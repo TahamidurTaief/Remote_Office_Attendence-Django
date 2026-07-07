@@ -1,0 +1,102 @@
+{% extends 'base/admin_base.html' %}
+
+{% block title %}{% if object %}Edit Branch{% else %}Add Branch{% endif %} | FieldTrack{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-3xl mx-auto">
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">
+            {% if object %}Edit Branch: {{ object.name }}{% else %}Add New Branch{% endif %}
+        </h2>
+    </div>
+
+    <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+        <form method="POST" class="p-6 space-y-6">
+            {% csrf_token %}
+            
+            {% if form.errors %}
+            <div class="rounded-md bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">Please fix the errors below.</h3>
+                        {{ form.non_field_errors }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                <div class="sm:col-span-6">
+                    <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">Branch Name</label>
+                    <div class="mt-1">
+                        {{ form.name }}
+                    </div>
+                    {% if form.name.errors %}<p class="mt-2 text-sm text-red-600">{{ form.name.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-6">
+                    <label for="{{ form.address.id_for_label }}" class="block text-sm font-medium text-gray-700">Address</label>
+                    <div class="mt-1">
+                        {{ form.address }}
+                    </div>
+                    {% if form.address.errors %}<p class="mt-2 text-sm text-red-600">{{ form.address.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label for="{{ form.latitude.id_for_label }}" class="block text-sm font-medium text-gray-700">Latitude</label>
+                    <div class="mt-1">
+                        {{ form.latitude }}
+                    </div>
+                    {% if form.latitude.errors %}<p class="mt-2 text-sm text-red-600">{{ form.latitude.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label for="{{ form.longitude.id_for_label }}" class="block text-sm font-medium text-gray-700">Longitude</label>
+                    <div class="mt-1">
+                        {{ form.longitude }}
+                    </div>
+                    {% if form.longitude.errors %}<p class="mt-2 text-sm text-red-600">{{ form.longitude.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label for="{{ form.radius_meters.id_for_label }}" class="block text-sm font-medium text-gray-700">Radius (meters)</label>
+                    <div class="mt-1">
+                        {{ form.radius_meters }}
+                    </div>
+                    {% if form.radius_meters.errors %}<p class="mt-2 text-sm text-red-600">{{ form.radius_meters.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label for="{{ form.wifi_ip.id_for_label }}" class="block text-sm font-medium text-gray-700">WiFi IP (Optional)</label>
+                    <div class="mt-1">
+                        {{ form.wifi_ip }}
+                    </div>
+                    {% if form.wifi_ip.errors %}<p class="mt-2 text-sm text-red-600">{{ form.wifi_ip.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-6">
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            {{ form.is_active }}
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="{{ form.is_active.id_for_label }}" class="font-medium text-gray-700">Is Active</label>
+                            <p class="text-gray-500">Uncheck to mark this branch as inactive.</p>
+                        </div>
+                    </div>
+                    {% if form.is_active.errors %}<p class="mt-2 text-sm text-red-600">{{ form.is_active.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="pt-5 flex justify-end gap-3 border-t border-gray-200 mt-6">
+                <a href="{% url 'branches:branch_list' %}" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Cancel
+                </a>
+                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

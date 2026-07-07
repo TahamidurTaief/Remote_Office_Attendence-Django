@@ -1,0 +1,404 @@
+{% extends 'base/admin_base.html' %}
+
+{% block title %}Employee: {{ employee.full_name }} | FieldTrack{% endblock %}
+{% block page_title %}Employee Detail{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-7xl mx-auto">
+    <div class="md:flex md:items-center md:justify-between mb-6">
+        <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">
+            Employee Dashboard
+        </h2>
+        <div class="mt-4 flex md:mt-0 md:ml-4 gap-3">
+            <a href="{% url 'admin_panel:reports_employee' employee.pk %}" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+                View Report
+            </a>
+            <a href="{% url 'employees:employee_edit' employee.pk %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+                Edit Profile
+            </a>
+            <a href="{% url 'employees:employee_list' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Profile Card -->
+        <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden lg:col-span-1">
+            <div class="p-6 text-center border-b border-gray-200">
+                {% if employee.profile_photo %}
+                <img class="h-24 w-24 rounded-full mx-auto object-cover border-4 border-indigo-50" src="{{ employee.profile_photo.url }}" alt="">
+                {% else %}
+                <div class="h-24 w-24 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-3xl mx-auto border-4 border-indigo-50">
+                    {{ employee.full_name|make_list|first|upper }}
+                </div>
+                {% endif %}
+                <h3 class="mt-4 text-xl font-bold text-gray-900">{{ employee.full_name }}</h3>
+                <p class="text-sm text-gray-500">{{ employee.designation }} • {{ employee.department }}</p>
+                <div class="mt-4">
+                    {% include 'employees/partials/status_badge.html' with employee=employee %}
+                </div>
+            </div>
+            <div class="px-6 py-4">
+                <dl class="space-y-4">
+                    <div>
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Employee ID</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ employee.employee_id }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Email (Login ID)</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ employee.user.email|default:"Not Provided" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Phone</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ employee.phone }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Emergency Contact</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ employee.emergency_contact }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Assigned Branch</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ employee.branch.name|default:"None" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Join Date</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ employee.joined_date }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium text-gray-500 uppercase">Overtime</dt>
+                        <dd class="mt-1 text-sm text-gray-900">
+                            {% if employee.overtime_enabled %}
+                            Enabled <i data-lucide="check-circle" class="inline w-4 h-4 text-green-500 align-text-bottom"></i>
+                            {% else %}
+                            Disabled <i data-lucide="x-circle" class="inline w-4 h-4 text-red-500 align-text-bottom"></i>
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Right Side: Stats & Recent Attendance -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- This Month Stats -->
+            <div class="bg-white shadow-sm border border-gray-200 rounded-xl p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">This Month's Statistics</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                        <dt class="text-sm font-medium text-green-600 truncate">Present</dt>
+                        <dd class="mt-1 text-3xl font-semibold text-green-900">{{ stats.present }}</dd>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                        <dt class="text-sm font-medium text-red-600 truncate">Absent</dt>
+                        <dd class="mt-1 text-3xl font-semibold text-red-900">{{ stats.absent }}</dd>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                        <dt class="text-sm font-medium text-yellow-600 truncate">Late</dt>
+                        <dd class="mt-1 text-3xl font-semibold text-yellow-900">{{ stats.late }}</dd>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <dt class="text-sm font-medium text-blue-600 truncate">Field Visits</dt>
+                        <dd class="mt-1 text-3xl font-semibold text-blue-900">{{ stats.field_visits }}</dd>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today's Field Visits -->
+            <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+                <div class="px-6 py-5 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Today's Field Visits</h3>
+                </div>
+                <div class="p-6">
+                    {% if todays_field_visits %}
+                    <ul class="space-y-4">
+                        {% for visit in todays_field_visits %}
+                        <li class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="text-md font-bold text-gray-900">{{ visit.visit_title|default:"Field Visit" }}</h4>
+                                    {% if visit.client_name %}
+                                    <p class="text-sm text-gray-600 mt-1">Client: {{ visit.client_name }}</p>
+                                    {% endif %}
+                                    {% if visit.site_address %}
+                                    <p class="text-sm text-gray-600 mt-1">Location: {{ visit.site_address }}</p>
+                                    {% endif %}
+                                    {% if visit.note %}
+                                    <p class="text-sm text-gray-500 mt-2 italic">"{{ visit.note }}"</p>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                                        <i data-lucide="clock" class="w-3 h-3"></i>
+                                        {{ visit.check_in_time|time:"h:i A" }}
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-sm text-gray-500 text-center py-4">No field visits logged today.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Attendance Records with Filters -->
+            <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+                <div class="px-6 py-5 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h3 class="text-lg font-bold text-gray-900">Attendance Records History</h3>
+                    <span class="text-xs bg-indigo-100 text-indigo-800 font-bold px-2.5 py-0.5 rounded-full">{{ recent_attendance.count }} Records Found</span>
+                </div>
+                
+                <!-- History Filters Form -->
+                <div class="p-6 border-b border-gray-200 bg-white">
+                    <form method="GET" action="" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <!-- Keep sync filters when submitting history filter -->
+                        <input type="hidden" name="sync_date" value="{{ sync_date }}">
+                        <input type="hidden" name="sync_time_from" value="{{ sync_time_from }}">
+                        <input type="hidden" name="sync_time_to" value="{{ sync_time_to }}">
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">From Date</label>
+                            <input type="date" name="history_date_from" value="{{ history_date_from }}" class="w-full text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">To Date</label>
+                            <input type="date" name="history_date_to" value="{{ history_date_to }}" class="w-full text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Status</label>
+                            <select name="history_status" class="w-full text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="">All Statuses</option>
+                                <option value="present" {% if history_status == 'present' %}selected{% endif %}>Present</option>
+                                <option value="on_time" {% if history_status == 'on_time' %}selected{% endif %}>On Time</option>
+                                <option value="late" {% if history_status == 'late' %}selected{% endif %}>Late</option>
+                                <option value="absent" {% if history_status == 'absent' %}selected{% endif %}>Absent</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Type</label>
+                            <select name="history_type" class="w-full text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="">All Types</option>
+                                <option value="office" {% if history_type == 'office' %}selected{% endif %}>Office</option>
+                                <option value="field" {% if history_type == 'field' %}selected{% endif %}>Field</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="submit" class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
+                                Filter
+                            </button>
+                            <a href="?sync_date={{ sync_date }}&sync_time_from={{ sync_time_from }}&sync_time_to={{ sync_time_to }}" class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                                Reset
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Photo</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for record in recent_attendance %}
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">{{ record.date|date:"Y-m-d" }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">{{ record.check_in_time|time:"h:i A"|default:"-" }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">{{ record.check_out_time|time:"h:i A"|default:"-" }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {% if record.photo %}
+                                    <img src="{{ record.photo.url }}" 
+                                         class="w-10 h-10 rounded-lg object-cover cursor-zoom-in hover:scale-110 hover:shadow-md transition-all border border-gray-200" 
+                                         alt="Attendance photo"
+                                         onclick="openPhotoModal('{{ record.photo.url }}', '{{ employee.full_name }} ({{ record.date }})')">
+                                    {% else %}
+                                    <span class="text-gray-300 text-xs">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{{ record.type }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% if record.status == 'on_time' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">On Time</span>
+                                    {% elif record.status == 'late' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Late</span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Absent</span>
+                                    {% endif %}
+                                    {% if record.is_early_checkout %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 mt-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Early Out</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                    <a href="{% url 'admin_panel:attendance_detail' record.id %}" class="inline-flex items-center px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition-colors">
+                                        Detail
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500">No attendance records found for the filter criteria.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Auto Sync Track Section -->
+            <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden mt-6">
+                <div class="px-6 py-5 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Auto-Sync Track (Periodic Locations)</h3>
+                        <p class="text-xs text-gray-500 mt-1">Surfaces periodic background GPS pings recorded during active check-in sessions.</p>
+                    </div>
+                    <span class="text-xs bg-purple-100 text-purple-800 font-bold px-2.5 py-0.5 rounded-full">{{ location_syncs.count }} Pings Found</span>
+                </div>
+
+                <!-- Sync Filters Form -->
+                <div class="p-6 border-b border-gray-200 bg-white">
+                    <form method="GET" action="" class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                        <!-- Keep history filters when submitting sync filter -->
+                        <input type="hidden" name="history_date_from" value="{{ history_date_from }}">
+                        <input type="hidden" name="history_date_to" value="{{ history_date_to }}">
+                        <input type="hidden" name="history_status" value="{{ history_status }}">
+                        <input type="hidden" name="history_type" value="{{ history_type }}">
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Select Track Date</label>
+                            <input type="date" name="sync_date" value="{{ sync_date }}" class="w-full text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Start Time (From)</label>
+                            <input type="time" name="sync_time_from" value="{{ sync_time_from }}" class="w-full text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">End Time (To)</label>
+                            <input type="time" name="sync_time_to" value="{{ sync_time_to }}" class="w-full text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+                        <div class="sm:col-span-3 flex justify-end gap-2 mt-2">
+                            <button type="submit" class="inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors">
+                                Filter Track
+                            </button>
+                            <a href="?history_date_from={{ history_date_from }}&history_date_to={{ history_date_to }}&history_status={{ history_status }}&history_type={{ history_type }}" class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                                Reset
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ping Time</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Coordinates</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Accuracy</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location Address</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Direction</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for sync in location_syncs %}
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">{{ sync.timestamp|time:"h:i A" }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{{ sync.latitude|floatformat:6 }}, {{ sync.longitude|floatformat:6 }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">±{{ sync.accuracy|floatformat:1 }}m</td>
+                                <td class="px-6 py-4 text-sm text-gray-700 max-w-xs truncate" title="{{ sync.address }}">{{ sync.address|default:"No address logged" }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                    <a href="https://www.google.com/maps/dir/?api=1&destination={{ sync.latitude }},{{ sync.longitude }}" 
+                                       target="_blank" 
+                                       class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 font-bold rounded-lg text-xs transition-colors animate-pulse hover:animate-none">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                        Direction
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="px-6 py-12 text-center text-sm text-gray-500">
+                                    <svg class="w-12 h-12 text-purple-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                    <p class="font-medium text-gray-700">No background sync data found for this date.</p>
+                                    <p class="text-xs text-gray-400 mt-1">Please select another date or check if the employee's browser has been syncing coordinates during their check-in shift.</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Photo Modal -->
+<div id="photoModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-all duration-300 opacity-0" onclick="closePhotoModal(event)">
+    <div class="relative max-w-3xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl scale-95 transition-all duration-300 flex flex-col" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-gray-150 flex justify-between items-center bg-gray-50">
+            <h3 id="modalTitle" class="font-bold text-gray-900 text-lg">Attendance Photo</h3>
+            <button onclick="hidePhotoModal()" class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors p-1.5 rounded-lg hover:bg-gray-150">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="p-6 flex justify-center items-center bg-slate-900 max-h-[70vh]">
+            <img id="modalImg" src="" alt="Zoomed Attendance Photo" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-md border border-slate-700">
+        </div>
+    </div>
+</div>
+
+<!-- Photo Modal Script -->
+<script>
+    function openPhotoModal(imgUrl, empName) {
+        const modal = document.getElementById('photoModal');
+        const modalImg = document.getElementById('modalImg');
+        const modalTitle = document.getElementById('modalTitle');
+        
+        modalImg.src = imgUrl;
+        modalTitle.textContent = empName + " - Attendance Photo";
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        // Trigger smooth transition
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            const inner = modal.querySelector('.relative');
+            if (inner) {
+                inner.classList.remove('scale-95');
+                inner.classList.add('scale-100');
+            }
+        }, 20);
+    }
+
+    function hidePhotoModal() {
+        const modal = document.getElementById('photoModal');
+        modal.classList.add('opacity-0');
+        const inner = modal.querySelector('.relative');
+        if (inner) {
+            inner.classList.remove('scale-100');
+            inner.classList.add('scale-95');
+        }
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('modalImg').src = '';
+        }, 300);
+    }
+
+    function closePhotoModal(event) {
+        hidePhotoModal();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,52 @@
+{
+  "packageId": "bd.com.athome.attendence.twa",
+  "host": "trackme.signtechlimited.com",
+  "name": "Signtech Track",
+  "launcherName": "Signtech",
+  "display": "standalone",
+  "themeColor": "#6366F1",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#0F172A",
+  "enableNotifications": true,
+  "startUrl": "/staff/home/",
+  "iconUrl": "https://trackme.signtechlimited.com/static/icon_main.jpg",
+  "maskableIconUrl": "https://trackme.signtechlimited.com/static/icon_main.jpg",
+  "monochromeIconUrl": "https://trackme.signtechlimited.com/static/icon_main.jpg",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "C:\\Users\\taham\\Desktop\\attendence\\fieldtrack\\android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://trackme.signtechlimited.com/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://trackme.signtechlimited.com/",
+  "minSdkVersion": 21,
+  "orientation": "any",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1"
+}

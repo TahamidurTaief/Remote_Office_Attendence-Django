@@ -1,0 +1,70 @@
+{% extends 'base/admin_base.html' %}
+
+{% block title %}{% if object %}Edit{% else %}Add{% endif %} Leave Type | FieldTrack Admin{% endblock %}
+{% block page_title %}Leave Types{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">
+                {% if object %}Edit Leave Type{% else %}Add Leave Type{% endif %}
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">
+                Configure leave parameters for employee tracking.
+            </p>
+        </div>
+        <a href="{% url 'leave:admin_leave_types' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors bg-white shadow-sm">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            Back
+        </a>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-sm overflow-hidden">
+        <form method="POST" class="p-6 space-y-6">
+            {% csrf_token %}
+            
+            {% if form.errors %}
+            <div class="rounded-xl bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800 flex items-center gap-2">
+                            <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                            Please fix the errors below.
+                        </h3>
+                        {{ form.non_field_errors }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700">Leave Type Name</label>
+                    <div class="mt-1.5">{{ form.name }}</div>
+                    {% if form.name.errors %}<p class="mt-2 text-sm text-red-650">{{ form.name.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700">Default Days Allowed Per Year</label>
+                    <div class="mt-1.5">{{ form.default_days_per_year }}</div>
+                    {% if form.default_days_per_year.errors %}<p class="mt-2 text-sm text-red-650">{{ form.default_days_per_year.errors.0 }}</p>{% endif %}
+                    <p class="text-xs text-gray-400 mt-1">This value will be used as the default starting allowance for employees when they request leaves of this type.</p>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-4 border-t border-gray-100 flex justify-end gap-3">
+                <a href="{% url 'leave:admin_leave_types' %}" class="px-4 py-2.5 border border-gray-300 text-gray-750 font-medium rounded-xl hover:bg-gray-50 transition-colors bg-white">
+                    Cancel
+                </a>
+                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors shadow-sm">
+                    Save Leave Type
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

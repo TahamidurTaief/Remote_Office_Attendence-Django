@@ -1,0 +1,8 @@
+<span id="status-badge-{{ employee.pk }}" 
+      class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors duration-200
+             {% if employee.is_active %}bg-green-100 text-green-800 hover:bg-green-200{% else %}bg-red-100 text-red-800 hover:bg-red-200{% endif %}"
+      hx-post="{% url 'employees:toggle_status' employee.pk %}"
+      hx-swap="outerHTML"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    {% if employee.is_active %}Active{% else %}Inactive{% endif %}
+</span>

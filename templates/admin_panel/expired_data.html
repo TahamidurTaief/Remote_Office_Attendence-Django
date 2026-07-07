@@ -1,0 +1,250 @@
+{% extends 'base/admin_base.html' %}
+{% block title %}Expired Data | FieldTrack Admin{% endblock %}
+{% block page_title %}Expired Data{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-7xl mx-auto space-y-8" x-data="{
+    showModal: false,
+    deleteMode: '', // 'all' or 'selected'
+    selectedCount: 0,
+    
+    updateCount() {
+        this.selectedCount = document.querySelectorAll('.record-checkbox:checked').length;
+    },
+    
+    confirmDelete() {
+        if (this.deleteMode === 'all') {
+            document.getElementById('delete-all-form').submit();
+        } else {
+            document.getElementById('bulk-action-form').submit();
+        }
+    }
+}">
+    
+    <div>
+        <p class="text-sm text-gray-500">Manage attendance records older than 3 months.</p>
+    </div>
+
+    <!-- Top Stats Bar -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <p class="text-xs font-bold text-gray-500 uppercase">Active Records</p>
+            <p class="mt-2 text-3xl font-black text-green-600">{{ stats.active_count }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <p class="text-xs font-bold text-gray-500 uppercase">Expired Records</p>
+            <p class="mt-2 text-3xl font-black text-amber-600">{{ stats.expired_count }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <p class="text-xs font-bold text-gray-500 uppercase">Deleting Soon</p>
+            <p class="mt-2 text-3xl font-black text-red-600">{{ stats.deleting_soon }}</p>
+            <p class="text-xs text-gray-500 mt-1">records expiring in &lt;30 days</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-center">
+            <p class="text-xs font-bold text-gray-500 uppercase">Auto-delete scheduled</p>
+            <div class="mt-2 flex items-center text-gray-700 font-medium">
+                <i data-lucide="clock" class="w-5 h-5 mr-2 text-indigo-500"></i>
+                Daily at 2:00 AM
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-start gap-4">
+        <i data-lucide="info" class="w-6 h-6 text-blue-500 mt-0.5 shrink-0"></i>
+        <p class="text-sm text-blue-800 leading-relaxed font-medium">
+            Data older than 3 months moves here automatically.<br>
+            Records stay here for 2 more months, then are permanently deleted. You can delete them manually before that.
+        </p>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <form method="GET" action="" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Employee</label>
+                <select name="employee" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">All Employees</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if selected_employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Branch</label>
+                <select name="branch" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">All Branches</option>
+                    {% for branch in branches %}
+                    <option value="{{ branch.id }}" {% if selected_branch == branch.id|stringformat:"s" %}selected{% endif %}>{{ branch.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">From Date</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">To Date</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+            </div>
+            <div>
+                <button type="submit" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    Search
+                </button>
+            </div>
+            {% if date_from or date_to or selected_employee or selected_branch %}
+            <div>
+                <a href="?" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    Reset
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Forms for Actions -->
+    <form id="delete-all-form" method="POST" action="{% url 'admin_panel:delete_all_expired' %}" class="hidden">{% csrf_token %}</form>
+
+    <form id="bulk-action-form" method="POST" action="{% url 'admin_panel:delete_expired_selected' %}">
+        {% csrf_token %}
+        
+        <!-- Bulk Action Bar -->
+        <div class="flex justify-between items-center mb-4 px-2">
+            <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
+                    <input type="checkbox" id="select-all" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" 
+                           onclick="document.querySelectorAll('.record-checkbox').forEach(cb => { cb.checked = this.checked; cb.dispatchEvent(new Event('change')) })">
+                    Select All
+                </label>
+                <span x-show="selectedCount > 0" class="text-sm font-bold text-indigo-600 px-3 py-1 bg-indigo-50 rounded-full" x-text="selectedCount + ' records selected'" style="display: none;"></span>
+            </div>
+            <div class="flex items-center gap-3">
+                <button type="button" x-show="selectedCount > 0" @click="deleteMode = 'selected'; showModal = true" class="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors" style="display: none;">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    Delete Selected
+                </button>
+                <button type="button" @click="deleteMode = 'all'; showModal = true" class="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    Delete All Expired
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="w-12 px-6 py-3 text-left"></th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Employee</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Check-in</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Check-out</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Expired On</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Auto-delete On</th>
+                            <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for att in attendances %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <input type="checkbox" name="record_ids" value="{{ att.id }}" class="record-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" @change="updateCount()">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ att.employee.full_name }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ att.date }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ att.check_in_time|time:"h:i A"|default:"-" }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ att.check_out_time|time:"h:i A"|default:"-" }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ att.get_type_display }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ att.expired_at|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                {% if att.auto_delete_on %}
+                                    <span class="{% if att.auto_delete_soon %}text-red-600 font-semibold{% else %}text-gray-700{% endif %}">
+                                        {{ att.auto_delete_on|date:"Y-m-d" }}
+                                    </span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-xl transition-colors" @click="
+                                    document.querySelectorAll('.record-checkbox').forEach(cb => cb.checked = false);
+                                    document.querySelector('input[value=\'{{ att.id }}\']').checked = true;
+                                    updateCount();
+                                    deleteMode = 'selected';
+                                    showModal = true;
+                                ">
+                                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="px-6 py-12 text-center text-gray-500">
+                                No expired data found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <div class="bg-white px-4 py-3 border-t border-gray-200 flex items-center justify-between sm:px-6">
+                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            Showing <span class="font-medium">{{ page_obj.start_index }}</span> to <span class="font-medium">{{ page_obj.end_index }}</span> of <span class="font-medium">{{ paginator.count }}</span> results
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                            {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                Previous
+                            </a>
+                            {% endif %}
+                            
+                            {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                Next
+                            </a>
+                            {% endif %}
+                        </nav>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </form>
+
+    <!-- Confirmation Modal (Alpine.js) -->
+    <div x-show="showModal" style="display: none;"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-2xl p-6 max-w-sm mx-4 shadow-xl transform transition-all" @click.away="showModal = false">
+        <h3 class="font-semibold text-gray-800 text-lg mb-2">Confirm Delete</h3>
+        <p class="text-gray-600 text-sm mb-6">
+          This action is permanent and cannot be undone. Are you sure?
+        </p>
+        <div class="flex gap-3">
+                    <button type="button" @click="showModal = false"
+                                    class="flex items-center justify-center gap-2 flex-1 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+            Cancel
+          </button>
+                    <button type="button" @click="confirmDelete()"
+                                    class="flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+            Yes, Delete
+          </button>
+        </div>
+      </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,357 @@
+{% extends "base/admin_base.html" %}
+{% load static %}
+
+{% block title %}{{ employee.full_name }} Report | FieldTrack{% endblock %}
+
+{% block content %}
+<div class="p-6 max-w-5xl mx-auto">
+
+    <!-- Breadcrumb -->
+    <nav class="text-sm text-gray-400 mb-4">
+        <a href="{% url 'admin_panel:reports_main' %}" class="hover:text-indigo-600">Reports</a>
+        <span class="mx-2">›</span>
+        <span class="text-gray-700">{{ employee.full_name }}</span>
+    </nav>
+
+    <!-- Employee Profile Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6 flex items-center gap-5">
+        {% if employee.profile_photo %}
+        <img src="{{ employee.profile_photo.url }}" alt=""
+             class="w-16 h-16 rounded-full object-cover shrink-0 ring-2 ring-indigo-100">
+        {% else %}
+        <div class="w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold shrink-0">
+            {{ employee.full_name|make_list|first|upper }}
+        </div>
+        {% endif %}
+        <div class="flex-1 min-w-0">
+            <h2 class="text-xl font-bold text-gray-900">{{ employee.full_name }}</h2>
+            <div class="flex flex-wrap gap-4 mt-1 text-sm text-gray-500">
+                <span>ID: <span class="text-gray-700 font-medium">{{ employee.employee_id }}</span></span>
+                <span>{{ employee.department }}</span>
+                <span>{{ employee.designation }}</span>
+                {% if employee.branch %}<span>{{ employee.branch.name }}</span>{% endif %}
+                {% if employee.overtime_enabled %}
+                <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded">OT Enabled</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="relative shrink-0" x-data="{ open: false }">
+          <!-- Trigger button -->
+          <button @click="open = !open"
+                  @click.outside="open = false"
+                  class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Export
+            <i data-lucide="chevron-down" 
+               class="w-3.5 h-3.5 transition-transform"
+               :class="open ? 'rotate-180' : ''"></i>
+          </button>
+          
+          <!-- Dropdown menu -->
+          <div x-show="open"
+               x-cloak
+               x-transition:enter="transition ease-out duration-100"
+               x-transition:enter-start="opacity-0 scale-95"
+               x-transition:enter-end="opacity-100 scale-100"
+               x-transition:leave="transition ease-in duration-75"
+               x-transition:leave-start="opacity-100 scale-100"
+               x-transition:leave-end="opacity-0 scale-95"
+               class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+            
+            <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&employee={{ employee.pk }}&year={{ year }}&month={{ month }}"
+               class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50">
+              <div class="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center">
+                <i data-lucide="table" class="w-3.5 h-3.5 text-green-600"></i>
+              </div>
+              <span>Excel (XLSX)</span>
+            </a>
+            
+            <a href="{% url 'admin_panel:export_attendance' %}?format=csv&employee={{ employee.pk }}&year={{ year }}&month={{ month }}"
+               class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50">
+              <div class="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-600"></i>
+              </div>
+              <span>CSV</span>
+            </a>
+            
+            <a href="{% url 'admin_panel:export_attendance' %}?format=pdf&employee={{ employee.pk }}&year={{ year }}&month={{ month }}"
+               class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+              <div class="w-6 h-6 bg-red-100 rounded-lg flex items-center justify-center">
+                <i data-lucide="file" class="w-3.5 h-3.5 text-red-600"></i>
+              </div>
+              <span>PDF</span>
+            </a>
+            
+          </div>
+        </div>
+    </div>
+
+    <!-- Month Selector -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-2">
+            <a href="?year={{ prev_y }}&month={{ prev_m }}"
+               class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </a>
+            <span class="px-5 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-semibold min-w-40 text-center">
+                {{ month_name }} {{ year }}
+            </span>
+            <a href="?year={{ next_y }}&month={{ next_m }}"
+               class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </a>
+        </div>
+    </div>
+
+    {% if schedule %}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Branch Schedule</p>
+                <h3 class="text-lg font-bold text-gray-900 mt-1">{{ employee.branch.name }}</h3>
+                <p class="text-sm text-gray-500 mt-1">This report uses the live schedule configured in Office Schedule Settings.</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                    <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Working Time</p>
+                    <p class="font-semibold text-gray-900 mt-1">{{ schedule.office_start_time|time:"g:i A" }} - {{ schedule.office_end_time|time:"g:i A" }}</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                    <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Late After</p>
+                    <p class="font-semibold text-gray-900 mt-1">{{ schedule.late_after_minutes }} mins</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                    <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Working Days</p>
+                    <p class="font-semibold text-gray-900 mt-1">{{ working_day_labels|join:", " }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+        <!-- Row 1 -->
+        <div class="bg-green-50 rounded-xl border border-green-200 p-4 text-center">
+            <p class="text-xs text-green-700 font-medium uppercase tracking-wider">Present Days</p>
+            <p class="text-2xl font-bold text-green-800 mt-1">{{ present }} <span class="text-sm font-normal">days</span></p>
+        </div>
+        <div class="bg-red-50 rounded-xl border border-red-200 p-4 text-center">
+            <p class="text-xs text-red-700 font-medium uppercase tracking-wider">Absent Days</p>
+            <p class="text-2xl font-bold text-red-800 mt-1">{{ absent }} <span class="text-sm font-normal">days</span></p>
+        </div>
+        <div class="bg-amber-50 rounded-xl border border-amber-200 p-4 text-center">
+            <p class="text-xs text-amber-700 font-medium uppercase tracking-wider">Late Days</p>
+            <p class="text-2xl font-bold text-amber-800 mt-1">{{ late }} <span class="text-sm font-normal">days</span></p>
+        </div>
+        <!-- Row 2 -->
+        <div class="bg-blue-50 rounded-xl border border-blue-200 p-4 text-center">
+            <p class="text-xs text-blue-700 font-medium uppercase tracking-wider">Total Hours</p>
+            <p class="text-2xl font-bold text-blue-800 mt-1">{{ total_hours }}</p>
+        </div>
+        {% if employee.overtime_enabled %}
+        <div class="bg-purple-50 rounded-xl border border-purple-200 p-4 text-center">
+            <p class="text-xs text-purple-700 font-medium uppercase tracking-wider">Overtime Hours</p>
+            <p class="text-2xl font-bold text-purple-800 mt-1">{{ overtime_hours }}</p>
+        </div>
+        {% else %}
+        <div class="bg-gray-50 rounded-xl border border-gray-200 p-4 text-center">
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Overtime</p>
+            <p class="text-2xl font-bold text-gray-400 mt-1">Disabled</p>
+        </div>
+        {% endif %}
+        <div class="rounded-xl border p-4 text-center
+            {% if att_pct >= 90 %}bg-green-50 border-green-200
+            {% elif att_pct >= 70 %}bg-amber-50 border-amber-200
+            {% else %}bg-red-50 border-red-200{% endif %}">
+            <p class="text-xs font-medium uppercase tracking-wider
+                {% if att_pct >= 90 %}text-green-700
+                {% elif att_pct >= 70 %}text-amber-700
+                {% else %}text-red-700{% endif %}">Attendance Rate</p>
+            <p class="text-2xl font-bold mt-1
+                {% if att_pct >= 90 %}text-green-800
+                {% elif att_pct >= 70 %}text-amber-800
+                {% else %}text-red-800{% endif %}">
+                {{ att_pct }}%
+            </p>
+        </div>
+    </div>
+
+    <!-- Calendar Heatmap -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+        <h3 class="text-base font-semibold text-gray-900 mb-4">Attendance Calendar</h3>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap gap-4 mb-4 text-xs text-gray-500">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-green-400 inline-block"></span>On Time</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-400 inline-block"></span>Late</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-red-400 inline-block"></span>Absent</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-purple-400 inline-block"></span>Field Visit</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blue-300 inline-block"></span>On Leave</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-gray-200 inline-block"></span>Off Day</span>
+        </div>
+
+        <!-- Day headers -->
+        <div class="grid grid-cols-7 gap-1 mb-1">
+            {% for day in weekday_headers %}
+            <div class="text-center text-xs font-semibold py-1 {% if day.is_working_day %}text-gray-500{% else %}text-gray-300{% endif %}">
+                {{ day.label }}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Calendar grid -->
+        {% for week in calendar_weeks %}
+        <div class="grid grid-cols-7 gap-1 mb-1">
+            {% for cell in week %}
+            {% if cell %}
+            <button class="aspect-square rounded-lg text-sm font-medium transition-all hover:ring-2 hover:ring-indigo-400 hover:ring-offset-1 focus:outline-none
+                {% if cell.color == 'green' %}bg-green-400 text-white hover:bg-green-500
+                {% elif cell.color == 'amber' %}bg-amber-400 text-white hover:bg-amber-500
+                {% elif cell.color == 'red' %}bg-red-200 text-red-700 hover:bg-red-300
+                {% elif cell.color == 'purple' %}bg-purple-400 text-white hover:bg-purple-500
+                {% elif cell.color == 'blue' %}bg-blue-300 text-white hover:bg-blue-400
+                {% else %}bg-gray-100 text-gray-400 cursor-default hover:ring-0{% endif %}"
+                    {% if not cell.is_weekend %}
+                    hx-get="{% url 'admin_panel:reports_employee_day' employee.pk cell.date_str %}"
+                    hx-target="#day-detail"
+                    hx-swap="innerHTML"
+                    hx-indicator="#day-detail-spinner"
+                    {% endif %}>
+                {{ cell.day }}
+            </button>
+            {% else %}
+            <div class="aspect-square"></div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Day Detail (HTMX target) -->
+    <div id="day-detail" class="mb-6">
+        <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-gray-400 text-sm">
+            <svg class="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/>
+            </svg>
+            Click a day in the calendar above to see details
+        </div>
+    </div>
+    <div id="day-detail-spinner" class="htmx-indicator text-center text-indigo-600 text-sm mb-4">Loading…</div>
+
+    <!-- Full Month Table -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100">
+            <h3 class="text-base font-semibold text-gray-900">{{ month_name }} {{ year }} — Full Breakdown</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-100 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Day</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Check-in</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Check-out</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Total Hours</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Late</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Early Out</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Overtime</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Type</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Notes</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for row in table_rows %}
+                    <tr class="{% if row.status == 'absent' %}bg-red-50{% elif row.status == 'on_leave' %}bg-blue-50/50{% elif row.is_late %}bg-amber-50{% elif row.is_weekend %}bg-gray-100{% else %}hover:bg-gray-50{% endif %} transition-colors">
+                        <td class="px-4 py-2.5 font-medium {% if row.is_weekend %}text-gray-400{% else %}text-gray-900{% endif %}">
+                            {{ row.date|date:"Y-m-d" }}
+                        </td>
+                        <td class="px-4 py-2.5 font-medium {% if row.is_weekend %}text-gray-400{% else %}text-gray-700{% endif %}">
+                            {{ row.date|date:"D" }}
+                        </td>
+                        <td class="px-4 py-2.5 text-gray-600">
+                            {% if row.check_in and row.check_in.check_in_time %}
+                                {{ row.check_in.check_in_time|time:"H:i" }}
+                            {% else %}
+                                <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-gray-600">
+                            {% if row.check_in and row.check_in.check_out_time %}
+                                {{ row.check_in.check_out_time|time:"H:i" }}
+                            {% else %}
+                                <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-gray-600">
+                            {% if row.check_in and row.total_hours_str %}
+                                {{ row.total_hours_str }}
+                            {% else %}
+                                <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5">
+                            {% if row.is_late %}
+                                <span class="text-red-600 font-bold">Yes</span>
+                            {% elif row.check_in %}
+                                <span class="text-green-600">No</span>
+                            {% else %}
+                                <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5">
+                            {% if row.is_early_checkout %}
+                                <span class="text-amber-600 font-bold">Yes</span>
+                            {% elif row.check_in %}
+                                <span class="text-green-600">No</span>
+                            {% else %}
+                                <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-gray-600">
+                            {% if row.check_in and row.overtime_str %}
+                                {{ row.overtime_str }}
+                            {% else %}
+                                <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5">
+                            {% if row.check_in %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">
+                                {{ row.check_in.get_attendance_type_display|default:"Office" }}
+                            </span>
+                            {% else %}
+                            <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5">
+                            {% if row.is_weekend %}
+                                <span class="text-gray-400 text-xs font-medium">Off Day</span>
+                            {% elif row.status == 'on_leave' %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">On Leave</span>
+                            {% elif row.status == 'scheduled' %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500">Scheduled</span>
+                            {% elif row.check_in or row.field_visits %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold
+                                    {% if row.status == 'on_time' %}bg-green-100 text-green-700
+                                    {% elif row.status == 'late' %}bg-amber-100 text-amber-700
+                                    {% else %}bg-red-100 text-red-700{% endif %}">
+                                    {{ row.status_display }}
+                                </span>
+                            {% else %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">Absent</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-gray-500 text-xs max-w-[150px] truncate">
+                            {{ row.check_in.note|default:"—" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

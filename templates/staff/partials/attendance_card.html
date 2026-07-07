@@ -1,0 +1,285 @@
+{% comment %}
+  attendance_card.html — supports multiple check-in/out sessions per day.
+  Variables from staff.views.attendance_card:
+    active_session      → Attendance (unclosed) or None
+    all_sessions_today  → queryset of all check-in sessions today
+    tracking_interval   → int (minutes, 0 = disabled)
+    stats               → {present, absent, late}
+    now                 → current datetime
+{% endcomment %}
+
+{% if active_session %}
+<div class="bg-gradient-to-br from-green-800 to-green-900 rounded-2xl p-6 text-white shadow-lg mb-4">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <p class="text-green-200 text-sm font-medium">Checked in</p>
+            <h2 class="text-3xl font-bold tracking-tight">{{ active_session.check_in_time|time:"h:i A" }}</h2>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+            <i data-lucide="check-circle" class="w-6 h-6 text-white"></i>
+        </div>
+    </div>
+    <p class="text-green-100 text-sm mb-4 flex items-start gap-2">
+        <i data-lucide="map-pin" class="w-4 h-4 mt-0.5 shrink-0"></i>
+        <span>{% if active_session.type == 'office' %}{{ employee.branch.name }} (Office){% else %}Field Visit{% endif %}</span>
+    </p>
+
+    {% if tracking_interval and tracking_interval > 0 %}
+    <div id="tracker-indicator" 
+         class="mb-5 bg-white/10 rounded-xl px-4 py-3">
+      
+      <!-- Top row: status dot + label -->
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 bg-emerald-400 rounded-full 
+                       animate-pulse flex-shrink-0"></span>
+          <span class="text-xs font-medium text-green-100">
+            Location Tracking Active
+          </span>
+        </div>
+        <span class="text-xs text-green-200 opacity-70">
+          every {{ tracking_interval }}m
+        </span>
+      </div>
+      
+      <!-- Countdown row -->
+      <div class="flex items-center gap-2 mt-1">
+        <i data-lucide="timer" 
+           class="w-3.5 h-3.5 text-green-300 flex-shrink-0"></i>
+        <span id="sync-countdown" 
+              class="text-xs text-green-200 font-mono 
+                     tabular-nums">
+          Calculating...
+        </span>
+      </div>
+
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 gap-3 mb-5">
+        <div class="hidden rounded-xl bg-white/10 p-3 text-center">
+            <p class="text-[11px] uppercase tracking-wider text-green-200">Tasks Assigned</p>
+            <p class="mt-1 text-xl font-bold">{{ stats.present }}</p>
+        </div>
+        <div class="hidden rounded-xl bg-white/10 p-3 text-center">
+            <p class="text-[11px] uppercase tracking-wider text-green-200">Tasks Done</p>
+            <p class="mt-1 text-xl font-bold">{{ stats.late }}</p>
+        </div>
+        <div class="rounded-xl bg-white/10 p-3 text-center">
+            <p class="text-[11px] uppercase tracking-wider text-green-200">Hours Worked</p>
+            <p class="mt-1 text-xl font-bold">{{ stats.absent }}</p>
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-green-50 mb-2">
+            <i data-lucide="camera" class="w-4 h-4 inline mr-1"></i> Check Out Photo *
+        </label>
+        <input type="file" id="checkout-photo" accept="image/*" capture="environment"
+               class="block w-full text-sm text-green-50 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-white file:text-green-700 hover:file:bg-green-50">
+    </div>
+    <button id="checkout-btn" class="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        Check Out
+    </button>
+</div>
+
+<div class="mb-4 text-center">
+    <p class="text-xs text-gray-500">You can check out first, then check in again for a new session.</p>
+</div>
+
+{% else %}
+<div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg mb-4">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <p class="text-slate-400 text-sm">Good morning</p>
+            <p class="text-xl font-semibold">{{ employee.full_name }}</p>
+        </div>
+        <div class="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center">
+            <i data-lucide="clock" class="w-6 h-6 text-slate-300"></i>
+        </div>
+    </div>
+    <p class="text-4xl font-bold mb-1" id="live-time">{{ now|time:"h:i A" }}</p>
+    <p class="text-slate-400 text-sm mb-6" id="live-date">{{ now|date:"l, F j, Y" }}</p>
+    <p class="text-slate-300 text-sm mb-4">You haven't checked in yet</p>
+    <a href="{% url 'staff:check_in' %}" class="block w-full py-4 px-4 bg-green-500 hover:bg-green-400 text-white font-bold text-center rounded-xl transition-colors text-lg whitespace-nowrap min-w-fit">
+        Check In
+    </a>
+</div>
+{% endif %}
+
+{# ── Sessions Today ──────────────────────────────────────────────── #}
+{% if all_sessions_today %}
+<div class="mb-4">
+    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Today's Sessions</p>
+    <div class="space-y-2">
+        {% for session in all_sessions_today %}
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+                <p class="text-sm font-semibold text-gray-800">
+                    {{ session.check_in_time|time:"h:i A" }}
+                    {% if session.check_out_time %}
+                    → {{ session.check_out_time|time:"h:i A" }}
+                    {% else %}
+                    <span class="text-green-600 text-xs font-normal ml-1">(active)</span>
+                    {% endif %}
+                </p>
+                {% if session.total_hours %}
+                <p class="text-xs text-gray-500">{{ session.total_hours }}h worked</p>
+                {% endif %}
+            </div>
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium
+                {% if session.status == 'on_time' %}bg-green-100 text-green-700
+                {% elif session.status == 'late' %}bg-amber-100 text-amber-700
+                {% else %}bg-gray-100 text-gray-500{% endif %}">
+                {{ session.get_status_display }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Monthly Stats ──────────────────────────────────────────────── #}
+<div class="grid grid-cols-3 gap-3">
+    <div class="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
+        <div class="w-8 h-8 mx-auto rounded-lg bg-green-50 flex items-center justify-center text-green-600 mb-2">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+        </div>
+        <p class="text-xs text-gray-500 font-medium mb-1">Present</p>
+        <p class="text-xl font-bold text-gray-900">{{ stats.present }}</p>
+    </div>
+    <div class="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
+        <div class="w-8 h-8 mx-auto rounded-lg bg-red-50 flex items-center justify-center text-red-600 mb-2">
+            <i data-lucide="x-circle" class="w-4 h-4"></i>
+        </div>
+        <p class="text-xs text-gray-500 font-medium mb-1">Absent</p>
+        <p class="text-xl font-bold text-gray-900">{{ stats.absent }}</p>
+    </div>
+    <div class="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
+        <div class="w-8 h-8 mx-auto rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 mb-2">
+            <i data-lucide="alert-circle" class="w-4 h-4"></i>
+        </div>
+        <p class="text-xs text-gray-500 font-medium mb-1">Late</p>
+        <p class="text-xl font-bold text-gray-900">{{ stats.late }}</p>
+    </div>
+</div>
+
+{# ── Scripts ──────────────────────────────────────────────────────── #}
+<script>
+(function () {
+
+    // ── CSRF helper ──────────────────────────────────────────────────
+    function getCsrf() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (el) return el.value;
+        const m = document.cookie.match(/csrftoken=([^;]+)/);
+        return m ? m[1] : '';
+    }
+
+    // ── CHECK OUT ────────────────────────────────────────────────────
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (checkoutBtn) {
+        checkoutBtn.addEventListener('click', function () {
+            const photoInput = document.getElementById('checkout-photo');
+            if (!photoInput || !photoInput.files || !photoInput.files[0]) {
+                alert('Photo is required for check out.');
+                return;
+            }
+            if (!confirm('Are you sure you want to check out?')) return;
+
+            const btn = this;
+            btn.innerHTML = '<div class="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin mr-2 inline-block"></div> Getting GPS...';
+            btn.disabled = true;
+
+            function doCheckout(lat, lng, acc, address) {
+                const fd = new FormData();
+                fd.append('latitude',  lat  || '0');
+                fd.append('longitude', lng  || '0');
+                fd.append('accuracy',  acc  || '0');
+                fd.append('address',   address || (lat + ', ' + lng) || 'Unknown location');
+                fd.append('photo',     photoInput.files[0]);
+
+                btn.innerHTML = '<div class="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin mr-2 inline-block"></div> Processing...';
+
+                fetch('/attendance/check-out/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrf() },
+                    body: fd
+                })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        if (window.LocationTracker) {
+                            window.LocationTracker.stopTracking();
+                        }
+                        const el = document.querySelector('[hx-get]');
+                        if (el && window.htmx) htmx.trigger(el, 'load');
+                        else window.location.reload();
+                    } else {
+                        alert('Error: ' + res.error);
+                        btn.innerHTML = 'Check Out';
+                        btn.disabled = false;
+                    }
+                })
+                .catch(function () {
+                    alert('Network error. Please try again.');
+                    btn.innerHTML = 'Check Out';
+                    btn.disabled = false;
+                });
+            }
+
+            function checkoutWithGPS() {
+                if (!navigator.geolocation) {
+                    doCheckout(0, 0, 0, 'GPS not supported');
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    function(pos) {
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        const acc = pos.coords.accuracy;
+                        // Try reverse geocode
+                        fetch(
+                            'https://nominatim.openstreetmap.org/reverse?lat=' + lat +
+                            '&lon=' + lng + '&format=json',
+                            { headers: { 'Accept-Language': 'en' } }
+                        )
+                        .then(r => r.json())
+                        .then(data => {
+                            doCheckout(lat, lng, acc, data.display_name || (lat + ', ' + lng));
+                        })
+                        .catch(function() {
+                            doCheckout(lat, lng, acc, lat + ', ' + lng);
+                        });
+                    },
+                    function() {
+                        // GPS denied/failed — still allow checkout, just no location
+                        doCheckout(0, 0, 0, 'Location unavailable at checkout');
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            }
+
+            checkoutWithGPS();
+        });
+    }
+
+})();
+</script>
+
+<script>
+// Restart countdown after HTMX swap
+(function() {
+  if (window.LocationTracker) {
+    const isActive = localStorage.getItem('ft_active') 
+      === 'true';
+    if (isActive) {
+      LocationTracker.startCountdown();
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    }
+  }
+})();
+</script>

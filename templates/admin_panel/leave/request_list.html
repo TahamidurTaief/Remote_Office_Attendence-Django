@@ -1,0 +1,221 @@
+{% extends 'base/admin_base.html' %}
+
+{% block title %}Leave Requests | FieldTrack Admin{% endblock %}
+{% block page_title %}Leave Requests{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Leave Requests</h1>
+            <p class="text-sm text-gray-500 mt-1">Review and manage employee leave requests and approvals.</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="{% url 'leave:admin_balances' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors bg-white">
+                <i data-lucide="users" class="w-4 h-4"></i>
+                Employee Balances
+            </a>
+            <a href="{% url 'leave:admin_leave_types' %}" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                Leave Types
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="mb-6 p-4 {% if message.tags == 'success' %}bg-green-50 border-green-200 text-green-700{% else %}bg-red-50 border-red-200 text-red-700{% endif %} border rounded-xl flex items-center gap-3">
+        <i data-lucide="{% if message.tags == 'success' %}check-circle{% else %}alert-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+        <p class="text-sm font-medium">{{ message }}</p>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Stats grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+                <i data-lucide="clock" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Pending Requests</p>
+                <p class="text-2xl font-bold text-gray-900 mt-1">{{ pending_count }}</p>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center text-green-600">
+                <i data-lucide="check-circle" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Approved Requests</p>
+                <p class="text-2xl font-bold text-gray-900 mt-1">{{ approved_count }}</p>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
+                <i data-lucide="x-circle" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Rejected Requests</p>
+                <p class="text-2xl font-bold text-gray-900 mt-1">{{ rejected_count }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and List Table -->
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-sm overflow-hidden">
+        <!-- Filter Tabs -->
+        <div class="px-6 py-4 border-b border-gray-150 bg-gray-50/50 flex flex-wrap gap-2">
+            <a href="?status=all" class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'all' or not current_status %}bg-indigo-600 text-white{% else %}bg-white text-gray-600 border border-gray-200 hover:bg-gray-100{% endif %}">
+                All
+            </a>
+            <a href="?status=pending" class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'pending' %}bg-amber-500 text-white{% else %}bg-white text-gray-600 border border-gray-200 hover:bg-gray-100{% endif %}">
+                Pending
+            </a>
+            <a href="?status=approved" class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'approved' %}bg-green-600 text-white{% else %}bg-white text-gray-600 border border-gray-200 hover:bg-gray-100{% endif %}">
+                Approved
+            </a>
+            <a href="?status=rejected" class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'rejected' %}bg-red-600 text-white{% else %}bg-white text-gray-600 border border-gray-200 hover:bg-gray-100{% endif %}">
+                Rejected
+            </a>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
+                <thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <tr>
+                        <th class="px-6 py-4">Employee</th>
+                        <th class="px-6 py-4">Leave Type</th>
+                        <th class="px-6 py-4">Duration</th>
+                        <th class="px-6 py-4 text-center">Days</th>
+                        <th class="px-6 py-4">Reason</th>
+                        <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 bg-white text-gray-700">
+                    {% for req in requests %}
+                    <tr class="hover:bg-gray-50/50 transition-colors">
+                        <!-- Employee Info -->
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center gap-3">
+                                {% if req.employee.profile_photo %}
+                                <img src="{{ req.employee.profile_photo.url }}" class="w-9 h-9 rounded-full object-cover bg-gray-100 border border-gray-200">
+                                {% else %}
+                                <div class="w-9 h-9 rounded-full bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center border border-indigo-150">
+                                    {{ req.employee.full_name|first|upper }}
+                                </div>
+                                {% endif %}
+                                <div>
+                                    <p class="font-medium text-gray-900">{{ req.employee.full_name }}</p>
+                                    <p class="text-xs text-gray-450">{{ req.employee.employee_id }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <!-- Leave Type -->
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                                {{ req.leave_type.name }}
+                            </span>
+                        </td>
+                        <!-- Duration -->
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-xs">
+                                <p class="font-medium text-gray-900">{{ req.start_date|date:"M d, Y" }}</p>
+                                <p class="text-gray-450">to {{ req.end_date|date:"M d, Y" }}</p>
+                            </div>
+                        </td>
+                        <!-- Days -->
+                        <td class="px-6 py-4 text-center whitespace-nowrap font-semibold text-gray-900">
+                            {{ req.number_of_days }}
+                        </td>
+                        <!-- Reason -->
+                        <td class="px-6 py-4 max-w-xs truncate" title="{{ req.reason }}">
+                            {{ req.reason }}
+                        </td>
+                        <!-- Status Badge -->
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if req.status == 'pending' %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-250">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                Pending
+                            </span>
+                            {% elif req.status == 'approved' %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-800 border border-green-250">
+                                <span class="w-1.5 h-1.5 rounded-full bg-green-600"></span>
+                                Approved
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-800 border border-red-250">
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span>
+                                Rejected
+                            </span>
+                            {% endif %}
+                        </td>
+                        <!-- Actions -->
+                        <td class="px-6 py-4 text-right whitespace-nowrap text-xs font-medium">
+                            {% if req.status == 'pending' %}
+                            <div class="flex justify-end gap-2">
+                                <form method="POST" action="{% url 'leave:approve_request' req.pk %}" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm">
+                                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                                        Approve
+                                    </button>
+                                </form>
+                                <form method="POST" action="{% url 'leave:reject_request' req.pk %}" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm">
+                                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                        Reject
+                                    </button>
+                                </form>
+                            </div>
+                            {% else %}
+                            <span class="text-gray-400 text-xs">
+                                Processed by {{ req.reviewed_by.email|default:req.reviewed_by.phone }}
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+                            <div class="flex flex-col items-center justify-center">
+                                <i data-lucide="inbox" class="w-10 h-10 text-gray-300 mb-3"></i>
+                                <p class="font-medium text-gray-600 text-sm">No leave requests found</p>
+                                <p class="text-xs text-gray-400 mt-1">Requests matching the status filter will appear here.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="px-6 py-4 border-t border-gray-150 bg-gray-50 flex items-center justify-between">
+            <span class="text-xs text-gray-500">
+                Showing page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </span>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}" class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-100 bg-white">
+                    Previous
+                </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}" class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-100 bg-white">
+                    Next
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

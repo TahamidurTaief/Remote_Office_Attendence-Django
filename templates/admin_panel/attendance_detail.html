@@ -1,0 +1,276 @@
+{% extends 'base/admin_base.html' %}
+{% block title %}Attendance Detail | FieldTrack Admin{% endblock %}
+{% block page_title %}Attendance Detail{% endblock %}
+{% block content %}
+<div class="p-8 max-w-5xl mx-auto space-y-8">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Attendance Detail Overview</h1>
+            <p class="text-xs text-gray-500 mt-1">Detailed check-in logs and tracking history for {{ attendance.employee.full_name }} on {{ attendance.date }}.</p>
+        </div>
+        <a href="{% url 'admin_panel:attendance_list' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            Back to List
+        </a>
+    </div>
+
+    <!-- Stats & Meta Panel -->
+    <div class="bg-white shadow-sm border border-gray-100 rounded-2xl p-6">
+        <dl class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-6">
+            <div>
+                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Employee</dt>
+                <dd class="mt-1 text-sm font-bold text-gray-900">{{ attendance.employee.full_name }}</dd>
+                <dd class="text-xs text-gray-500 mt-0.5">{{ attendance.employee.designation }} • ID: {{ attendance.employee.employee_id }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Date & Shift</dt>
+                <dd class="mt-1 text-sm font-bold text-gray-900">{{ attendance.date|date:"Y-m-d" }}</dd>
+                <dd class="text-xs text-gray-500 mt-0.5 capitalize">{{ attendance.type }} duty</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Status</dt>
+                <dd class="mt-1">
+                    {% if attendance.status == 'on_time' %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                        <i data-lucide="check-circle" class="w-3 h-3"></i>
+                        On Time
+                    </span>
+                    {% elif attendance.status == 'late' %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                        <i data-lucide="alert-circle" class="w-3 h-3"></i>
+                        Late
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                        <i data-lucide="x-circle" class="w-3 h-3"></i>
+                        Absent
+                    </span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="border-t border-gray-100 pt-4">
+                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Check In Time</dt>
+                <dd class="mt-1 text-sm font-semibold text-gray-900">{{ attendance.check_in_time|time:"h:i A"|default:"-" }}</dd>
+            </div>
+            <div class="border-t border-gray-100 pt-4">
+                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Check Out Time</dt>
+                <dd class="mt-1 text-sm font-semibold text-gray-900">{{ attendance.check_out_time|time:"h:i A"|default:"-" }}</dd>
+            </div>
+            <div class="border-t border-gray-100 pt-4">
+                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Hours Worked</dt>
+                <dd class="mt-1 text-sm font-bold text-indigo-600">{{ attendance.total_hours|default:"0.00" }} hours</dd>
+            </div>
+            <div class="col-span-1 md:col-span-3 border-t border-gray-100 pt-4">
+                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Note / Override Reason</dt>
+                <dd class="mt-1 text-sm text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-150 italic">"{{ attendance.note|default:"No notes provided." }}"</dd>
+            </div>
+        </dl>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+        <!-- Photo Section -->
+        <div class="md:col-span-5 flex flex-col space-y-4">
+            <h2 class="text-lg font-bold text-gray-900">Attendance Verification Photo</h2>
+                        <div class="bg-white p-6 shadow-sm border border-gray-100 rounded-2xl flex flex-col items-center justify-center">
+              {% if attendance.photo %}
+                <div class="group relative overflow-hidden rounded-xl border border-gray-200 shadow-sm cursor-zoom-in" 
+                     onclick="openPhotoModal('{{ attendance.photo.url }}', '{{ attendance.employee.full_name }} (Check-in)')">
+                    <img src="{{ attendance.photo.url }}" 
+                         class="w-full max-h-72 object-cover group-hover:scale-105 transition-all duration-300"
+                         alt="Attendance photo">
+                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+                                                <span class="inline-flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider bg-black/60 px-3 py-1.5 rounded-lg">
+                                                        <i data-lucide="eye" class="w-3 h-3"></i>
+                                                        Zoom Photo
+                                                </span>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-3 flex items-center gap-1.5 font-medium">
+                                    <i data-lucide="camera" class="w-4 h-4 text-gray-400"></i>
+                  Captured at check-in ({{ attendance.check_in_time|time:"h:i A" }})
+                </p>
+              {% else %}
+                <div class="bg-gray-50 rounded-xl p-8 border border-dashed border-gray-300 text-center w-full">
+                                    <i data-lucide="camera" class="w-12 h-12 text-gray-300 mx-auto mb-2"></i>
+                  <p class="text-gray-400 text-sm font-semibold">No photo captured for this attendance</p>
+                </div>
+              {% endif %}
+            </div>
+        </div>
+
+        <!-- Location Snapshots Table -->
+        <div class="md:col-span-7 flex flex-col space-y-4">
+            <h2 class="text-lg font-bold text-gray-900">Attendance Location Snapshots</h2>
+            <div class="bg-white shadow-sm border border-gray-100 rounded-2xl overflow-hidden flex-1">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Event</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Time</th>
+                                <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Direction</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for loc in locations %}
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 uppercase">
+                                    {% if loc.event == 'check_in' %}
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                        <i data-lucide="log-in" class="w-3 h-3"></i>
+                                        Check In
+                                    </span>
+                                    {% elif loc.event == 'check_out' %}
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                        <i data-lucide="log-out" class="w-3 h-3"></i>
+                                        Check Out
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                        <i data-lucide="navigation" class="w-3 h-3"></i>
+                                        {{ loc.get_event_display }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ loc.timestamp|time:"h:i A" }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                    <a href="https://www.google.com/maps/dir/?api=1&destination={{ loc.latitude }},{{ loc.longitude }}" 
+                                       target="_blank" 
+                                       class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-xl transition-colors">
+                                        <i data-lucide="map-pin" class="w-4 h-4"></i>
+                                        Direction
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="px-6 py-10 text-center text-gray-400 font-medium">No check-in or checkout location snapshots available.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-6">
+              <div class="px-6 py-4 border-b border-gray-100">
+                <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                  <i data-lucide="map-pin" class="w-4 h-4 text-indigo-500"></i>
+                  Location Details
+                </h3>
+              </div>
+              <div class="p-6">
+                
+                <!-- Check-in location -->
+                                {% if first_location %}
+                <div class="mb-4">
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Check-in Location
+                  </p>
+                  <div class="bg-gray-50 rounded-xl p-4">
+                    <p class="text-sm text-gray-800 mb-1">
+                                            {{ first_location.address|default:"Address not available" }}
+                    </p>
+                    <p class="text-xs text-gray-500 font-mono">
+                                            {{ first_location.latitude }}, {{ first_location.longitude }}
+                    </p>
+                    <p class="text-xs text-gray-400 mt-1">
+                                            Accuracy: ±{{ first_location.accuracy|floatformat:0 }}m
+                    </p>
+                  </div>
+                </div>
+                {% endif %}
+                
+                <!-- Check-out location -->
+                                {% if attendance.check_out_time and last_location and locations|length > 1 %}
+                <div>
+                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Check-out Location
+                  </p>
+                  <div class="bg-gray-50 rounded-xl p-4">
+                    <p class="text-sm text-gray-800 mb-1">
+                                            {{ last_location.address|default:"Address not available" }}
+                    </p>
+                    <p class="text-xs text-gray-500 font-mono">
+                                            {{ last_location.latitude }}, {{ last_location.longitude }}
+                    </p>
+                    <p class="text-xs text-gray-400 mt-1">
+                                            Accuracy: ±{{ last_location.accuracy|floatformat:0 }}m
+                    </p>
+                  </div>
+                </div>
+                {% endif %}
+                
+              </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto Sync Tracking Section -->
+    <div class="bg-white shadow-sm border border-gray-100 rounded-2xl overflow-hidden mt-6 p-6"
+         hx-get="{% url 'admin_panel:attendance_locations' attendance.pk %}"
+         hx-trigger="load">
+        <div class="flex justify-center p-8">
+            <div class="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Photo Modal -->
+<div id="photoModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-all duration-300 opacity-0" onclick="closePhotoModal(event)">
+    <div class="relative max-w-3xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl scale-95 transition-all duration-300 flex flex-col" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-gray-150 flex justify-between items-center bg-gray-50">
+            <h3 id="modalTitle" class="font-bold text-gray-900 text-lg">Attendance Photo</h3>
+            <button onclick="hidePhotoModal()" class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors p-1.5 rounded-lg hover:bg-gray-150">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="p-6 flex justify-center items-center bg-slate-900 max-h-[70vh]">
+            <img id="modalImg" src="" alt="Zoomed Attendance Photo" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-md border border-slate-700">
+        </div>
+    </div>
+</div>
+
+<!-- Photo Modal Script -->
+<script>
+    function openPhotoModal(imgUrl, empName) {
+        const modal = document.getElementById('photoModal');
+        const modalImg = document.getElementById('modalImg');
+        const modalTitle = document.getElementById('modalTitle');
+        
+        modalImg.src = imgUrl;
+        modalTitle.textContent = empName + " - Attendance Photo";
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        // Trigger smooth transition
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            const inner = modal.querySelector('.relative');
+            if (inner) {
+                inner.classList.remove('scale-95');
+                inner.classList.add('scale-100');
+            }
+        }, 20);
+    }
+
+    function hidePhotoModal() {
+        const modal = document.getElementById('photoModal');
+        modal.classList.add('opacity-0');
+        const inner = modal.querySelector('.relative');
+        if (inner) {
+            inner.classList.remove('scale-100');
+            inner.classList.add('scale-95');
+        }
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('modalImg').src = '';
+        }, 300);
+    }
+
+    function closePhotoModal(event) {
+        hidePhotoModal();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,41 @@
+<div class="location-timeline">
+  <h4 class="font-medium text-gray-700 mb-3">
+    Location Timeline
+  </h4>
+  {% for loc in locations %}
+  <div class="flex gap-3 items-start mb-3">
+    <div class="flex flex-col items-center">
+      <div class="w-3 h-3 rounded-full 
+        {% if loc.event == 'check_in' %}bg-green-500
+        {% elif loc.event == 'check_out' %}bg-red-500
+        {% else %}bg-blue-400{% endif %}">
+      </div>
+      {% if not forloop.last %}
+        <div class="w-0.5 h-8 bg-gray-200"></div>
+      {% endif %}
+    </div>
+    <div class="flex-1 pb-2">
+      <div class="flex justify-between">
+        <span class="text-xs font-medium text-gray-700">
+          {% if loc.event == 'check_in' %}Check In
+          {% elif loc.event == 'check_out' %}Check Out
+          {% else %}Auto Track{% endif %}
+        </span>
+        <span class="text-xs text-gray-400">
+          {{ loc.timestamp|time:"h:i A" }}
+        </span>
+      </div>
+      <p class="text-xs text-gray-500 mt-0.5">
+        {{ loc.address|truncatechars:60 }}
+      </p>
+      <p class="text-xs text-gray-400">
+        ±{{ loc.accuracy|floatformat:0 }}m accuracy
+      </p>
+    </div>
+  </div>
+  {% empty %}
+  <p class="text-sm text-gray-400">
+    No location history
+  </p>
+  {% endfor %}
+</div>

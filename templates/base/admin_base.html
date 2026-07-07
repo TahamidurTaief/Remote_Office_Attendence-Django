@@ -1,0 +1,237 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Panel | FieldTrack{% endblock %}</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#6366f1">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        [x-cloak] { display: none !important; }
+        /* Hide scrollbar but keep scrollable */
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased" x-data="{ sidebarOpen: false }">
+    <div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-indigo-600 z-50 hidden"></div>
+
+    <!-- Mobile overlay -->
+    <div x-show="sidebarOpen" x-cloak @click="sidebarOpen = false"
+         class="fixed inset-0 bg-black/50 z-30 md:hidden"></div>
+
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+           class="fixed top-0 left-0 h-screen w-64 bg-slate-900 text-slate-300 z-40 flex flex-col overflow-y-auto scrollbar-hide shrink-0 transition-transform duration-200 md:translate-x-0">
+        <div class="flex items-center h-16 px-6 border-b border-slate-200 bg-white">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                    <i data-lucide="clock" class="w-4 h-4 text-white"></i>
+                </div>
+                <img src="{% static 'main_logo.jpg' %}" 
+                     alt="FieldTrack" 
+                     class="h-8 w-auto object-contain"
+                     onerror="this.style.display='none'; 
+                              document.getElementById('logo-text')
+                              .style.display='block'">
+                <span id="logo-text" 
+                      style="display:none"
+                      class="text-slate-900 font-semibold text-lg">
+                  FieldTrack
+                </span>
+            </div>
+        </div>
+
+        <nav class="flex-1 py-4 overflow-y-auto scrollbar-hide">
+            {% with request.path as path %}
+            <p class="px-6 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Main</p>
+            <a href="{% url 'admin_panel:dashboard' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if path == '/admin-panel/dashboard/' %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="{% url 'employees:employee_list' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/employees/' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="users" class="w-4 h-4 shrink-0"></i>
+                <span>Employees</span>
+            </a>
+            <a href="{% url 'admin_panel:attendance_list' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/admin-panel/attendance/' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="clock" class="w-4 h-4 shrink-0"></i>
+                <span>Attendance</span>
+            </a>
+
+            <p class="px-6 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Management</p>
+            <a href="{% url 'admin_panel:reports_main' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/admin-panel/reports' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 shrink-0"></i>
+                <span>Reports</span>
+            </a>
+
+            <p class="px-6 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</p>
+            <a href="{% url 'notifications:list' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/notifications/' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="bell" class="w-4 h-4 shrink-0"></i>
+                <span>Notifications</span>
+                {% if unread_notifications %}
+                <span class="ml-auto bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                    {{ unread_notifications }}
+                </span>
+                {% endif %}
+            </a>
+            <a href="{% url 'backups:backup_list' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/backups/' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="database" class="w-4 h-4 shrink-0"></i>
+                <span>Backups</span>
+            </a>
+            <a href="{% url 'admin_panel:expired_data' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/expired-data/' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="trash-2" class="w-4 h-4 shrink-0"></i>
+                <span>Expired Data</span>
+                {% if expired_data_count %}
+                <span class="ml-auto bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                    {{ expired_data_count }}
+                </span>
+                {% endif %}
+            </a>
+
+            <p class="px-6 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Settings</p>
+            <a href="{% url 'branches:branch_list' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/branches/' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="building-2" class="w-4 h-4 shrink-0"></i>
+                <span>Branches</span>
+            </a>
+            <a href="{% url 'admin_panel:schedule_settings' %}"
+               class="group flex items-center gap-3 px-3 py-2.5 mx-3 rounded-lg text-sm font-medium transition-all duration-150 {% if '/admin-panel/settings' in path %}bg-indigo-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %}">
+                <i data-lucide="settings" class="w-4 h-4 shrink-0"></i>
+                <span>Settings</span>
+            </a>
+            {% endwith %}
+        </nav>
+
+        <div class="border-t border-slate-700/50 p-4">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                    {{ request.user.email|default:request.user.phone|make_list|first|upper }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-white text-sm font-medium truncate">Admin</p>
+                    <p class="text-slate-400 text-xs truncate">{{ request.user.email|default:request.user.phone }}</p>
+                </div>
+                <a href="{% url 'accounts:logout' %}" class="text-slate-400 hover:text-red-400 transition-colors">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <div class="md:ml-64 min-h-screen flex flex-col bg-gray-50">
+        <header class="sticky top-0 z-20 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6">
+            <div class="flex items-center gap-3">
+                <button type="button" @click="sidebarOpen = !sidebarOpen"
+                        class="md:hidden p-2 -ml-2 rounded-lg text-gray-500 hover:bg-gray-100">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <h1 class="text-lg font-semibold text-gray-900">{% block page_title %}Dashboard{% endblock %}</h1>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+                    <input type="text" placeholder="Search" class="bg-transparent text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none">
+                </div>
+                <button type="button" class="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100">
+                    <i data-lucide="search" class="w-5 h-5"></i>
+                </button>
+
+                <div class="relative"
+                     hx-get="{% url 'notifications:count' %}"
+                     hx-trigger="load, every 30s"
+                     hx-target="#notif-badge"
+                     hx-swap="outerHTML">
+                    <a href="{% url 'notifications:list' %}" class="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+                        <i data-lucide="bell" class="w-5 h-5"></i>
+                        <span id="notif-badge" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full hidden"></span>
+                    </a>
+                </div>
+
+                <div class="h-6 w-px bg-gray-200"></div>
+
+                <div class="relative" x-data="{ open: false }">
+                    <button type="button" @click="open = !open" class="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-gray-100">
+                        <span class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center">
+                            <i data-lucide="user-circle" class="w-5 h-5"></i>
+                        </span>
+                        <span class="hidden md:block text-sm font-medium text-gray-700">{{ request.user.email|default:request.user.phone }}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
+                    </button>
+                    <div x-show="open" @click.away="open = false" x-transition.opacity class="origin-top-right absolute right-0 mt-2 w-48 rounded-xl shadow-lg py-2 bg-white ring-1 ring-black ring-opacity-5 z-50" x-cloak>
+                        <a href="{% url 'accounts:change_password' %}" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            <i data-lucide="user-circle" class="w-4 h-4"></i>
+                            My Profile
+                        </a>
+                        <div class="h-px bg-gray-100 my-1"></div>
+                        <a href="{% url 'accounts:logout' %}" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                            <i data-lucide="log-out" class="w-4 h-4"></i>
+                            Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 p-6 overflow-y-auto flex flex-col justify-between">
+            <div class="grow">
+                {% block content %}{% endblock %}
+            </div>
+            <footer class="py-4 px-6 bg-white border-t border-gray-200 text-center md:text-right text-xs text-gray-500 shrink-0">
+                <span>Developed by <a href="https://tahamidurtaief.com" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold hover:underline">Tahamidur taief</a></span>
+            </footer>
+        </main>
+    </div>
+
+    {% block scripts %}{% endblock %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        });
+        document.addEventListener('htmx:afterSwap', () => {
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        });
+        document.addEventListener('htmx:beforeRequest', () => {
+            const loader = document.getElementById('page-loader');
+            if (loader) {
+                loader.classList.remove('hidden');
+            }
+        });
+        document.addEventListener('htmx:afterRequest', () => {
+            const loader = document.getElementById('page-loader');
+            if (loader) {
+                loader.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

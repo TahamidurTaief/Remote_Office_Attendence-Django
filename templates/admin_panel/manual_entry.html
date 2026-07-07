@@ -1,0 +1,89 @@
+{% extends 'base/admin_base.html' %}
+
+{% block title %}Manual Entry | FieldTrack Admin{% endblock %}
+{% block page_title %}Manual Entry{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-3xl mx-auto">
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">Manual Attendance Entry</h1>
+            <p class="text-sm text-gray-500 mt-1">Override or add missing attendance records.</p>
+        </div>
+        <a href="{% url 'admin_panel:attendance_list' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            Back
+        </a>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <form method="POST" class="p-6 space-y-6">
+            {% csrf_token %}
+            
+            {% if form.errors %}
+            <div class="rounded-xl bg-red-50 p-4 border border-red-200">
+                <div class="flex">
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800 flex items-center gap-2"><i data-lucide="alert-circle" class="w-4 h-4"></i>Please fix the errors below.</h3>
+                        {{ form.non_field_errors }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                <div class="sm:col-span-6">
+                    <label class="block text-sm font-bold text-gray-700">Employee</label>
+                    <div class="mt-1">{{ form.employee }}</div>
+                    {% if form.employee.errors %}<p class="mt-2 text-sm text-red-600">{{ form.employee.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label class="block text-sm font-bold text-gray-700">Date</label>
+                    <div class="mt-1">{{ form.date }}</div>
+                    {% if form.date.errors %}<p class="mt-2 text-sm text-red-600">{{ form.date.errors.0 }}</p>{% endif %}
+                </div>
+                
+                <div class="sm:col-span-3"></div>
+
+                <div class="sm:col-span-3">
+                    <label class="block text-sm font-bold text-gray-700">Check In Time</label>
+                    <div class="mt-1">{{ form.check_in_time }}</div>
+                    {% if form.check_in_time.errors %}<p class="mt-2 text-sm text-red-600">{{ form.check_in_time.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label class="block text-sm font-bold text-gray-700">Check Out Time</label>
+                    <div class="mt-1">{{ form.check_out_time }}</div>
+                    {% if form.check_out_time.errors %}<p class="mt-2 text-sm text-red-600">{{ form.check_out_time.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label class="block text-sm font-bold text-gray-700">Type</label>
+                    <div class="mt-1">{{ form.type }}</div>
+                    {% if form.type.errors %}<p class="mt-2 text-sm text-red-600">{{ form.type.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label class="block text-sm font-bold text-gray-700">Status</label>
+                    <div class="mt-1">{{ form.status }}</div>
+                    {% if form.status.errors %}<p class="mt-2 text-sm text-red-600">{{ form.status.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div class="sm:col-span-6">
+                    <label class="block text-sm font-bold text-gray-700">{{ form.admin_override_reason.label }}</label>
+                    <div class="mt-1">{{ form.admin_override_reason }}</div>
+                    {% if form.admin_override_reason.errors %}<p class="mt-2 text-sm text-red-600">{{ form.admin_override_reason.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="pt-5 flex justify-end gap-3 border-t border-gray-100 mt-6">
+                <button type="submit" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    Save Record
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,399 @@
+{% extends 'base/staff_base.html' %}
+
+{% block page_title %}Check In{% endblock %}
+
+{% block content %}
+<div class="px-6 py-6">
+    <form action="{% url 'attendance:check_in' %}" method="POST" enctype="multipart/form-data" id="check-in-form">
+        {% csrf_token %}
+        <input type="hidden" name="latitude" id="id_latitude">
+        <input type="hidden" name="longitude" id="id_longitude">
+        <input type="hidden" name="accuracy" id="id_accuracy">
+        <input type="hidden" name="address" id="id_address">
+
+        <!-- Header -->
+        <div class="flex items-center mb-8">
+            <a href="{% url 'staff:home' %}" class="p-2 -ml-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100 transition-colors">
+            <i data-lucide="arrow-left" class="w-6 h-6"></i>
+            </a>
+            <h1 class="text-xl font-bold text-gray-900 ml-4">Check In</h1>
+        </div>
+
+        <div class="flex gap-3 mb-6">
+            <div id="step-gps" 
+                 class="flex-1 flex items-center gap-2 p-3 
+                        rounded-xl border-2 border-gray-200 
+                        bg-gray-50 transition-all">
+              <span id="gps-icon" class="text-xl text-indigo-600"><i data-lucide="map-pin"></i></span>
+              <div>
+                <p class="text-xs text-gray-500">Step 1</p>
+                <p class="text-sm font-medium" id="gps-step-text">
+                  Getting GPS...
+                </p>
+              </div>
+            </div>
+            <div id="step-photo"
+                 class="flex-1 flex items-center gap-2 p-3 
+                        rounded-xl border-2 border-gray-200 
+                        bg-gray-50 transition-all">
+              <span class="text-xl text-indigo-600"><i data-lucide="camera"></i></span>
+              <div>
+                <p class="text-xs text-gray-500">Step 2</p>
+                <p class="text-sm font-medium">Take Photo</p>
+              </div>
+            </div>
+          </div>
+
+        <!-- GPS Status Card -->
+        <div id="gps-card" class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl text-red-500"><i data-lucide="map-pin"></i></span>
+              <div class="flex-1">
+                <p id="gps-status" class="font-medium text-amber-600">
+                  Getting location...
+                </p>
+                <p id="gps-address" class="text-sm text-gray-500 mt-0.5">
+                  Please wait...
+                </p>
+                <p id="gps-accuracy" class="text-xs text-gray-400"></p>
+              </div>
+            </div>
+            <button id="retry-btn" type="button"
+                    onclick="getLocation()"
+                    class="hidden mt-3 text-sm text-indigo-600 underline whitespace-nowrap">
+              Retry GPS
+            </button>
+        </div>
+
+        <!-- Photo capture section -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i data-lucide="camera" class="w-4 h-4 inline mr-1 text-indigo-600"></i> Attendance Photo <span class="text-red-500">*</span>
+            </label>
+            
+            <div id="camera-area"
+                onclick="document.getElementById('camera-input').click()"
+                class="border-2 border-dashed border-gray-300 
+                        rounded-xl p-6 text-center cursor-pointer 
+                        hover:border-indigo-400 transition-colors">
+            
+            <div id="camera-placeholder">
+                <span class="text-5xl text-gray-400"><i data-lucide="camera"></i></span>
+                <p class="text-gray-600 font-medium mt-2">
+                Tap to take photo
+                </p>
+                <p class="text-xs text-gray-400 mt-1">
+                Photo is required for attendance
+                </p>
+            </div>
+            
+            <img id="photo-preview" 
+                class="hidden w-full rounded-lg max-h-56 object-cover"
+                alt="Attendance photo preview">
+            </div>
+            
+            <!-- 
+            capture="environment" = rear camera on mobile
+            On desktop: file picker opens (allowed)
+            On mobile: camera opens directly
+            -->
+            <input type="file"
+                id="camera-input"
+                name="photo"
+                accept="image/*"
+                capture="environment"
+                class="hidden"
+                onchange="handlePhoto(this)">
+            
+            <p id="photo-error" 
+            class="text-xs text-red-500 mt-1 hidden">
+            <i data-lucide="alert-circle" class="w-3 h-3 inline mr-1 text-red-500"></i> Photo is required
+            </p>
+            
+            <!-- Retake button (shown after photo taken) -->
+            <button type="button"
+                    id="retake-btn"
+                    onclick="retakePhoto()"
+                    class="hidden mt-2 w-full py-2 px-4 rounded-lg border 
+                            border-gray-300 text-sm text-gray-600
+                            hover:bg-gray-50 whitespace-nowrap">
+            <i data-lucide="rotate-ccw" class="w-4 h-4 mr-1"></i> Retake Photo
+            </button>
+        </div>
+
+        <!-- Type Toggle -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Attendance Type</label>
+            <div class="grid grid-cols-2 gap-3">
+                <label class="relative flex cursor-pointer rounded-lg border bg-white p-4 shadow-sm focus:outline-none">
+                    <input type="radio" name="attendance_type" value="office" class="sr-only" checked onchange="document.getElementById('id_type').value = this.value">
+                    <span class="flex flex-1">
+                        <span class="flex flex-col">
+                            <span id="type-office-label" class="block text-sm font-medium text-gray-900"><i data-lucide="building-2" class="w-4 h-4 inline mr-1.5 text-indigo-600"></i> Office</span>
+                        </span>
+                    </span>
+                    <svg class="h-5 w-5 text-indigo-600 hidden check-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
+                </label>
+                <label class="relative flex cursor-pointer rounded-lg border bg-white p-4 shadow-sm focus:outline-none">
+                    <input type="radio" name="attendance_type" value="field" class="sr-only" onchange="document.getElementById('id_type').value = this.value">
+                    <span class="flex flex-1">
+                        <span class="flex flex-col">
+                            <span id="type-field-label" class="block text-sm font-medium text-gray-900"><i data-lucide="map" class="w-4 h-4 inline mr-1.5 text-indigo-600"></i> Field Visit</span>
+                        </span>
+                    </span>
+                    <svg class="h-5 w-5 text-indigo-600 hidden check-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
+                </label>
+            </div>
+            <input type="hidden" name="type" id="id_type" value="office">
+            <style>
+                input[type="radio"]:checked + span + svg { display: block; }
+                input[type="radio"]:checked ~ span { color: #4f46e5; font-weight: 700; }
+                label:has(input[type="radio"]:checked) { border-color: #4f46e5; background-color: #eef2ff; }
+            </style>
+        </div>
+
+        <div class="mb-8">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
+            <textarea name="note" id="id_note" rows="3" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-3 border" placeholder="Any details for today's check in..."></textarea>
+        </div>
+
+        <button type="button"
+                id="check-in-btn"
+                onclick="submitCheckIn()"
+                disabled
+                class="w-full py-4 px-4 rounded-xl font-bold text-white 
+                    text-lg bg-gray-300 cursor-not-allowed
+                    transition-all duration-300 whitespace-nowrap min-w-fit"
+                data-gps-ready="false"
+                data-photo-ready="false">
+        Complete Check In
+        </button>
+
+        <p id="submit-hint" class="text-center text-xs text-gray-400 mt-2">
+        Waiting for GPS and photo...
+        </p>
+    </form>
+</div>
+
+{% block scripts %}
+<script>
+let gpsReady = false;
+let photoReady = false;
+
+// ==================
+// GPS Logic
+// ==================
+function getLocation() {
+  const btn = document.getElementById('check-in-btn');
+  updateGPSStatus('loading', 'Getting your location...');
+  document.getElementById('retry-btn').classList.add('hidden');
+
+  if (!navigator.geolocation) {
+    updateGPSStatus('error', 'GPS not supported');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async function(position) {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const acc = position.coords.accuracy;
+
+      document.getElementById('id_latitude').value = lat;
+      document.getElementById('id_longitude').value = lng;
+      document.getElementById('id_accuracy').value = acc.toFixed(1);
+      document.getElementById('gps-accuracy').textContent = acc.toFixed(1) + ' meters';
+
+      updateGPSStatus('success', 
+        'Location acquired (±' + acc.toFixed(0) + 'm)');
+
+      // Step 1 indicator — done
+      document.getElementById('step-gps').classList.add(
+        'border-green-400', 'bg-green-50');
+      document.getElementById('gps-step-text').textContent = 
+        'GPS Ready';
+
+      // Reverse geocode
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse` +
+          `?lat=${lat}&lon=${lng}&format=json`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        const address = data.display_name || 
+          `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        document.getElementById('id_address').value = address;
+        document.getElementById('gps-address').textContent = address;
+      } catch(e) {
+        const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        document.getElementById('id_address').value = fallback;
+        document.getElementById('gps-address').textContent = fallback;
+      }
+
+      gpsReady = true;
+      checkBothReady();
+    },
+    function(error) {
+      let msg = 'Location access denied';
+      if (error.code === 2) msg = 'Location unavailable. Try again.';
+      if (error.code === 3) msg = 'Timed out. Try again.';
+      updateGPSStatus('error', msg);
+      document.getElementById('retry-btn').classList.remove('hidden');
+      gpsReady = false;
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+function updateGPSStatus(state, message) {
+  const status = document.getElementById('gps-status');
+  if (state === 'loading') {
+    status.className = 'font-medium text-amber-600';
+  } else if (state === 'success') {
+    status.className = 'font-medium text-green-600';
+  } else {
+    status.className = 'font-medium text-red-600';
+  }
+  status.textContent = message;
+}
+
+// ==================
+// Photo Logic
+// ==================
+function handlePhoto(input) {
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+
+    // Validate size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Photo too large. Maximum 10MB allowed.');
+      input.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      // Show preview
+      document.getElementById('photo-preview').src = e.target.result;
+      document.getElementById('photo-preview')
+        .classList.remove('hidden');
+      document.getElementById('camera-placeholder')
+        .classList.add('hidden');
+      document.getElementById('retake-btn')
+        .classList.remove('hidden');
+      document.getElementById('photo-error')
+        .classList.add('hidden');
+      
+      // Step 2 indicator — done
+      document.getElementById('step-photo').classList.add(
+        'border-green-400', 'bg-green-50');
+
+      photoReady = true;
+      checkBothReady();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function retakePhoto() {
+  document.getElementById('camera-input').value = '';
+  document.getElementById('photo-preview').classList.add('hidden');
+  document.getElementById('camera-placeholder')
+    .classList.remove('hidden');
+  document.getElementById('retake-btn').classList.add('hidden');
+  document.getElementById('step-photo').classList.remove(
+    'border-green-400', 'bg-green-50');
+  photoReady = false;
+  checkBothReady();
+}
+
+// ==================
+// Submit Enable Logic
+// ==================
+function checkBothReady() {
+  const btn = document.getElementById('check-in-btn');
+  const hint = document.getElementById('submit-hint');
+  
+  if (gpsReady && photoReady) {
+    btn.disabled = false;
+    btn.className = 'w-full py-4 px-4 rounded-xl font-bold ' +
+      'text-white text-lg bg-green-600 cursor-pointer ' +
+      'hover:bg-green-700 transition-all duration-300 whitespace-nowrap min-w-fit';
+    hint.textContent = 'Ready to check in';
+    hint.className = 'text-center text-xs text-green-600 mt-2';
+  } else {
+    btn.disabled = true;
+    btn.className = 'w-full py-4 px-4 rounded-xl font-bold ' +
+      'text-white text-lg bg-gray-300 cursor-not-allowed ' +
+      'transition-all duration-300 whitespace-nowrap min-w-fit';
+    
+    if (!gpsReady && !photoReady) {
+      hint.textContent = 'Waiting for GPS and photo...';
+    } else if (!gpsReady) {
+      hint.textContent = 'Waiting for GPS...';
+    } else {
+      hint.textContent = 'Photo required';
+    }
+    hint.className = 'text-center text-xs text-gray-400 mt-2';
+  }
+}
+
+// ==================
+// Form Submit
+// ==================
+function submitCheckIn() {
+  if (!gpsReady || !photoReady) return;
+  
+  const btn = document.getElementById('check-in-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  
+  const formData = new FormData();
+  formData.append('latitude', 
+    document.getElementById('id_latitude').value);
+  formData.append('longitude', 
+    document.getElementById('id_longitude').value);
+  formData.append('accuracy', 
+    document.getElementById('id_accuracy').value);
+  formData.append('address', 
+    document.getElementById('id_address').value);
+  formData.append('photo', 
+    document.getElementById('camera-input').files[0]);
+  formData.append('note', 
+    document.getElementById('id_note').value || '');
+  formData.append('type',
+    document.querySelector('input[name="attendance_type"]:checked')
+    ?.value || 'office');
+  formData.append('csrfmiddlewaretoken', 
+    document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+  fetch('/attendance/check-in/', {
+    method: 'POST',
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      if (window.LocationTracker) {
+        window.LocationTracker.startTracking();
+      }
+      window.location.href = '/staff/home/';
+    } else {
+      alert('Error: ' + data.error);
+      btn.disabled = false;
+      btn.textContent = 'Complete Check In';
+    }
+  })
+  .catch(err => {
+    alert('Something went wrong. Try again.');
+    btn.disabled = false;
+    btn.textContent = 'Complete Check In';
+  });
+}
+
+// Start GPS on page load
+window.addEventListener('load', getLocation);
+</script>
+{% endblock %}
+{% endblock %}

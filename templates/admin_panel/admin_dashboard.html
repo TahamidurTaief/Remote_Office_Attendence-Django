@@ -1,0 +1,129 @@
+{% extends 'base/admin_base.html' %}
+
+{% block title %}Dashboard | FieldTrack Admin{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <p class="text-sm text-gray-500 mt-1">Live attendance tracking for {% if request.GET.date %}{{ selected_date }}{% else %}today{% endif %}.</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm mb-6">
+        <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+                <input type="date" name="date" value="{{ selected_date }}" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Employee</label>
+                <select name="employee" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">All Employees</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if selected_employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">Branch</label>
+                <select name="branch" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">All Branches</option>
+                    {% for b in branches %}
+                    <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex gap-2">
+                <button type="submit" class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="filter" class="w-4 h-4"></i>
+                    Filter
+                </button>
+                <a href="{% url 'admin_panel:dashboard' %}" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div id="live-section" hx-get="{% url 'admin_panel:dashboard_partial' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" hx-trigger="load, every 60s">
+        <!-- Skeleton loader -->
+        <div class="animate-pulse">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+                <div class="h-24 bg-gray-200 rounded-xl"></div>
+                <div class="h-24 bg-gray-200 rounded-xl"></div>
+                <div class="h-24 bg-gray-200 rounded-xl"></div>
+                <div class="h-24 bg-gray-200 rounded-xl"></div>
+                <div class="h-24 bg-gray-200 rounded-xl"></div>
+            </div>
+            <div class="grid grid-cols-12 gap-8">
+                <div class="col-span-12 lg:col-span-7 xl:col-span-8 h-96 bg-gray-200 rounded-xl"></div>
+                <div class="col-span-12 lg:col-span-5 xl:col-span-4 h-96 bg-gray-200 rounded-xl"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Photo Modal -->
+    <div id="photoModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-all duration-300 opacity-0" onclick="closePhotoModal(event)">
+        <div class="relative max-w-3xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl scale-95 transition-all duration-300 flex flex-col" onclick="event.stopPropagation()">
+            <!-- Header -->
+            <div class="px-6 py-4 border-b border-gray-150 flex justify-between items-center bg-gray-50">
+                <h3 id="modalTitle" class="font-bold text-gray-900 text-lg">Attendance Photo</h3>
+                <button onclick="hidePhotoModal()" class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors p-1.5 rounded-lg hover:bg-gray-150">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="p-6 flex justify-center items-center bg-slate-900 max-h-[70vh]">
+                <img id="modalImg" src="" alt="Zoomed Attendance Photo" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-md border border-slate-700">
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Modal Script -->
+    <script>
+        function openPhotoModal(imgUrl, empName) {
+            const modal = document.getElementById('photoModal');
+            const modalImg = document.getElementById('modalImg');
+            const modalTitle = document.getElementById('modalTitle');
+            
+            modalImg.src = imgUrl;
+            modalTitle.textContent = empName + " - Attendance Photo";
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Trigger smooth transition
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                const inner = modal.querySelector('.relative');
+                if (inner) {
+                    inner.classList.remove('scale-95');
+                    inner.classList.add('scale-100');
+                }
+            }, 20);
+        }
+
+        function hidePhotoModal() {
+            const modal = document.getElementById('photoModal');
+            modal.classList.add('opacity-0');
+            const inner = modal.querySelector('.relative');
+            if (inner) {
+                inner.classList.remove('scale-100');
+                inner.classList.add('scale-95');
+            }
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                document.getElementById('modalImg').src = '';
+            }, 300);
+        }
+
+        function closePhotoModal(event) {
+            hidePhotoModal();
+        }
+    </script>
+</div>
+{% endblock %}
