@@ -246,6 +246,14 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
     template_name = 'staff/leave/request_form.html'
     success_url = reverse_lazy('leave:staff_dashboard')
 
+    def get_initial(self):
+        initial = super().get_initial()
+        date_str = self.request.GET.get('date')
+        if date_str:
+            initial['start_date'] = date_str
+            initial['end_date'] = date_str
+        return initial
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['employee'] = getattr(self.request.user, 'employee_profile', None)

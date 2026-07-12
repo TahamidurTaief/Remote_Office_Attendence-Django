@@ -32,6 +32,7 @@ class LeaveRequestForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.employee = kwargs.pop('employee', None)
         super().__init__(*args, **kwargs)
+        self.projected_remaining = None
 
     def clean(self):
         cleaned_data = super().clean()
@@ -62,11 +63,7 @@ class LeaveRequestForm(forms.ModelForm):
                 if self.instance and self.instance.pk and self.instance.status == 'approved':
                     remaining += self.instance.number_of_days
 
-                if number_of_days > remaining:
-                    raise forms.ValidationError(
-                        f"Insufficient leave balance for {leave_type.name} in {year}. "
-                        f"Requested: {number_of_days} days, Remaining: {remaining} days."
-                    )
+                self.projected_remaining = remaining - number_of_days
         return cleaned_data
 
 class LeaveTypeForm(forms.ModelForm):

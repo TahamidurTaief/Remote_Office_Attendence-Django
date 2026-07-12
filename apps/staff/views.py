@@ -167,9 +167,61 @@ def attendance_history(request):
         'field':   attendances.filter(type='field').count()
     }
 
+    # Fetch Leave Requests
+    from apps.leave.models import LeaveRequest
+    leave_requests = LeaveRequest.objects.filter(
+        employee=employee,
+        status__in=['pending', 'approved'],
+        start_date__lte=end_date,
+        end_date__gte=start_date
+    )
+    leave_by_date = {}
+    for req in leave_requests:
+        curr = req.start_date
+        while curr <= req.end_date:
+            leave_by_date[curr] = {
+                'status': req.status,
+                'leave_type_name': req.leave_type.name if req.leave_type else 'Leave'
+            }
+            curr += datetime.timedelta(days=1)
+
+    # Attach leave info to real attendances and group by date
+    from collections import defaultdict
+    atts_by_date = defaultdict(list)
+    for att in attendances:
+        att.leave_info = leave_by_date.get(att.date)
+        atts_by_date[att.date].append(att)
+
+    # Build the combined list of day rows to display in the template
+    combined_records = []
+    today = timezone.localdate()
+    curr = end_date
+    while curr >= start_date:
+        has_atts = curr in atts_by_date
+        has_leave = curr in leave_by_date
+        
+        if has_atts or has_leave or curr <= today:
+            if has_atts:
+                for att in atts_by_date[curr]:
+                    combined_records.append(att)
+            else:
+                placeholder = {
+                    'date': curr,
+                    'status': 'absent' if curr < today else 'no_attendance',
+                    'check_in_time': None,
+                    'check_out_time': None,
+                    'total_hours': None,
+                    'type': '--',
+                    'is_placeholder': True,
+                    'leave_info': leave_by_date.get(curr)
+                }
+                combined_records.append(placeholder)
+        curr -= datetime.timedelta(days=1)
+
     context = {
         'employee':         employee,
-        'attendances':      attendances,
+        'attendances':      combined_records,
+        'leave_by_date':    leave_by_date,
         'stats':            stats,
         'current_month':    target_date.strftime('%B %Y'),
         'current_month_val': target_date.strftime('%Y-%m'),

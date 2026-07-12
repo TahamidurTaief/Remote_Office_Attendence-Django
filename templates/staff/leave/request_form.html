@@ -40,6 +40,16 @@
             </div>
             {% endif %}
 
+            {% if form.projected_remaining is not None %}
+            <div class="p-4 rounded-xl border flex items-center justify-between gap-3 shadow-inner {% if form.projected_remaining < 0 %}bg-red-50 border-red-200 text-red-700{% else %}bg-green-50 border-green-200 text-green-700{% endif %}">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="info" class="w-5 h-5 {% if form.projected_remaining < 0 %}text-red-650{% else %}text-green-600{% endif %} flex-shrink-0"></i>
+                    <span class="text-sm font-semibold">After this request:</span>
+                </div>
+                <span class="text-sm font-bold">{{ form.projected_remaining }} day{% if form.projected_remaining != 1 and form.projected_remaining != -1 %}s{% endif %} remaining</span>
+            </div>
+            {% endif %}
+
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-bold text-gray-700">Leave Type</label>
