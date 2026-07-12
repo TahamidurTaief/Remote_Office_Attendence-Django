@@ -172,11 +172,11 @@
                                         remaining: '{{ row.remaining_days|escapejs }}',
                                         branch: '{{ row.employee.branch.name|default:"—"|escapejs }}',
                                         sourceType: '{{ row.source_type|escapejs }}',
-                                        reason: '{{ row.leave_request.reason|default:""|escapejs }}',
-                                        reviewedBy: '{{ row.leave_request.reviewed_by.email|default:row.leave_request.reviewed_by.phone|escapejs }}',
-                                        reviewedAt: '{{ row.leave_request.reviewed_at|date:"M d, Y, I:i A"|escapejs }}',
-                                        startDate: '{{ row.leave_request.start_date|date:"M d, Y"|escapejs }}',
-                                        endDate: '{{ row.leave_request.end_date|date:"M d, Y"|escapejs }}'
+                                        reason: '{% if row.leave_request %}{{ row.leave_request.reason|default:""|escapejs }}{% endif %}',
+                                        reviewedBy: '{% if row.leave_request.reviewed_by %}{{ row.leave_request.reviewed_by.email|default:row.leave_request.reviewed_by.phone|escapejs }}{% endif %}',
+                                        reviewedAt: '{% if row.leave_request.reviewed_at %}{{ row.leave_request.reviewed_at|date:"M d, Y, I:i A"|escapejs }}{% endif %}',
+                                        startDate: '{% if row.leave_request.start_date %}{{ row.leave_request.start_date|date:"M d, Y"|escapejs }}{% endif %}',
+                                        endDate: '{% if row.leave_request.end_date %}{{ row.leave_request.end_date|date:"M d, Y"|escapejs }}{% endif %}'
                                     })"
                                     class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-indigo-600 rounded-lg transition-colors inline-flex items-center justify-center"
                                     title="View Details">
