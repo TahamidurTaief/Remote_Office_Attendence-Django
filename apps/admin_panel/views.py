@@ -1407,9 +1407,12 @@ class OfficeScheduleView(AdminRequiredMixin, View):
             (240, '4 hours'),
             (0,   'Disabled'),
         ]
+        from apps.leave.models import LeaveType
+        leave_types = LeaveType.objects.all().order_by('category', 'name')
         return render(request, self.template_name, {
             'schedules': schedules,
-            'tracking_choices': TRACKING_CHOICES
+            'tracking_choices': TRACKING_CHOICES,
+            'leave_types': leave_types
         })
 
     def post(self, request):
@@ -2254,3 +2257,316 @@ def delete_all_expired(request):
             is_expired=True).delete()
         messages.success(request, f"Deleted all {count} expired records.")
         return redirect('admin_panel:expired_data')
+
+
+class AbsentReportView(AdminRequiredMixin, ListView):
+    template_name = 'admin_panel/reports/absent_report.html'
+    context_object_name = 'absences'
+    paginate_by = 25
+
+    def get_queryset(self):
+        from apps.attendance.models import AttendanceAbsentLog
+        queryset = AttendanceAbsentLog.objects.select_related('employee', 'employee__branch', 'leave_type_deducted')
+        
+        date_from = self.request.GET.get('date_from')
+        date_to = self.request.GET.get('date_to')
+        emp_id = self.request.GET.get('employee')
+        branch_id = self.request.GET.get('branch')
+        lt_id = self.request.GET.get('leave_type')
+
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+        if emp_id:
+            queryset = queryset.filter(employee_id=emp_id)
+        if branch_id:
+            queryset = queryset.filter(employee__branch_id=branch_id)
+        if lt_id:
+            queryset = queryset.filter(leave_type_deducted_id=lt_id)
+
+        return queryset.order_by('-date', 'employee__full_name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.employees.models import EmployeeProfile
+        from apps.branches.models import Branch
+        from apps.leave.models import LeaveType, LeaveBalance
+
+        # Populate live snapshot of LeaveBalance remaining days
+        for absence in context['absences']:
+            year = absence.date.year
+            lt = absence.leave_type_deducted
+            if lt:
+                bal = LeaveBalance.objects.filter(employee=absence.employee, leave_type=lt, year=year).first()
+                absence.remaining_days = bal.remaining_days if bal else lt.default_days_per_year
+            else:
+                absence.remaining_days = None
+
+        context.update({
+            'employees': EmployeeProfile.objects.all().order_by('full_name'),
+            'branches': Branch.objects.all().order_by('name'),
+            'leave_types': LeaveType.objects.all().order_by('name'),
+            'selected_employee': self.request.GET.get('employee', ''),
+            'selected_branch': self.request.GET.get('branch', ''),
+            'selected_leave_type': self.request.GET.get('leave_type', ''),
+            'date_from': self.request.GET.get('date_from', ''),
+            'date_to': self.request.GET.get('date_to', ''),
+        })
+        
+        # Build query string for pagination links
+        get_copy = self.request.GET.copy()
+        if 'page' in get_copy:
+            del get_copy['page']
+        context['query_string'] = get_copy.urlencode()
+        
+        return context
+
+
+class ExportAbsentReportExcelView(AdminRequiredMixin, View):
+    def get(self, request):
+        from apps.attendance.models import AttendanceAbsentLog
+        from apps.leave.models import LeaveBalance
+        from django.utils import timezone
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        queryset = AttendanceAbsentLog.objects.select_related('employee', 'employee__branch', 'leave_type_deducted')
+        
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        emp_id = request.GET.get('employee')
+        branch_id = request.GET.get('branch')
+        lt_id = request.GET.get('leave_type')
+
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+        if emp_id:
+            queryset = queryset.filter(employee_id=emp_id)
+        if branch_id:
+            queryset = queryset.filter(employee__branch_id=branch_id)
+        if lt_id:
+            queryset = queryset.filter(leave_type_deducted_id=lt_id)
+
+        absences = list(queryset.order_by('-date', 'employee__full_name'))
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Absence Deductions"
+
+        company_font = Font(name='Calibri', bold=True, size=14)
+        header_font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
+        normal_font = Font(name='Calibri', size=9)
+        
+        header_fill = PatternFill('solid', fgColor='1F4E79')  # dark blue
+        center = Alignment(horizontal='center', vertical='center')
+        left = Alignment(horizontal='left', vertical='center')
+        
+        thin = Side(style='thin', color='E5E7EB')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        ws.merge_cells('A1:F1')
+        ws['A1'] = 'Absence Deductions Report'
+        ws['A1'].font = company_font
+        ws['A1'].alignment = center
+        ws.row_dimensions[1].height = 30
+
+        headers = ['Employee Name', 'Employee ID', 'Date', 'Leave Type Deducted', 'Remaining Balance', 'Branch']
+        ws.row_dimensions[2].height = 20
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=2, column=col_num, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center
+            cell.border = border
+
+        data_row = 3
+        for abs_log in absences:
+            year = abs_log.date.year
+            lt = abs_log.leave_type_deducted
+            if lt:
+                bal = LeaveBalance.objects.filter(employee=abs_log.employee, leave_type=lt, year=year).first()
+                remaining = bal.remaining_days if bal else lt.default_days_per_year
+                remaining_str = f"{remaining} days"
+                lt_name = lt.name
+            else:
+                remaining_str = "—"
+                lt_name = "—"
+
+            branch_name = abs_log.employee.branch.name if abs_log.employee.branch else '—'
+
+            ws.cell(row=data_row, column=1, value=abs_log.employee.full_name).alignment = left
+            ws.cell(row=data_row, column=2, value=abs_log.employee.employee_id).alignment = center
+            ws.cell(row=data_row, column=3, value=str(abs_log.date)).alignment = center
+            ws.cell(row=data_row, column=4, value=lt_name).alignment = center
+            ws.cell(row=data_row, column=5, value=remaining_str).alignment = center
+            ws.cell(row=data_row, column=6, value=branch_name).alignment = left
+
+            for c in range(1, 7):
+                cell = ws.cell(row=data_row, column=c)
+                cell.font = normal_font
+                cell.border = border
+
+            ws.row_dimensions[data_row].height = 18
+            data_row += 1
+
+        ws.column_dimensions['A'].width = 25
+        ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 20
+        ws.column_dimensions['E'].width = 20
+        ws.column_dimensions['F'].width = 20
+
+        filename = f"absence_report_{timezone.localdate()}.xlsx"
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(response)
+        return response
+
+
+class ExportAbsentReportPDFView(AdminRequiredMixin, View):
+    def get(self, request):
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from apps.attendance.models import AttendanceAbsentLog
+        from apps.leave.models import LeaveBalance
+        from django.utils import timezone
+
+        queryset = AttendanceAbsentLog.objects.select_related('employee', 'employee__branch', 'leave_type_deducted')
+        
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        emp_id = request.GET.get('employee')
+        branch_id = request.GET.get('branch')
+        lt_id = request.GET.get('leave_type')
+
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+        if emp_id:
+            queryset = queryset.filter(employee_id=emp_id)
+        if branch_id:
+            queryset = queryset.filter(employee__branch_id=branch_id)
+        if lt_id:
+            queryset = queryset.filter(leave_type_deducted_id=lt_id)
+
+        absences = list(queryset.order_by('-date', 'employee__full_name'))
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="absence_report_{timezone.localdate()}.pdf"'
+
+        doc = SimpleDocTemplate(
+            response,
+            pagesize=A4,
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=30,
+            bottomMargin=30,
+        )
+
+        styles = getSampleStyleSheet()
+        elements = []
+
+        cell_style = ParagraphStyle(
+            'GridCell',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=8,
+            leading=10,
+            alignment=1
+        )
+        cell_style_left = ParagraphStyle(
+            'GridCellLeft',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=8,
+            leading=10,
+            alignment=0
+        )
+        
+        title_style = ParagraphStyle(
+            'TitleStyle',
+            parent=styles['Heading1'],
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            leading=16,
+            textColor=colors.HexColor('#1F4E79'),
+            alignment=0
+        )
+        
+        subtitle_style = ParagraphStyle(
+            'SubtitleStyle',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=8,
+            leading=10,
+            textColor=colors.HexColor('#4B5563')
+        )
+
+        elements.append(Paragraph('Signtech Track — Absence Deductions Report', title_style))
+        elements.append(Paragraph(
+            f'Generated: {timezone.localtime(timezone.now()).strftime("%d %b %Y, %I:%M %p")}',
+            subtitle_style,
+        ))
+        elements.append(Spacer(1, 16))
+
+        headers = ['Employee', 'Emp ID', 'Date', 'Leave Type Deducted', 'Remaining Balance', 'Branch']
+        data = [headers]
+
+        for abs_log in absences:
+            year = abs_log.date.year
+            lt = abs_log.leave_type_deducted
+            if lt:
+                bal = LeaveBalance.objects.filter(employee=abs_log.employee, leave_type=lt, year=year).first()
+                remaining = bal.remaining_days if bal else lt.default_days_per_year
+                remaining_str = f"{remaining} days"
+                lt_name = lt.name
+            else:
+                remaining_str = "—"
+                lt_name = "—"
+
+            branch_name = abs_log.employee.branch.name if abs_log.employee.branch else '—'
+
+            data.append([
+                Paragraph(abs_log.employee.full_name, cell_style_left),
+                Paragraph(abs_log.employee.employee_id, cell_style),
+                Paragraph(str(abs_log.date), cell_style),
+                Paragraph(lt_name, cell_style),
+                Paragraph(remaining_str, cell_style),
+                Paragraph(branch_name, cell_style_left),
+            ])
+
+        col_widths = [140, 70, 75, 90, 80, 80]
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
+            ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
+            ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, 0), 9),
+            ('ALIGN',         (0, 0), (-1, 0), 'CENTER'),
+            ('TOPPADDING',    (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('FONTNAME',      (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE',      (0, 1), (-1, -1), 8),
+            ('ALIGN',         (0, 1), (-1, -1), 'CENTER'),
+            ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING',    (0, 1), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9FAFB')]),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#E5E7EB')),
+            ('BOX',  (0, 0), (-1, -1), 0.8, colors.HexColor('#D1D5DB')),
+        ]))
+
+        elements.append(table)
+        elements.append(Spacer(1, 20))
+        elements.append(Paragraph('Signtech Track Attendance Management System', styles['Normal']))
+
+        doc.build(elements)
+        return response

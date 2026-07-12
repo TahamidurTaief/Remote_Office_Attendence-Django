@@ -18,6 +18,24 @@ python manage.py run_retention
 python manage.py run_retention --dry-run
 ```
 
+## Daily Absence Deduction Job
+Time: 2:30 AM daily
+
+Command:
+```bash
+30 2 * * * cd /home/username/fieldtrack && /home/username/venv/bin/python manage.py mark_daily_absences >> /home/username/logs/mark_daily_absences.log 2>&1
+```
+
+## Manual Run
+```bash
+python manage.py mark_daily_absences --date=2026-07-11
+```
+
+## Test (dry run - just shows planned actions):
+```bash
+python manage.py mark_daily_absences --dry-run
+```
+
 ## Backup Jobs
 
 ### Daily backup at 1:00 AM

@@ -153,3 +153,7 @@ AUTHENTICATION_BACKENDS = [
 IMAGEKIT_CACHEFILE_DIR = 'cache'
 IMAGEKIT_HASH_FILENAMES = True
 IMAGEKIT_CACHEFILE_NAMER = 'imagekit.cachefiles.namers.hash'
+
+# Working days (Monday to Saturday, Sunday = 6 is excluded by default)
+WORKING_DAYS = [0, 1, 2, 3, 4, 5]
+

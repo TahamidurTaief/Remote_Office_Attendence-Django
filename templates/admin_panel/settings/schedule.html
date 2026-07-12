@@ -137,5 +137,63 @@
         {% endfor %}
     </div>
 
+    <!-- Leave Configuration Section -->
+    <div class="mt-8">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h2 class="font-semibold text-gray-800 text-lg">Leave Configuration</h2>
+                    <p class="text-xs text-gray-550 mt-0.5">Configure default leave allowances per type.</p>
+                </div>
+                <a href="{% url 'leave:admin_leave_type_add' %}?next=/admin-panel/settings/schedule/" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    Add Leave Type
+                </a>
+            </div>
+            
+            <div class="p-6">
+                {% if leave_types %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-100">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Leave Type Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Default Days Per Year</th>
+                                <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            {% for lt in leave_types %}
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ lt.name }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-550 uppercase">
+                                    {{ lt.category }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+                                    {{ lt.default_days_per_year }} day{% if lt.default_days_per_year != 1 %}s{% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <a href="{% url 'leave:admin_leave_type_edit' lt.pk %}?next=/admin-panel/settings/schedule/" class="text-indigo-600 hover:text-indigo-900 transition-colors">
+                                        Edit
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                    <i data-lucide="clipboard-list" class="w-10 h-10 mx-auto text-gray-300 mb-3"></i>
+                    <p class="text-gray-500 text-sm">No leave types configured yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}

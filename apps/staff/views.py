@@ -34,10 +34,19 @@ def home(request):
         is_expired=False
     ).exists()
 
+    total_leave_left = None
+    pending_leave_count = 0
+    if employee:
+        total_leave_left = employee.total_leave_left_by_year[today.year]
+        from apps.leave.models import LeaveRequest
+        pending_leave_count = LeaveRequest.objects.filter(employee=employee, status='pending').count()
+
     return render(request, 'staff/home.html', {
         'employee': employee,
         'field_visits': field_visits,
-        'is_checked_in': active_session
+        'is_checked_in': active_session,
+        'total_leave_left': total_leave_left,
+        'pending_leave_count': pending_leave_count
     })
 
 

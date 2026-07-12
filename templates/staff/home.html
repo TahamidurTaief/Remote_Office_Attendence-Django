@@ -82,6 +82,35 @@ window.addEventListener('appinstalled', () => {
         </div>
     </div>
 
+    <!-- Leave Summary Widget -->
+    {% if employee %}
+    <a href="{% url 'leave:staff_dashboard' %}" class="block bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between gap-4">
+            <div class="space-y-1">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Leave Summary</p>
+                <div class="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-black {% if total_leave_left < 0 %}bg-red-50 border-red-200 text-red-700{% else %}bg-green-50 border-green-200 text-green-700{% endif %}">
+                        Leave Left: {{ total_leave_left }} day{% if total_leave_left != 1 and total_leave_left != -1 %}s{% endif %}
+                    </span>
+                    
+                    {% if pending_leave_count > 0 %}
+                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-bold bg-amber-50 border-amber-200 text-amber-800">
+                        Pending Requests: {{ pending_leave_count }}
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-medium bg-gray-50 border-gray-200 text-gray-600">
+                        Pending Requests: 0
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="p-2 bg-indigo-50 text-indigo-650 rounded-xl">
+                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+            </div>
+        </div>
+    </a>
+    {% endif %}
+
     <div hx-get="{% url 'staff:attendance_card' %}" hx-trigger="load, every 30s">
         <div class="w-full h-52 bg-white rounded-2xl border border-gray-100 shadow-sm animate-pulse flex flex-col justify-center items-center">
             <div class="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mb-2"></div>

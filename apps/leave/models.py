@@ -4,8 +4,14 @@ from django.conf import settings
 from apps.employees.models import EmployeeProfile
 
 class LeaveType(models.Model):
+    CATEGORY_CHOICES = (
+        ('sick', 'Sick'),
+        ('casual', 'Casual'),
+        ('other', 'Other'),
+    )
     name = models.CharField(max_length=100, unique=True)
     default_days_per_year = models.IntegerField(default=0)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
 
     def __str__(self):
         return self.name
@@ -26,6 +32,8 @@ class LeaveBalance(models.Model):
 
     @property
     def remaining_days(self):
+        # NOTE: confirmed via codebase grep check that remaining_days has no max(0, ...) clamp 
+        # anywhere in the codebase. Negative balances are naturally calculated and allowed.
         return self.total_days - self.used_days
 
     def __str__(self):
@@ -154,3 +162,34 @@ class LeaveRequest(models.Model):
 
     def __str__(self):
         return f"{self.employee.full_name} - {self.leave_type.name} ({self.start_date} to {self.end_date})"
+
+class YearLeaveHelper(dict):
+    """
+    Helper class that acts like a dictionary (via dictget filter) to calculate
+    the combined total leave remaining for an employee in a given year.
+    """
+    def __init__(self, employee):
+        self.employee = employee
+        super().__init__()
+
+    def get(self, year, default=None):
+        try:
+            year = int(year)
+        except (ValueError, TypeError):
+            return default
+
+        total_remaining = 0
+        leave_types = LeaveType.objects.all()
+        for lt in leave_types:
+            balance = LeaveBalance.objects.filter(employee=self.employee, leave_type=lt, year=year).first()
+            if balance:
+                total_remaining += balance.remaining_days
+            else:
+                total_remaining += lt.default_days_per_year
+        return total_remaining
+
+    def __getitem__(self, year):
+        return self.get(year)
+
+EmployeeProfile.total_leave_left_by_year = property(lambda self: YearLeaveHelper(self))
+

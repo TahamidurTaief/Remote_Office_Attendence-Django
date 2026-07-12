@@ -174,7 +174,13 @@ class AdminLeaveTypeCreateView(AdminRequiredMixin, CreateView):
 
     def form_valid(self, form):
         messages.success(self.request, f"Leave type '{form.cleaned_data['name']}' created successfully.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        next_url = self.request.GET.get('next') or self.request.POST.get('next')
+        from django.utils.http import url_has_allowed_host_and_scheme
+        if next_url and url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={self.request.get_host()}):
+            from django.shortcuts import redirect
+            return redirect(next_url)
+        return response
 
 class AdminLeaveTypeUpdateView(AdminRequiredMixin, UpdateView):
     model = LeaveType
@@ -184,7 +190,13 @@ class AdminLeaveTypeUpdateView(AdminRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, f"Leave type '{form.cleaned_data['name']}' updated successfully.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        next_url = self.request.GET.get('next') or self.request.POST.get('next')
+        from django.utils.http import url_has_allowed_host_and_scheme
+        if next_url and url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={self.request.get_host()}):
+            from django.shortcuts import redirect
+            return redirect(next_url)
+        return response
 
 # ==============================================================================
 # Staff (Employee) Views

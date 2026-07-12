@@ -1,4 +1,5 @@
 {% extends 'base/staff_base.html' %}
+{% load leave_extras %}
 
 {% block page_title %}My Leaves{% endblock %}
 
@@ -24,6 +25,23 @@
         <p class="text-sm text-green-700 font-medium">{{ message }}</p>
     </div>
     {% endfor %}
+    {% endif %}
+
+    <!-- Combined Total Leave Left Counter -->
+    {% if employee %}
+    {% with total_left=employee.total_leave_left_by_year|dictget:year %}
+    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Total Leave Left</h2>
+            <p class="text-xs text-gray-400 mt-1">Combined balance across all active leave categories for {{ year }}</p>
+        </div>
+        <div>
+            <span class="inline-flex items-center px-4 py-2 rounded-xl border text-2xl font-black {% if total_left < 0 %}bg-red-50 border-red-200 text-red-700{% else %}bg-green-50 border-green-200 text-green-700{% endif %} shadow-inner">
+                {{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}
+            </span>
+        </div>
+    </div>
+    {% endwith %}
     {% endif %}
 
     <!-- Balance Cards Grid -->

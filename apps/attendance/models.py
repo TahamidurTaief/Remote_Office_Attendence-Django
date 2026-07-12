@@ -93,3 +93,26 @@ class AttendanceLocation(models.Model):
 
     def __str__(self):
         return f"{self.attendance} - {self.event}"
+
+
+class AttendanceAbsentLog(models.Model):
+    employee = models.ForeignKey(
+        EmployeeProfile, 
+        on_delete=models.CASCADE, 
+        related_name='absent_logs'
+    )
+    date = models.DateField()
+    leave_type_deducted = models.ForeignKey(
+        'leave.LeaveType', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('employee', 'date')
+
+    def __str__(self):
+        return f"{self.employee.full_name} - Absent on {self.date}"
+
