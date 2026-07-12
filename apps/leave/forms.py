@@ -66,6 +66,8 @@ class LeaveRequestForm(forms.ModelForm):
                 self.projected_remaining = remaining - number_of_days
         return cleaned_data
 
+from apps.employees.models import EmployeeProfile
+
 class LeaveTypeForm(forms.ModelForm):
     class Meta:
         model = LeaveType
@@ -75,4 +77,34 @@ class LeaveTypeForm(forms.ModelForm):
             'category': forms.Select(attrs={'class': SELECT_INPUT}),
             'default_days_per_year': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0}),
         }
+
+
+class AdminAddLeaveForm(forms.ModelForm):
+    employee = forms.ModelChoiceField(
+        queryset=EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
+        widget=forms.Select(attrs={'class': SELECT_INPUT}),
+        label="Employee"
+    )
+
+    class Meta:
+        model = LeaveRequest
+        fields = ['employee', 'leave_type', 'start_date', 'end_date', 'reason', 'status']
+        widgets = {
+            'leave_type': forms.Select(attrs={'class': SELECT_INPUT}),
+            'start_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'end_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'reason': forms.Textarea(attrs={'rows': 3, 'class': TEXTAREA_INPUT, 'placeholder': 'Reason for leave...'}),
+            'status': forms.Select(attrs={'class': SELECT_INPUT}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+
+        if start_date and end_date:
+            if end_date < start_date:
+                raise forms.ValidationError("End date cannot be before start date.")
+        return cleaned_data
+
 

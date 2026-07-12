@@ -108,11 +108,14 @@ class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):
                         'remaining': balance.remaining_days
                     })
                 else:
+                    from apps.employees.models import EmployeeLeaveRule
+                    rule = EmployeeLeaveRule.objects.filter(employee=emp, leave_type=lt).first()
+                    limit = rule.days_per_year if rule else lt.default_days_per_year
                     balances.append({
                         'type': lt,
-                        'total': lt.default_days_per_year,
+                        'total': limit,
                         'used': 0,
-                        'remaining': lt.default_days_per_year
+                        'remaining': limit
                     })
             employee_balances[emp.id] = balances
 
@@ -145,11 +148,14 @@ class AdminEmployeeBalanceDetailView(AdminRequiredMixin, DetailView):
             if balance:
                 balances.append(balance)
             else:
+                from apps.employees.models import EmployeeLeaveRule
+                rule = EmployeeLeaveRule.objects.filter(employee=self.object, leave_type=lt).first()
+                limit = rule.days_per_year if rule else lt.default_days_per_year
                 balances.append({
                     'leave_type': lt,
-                    'total_days': lt.default_days_per_year,
+                    'total_days': limit,
                     'used_days': 0,
-                    'remaining_days': lt.default_days_per_year
+                    'remaining_days': limit
                 })
 
         history = LeaveRequest.objects.filter(employee=self.object).select_related('leave_type').order_by('-requested_at')
@@ -219,6 +225,9 @@ class StaffLeaveDashboardView(StaffOrManagerMixin, TemplateView):
                 if balance:
                     balances.append(balance)
                 else:
+                    from apps.employees.models import EmployeeLeaveRule
+                    rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type=lt).first()
+                    limit = rule.days_per_year if rule else lt.default_days_per_year
                     # Provide an object-like wrapper matching LeaveBalance interface
                     class MockBalance:
                         def __init__(self, lt, total):
@@ -226,7 +235,7 @@ class StaffLeaveDashboardView(StaffOrManagerMixin, TemplateView):
                             self.total_days = total
                             self.used_days = 0
                             self.remaining_days = total
-                    balances.append(MockBalance(lt, lt.default_days_per_year))
+                    balances.append(MockBalance(lt, limit))
 
             history = LeaveRequest.objects.filter(employee=employee).select_related('leave_type').order_by('-requested_at')
         else:

@@ -25,6 +25,7 @@ urlpatterns = [
     path('reports/export/pdf/', views.ExportReportPDFView.as_view(), name='reports_export_pdf'),
     path('reports/export/monthly-xlsx/', views.export_monthly_xlsx, name='reports_export_monthly_xlsx'),
     path('reports/absent/', views.AbsentReportView.as_view(), name='reports_absent'),
+    path('reports/absent/add/', views.AdminAddLeaveView.as_view(), name='reports_absent_add_leave'),
     path('reports/absent/export/excel/', views.ExportAbsentReportExcelView.as_view(), name='reports_absent_excel'),
     path('reports/absent/export/pdf/', views.ExportAbsentReportPDFView.as_view(), name='reports_absent_pdf'),
     path('settings/schedule/', views.OfficeScheduleView.as_view(), name='schedule_settings'),

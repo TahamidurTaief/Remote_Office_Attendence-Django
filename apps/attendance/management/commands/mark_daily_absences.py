@@ -102,12 +102,18 @@ class Command(BaseCommand):
                 try:
                     with transaction.atomic():
                         # Get or create balance for employee / leave type / year
-                        balance, _ = LeaveBalance.objects.get_or_create(
+                        from apps.employees.models import EmployeeLeaveRule
+                        rule = EmployeeLeaveRule.objects.filter(employee=emp, leave_type=leave_type).first()
+                        limit = rule.days_per_year if rule else leave_type.default_days_per_year
+                        balance, created = LeaveBalance.objects.get_or_create(
                             employee=emp,
                             leave_type=leave_type,
                             year=target_date.year,
-                            defaults={'total_days': leave_type.default_days_per_year}
+                            defaults={'total_days': limit}
                         )
+                        if not created and rule:
+                            balance.total_days = limit
+                            balance.save()
                         balance.used_days = F('used_days') + 1
                         balance.save()
 

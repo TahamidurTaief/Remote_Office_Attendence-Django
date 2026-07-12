@@ -68,3 +68,15 @@ class EmployeeLocationSync(models.Model):
 
     def __str__(self):
         return f"{self.employee.full_name} @ {self.timestamp:%Y-%m-%d %H:%M}"
+
+
+class EmployeeLeaveRule(models.Model):
+    employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name='leave_rules')
+    leave_type = models.ForeignKey('leave.LeaveType', on_delete=models.CASCADE)
+    days_per_year = models.IntegerField()
+
+    class Meta:
+        unique_together = ('employee', 'leave_type')
+
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.leave_type.name}: {self.days_per_year} days"

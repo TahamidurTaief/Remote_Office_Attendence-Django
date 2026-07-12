@@ -98,14 +98,41 @@ class LeaveRequest(models.Model):
         
         # Case 1: Status transitioned to approved
         if self.status == 'approved' and old_status != 'approved':
-            balance, _ = LeaveBalance.objects.get_or_create(
+            from apps.employees.models import EmployeeLeaveRule
+            rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
+            limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
+            balance, created = LeaveBalance.objects.get_or_create(
                 employee=self.employee,
                 leave_type=self.leave_type,
                 year=year,
-                defaults={'total_days': self.leave_type.default_days_per_year}
+                defaults={'total_days': limit}
             )
+            if not created and rule:
+                balance.total_days = limit
+                balance.save()
             balance.used_days = F('used_days') + self.number_of_days
             balance.save()
+
+            # Clean up overlapping absent logs to prevent double deduction
+            from apps.attendance.models import AttendanceAbsentLog
+            overlapping_logs = AttendanceAbsentLog.objects.filter(
+                employee=self.employee,
+                date__range=(self.start_date, self.end_date)
+            )
+            for log in overlapping_logs:
+                lt = log.leave_type_deducted
+                if lt:
+                    try:
+                        bal = LeaveBalance.objects.get(
+                            employee=self.employee,
+                            leave_type=lt,
+                            year=log.date.year
+                        )
+                        bal.used_days = F('used_days') - 1
+                        bal.save()
+                    except LeaveBalance.DoesNotExist:
+                        pass
+                log.delete()
             
         # Case 2: Status transitioned from approved to something else (e.g. pending/rejected)
         elif old_status == 'approved' and self.status != 'approved':
@@ -136,14 +163,41 @@ class LeaveRequest(models.Model):
                     pass
                 
                 # Apply new balance
-                new_balance, _ = LeaveBalance.objects.get_or_create(
+                from apps.employees.models import EmployeeLeaveRule
+                rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
+                limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
+                new_balance, created = LeaveBalance.objects.get_or_create(
                     employee=self.employee,
                     leave_type=self.leave_type,
                     year=year,
-                    defaults={'total_days': self.leave_type.default_days_per_year}
+                    defaults={'total_days': limit}
                 )
+                if not created and rule:
+                    new_balance.total_days = limit
+                    new_balance.save()
                 new_balance.used_days = F('used_days') + self.number_of_days
                 new_balance.save()
+
+                # Clean up overlapping absent logs to prevent double deduction
+                from apps.attendance.models import AttendanceAbsentLog
+                overlapping_logs = AttendanceAbsentLog.objects.filter(
+                    employee=self.employee,
+                    date__range=(self.start_date, self.end_date)
+                )
+                for log in overlapping_logs:
+                    lt = log.leave_type_deducted
+                    if lt:
+                        try:
+                            bal = LeaveBalance.objects.get(
+                                employee=self.employee,
+                                leave_type=lt,
+                                year=log.date.year
+                            )
+                            bal.used_days = F('used_days') - 1
+                            bal.save()
+                        except LeaveBalance.DoesNotExist:
+                            pass
+                    log.delete()
 
         # Case 4: Status transitioned to rejected
         if self.status == 'rejected' and old_status != 'rejected':
@@ -169,12 +223,18 @@ class LeaveRequest(models.Model):
                             if not AttendanceAbsentLog.objects.filter(employee=self.employee, date=current_date).exists():
                                 if deduct_type:
                                     with transaction.atomic():
-                                        balance, _ = LeaveBalance.objects.get_or_create(
+                                        from apps.employees.models import EmployeeLeaveRule
+                                        rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=deduct_type).first()
+                                        limit = rule.days_per_year if rule else deduct_type.default_days_per_year
+                                        balance, created = LeaveBalance.objects.get_or_create(
                                             employee=self.employee,
                                             leave_type=deduct_type,
                                             year=current_date.year,
-                                            defaults={'total_days': deduct_type.default_days_per_year}
+                                            defaults={'total_days': limit}
                                         )
+                                        if not created and rule:
+                                            balance.total_days = limit
+                                            balance.save()
                                         balance.used_days = F('used_days') + 1
                                         balance.save()
 
@@ -213,20 +273,22 @@ class YearLeaveHelper(dict):
         super().__init__()
 
     def get(self, year, default=None):
-        try:
-            year = int(year)
-        except (ValueError, TypeError):
-            return default
+            try:
+                year = int(year)
+            except (ValueError, TypeError):
+                return default
 
-        total_remaining = 0
-        leave_types = LeaveType.objects.all()
-        for lt in leave_types:
-            balance = LeaveBalance.objects.filter(employee=self.employee, leave_type=lt, year=year).first()
-            if balance:
-                total_remaining += balance.remaining_days
-            else:
-                total_remaining += lt.default_days_per_year
-        return total_remaining
+            total_remaining = 0
+            leave_types = LeaveType.objects.all()
+            from apps.employees.models import EmployeeLeaveRule
+            for lt in leave_types:
+                balance = LeaveBalance.objects.filter(employee=self.employee, leave_type=lt, year=year).first()
+                if balance:
+                    total_remaining += balance.remaining_days
+                else:
+                    rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=lt).first()
+                    total_remaining += rule.days_per_year if rule else lt.default_days_per_year
+            return total_remaining
 
     def __getitem__(self, year):
         return self.get(year)

@@ -61,9 +61,62 @@ class EmployeeCreateView(AdminRequiredMixin, CreateView):
     template_name = 'employees/employee_form.html'
     success_url = reverse_lazy('employees:employee_list')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.leave.models import LeaveType
+        leave_types = LeaveType.objects.all().order_by('name')
+        context['leave_types_with_overrides'] = [
+            {
+                'id': lt.id,
+                'name': lt.name,
+                'category': lt.category,
+                'default_days': lt.default_days_per_year,
+                'override_days': ''
+            }
+            for lt in leave_types
+        ]
+        return context
+
     def form_valid(self, form):
+        response = super().form_valid(form)
+        from apps.leave.models import LeaveType, LeaveBalance
+        from .models import EmployeeLeaveRule
+        
+        leave_types = LeaveType.objects.all()
+        for lt in leave_types:
+            post_key = f'leave_override_{lt.id}'
+            override_val = self.request.POST.get(post_key)
+            if override_val is not None and override_val.strip() != '':
+                try:
+                    days = int(override_val)
+                    EmployeeLeaveRule.objects.update_or_create(
+                        employee=self.object,
+                        leave_type=lt,
+                        defaults={'days_per_year': days}
+                    )
+                    year = timezone.now().year
+                    balance, bal_created = LeaveBalance.objects.get_or_create(
+                        employee=self.object,
+                        leave_type=lt,
+                        year=year,
+                        defaults={'total_days': days, 'used_days': 0}
+                    )
+                    if not bal_created:
+                        balance.total_days = days
+                        balance.save()
+                except ValueError:
+                    pass
+            else:
+                EmployeeLeaveRule.objects.filter(employee=self.object, leave_type=lt).delete()
+                year = timezone.now().year
+                LeaveBalance.objects.filter(
+                    employee=self.object,
+                    leave_type=lt,
+                    year=year
+                ).update(total_days=lt.default_days_per_year)
+
         messages.success(self.request, 'Employee profile and user account created successfully.')
-        return super().form_valid(form)
+        return response
 
 class EmployeeEditView(AdminRequiredMixin, UpdateView):
     model = EmployeeProfile
@@ -71,9 +124,69 @@ class EmployeeEditView(AdminRequiredMixin, UpdateView):
     template_name = 'employees/employee_form.html'
     success_url = reverse_lazy('employees:employee_list')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.leave.models import LeaveType
+        from .models import EmployeeLeaveRule
+        leave_types = LeaveType.objects.all().order_by('name')
+        
+        overrides = {
+            rule.leave_type_id: rule.days_per_year 
+            for rule in EmployeeLeaveRule.objects.filter(employee=self.object)
+        }
+        
+        context['leave_types_with_overrides'] = [
+            {
+                'id': lt.id,
+                'name': lt.name,
+                'category': lt.category,
+                'default_days': lt.default_days_per_year,
+                'override_days': overrides.get(lt.id, '')
+            }
+            for lt in leave_types
+        ]
+        return context
+
     def form_valid(self, form):
+        response = super().form_valid(form)
+        from apps.leave.models import LeaveType, LeaveBalance
+        from .models import EmployeeLeaveRule
+        
+        leave_types = LeaveType.objects.all()
+        for lt in leave_types:
+            post_key = f'leave_override_{lt.id}'
+            override_val = self.request.POST.get(post_key)
+            if override_val is not None and override_val.strip() != '':
+                try:
+                    days = int(override_val)
+                    EmployeeLeaveRule.objects.update_or_create(
+                        employee=self.object,
+                        leave_type=lt,
+                        defaults={'days_per_year': days}
+                    )
+                    year = timezone.now().year
+                    balance, bal_created = LeaveBalance.objects.get_or_create(
+                        employee=self.object,
+                        leave_type=lt,
+                        year=year,
+                        defaults={'total_days': days, 'used_days': 0}
+                    )
+                    if not bal_created:
+                        balance.total_days = days
+                        balance.save()
+                except ValueError:
+                    pass
+            else:
+                EmployeeLeaveRule.objects.filter(employee=self.object, leave_type=lt).delete()
+                year = timezone.now().year
+                LeaveBalance.objects.filter(
+                    employee=self.object,
+                    leave_type=lt,
+                    year=year
+                ).update(total_days=lt.default_days_per_year)
+
         messages.success(self.request, 'Employee profile updated successfully.')
-        return super().form_valid(form)
+        return response
 
 class EmployeeDetailView(AdminRequiredMixin, DetailView):
     model = EmployeeProfile
