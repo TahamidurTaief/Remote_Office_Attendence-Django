@@ -133,8 +133,17 @@
                             {{ req.number_of_days }}
                         </td>
                         <!-- Reason -->
-                        <td class="px-6 py-4 max-w-xs truncate" title="{{ req.reason }}">
-                            {{ req.reason }}
+                        <td class="px-6 py-4 max-w-xs">
+                            <div x-data="{ expanded: false }">
+                                <p class="text-sm text-gray-700 truncate" x-show="!expanded" title="{{ req.reason }}">{{ req.reason }}</p>
+                                <p class="text-sm text-gray-700 whitespace-pre-line" x-show="expanded" x-cloak>{{ req.reason }}</p>
+                                {% if req.reason|length > 30 %}
+                                <button type="button" @click="expanded = !expanded" class="text-[10px] text-indigo-600 hover:text-indigo-850 font-bold focus:outline-none mt-0.5">
+                                    <span x-show="!expanded">Show More</span>
+                                    <span x-show="expanded" x-cloak>Show Less</span>
+                                </button>
+                                {% endif %}
+                            </div>
                         </td>
                         <!-- Status Badge -->
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -157,28 +166,33 @@
                         </td>
                         <!-- Actions -->
                         <td class="px-6 py-4 text-right whitespace-nowrap text-xs font-medium">
-                            {% if req.status == 'pending' %}
-                            <div class="flex justify-end gap-2">
+                            <div class="flex items-center justify-end gap-2">
+                                {% if req.status == 'pending' %}
                                 <form method="POST" action="{% url 'leave:approve_request' req.pk %}" class="inline">
                                     {% csrf_token %}
-                                    <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm">
+                                    <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm font-semibold">
                                         <i data-lucide="check" class="w-3.5 h-3.5"></i>
                                         Approve
                                     </button>
                                 </form>
                                 <form method="POST" action="{% url 'leave:reject_request' req.pk %}" class="inline">
                                     {% csrf_token %}
-                                    <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm">
+                                    <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm font-semibold">
                                         <i data-lucide="x" class="w-3.5 h-3.5"></i>
                                         Reject
                                     </button>
                                 </form>
+                                {% else %}
+                                <span class="text-gray-400 text-xs mr-2">
+                                    Processed by {{ req.reviewed_by.email|default:req.reviewed_by.phone }}
+                                    {% if req.reviewed_at %} on {{ req.reviewed_at|date:"M d, Y" }}{% endif %}
+                                </span>
+                                {% endif %}
+                                <a href="{% url 'leave:reschedule_request' req.pk %}" class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-650 hover:bg-indigo-750 text-white rounded-lg transition-colors shadow-sm font-semibold">
+                                    <i data-lucide="calendar-range" class="w-3.5 h-3.5"></i>
+                                    Reschedule
+                                </a>
                             </div>
-                            {% else %}
-                            <span class="text-gray-400 text-xs">
-                                Processed by {{ req.reviewed_by.email|default:req.reviewed_by.phone }}
-                            </span>
-                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

@@ -19,4 +19,5 @@ urlpatterns = [
     # Staff URLs
     path('staff/', views.StaffLeaveDashboardView.as_view(), name='staff_dashboard'),
     path('staff/request/', views.StaffLeaveRequestCreateView.as_view(), name='staff_request_create'),
+    path('admin/requests/<int:pk>/reschedule/', views.RescheduleLeaveRequestView.as_view(), name='reschedule_request'),
 ]

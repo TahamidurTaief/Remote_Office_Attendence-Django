@@ -28,7 +28,8 @@ class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
         queryset = LeaveRequest.objects.all().select_related('employee', 'leave_type')
         if status in ['pending', 'approved', 'rejected']:
             queryset = queryset.filter(status=status)
-        return queryset
+        from django.db.models import Case, When
+        return queryset.order_by(Case(When(status='pending', then=0), default=1), '-requested_at')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -269,3 +270,50 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
         form.instance.status = 'pending'
         messages.success(self.request, "Your leave request has been submitted successfully.")
         return super().form_valid(form)
+
+
+from django import forms
+from apps.leave.forms import SELECT_INPUT, TEXT_INPUT, TEXTAREA_INPUT
+
+class AdminLeaveRequestRescheduleForm(forms.ModelForm):
+    class Meta:
+        model = LeaveRequest
+        fields = ['leave_type', 'start_date', 'end_date', 'reason']
+        widgets = {
+            'leave_type': forms.Select(attrs={'class': SELECT_INPUT}),
+            'start_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'end_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'reason': forms.Textarea(attrs={'rows': 3, 'class': TEXTAREA_INPUT, 'placeholder': 'Reason for reschedule...'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+
+        if start_date and end_date:
+            if end_date < start_date:
+                raise forms.ValidationError("End date cannot be before start date.")
+        return cleaned_data
+
+
+class RescheduleLeaveRequestView(AdminRequiredMixin, UpdateView):
+    model = LeaveRequest
+    form_class = AdminLeaveRequestRescheduleForm
+    template_name = 'admin_panel/leave/reschedule_form.html'
+
+    def form_valid(self, form):
+        form.instance.reviewed_by = self.request.user
+        form.instance.reviewed_at = timezone.now()
+        
+        response = super().form_valid(form)
+        
+        messages.success(
+            self.request,
+            f"Leave request for {self.object.employee.full_name} rescheduled to "
+            f"{self.object.start_date}–{self.object.end_date}."
+        )
+        return response
+
+    def get_success_url(self):
+        return reverse_lazy('leave:admin_dashboard')
