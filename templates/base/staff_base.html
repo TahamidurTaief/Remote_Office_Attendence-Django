@@ -121,6 +121,12 @@
         <i data-lucide="calendar" class="w-5 h-5 shrink-0"></i>
         My Attendance
       </a>
+      <a href="{% url 'leave:staff_dashboard' %}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
+         {% if '/leave/staff/' in request.path %}bg-indigo-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+        <i data-lucide="clipboard-list" class="w-5 h-5 shrink-0"></i>
+        Leave
+      </a>
       <a href="{% url 'staff:profile' %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
          {% if request.path == '/staff/profile/' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
@@ -204,6 +210,16 @@
       </div>
       <span class="text-[11px] mt-1 font-medium">Attendance</span>
       {% if request.path == '/staff/attendance/' %}
+      <div class="w-1 h-1 bg-indigo-600 rounded-full mt-0.5"></div>
+      {% endif %}
+    </a>
+    <a href="{% url 'leave:staff_dashboard' %}"
+       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if '/leave/staff/' in request.path %}text-indigo-600{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+      <div class="relative">
+        <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+      </div>
+      <span class="text-[11px] mt-1 font-medium">Leave</span>
+      {% if '/leave/staff/' in request.path %}
       <div class="w-1 h-1 bg-indigo-600 rounded-full mt-0.5"></div>
       {% endif %}
     </a>
