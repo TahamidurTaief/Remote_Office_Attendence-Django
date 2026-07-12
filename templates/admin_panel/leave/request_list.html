@@ -16,9 +16,13 @@
                 <i data-lucide="users" class="w-4 h-4"></i>
                 Employee Balances
             </a>
-            <a href="{% url 'leave:admin_leave_types' %}" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+            <a href="{% url 'leave:admin_leave_types' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors bg-white">
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 Leave Types
+            </a>
+            <a href="{% url 'admin_panel:reports_absent_add_leave' %}" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                Add Leave
             </a>
         </div>
     </div>
