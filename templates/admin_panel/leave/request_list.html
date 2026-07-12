@@ -179,8 +179,8 @@
                                             reason: '{{ req.reason|escapejs }}',
                                             status: '{{ req.status|escapejs }}',
                                             requestedAt: '{{ req.requested_at|date:"M d, Y, I:i A"|escapejs }}',
-                                            reviewedBy: '{{ req.reviewed_by.email|default:req.reviewed_by.phone|escapejs }}',
-                                            reviewedAt: '{{ req.reviewed_at|date:"M d, Y, I:i A"|escapejs }}'
+                                            reviewedBy: '{% if req.reviewed_by %}{{ req.reviewed_by.email|default:req.reviewed_by.phone|escapejs }}{% endif %}',
+                                            reviewedAt: '{% if req.reviewed_at %}{{ req.reviewed_at|date:"M d, Y, I:i A"|escapejs }}{% endif %}'
                                         })"
                                         class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-indigo-600 rounded-lg transition-colors inline-flex items-center justify-center"
                                         title="View Leave Details">
@@ -203,7 +203,7 @@
                                 </form>
                                 {% else %}
                                 <span class="text-gray-400 text-xs mr-2">
-                                    Processed by {{ req.reviewed_by.email|default:req.reviewed_by.phone }}
+                                    Processed by {% if req.reviewed_by %}{{ req.reviewed_by.email|default:req.reviewed_by.phone }}{% else %}System{% endif %}
                                     {% if req.reviewed_at %} on {{ req.reviewed_at|date:"M d, Y" }}{% endif %}
                                 </span>
                                 {% endif %}
