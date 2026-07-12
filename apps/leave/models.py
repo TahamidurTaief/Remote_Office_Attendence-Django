@@ -12,6 +12,12 @@ class LeaveType(models.Model):
     name = models.CharField(max_length=100, unique=True)
     default_days_per_year = models.IntegerField(default=0)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    is_default = models.BooleanField(default=False, help_text="Set as default leave type for automated absence deductions")
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            LeaveType.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

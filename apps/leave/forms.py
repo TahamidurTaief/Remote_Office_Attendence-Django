@@ -43,6 +43,8 @@ class LeaveRequestForm(forms.ModelForm):
         if start_date and end_date:
             if end_date < start_date:
                 raise forms.ValidationError("End date cannot be before start date.")
+            if start_date.year != end_date.year:
+                raise forms.ValidationError("Leave request cannot span across multiple calendar years. Please submit separate requests for each year.")
 
             number_of_days = (end_date - start_date).days + 1
             year = start_date.year
@@ -71,11 +73,12 @@ from apps.employees.models import EmployeeProfile
 class LeaveTypeForm(forms.ModelForm):
     class Meta:
         model = LeaveType
-        fields = ['name', 'category', 'default_days_per_year']
+        fields = ['name', 'category', 'default_days_per_year', 'is_default']
         widgets = {
             'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Casual, Sick'}),
             'category': forms.Select(attrs={'class': SELECT_INPUT}),
             'default_days_per_year': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0}),
+            'is_default': forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-indigo-650 focus:ring-indigo-500 border-gray-305 rounded'}),
         }
 
 
@@ -105,6 +108,8 @@ class AdminAddLeaveForm(forms.ModelForm):
         if start_date and end_date:
             if end_date < start_date:
                 raise forms.ValidationError("End date cannot be before start date.")
+            if start_date.year != end_date.year:
+                raise forms.ValidationError("Leave request cannot span across multiple calendar years. Please submit separate requests for each year.")
         return cleaned_data
 
 

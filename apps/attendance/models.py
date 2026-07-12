@@ -119,7 +119,9 @@ class AttendanceAbsentLog(models.Model):
 
 def get_default_deduction_leave_type():
     from apps.leave.models import LeaveType
-    leave_type = LeaveType.objects.filter(category='casual').first()
+    leave_type = LeaveType.objects.filter(is_default=True).first()
+    if not leave_type:
+        leave_type = LeaveType.objects.filter(category='casual').first()
     if not leave_type:
         leave_type = LeaveType.objects.filter(category='sick').first()
     if not leave_type:

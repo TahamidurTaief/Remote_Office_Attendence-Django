@@ -272,3 +272,81 @@ class EmployeeLeaveRuleTests(TestCase):
 
         # YearLeaveHelper should now yield 14 remaining
         self.assertEqual(self.employee.total_leave_left_by_year[2026], 14)
+
+
+class DefaultLeaveTypeAndYearValidationTests(TestCase):
+    def test_only_one_leave_type_can_be_default(self):
+        # 1. Create a default leave type
+        lt1 = LeaveType.objects.create(
+            name='Default Leave 1',
+            category='casual',
+            default_days_per_year=10,
+            is_default=True
+        )
+        self.assertTrue(lt1.is_default)
+
+        # 2. Create another default leave type
+        lt2 = LeaveType.objects.create(
+            name='Default Leave 2',
+            category='sick',
+            default_days_per_year=15,
+            is_default=True
+        )
+        self.assertTrue(lt2.is_default)
+
+        # 3. Verify lt1.is_default was unset to False
+        lt1.refresh_from_db()
+        self.assertFalse(lt1.is_default)
+
+    def test_get_default_deduction_leave_type(self):
+        from apps.attendance.models import get_default_deduction_leave_type
+        
+        # Clear existing defaults if any
+        LeaveType.objects.all().delete()
+
+        # Create two types, one is default
+        lt_casual = LeaveType.objects.create(name='Casual', category='casual', is_default=False)
+        lt_sick = LeaveType.objects.create(name='Sick', category='sick', is_default=True)
+
+        # get_default_deduction_leave_type should return sick because it is marked as default
+        self.assertEqual(get_default_deduction_leave_type(), lt_sick)
+
+    def test_leave_request_crosses_year_fails_validation(self):
+        # Clear existing
+        LeaveType.objects.all().delete()
+        lt = LeaveType.objects.create(name='Casual', category='casual')
+        
+        branch = Branch.objects.create(name='Test Branch 4', latitude=23.8, longitude=90.4)
+        user = User.objects.create_user(phone='+8801700000004', password='password123', role='staff')
+        employee = EmployeeProfile.objects.create(
+            user=user, employee_id='EMP-2026-004', full_name='Emp 4',
+            phone='+8801700000004', joined_date=datetime.date(2026, 1, 1),
+            branch=branch
+        )
+
+        from apps.leave.forms import LeaveRequestForm
+        
+        # Leave request within same year should succeed
+        form_valid = LeaveRequestForm(
+            data={
+                'leave_type': lt.pk,
+                'start_date': '2026-12-01',
+                'end_date': '2026-12-05',
+                'reason': 'Test'
+            },
+            employee=employee
+        )
+        self.assertTrue(form_valid.is_valid())
+
+        # Leave request crossing year should fail validation
+        form_invalid = LeaveRequestForm(
+            data={
+                'leave_type': lt.pk,
+                'start_date': '2026-12-30',
+                'end_date': '2027-01-02',
+                'reason': 'Test'
+            },
+            employee=employee
+        )
+        self.assertFalse(form_invalid.is_valid())
+        self.assertIn("Leave request cannot span across multiple calendar years", form_invalid.errors['__all__'][0])

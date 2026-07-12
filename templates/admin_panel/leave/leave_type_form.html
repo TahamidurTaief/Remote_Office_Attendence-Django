@@ -59,6 +59,19 @@
                     {% if form.default_days_per_year.errors %}<p class="mt-2 text-sm text-red-650">{{ form.default_days_per_year.errors.0 }}</p>{% endif %}
                     <p class="text-xs text-gray-400 mt-1">This value will be used as the default starting allowance for employees when they request leaves of this type.</p>
                 </div>
+
+                <div class="pt-2">
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            {{ form.is_default }}
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="{{ form.is_default.id_for_label }}" class="font-bold text-gray-750 select-none cursor-pointer">Set as Default Leave Type for Absences</label>
+                            <p class="text-gray-400 text-xs mt-0.5">If checked, this leave type will be automatically deducted when marking daily employee absences. Only one leave type can be default at any time.</p>
+                        </div>
+                    </div>
+                    {% if form.is_default.errors %}<p class="mt-2 text-sm text-red-655">{{ form.is_default.errors.0 }}</p>{% endif %}
+                </div>
             </div>
 
             <!-- Submit Button -->
