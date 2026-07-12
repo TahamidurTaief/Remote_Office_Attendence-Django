@@ -145,6 +145,46 @@ class LeaveRequest(models.Model):
                 new_balance.used_days = F('used_days') + self.number_of_days
                 new_balance.save()
 
+        # Case 4: Status transitioned to rejected
+        if self.status == 'rejected' and old_status != 'rejected':
+            import datetime
+            from django.utils import timezone
+            from django.conf import settings
+            from apps.attendance.models import Attendance, AttendanceAbsentLog, get_default_deduction_leave_type
+            from django.db import transaction
+
+            today = timezone.localdate()
+            yesterday = today - datetime.timedelta(days=1)
+            end_limit = min(self.end_date, yesterday)
+
+            if self.start_date <= end_limit:
+                working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 4, 5])
+                deduct_type = get_default_deduction_leave_type()
+
+                current_date = self.start_date
+                while current_date <= end_limit:
+                    if current_date.weekday() in working_days:
+                        # Check attendance & absence logs
+                        if not Attendance.objects.filter(employee=self.employee, date=current_date).exists():
+                            if not AttendanceAbsentLog.objects.filter(employee=self.employee, date=current_date).exists():
+                                if deduct_type:
+                                    with transaction.atomic():
+                                        balance, _ = LeaveBalance.objects.get_or_create(
+                                            employee=self.employee,
+                                            leave_type=deduct_type,
+                                            year=current_date.year,
+                                            defaults={'total_days': deduct_type.default_days_per_year}
+                                        )
+                                        balance.used_days = F('used_days') + 1
+                                        balance.save()
+
+                                        AttendanceAbsentLog.objects.create(
+                                            employee=self.employee,
+                                            date=current_date,
+                                            leave_type_deducted=deduct_type
+                                        )
+                    current_date += datetime.timedelta(days=1)
+
     def delete(self, *args, **kwargs):
         if self.status == 'approved':
             year = self.start_date.year

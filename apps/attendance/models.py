@@ -116,3 +116,14 @@ class AttendanceAbsentLog(models.Model):
     def __str__(self):
         return f"{self.employee.full_name} - Absent on {self.date}"
 
+
+def get_default_deduction_leave_type():
+    from apps.leave.models import LeaveType
+    leave_type = LeaveType.objects.filter(category='casual').first()
+    if not leave_type:
+        leave_type = LeaveType.objects.filter(category='sick').first()
+    if not leave_type:
+        leave_type = LeaveType.objects.order_by('id').first()
+    return leave_type
+
+

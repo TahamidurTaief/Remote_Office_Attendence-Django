@@ -48,6 +48,12 @@
                 </div>
 
                 <div>
+                    <label class="block text-sm font-bold text-gray-700">Category</label>
+                    <div class="mt-1.5">{{ form.category }}</div>
+                    {% if form.category.errors %}<p class="mt-2 text-sm text-red-650">{{ form.category.errors.0 }}</p>{% endif %}
+                </div>
+
+                <div>
                     <label class="block text-sm font-bold text-gray-700">Default Days Allowed Per Year</label>
                     <div class="mt-1.5">{{ form.default_days_per_year }}</div>
                     {% if form.default_days_per_year.errors %}<p class="mt-2 text-sm text-red-650">{{ form.default_days_per_year.errors.0 }}</p>{% endif %}

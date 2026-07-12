@@ -65,7 +65,7 @@
                         <div class="bg-gray-50 p-3 rounded-xl border border-gray-100">
                             <p class="text-xs font-semibold text-gray-600 truncate">{{ balance.type.name }}</p>
                             <div class="flex items-baseline justify-between mt-2">
-                                <span class="text-lg font-bold text-gray-900">{{ balance.remaining }}</span>
+                                <span class="text-lg font-bold {% if balance.remaining < 0 %}text-red-600{% else %}text-gray-900{% endif %}">{{ balance.remaining }}</span>
                                 <span class="text-xs text-gray-550">/ {{ balance.total }} left</span>
                             </div>
                             <div class="w-full bg-gray-250 h-1.5 rounded-full mt-2 overflow-hidden flex">

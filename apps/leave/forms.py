@@ -69,8 +69,10 @@ class LeaveRequestForm(forms.ModelForm):
 class LeaveTypeForm(forms.ModelForm):
     class Meta:
         model = LeaveType
-        fields = ['name', 'default_days_per_year']
+        fields = ['name', 'category', 'default_days_per_year']
         widgets = {
             'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Casual, Sick'}),
+            'category': forms.Select(attrs={'class': SELECT_INPUT}),
             'default_days_per_year': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0}),
         }
+

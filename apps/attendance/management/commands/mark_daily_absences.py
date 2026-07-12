@@ -58,11 +58,8 @@ class Command(BaseCommand):
         deducted_count = 0
 
         # Pre-fetch deduction leave type
-        leave_type = LeaveType.objects.filter(category='casual').first()
-        if not leave_type:
-            leave_type = LeaveType.objects.filter(category='sick').first()
-        if not leave_type:
-            leave_type = LeaveType.objects.order_by('id').first()
+        from apps.attendance.models import get_default_deduction_leave_type
+        leave_type = get_default_deduction_leave_type()
 
         for emp in active_employees:
             # Check if attendance exists
@@ -71,15 +68,15 @@ class Command(BaseCommand):
                 self.stdout.write(f'Employee {emp.full_name} had attendance. Skipping.')
                 continue
 
-            # Check if approved leave request covers target_date
+            # Check if approved or pending leave request covers target_date
             if LeaveRequest.objects.filter(
                 employee=emp,
-                status='approved',
+                status__in=['approved', 'pending'],
                 start_date__lte=target_date,
                 end_date__gte=target_date
             ).exists():
                 skipped_leave += 1
-                self.stdout.write(f'Employee {emp.full_name} has approved leave. Skipping.')
+                self.stdout.write(f'Employee {emp.full_name} has approved or pending leave. Skipping.')
                 continue
 
             # Check if already logged (idempotency)
@@ -136,7 +133,7 @@ class Command(BaseCommand):
         self.stdout.write('--- Summary ---')
         self.stdout.write(f'Total active employees checked: {total_checked}')
         self.stdout.write(f'Skipped (had attendance): {skipped_present}')
-        self.stdout.write(f'Skipped (had approved leave): {skipped_leave}')
+        self.stdout.write(f'Skipped (had approved/pending leave): {skipped_leave}')
         self.stdout.write(f'Skipped (already logged absent): {skipped_already_logged}')
         if skipped_no_leavetype:
             self.stdout.write(f'Skipped (no LeaveType configured): {skipped_no_leavetype}')
