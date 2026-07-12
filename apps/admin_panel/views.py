@@ -292,13 +292,14 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
         response['Content-Disposition'] = f'attachment; filename="attendance_export_{timezone.localdate()}.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours', 'Type', 'Status', 'Note'])
+        writer.writerow(['SN', 'Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours', 'Type', 'Status', 'Note'])
         
-        for att in records:
+        for idx, att in enumerate(records, 1):
             check_in = timezone.localtime(att.check_in_time).strftime('%H:%M:%S') if att.check_in_time else ''
             check_out = timezone.localtime(att.check_out_time).strftime('%H:%M:%S') if att.check_out_time else ''
             branch_name = att.employee.branch.name if att.employee.branch else 'Unassigned'
             writer.writerow([
+                idx,
                 att.date,
                 att.employee.employee_id,
                 att.employee.full_name,
@@ -1328,15 +1329,16 @@ class ExportReportCSVView(AdminRequiredMixin, View):
         )
         writer = csv.writer(response)
         writer.writerow([
-            'Employee', 'Employee ID', 'Date',
+            'SN', 'Employee', 'Employee ID', 'Date',
             'Check-in', 'Check-out', 'Hours',
             'Type', 'Status', 'Location', 'Notes',
         ])
-        for a in records:
+        for idx, a in enumerate(records, 1):
             loc = None
             if not isinstance(a, SyntheticAttendance):
                 loc = a.locations.filter(event='check_in').first()
             writer.writerow([
+                idx,
                 a.employee.full_name,
                 a.employee.employee_id,
                 a.date,
@@ -1412,15 +1414,16 @@ class ExportReportPDFView(AdminRequiredMixin, View):
 
         # ── Table ───────────────────────────────────────────────────────
         header = [
-            'Employee', 'Emp ID', 'Date',
+            'SN', 'Employee', 'Emp ID', 'Date',
             'Check-in', 'Check-out', 'Hours',
             'Type', 'Status', 'Notes',
         ]
         data = [header]
 
-        for a in attendances:
+        for idx, a in enumerate(attendances, 1):
             branch = a.employee.branch.name if a.employee.branch else '—'
             data.append([
+                str(idx),
                 a.employee.full_name,
                 a.employee.employee_id,
                 str(a.date),
@@ -1432,7 +1435,7 @@ class ExportReportPDFView(AdminRequiredMixin, View):
                 a.note or '—',
             ])
 
-        col_widths = [110, 60, 65, 52, 60, 40, 55, 55, 80]
+        col_widths = [25, 100, 50, 55, 50, 50, 40, 50, 50, 65]
         table = Table(data, colWidths=col_widths, repeatRows=1)
         table.setStyle(TableStyle([
             # Header row
@@ -2113,12 +2116,13 @@ def export_monthly_csv(request):
     writer = csv.writer(response)
     
     # Headers
-    headers = ['Employee Name', 'Designation', 'Present', 'Absent', 'Late Days', 'OT Hours', 'Holiday Work']
+    headers = ['SN', 'Employee Name', 'Designation', 'Present', 'Absent', 'Late Days', 'OT Hours', 'Holiday Work']
     writer.writerow(headers)
     
-    for emp in employees:
+    for idx, emp in enumerate(employees, 1):
         emp_stat = employee_stats.get(emp.id, {})
         row = [
+            idx,
             emp.full_name,
             emp.designation,
             emp_stat.get('present_count', 0),
@@ -2211,13 +2215,13 @@ def export_monthly_pdf(request):
     elements.append(Spacer(1, 10))
     
     # Table headers
-    headers = ['Employee Name', 'Designation', 'Present', 'Absent', 'Late Days', 'OT Hours', 'Holiday Work']
+    headers = ['SN', 'Employee Name', 'Designation', 'Present', 'Absent', 'Late Days', 'OT Hours', 'Holiday Work']
     table_data = [headers]
     
     t_style = [
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
+        ('ALIGN', (1, 1), (2, -1), 'LEFT'),
         ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#D1D5DB')),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1F4E79')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -2230,7 +2234,7 @@ def export_monthly_pdf(request):
     ]
     
     r_idx = 1
-    for emp in employees:
+    for idx, emp in enumerate(employees, 1):
         emp_stat = employee_stats.get(emp.id, {})
         present_count = emp_stat.get('present_count', 0)
         absent_count = emp_stat.get('absent_count', 0)
@@ -2239,6 +2243,7 @@ def export_monthly_pdf(request):
         holiday_work_count = emp_stat.get('holiday_work_count', 0)
         
         row = [
+            Paragraph(str(idx), cell_style),
             Paragraph(emp.full_name, cell_style_left),
             Paragraph(emp.designation, cell_style_left),
             Paragraph(str(present_count), cell_style),
@@ -2250,20 +2255,20 @@ def export_monthly_pdf(request):
         
         # Color highlights
         if absent_count > 0:
-            t_style.append(('BACKGROUND', (3, r_idx), (3, r_idx), colors.HexColor('#FFE0E0')))
-            row[3] = Paragraph(str(absent_count), late_text_style)
+            t_style.append(('BACKGROUND', (4, r_idx), (4, r_idx), colors.HexColor('#FFE0E0')))
+            row[4] = Paragraph(str(absent_count), late_text_style)
             
         if late_count > 0:
-            t_style.append(('BACKGROUND', (4, r_idx), (4, r_idx), colors.HexColor('#FFE0E0')))
-            row[4] = Paragraph(str(late_count), late_text_style)
+            t_style.append(('BACKGROUND', (5, r_idx), (5, r_idx), colors.HexColor('#FFE0E0')))
+            row[5] = Paragraph(str(late_count), late_text_style)
             
         if ot_display != '-':
-            t_style.append(('BACKGROUND', (5, r_idx), (5, r_idx), colors.HexColor('#E0F0FF')))
+            t_style.append(('BACKGROUND', (6, r_idx), (6, r_idx), colors.HexColor('#E0F0FF')))
             
         table_data.append(row)
         r_idx += 1
         
-    col_widths = [180, 150, 70, 70, 70, 80, 80]
+    col_widths = [30, 160, 140, 70, 70, 70, 80, 80]
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle(t_style))
     elements.append(table)
