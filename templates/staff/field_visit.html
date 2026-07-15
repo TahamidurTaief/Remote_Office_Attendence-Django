@@ -22,9 +22,9 @@
         <div class="flex gap-3 mb-6">
             <div id="step-gps" 
                  class="flex-1 flex items-center gap-2 p-3 
-                        rounded-xl border-2 border-gray-200 
+                        rounded-xl border-2 border-gray-150 
                         bg-gray-50 transition-all">
-              <span id="gps-icon" class="text-xl text-indigo-600"><i data-lucide="map-pin"></i></span>
+              <span id="gps-icon" class="text-xl text-primary-500"><i data-lucide="map-pin"></i></span>
               <div>
                 <p class="text-xs text-gray-500">Step 1</p>
                 <p class="text-sm font-medium" id="gps-step-text">
@@ -34,9 +34,9 @@
             </div>
             <div id="step-photo"
                  class="flex-1 flex items-center gap-2 p-3 
-                        rounded-xl border-2 border-gray-200 
+                        rounded-xl border-2 border-gray-150 
                         bg-gray-50 transition-all">
-              <span class="text-xl text-indigo-600"><i data-lucide="camera"></i></span>
+              <span class="text-xl text-primary-500"><i data-lucide="camera"></i></span>
               <div>
                 <p class="text-xs text-gray-500">Step 2</p>
                 <p class="text-sm font-medium">Take Photo</p>
@@ -45,7 +45,7 @@
         </div>
 
         <!-- GPS Status Card -->
-        <div id="gps-card" class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+        <div id="gps-card" class="bg-gray-50 border border-gray-150 rounded-xl p-4 mb-4">
             <div class="flex items-center gap-3">
               <span class="text-2xl text-red-500"><i data-lucide="map-pin"></i></span>
               <div class="flex-1">
@@ -60,7 +60,7 @@
             </div>
             <button id="retry-btn" type="button"
                     onclick="getLocation()"
-                    class="hidden mt-3 text-sm text-indigo-600 underline">
+                    class="hidden mt-3 text-sm text-primary-500 underline">
               Retry GPS
             </button>
         </div>
@@ -68,14 +68,14 @@
         <!-- Photo capture section -->
         <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2">
-            <i data-lucide="camera" class="w-4 h-4 inline mr-1 text-indigo-600"></i> Visit Photo <span class="text-red-500">*</span>
+            <i data-lucide="camera" class="w-4 h-4 inline mr-1 text-primary-500"></i> Visit Photo <span class="text-red-500">*</span>
             </label>
             
             <div id="camera-area"
                 onclick="document.getElementById('camera-input').click()"
                 class="border-2 border-dashed border-gray-300 
                         rounded-xl p-6 text-center cursor-pointer 
-                        hover:border-indigo-400 transition-colors">
+                        hover:border-primary-400 transition-colors">
             
             <div id="camera-placeholder">
                 <span class="text-5xl text-gray-400"><i data-lucide="camera"></i></span>
@@ -120,30 +120,30 @@
         <div class="mb-6 space-y-4">
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">Visit Title *</label>
-                <input type="text" id="id_visit_title" name="visit_title" required class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-3 border" placeholder="e.g. AC Repair at Client Site">
+                <input type="text" id="id_visit_title" name="visit_title" required class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="e.g. AC Repair at Client Site">
             </div>
             
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">Client Name (Optional)</label>
-                <input type="text" id="id_client_name" name="client_name" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-3 border" placeholder="Client or Company Name">
+                <input type="text" id="id_client_name" name="client_name" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Client or Company Name">
             </div>
 
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">Site Address (Optional)</label>
-                <input type="text" id="id_site_address" name="site_address" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-3 border" placeholder="Enter manual address if different from GPS">
+                <input type="text" id="id_site_address" name="site_address" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Enter manual address if different from GPS">
             </div>
         </div>
 
         <div class="mb-8">
             <label class="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
-            <textarea name="note" id="id_note" rows="3" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-3 border" placeholder="Any details for this visit..."></textarea>
+            <textarea name="note" id="id_note" rows="3" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Any details for this visit..."></textarea>
         </div>
 
         <button type="button"
                 id="submit-visit-btn"
                 onclick="submitFieldVisit()"
                 disabled
-                class="w-full py-4 rounded-xl font-bold text-white 
+                class="w-full py-2.5 rounded-xl font-bold text-white 
                     text-lg bg-gray-300 cursor-not-allowed
                     transition-all duration-300"
                 data-gps-ready="false"

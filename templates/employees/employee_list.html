@@ -12,7 +12,7 @@
             </h2>
         </div>
         <div class="mt-4 flex md:mt-0 md:ml-4">
-            <a href="{% url 'employees:employee_add' %}" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+            <a href="{% url 'employees:employee_add' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Add Employee
             </a>
@@ -20,15 +20,15 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-150 mb-6">
         <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div class="md:col-span-2">
                 <label for="search" class="block text-sm font-medium text-gray-700">Search Name/ID</label>
-                <input type="text" name="search" id="search" value="{{ search }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" placeholder="...">
+                <input type="text" name="search" id="search" value="{{ search }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border" placeholder="...">
             </div>
             <div>
                 <label for="department" class="block text-sm font-medium text-gray-700">Department</label>
-                <select name="department" id="department" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border">
+                <select name="department" id="department" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
                     <option value="">All</option>
                     {% for dept in departments %}
                     <option value="{{ dept }}" {% if department == dept %}selected{% endif %}>{{ dept }}</option>
@@ -37,7 +37,7 @@
             </div>
             <div>
                 <label for="branch" class="block text-sm font-medium text-gray-700">Branch</label>
-                <select name="branch" id="branch" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border">
+                <select name="branch" id="branch" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
                     <option value="">All</option>
                     {% for b in branches %}
                     <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
@@ -46,14 +46,14 @@
             </div>
             <div>
                 <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
-                <select name="status" id="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border">
+                <select name="status" id="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
                     <option value="">All</option>
                     <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
                     <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
                 </select>
             </div>
             <div>
-                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                     <i data-lucide="filter" class="w-4 h-4"></i>
                     Filter
                 </button>
@@ -72,7 +72,7 @@
     {% endif %}
 
     <!-- Table -->
-    <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
@@ -88,13 +88,13 @@
                 <tbody class="bg-white divide-y divide-gray-200">
                     {% for emp in employees %}
                     <tr class="hover:bg-gray-50/80 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0 h-10 w-10">
                                     {% if emp.profile_photo %}
                                     <img class="h-10 w-10 rounded-full object-cover" src="{{ emp.profile_photo.url }}" alt="">
                                     {% else %}
-                                    <div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">
+                                    <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold">
                                         {{ emp.full_name|make_list|first|upper }}
                                     </div>
                                     {% endif %}
@@ -105,29 +105,29 @@
                                 </div>
                             </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                             <div class="text-sm text-gray-900">{{ emp.department }}</div>
                             <div class="text-sm text-gray-500">{{ emp.designation }}</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">
                             {{ emp.branch.name|default:"Unassigned" }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">
                             {{ emp.phone }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                             {% include 'employees/partials/status_badge.html' with employee=emp %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium">
                             <div class="flex items-center justify-end gap-1">
                                 <a href="{% url 'admin_panel:reports_employee' emp.pk %}"
                                    title="View Report"
-                                   class="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                                   class="p-1.5 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 transition-colors">
                                     <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
                                 </a>
                                 <a href="{% url 'employees:employee_detail' emp.pk %}"
                                    title="View"
-                                   class="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                                   class="p-1.5 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 transition-colors">
                                     <i data-lucide="eye" class="w-4 h-4"></i>
                                 </a>
                                 <a href="{% url 'employees:employee_edit' emp.pk %}"
@@ -153,7 +153,7 @@
         
         <!-- Pagination -->
         {% if is_paginated %}
-        <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6 flex items-center justify-between">
+        <div class="bg-white px-4 py-3 border-t border-gray-150 sm:px-6 flex items-center justify-between">
             <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                 <div>
                     <p class="text-sm text-gray-700">

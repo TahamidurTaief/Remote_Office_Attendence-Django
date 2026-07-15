@@ -22,7 +22,7 @@
               <!-- Trigger button -->
               <button @click="open = !open"
                       @click.outside="open = false"
-                      class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                      class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                 <i data-lucide="download" class="w-4 h-4"></i>
                 Export
                 <i data-lucide="chevron-down" 
@@ -39,7 +39,7 @@
                    x-transition:leave="transition ease-in duration-75"
                    x-transition:leave-start="opacity-100 scale-100"
                    x-transition:leave-end="opacity-0 scale-95"
-                   class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+                   class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-sm border border-gray-100 z-50 overflow-hidden">
                 
                 <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&{{ query_string }}"
                    class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50">
@@ -75,15 +75,15 @@
         <form method="GET" class="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">From Date</label>
-                <input type="date" name="date_from" value="{{ request.GET.date_from }}" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <input type="date" name="date_from" value="{{ request.GET.date_from }}" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">To Date</label>
-                <input type="date" name="date_to" value="{{ request.GET.date_to }}" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <input type="date" name="date_to" value="{{ request.GET.date_to }}" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Employee</label>
-                <select name="employee" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <select name="employee" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     <option value="">All Employees</option>
                     {% for emp in employees %}
                     <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
@@ -92,7 +92,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Branch</label>
-                <select name="branch" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <select name="branch" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     <option value="">All Branches</option>
                     {% for b in branches %}
                     <option value="{{ b.id }}" {% if request.GET.branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
@@ -101,7 +101,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
-                <select name="type" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <select name="type" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     <option value="">All Types</option>
                     <option value="office" {% if request.GET.type == 'office' %}selected{% endif %}>Office</option>
                     <option value="field" {% if request.GET.type == 'field' %}selected{% endif %}>Field</option>
@@ -109,7 +109,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
-                <select name="status" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <select name="status" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     <option value="">All Statuses</option>
                     <option value="on_time" {% if request.GET.status == 'on_time' %}selected{% endif %}>On Time</option>
                     <option value="late" {% if request.GET.status == 'late' %}selected{% endif %}>Late</option>
@@ -118,7 +118,7 @@
                 </select>
             </div>
             <div>
-                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                     <i data-lucide="filter" class="w-4 h-4"></i>
                     Filter Results
                 </button>
@@ -140,9 +140,9 @@
             <p class="text-xs text-red-600 uppercase font-bold">Absent</p>
             <p class="text-2xl font-black text-red-900">{{ total_absent }}</p>
         </div>
-        <div class="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 shadow-sm text-center">
-            <p class="text-xs text-indigo-600 uppercase font-bold">On Leave</p>
-            <p class="text-2xl font-black text-indigo-900">{{ total_on_leave }}</p>
+        <div class="bg-primary-50 rounded-2xl p-4 border border-primary-200/50 shadow-sm text-center">
+            <p class="text-xs text-primary-500 uppercase font-bold">On Leave</p>
+            <p class="text-2xl font-black text-primary-800">{{ total_on_leave }}</p>
         </div>
         <div class="bg-amber-50 rounded-2xl p-4 border border-amber-100 shadow-sm text-center">
             <p class="text-xs text-amber-600 uppercase font-bold">Late</p>
@@ -183,37 +183,37 @@
                 <tbody class="bg-white divide-y divide-gray-200">
                     {% for att in attendances %}
                     <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                             <div class="text-sm font-bold text-gray-900">{{ att.employee.full_name }}</div>
                             <div class="text-xs text-gray-500">{{ att.employee.branch.name|default:"Unassigned" }}</div>
                             {% if att.leave_balances %}
                             <div class="text-[10px] text-gray-500 mt-1.5 flex flex-wrap gap-1 max-w-xs">
                                 {% for bal in att.leave_balances %}
-                                <span class="inline-block bg-gray-100 border border-gray-200 text-gray-700 px-1.5 py-0.5 rounded text-[10px]">
+                                <span class="inline-block bg-gray-100 border border-gray-150 text-gray-700 px-1.5 py-0.5 rounded text-[10px]">
                                     {{ bal.type.name }}: {{ bal.remaining }}d
                                 </span>
                                 {% endfor %}
                             </div>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ att.date|date:"Y-m-d" }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-900">{{ att.date|date:"Y-m-d" }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                             <div class="text-sm font-bold text-gray-900">{{ att.check_in_time|time:"h:i A"|default:"-" }}</div>
                             <div class="text-xs text-gray-500">{{ att.check_out_time|time:"h:i A"|default:"-" }}</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 font-bold">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-primary-500 font-bold">
                             {{ att.total_hours|default:"0.00" }}h
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                           {% if att.photo %}
                             <img src="{{ att.photo.url }}"
-                                 class="w-10 h-10 rounded-lg object-cover cursor-zoom-in hover:scale-110 hover:shadow-md transition-all duration-150 border border-gray-200"
+                                 class="w-10 h-10 rounded-lg object-cover cursor-zoom-in hover:scale-110 hover:shadow-sm transition-all duration-150 border border-gray-150"
                                  onclick="openPhotoModal('{{ att.photo.url }}', '{{ att.employee.full_name }}')">
                           {% else %}
                             <span class="text-gray-300 text-xs">—</span>
                           {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                             {% if att.attendance_type == 'check_in' %}
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                                 <i data-lucide="log-in" class="w-3 h-3"></i>
@@ -231,7 +231,7 @@
                             </span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-2.5 whitespace-nowrap">
                             <div class="flex flex-col items-start space-y-1">
                                 {% if att.status != 'absent' %}
                                     {% if att.type == 'field' %}
@@ -276,7 +276,7 @@
                                 {% endif %}
                             </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium">
                             {% if att.id %}
                             <a href="{% url 'admin_panel:attendance_detail' att.id %}" class="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-xl transition-colors">
                                 <i data-lucide="eye" class="w-3 h-3"></i>
@@ -302,7 +302,7 @@
         
         <!-- Pagination -->
         {% if is_paginated %}
-        <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6 flex items-center justify-between">
+        <div class="bg-white px-4 py-3 border-t border-gray-150 sm:px-6 flex items-center justify-between">
             <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                 <div>
                     <p class="text-sm text-gray-700">
@@ -328,7 +328,7 @@
     <div id="photoModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-all duration-300 opacity-0" onclick="closePhotoModal(event)">
         <div class="relative max-w-3xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl scale-95 transition-all duration-300 flex flex-col" onclick="event.stopPropagation()">
             <!-- Header -->
-            <div class="px-6 py-4 border-b border-gray-150 flex justify-between items-center bg-gray-50">
+            <div class="px-6 py-2.5 border-b border-gray-150 flex justify-between items-center bg-gray-50">
                 <h3 id="modalTitle" class="font-bold text-gray-900 text-lg">Attendance Photo</h3>
                 <button onclick="hidePhotoModal()" class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors p-1.5 rounded-lg hover:bg-gray-150">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -336,7 +336,7 @@
             </div>
             <!-- Body -->
             <div class="p-6 flex justify-center items-center bg-slate-900 max-h-[70vh]">
-                <img id="modalImg" src="" alt="Zoomed Attendance Photo" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-md border border-slate-700">
+                <img id="modalImg" src="" alt="Zoomed Attendance Photo" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm border border-slate-700">
             </div>
         </div>
     </div>

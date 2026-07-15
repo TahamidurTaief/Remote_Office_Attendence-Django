@@ -8,18 +8,18 @@
 
     <!-- Breadcrumb -->
     <nav class="text-sm text-gray-400 mb-4">
-        <a href="{% url 'admin_panel:reports_main' %}" class="hover:text-indigo-600">Reports</a>
+        <a href="{% url 'admin_panel:reports_main' %}" class="hover:text-primary-500">Reports</a>
         <span class="mx-2">›</span>
         <span class="text-gray-700">{{ employee.full_name }}</span>
     </nav>
 
     <!-- Employee Profile Card -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6 flex items-center gap-5">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 p-6 mb-6 flex items-center gap-5">
         {% if employee.profile_photo %}
         <img src="{{ employee.profile_photo.url }}" alt=""
-             class="w-16 h-16 rounded-full object-cover shrink-0 ring-2 ring-indigo-100">
+             class="w-16 h-16 rounded-full object-cover shrink-0 ring-2 ring-primary-100">
         {% else %}
-        <div class="w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold shrink-0">
+        <div class="w-16 h-16 rounded-full bg-primary-100 text-primary-500 flex items-center justify-center text-2xl font-bold shrink-0">
             {{ employee.full_name|make_list|first|upper }}
         </div>
         {% endif %}
@@ -31,7 +31,7 @@
                 <span>{{ employee.designation }}</span>
                 {% if employee.branch %}<span>{{ employee.branch.name }}</span>{% endif %}
                 {% if employee.overtime_enabled %}
-                <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded">OT Enabled</span>
+                <span class="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200/50 text-xs font-bold rounded">OT Enabled</span>
                 {% endif %}
             </div>
         </div>
@@ -39,7 +39,7 @@
           <!-- Trigger button -->
           <button @click="open = !open"
                   @click.outside="open = false"
-                  class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                  class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
             <i data-lucide="download" class="w-4 h-4"></i>
             Export
             <i data-lucide="chevron-down" 
@@ -56,7 +56,7 @@
                x-transition:leave="transition ease-in duration-75"
                x-transition:leave-start="opacity-100 scale-100"
                x-transition:leave-end="opacity-0 scale-95"
-               class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+               class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-sm border border-gray-100 z-50 overflow-hidden">
             
             <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&employee={{ employee.pk }}&year={{ year }}&month={{ month }}"
                class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50">
@@ -93,7 +93,7 @@
                class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600">
                 <i data-lucide="chevron-left" class="w-4 h-4"></i>
             </a>
-            <span class="px-5 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-semibold min-w-40 text-center">
+            <span class="px-5 py-2 bg-primary-50 text-primary-600 rounded-xl font-semibold min-w-40 text-center">
                 {{ month_name }} {{ year }}
             </span>
             <a href="?year={{ next_y }}&month={{ next_m }}"
@@ -104,10 +104,10 @@
     </div>
 
     {% if schedule %}
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 p-5 mb-6">
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-                <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Branch Schedule</p>
+                <p class="text-xs font-semibold uppercase tracking-wider text-primary-500">Branch Schedule</p>
                 <h3 class="text-lg font-bold text-gray-900 mt-1">{{ employee.branch.name }}</h3>
                 <p class="text-sm text-gray-500 mt-1">This report uses the live schedule configured in Office Schedule Settings.</p>
             </div>
@@ -155,7 +155,7 @@
             <p class="text-2xl font-bold text-purple-800 mt-1">{{ overtime_hours }}</p>
         </div>
         {% else %}
-        <div class="bg-gray-50 rounded-xl border border-gray-200 p-4 text-center">
+        <div class="bg-gray-50 rounded-xl border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Overtime</p>
             <p class="text-2xl font-bold text-gray-400 mt-1">Disabled</p>
         </div>
@@ -178,7 +178,7 @@
     </div>
 
     <!-- Calendar Heatmap -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 p-5 mb-6">
         <h3 class="text-base font-semibold text-gray-900 mb-4">Attendance Calendar</h3>
 
         <!-- Legend -->
@@ -205,7 +205,7 @@
         <div class="grid grid-cols-7 gap-1 mb-1">
             {% for cell in week %}
             {% if cell %}
-            <button class="aspect-square rounded-lg text-sm font-medium transition-all hover:ring-2 hover:ring-indigo-400 hover:ring-offset-1 focus:outline-none
+            <button class="aspect-square rounded-lg text-sm font-medium transition-all hover:ring-2 hover:ring-primary-400 hover:ring-offset-1 focus:outline-none
                 {% if cell.color == 'green' %}bg-green-400 text-white hover:bg-green-500
                 {% elif cell.color == 'amber' %}bg-amber-400 text-white hover:bg-amber-500
                 {% elif cell.color == 'red' %}bg-red-200 text-red-700 hover:bg-red-300
@@ -230,18 +230,18 @@
 
     <!-- Day Detail (HTMX target) -->
     <div id="day-detail" class="mb-6">
-        <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-gray-400 text-sm">
+        <div class="bg-white rounded-2xl border border-dashed border-gray-150 p-8 text-center text-gray-400 text-sm">
             <svg class="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/>
             </svg>
             Click a day in the calendar above to see details
         </div>
     </div>
-    <div id="day-detail-spinner" class="htmx-indicator text-center text-indigo-600 text-sm mb-4">Loading…</div>
+    <div id="day-detail-spinner" class="htmx-indicator text-center text-primary-500 text-sm mb-4">Loading…</div>
 
     <!-- Full Month Table -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-100">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 overflow-hidden">
+        <div class="px-5 py-2.5 border-b border-gray-100">
             <h3 class="text-base font-semibold text-gray-900">{{ month_name }} {{ year }} — Full Breakdown</h3>
         </div>
         <div class="overflow-x-auto">
@@ -318,7 +318,7 @@
                         </td>
                         <td class="px-4 py-2.5">
                             {% if row.check_in %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-primary-50 text-primary-600 border border-primary-200/50 uppercase">
                                 {{ row.check_in.get_attendance_type_display|default:"Office" }}
                             </span>
                             {% else %}

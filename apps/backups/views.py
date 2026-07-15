@@ -25,7 +25,7 @@ def _admin_required(view_func):
 
 @_admin_required
 def backup_list(request):
-    backups = BackupRecord.objects.all()[:50]
+    backups = BackupRecord.objects.select_related('created_by').all()[:50]
     config = GoogleDriveConfig.get_config()
     stats = {
         "total": BackupRecord.objects.count(),

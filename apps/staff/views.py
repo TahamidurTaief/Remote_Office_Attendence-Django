@@ -169,7 +169,7 @@ def attendance_history(request):
 
     # Fetch Leave Requests
     from apps.leave.models import LeaveRequest
-    leave_requests = LeaveRequest.objects.filter(
+    leave_requests = LeaveRequest.objects.select_related('leave_type').filter(
         employee=employee,
         status__in=['pending', 'approved'],
         start_date__lte=end_date,

@@ -52,13 +52,13 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">Employee <span class="text-red-500">*</span></label>
                     
                     <!-- Dropdown Trigger button -->
-                    <button type="button" id="employee-dropdown-btn" class="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-left text-sm text-gray-705 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm">
+                    <button type="button" id="employee-dropdown-btn" class="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-left text-sm text-gray-705 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all shadow-sm">
                         <span id="selected-employee-label" class="text-gray-400 font-normal">Select employee...</span>
                         <i data-lucide="chevrons-up-down" class="w-4 h-4 text-gray-400"></i>
                     </button>
 
                     <!-- Dropdown Menu -->
-                    <div id="employee-dropdown-menu" class="hidden absolute left-0 right-0 z-50 mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden transform origin-top transition-all max-h-72 flex flex-col">
+                    <div id="employee-dropdown-menu" class="hidden absolute left-0 right-0 z-50 mt-1.5 bg-white border border-gray-150 rounded-2xl shadow-xl overflow-hidden transform origin-top transition-all max-h-72 flex flex-col">
                         <!-- Search Box -->
                         <div class="p-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
                             <i data-lucide="search" class="w-4 h-4 text-gray-400 ml-2"></i>
@@ -67,21 +67,21 @@
                         <!-- Options List -->
                         <ul id="employee-options" class="overflow-y-auto divide-y divide-gray-50 flex-1">
                             {% for emp in employees %}
-                            <li data-value="{{ emp.id }}" data-search="{{ emp.full_name|lower }} {{ emp.employee_id|lower }}" class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-center justify-between text-sm transition-colors group">
+                            <li data-value="{{ emp.id }}" data-search="{{ emp.full_name|lower }} {{ emp.employee_id|lower }}" class="px-4 py-3 hover:bg-primary-50 cursor-pointer flex items-center justify-between text-sm transition-colors group">
                                 <div class="flex items-center gap-3">
                                     {% if emp.profile_photo %}
                                     <img src="{{ emp.profile_photo.url }}" class="w-8 h-8 rounded-full object-cover shrink-0">
                                     {% else %}
-                                    <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                                    <div class="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs uppercase shrink-0">
                                         {{ emp.full_name|first }}
                                     </div>
                                     {% endif %}
                                     <div>
-                                        <p class="font-medium text-gray-950 group-hover:text-indigo-900">{{ emp.full_name }}</p>
+                                        <p class="font-medium text-gray-950 group-hover:text-primary-800">{{ emp.full_name }}</p>
                                         <p class="text-xs text-gray-500">ID: {{ emp.employee_id }} | {{ emp.branch.name|default:"No Branch" }}</p>
                                     </div>
                                 </div>
-                                <span class="hidden group-hover:block text-xs font-semibold text-indigo-600">Select</span>
+                                <span class="hidden group-hover:block text-xs font-semibold text-primary-500">Select</span>
                             </li>
                             {% empty %}
                             <li class="px-4 py-6 text-center text-sm text-gray-400">No active employees found</li>
@@ -94,20 +94,20 @@
                 <div class="sm:col-span-3 relative">
                     <label class="block text-sm font-bold text-gray-700 mb-1">Leave Type <span class="text-red-500">*</span></label>
                     
-                    <button type="button" id="leavetype-dropdown-btn" class="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-left text-sm text-gray-705 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm">
+                    <button type="button" id="leavetype-dropdown-btn" class="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-left text-sm text-gray-705 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all shadow-sm">
                         <span id="selected-leavetype-label" class="text-gray-400 font-normal">Select leave type...</span>
                         <i data-lucide="chevrons-up-down" class="w-4 h-4 text-gray-400"></i>
                     </button>
 
-                    <div id="leavetype-dropdown-menu" class="hidden absolute left-0 right-0 z-50 mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden transform origin-top transition-all max-h-56 flex flex-col">
+                    <div id="leavetype-dropdown-menu" class="hidden absolute left-0 right-0 z-50 mt-1.5 bg-white border border-gray-150 rounded-2xl shadow-xl overflow-hidden transform origin-top transition-all max-h-56 flex flex-col">
                         <ul id="leavetype-options" class="overflow-y-auto divide-y divide-gray-50">
                             {% for lt in leave_types %}
-                            <li data-value="{{ lt.id }}" class="px-4 py-3 hover:bg-indigo-50 cursor-pointer flex items-center justify-between text-sm transition-colors group">
-                                <span class="font-medium text-gray-900 group-hover:text-indigo-900">{{ lt.name }}</span>
+                            <li data-value="{{ lt.id }}" class="px-4 py-3 hover:bg-primary-50 cursor-pointer flex items-center justify-between text-sm transition-colors group">
+                                <span class="font-medium text-gray-900 group-hover:text-primary-800">{{ lt.name }}</span>
                                 <span class="text-xs text-gray-400">Default: {{ lt.default_days_per_year }} days</span>
                             </li>
                             {% empty %}
-                            <li class="px-4 py-4 text-center text-sm text-gray-400">No leave types available</li>
+                            <li class="px-4 py-2.5 text-center text-sm text-gray-400">No leave types available</li>
                             {% endfor %}
                         </ul>
                     </div>
@@ -151,7 +151,7 @@
                 <a href="{% url 'admin_panel:reports_absent' %}" class="px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors bg-white shadow-sm">
                     Cancel
                 </a>
-                <button type="submit" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+                <button type="submit" class="flex items-center gap-2 px-5 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
                     <i data-lucide="check" class="w-4 h-4"></i>
                     Add Leave Record
                 </button>

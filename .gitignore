@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 staticfiles
+
+# Allow compiled tailwind css to be committed
+!theme/static/css/dist/

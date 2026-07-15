@@ -1,6 +1,6 @@
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
     <a href="{% url 'admin_panel:attendance_list' %}?status=present&date_from={{ today_str }}&date_to={{ today_str }}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
-       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-sm transition-all">
         <div class="flex items-center justify-between mb-4">
             <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-green-50">
                 <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
@@ -12,7 +12,7 @@
     </a>
 
     <a href="{% url 'admin_panel:attendance_list' %}?status=absent&date_from={{ today_str }}&date_to={{ today_str }}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
-       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-sm transition-all">
         <div class="flex items-center justify-between mb-4">
             <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-red-50">
                 <i data-lucide="x-circle" class="w-6 h-6 text-red-600"></i>
@@ -24,7 +24,7 @@
     </a>
 
     <a href="{% url 'admin_panel:attendance_list' %}?status=on_leave&date_from={{ today_str }}&date_to={{ today_str }}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
-       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-sm transition-all">
         <div class="flex items-center justify-between mb-4">
             <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50">
                 <i data-lucide="info" class="w-6 h-6 text-blue-600"></i>
@@ -36,7 +36,7 @@
     </a>
 
     <a href="{% url 'admin_panel:attendance_list' %}?status=late&date_from={{ today_str }}&date_to={{ today_str }}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
-       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-sm transition-all">
         <div class="flex items-center justify-between mb-4">
             <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-amber-50">
                 <i data-lucide="alert-circle" class="w-6 h-6 text-amber-600"></i>
@@ -48,7 +48,7 @@
     </a>
 
     <a href="{% url 'admin_panel:attendance_list' %}?type=field&date_from={{ today_str }}&date_to={{ today_str }}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}"
-       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+       class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-sm transition-all">
         <div class="flex items-center justify-between mb-4">
             <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50">
                 <i data-lucide="map" class="w-6 h-6 text-blue-600"></i>
@@ -65,9 +65,9 @@
     <!-- Left: Today's Attendance -->
     <div class="col-span-12 lg:col-span-7 xl:col-span-8">
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col h-[600px] overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <div class="px-6 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <h2 class="text-lg font-bold text-gray-900">Today's Attendance</h2>
-                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-600">
                     {{ todays_attendances.count }} Records
                 </span>
             </div>
@@ -84,38 +84,38 @@
                     <tbody class="divide-y divide-gray-100">
                         {% for att in todays_attendances %}
                         <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-6 py-2.5 whitespace-nowrap">
                                 <div class="flex items-center">
                                     {% if att.employee.profile_photo %}
                                     <img class="h-10 w-10 rounded-full object-cover shadow-sm" src="{{ att.employee.profile_photo.url }}" alt="">
                                     {% else %}
-                                    <div class="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shadow-sm">
+                                    <div class="h-10 w-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold shadow-sm">
                                         {{ att.employee.full_name|make_list|first|upper }}
                                     </div>
                                     {% endif %}
                                     <div class="ml-4">
-                                        <a href="{% url 'employees:employee_detail' att.employee.pk %}" class="text-sm font-bold text-gray-900 hover:text-indigo-600 transition-colors">{{ att.employee.full_name }}</a>
+                                        <a href="{% url 'employees:employee_detail' att.employee.pk %}" class="text-sm font-bold text-gray-900 hover:text-primary-500 transition-colors">{{ att.employee.full_name }}</a>
                                         <div class="text-xs text-gray-500">{{ att.employee.branch.name|default:"No Branch" }}</div>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-6 py-2.5 whitespace-nowrap">
                                 <div class="text-sm font-bold text-gray-900">{{ att.check_in_time|time:"h:i A" }}</div>
                                 {% if att.check_out_time %}
                                 <div class="text-xs text-gray-500">Out: {{ att.check_out_time|time:"h:i A" }}</div>
                                 {% endif %}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-6 py-2.5 whitespace-nowrap">
                                 {% if att.photo %}
                                 <img src="{{ att.photo.url }}" 
-                                     class="w-10 h-10 rounded-lg object-cover cursor-zoom-in hover:scale-110 hover:shadow-md transition-all duration-150 border border-gray-200"
+                                     class="w-10 h-10 rounded-lg object-cover cursor-zoom-in hover:scale-110 hover:shadow-sm transition-all duration-150 border border-gray-150"
                                      alt="Attendance photo"
                                      onclick="openPhotoModal('{{ att.photo.url }}', '{{ att.employee.full_name }}')">
                                 {% else %}
                                 <span class="text-gray-300 text-xs font-semibold">—</span>
                                 {% endif %}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-6 py-2.5 whitespace-nowrap">
                                 <div class="flex flex-col items-start space-y-1">
                                     {% if att.type == 'field' %}
                                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
@@ -160,7 +160,7 @@
     <!-- Right: Not Checked In -->
     <div class="col-span-12 lg:col-span-5 xl:col-span-4">
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col h-[600px] overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+            <div class="px-6 py-2.5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                 <h2 class="text-lg font-bold text-gray-900">Not Checked In</h2>
                 <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
                     {{ absent_today }} Absent / {{ on_leave_today }} Leave

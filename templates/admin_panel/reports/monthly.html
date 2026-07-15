@@ -10,7 +10,7 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <nav class="text-sm text-gray-400 mb-1">
-                <a href="{% url 'admin_panel:reports_main' %}" class="hover:text-indigo-600">Reports</a>
+                <a href="{% url 'admin_panel:reports_main' %}" class="hover:text-primary-500">Reports</a>
                 <span class="mx-2">›</span>
                 <span class="text-gray-700">Monthly Report</span>
             </nav>
@@ -21,7 +21,7 @@
           <!-- Trigger button -->
           <button @click="open = !open"
                   @click.outside="open = false"
-                  class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                  class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
             <i data-lucide="download" class="w-4 h-4"></i>
             Export
             <i data-lucide="chevron-down" 
@@ -38,7 +38,7 @@
                x-transition:leave="transition ease-in duration-75"
                x-transition:leave-start="opacity-100 scale-100"
                x-transition:leave-end="opacity-0 scale-95"
-               class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+               class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-sm border border-gray-100 z-50 overflow-hidden">
             
             <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&year={{ year }}&month={{ month }}"
                class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50">
@@ -69,7 +69,7 @@
     </div>
 
     <!-- Month Navigation + Filters -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 p-4 mb-6">
         <div class="flex flex-wrap items-end gap-3">
             <!-- Month nav -->
             <div class="flex items-center gap-2">
@@ -77,7 +77,7 @@
                    class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600">
                     <i data-lucide="chevron-left" class="w-4 h-4"></i>
                 </a>
-                <span class="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-semibold text-sm min-w-[140px] text-center">
+                <span class="px-4 py-2 bg-primary-50 text-primary-600 rounded-lg font-semibold text-sm min-w-[140px] text-center">
                     {{ month_name }} {{ year }}
                 </span>
                 <a href="?year={{ next_y }}&month={{ next_m }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
@@ -91,7 +91,7 @@
                 <input type="hidden" name="month" value="{{ month }}">
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">Employee</label>
-                    <select name="employee" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <select name="employee" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500">
                         <option value="">All Employees</option>
                         {% for emp in employees %}
                         <option value="{{ emp.pk }}" {% if selected_employee == emp.pk|stringformat:'s' %}selected{% endif %}>
@@ -102,7 +102,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">Branch</label>
-                    <select name="branch" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <select name="branch" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500">
                         <option value="">All Branches</option>
                         {% for branch in branches %}
                         <option value="{{ branch.pk }}" {% if selected_branch == branch.pk|stringformat:'s' %}selected{% endif %}>
@@ -112,7 +112,7 @@
                     </select>
                 </div>
                 <button type="submit"
-                        class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+                        class="px-5 py-2 bg-primary-gradient text-white text-sm font-medium rounded-lg hover:bg-primary-600 transition-colors">
                     Apply
                 </button>
             </form>
@@ -121,34 +121,34 @@
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Working Days</p>
             <p class="text-3xl font-bold text-gray-700 mt-1">{{ working_days }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Present</p>
             <p class="text-3xl font-bold text-green-600 mt-1">{{ total_present }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Absent</p>
             <p class="text-3xl font-bold text-red-500 mt-1">{{ total_absent }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total On Leave</p>
             <p class="text-3xl font-bold text-blue-600 mt-1">{{ total_on_leave }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Late</p>
             <p class="text-3xl font-bold text-amber-500 mt-1">{{ total_late }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Avg Attendance</p>
-            <p class="text-3xl font-bold text-indigo-600 mt-1">{{ avg_att_pct }}%</p>
+            <p class="text-3xl font-bold text-primary-500 mt-1">{{ avg_att_pct }}%</p>
         </div>
     </div>
 
     <!-- Monthly Table -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 overflow-hidden">
         {% if rows %}
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-100">
@@ -175,7 +175,7 @@
                                 <img src="{{ row.employee.profile_photo.url }}" alt=""
                                      class="w-8 h-8 rounded-full object-cover shrink-0">
                                 {% else %}
-                                <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold shrink-0">
+                                <div class="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-sm font-bold shrink-0">
                                     {{ row.employee.full_name|make_list|first|upper }}
                                 </div>
                                 {% endif %}
@@ -185,7 +185,7 @@
                                     {% if row.leave_balances %}
                                     <div class="text-[10px] text-gray-500 mt-1 flex flex-wrap gap-1 max-w-xs">
                                         {% for bal in row.leave_balances %}
-                                        <span class="inline-block bg-gray-100 border border-gray-200 text-gray-700 px-1.5 py-0.5 rounded text-[10px]">
+                                        <span class="inline-block bg-gray-100 border border-gray-150 text-gray-700 px-1.5 py-0.5 rounded text-[10px]">
                                             {{ bal.type.name }}: {{ bal.remaining }}d
                                         </span>
                                         {% endfor %}
@@ -229,7 +229,7 @@
                         </td>
                         <td class="px-4 py-3">
                             <a href="{% url 'admin_panel:reports_employee' row.employee.pk %}?year={{ year }}&month={{ month }}"
-                               class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">
+                               class="text-primary-500 hover:text-primary-700 text-xs font-medium">
                                 View Report
                             </a>
                         </td>

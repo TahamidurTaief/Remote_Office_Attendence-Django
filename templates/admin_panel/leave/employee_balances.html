@@ -16,7 +16,7 @@
             <!-- Year Selector Form -->
             <form method="GET" class="flex items-center gap-2">
                 <label class="text-xs font-semibold text-gray-500 uppercase">Year:</label>
-                <select name="year" onchange="this.form.submit()" class="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <select name="year" onchange="this.form.submit()" class="px-3 py-2 border border-gray-150 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
                     {% for y in available_years %}
                     <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
                     {% endfor %}
@@ -32,14 +32,14 @@
     <!-- Employee Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for emp in employees %}
-        <div class="bg-white rounded-2xl border border-gray-150 shadow-sm p-6 hover:shadow-md transition-shadow flex flex-col justify-between">
+        <div class="bg-white rounded-2xl border border-gray-150 shadow-sm p-6 hover:shadow-sm transition-shadow flex flex-col justify-between">
             <div>
                 <!-- Employee Card Header -->
                 <div class="flex items-center gap-3 border-b border-gray-100 pb-4 mb-4">
                     {% if emp.profile_photo %}
-                    <img src="{{ emp.profile_photo.url }}" class="w-12 h-12 rounded-full object-cover bg-gray-100 border border-gray-200">
+                    <img src="{{ emp.profile_photo.url }}" class="w-12 h-12 rounded-full object-cover bg-gray-100 border border-gray-150">
                     {% else %}
-                    <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-lg border border-indigo-150">
+                    <div class="w-12 h-12 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-lg border border-primary-200/50">
                         {{ emp.full_name|first|upper }}
                     </div>
                     {% endif %}
@@ -69,7 +69,7 @@
                                 <span class="text-xs text-gray-550">/ {{ balance.total }} left</span>
                             </div>
                             <div class="w-full bg-gray-250 h-1.5 rounded-full mt-2 overflow-hidden flex">
-                                <div class="bg-indigo-650 h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
+                                <div class="bg-primary-gradient h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
                             </div>
                             <p class="text-[10px] text-gray-500 mt-1">{{ balance.used }} days used</p>
                         </div>
@@ -84,7 +84,7 @@
 
             <!-- View History Link -->
             <div class="mt-6 border-t border-gray-100 pt-4 flex justify-end">
-                <a href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-850 hover:underline">
+                <a href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" class="inline-flex items-center gap-1 text-xs font-bold text-primary-500 hover:text-primary-700 hover:underline">
                     View History & Adjust
                     <i data-lucide="chevron-right" class="w-4 h-4"></i>
                 </a>

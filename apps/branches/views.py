@@ -12,7 +12,7 @@ class BranchListView(AdminRequiredMixin, ListView):
     context_object_name = 'branches'
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('schedule')
         search_query = self.request.GET.get('search', '')
         status_filter = self.request.GET.get('status', '')
 

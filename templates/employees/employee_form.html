@@ -10,7 +10,7 @@
         </h2>
     </div>
 
-    <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
         <form method="POST" enctype="multipart/form-data" class="p-6 space-y-6">
             {% csrf_token %}
             
@@ -92,7 +92,7 @@
                     <label for="{{ form.profile_photo.id_for_label }}" class="block text-sm font-medium text-gray-700">Profile Photo</label>
                     <div class="mt-2 flex items-center gap-4">
                         <img id="photo-preview" src="{% if object and object.profile_photo %}{{ object.profile_photo.url }}{% else %}#{% endif %}" alt="Photo preview"
-                             class="w-16 h-16 rounded-full object-cover border border-gray-200 {% if not object or not object.profile_photo %}hidden{% endif %}" />
+                             class="w-16 h-16 rounded-full object-cover border border-gray-150 {% if not object or not object.profile_photo %}hidden{% endif %}" />
                         <div class="flex-1">
                             <div class="mt-1">{{ form.profile_photo }}</div>
                             {% if form.profile_photo.errors %}<p class="mt-2 text-sm text-red-600">{{ form.profile_photo.errors.0 }}</p>{% endif %}
@@ -120,7 +120,7 @@
                 <!-- Location Tracking -->
                 <div class="sm:col-span-6 pt-4 border-t border-gray-100">
                     <div class="flex items-center gap-2 mb-1">
-                        <i data-lucide="map-pin" class="w-4 h-4 text-indigo-500"></i>
+                        <i data-lucide="map-pin" class="w-4 h-4 text-primary-500"></i>
                         <label for="{{ form.tracking_interval.id_for_label }}" class="block text-sm font-semibold text-gray-700">
                             Auto Location Tracking Interval
                         </label>
@@ -135,7 +135,7 @@
 
                 <!-- Overtime Tracking -->
                 <div class="sm:col-span-6 pt-4 border-t border-gray-100">
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-150">
                       <div>
                         <p class="text-sm font-medium text-gray-800">
                           Overtime Tracking
@@ -153,9 +153,9 @@
                                checked
                                {% endif %}>
                         <div class="w-11 h-6 bg-gray-200 rounded-full 
-                                    peer peer-checked:bg-indigo-600
+                                    peer peer-checked:bg-primary-gradient
                                     peer-focus:ring-2 
-                                    peer-focus:ring-indigo-300
+                                    peer-focus:ring-primary-300
                                     after:content-[''] after:absolute 
                                     after:top-0.5 after:left-0.5
                                     after:bg-white after:rounded-full 
@@ -169,12 +169,12 @@
                 </div>
             </div>
 
-            <div class="mt-8 pt-6 border-t border-gray-200">
+            <div class="mt-8 pt-6 border-t border-gray-150">
                 <h3 class="text-lg font-medium text-gray-900 flex items-center mb-4">
                     <i data-lucide="lock" class="w-5 h-5 mr-2 text-gray-500"></i>
                     Login Credentials
                 </h3>
-                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6 bg-gray-50 p-4 rounded-lg border border-gray-150">
                     {% if not object %}
                     <div class="sm:col-span-3">
                         <label for="{{ form.password1.id_for_label }}" class="block text-sm font-medium text-gray-700">Password</label>
@@ -206,7 +206,7 @@
             <!-- Leave Override Policies -->
             <div class="sm:col-span-6 pt-6 border-t border-gray-150 mt-6">
                 <div class="flex items-center gap-2 mb-1">
-                    <i data-lucide="calendar-days" class="w-4 h-4 text-indigo-500"></i>
+                    <i data-lucide="calendar-days" class="w-4 h-4 text-primary-500"></i>
                     <label class="block text-sm font-semibold text-gray-750">
                         Leave Override Rules
                     </label>
@@ -217,7 +217,7 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-150">
                     {% for item in leave_types_with_overrides %}
-                    <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm gap-3">
+                    <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-150 shadow-sm gap-3">
                         <div class="min-w-0">
                             <p class="text-sm font-bold text-gray-900 truncate">{{ item.name }}</p>
                             <p class="text-[10px] text-gray-400 uppercase tracking-wider">{{ item.category }} (Global Default: {{ item.default_days }}d)</p>
@@ -228,7 +228,7 @@
                                    value="{{ item.override_days }}"
                                    placeholder="{{ item.default_days }}"
                                    min="0"
-                                   class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-right pr-9">
+                                   class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-right pr-9">
                             <span class="absolute inset-y-0 right-3 flex items-center pointer-events-none text-xs text-gray-400">days</span>
                         </div>
                     </div>
@@ -236,11 +236,11 @@
                 </div>
             </div>
 
-            <div class="pt-5 flex justify-end gap-3 border-t border-gray-200 mt-6 sm:col-span-6">
+            <div class="pt-5 flex justify-end gap-3 border-t border-gray-150 mt-6 sm:col-span-6">
                 <a href="{% url 'employees:employee_list' %}" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">
                     Cancel
                 </a>
-                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-gradient hover:opacity-90">
                     Save
                 </button>
             </div>

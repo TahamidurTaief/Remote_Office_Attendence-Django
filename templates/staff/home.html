@@ -5,7 +5,7 @@
 {% block content %}
 <div id="install-banner"
      class="hidden mb-4 mx-0">
-  <div class="bg-indigo-600 rounded-2xl p-4 
+  <div class="bg-primary-gradient rounded-2xl p-4 
               flex items-center justify-between gap-3">
     <div class="flex items-center gap-3">
       <img src="/static/icons/icon-72.png" 
@@ -14,18 +14,18 @@
         <p class="text-white font-semibold text-sm">
           Install FieldTrack
         </p>
-        <p class="text-indigo-200 text-xs">
+        <p class="text-primary-200 text-xs">
           Add to home screen
         </p>
       </div>
     </div>
     <div class="flex items-center gap-2">
       <button onclick="dismissInstall()"
-              class="text-indigo-300 p-1">
+              class="text-primary-300 p-1">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
       <button onclick="installPWA()"
-              class="bg-white text-indigo-600 
+              class="bg-white text-primary-500 
                      text-sm font-semibold 
                      px-4 py-2 rounded-xl
                      whitespace-nowrap">
@@ -84,7 +84,7 @@ window.addEventListener('appinstalled', () => {
 
     <!-- Leave Summary Widget -->
     {% if employee %}
-    <a href="{% url 'leave:staff_dashboard' %}" class="block bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow">
+    <a href="{% url 'leave:staff_dashboard' %}" class="block bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-sm transition-shadow">
         <div class="flex items-center justify-between gap-4">
             <div class="space-y-1">
                 <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Leave Summary</p>
@@ -98,13 +98,13 @@ window.addEventListener('appinstalled', () => {
                         Pending Requests: {{ pending_leave_count }}
                     </span>
                     {% else %}
-                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-medium bg-gray-50 border-gray-200 text-gray-600">
+                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-medium bg-gray-50 border-gray-150 text-gray-600">
                         Pending Requests: 0
                     </span>
                     {% endif %}
                 </div>
             </div>
-            <div class="p-2 bg-indigo-50 text-indigo-650 rounded-xl">
+            <div class="p-2 bg-primary-50 text-primary-600 rounded-xl">
                 <i data-lucide="chevron-right" class="w-5 h-5"></i>
             </div>
         </div>
@@ -113,18 +113,18 @@ window.addEventListener('appinstalled', () => {
 
     <div hx-get="{% url 'staff:attendance_card' %}" hx-trigger="load, every 30s">
         <div class="w-full h-52 bg-white rounded-2xl border border-gray-100 shadow-sm animate-pulse flex flex-col justify-center items-center">
-            <div class="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mb-2"></div>
+            <div class="w-8 h-8 rounded-full border-2 border-primary-500 border-t-transparent animate-spin mb-2"></div>
             <p class="text-sm text-gray-500">Loading status...</p>
         </div>
     </div>
 
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div class="px-6 py-2.5 border-b border-gray-100 flex items-center justify-between">
             <div>
                 <h2 class="text-lg font-bold text-gray-900">Field Visits Today</h2>
                 <p class="text-xs text-gray-500 mt-1">Track client work and site visits.</p>
             </div>
-            <a href="{% url 'staff:field_visit' %}" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
+            <a href="{% url 'staff:field_visit' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Add Visit
             </a>
@@ -148,12 +148,12 @@ window.addEventListener('appinstalled', () => {
                         </p>
                         {% endif %}
                     </div>
-                    <button type="button" class="shrink-0 p-2 rounded-xl text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Add follow-up">
+                    <button type="button" class="shrink-0 p-2 rounded-xl text-gray-400 hover:text-primary-500 hover:bg-primary-50 transition-colors" title="Add follow-up">
                         <i data-lucide="plus" class="w-4 h-4"></i>
                     </button>
                 </div>
             {% empty %}
-                <div class="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <div class="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-150">
                     <i data-lucide="map" class="w-10 h-10 mx-auto text-gray-300 mb-3"></i>
                     <p class="text-gray-500 text-sm">No field visits yet</p>
                 </div>

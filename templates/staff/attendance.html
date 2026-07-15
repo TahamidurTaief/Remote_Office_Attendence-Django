@@ -3,17 +3,17 @@
 {% block page_title %}Attendance History{% endblock %}
 
 {% block content %}
-<div class="bg-indigo-600 text-white px-6 pt-8 pb-16">
+<div class="bg-primary-gradient text-white px-6 pt-8 pb-16">
     <h1 class="text-2xl font-bold mb-6">Attendance History</h1>
     
     <div class="flex justify-between items-center mb-2" id="month-selector">
-        <button id="prev-month-btn" class="p-2 text-indigo-100 hover:text-white transition-colors" 
+        <button id="prev-month-btn" class="p-2 text-primary-100 hover:text-white transition-colors" 
                 hx-get="{% url 'staff:attendance' %}?month={{ prev_month_val }}" 
                 hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
         </button>
         <h2 class="text-lg font-bold" id="current-month-display">{{ current_month }}</h2>
-        <button id="next-month-btn" class="p-2 text-indigo-100 hover:text-white transition-colors"
+        <button id="next-month-btn" class="p-2 text-primary-100 hover:text-white transition-colors"
                 hx-get="{% url 'staff:attendance' %}?month={{ next_month_val }}" 
                 hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>

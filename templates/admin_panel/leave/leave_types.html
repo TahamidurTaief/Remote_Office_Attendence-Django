@@ -11,7 +11,7 @@
             <h1 class="text-2xl font-bold text-gray-900">Leave Types</h1>
             <p class="text-sm text-gray-500 mt-1">Configure leave types and their default days allowed per year.</p>
         </div>
-        <a href="{% url 'leave:admin_leave_type_add' %}" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+        <a href="{% url 'leave:admin_leave_type_add' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Add Leave Type
         </a>
@@ -33,27 +33,27 @@
             <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
                 <thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <tr>
-                        <th class="px-6 py-4">Leave Type Name</th>
-                        <th class="px-6 py-4">Category</th>
-                        <th class="px-6 py-4">Default Days Allowed Per Year</th>
-                        <th class="px-6 py-4 text-right">Actions</th>
+                        <th class="px-6 py-2.5">Leave Type Name</th>
+                        <th class="px-6 py-2.5">Category</th>
+                        <th class="px-6 py-2.5">Default Days Allowed Per Year</th>
+                        <th class="px-6 py-2.5 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 bg-white text-gray-700">
                     {% for lt in leave_types %}
                     <tr class="hover:bg-gray-50/50 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
+                        <td class="px-6 py-2.5 whitespace-nowrap font-bold text-gray-900">
                             {{ lt.name }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-gray-700 font-medium capitalize">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-gray-700 font-medium capitalize">
                             {{ lt.get_category_display }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-gray-700">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-gray-700">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary-50 text-primary-600">
                                 {{ lt.default_days_per_year }} Days
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-right whitespace-nowrap text-xs font-medium">
+                        <td class="px-6 py-2.5 text-right whitespace-nowrap text-xs font-medium">
                             <a href="{% url 'leave:admin_leave_type_edit' lt.pk %}" class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors bg-white font-semibold">
                                 <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                                 Edit defaults

@@ -39,3 +39,19 @@ You have full control over staff accounts.
 - **Filters & Export:** You can filter attendance by Date Range, Branch, or Employee. You can also export this data as a **CSV** file for payroll or HR.
 - **Detailed View:** Click "Detail" on any record to see the exact map coordinates and time the employee checked in and out.
 - **Manual Entry:** If an employee's phone dies or GPS fails, you can use the **Manual Entry** button to add their attendance. You are required to provide an "Admin Override Reason" for auditing purposes.
+
+## 6. Tailwind CSS Build Steps
+FieldTrack uses a compiled and purged Tailwind CSS build via `django-tailwind` instead of loading it from a CDN to optimize production loading performance.
+
+### For Local Development:
+To start the JIT watcher and rebuild CSS on the fly when template files are changed:
+```bash
+python manage.py tailwind start
+```
+
+### Before Production Deployment:
+Always build the minified production stylesheet to bundle only used utility classes:
+```bash
+python manage.py tailwind build
+python manage.py collectstatic --no-input
+```

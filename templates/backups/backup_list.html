@@ -81,15 +81,15 @@
             </div>
         </div>
 
-        <div class="relative overflow-hidden bg-linear-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-2xl p-6">
+        <div class="relative overflow-hidden bg-linear-to-br from-primary-50 to-primary-100 border border-primary-200/50 rounded-2xl p-6">
             <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
-                    <i data-lucide="cloud" class="w-5 h-5 text-indigo-700"></i>
+                <div class="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center">
+                    <i data-lucide="cloud" class="w-5 h-5 text-primary-600"></i>
                 </div>
-                <span class="text-xs font-semibold text-indigo-700 bg-indigo-200/70 px-2 py-1 rounded-full">Drive</span>
+                <span class="text-xs font-semibold text-primary-600 bg-primary-200/70 px-2 py-1 rounded-full">Drive</span>
             </div>
-            <h3 class="mt-4 text-lg font-bold text-indigo-900">Google Drive</h3>
-            <p class="text-sm text-indigo-800 mt-1">
+            <h3 class="mt-4 text-lg font-bold text-primary-800">Google Drive</h3>
+            <p class="text-sm text-primary-700 mt-1">
                 {% if config.is_enabled and config.service_account_json %}
                 Configured and ready.
                 {% else %}
@@ -105,7 +105,7 @@
 
     <!-- Google Drive Settings -->
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <button type="button" @click="showSettings = !showSettings" class="w-full flex items-center justify-between px-6 py-4 text-left">
+        <button type="button" @click="showSettings = !showSettings" class="w-full flex items-center justify-between px-6 py-2.5 text-left">
             <span class="text-sm font-bold text-gray-800 flex items-center gap-2">
                 <i data-lucide="settings" class="w-4 h-4 text-gray-500"></i>
                 Google Drive Settings
@@ -130,32 +130,32 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Service Account JSON</label>
-                    <textarea name="service_account_json" rows="8" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder:text-gray-400 resize-none" placeholder="Paste your Google Service Account JSON key here...">{{ config.service_account_json }}</textarea>
+                    <textarea name="service_account_json" rows="8" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder:text-gray-400 resize-none" placeholder="Paste your Google Service Account JSON key here...">{{ config.service_account_json }}</textarea>
                     <p class="text-xs text-gray-500 mt-2">Create a Service Account in Google Cloud Console, download the JSON key, and paste it here.</p>
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Drive Folder ID</label>
-                    <input type="text" name="folder_id" value="{{ config.folder_id }}" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <input type="text" name="folder_id" value="{{ config.folder_id }}" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     <p class="text-xs text-gray-500 mt-2">The ID from your Google Drive folder URL.</p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
                         <span class="text-sm font-semibold text-gray-700">Auto Daily Backup</span>
-                        <input type="checkbox" name="auto_daily_enabled" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" {% if config.auto_daily_enabled %}checked{% endif %}>
+                        <input type="checkbox" name="auto_daily_enabled" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500" {% if config.auto_daily_enabled %}checked{% endif %}>
                     </label>
                     <label class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
                         <span class="text-sm font-semibold text-gray-700">Auto 3-Day Backup</span>
-                        <input type="checkbox" name="auto_3day_enabled" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" {% if config.auto_3day_enabled %}checked{% endif %}>
+                        <input type="checkbox" name="auto_3day_enabled" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500" {% if config.auto_3day_enabled %}checked{% endif %}>
                     </label>
                     <label class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
                         <span class="text-sm font-semibold text-gray-700">Auto Upload to Drive</span>
-                        <input type="checkbox" name="auto_upload_to_drive" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" {% if config.auto_upload_to_drive %}checked{% endif %}>
+                        <input type="checkbox" name="auto_upload_to_drive" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500" {% if config.auto_upload_to_drive %}checked{% endif %}>
                     </label>
                     <div class="bg-gray-50 rounded-xl px-4 py-3">
                         <label class="block text-sm font-medium text-gray-700 mb-1.5">Keep Local Copies</label>
-                        <input type="number" name="keep_local_copies" value="{{ config.keep_local_copies }}" min="1" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <input type="number" name="keep_local_copies" value="{{ config.keep_local_copies }}" min="1" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     </div>
                 </div>
 
@@ -170,7 +170,7 @@
                         Test Connection
                     </button>
                     <div id="drive-test-result" class="text-xs text-gray-600"></div>
-                    <button type="submit" class="ml-auto flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    <button type="submit" class="ml-auto flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                         <i data-lucide="save" class="w-4 h-4"></i>
                         Save Settings
                     </button>
@@ -181,7 +181,7 @@
 
     <!-- Backup History -->
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div class="px-6 py-2.5 border-b border-gray-100 flex items-center justify-between">
             <h3 class="text-lg font-bold text-gray-900">Backup History</h3>
             <div class="text-xs text-gray-500">Total: <span class="font-semibold text-gray-700">{{ stats.total }}</span></div>
         </div>
@@ -201,14 +201,14 @@
                 <tbody class="divide-y divide-gray-200">
                     {% for backup in backups %}
                     <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ backup.created_at|date:"Y-m-d H:i" }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-700">{{ backup.created_at|date:"Y-m-d H:i" }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-600">
                                 <i data-lucide="database" class="w-3 h-3"></i>
                                 {{ backup.get_backup_type_display }}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium {% if backup.status == 'completed' %}bg-emerald-100 text-emerald-700{% elif backup.status == 'failed' %}bg-red-100 text-red-700{% else %}bg-amber-100 text-amber-700{% endif %}">
                                 {% if backup.status == 'completed' %}
                                 <i data-lucide="check-circle" class="w-3 h-3"></i>
@@ -220,9 +220,9 @@
                                 {{ backup.get_status_display }}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ backup.record_count }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ backup.file_size|filesizeformat }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-700">{{ backup.record_count }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-700">{{ backup.file_size|filesizeformat }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
                             {% if backup.gdrive_uploaded %}
                                 <a href="{{ backup.gdrive_link }}" target="_blank" class="inline-flex items-center gap-1 text-emerald-700 font-semibold hover:underline">
                                     <i data-lucide="check-circle" class="w-4 h-4"></i>
@@ -246,7 +246,7 @@
                                 {% endif %}
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium">
                             {% if backup.file_path %}
                             <a href="{% url 'backups:download_backup' backup.id %}" class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-xl transition-colors">
                                 <i data-lucide="download" class="w-3 h-3"></i>

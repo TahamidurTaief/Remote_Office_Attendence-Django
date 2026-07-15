@@ -1,4 +1,4 @@
-{% load static %}
+{% load static tailwind_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    {% tailwind_css %}
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -37,6 +37,29 @@
         .scrollbar-hide::-webkit-scrollbar {
             display: none;
         }
+        /* Unified Form Fields Styling */
+        input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="time"], input[type="number"], input[type="tel"], select, textarea {
+            width: 100% !important;
+            padding: 0.625rem 0.875rem !important;
+            border: 1px solid #E5E7EB !important;
+            border-radius: 0.5rem !important;
+            font-size: 0.875rem !important;
+            color: #1F2937 !important;
+            background-color: #FFFFFF !important;
+            transition: all 0.2s ease-in-out !important;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="date"]:focus, input[type="time"]:focus, input[type="number"]:focus, input[type="tel"]:focus, select:focus, textarea:focus {
+            border-color: #0B5FA5 !important;
+            box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.15) !important;
+        }
+        input[type="checkbox"] {
+            border-radius: 0.25rem !important;
+            border-color: #D1D5DB !important;
+            color: #0B5FA5 !important;
+            focus:ring-primary-500 !important;
+        }
     </style>
     
     <script>
@@ -51,7 +74,7 @@
     
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#6366f1">
+    <meta name="theme-color" content="#0B5FA5">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -61,42 +84,47 @@
 
     {% block head %}{% endblock %}
 </head>
-<body class="bg-gray-100">
-<div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-indigo-600 z-50 hidden"></div>
+<body class="bg-slate-50 bg-soft-gradient">
+<div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-primary-500 z-50 hidden"></div>
 
 <!-- DESKTOP: Sidebar (hidden on mobile) -->
-<div class="hidden md:flex md:flex-col fixed top-0 left-0 h-screen w-64 bg-slate-900 text-slate-300 z-40 overflow-y-auto scrollbar-hide">
+<div class="hidden md:flex md:flex-col fixed top-0 left-0 h-screen w-64 bg-white border-r border-gray-150 text-gray-600 z-40 overflow-y-auto scrollbar-hide">
   <div class="flex flex-col grow">
     <!-- Logo -->
-    <div class="flex items-center justify-between h-16 px-4 border-b border-gray-200 bg-white">
-      <img src="{% static 'main_logo.jpg' %}" 
-           alt="FieldTrack" 
-           class="h-8 w-auto object-contain"
-           onerror="this.style.display='none'; 
-                    document.getElementById('logo-text')
-                    .style.display='block'">
-      <span id="logo-text" 
-            style="display:none"
-            class="text-slate-900 font-semibold text-lg">
-        FieldTrack
-      </span>
-      <span class="text-xs bg-indigo-600 text-white px-2 py-0.5 rounded-full shrink-0">Staff</span>
+    <div class="flex items-center justify-between h-16 px-4 border-b border-gray-150 bg-white">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-primary-gradient rounded-lg flex items-center justify-center shadow-sm">
+          <i data-lucide="clock" class="w-4 h-4 text-white"></i>
+        </div>
+        <img src="{% static 'main_logo.jpg' %}" 
+             alt="FieldTrack" 
+             class="h-8 w-auto object-contain"
+             onerror="this.style.display='none'; 
+                      document.getElementById('logo-text')
+                      .style.display='block'">
+        <span id="logo-text" 
+              style="display:none"
+              class="text-gray-800 font-semibold text-lg">
+          FieldTrack
+        </span>
+      </div>
+      <span class="text-[10px] bg-primary-50 text-primary-600 border border-primary-200/50 px-2.5 py-0.5 rounded-full shrink-0 font-bold">Staff</span>
     </div>
 
     <!-- Staff info -->
-    <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-700">
+    <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-150 bg-gray-50/30">
       {% if request.user.employeeprofile.profile_photo %}
       <img src="{{ request.user.employeeprofile.profile_photo.url }}"
-           class="w-10 h-10 rounded-full object-cover bg-gray-600">
+           class="w-10 h-10 rounded-full object-cover bg-gray-150 border border-gray-200 shadow-sm">
       {% else %}
-      <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+      <div class="w-10 h-10 rounded-full bg-primary-gradient flex items-center justify-center text-white font-bold text-sm shadow-sm">
         {{ request.user.employeeprofile.full_name|first|upper }}
       </div>
       {% endif %}
       <div class="min-w-0">
-        <p class="text-white text-sm font-medium truncate">
+        <p class="text-gray-800 text-sm font-medium truncate">
           {{ request.user.employeeprofile.full_name }}</p>
-        <p class="text-gray-400 text-xs truncate">
+        <p class="text-gray-500 text-xs truncate">
           {{ request.user.employeeprofile.employee_id }}</p>
       </div>
     </div>
@@ -104,45 +132,57 @@
     <!-- Nav items -->
     <nav class="flex-1 px-3 py-4 space-y-1">
       <a href="{% url 'staff:home' %}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-         {% if request.path == '/staff/home/' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
-        <i data-lucide="home" class="w-5 h-5 shrink-0"></i>
+         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
+         {% if request.path == '/staff/home/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
+        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/home/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
+          <i data-lucide="home" class="w-4 h-4 shrink-0"></i>
+        </div>
         Home
       </a>
       <a href="{% url 'staff:check_in' %}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-         {% if request.path == '/staff/check-in/' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
-        <i data-lucide="map-pin" class="w-5 h-5 shrink-0"></i>
+         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
+         {% if request.path == '/staff/check-in/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
+        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/check-in/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
+          <i data-lucide="map-pin" class="w-4 h-4 shrink-0"></i>
+        </div>
         Check In / Out
       </a>
       <a href="{% url 'staff:attendance' %}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-         {% if request.path == '/staff/attendance/' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
-        <i data-lucide="calendar" class="w-5 h-5 shrink-0"></i>
+         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
+         {% if request.path == '/staff/attendance/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
+        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/attendance/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
+          <i data-lucide="calendar" class="w-4 h-4 shrink-0"></i>
+        </div>
         My Attendance
       </a>
       <a href="{% url 'leave:staff_dashboard' %}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-         {% if '/leave/staff/' in request.path %}bg-indigo-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
-        <i data-lucide="clipboard-list" class="w-5 h-5 shrink-0"></i>
+         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
+         {% if '/leave/staff/' in request.path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
+        <div class="p-2 rounded-md transition-colors {% if '/leave/staff/' in request.path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
+          <i data-lucide="clipboard-list" class="w-4 h-4 shrink-0"></i>
+        </div>
         Leave
       </a>
       <a href="{% url 'staff:profile' %}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-         {% if request.path == '/staff/profile/' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
-        <i data-lucide="user" class="w-5 h-5 shrink-0"></i>
+         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
+         {% if request.path == '/staff/profile/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
+        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/profile/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
+          <i data-lucide="user" class="w-4 h-4 shrink-0"></i>
+        </div>
         Profile
       </a>
     </nav>
 
     <!-- Logout at bottom -->
-    <div class="px-3 py-4 border-t border-gray-700">
+    <div class="px-6 py-4 border-t border-gray-150 bg-gray-50/50">
       <form action="{% url 'accounts:logout' %}" method="POST">
         {% csrf_token %}
         <button type="submit"
-                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm
-                       text-red-400 hover:bg-gray-800 hover:text-red-300 transition-colors">
-          <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
+                class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-medium
+                       text-red-500 hover:bg-red-50 hover:text-red-600 transition-all duration-150">
+          <div class="p-2 rounded-md bg-red-50 text-red-500 group-hover:bg-red-100/50 transition-colors">
+            <i data-lucide="log-out" class="w-4 h-4 shrink-0"></i>
+          </div>
           Sign Out
         </button>
       </form>
@@ -151,10 +191,10 @@
 </div>
 
 <!-- DESKTOP: Main content with left margin -->
-<div class="md:ml-64 min-h-screen flex flex-col bg-gray-50">
+<div class="md:ml-64 min-h-screen flex flex-col bg-slate-50 bg-soft-gradient">
 
   <!-- Desktop top header (hidden on mobile) -->
-  <header class="hidden md:flex sticky top-0 z-30 h-16 bg-white border-b border-gray-200 items-center justify-between px-6">
+  <header class="hidden md:flex sticky top-0 z-30 h-16 bg-white border-b border-gray-150 items-center justify-between px-6">
     <h1 class="text-gray-800 font-semibold text-lg">
       {% block page_title %}Dashboard{% endblock %}
     </h1>
@@ -162,8 +202,7 @@
       <span class="text-sm text-gray-500">
         {{ request.user.employeeprofile.branch.name }}
       </span>
-      <div class="w-8 h-8 rounded-full bg-indigo-600 
-                  flex items-center justify-center text-white text-sm">
+      <div class="w-8 h-8 rounded-full bg-primary-gradient flex items-center justify-center text-white text-sm font-semibold shadow-sm">
         {{ request.user.employeeprofile.full_name|first }}
       </div>
     </div>
@@ -174,63 +213,63 @@
     <div class="grow">
       {% block content %}{% endblock %}
     </div>
-    <footer class="mt-8 pt-4 border-t border-gray-200 text-center md:text-right text-xs text-gray-500">
-      <span>Developed by <a href="https://tahamidurtaief.com" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold hover:underline">Tahamidur taief</a></span>
+    <footer class="mt-8 pt-4 border-t border-gray-250 text-center md:text-right text-xs text-gray-500">
+      <span>Developed by <a href="https://tahamidurtaief.com" target="_blank" class="text-primary-500 hover:text-primary-700 font-semibold hover:underline">Tahamidur taief</a></span>
     </footer>
   </main>
 </div>
 
 <!-- MOBILE: Bottom navigation (hidden on desktop) -->
-<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-50 safe-area-pb">
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-150 shadow-lg z-50 safe-area-pb">
   <div class="flex max-w-lg mx-auto">
     <a href="{% url 'staff:home' %}"
-       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/home/' %}text-indigo-600{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/home/' %}text-primary-500{% else %}text-gray-400 hover:text-gray-600{% endif %}">
       <div class="relative">
         <i data-lucide="home" class="w-5 h-5"></i>
       </div>
       <span class="text-[11px] mt-1 font-medium">Home</span>
       {% if request.path == '/staff/home/' %}
-      <div class="w-1 h-1 bg-indigo-600 rounded-full mt-0.5"></div>
+      <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
       {% endif %}
     </a>
     <a href="{% url 'staff:check_in' %}"
-       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/check-in/' %}text-indigo-600{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/check-in/' %}text-primary-500{% else %}text-gray-400 hover:text-gray-600{% endif %}">
       <div class="relative">
         <i data-lucide="map-pin" class="w-5 h-5"></i>
       </div>
       <span class="text-[11px] mt-1 font-medium">Check In</span>
       {% if request.path == '/staff/check-in/' %}
-      <div class="w-1 h-1 bg-indigo-600 rounded-full mt-0.5"></div>
+      <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
       {% endif %}
     </a>
     <a href="{% url 'staff:attendance' %}"
-       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/attendance/' %}text-indigo-600{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/attendance/' %}text-primary-500{% else %}text-gray-400 hover:text-gray-600{% endif %}">
       <div class="relative">
         <i data-lucide="calendar" class="w-5 h-5"></i>
       </div>
       <span class="text-[11px] mt-1 font-medium">Attend.</span>
       {% if request.path == '/staff/attendance/' %}
-      <div class="w-1 h-1 bg-indigo-600 rounded-full mt-0.5"></div>
+      <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
       {% endif %}
     </a>
     <a href="{% url 'leave:staff_dashboard' %}"
-       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if '/leave/staff/' in request.path %}text-indigo-600{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if '/leave/staff/' in request.path %}text-primary-500{% else %}text-gray-400 hover:text-gray-600{% endif %}">
       <div class="relative">
         <i data-lucide="clipboard-list" class="w-5 h-5"></i>
       </div>
       <span class="text-[11px] mt-1 font-medium">Leave</span>
       {% if '/leave/staff/' in request.path %}
-      <div class="w-1 h-1 bg-indigo-600 rounded-full mt-0.5"></div>
+      <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
       {% endif %}
     </a>
     <a href="{% url 'staff:profile' %}"
-       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/profile/' %}text-indigo-600{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/profile/' %}text-primary-500{% else %}text-gray-400 hover:text-gray-600{% endif %}">
       <div class="relative">
         <i data-lucide="user" class="w-5 h-5"></i>
       </div>
       <span class="text-[11px] mt-1 font-medium">Profile</span>
       {% if request.path == '/staff/profile/' %}
-      <div class="w-1 h-1 bg-indigo-600 rounded-full mt-0.5"></div>
+      <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
       {% endif %}
     </a>
   </div>

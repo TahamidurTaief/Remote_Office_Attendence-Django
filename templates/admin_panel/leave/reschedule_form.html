@@ -18,7 +18,7 @@
     </div>
 
     <!-- Form Card -->
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-sm overflow-hidden">
         <form method="POST" class="p-6 space-y-6">
             {% csrf_token %}
             
@@ -74,7 +74,7 @@
                 <a href="{% url 'leave:admin_dashboard' %}" class="px-4 py-2.5 border border-gray-300 text-gray-750 font-semibold rounded-xl hover:bg-gray-50 transition-colors bg-white text-sm">
                     Cancel
                 </a>
-                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors shadow-sm text-sm">
+                <button type="submit" class="px-6 py-2.5 bg-primary-gradient hover:opacity-90 text-white font-bold rounded-xl transition-colors shadow-sm text-sm">
                     Save Changes
                 </button>
             </div>

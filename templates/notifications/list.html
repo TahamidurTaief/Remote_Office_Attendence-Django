@@ -20,7 +20,7 @@
         <form method="post" action="{% url 'notifications:mark_all_read' %}">
             {% csrf_token %}
             <button type="submit"
-                    class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                 <i data-lucide="check-circle" class="w-4 h-4"></i>
                 Mark all as read
             </button>
@@ -32,7 +32,7 @@
         {% for key, label in filter_tabs %}
         <a href="?type={{ key }}"
            class="px-4 py-2 rounded-full text-sm whitespace-nowrap font-medium
-                  {% if filter_type == key %}bg-indigo-600 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+                  {% if filter_type == key %}bg-primary-gradient text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
             {{ label }}
         </a>
         {% endfor %}
@@ -43,7 +43,7 @@
         {% for notif in notifs %}
         <a href="{% if notif.employee %}{% url 'employees:employee_detail' notif.employee.pk %}{% else %}{% url 'notifications:list' %}{% endif %}"
            class="flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-colors
-                  {% if not notif.is_read %}bg-white border-l-4 border-indigo-500 shadow-sm{% else %}bg-gray-50 border border-gray-100{% endif %}"
+                  {% if not notif.is_read %}bg-white border-l-4 border-primary-500 shadow-sm{% else %}bg-gray-50 border border-gray-100{% endif %}"
            data-notif-id="{{ notif.pk }}"
            data-read-url="{% url 'notifications:mark_read' notif.pk %}"
            data-redirect="{% if notif.employee %}{% url 'employees:employee_detail' notif.employee.pk %}{% else %}{% url 'notifications:list' %}{% endif %}">
@@ -53,7 +53,7 @@
                   alt="{{ notif.employee.full_name }}"
                   class="w-10 h-10 rounded-full object-cover shrink-0">
             {% else %}
-            <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 text-indigo-700">
+            <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center shrink-0 text-primary-600">
                 {% if notif.employee %}
                 <span class="text-sm font-semibold">{{ notif.employee.full_name|make_list|first|upper }}</span>
                 {% else %}

@@ -109,6 +109,7 @@ urlpatterns = [
     path('notifications/', include('apps.notifications.urls')),
     path('backups/', include('apps.backups.urls')),
     path('leave/', include('apps.leave.urls')),
+    path('projects/', include('apps.projects.urls')),
     
     # PWA URLs served from root
     path('manifest.json', manifest_view, name='manifest'),

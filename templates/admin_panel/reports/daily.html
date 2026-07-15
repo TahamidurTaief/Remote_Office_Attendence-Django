@@ -10,7 +10,7 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <nav class="text-sm text-gray-400 mb-1">
-                <a href="{% url 'admin_panel:reports_main' %}" class="hover:text-indigo-600">Reports</a>
+                <a href="{% url 'admin_panel:reports_main' %}" class="hover:text-primary-500">Reports</a>
                 <span class="mx-2">›</span>
                 <span class="text-gray-700">Daily Report</span>
             </nav>
@@ -32,16 +32,16 @@
     </div>
 
     <!-- Filter Bar -->
-    <form method="get" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6">
+    <form method="get" class="bg-white rounded-2xl shadow-sm border border-gray-150 p-4 mb-6">
         <div class="flex flex-wrap gap-3 items-end">
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Date</label>
                 <input type="date" name="date" value="{{ report_date|date:'Y-m-d' }}"
-                       class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                       class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500">
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Employee</label>
-                <select name="employee" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                <select name="employee" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500">
                     <option value="">All Employees</option>
                     {% for emp in employees %}
                     <option value="{{ emp.pk }}" {% if selected_employee == emp.pk|stringformat:'s' %}selected{% endif %}>
@@ -52,7 +52,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Branch</label>
-                <select name="branch" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                <select name="branch" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500">
                     <option value="">All Branches</option>
                     {% for branch in branches %}
                     <option value="{{ branch.pk }}" {% if selected_branch == branch.pk|stringformat:'s' %}selected{% endif %}>
@@ -62,7 +62,7 @@
                 </select>
             </div>
             <button type="submit"
-                    class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                     <i data-lucide="filter" class="w-4 h-4"></i>
                 Apply
             </button>
@@ -76,30 +76,30 @@
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Present</p>
             <p class="text-3xl font-bold text-green-600 mt-1">{{ present }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Absent</p>
             <p class="text-3xl font-bold text-red-500 mt-1">{{ absent }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Late</p>
             <p class="text-3xl font-bold text-amber-500 mt-1">{{ late }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Field Visits</p>
             <p class="text-3xl font-bold text-purple-600 mt-1">{{ field_total }}</p>
         </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-150 p-4 text-center">
             <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Hours</p>
-            <p class="text-3xl font-bold text-indigo-600 mt-1">{{ total_hours }}</p>
+            <p class="text-3xl font-bold text-primary-500 mt-1">{{ total_hours }}</p>
         </div>
     </div>
 
     <!-- Attendance Table -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 overflow-hidden">
         {% if rows %}
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-100">
@@ -125,7 +125,7 @@
                                 <img src="{{ row.employee.profile_photo.url }}" alt=""
                                      class="w-8 h-8 rounded-full object-cover shrink-0">
                                 {% else %}
-                                <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold shrink-0">
+                                <div class="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-sm font-bold shrink-0">
                                     {{ row.employee.full_name|make_list|first|upper }}
                                 </div>
                                 {% endif %}
@@ -195,12 +195,12 @@
                         <td class="px-4 py-3">
                             {% if row.check_in %}
                             <a href="{% url 'admin_panel:attendance_detail' row.check_in.pk %}"
-                               class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">
+                               class="text-primary-500 hover:text-primary-700 text-xs font-medium">
                                 View Detail
                             </a>
                             {% else %}
                             <a href="{% url 'admin_panel:reports_employee' row.employee.pk %}?year={{ report_date|date:'Y' }}&month={{ report_date|date:'n' }}"
-                               class="text-gray-400 hover:text-indigo-600 text-xs font-medium">
+                               class="text-gray-400 hover:text-primary-500 text-xs font-medium">
                                 Profile
                             </a>
                             {% endif %}

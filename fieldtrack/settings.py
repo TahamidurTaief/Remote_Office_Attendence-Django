@@ -1,16 +1,23 @@
 import os
 from pathlib import Path
+import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Initialize environment variables
+env = environ.Env(
+    DEBUG=(bool, True)
+)
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-placehojkbkj-ssdfsadflder'
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-placehojkbkj-ssdfsadflder')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
 CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://trackme.signtechlimited.com"]
 
@@ -40,6 +47,7 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'tailwind',
+    'theme',
     'imagekit',
     
     # Local apps
@@ -52,6 +60,7 @@ INSTALLED_APPS = [
     'apps.notifications',
     'apps.backups',
     'apps.leave',
+    'apps.projects',
 ]
 
 MIDDLEWARE = [
@@ -125,6 +134,25 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+if DEBUG:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+        },
+    }
+
 # Media files
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -140,6 +168,11 @@ SESSION_COOKIE_AGE = 86400  # 1 day
 
 # Tailwind config (if using django-tailwind)
 TAILWIND_APP_NAME = 'theme'
+
+import platform
+if platform.system() == 'Windows':
+    # On Windows, use npm.cmd to bypass PowerShell script execution restrictions
+    NPM_BIN_PATH = r"C:\Program Files\nodejs\npm.cmd"
 
 # Custom user model
 AUTH_USER_MODEL = 'accounts.CustomUser'

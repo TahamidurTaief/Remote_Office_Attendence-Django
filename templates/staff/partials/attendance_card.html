@@ -9,7 +9,7 @@
 {% endcomment %}
 
 {% if active_session %}
-<div class="bg-gradient-to-br from-green-800 to-green-900 rounded-2xl p-6 text-white shadow-lg mb-4">
+<div class="bg-gradient-to-br from-green-800 to-green-900 rounded-2xl p-6 text-white shadow-sm mb-4">
     <div class="flex items-center justify-between mb-4">
         <div>
             <p class="text-green-200 text-sm font-medium">Checked in</p>
@@ -89,7 +89,7 @@
 </div>
 
 {% else %}
-<div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg mb-4">
+<div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-sm mb-4">
     <div class="flex items-center justify-between mb-4">
         <div>
             <p class="text-slate-400 text-sm">Good morning</p>
@@ -102,7 +102,7 @@
     <p class="text-4xl font-bold mb-1" id="live-time">{{ now|time:"h:i A" }}</p>
     <p class="text-slate-400 text-sm mb-6" id="live-date">{{ now|date:"l, F j, Y" }}</p>
     <p class="text-slate-300 text-sm mb-4">You haven't checked in yet</p>
-    <a href="{% url 'staff:check_in' %}" class="block w-full py-4 px-4 bg-green-500 hover:bg-green-400 text-white font-bold text-center rounded-xl transition-colors text-lg whitespace-nowrap min-w-fit">
+    <a href="{% url 'staff:check_in' %}" class="block w-full py-2.5 px-4 bg-green-500 hover:bg-green-400 text-white font-bold text-center rounded-xl transition-colors text-lg whitespace-nowrap min-w-fit">
         Check In
     </a>
 </div>
