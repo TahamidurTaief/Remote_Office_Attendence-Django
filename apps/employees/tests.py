@@ -74,6 +74,7 @@ class EmployeeProfileTests(TestCase):
         form_data = {
             'employee_id': 'EMP-2026-888',
             'full_name': 'Jane Doe',
+            'role': 'staff',
             'department': '',  # clear it
             'designation': '', # clear it
             'branch': self.branch.id,

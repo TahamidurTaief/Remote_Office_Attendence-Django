@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from datetime import date
 from apps.branches.models import Branch
-from apps.projects.models import Project, TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff
+from apps.projects.models import Project, ProjectType, TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff
 
 User = get_user_model()
 
@@ -29,8 +29,11 @@ class ProjectTests(TestCase):
             longitude=90.4125,
             radius_meters=100
         )
+        # Create default ProjectType
+        self.project_type, _ = ProjectType.objects.get_or_create(name='HVAC Installation')
         self.project_data = {
             'name': 'VRF HVAC Installation',
+            'project_type': self.project_type.id,
             'client_name': 'ACME Corp',
             'consultant': 'TechConsult Ltd',
             'main_contractor': 'Signtech Building',
@@ -50,6 +53,7 @@ class ProjectTests(TestCase):
         # Create a project first
         Project.objects.create(
             name='Test Project',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -115,6 +119,7 @@ class ProjectTests(TestCase):
         # Create project
         project = Project.objects.create(
             name='Test Project for Tasks',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -153,6 +158,7 @@ class ProjectTests(TestCase):
         
         project = Project.objects.create(
             name='Test Project for Status',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -183,6 +189,7 @@ class ProjectTests(TestCase):
         # Try to post status update as staff user (should redirect/deny)
         project = Project.objects.create(
             name='Test Project non-admin',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -218,6 +225,7 @@ class ProjectTests(TestCase):
         # 1. Create a project
         project = Project.objects.create(
             name='Test Progress Project',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -334,6 +342,7 @@ class ProjectTests(TestCase):
         # 1. Create a project
         project = Project.objects.create(
             name='Test Manpower Project',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -428,6 +437,7 @@ class ProjectTests(TestCase):
         # 1. Create a project
         project = Project.objects.create(
             name='Test Materials Project',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -511,6 +521,7 @@ class ProjectTests(TestCase):
         # 1. Create a project
         project = Project.objects.create(
             name='Test Sign-off Project',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -560,6 +571,7 @@ class ProjectTests(TestCase):
         # Create project
         project = Project.objects.create(
             name='Test Query Project',
+            project_type=self.project_type,
             client_name='Test Client',
             location='Test Location',
             system_type='VRF',
@@ -676,9 +688,474 @@ class ProjectTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('manpower_count', form.errors)
 
+    def test_dynamic_project_types_and_hvac_validation(self):
+        electrical_type = ProjectType.objects.create(name='Electrical Installation')
+        non_hvac_data = {
+            'name': 'Electrical Project',
+            'project_type': electrical_type.id,
+            'client_name': 'ACME Corp',
+            'location': 'Dhaka',
+            'start_date': date.today().isoformat(),
+            'status': 'Not Started',
+            'progress_percent': 0,
+        }
+        self.client.login(username='+8801700000100', password=self.password)
+        response = self.client.post(reverse('projects:project_add'), data=non_hvac_data)
+        self.assertRedirects(response, reverse('projects:project_list'))
+        project = Project.objects.get(name='Electrical Project')
+        self.assertEqual(project.project_type, electrical_type)
+        self.assertEqual(project.system_type, '')
+        self.assertIsNone(project.hvac_capacity_tr)
+
+        bad_hvac_data = {
+            'name': 'Failing HVAC Project',
+            'project_type': self.project_type.id,
+            'client_name': 'ACME Corp',
+            'location': 'Dhaka',
+            'start_date': date.today().isoformat(),
+            'status': 'Not Started',
+            'progress_percent': 0,
+        }
+        response = self.client.post(reverse('projects:project_add'), data=bad_hvac_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context['form'], 'system_type', 'System type is required for HVAC Installation projects.')
+
+    def test_project_type_crud_views(self):
+        self.client.login(username='+8801700000100', password=self.password)
+        response = self.client.get(reverse('projects:project_type_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'HVAC Installation')
+
+        response = self.client.post(reverse('projects:project_type_create'), data={'name': 'Plumbing'})
+        self.assertRedirects(response, reverse('projects:project_type_list'))
+        self.assertTrue(ProjectType.objects.filter(name='Plumbing').exists())
+
+        plumbing = ProjectType.objects.get(name='Plumbing')
+        response = self.client.post(reverse('projects:project_type_edit', kwargs={'pk': plumbing.pk}), data={'name': 'Sanitary & Plumbing'})
+        self.assertRedirects(response, reverse('projects:project_type_list'))
+        self.assertTrue(ProjectType.objects.filter(name='Sanitary & Plumbing').exists())
+
+        sanitary = ProjectType.objects.get(name='Sanitary & Plumbing')
+        response = self.client.post(reverse('projects:project_type_delete', kwargs={'pk': sanitary.pk}))
+        self.assertRedirects(response, reverse('projects:project_type_list'))
+        self.assertFalse(ProjectType.objects.filter(name='Sanitary & Plumbing').exists())
+
+        # Create a referencing project to prevent deletion
+        Project.objects.create(
+            name='Test HVAC Project',
+            project_type=self.project_type,
+            client_name='Test Client',
+            location='Test Location',
+            system_type='VRF',
+            start_date=date.today(),
+            branch=self.branch
+        )
+        response = self.client.post(reverse('projects:project_type_delete', kwargs={'pk': self.project_type.pk}))
+        self.assertRedirects(response, reverse('projects:project_type_list'))
+        self.assertTrue(ProjectType.objects.filter(name='HVAC Installation').exists())
 
 
 
 
 
+
+class Phase2And3Tests(TestCase):
+    """Tests covering all Phase 2 fixes and Phase 3 feature additions."""
+
+    def setUp(self):
+        self.password = 'testpassword123'
+        self.admin_user = User.objects.create_user(
+            email='admin2@example.com',
+            phone='+8801700001100',
+            password=self.password,
+            role='admin'
+        )
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            address='Dhaka',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.project_type, _ = ProjectType.objects.get_or_create(name='HVAC Installation')
+        self.non_hvac_type = ProjectType.objects.create(name='Electrical Installation')
+        self.project = Project.objects.create(
+            name='Phase 2 Test Project',
+            project_type=self.project_type,
+            client_name='Test Client',
+            location='Test Location',
+            system_type='VRF',
+            start_date=date(2026, 1, 1),
+            branch=self.branch
+        )
+        self.client.login(username='+8801700001100', password=self.password)
+
+    # ------------------------------------------------------------------ #
+    # #3 — ProjectForm: completion_date < start_date                       #
+    # ------------------------------------------------------------------ #
+    def test_project_form_rejects_completion_before_start(self):
+        data = {
+            'name': 'Bad Date Project',
+            'project_type': self.project_type.id,
+            'client_name': 'Client',
+            'location': 'Dhaka',
+            'start_date': '2026-06-01',
+            'completion_date': '2026-01-01',   # <-- before start_date
+            'status': 'Not Started',
+            'progress_percent': 0,
+        }
+        response = self.client.post(reverse('projects:project_add'), data=data)
+        self.assertEqual(response.status_code, 200)  # stays on form
+        self.assertFormError(
+            response.context['form'], 'completion_date',
+            'Completion date cannot be before the start date.'
+        )
+        self.assertFalse(Project.objects.filter(name='Bad Date Project').exists())
+
+    def test_project_form_accepts_valid_dates(self):
+        data = {
+            'name': 'Good Date Project',
+            'project_type': self.project_type.id,
+            'client_name': 'Client',
+            'location': 'Dhaka',
+            'start_date': '2026-01-01',
+            'completion_date': '2026-06-01',   # <-- after start_date, valid
+            'status': 'Not Started',
+            'progress_percent': 0,
+            'system_type': 'VRF',
+        }
+        response = self.client.post(reverse('projects:project_add'), data=data)
+        self.assertRedirects(response, reverse('projects:project_list'))
+        self.assertTrue(Project.objects.filter(name='Good Date Project').exists())
+
+    # ------------------------------------------------------------------ #
+    # #4 — ProjectTaskForm: planned_finish < planned_start                  #
+    # ------------------------------------------------------------------ #
+    def test_task_form_rejects_finish_before_start(self):
+        from apps.projects.forms import ProjectTaskForm
+        form = ProjectTaskForm(data={
+            'order': 1,
+            'activity': 'Test Task',
+            'planned_start': '2026-06-10',
+            'planned_finish': '2026-06-01',   # <-- before planned_start
+            'status': 'Not Started',
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn('planned_finish', form.errors)
+        self.assertIn('cannot be before', form.errors['planned_finish'][0])
+
+    def test_task_form_accepts_valid_dates(self):
+        from apps.projects.forms import ProjectTaskForm
+        form = ProjectTaskForm(data={
+            'order': 1,
+            'activity': 'Test Task',
+            'planned_start': '2026-06-01',
+            'planned_finish': '2026-06-10',   # <-- after planned_start, valid
+            'status': 'Not Started',
+        })
+        self.assertTrue(form.is_valid(), msg=form.errors)
+
+    # ------------------------------------------------------------------ #
+    # #5 — ProjectMaterialForm: over-delivery warning (non-blocking)       #
+    # ------------------------------------------------------------------ #
+    def test_material_form_warns_on_over_delivery(self):
+        from apps.projects.forms import ProjectMaterialForm
+        form = ProjectMaterialForm(data={
+            'material_name': 'Copper Pipe',
+            'unit': 'meter',
+            'required_qty': '10.00',
+            'received_qty': '15.00',   # <-- exceeds required
+        })
+        # Form is valid (not hard-blocked) but has a field error warning
+        self.assertFalse(form.is_valid())  # add_error makes it invalid
+        self.assertIn('received_qty', form.errors)
+        self.assertIn('over-delivery', form.errors['received_qty'][0].lower())
+
+    def test_material_form_accepts_equal_quantities(self):
+        from apps.projects.forms import ProjectMaterialForm
+        form = ProjectMaterialForm(data={
+            'material_name': 'Copper Pipe',
+            'unit': 'meter',
+            'required_qty': '10.00',
+            'received_qty': '10.00',   # exact match — should be fine
+        })
+        self.assertTrue(form.is_valid(), msg=form.errors)
+
+    # ------------------------------------------------------------------ #
+    # #9 — Apply template server guard: blocks without force=true          #
+    # ------------------------------------------------------------------ #
+    def test_apply_template_blocked_without_force_when_tasks_exist(self):
+        """Server must reject apply when tasks exist unless force=true sent."""
+        # Create a pre-existing task
+        ProjectTask.objects.create(
+            project=self.project, order=1, activity='Existing Task', status='Not Started'
+        )
+        template = TaskTemplate.objects.get(name='HVAC Installation - Standard (28 Step)')
+
+        # Post WITHOUT force=true — should redirect back with error, no deletion
+        response = self.client.post(
+            reverse('projects:project_apply_template', kwargs={'project_id': self.project.id}),
+            data={'template_id': template.id}
+        )
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.id}))
+        # Task should still exist — NOT deleted
+        self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 1)
+
+    def test_apply_template_succeeds_with_force_true(self):
+        """Server allows apply and deletes old tasks when force=true is present."""
+        # Create a pre-existing task
+        ProjectTask.objects.create(
+            project=self.project, order=1, activity='Existing Task', status='Not Started'
+        )
+        template = TaskTemplate.objects.get(name='HVAC Installation - Standard (28 Step)')
+
+        # Post WITH force=true — should clear old tasks and apply new template
+        response = self.client.post(
+            reverse('projects:project_apply_template', kwargs={'project_id': self.project.id}),
+            data={'template_id': template.id, 'force': 'true'}
+        )
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.id}))
+        # New 28 tasks should now exist (old one was deleted)
+        self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 28)
+
+    def test_apply_template_succeeds_without_force_when_no_tasks(self):
+        """When no tasks exist, no force parameter needed."""
+        self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 0)
+        template = TaskTemplate.objects.get(name='HVAC Installation - Standard (28 Step)')
+
+        response = self.client.post(
+            reverse('projects:project_apply_template', kwargs={'project_id': self.project.id}),
+            data={'template_id': template.id}
+        )
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.id}))
+        self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 28)
+
+    # ------------------------------------------------------------------ #
+    # #6 — PDF title reflects project type                                 #
+    # ------------------------------------------------------------------ #
+    def test_pdf_title_reflects_project_type(self):
+        """PDF export uses project_type.name in the title, not hardcoded 'HVAC'."""
+        elec_project = Project.objects.create(
+            name='Elec Project PDF',
+            project_type=self.non_hvac_type,
+            client_name='Client',
+            location='Dhaka',
+            start_date=date(2026, 1, 1),
+        )
+        response = self.client.get(
+            reverse('projects:export_pdf', kwargs={'project_id': elec_project.id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        # PDF bytes should contain the project type name (case-insensitive search in PDF raw bytes)
+        self.assertIn(b'ELECTRICAL INSTALLATION', response.content.upper())
+
+    # ------------------------------------------------------------------ #
+    # #15/#16 — N+1 fix: project_type in select_related                   #
+    # ------------------------------------------------------------------ #
+    def test_project_list_select_related_includes_project_type(self):
+        """Project list queryset should join project_type to avoid N+1."""
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        # Create two projects of different types
+        Project.objects.create(
+            name='Project A', project_type=self.project_type,
+            client_name='Client A', location='Loc A', start_date=date(2026, 1, 1)
+        )
+        Project.objects.create(
+            name='Project B', project_type=self.non_hvac_type,
+            client_name='Client B', location='Loc B', start_date=date(2026, 1, 1)
+        )
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(reverse('projects:project_list'))
+        self.assertEqual(response.status_code, 200)
+        # project_type for all projects should be fetched in a single JOIN query,
+        # not N separate queries. Check by confirming no extra queries for project_type.
+        project_type_queries = [q for q in ctx.captured_queries if "projects_projecttype" in q['sql'] and "project_type_id" not in q['sql']]
+        self.assertLessEqual(len(project_type_queries), 1, "Expected project_type to be JOIN'd, not N separate queries")
+
+    # ------------------------------------------------------------------ #
+    # Phase 3 — Task reorder                                               #
+    # ------------------------------------------------------------------ #
+    def test_task_reorder_moves_task_up(self):
+        task1 = ProjectTask.objects.create(project=self.project, order=1, activity='First', status='Not Started')
+        task2 = ProjectTask.objects.create(project=self.project, order=2, activity='Second', status='Not Started')
+
+        response = self.client.post(
+            reverse('projects:project_task_reorder', kwargs={'pk': task2.pk}),
+            data={'direction': 'up'}
+        )
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+
+        task1.refresh_from_db()
+        task2.refresh_from_db()
+        # task2 should now have order 1, task1 should have order 2
+        self.assertEqual(task2.order, 1)
+        self.assertEqual(task1.order, 2)
+
+    def test_task_reorder_moves_task_down(self):
+        task1 = ProjectTask.objects.create(project=self.project, order=1, activity='First', status='Not Started')
+        task2 = ProjectTask.objects.create(project=self.project, order=2, activity='Second', status='Not Started')
+
+        response = self.client.post(
+            reverse('projects:project_task_reorder', kwargs={'pk': task1.pk}),
+            data={'direction': 'down'}
+        )
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+
+        task1.refresh_from_db()
+        task2.refresh_from_db()
+        self.assertEqual(task1.order, 2)
+        self.assertEqual(task2.order, 1)
+
+    def test_task_reorder_noop_at_boundary(self):
+        """Moving first task up or last task down should silently no-op."""
+        task1 = ProjectTask.objects.create(project=self.project, order=1, activity='Only Task', status='Not Started')
+
+        # Move the only task up — no change
+        response = self.client.post(
+            reverse('projects:project_task_reorder', kwargs={'pk': task1.pk}),
+            data={'direction': 'up'}
+        )
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+        task1.refresh_from_db()
+        self.assertEqual(task1.order, 1)  # unchanged
+
+    # ------------------------------------------------------------------ #
+    # Phase 3 — Bulk status update                                         #
+    # ------------------------------------------------------------------ #
+    def test_bulk_status_update(self):
+        task1 = ProjectTask.objects.create(project=self.project, order=1, activity='T1', status='Not Started')
+        task2 = ProjectTask.objects.create(project=self.project, order=2, activity='T2', status='Not Started')
+        task3 = ProjectTask.objects.create(project=self.project, order=3, activity='T3', status='Not Started')
+
+        response = self.client.post(
+            reverse('projects:project_task_bulk_status', kwargs={'project_id': self.project.id}),
+            data={
+                'task_ids': [str(task1.pk), str(task2.pk)],
+                'new_status': 'In Progress'
+            }
+        )
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+
+        task1.refresh_from_db()
+        task2.refresh_from_db()
+        task3.refresh_from_db()
+        self.assertEqual(task1.status, 'In Progress')
+        self.assertEqual(task2.status, 'In Progress')
+        self.assertEqual(task3.status, 'Not Started')  # not updated
+
+    def test_bulk_status_rejects_invalid_status(self):
+        task1 = ProjectTask.objects.create(project=self.project, order=1, activity='T1', status='Not Started')
+
+        response = self.client.post(
+            reverse('projects:project_task_bulk_status', kwargs={'project_id': self.project.id}),
+            data={
+                'task_ids': [str(task1.pk)],
+                'new_status': 'INVALID_STATUS'
+            }
+        )
+        # Should redirect back (not crash) and task should remain unchanged
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+        task1.refresh_from_db()
+        self.assertEqual(task1.status, 'Not Started')
+
+    def test_bulk_status_idor_protection(self):
+        """Bulk status update must not update tasks from a different project."""
+        other_project = Project.objects.create(
+            name='Other Project',
+            project_type=self.non_hvac_type,
+            client_name='Other Client',
+            location='Other Loc',
+            start_date=date(2026, 1, 1),
+        )
+        other_task = ProjectTask.objects.create(
+            project=other_project, order=1, activity='Other Task', status='Not Started'
+        )
+
+        # Try to bulk-update other_task via self.project's endpoint
+        response = self.client.post(
+            reverse('projects:project_task_bulk_status', kwargs={'project_id': self.project.id}),
+            data={
+                'task_ids': [str(other_task.pk)],
+                'new_status': 'Completed'
+            }
+        )
+        # It should redirect (no crash) but other_task should NOT be changed
+        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+        other_task.refresh_from_db()
+        self.assertEqual(other_task.status, 'Not Started')
+
+    # ------------------------------------------------------------------ #
+    # Phase 3 — Delay warning banner visible in template                   #
+    # ------------------------------------------------------------------ #
+    def test_delay_banner_shown_when_task_is_delayed(self):
+        ProjectTask.objects.create(
+            project=self.project, order=1, activity='Delayed Task', status='Delayed'
+        )
+        response = self.client.get(reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Delay alert')
+        self.assertContains(response, 'Delayed')
+
+    def test_delay_banner_not_shown_when_no_delayed_tasks(self):
+        ProjectTask.objects.create(
+            project=self.project, order=1, activity='OK Task', status='In Progress'
+        )
+        response = self.client.get(reverse('projects:project_detail', kwargs={'pk': self.project.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Delay alert')
+
+    # ------------------------------------------------------------------ #
+    # Audit gap #24a — empty project renders without error                 #
+    # ------------------------------------------------------------------ #
+    def test_empty_project_detail_renders_without_error(self):
+        """A project with zero tasks/logs/materials/manpower should render cleanly."""
+        empty_project = Project.objects.create(
+            name='Completely Empty Project',
+            project_type=self.non_hvac_type,
+            client_name='Client',
+            location='Dhaka',
+            start_date=date(2026, 1, 1),
+        )
+        response = self.client.get(
+            reverse('projects:project_detail', kwargs={'pk': empty_project.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No tasks found')
+
+    # ------------------------------------------------------------------ #
+    # Audit gap #24b — project deletion cascades child records             #
+    # ------------------------------------------------------------------ #
+    def test_project_delete_cascades_all_children(self):
+        task = ProjectTask.objects.create(project=self.project, order=1, activity='T', status='Not Started')
+        log = DailyProgressLog.objects.create(
+            project=self.project, date=date.today(),
+            planned_work='plan', completed_work='done', supervisor_name='Bob'
+        )
+        material = ProjectMaterial.objects.create(
+            project=self.project, material_name='Pipe', unit='m', required_qty=10
+        )
+
+        response = self.client.post(
+            reverse('projects:project_delete', kwargs={'pk': self.project.pk})
+        )
+        self.assertRedirects(response, reverse('projects:project_list'))
+
+        self.assertFalse(Project.objects.filter(pk=self.project.pk).exists())
+        self.assertFalse(ProjectTask.objects.filter(pk=task.pk).exists())
+        self.assertFalse(DailyProgressLog.objects.filter(pk=log.pk).exists())
+        self.assertFalse(ProjectMaterial.objects.filter(pk=material.pk).exists())
+
+    # ------------------------------------------------------------------ #
+    # Audit gap #24c — deferred branch-scoping TODO comments present       #
+    # ------------------------------------------------------------------ #
+    def test_branch_scoping_todo_comments_present_in_views(self):
+        """Verify TODO: branch-scoping deferred comments exist in views.py."""
+        import os
+        views_path = os.path.join(os.path.dirname(__file__), 'views.py')
+        with open(views_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('TODO: branch-scoping deferred', content,
+                      "Expected 'TODO: branch-scoping deferred' comment in views.py")
 

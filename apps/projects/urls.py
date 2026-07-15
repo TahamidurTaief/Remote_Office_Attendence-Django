@@ -10,6 +10,12 @@ urlpatterns = [
     path('<int:pk>/edit/', views.ProjectUpdateView.as_view(), name='project_edit'),
     path('<int:pk>/delete/', views.ProjectDeleteView.as_view(), name='project_delete'),
     
+    # Project Types
+    path('types/', views.ProjectTypeListView.as_view(), name='project_type_list'),
+    path('types/add/', views.ProjectTypeCreateView.as_view(), name='project_type_create'),
+    path('types/<int:pk>/edit/', views.ProjectTypeUpdateView.as_view(), name='project_type_edit'),
+    path('types/<int:pk>/delete/', views.ProjectTypeDeleteView.as_view(), name='project_type_delete'),
+    
     # Task Templates
     path('templates/', views.TaskTemplateListView.as_view(), name='template_list'),
     path('templates/add/', views.TaskTemplateCreateView.as_view(), name='template_add'),
@@ -23,6 +29,8 @@ urlpatterns = [
     path('tasks/<int:pk>/edit/', views.ProjectTaskUpdateView.as_view(), name='project_task_edit'),
     path('tasks/<int:pk>/delete/', views.ProjectTaskDeleteView.as_view(), name='project_task_delete'),
     path('tasks/<int:pk>/update-status/', views.ProjectTaskUpdateStatusView.as_view(), name='project_task_update_status'),
+    path('tasks/<int:pk>/reorder/', views.ProjectTaskReorderView.as_view(), name='project_task_reorder'),
+    path('<int:project_id>/tasks/bulk-status/', views.ProjectTaskBulkStatusView.as_view(), name='project_task_bulk_status'),
     path('<int:project_id>/apply-template/', views.ProjectApplyTemplateView.as_view(), name='project_apply_template'),
     
     # Daily Progress Logs

@@ -601,11 +601,20 @@
 
              <!-- Projects -->
              <a href="{% url 'projects:project_list' %}"
-                class="ft-nav-item {% if '/projects/' in path and '/templates/' not in path %}active{% endif %}"
+                class="ft-nav-item {% if '/projects/' in path and '/templates/' not in path and '/types/' not in path %}active{% endif %}"
                 x-show="matchSearch('Projects')"
                 title="Projects">
                  <i data-lucide="briefcase" class="ft-icon"></i>
                  <span class="ft-nav-label">Projects</span>
+             </a>
+
+             <!-- Project Types -->
+             <a href="{% url 'projects:project_type_list' %}"
+                class="ft-nav-item {% if '/types/' in path %}active{% endif %}"
+                x-show="matchSearch('Project Types')"
+                title="Project Types">
+                 <i data-lucide="tag" class="ft-icon"></i>
+                 <span class="ft-nav-label">Project Types</span>
              </a>
 
              <!-- Task Templates -->

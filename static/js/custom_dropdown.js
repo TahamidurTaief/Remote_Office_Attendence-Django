@@ -207,6 +207,11 @@
         
         // Insert custom dropdown adjacent to original select
         selectEl.parentNode.insertBefore(wrapper, selectEl.nextSibling);
+        
+        // Initialize Alpine on the newly inserted tree if Alpine is loaded
+        if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+            window.Alpine.initTree(wrapper);
+        }
     }
 
     function initCustomDropdowns() {

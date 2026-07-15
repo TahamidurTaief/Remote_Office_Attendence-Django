@@ -11,7 +11,7 @@
             <h2 class="text-[14px] font-semibold text-gray-900">
                 {% if object %}Edit Project: {{ object.name }}{% else %}Add New Project{% endif %}
             </h2>
-            <p class="mt-0.5 text-[12px] text-gray-500">Provide details for the HVAC installation project.</p>
+            <p class="mt-0.5 text-[12px] text-gray-500">Provide details for the project below. HVAC-specific fields will appear after selecting the project type.</p>
         </div>
         <a href="{% url 'projects:project_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
             <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
@@ -39,12 +39,33 @@
             </div>
             {% endif %}
 
-            <div class="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
+            <div class="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6" x-data="{
+                projectTypeName: '',
+                get isHVAC() { return this.projectTypeName === 'HVAC Installation'; }
+            }" x-init="
+                const select = $el.querySelector('select[name=project_type]');
+                if (select) {
+                    const updateTypeName = () => {
+                        const opt = select.options[select.selectedIndex];
+                        projectTypeName = opt ? opt.text.trim() : '';
+                    };
+                    select.addEventListener('change', updateTypeName);
+                    updateTypeName();
+                    setTimeout(updateTypeName, 100);
+                }
+            }">
                 <!-- Project Name -->
-                <div class="sm:col-span-6">
+                <div class="sm:col-span-3">
                     <label for="{{ form.name.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Project Name *</label>
                     {{ form.name }}
                     {% if form.name.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.name.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Project Type -->
+                <div class="sm:col-span-3">
+                    <label for="{{ form.project_type.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Project Type *</label>
+                    {{ form.project_type }}
+                    {% if form.project_type.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.project_type.errors.0 }}</p>{% endif %}
                 </div>
 
                 <!-- Client Name -->
@@ -89,15 +110,15 @@
                     {% if form.site_engineer.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.site_engineer.errors.0 }}</p>{% endif %}
                 </div>
 
-                <!-- System Type -->
-                <div class="sm:col-span-3">
+                <!-- System Type (Conditionally Shown) -->
+                <div class="sm:col-span-3" x-show="isHVAC" x-cloak x-transition>
                     <label for="{{ form.system_type.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">System Type *</label>
                     {{ form.system_type }}
                     {% if form.system_type.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.system_type.errors.0 }}</p>{% endif %}
                 </div>
 
-                <!-- HVAC Capacity (TR) -->
-                <div class="sm:col-span-3">
+                <!-- HVAC Capacity (Conditionally Shown) -->
+                <div class="sm:col-span-3" x-show="isHVAC" x-cloak x-transition>
                     <label for="{{ form.hvac_capacity_tr.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">HVAC Capacity (TR)</label>
                     {{ form.hvac_capacity_tr }}
                     {% if form.hvac_capacity_tr.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.hvac_capacity_tr.errors.0 }}</p>{% endif %}

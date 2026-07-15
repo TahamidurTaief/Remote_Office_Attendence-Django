@@ -66,11 +66,16 @@
 
         <!-- Specs Card -->
         <div class="md:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">HVAC Specifications</h3>
+            <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Project Specifications</h3>
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6">
                 <div>
+                    <dt class="text-[11px] font-semibold text-gray-400">Project Type</dt>
+                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900">{{ project.project_type.name }}</dd>
+                </div>
+                {% if project.project_type.name == 'HVAC Installation' %}
+                <div>
                     <dt class="text-[11px] font-semibold text-gray-400">System Type</dt>
-                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900">{{ project.system_type }}</dd>
+                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900">{{ project.system_type|default:"-" }}</dd>
                 </div>
                 <div>
                     <dt class="text-[11px] font-semibold text-gray-400">Capacity (TR)</dt>
@@ -78,6 +83,7 @@
                         {% if project.hvac_capacity_tr %}{{ project.hvac_capacity_tr }} Tons of Refrigeration{% else %}Not Specified{% endif %}
                     </dd>
                 </div>
+                {% endif %}
                 <div>
                     <dt class="text-[11px] font-semibold text-gray-400">Location</dt>
                     <dd class="mt-0.5 text-[12px] font-medium text-gray-900 flex items-center gap-1">
@@ -164,26 +170,65 @@
     </div>
 
     <!-- Tasks Checklist Section -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4"
+         x-data="{
+            statusFilter: 'all',
+            selectedTasks: [],
+            bulkStatus: '',
+            get filteredCount() {
+                if (this.statusFilter === 'all') return {{ tasks|length }};
+                return document.querySelectorAll('[data-task-status=\'' + this.statusFilter + '\']').length;
+            }
+         }">
+
+        {# Delay warning banner — visible when any task has status 'Delayed' #}
+        {% for task in tasks %}{% if task.status == 'Delayed' %}
+        <div class="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-[12px] text-amber-800">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-500 shrink-0"></i>
+            <span class="font-semibold">Delay alert:</span>
+            One or more tasks are marked <strong>Delayed</strong>. Review and update schedules as needed.
+        </div>
+        {% endif %}{% endfor %}
+
         <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
                 <h3 class="text-[14px] font-semibold text-gray-900">Project Tasks Checklist</h3>
                 <p class="text-[12px] text-gray-500 mt-0.5">Add, update, or schedule task checklist items for this project.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <!-- Apply Template Form -->
                 {% if templates %}
-                <form action="{% url 'projects:project_apply_template' project.pk %}" method="POST" class="flex items-center gap-1.5" x-data @submit.prevent="window.confirmAction('Applying a template will delete any existing tasks on this project. Are you sure you want to proceed?', () => $el.submit())">
+                <form action="{% url 'projects:project_apply_template' project.pk %}" method="POST"
+                      class="flex flex-wrap items-center gap-2"
+                      x-data="{ hasForce: false }"
+                      @submit.prevent="
+                        if ({{ tasks|length }} > 0 && !hasForce) {
+                            window.toastError
+                                ? window.toastError('Check the &quot;Replace existing tasks&quot; box to confirm.')
+                                : alert('Check the \u201cReplace existing tasks\u201d box to confirm.');
+                        } else {
+                            $el.submit();
+                        }
+                      ">
                     {% csrf_token %}
-                    <select name="template_id" required>
+                    <select name="template_id" required class="text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500">
                         <option value="">-- Select Template --</option>
                         {% for t in templates %}
                         <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
                         {% endfor %}
                     </select>
+                    {% if tasks %}
+                    {# Server-side guard: force=true required when tasks already exist — see views.py #9 #}
+                    <label class="flex items-center gap-1.5 text-[11px] text-amber-700 font-semibold cursor-pointer select-none"
+                           title="Required when tasks already exist — this will permanently delete all current tasks">
+                        <input type="checkbox" name="force" value="true"
+                               x-model="hasForce"
+                               class="w-3.5 h-3.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500">
+                        Replace existing tasks ({{ tasks|length }} will be deleted)
+                    </label>
+                    {% endif %}
                     <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90 whitespace-nowrap">
                         <i data-lucide="copy" class="w-3 h-3 mr-1"></i>
-                        Apply
+                        Apply Template
                     </button>
                 </form>
                 {% endif %}
@@ -194,12 +239,77 @@
             </div>
         </div>
 
-
+        {# Status filter + bulk action bar #}
+        {% if tasks %}
+        <div class="px-4 py-2.5 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">Filter:</span>
+                <button type="button"
+                        @click="statusFilter = 'all'"
+                        :class="statusFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'"
+                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">All</button>
+                <button type="button"
+                        @click="statusFilter = 'Not Started'"
+                        :class="statusFilter === 'Not Started' ? 'bg-gray-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'"
+                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">Not Started</button>
+                <button type="button"
+                        @click="statusFilter = 'In Progress'"
+                        :class="statusFilter === 'In Progress' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-50'"
+                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">In Progress</button>
+                <button type="button"
+                        @click="statusFilter = 'Delayed'"
+                        :class="statusFilter === 'Delayed' ? 'bg-red-600 text-white' : 'bg-white text-red-600 border border-red-200 hover:bg-red-50'"
+                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">Delayed</button>
+                <button type="button"
+                        @click="statusFilter = 'Completed'"
+                        :class="statusFilter === 'Completed' ? 'bg-green-600 text-white' : 'bg-white text-green-600 border border-green-200 hover:bg-green-50'"
+                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">Completed</button>
+            </div>
+            {# Bulk action — only shown when at least one task is checked #}
+            <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST"
+                  class="flex items-center gap-2"
+                  x-show="selectedTasks.length > 0"
+                  x-cloak>
+                {% csrf_token %}
+                <template x-for="id in selectedTasks" :key="id">
+                    <input type="hidden" name="task_ids" :value="id">
+                </template>
+                <span class="text-[11px] text-gray-500 font-medium" x-text="selectedTasks.length + ' selected'"></span>
+                <select name="new_status" x-model="bulkStatus"
+                        class="text-[11px] border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500">
+                    <option value="">-- Set status --</option>
+                    <option value="Not Started">Not Started</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Delayed">Delayed</option>
+                    <option value="Completed">Completed</option>
+                </select>
+                <button type="submit"
+                        :disabled="!bulkStatus"
+                        class="inline-flex items-center px-2.5 py-1 border border-transparent rounded-lg text-[11px] font-medium text-white bg-primary-gradient hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
+                    Apply to Selected
+                </button>
+                <button type="button" @click="selectedTasks = []"
+                        class="text-[11px] text-gray-400 hover:text-gray-600">Clear</button>
+            </form>
+        </div>
+        {% endif %}
 
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-100">
                 <thead class="bg-gray-50">
                     <tr>
+                        {% if tasks %}
+                        <th scope="col" class="px-4 py-2.5 w-8">
+                            <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-300"
+                                   @change="
+                                       if ($event.target.checked) {
+                                           selectedTasks = [...document.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
+                                       } else {
+                                           selectedTasks = [];
+                                       }"
+                                   title="Select all tasks">
+                        </th>
+                        {% endif %}
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12">Seq</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Activity</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Responsible</th>
@@ -207,12 +317,25 @@
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-36">Status</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Remarks</th>
-                        <th scope="col" class="relative px-4 py-2.5 w-24"><span class="sr-only">Actions</span></th>
+                        <th scope="col" class="relative px-4 py-2.5 w-32"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-100">
                     {% for task in tasks %}
-                    <tr class="hover:bg-gray-50/70 transition-colors">
+                    <tr class="hover:bg-gray-50/70 transition-colors"
+                        data-task-id="{{ task.pk }}"
+                        data-task-status="{{ task.status }}"
+                        x-show="statusFilter === 'all' || statusFilter === '{{ task.status }}'">
+                        <td class="px-4 py-2.5">
+                            <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-300"
+                                   :checked="selectedTasks.includes('{{ task.pk }}')"
+                                   @change="
+                                       if ($event.target.checked) {
+                                           selectedTasks.push('{{ task.pk }}');
+                                       } else {
+                                           selectedTasks = selectedTasks.filter(id => id !== '{{ task.pk }}');
+                                       }">
+                        </td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.order }}</td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-800 font-medium">{{ task.activity }}</td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-600">
@@ -238,17 +361,38 @@
                             {% include 'projects/partials/task_status_dropdown.html' with task=task %}
                         </td>
                         <td class="px-4 py-2.5 text-[12px] text-gray-500 max-w-xs truncate" title="{{ task.remarks }}">{{ task.remarks|default:"-" }}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-right text-[12px] font-semibold space-x-2">
-                            <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:text-primary-900">Edit</a>
-                            <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this task?', () => $el.submit())">
-                                {% csrf_token %}
-                                <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
-                            </form>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-right text-[12px] font-semibold">
+                            <div class="flex items-center justify-end gap-2">
+                                {# Reorder buttons #}
+                                <div class="flex flex-col gap-0.5">
+                                    <form action="{% url 'projects:project_task_reorder' task.pk %}" method="POST" class="inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="direction" value="up">
+                                        <button type="submit" class="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                                                {% if forloop.first %}disabled title="Already first"{% else %}title="Move up"{% endif %}>
+                                            <i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </form>
+                                    <form action="{% url 'projects:project_task_reorder' task.pk %}" method="POST" class="inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="direction" value="down">
+                                        <button type="submit" class="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                                                {% if forloop.last %}disabled title="Already last"{% else %}title="Move down"{% endif %}>
+                                            <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                                <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:text-primary-900">Edit</a>
+                                <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this task?', () => $el.submit())">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="px-4 py-10 text-center text-gray-400">
+                        <td colspan="9" class="px-4 py-10 text-center text-gray-400">
                             <i data-lucide="list-todo" class="w-7 h-7 text-gray-200 mx-auto mb-1.5"></i>
                             <p class="text-[12px] italic">No tasks found. Apply a template or add tasks manually.</p>
                         </td>
@@ -258,6 +402,7 @@
             </table>
         </div>
     </div>
+
 
     <!-- Daily Progress Logs Section -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">

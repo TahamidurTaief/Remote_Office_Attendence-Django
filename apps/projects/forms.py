@@ -1,5 +1,5 @@
 from django import forms
-from .models import Project
+from .models import Project, ProjectType
 
 TEXT_INPUT = (
     "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 "
@@ -12,17 +12,26 @@ SELECT_INPUT = (
     "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
 )
 
+class ProjectTypeForm(forms.ModelForm):
+    class Meta:
+        model = ProjectType
+        fields = ['name']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. HVAC Installation, Electrical'}),
+        }
+
 class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
         fields = [
-            'name', 'client_name', 'consultant', 'main_contractor',
+            'name', 'project_type', 'client_name', 'consultant', 'main_contractor',
             'location', 'project_manager', 'site_engineer',
             'hvac_capacity_tr', 'system_type', 'start_date',
             'completion_date', 'status', 'progress_percent', 'branch'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Project Name'}),
+            'project_type': forms.Select(attrs={'class': SELECT_INPUT}),
             'client_name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Client Name'}),
             'consultant': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Consultant Name'}),
             'main_contractor': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Main Contractor'}),
@@ -37,6 +46,39 @@ class ProjectForm(forms.ModelForm):
             'progress_percent': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': '0', 'max': '100', 'placeholder': '0'}),
             'branch': forms.Select(attrs={'class': SELECT_INPUT}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.employees.models import EmployeeProfile
+        active_employees = EmployeeProfile.objects.filter(is_active=True)
+        self.fields['project_manager'].queryset = active_employees
+        self.fields['site_engineer'].queryset = active_employees
+        
+        self.fields['project_manager'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
+        self.fields['site_engineer'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
+        
+        self.fields['system_type'].required = False
+        self.fields['hvac_capacity_tr'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        project_type = cleaned_data.get('project_type')
+        system_type = cleaned_data.get('system_type')
+        start_date = cleaned_data.get('start_date')
+        completion_date = cleaned_data.get('completion_date')
+
+        # #3 — Date ordering: completion_date cannot be before start_date
+        if start_date and completion_date and completion_date < start_date:
+            self.add_error('completion_date', 'Completion date cannot be before the start date.')
+
+        if project_type and project_type.name == 'HVAC Installation':
+            if not system_type:
+                self.add_error('system_type', 'System type is required for HVAC Installation projects.')
+        else:
+            cleaned_data['system_type'] = ''
+            cleaned_data['hvac_capacity_tr'] = None
+
+        return cleaned_data
 
 from .models import TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial
 
@@ -78,6 +120,17 @@ class ProjectTaskForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        planned_start = cleaned_data.get('planned_start')
+        planned_finish = cleaned_data.get('planned_finish')
+
+        # #4 — Task date ordering: planned_finish cannot be before planned_start
+        if planned_start and planned_finish and planned_finish < planned_start:
+            self.add_error('planned_finish', 'Planned finish date cannot be before the planned start date.')
+
+        return cleaned_data
 
 
 class DailyProgressLogForm(forms.ModelForm):
@@ -147,6 +200,23 @@ class ProjectMaterialForm(forms.ModelForm):
         if qty is not None and qty < 0:
             raise forms.ValidationError("Received quantity cannot be negative.")
         return qty
+
+    def clean(self):
+        cleaned_data = super().clean()
+        required_qty = cleaned_data.get('required_qty')
+        received_qty = cleaned_data.get('received_qty')
+
+        # #5 — Over-delivery: allow but surface a non-blocking info note.
+        # Hard-blocking would frustrate site teams who sometimes receive buffer stock.
+        # The balance property on the model will show as negative, signalling over-delivery.
+        if required_qty is not None and received_qty is not None and received_qty > required_qty:
+            self.add_error(
+                'received_qty',
+                f'Received quantity ({received_qty}) exceeds required quantity ({required_qty}). '
+                'This is allowed (over-delivery), but verify the figures are correct.'
+            )
+
+        return cleaned_data
 
 
 

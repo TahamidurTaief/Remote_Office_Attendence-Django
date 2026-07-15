@@ -79,7 +79,7 @@
                                 </a>
                             </div>
                             <div class="text-[11px] text-gray-400 mt-0.5">
-                                {{ project.system_type }}{% if project.hvac_capacity_tr %} ({{ project.hvac_capacity_tr }} TR){% endif %}
+                                {{ project.project_type.name }}{% if project.system_type %} - {{ project.system_type }}{% endif %}{% if project.hvac_capacity_tr %} ({{ project.hvac_capacity_tr }} TR){% endif %}
                             </div>
                         </td>
                         <!-- Client & Location -->

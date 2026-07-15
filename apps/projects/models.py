@@ -4,6 +4,13 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.employees.models import EmployeeProfile
 from apps.branches.models import Branch
 
+class ProjectType(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Project(models.Model):
     SYSTEM_TYPE_CHOICES = (
         ('VRF', 'VRF'),
@@ -24,6 +31,12 @@ class Project(models.Model):
     consultant = models.CharField(max_length=255, blank=True)
     main_contractor = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255)
+    
+    project_type = models.ForeignKey(
+        ProjectType,
+        on_delete=models.PROTECT,
+        related_name='projects'
+    )
     
     project_manager = models.ForeignKey(
         EmployeeProfile,
@@ -49,7 +62,9 @@ class Project(models.Model):
     )
     system_type = models.CharField(
         max_length=50,
-        choices=SYSTEM_TYPE_CHOICES
+        choices=SYSTEM_TYPE_CHOICES,
+        null=True,
+        blank=True
     )
     
     start_date = models.DateField()
