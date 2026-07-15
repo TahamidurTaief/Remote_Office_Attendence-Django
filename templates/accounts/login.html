@@ -31,19 +31,7 @@
         <form class="mt-8 space-y-6" action="{% url 'accounts:login' %}" method="POST">
             {% csrf_token %}
             
-            {% if messages %}
-            <div class="rounded-md bg-red-50 p-4 border border-red-200">
-                <div class="flex">
-                    <div class="ml-3">
-                        {% for message in messages %}
-                        <h3 class="text-sm font-medium text-red-800">
-                            {{ message }}
-                        </h3>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
+
 
             <div class="space-y-4">
                 <div>

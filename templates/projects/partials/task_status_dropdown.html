@@ -1,0 +1,15 @@
+<select name="status"
+        hx-post="{% url 'projects:project_task_update_status' task.pk %}"
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+        hx-trigger="change"
+        hx-swap="outerHTML"
+        class="text-xs rounded-full border px-2.5 py-1 font-semibold outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer
+               {% if task.status == 'Completed' %}bg-green-50 text-green-700 border-green-200/50
+               {% elif task.status == 'In Progress' %}bg-blue-50 text-blue-700 border-blue-200/50
+               {% elif task.status == 'Delayed' %}bg-red-50 text-red-700 border-red-200/50
+               {% else %}bg-gray-50 text-gray-700 border-gray-200/50{% endif %}">
+    <option value="Not Started" {% if task.status == 'Not Started' %}selected{% endif %}>Not Started</option>
+    <option value="In Progress" {% if task.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+    <option value="Delayed" {% if task.status == 'Delayed' %}selected{% endif %}>Delayed</option>
+    <option value="Completed" {% if task.status == 'Completed' %}selected{% endif %}>Completed</option>
+</select>

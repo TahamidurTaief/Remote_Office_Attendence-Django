@@ -3,7 +3,7 @@
 {% block page_title %}Expired Data{% endblock %}
 
 {% block content %}
-<div class="p-8 max-w-7xl mx-auto space-y-8" x-data="{
+<div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
     showModal: false,
     deleteMode: '', // 'all' or 'selected'
     selectedCount: 0,
@@ -225,26 +225,57 @@
     </form>
 
     <!-- Confirmation Modal (Alpine.js) -->
-    <div x-show="showModal" style="display: none;"
-         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-2xl p-6 max-w-sm mx-4 shadow-xl transform transition-all" @click.away="showModal = false">
-        <h3 class="font-semibold text-gray-800 text-lg mb-2">Confirm Delete</h3>
-        <p class="text-gray-600 text-sm mb-6">
-          This action is permanent and cannot be undone. Are you sure?
-        </p>
-        <div class="flex gap-3">
-                    <button type="button" @click="showModal = false"
-                                    class="flex items-center justify-center gap-2 flex-1 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-            Cancel
-          </button>
-                    <button type="button" @click="confirmDelete()"
-                                    class="flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-            Yes, Delete
-          </button>
-        </div>
-      </div>
+    <div x-show="showModal" 
+         x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="showModal = false">
+         
+         <!-- Backdrop blur -->
+         <div class="fixed inset-0 bg-gray-500/20 backdrop-blur-sm transition-opacity"
+              x-show="showModal"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0"
+              x-transition:enter-end="opacity-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100"
+              x-transition:leave-end="opacity-0"
+              @click="showModal = false"></div>
+
+         <!-- Centered card -->
+         <div class="bg-white rounded-xl shadow-xl border border-gray-150 max-w-md w-full overflow-hidden transform transition-all z-10"
+              x-show="showModal"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              @click.away="showModal = false">
+              
+              <div class="p-6">
+                  <div class="flex items-start gap-4">
+                      <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
+                          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                      </div>
+                      <div>
+                          <h3 class="text-sm font-semibold text-gray-900">Confirm Delete</h3>
+                          <p class="mt-2 text-xs text-gray-500">This action is permanent and cannot be undone. Are you sure you want to delete these records?</p>
+                      </div>
+                  </div>
+              </div>
+              <div class="bg-gray-50 px-6 py-3.5 flex justify-end gap-3 border-t border-gray-100">
+                  <button type="button" 
+                          @click="showModal = false" 
+                          class="px-3.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                      Cancel
+                  </button>
+                  <button type="button" 
+                          @click="confirmDelete()" 
+                          class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors shadow-sm">
+                      Yes, Delete
+                  </button>
+              </div>
+         </div>
     </div>
 </div>
 {% endblock %}

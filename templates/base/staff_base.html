@@ -6,22 +6,175 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}Signtech Track{% endblock %}</title>
     
-    <!-- Google Fonts (Inter) & Font Awesome -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    
+    <!-- Head Assets & Custom Scripts -->
     {% tailwind_css %}
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
+    <script>
+        // Web Audio API Sound Effects Engine
+        const SoundFX = {
+            ctx: null,
+            isMuted: localStorage.getItem('sound_muted') === 'true',
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                localStorage.setItem('sound_muted', this.isMuted ? 'true' : 'false');
+                return this.isMuted;
+            },
+            playClick() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.03, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.08);
+            },
+            playToastSuccess() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const playTone = (freq, time, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, time);
+                    gain.gain.setValueAtTime(0.03, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                    osc.start(time);
+                    osc.stop(time + duration);
+                };
+                const now = ctx.currentTime;
+                playTone(523.25, now, 0.12);
+                playTone(659.25, now + 0.06, 0.15);
+            },
+            playToastError() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const playTone = (freq, time, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, time);
+                    gain.gain.setValueAtTime(0.04, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                    osc.start(time);
+                    osc.stop(time + duration);
+                };
+                const now = ctx.currentTime;
+                playTone(392, now, 0.12);
+                playTone(349.23, now + 0.08, 0.18);
+            },
+            playModalOpen() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(450, ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.15);
+            },
+            playModalClose() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(450, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.12);
+            },
+            playSubmenuOpen() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, ctx.currentTime);
+                gain.gain.setValueAtTime(0.015, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.05);
+            }
+        };
+
+        window.SoundFX = SoundFX;
+
+        // Global Action Confirmation Modal Helper
+        window.confirmAction = function(message, onConfirm) {
+            window.dispatchEvent(new CustomEvent('open-confirm-modal', { detail: { message, onConfirm } }));
+        };
+
+        // Global Toast Notification Helper
+        window.showToast = function(message, type = 'info') {
+            window.dispatchEvent(new CustomEvent('new-toast', { detail: { message, type } }));
+        };
+
+        // Play sound on primary/action elements click
+        document.addEventListener('click', (e) => {
+            const target = e.target.closest('button, a');
+            if (!target) return;
+            const isPrimary = target.classList.contains('bg-primary-600') || 
+                              target.classList.contains('btn-primary') ||
+                              target.classList.contains('bg-primary-gradient') ||
+                              target.type === 'submit' ||
+                              target.getAttribute('type') === 'submit' ||
+                              target.classList.contains('text-red-600') ||
+                              target.classList.contains('bg-red-600') ||
+                              target.dataset.sound === 'click';
+            if (isPrimary) {
+                SoundFX.playClick();
+            }
+        });
+    </script>
+
     <style>
         body {
             background-color: #f3f4f6;
             margin: 0;
-            font-family: 'Inter', sans-serif;
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
         }
+        [x-cloak] { display: none !important; }
         .safe-area-pb {
           padding-bottom: env(safe-area-inset-bottom);
         }
@@ -40,25 +193,109 @@
         /* Unified Form Fields Styling */
         input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="time"], input[type="number"], input[type="tel"], select, textarea {
             width: 100% !important;
-            padding: 0.625rem 0.875rem !important;
+            padding: 0.375rem 0.625rem !important; /* py-1.5 px-2.5 */
             border: 1px solid #E5E7EB !important;
-            border-radius: 0.5rem !important;
-            font-size: 0.875rem !important;
+            border-radius: 0.25rem !important; /* rounded-md */
+            font-size: 12px !important; /* text-[12px] */
             color: #1F2937 !important;
             background-color: #FFFFFF !important;
             transition: all 0.2s ease-in-out !important;
             outline: none !important;
             box-shadow: none !important;
+            /* Remove native select styles */
+            appearance: none !important;
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E") !important;
+            background-position: right 0.5rem center !important;
+            background-repeat: no-repeat !important;
+            background-size: 1.25em 1.25em !important;
+            padding-right: 2rem !important;
         }
         input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="date"]:focus, input[type="time"]:focus, input[type="number"]:focus, input[type="tel"]:focus, select:focus, textarea:focus {
             border-color: #0B5FA5 !important;
-            box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.15) !important;
+            box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.12) !important;
         }
         input[type="checkbox"] {
             border-radius: 0.25rem !important;
             border-color: #D1D5DB !important;
             color: #0B5FA5 !important;
-            focus:ring-primary-500 !important;
+        }
+        /* Content area gradient background */
+        .ft-content-bg {
+            background:
+                radial-gradient(ellipse at top left,    rgba(186,230,253,0.10) 0%, transparent 60%),
+                radial-gradient(ellipse at top right,   rgba(254,243,199,0.09) 0%, transparent 60%),
+                radial-gradient(ellipse at bottom left, rgba(187,247,208,0.09) 0%, transparent 60%),
+                radial-gradient(ellipse at bottom right,rgba(254,215,170,0.08) 0%, transparent 60%),
+                #f9fafb !important;
+        }
+
+        /* =========================================================
+           GLOBAL METRIC & TIGHT LAYOUT OVERRIDES
+           ========================================================= */
+
+        /* 1. Shadows Sweep: Strip from static elements, keep on floating panels */
+        .shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+            box-shadow: none !important;
+        }
+        .origin-top-right,
+        .fixed.z-50 > div,
+        .fixed.z-40 > div,
+        [class*="z-50"].absolute,
+        [class*="z-40"].absolute,
+        .toast,
+        .modal,
+        [onclick*="stopPropagation"],
+        #employee-dropdown-menu,
+        #leavetype-dropdown-menu {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+        }
+        .fixed.bottom-6.right-6 button {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+        }
+
+        /* 2. Border Radius Sweep: Reduce to rounded-md (4px/0.25rem) */
+        .rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg, .rounded-md {
+            border-radius: 0.25rem !important;
+        }
+        .rounded-full {
+            border-radius: 9999px !important;
+        }
+
+        /* 3. Padding Sweep (Tightening Cards, Inputs & Buttons) */
+        .p-6, .p-8, .p-5 {
+            padding: 0.75rem !important; /* tighten p-6/p-8/p-5 to p-3 */
+        }
+        button, .btn, a[class*="bg-primary-gradient"], a[class*="bg-green-500"], a[class*="bg-blue-500"], a[class*="bg-red-650"] {
+            padding: 0.375rem 0.75rem !important; /* py-1.5 px-3 */
+        }
+
+        /* 4. Global Typography Sweep */
+        body, p, span, a, td, th, label, input, select, textarea, button, div:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+            font-size: 12px;
+        }
+        .text-xs, .text-sm, .text-base, .text-md, .text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl {
+            font-size: 12px !important;
+        }
+        h1, h2, h3, h4, h5, h6,
+        h1 *, h2 *, h3 *, h4 *, h5 *, h6 *,
+        .text-\[14px\],
+        [class*="page_title"],
+        .page-title,
+        header h1 {
+            font-size: 14px !important;
+            font-weight: 600 !important;
+        }
+
+        /* 5. Responsive Tables Override */
+        @media (max-width: 767px) {
+            table {
+                display: block !important;
+                width: 100% !important;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
         }
     </style>
     
@@ -84,7 +321,7 @@
 
     {% block head %}{% endblock %}
 </head>
-<body class="bg-slate-50 bg-soft-gradient">
+<body class="bg-slate-50 bg-soft-gradient ft-content-bg" x-data="{ muted: localStorage.getItem('sound_muted') === 'true' }">
 <div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-primary-500 z-50 hidden"></div>
 
 <!-- DESKTOP: Sidebar (hidden on mobile) -->
@@ -191,7 +428,7 @@
 </div>
 
 <!-- DESKTOP: Main content with left margin -->
-<div class="md:ml-64 min-h-screen flex flex-col bg-slate-50 bg-soft-gradient">
+<div class="md:ml-64 min-h-screen flex flex-col bg-slate-50 bg-soft-gradient ft-content-bg">
 
   <!-- Desktop top header (hidden on mobile) -->
   <header class="hidden md:flex sticky top-0 z-30 h-16 bg-white border-b border-gray-150 items-center justify-between px-6">
@@ -202,6 +439,20 @@
       <span class="text-sm text-gray-500">
         {{ request.user.employeeprofile.branch.name }}
       </span>
+
+      <!-- Mute Toggle -->
+      <button type="button" 
+              @click="muted = SoundFX.toggleMute(); $nextTick(() => { if(window.lucide) window.lucide.createIcons() })" 
+              class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 flex items-center justify-center"
+              title="Toggle sound">
+          <template x-if="!muted">
+              <i data-lucide="volume-2" class="w-4 h-4"></i>
+          </template>
+          <template x-if="muted">
+              <i data-lucide="volume-x" class="w-4 h-4"></i>
+          </template>
+      </button>
+
       <div class="w-8 h-8 rounded-full bg-primary-gradient flex items-center justify-center text-white text-sm font-semibold shadow-sm">
         {{ request.user.employeeprofile.full_name|first }}
       </div>
@@ -278,6 +529,213 @@
 <form style="display:none;">{% csrf_token %}</form>
 {% block scripts %}{% endblock %}
 
+<!-- ================================================================
+     GLOBAL TOAST NOTIFICATIONS CONTAINER
+     ================================================================ -->
+<div x-data="{
+         toasts: [],
+         addToast(message, type) {
+             const id = Date.now() + Math.random();
+             this.toasts.push({ id, message, type });
+
+             if (window.SoundFX) {
+                 if (type === 'error') {
+                     window.SoundFX.playToastError();
+                 } else {
+                     window.SoundFX.playToastSuccess();
+                 }
+             }
+
+             this.$nextTick(() => {
+                 if (window.lucide) window.lucide.createIcons();
+             });
+
+             setTimeout(() => {
+                 this.removeToast(id);
+             }, 4000);
+         },
+         removeToast(id) {
+             this.toasts = this.toasts.filter(t => t.id !== id);
+         }
+     }"
+     @new-toast.window="addToast($event.detail.message, $event.detail.type)"
+     class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    
+    <template x-for="toast in toasts" :key="toast.id">
+        <div x-show="true"
+             x-transition:enter="transition ease-out duration-300 transform"
+             x-transition:enter-start="translate-y-2 opacity-0 scale-95"
+             x-transition:enter-end="translate-y-0 opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-200 transform"
+             x-transition:leave-start="translate-y-0 opacity-100 scale-100"
+             x-transition:leave-end="translate-y-2 opacity-0 scale-95"
+             @click="removeToast(toast.id)"
+             class="pointer-events-auto cursor-pointer p-3 rounded-lg border flex items-center justify-between gap-3 shadow-md transition-all duration-200"
+             :class="{
+                 'bg-green-50 border-green-200 text-green-800': toast.type === 'success',
+                 'bg-red-50 border-red-200 text-red-800': toast.type === 'error',
+                 'bg-amber-50 border-amber-200 text-amber-800': toast.type === 'warning',
+                 'bg-blue-50 border-blue-200 text-blue-800': toast.type === 'info'
+             }">
+            <div class="flex items-center gap-2.5">
+                <template x-if="toast.type === 'success'">
+                    <i data-lucide="check-circle" class="w-4 h-4 text-green-600 shrink-0"></i>
+                </template>
+                <template x-if="toast.type === 'error'">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600 shrink-0"></i>
+                </template>
+                <template x-if="toast.type === 'warning'">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                </template>
+                <template x-if="toast.type === 'info'">
+                    <i data-lucide="info" class="w-4 h-4 text-blue-600 shrink-0"></i>
+                </template>
+                <span class="text-[12px] font-medium" x-text="toast.message"></span>
+            </div>
+            <button type="button" class="text-gray-400 hover:text-gray-600 p-0.5">
+                <i data-lucide="x" class="w-3 h-3"></i>
+            </button>
+        </div>
+    </template>
+</div>
+
+<!-- ================================================================
+     GLOBAL ACTION CONFIRMATION MODAL
+     ================================================================ -->
+<div x-data="{
+         open: false,
+         message: '',
+         onConfirmCallback: null,
+         init() {
+             window.addEventListener('open-confirm-modal', (e) => {
+                 this.message = e.detail.message;
+                 this.onConfirmCallback = () => {
+                     e.detail.onConfirm();
+                     this.closeModal();
+                 };
+                 this.open = true;
+                 if (window.SoundFX) window.SoundFX.playModalOpen();
+             });
+         },
+         closeModal() {
+             this.open = false;
+             this.onConfirmCallback = null;
+             if (window.SoundFX) window.SoundFX.playModalClose();
+         }
+     }"
+     x-show="open"
+     x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
+     @keydown.escape.window="closeModal()">
+     
+     <!-- Backdrop blur -->
+     <div class="fixed inset-0 bg-gray-500/20 backdrop-blur-sm transition-opacity"
+          x-show="open"
+          x-transition:enter="ease-out duration-300"
+          x-transition:enter-start="opacity-0"
+          x-transition:enter-end="opacity-100"
+          x-transition:leave="ease-in duration-200"
+          x-transition:leave-start="opacity-100"
+          x-transition:leave-end="opacity-0"
+          @click="closeModal()"></div>
+
+     <!-- Centered card -->
+     <div class="bg-white rounded-xl shadow-xl border border-gray-150 max-w-md w-full overflow-hidden transform transition-all z-10"
+          x-show="open"
+          x-transition:enter="ease-out duration-300"
+          x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+          x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+          x-transition:leave="ease-in duration-200"
+          x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+          x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+          
+          <div class="p-6">
+              <div class="flex items-start gap-4">
+                  <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
+                      <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                  </div>
+                  <div>
+                      <h3 class="text-sm font-semibold text-gray-900">Confirm Action</h3>
+                      <p class="mt-2 text-xs text-gray-500" x-text="message"></p>
+                  </div>
+              </div>
+          </div>
+          <div class="bg-gray-50 px-6 py-3.5 flex justify-end gap-3 border-t border-gray-100">
+              <button type="button" 
+                      @click="closeModal()" 
+                      class="px-3.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                  Cancel
+              </button>
+              <button type="button" 
+                      @click="onConfirmCallback && onConfirmCallback()" 
+                      class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors shadow-sm">
+                  Confirm
+              </button>
+          </div>
+     </div>
+</div>
+
+<!-- ================================================================
+     AI ASSISTANT FLOATING CHAT LAUNCHER & PANEL
+     ================================================================ -->
+<div x-data="{ open: false }" class="fixed bottom-6 right-6 z-40">
+    <!-- Chat Panel -->
+    <div x-show="open"
+         x-cloak
+         @click.away="open = false"
+         x-transition:enter="transition ease-out duration-200 transform"
+         x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+         x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+         x-transition:leave="transition ease-in duration-150 transform"
+         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+         x-transition:leave-end="opacity-0 translate-y-4 scale-95"
+         class="absolute bottom-16 right-0 w-80 bg-white rounded-2xl border border-gray-150 shadow-xl overflow-hidden flex flex-col h-96">
+         
+         <!-- Header -->
+         <div class="bg-primary-600 text-white p-4 flex items-center justify-between shrink-0">
+             <div class="flex items-center gap-2">
+                 <i data-lucide="sparkles" class="w-4 h-4"></i>
+                 <span class="text-xs font-semibold">AI Assistant</span>
+             </div>
+             <button type="button" @click="open = false" class="text-white/80 hover:text-white transition-colors">
+                 <i data-lucide="x" class="w-4 h-4"></i>
+             </button>
+         </div>
+
+         <!-- Body -->
+         <div class="flex-1 p-6 flex flex-col items-center justify-center text-center bg-gray-50/50">
+             <div class="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 mb-3">
+                 <i data-lucide="message-square" class="w-6 h-6"></i>
+             </div>
+             <h4 class="text-xs font-bold text-gray-800">Coming Soon</h4>
+             <p class="text-[11px] text-gray-400 mt-1 max-w-[180px]">
+                 Our AI-powered assistant is under development and will be available in a future release.
+             </p>
+         </div>
+
+         <!-- Footer (Disabled Input) -->
+         <div class="p-3 border-t border-gray-100 bg-white shrink-0">
+             <div class="flex gap-2">
+                 <input type="text" 
+                        disabled 
+                        placeholder="Type a message..." 
+                        class="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5 text-xs text-gray-400 placeholder:text-gray-300 focus:outline-none !p-2">
+                 <button type="button" disabled class="p-1.5 rounded-lg bg-gray-100 text-gray-300">
+                     <i data-lucide="send" class="w-4 h-4"></i>
+                 </button>
+             </div>
+         </div>
+    </div>
+
+    <!-- Launcher Button -->
+    <button type="button"
+            @click="open = !open; if(open) { if(window.SoundFX) window.SoundFX.playModalOpen() } else { if(window.SoundFX) window.SoundFX.playModalClose() }"
+            class="w-11 h-11 rounded-full bg-primary-gradient hover:scale-105 active:scale-95 text-white flex items-center justify-center shadow-lg transition-transform focus:outline-none"
+            title="AI Assistant">
+        <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
+    </button>
+</div>
+
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     if (window.lucide) {
@@ -322,5 +780,15 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
+<!-- Django Messages Integration Trigger -->
+{% if messages %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        {% for message in messages %}
+            window.showToast("{{ message|escapejs }}", "{{ message.tags|default:'info' }}");
+        {% endfor %}
+    });
+</script>
+{% endif %}
 </body>
 </html>

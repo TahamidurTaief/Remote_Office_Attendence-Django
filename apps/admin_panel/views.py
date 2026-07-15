@@ -26,6 +26,19 @@ from apps.branches.models import Branch, OfficeSchedule
 from apps.leave.models import LeaveType, LeaveBalance, LeaveRequest
 from .forms import ManualAttendanceForm
 
+def admin_required(view_func):
+    from functools import wraps
+    from django.http import HttpResponseForbidden
+    from django.contrib.auth.decorators import login_required
+
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if request.user.role != 'admin':
+            return HttpResponseForbidden('Admins only.')
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
 class AdminDashboardView(AdminRequiredMixin, TemplateView):
     template_name = 'admin_panel/admin_dashboard.html'
     
@@ -1551,9 +1564,7 @@ from openpyxl.styles import (
 )
 from openpyxl.utils import get_column_letter
 
-from django.contrib.auth.decorators import login_required
-
-@login_required
+@admin_required
 def export_attendance(request):
     format_type = request.GET.get('format', 'xlsx')
     year = request.GET.get('year')
@@ -1714,6 +1725,7 @@ def get_monthly_grid_data(request):
         'approved_leaves': approved_leaves_map
     }
     
+@admin_required
 def export_monthly_xlsx(request):
     from datetime import date
     data = get_monthly_grid_data(request)
@@ -2098,6 +2110,7 @@ def export_monthly_xlsx(request):
     wb.save(response)
     return response
 
+@admin_required
 def export_monthly_csv(request):
     from datetime import date
     data = get_monthly_grid_data(request)
@@ -2135,6 +2148,7 @@ def export_monthly_csv(request):
         
     return response
 
+@admin_required
 def export_monthly_pdf(request):
     from datetime import date
     from reportlab.lib.pagesizes import landscape, A4
@@ -2335,10 +2349,8 @@ class ExpiredDataView(AdminRequiredMixin, ListView):
         context['query_string'] = get_copy.urlencode()
         return context
 
-@login_required
+@admin_required
 def delete_expired_selected(request):
-    if not request.user.is_superuser and not getattr(request.user, 'is_staff', False):
-        return HttpResponse('Unauthorized', status=401)
     if request.method == 'POST':
         ids = request.POST.getlist('record_ids')
         if ids:
@@ -2353,10 +2365,8 @@ def delete_expired_selected(request):
             messages.success(request, f"Deleted {len(ids)} selected records.")
         return redirect('admin_panel:expired_data')
 
-@login_required
+@admin_required
 def delete_all_expired(request):
-    if not request.user.is_superuser and not getattr(request.user, 'is_staff', False):
-        return HttpResponse('Unauthorized', status=401)
     if request.method == 'POST':
         AttendanceLocation.objects.filter(
             attendance__is_expired=True

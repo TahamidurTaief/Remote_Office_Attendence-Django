@@ -4,11 +4,11 @@
 {% block page_title %}Leave Requests{% endblock %}
 
 {% block content %}
-<div class="p-8 max-w-7xl mx-auto">
+<div class="p-4 max-w-7xl mx-auto">
     <!-- Header -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Leave Requests</h1>
+            <h1 class="text-[14px] font-semibold text-gray-900">Leave Requests</h1>
             <p class="text-sm text-gray-500 mt-1">Review and manage employee leave requests and approvals.</p>
         </div>
         <div class="flex gap-3">
@@ -27,15 +27,7 @@
         </div>
     </div>
 
-    <!-- Alert Messages -->
-    {% if messages %}
-    {% for message in messages %}
-    <div class="mb-6 p-4 {% if message.tags == 'success' %}bg-green-50 border-green-200 text-green-700{% else %}bg-red-50 border-red-200 text-red-700{% endif %} border rounded-xl flex items-center gap-3">
-        <i data-lucide="{% if message.tags == 'success' %}check-circle{% else %}alert-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
-        <p class="text-sm font-medium">{{ message }}</p>
-    </div>
-    {% endfor %}
-    {% endif %}
+
 
     <!-- Stats grid -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">

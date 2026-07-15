@@ -9,355 +9,906 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0B5FA5">
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-
+    <!-- Head Assets & Custom Scripts -->
     {% tailwind_css %}
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
+    <script>
+        // Web Audio API Sound Effects Engine
+        const SoundFX = {
+            ctx: null,
+            isMuted: localStorage.getItem('sound_muted') === 'true',
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                localStorage.setItem('sound_muted', this.isMuted ? 'true' : 'false');
+                return this.isMuted;
+            },
+            playClick() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.03, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.08);
+            },
+            playToastSuccess() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const playTone = (freq, time, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, time);
+                    gain.gain.setValueAtTime(0.03, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                    osc.start(time);
+                    osc.stop(time + duration);
+                };
+                const now = ctx.currentTime;
+                playTone(523.25, now, 0.12);
+                playTone(659.25, now + 0.06, 0.15);
+            },
+            playToastError() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const playTone = (freq, time, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, time);
+                    gain.gain.setValueAtTime(0.04, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                    osc.start(time);
+                    osc.stop(time + duration);
+                };
+                const now = ctx.currentTime;
+                playTone(392, now, 0.12);
+                playTone(349.23, now + 0.08, 0.18);
+            },
+            playModalOpen() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(450, ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.15);
+            },
+            playModalClose() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(450, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.12);
+            },
+            playSubmenuOpen() {
+                if (this.isMuted) return;
+                this.init();
+                const ctx = this.ctx;
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, ctx.currentTime);
+                gain.gain.setValueAtTime(0.015, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.05);
+            }
+        };
+
+        window.SoundFX = SoundFX;
+
+        // Global Action Confirmation Modal Helper
+        window.confirmAction = function(message, onConfirm) {
+            window.dispatchEvent(new CustomEvent('open-confirm-modal', { detail: { message, onConfirm } }));
+        };
+
+        // Global Toast Notification Helper
+        window.showToast = function(message, type = 'info') {
+            window.dispatchEvent(new CustomEvent('new-toast', { detail: { message, type } }));
+        };
+
+        // Play sound on primary/action elements click
+        document.addEventListener('click', (e) => {
+            const target = e.target.closest('button, a');
+            if (!target) return;
+            const isPrimary = target.classList.contains('bg-primary-600') || 
+                              target.classList.contains('btn-primary') ||
+                              target.classList.contains('bg-primary-gradient') ||
+                              target.type === 'submit' ||
+                              target.getAttribute('type') === 'submit' ||
+                              target.classList.contains('text-red-600') ||
+                              target.classList.contains('bg-red-600') ||
+                              target.dataset.sound === 'click';
+            if (isPrimary) {
+                SoundFX.playClick();
+            }
+        });
+    </script>
+
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; }
         [x-cloak] { display: none !important; }
+
         /* Hide scrollbar but keep scrollable */
         .scrollbar-hide {
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+
         /* Unified Form Fields Styling */
-        input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="time"], input[type="number"], input[type="tel"], select, textarea {
+        input[type="text"], input[type="email"], input[type="password"],
+        input[type="date"], input[type="time"], input[type="number"],
+        input[type="tel"], select, textarea {
             width: 100% !important;
-            padding: 0.625rem 0.875rem !important;
+            padding: 0.375rem 0.625rem !important; /* py-1.5 px-2.5 */
             border: 1px solid #E5E7EB !important;
-            border-radius: 0.5rem !important;
-            font-size: 0.875rem !important;
+            border-radius: 0.25rem !important; /* rounded-md */
+            font-size: 12px !important; /* text-[12px] */
             color: #1F2937 !important;
             background-color: #FFFFFF !important;
             transition: all 0.2s ease-in-out !important;
             outline: none !important;
             box-shadow: none !important;
+            /* Remove native select styles */
+            appearance: none !important;
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E") !important;
+            background-position: right 0.5rem center !important;
+            background-repeat: no-repeat !important;
+            background-size: 1.25em 1.25em !important;
+            padding-right: 2rem !important;
         }
-        input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="date"]:focus, input[type="time"]:focus, input[type="number"]:focus, input[type="tel"]:focus, select:focus, textarea:focus {
+        input[type="text"]:focus, input[type="email"]:focus,
+        input[type="password"]:focus, input[type="date"]:focus,
+        input[type="time"]:focus, input[type="number"]:focus,
+        input[type="tel"]:focus, select:focus, textarea:focus {
             border-color: #0B5FA5 !important;
-            box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.15) !important;
+            box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.12) !important;
         }
         input[type="checkbox"] {
             border-radius: 0.25rem !important;
             border-color: #D1D5DB !important;
             color: #0B5FA5 !important;
-            focus:ring-primary-500 !important;
+        }
+
+        /* =========================================================
+           META BUSINESS SUITE SIDEBAR (FIXED WIDE SIDEBAR)
+           ========================================================= */
+
+        /* Sidebar root */
+        #ft-sidebar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 100vh;
+            width: 220px; /* Always wide */
+            background: #ffffff;
+            border-right: 1px solid #f0f0f0;
+            z-index: 45;
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+            box-shadow: none;
+        }
+
+        /* Sidebar label — always visible */
+        .ft-nav-label {
+            opacity: 1;
+            width: auto;
+            overflow: hidden;
+            white-space: nowrap;
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        /* Section group label - completely hidden */
+        .ft-group-label {
+            display: none !important;
+        }
+
+        /* Nav item row */
+        .ft-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 14px;
+            margin: 1px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            color: #4B5563;
+            transition: background 140ms ease, color 140ms ease;
+            position: relative;
+        }
+        .ft-nav-item:hover {
+            background: #F0F7FF;
+            color: #0B5FA5;
+        }
+        .ft-nav-item.active {
+            background: #EFF6FF;
+            color: #0B5FA5;
+        }
+        .ft-nav-item .ft-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            color: inherit;
+        }
+        .ft-nav-item .ft-chevron {
+            margin-left: auto;
+            width: 13px;
+            height: 13px;
+            flex-shrink: 0;
+            opacity: 1;
+            transition: transform 200ms ease;
+        }
+        .ft-nav-item.submenu-open .ft-chevron {
+            transform: rotate(90deg);
+        }
+
+        /* Badge */
+        .ft-badge {
+            min-width: 17px;
+            height: 17px;
+            padding: 0 4px;
+            background: #EF4444;
+            color: white;
+            font-size: 9px;
+            font-weight: 700;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        /* Content area gradient background */
+        .ft-content-bg {
+            background:
+                radial-gradient(ellipse at top left,    rgba(186,230,253,0.10) 0%, transparent 60%),
+                radial-gradient(ellipse at top right,   rgba(254,243,199,0.09) 0%, transparent 60%),
+                radial-gradient(ellipse at bottom left, rgba(187,247,208,0.09) 0%, transparent 60%),
+                radial-gradient(ellipse at bottom right,rgba(254,215,170,0.08) 0%, transparent 60%),
+                #f9fafb !important;
+        }
+
+        /* Content offset for sidebar */
+        .ft-main-offset {
+            margin-left: 220px; /* Constant wide offset */
+            transition: margin-left 200ms cubic-bezier(0.4,0,0.2,1);
+        }
+
+        /* Sidebar search */
+        .ft-search-wrap {
+            padding: 8px 10px 4px;
+            height: 44px;
+            opacity: 1;
+        }
+
+        /* Mobile overlay */
+        #ft-mobile-overlay {
+            display: none;
+        }
+        @media (max-width: 767px) {
+            #ft-sidebar {
+                width: 0;
+                overflow: hidden;
+                transform: translateX(-100%);
+                transition: width 200ms ease, transform 200ms ease;
+            }
+            #ft-sidebar.mobile-open {
+                width: 220px;
+                transform: translateX(0);
+            }
+            #ft-mobile-overlay {
+                display: block;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.4);
+                z-index: 38;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 200ms ease;
+            }
+            #ft-mobile-overlay.active {
+                opacity: 1;
+                pointer-events: auto;
+            }
+            .ft-main-offset {
+                margin-left: 0 !important;
+            }
+        }
+
+        /* =========================================================
+           GLOBAL METRIC & TIGHT LAYOUT OVERRIDES
+           ========================================================= */
+
+        /* 1. Shadows Sweep: Strip from static elements, keep on floating panels */
+        .shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+            box-shadow: none !important;
+        }
+        #ft-pinned-panel,
+        #ft-floating-panel,
+        .origin-top-right,
+        .fixed.z-50 > div,
+        .fixed.z-40 > div,
+        [class*="z-50"].absolute,
+        [class*="z-40"].absolute,
+        .toast,
+        .modal,
+        [onclick*="stopPropagation"],
+        #employee-dropdown-menu,
+        #leavetype-dropdown-menu {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+        }
+        .fixed.bottom-6.right-6 button {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+        }
+
+        /* 2. Border Radius Sweep: Reduce to rounded-md (4px/0.25rem) */
+        .rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg, .rounded-md {
+            border-radius: 0.25rem !important;
+        }
+        .rounded-full {
+            border-radius: 9999px !important;
+        }
+
+        /* 3. Padding Sweep (Tightening Cards, Inputs & Buttons) */
+        .p-6, .p-8, .p-5 {
+            padding: 0.75rem !important; /* tighten p-6/p-8/p-5 to p-3 */
+        }
+        button, .btn, a[class*="bg-primary-gradient"], a[class*="bg-green-500"], a[class*="bg-blue-500"], a[class*="bg-red-600"] {
+            padding: 0.375rem 0.75rem !important; /* py-1.5 px-3 */
+        }
+
+        /* 4. Global Typography Sweep */
+        body, p, span, a, td, th, label, input, select, textarea, button, div:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+            font-size: 12px;
+        }
+        .text-xs, .text-sm, .text-base, .text-md, .text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl {
+            font-size: 12px !important;
+        }
+        h1, h2, h3, h4, h5, h6,
+        h1 *, h2 *, h3 *, h4 *, h5 *, h6 *,
+        .text-\[14px\],
+        [class*="page_title"],
+        .page-title,
+        header h1 {
+            font-size: 14px !important;
+            font-weight: 600 !important;
+        }
+
+        /* 5. Responsive Tables Override */
+        @media (max-width: 767px) {
+            table {
+                display: block !important;
+                width: 100% !important;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+        }
+
+        /* 6. Mobile Submenu Drawer Fallback */
+        @media (max-width: 767px) {
+            .mobile-submenu-drawer {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: #ffffff !important;
+                z-index: 100 !important;
+                padding: 16px !important;
+                margin: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                transform: translateX(100%);
+                transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+                overflow: hidden !important;
+            }
+            .mobile-submenu-drawer.open {
+                transform: translateX(0) !important;
+            }
+            .mobile-submenu-drawer a {
+                font-size: 14px !important;
+                padding: 10px 14px !important;
+                border-radius: 6px !important;
+            }
+            .mobile-submenu-drawer a i {
+                width: 16px !important;
+                height: 16px !important;
+            }
         }
     </style>
     {% block head %}{% endblock %}
 </head>
-<body class="bg-slate-50 bg-soft-gradient text-gray-900 antialiased" x-data="{ sidebarOpen: false }">
-    <div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-primary-500 z-50 hidden"></div>
+<body class="text-gray-900 antialiased ft-content-bg"
+      x-data="{
+        sidebarMobile: false,
+        activeMenu: window.location.pathname.includes('/projects/') || window.location.pathname.includes('/templates/') ? 'projects' : 
+                    window.location.pathname.includes('/notifications/') || window.location.pathname.includes('/backups/') || window.location.pathname.includes('/expired-data/') ? 'system' :
+                    window.location.pathname.includes('/branches/') || window.location.pathname.includes('/admin-panel/settings') ? 'settings' :
+                    window.location.pathname.includes('/leave/') ? 'leave' :
+                    window.location.pathname.includes('/employees/') ? 'people' :
+                    window.location.pathname.includes('/admin-panel/reports') ? 'reports' : null,
+        search: '',
+        muted: localStorage.getItem('sound_muted') === 'true',
+
+        openMenu(key) {
+          if (this.activeMenu === key) {
+            this.activeMenu = null;
+          } else {
+            this.activeMenu = key;
+            if (window.SoundFX) window.SoundFX.playSubmenuOpen();
+          }
+        },
+
+        closeAll() {
+          this.activeMenu = null;
+        },
+
+        matchSearch(label) {
+          if (!this.search) return true;
+          return label.toLowerCase().includes(this.search.toLowerCase());
+        },
+
+        groupVisible(group, labels) {
+          if (!this.search) return true;
+          return labels.some(l => l.toLowerCase().includes(this.search.toLowerCase()))
+               || group.toLowerCase().includes(this.search.toLowerCase());
+        },
+
+        /* Auto-open submenu when search matches a grouped item */
+        handleSearch() {
+          if (!this.search) { return; }
+          const groups = ['reports','projects','system','settings','leave','people','attendance'];
+          for (const g of groups) {
+            const hits = this.navItems.filter(n => n.group === g && this.matchSearch(n.label));
+            if (hits.length) { 
+              this.activeMenu = g; 
+              return; 
+            }
+          }
+        },
+
+        navItems: [
+          { key: 'dashboard',     label: 'Dashboard',       group: 'overview' },
+          { key: 'attendance',    label: 'Attendance',       group: 'attendance' },
+          { key: 'reports',       label: 'Reports',          group: 'reports' },
+          { key: 'absencereport', label: 'Absence Report',   group: 'reports' },
+          { key: 'leave',         label: 'Leave Issues',     group: 'leave' },
+          { key: 'employees',     label: 'Employees',        group: 'people' },
+          { key: 'projects',      label: 'Projects',         group: 'projects' },
+          { key: 'templates',     label: 'Task Templates',   group: 'projects' },
+          { key: 'notifications', label: 'Notifications',    group: 'system' },
+          { key: 'backups',       label: 'Backups',          group: 'system' },
+          { key: 'expireddata',   label: 'Expired Data',     group: 'system' },
+          { key: 'branches',      label: 'Branches',         group: 'settings' },
+          { key: 'settings',      label: 'Settings',         group: 'settings' }
+        ]
+      }"
+      @keydown.escape.window="closeAll()">
+
+    <div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-blue-500 z-50 hidden"></div>
 
     <!-- Mobile overlay -->
-    <div x-show="sidebarOpen" x-cloak @click="sidebarOpen = false"
-         class="fixed inset-0 bg-black/50 z-30 md:hidden"></div>
+    <div id="ft-mobile-overlay"
+         :class="sidebarMobile ? 'active' : ''"
+         @click="sidebarMobile = false; closeAll()"></div>
 
-    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-           class="fixed top-0 left-0 h-screen w-64 bg-white border-r border-gray-150 text-gray-600 z-40 flex flex-col overflow-y-auto scrollbar-hide shrink-0 transition-transform duration-200 md:translate-x-0">
-        <div class="flex items-center h-16 px-6 border-b border-gray-150 bg-white">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-primary-gradient rounded-lg flex items-center justify-center shadow-sm">
-                    <i data-lucide="clock" class="w-4 h-4 text-white"></i>
-                </div>
-                <img src="{% static 'main_logo.jpg' %}" 
-                     alt="FieldTrack" 
-                     class="h-8 w-auto object-contain"
-                     onerror="this.style.display='none'; 
-                              document.getElementById('logo-text')
-                              .style.display='block'">
-                <span id="logo-text" 
-                      style="display:none"
-                      class="text-gray-800 font-semibold text-lg">
-                  FieldTrack
-                </span>
+    <!-- ================================================================
+         SIDEBAR
+         ================================================================ -->
+    <aside id="ft-sidebar"
+           :class="sidebarMobile ? 'mobile-open' : ''">
+
+        <!-- Logo -->
+        <div class="flex items-center h-14 px-4 border-b border-gray-100 shrink-0 overflow-hidden">
+            <div class="w-7 h-7 bg-primary-gradient rounded-lg flex items-center justify-center shadow-sm shrink-0">
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <div class="ft-nav-label ml-2.5 font-semibold text-gray-800 text-[13px]">
+                <img src="{% static 'main_logo.jpg' %}"
+                     alt="FieldTrack"
+                     class="h-7 w-auto object-contain"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                <span style="display:none">FieldTrack</span>
             </div>
         </div>
 
-        <nav class="flex-1 py-4 overflow-y-auto scrollbar-hide space-y-4" x-data="{ 
-            search: '', 
-            sections: {
-                overview: true,
-                attendance: true,
-                reports: true,
-                leave: true,
-                people: true,
-                projects: true,
-                system: true,
-                settings: true
-            },
-            matchesSearch(text) {
-                return !this.search || text.toLowerCase().includes(this.search.toLowerCase());
-            },
-            sectionMatches(sectionName, links) {
-                if (!this.search) return true;
-                return sectionName.toLowerCase().includes(this.search.toLowerCase()) || 
-                       links.some(l => l.toLowerCase().includes(this.search.toLowerCase()));
-            }
-        }">
-            <!-- Sidebar Search -->
-            <div class="px-4 mb-2">
-                <div class="flex items-center gap-2 bg-gray-50 border border-gray-150 rounded-lg px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-primary-500/20 focus-within:border-primary-500 transition-all">
-                    <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400"></i>
-                    <input type="text" x-model="search" placeholder="Search menu..." class="bg-transparent text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none w-full">
-                </div>
+        <!-- Search (Apple macOS/iOS style) -->
+        <div class="px-3.5 py-2 shrink-0">
+            <div class="flex items-center gap-2 bg-[#F2F2F7] rounded-lg px-2.5 py-1.5 transition-colors focus-within:bg-[#E5E5EA]">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-[#8E8E93] shrink-0"></i>
+                <input type="text"
+                       x-model="search"
+                       @input.debounce.200ms="handleSearch()"
+                       placeholder="Search"
+                       class="bg-transparent text-[12px] text-gray-800 placeholder-[#8E8E93] focus:outline-none w-full !border-0 !p-0 !shadow-none !ring-0">
             </div>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 py-3 overflow-y-auto scrollbar-hide space-y-0.5">
 
             {% with request.path as path %}
-            <!-- Overview Group -->
-            <div x-show="sectionMatches('Overview', ['Dashboard'])" class="space-y-0.5">
-                <button @click="sections.overview = !sections.overview" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>Overview</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.overview }"></i>
+
+            <!-- OVERVIEW -->
+            <div x-show="groupVisible('overview', ['Dashboard'])" class="mt-1">
+                <a href="{% url 'admin_panel:dashboard' %}"
+                   class="ft-nav-item {% if path == '/admin-panel/dashboard/' %}active{% endif %}"
+                   x-show="matchSearch('Dashboard')"
+                   title="Dashboard">
+                    <i data-lucide="layout-dashboard" class="ft-icon"></i>
+                    <span class="ft-nav-label">Dashboard</span>
+                </a>
+            </div>
+
+            <!-- ATTENDANCE -->
+            <div x-show="groupVisible('attendance', ['Attendance'])" class="mt-2">
+                <a href="{% url 'admin_panel:attendance_list' %}"
+                   class="ft-nav-item {% if '/admin-panel/attendance/' in path %}active{% endif %}"
+                   x-show="matchSearch('Attendance')"
+                   title="Attendance">
+                    <i data-lucide="clock" class="ft-icon"></i>
+                    <span class="ft-nav-label">Attendance</span>
+                </a>
+            </div>
+
+            <!-- REPORTS -->
+            <div x-show="groupVisible('reports', ['Reports', 'Absence Report'])" class="mt-2">
+                <button type="button"
+                        @click="openMenu('reports')"
+                        :class="{'submenu-open': activeMenu === 'reports'}"
+                        class="ft-nav-item w-full text-left {% if '/admin-panel/reports' in path %}active{% endif %}"
+                        title="Reports">
+                    <i data-lucide="bar-chart-2" class="ft-icon"></i>
+                    <span class="ft-nav-label">Reports</span>
+                    <i data-lucide="chevron-right" class="ft-chevron"></i>
                 </button>
-                <div x-show="sections.overview || search" class="space-y-0.5">
-                    <a href="{% url 'admin_panel:dashboard' %}" x-show="matchesSearch('Dashboard')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if path == '/admin-panel/dashboard/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if path == '/admin-panel/dashboard/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Dashboard</span>
+                <div x-show="activeMenu === 'reports'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'reports' && 'open'">
+                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
+                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span class="font-semibold">Back</span>
+                        </button>
+                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Reports Menu</span>
+                        <div class="w-6"></div>
+                    </div>
+                    <a href="{% url 'admin_panel:reports_main' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/admin-panel/reports' in path and '/admin-panel/reports/absent/' not in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 shrink-0"></i>
+                        Reports
+                    </a>
+                    <a href="{% url 'admin_panel:reports_absent' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/admin-panel/reports/absent/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="user-x" class="w-3.5 h-3.5 shrink-0"></i>
+                        Absence Report
                     </a>
                 </div>
             </div>
 
-            <!-- Attendance Group -->
-            <div x-show="sectionMatches('Attendance', ['Attendance'])" class="space-y-0.5">
-                <button @click="sections.attendance = !sections.attendance" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>Attendance</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.attendance }"></i>
+            <!-- LEAVE -->
+            <div x-show="groupVisible('leave', ['Leave Issues'])" class="mt-2">
+                <button type="button"
+                        @click="openMenu('leave')"
+                        :class="{'submenu-open': activeMenu === 'leave'}"
+                        class="ft-nav-item w-full text-left {% if '/leave/admin/' in path %}active{% endif %}"
+                        title="Leave">
+                    <i data-lucide="clipboard-check" class="ft-icon"></i>
+                    <span class="ft-nav-label">Leave</span>
+                    {% if pending_leave_count %}
+                    <span class="ft-badge">{{ pending_leave_count }}</span>
+                    {% endif %}
+                    <i data-lucide="chevron-right" class="ft-chevron"></i>
                 </button>
-                <div x-show="sections.attendance || search" class="space-y-0.5">
-                    <a href="{% url 'admin_panel:attendance_list' %}" x-show="matchesSearch('Attendance')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/admin-panel/attendance/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/admin-panel/attendance/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="clock" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Attendance</span>
+                <div x-show="activeMenu === 'leave'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'leave' && 'open'">
+                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
+                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span class="font-semibold">Back</span>
+                        </button>
+                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Leave Menu</span>
+                        <div class="w-6"></div>
+                    </div>
+                    <a href="{% url 'leave:admin_dashboard' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/leave/admin/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="clipboard-check" class="w-3.5 h-3.5 shrink-0"></i>
+                        Leave Issues
                     </a>
                 </div>
             </div>
 
-            <!-- Reports Group -->
-            <div x-show="sectionMatches('Reports', ['Reports', 'Absence Report'])" class="space-y-0.5">
-                <button @click="sections.reports = !sections.reports" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>Reports</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.reports }"></i>
+            <!-- PEOPLE -->
+            <div x-show="groupVisible('people', ['Employees'])" class="mt-2">
+                <button type="button"
+                        @click="openMenu('people')"
+                        :class="{'submenu-open': activeMenu === 'people'}"
+                        class="ft-nav-item w-full text-left {% if '/employees/' in path %}active{% endif %}"
+                        title="People">
+                    <i data-lucide="users" class="ft-icon"></i>
+                    <span class="ft-nav-label">People</span>
+                    <i data-lucide="chevron-right" class="ft-chevron"></i>
                 </button>
-                <div x-show="sections.reports || search" class="space-y-0.5">
-                    <a href="{% url 'admin_panel:reports_main' %}" x-show="matchesSearch('Reports')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/admin-panel/reports' in path and not '/admin-panel/reports/absent/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/admin-panel/reports' in path and not '/admin-panel/reports/absent/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="bar-chart-2" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Reports</span>
-                    </a>
-                    <a href="{% url 'admin_panel:reports_absent' %}" x-show="matchesSearch('Absence Report')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/admin-panel/reports/absent/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/admin-panel/reports/absent/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="user-x" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Absence Report</span>
-                    </a>
-                </div>
-            </div>
-
-            <!-- Leave Group -->
-            <div x-show="sectionMatches('Leave', ['Leave Issues'])" class="space-y-0.5">
-                <button @click="sections.leave = !sections.leave" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>Leave</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.leave }"></i>
-                </button>
-                <div x-show="sections.leave || search" class="space-y-0.5">
-                    <a href="{% url 'leave:admin_dashboard' %}" x-show="matchesSearch('Leave Issues')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/leave/admin/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/leave/admin/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="clipboard-check" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Leave Issues</span>
-                        {% if pending_leave_count %}
-                        <span class="ml-auto bg-red-500 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold">
-                            {{ pending_leave_count }}
-                        </span>
-                        {% endif %}
+                <div x-show="activeMenu === 'people'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'people' && 'open'">
+                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
+                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span class="font-semibold">Back</span>
+                        </button>
+                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">People Menu</span>
+                        <div class="w-6"></div>
+                    </div>
+                    <a href="{% url 'employees:employee_list' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/employees/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="users" class="w-3.5 h-3.5 shrink-0"></i>
+                        Employees
                     </a>
                 </div>
             </div>
 
-            <!-- People Group -->
-            <div x-show="sectionMatches('People', ['Employees'])" class="space-y-0.5">
-                <button @click="sections.people = !sections.people" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>People</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.people }"></i>
+            <!-- PROJECTS -->
+            <div x-show="groupVisible('projects', ['Projects', 'Task Templates'])" class="mt-2">
+                <button type="button"
+                        @click="openMenu('projects')"
+                        :class="{'submenu-open': activeMenu === 'projects'}"
+                        class="ft-nav-item w-full text-left {% if '/projects/' in path or '/templates/' in path %}active{% endif %}"
+                        title="Projects">
+                    <i data-lucide="briefcase" class="ft-icon"></i>
+                    <span class="ft-nav-label">Projects</span>
+                    <i data-lucide="chevron-right" class="ft-chevron"></i>
                 </button>
-                <div x-show="sections.people || search" class="space-y-0.5">
-                    <a href="{% url 'employees:employee_list' %}" x-show="matchesSearch('Employees')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/employees/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/employees/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="users" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Employees</span>
+                <div x-show="activeMenu === 'projects'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'projects' && 'open'">
+                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
+                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span class="font-semibold">Back</span>
+                        </button>
+                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Projects Menu</span>
+                        <div class="w-6"></div>
+                    </div>
+                    <a href="{% url 'projects:project_list' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/projects/' in path and '/templates/' not in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="briefcase" class="w-3.5 h-3.5 shrink-0"></i>
+                        Projects
+                    </a>
+                    <a href="{% url 'projects:template_list' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/templates/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="clipboard-list" class="w-3.5 h-3.5 shrink-0"></i>
+                        Task Templates
                     </a>
                 </div>
             </div>
 
-            <!-- Projects Group -->
-            <div x-show="sectionMatches('Projects', ['Projects'])" class="space-y-0.5">
-                <button @click="sections.projects = !sections.projects" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>Projects</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.projects }"></i>
+            <!-- SYSTEM -->
+            <div x-show="groupVisible('system', ['Notifications', 'Backups', 'Expired Data'])" class="mt-2">
+                <button type="button"
+                        @click="openMenu('system')"
+                        :class="{'submenu-open': activeMenu === 'system'}"
+                        class="ft-nav-item w-full text-left {% if '/notifications/' in path or '/backups/' in path or '/expired-data/' in path %}active{% endif %}"
+                        title="System">
+                    <i data-lucide="settings-2" class="ft-icon"></i>
+                    <span class="ft-nav-label">System</span>
+                    {% if unread_notifications or expired_data_count %}
+                    <span class="ft-badge">{{ unread_notifications|default:0|add:expired_data_count|default:0 }}</span>
+                    {% endif %}
+                    <i data-lucide="chevron-right" class="ft-chevron"></i>
                 </button>
-                <div x-show="sections.projects || search" class="space-y-0.5">
-                    <a href="{% url 'projects:project_list' %}" x-show="matchesSearch('Projects')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/projects/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/projects/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="briefcase" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Projects</span>
-                    </a>
-                </div>
-            </div>
-
-            <!-- System Group -->
-            <div x-show="sectionMatches('System', ['Notifications', 'Backups', 'Expired Data'])" class="space-y-0.5">
-                <button @click="sections.system = !sections.system" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>System</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.system }"></i>
-                </button>
-                <div x-show="sections.system || search" class="space-y-0.5">
-                    <a href="{% url 'notifications:list' %}" x-show="matchesSearch('Notifications')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/notifications/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/notifications/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="bell" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Notifications</span>
+                <div x-show="activeMenu === 'system'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'system' && 'open'">
+                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
+                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span class="font-semibold">Back</span>
+                        </button>
+                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">System Menu</span>
+                        <div class="w-6"></div>
+                    </div>
+                    <a href="{% url 'notifications:list' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/notifications/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="bell" class="w-3.5 h-3.5 shrink-0"></i>
+                        Notifications
                         {% if unread_notifications %}
-                        <span class="ml-auto bg-red-500 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold">
-                            {{ unread_notifications }}
-                        </span>
+                        <span class="ml-auto bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{{ unread_notifications }}</span>
                         {% endif %}
                     </a>
-                    <a href="{% url 'backups:backup_list' %}" x-show="matchesSearch('Backups')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/backups/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/backups/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="database" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Backups</span>
+                    <a href="{% url 'backups:backup_list' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/backups/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="database" class="w-3.5 h-3.5 shrink-0"></i>
+                        Backups
                     </a>
-                    <a href="{% url 'admin_panel:expired_data' %}" x-show="matchesSearch('Expired Data')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/expired-data/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/expired-data/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="trash-2" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Expired Data</span>
+                    <a href="{% url 'admin_panel:expired_data' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/expired-data/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5 shrink-0"></i>
+                        Expired Data
                         {% if expired_data_count %}
-                        <span class="ml-auto bg-red-500 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold">
-                            {{ expired_data_count }}
-                        </span>
+                        <span class="ml-auto bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{{ expired_data_count }}</span>
                         {% endif %}
                     </a>
                 </div>
             </div>
 
-            <!-- Settings Group -->
-            <div x-show="sectionMatches('Settings', ['Branches', 'Settings'])" class="space-y-0.5">
-                <button @click="sections.settings = !sections.settings" class="w-full flex items-center justify-between px-6 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors">
-                    <span>Settings</span>
-                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="{ 'rotate-180': !sections.settings }"></i>
+            <!-- SETTINGS -->
+            <div x-show="groupVisible('settings', ['Branches', 'Settings'])" class="mt-2">
+                <button type="button"
+                        @click="openMenu('settings')"
+                        :class="{'submenu-open': activeMenu === 'settings'}"
+                        class="ft-nav-item w-full text-left {% if '/branches/' in path or '/admin-panel/settings' in path %}active{% endif %}"
+                        title="Settings">
+                    <i data-lucide="sliders" class="ft-icon"></i>
+                    <span class="ft-nav-label">Settings</span>
+                    <i data-lucide="chevron-right" class="ft-chevron"></i>
                 </button>
-                <div x-show="sections.settings || search" class="space-y-0.5">
-                    <a href="{% url 'branches:branch_list' %}" x-show="matchesSearch('Branches')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/branches/' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/branches/' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="building-2" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Branches</span>
+                <div x-show="activeMenu === 'settings'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'settings' && 'open'">
+                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
+                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span class="font-semibold">Back</span>
+                        </button>
+                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Settings Menu</span>
+                        <div class="w-6"></div>
+                    </div>
+                    <a href="{% url 'branches:branch_list' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/branches/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="building-2" class="w-3.5 h-3.5 shrink-0"></i>
+                        Branches
                     </a>
-                    <a href="{% url 'admin_panel:schedule_settings' %}" x-show="matchesSearch('Settings')"
-                       class="group flex items-center gap-3 px-3 py-1.5 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150 {% if '/admin-panel/settings' in path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:text-primary-600 hover:bg-primary-50/50{% endif %}">
-                        <div class="p-2 rounded-md transition-colors {% if '/admin-panel/settings' in path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-                            <i data-lucide="settings" class="w-4 h-4 shrink-0"></i>
-                        </div>
-                        <span>Settings</span>
+                    <a href="{% url 'admin_panel:schedule_settings' %}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/admin-panel/settings' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
+                        <i data-lucide="settings" class="w-3.5 h-3.5 shrink-0"></i>
+                        Settings
                     </a>
                 </div>
             </div>
+
             {% endwith %}
         </nav>
 
-        <div class="border-t border-gray-150 p-4 bg-gray-50/50">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-primary-gradient rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+        <!-- User Footer -->
+        <div class="border-t border-gray-100 p-3 shrink-0 overflow-hidden">
+            <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 bg-primary-gradient rounded-full flex items-center justify-center text-white text-[11px] font-semibold shadow-sm shrink-0">
                     {{ request.user.email|default:request.user.phone|make_list|first|upper }}
                 </div>
-                <div class="flex-1 min-w-0">
-                    <p class="text-gray-800 text-sm font-medium truncate">Admin</p>
-                    <p class="text-gray-500 text-xs truncate">{{ request.user.email|default:request.user.phone }}</p>
+                <div class="ft-nav-label flex-1 min-w-0">
+                    <p class="text-gray-800 text-[12px] font-medium truncate leading-tight">Admin</p>
+                    <p class="text-gray-400 text-[11px] truncate leading-tight">{{ request.user.email|default:request.user.phone }}</p>
                 </div>
-                <a href="{% url 'accounts:logout' %}" class="text-gray-400 hover:text-red-600 transition-colors p-1.5 hover:bg-red-50 rounded-lg">
-                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                <a href="{% url 'accounts:logout' %}"
+                   class="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-red-50 shrink-0 ft-nav-label"
+                   style="width:auto; opacity:1"
+                   title="Logout">
+                    <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
                 </a>
             </div>
         </div>
     </aside>
 
-    <div class="md:ml-64 min-h-screen flex flex-col bg-slate-50 bg-soft-gradient">
-        <header class="sticky top-0 z-20 h-16 bg-white border-b border-gray-150 flex items-center justify-between px-4 md:px-6">
-            <div class="flex items-center gap-3">
-                <button type="button" @click="sidebarOpen = !sidebarOpen"
-                        class="md:hidden p-2 -ml-2 rounded-lg text-gray-500 hover:bg-gray-100">
-                    <i data-lucide="menu" class="w-5 h-5"></i>
+
+
+    <!-- ================================================================
+         MAIN CONTENT
+         ================================================================ -->
+    <div class="ft-main-offset min-h-screen flex flex-col ft-content-bg transition-all duration-200">
+
+        <!-- Header -->
+        <header class="sticky top-0 z-20 h-12 bg-white border-b border-gray-100 flex items-center justify-between px-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <div class="flex items-center gap-2.5">
+                <!-- Mobile menu toggle -->
+                <button type="button"
+                        @click="sidebarMobile = !sidebarMobile"
+                        class="md:hidden p-1.5 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100">
+                    <i data-lucide="menu" class="w-4 h-4"></i>
                 </button>
-                <h1 class="text-lg font-semibold text-gray-900">{% block page_title %}Dashboard{% endblock %}</h1>
+                <h1 class="text-[14px] font-semibold text-gray-900">{% block page_title %}Dashboard{% endblock %}</h1>
             </div>
 
-            <div class="flex items-center gap-4">
-                <div class="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-                    <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
-                    <input type="text" placeholder="Search" class="bg-transparent text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none">
+            <div class="flex items-center gap-3">
+                <!-- Desktop search -->
+                <div class="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5">
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400"></i>
+                    <input type="text" placeholder="Search…" class="bg-transparent text-[12px] text-gray-700 placeholder:text-gray-400 focus:outline-none !border-0 !p-0 !shadow-none !ring-0 w-36">
                 </div>
-                <button type="button" class="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100">
-                    <i data-lucide="search" class="w-5 h-5"></i>
+                <!-- Mobile search -->
+                <button type="button" class="md:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+                    <i data-lucide="search" class="w-4 h-4"></i>
                 </button>
 
+                <!-- Mute Toggle -->
+                <button type="button" 
+                        @click="muted = SoundFX.toggleMute(); $nextTick(() => initIcons())" 
+                        class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 flex items-center justify-center"
+                        title="Toggle sound">
+                    <template x-if="!muted">
+                        <i data-lucide="volume-2" class="w-4 h-4"></i>
+                    </template>
+                    <template x-if="muted">
+                        <i data-lucide="volume-x" class="w-4 h-4"></i>
+                    </template>
+                </button>
+
+                <!-- Notifications bell -->
                 <div class="relative"
                      hx-get="{% url 'notifications:count' %}"
                      hx-trigger="load, every 30s"
                      hx-target="#notif-badge"
                      hx-swap="outerHTML">
-                    <a href="{% url 'notifications:list' %}" class="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500">
-                        <i data-lucide="bell" class="w-5 h-5"></i>
-                        <span id="notif-badge" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full hidden"></span>
+                    <a href="{% url 'notifications:list' %}" class="relative p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 flex">
+                        <i data-lucide="bell" class="w-4 h-4"></i>
+                        <span id="notif-badge" class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full hidden items-center justify-center font-bold"></span>
                     </a>
                 </div>
 
-                <div class="h-6 w-px bg-gray-200"></div>
+                <div class="h-5 w-px bg-gray-100"></div>
 
+                <!-- User menu -->
                 <div class="relative" x-data="{ open: false }">
-                    <button type="button" @click="open = !open" class="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-gray-100">
-                        <span class="w-8 h-8 rounded-full bg-primary-gradient text-white flex items-center justify-center shadow-sm">
-                            <i data-lucide="user-circle" class="w-5 h-5 text-white"></i>
+                    <button type="button" @click="open = !open" class="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100">
+                        <span class="w-6 h-6 rounded-full bg-primary-gradient text-white flex items-center justify-center shadow-sm">
+                            <i data-lucide="user-circle" class="w-4 h-4 text-white"></i>
                         </span>
-                        <span class="hidden md:block text-sm font-medium text-gray-700">{{ request.user.email|default:request.user.phone }}</span>
-                        <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
+                        <span class="hidden md:block text-[12px] font-medium text-gray-700 max-w-[120px] truncate">{{ request.user.email|default:request.user.phone }}</span>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
                     </button>
-                    <div x-show="open" @click.away="open = false" x-transition.opacity class="origin-top-right absolute right-0 mt-2 w-48 rounded-xl shadow-lg py-2 bg-white ring-1 ring-black ring-opacity-5 z-50" x-cloak>
-                        <a href="{% url 'accounts:change_password' %}" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <i data-lucide="user-circle" class="w-4 h-4"></i>
+                    <div x-show="open" @click.away="open = false" x-transition.opacity
+                         class="origin-top-right absolute right-0 mt-1.5 w-44 rounded-xl shadow-lg py-1.5 bg-white ring-1 ring-black ring-opacity-5 z-50"
+                         x-cloak>
+                        <a href="{% url 'accounts:change_password' %}" class="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50">
+                            <i data-lucide="user-circle" class="w-3.5 h-3.5"></i>
                             My Profile
                         </a>
                         <div class="h-px bg-gray-100 my-1"></div>
-                        <a href="{% url 'accounts:logout' %}" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
-                            <i data-lucide="log-out" class="w-4 h-4"></i>
+                        <a href="{% url 'accounts:logout' %}" class="flex items-center gap-2 px-3 py-2 text-[12px] text-red-600 hover:bg-red-50">
+                            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
                             Logout
                         </a>
                     </div>
@@ -365,40 +916,254 @@
             </div>
         </header>
 
-        <main class="flex-1 p-6 overflow-y-auto flex flex-col justify-between">
+        <!-- Page content -->
+        <main class="flex-1 p-4 overflow-y-auto flex flex-col justify-between">
             <div class="grow">
                 {% block content %}{% endblock %}
             </div>
-            <footer class="py-4 px-6 bg-white border-t border-gray-200 text-center md:text-right text-xs text-gray-500 shrink-0 rounded-xl mt-4">
-                <span>Developed by <a href="https://tahamidurtaief.com" target="_blank" class="text-primary-500 hover:text-primary-700 font-semibold hover:underline">Tahamidur taief</a></span>
+            <footer class="py-3 px-4 bg-white border-t border-gray-100 text-center md:text-right text-[11px] text-gray-400 shrink-0 rounded-xl mt-4">
+                <span>Developed by <a href="https://tahamidurtaief.com" target="_blank" class="text-primary-500 hover:text-primary-700 font-semibold hover:underline">Tahamidur Taief</a></span>
             </footer>
         </main>
     </div>
 
+    <!-- ================================================================
+         GLOBAL TOAST NOTIFICATIONS CONTAINER
+         ================================================================ -->
+    <div x-data="{
+             toasts: [],
+             addToast(message, type) {
+                 const id = Date.now() + Math.random();
+                 this.toasts.push({ id, message, type });
+
+                 if (window.SoundFX) {
+                     if (type === 'error') {
+                         window.SoundFX.playToastError();
+                     } else {
+                         window.SoundFX.playToastSuccess();
+                     }
+                 }
+
+                 this.$nextTick(() => {
+                     if (window.lucide) window.lucide.createIcons();
+                 });
+
+                 setTimeout(() => {
+                     this.removeToast(id);
+                 }, 4000);
+             },
+             removeToast(id) {
+                 this.toasts = this.toasts.filter(t => t.id !== id);
+             }
+         }"
+         @new-toast.window="addToast($event.detail.message, $event.detail.type)"
+         class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+        
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-show="true"
+                 x-transition:enter="transition ease-out duration-300 transform"
+                 x-transition:enter-start="translate-y-2 opacity-0 scale-95"
+                 x-transition:enter-end="translate-y-0 opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-200 transform"
+                 x-transition:leave-start="translate-y-0 opacity-100 scale-100"
+                 x-transition:leave-end="translate-y-2 opacity-0 scale-95"
+                 @click="removeToast(toast.id)"
+                 class="pointer-events-auto cursor-pointer p-3 rounded-lg border flex items-center justify-between gap-3 shadow-md transition-all duration-200"
+                 :class="{
+                     'bg-green-50 border-green-200 text-green-800': toast.type === 'success',
+                     'bg-red-50 border-red-200 text-red-800': toast.type === 'error',
+                     'bg-amber-50 border-amber-200 text-amber-800': toast.type === 'warning',
+                     'bg-blue-50 border-blue-200 text-blue-800': toast.type === 'info'
+                 }">
+                <div class="flex items-center gap-2.5">
+                    <template x-if="toast.type === 'success'">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-green-600 shrink-0"></i>
+                    </template>
+                    <template x-if="toast.type === 'error'">
+                        <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600 shrink-0"></i>
+                    </template>
+                    <template x-if="toast.type === 'warning'">
+                        <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                    </template>
+                    <template x-if="toast.type === 'info'">
+                        <i data-lucide="info" class="w-4 h-4 text-blue-600 shrink-0"></i>
+                    </template>
+                    <span class="text-[12px] font-medium" x-text="toast.message"></span>
+                </div>
+                <button type="button" class="text-gray-400 hover:text-gray-600 p-0.5">
+                    <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <!-- ================================================================
+         GLOBAL ACTION CONFIRMATION MODAL
+         ================================================================ -->
+    <div x-data="{
+             open: false,
+             message: '',
+             onConfirmCallback: null,
+             init() {
+                 window.addEventListener('open-confirm-modal', (e) => {
+                     this.message = e.detail.message;
+                     this.onConfirmCallback = () => {
+                         e.detail.onConfirm();
+                         this.closeModal();
+                     };
+                     this.open = true;
+                     if (window.SoundFX) window.SoundFX.playModalOpen();
+                 });
+             },
+             closeModal() {
+                 this.open = false;
+                 this.onConfirmCallback = null;
+                 if (window.SoundFX) window.SoundFX.playModalClose();
+             }
+         }"
+         x-show="open"
+         x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="closeModal()">
+         
+         <!-- Backdrop blur -->
+         <div class="fixed inset-0 bg-gray-500/20 backdrop-blur-sm transition-opacity"
+              x-show="open"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0"
+              x-transition:enter-end="opacity-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100"
+              x-transition:leave-end="opacity-0"
+              @click="closeModal()"></div>
+
+         <!-- Centered card -->
+         <div class="bg-white rounded-xl shadow-xl border border-gray-150 max-w-md w-full overflow-hidden transform transition-all z-10"
+              x-show="open"
+              x-transition:enter="ease-out duration-300"
+              x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave="ease-in duration-200"
+              x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+              x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+              
+              <div class="p-6">
+                  <div class="flex items-start gap-4">
+                      <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
+                          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                      </div>
+                      <div>
+                          <h3 class="text-sm font-semibold text-gray-900">Confirm Action</h3>
+                          <p class="mt-2 text-xs text-gray-500" x-text="message"></p>
+                      </div>
+                  </div>
+              </div>
+              <div class="bg-gray-50 px-6 py-3.5 flex justify-end gap-3 border-t border-gray-100">
+                  <button type="button" 
+                          @click="closeModal()" 
+                          class="px-3.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                      Cancel
+                  </button>
+                  <button type="button" 
+                          @click="onConfirmCallback && onConfirmCallback()" 
+                          class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors shadow-sm">
+                      Confirm
+                  </button>
+              </div>
+         </div>
+    </div>
+
+    <!-- ================================================================
+         AI ASSISTANT FLOATING CHAT LAUNCHER & PANEL
+         ================================================================ -->
+    <div x-data="{ open: false }" class="fixed bottom-6 right-6 z-40">
+        <!-- Chat Panel -->
+        <div x-show="open"
+             x-cloak
+             @click.away="open = false"
+             x-transition:enter="transition ease-out duration-200 transform"
+             x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+             x-transition:leave="transition ease-in duration-150 transform"
+             x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+             x-transition:leave-end="opacity-0 translate-y-4 scale-95"
+             class="absolute bottom-16 right-0 w-80 bg-white rounded-2xl border border-gray-150 shadow-xl overflow-hidden flex flex-col h-96">
+             
+             <!-- Header -->
+             <div class="bg-primary-600 text-white p-4 flex items-center justify-between shrink-0">
+                 <div class="flex items-center gap-2">
+                     <i data-lucide="sparkles" class="w-4 h-4"></i>
+                     <span class="text-xs font-semibold">AI Assistant</span>
+                 </div>
+                 <button type="button" @click="open = false" class="text-white/80 hover:text-white transition-colors">
+                     <i data-lucide="x" class="w-4 h-4"></i>
+                 </button>
+             </div>
+
+             <!-- Body -->
+             <div class="flex-1 p-6 flex flex-col items-center justify-center text-center bg-gray-50/50">
+                 <div class="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 mb-3">
+                     <i data-lucide="message-square" class="w-6 h-6"></i>
+                 </div>
+                 <h4 class="text-xs font-bold text-gray-800">Coming Soon</h4>
+                 <p class="text-[11px] text-gray-400 mt-1 max-w-[180px]">
+                     Our AI-powered assistant is under development and will be available in a future release.
+                 </p>
+             </div>
+
+             <!-- Footer (Disabled Input) -->
+             <div class="p-3 border-t border-gray-100 bg-white shrink-0">
+                 <div class="flex gap-2">
+                     <input type="text" 
+                            disabled 
+                            placeholder="Type a message..." 
+                            class="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5 text-xs text-gray-400 placeholder:text-gray-300 focus:outline-none !p-2">
+                     <button type="button" disabled class="p-1.5 rounded-lg bg-gray-100 text-gray-300">
+                         <i data-lucide="send" class="w-4 h-4"></i>
+                     </button>
+                 </div>
+             </div>
+        </div>
+
+        <!-- Launcher Button -->
+        <button type="button"
+                @click="open = !open; if(open) { if(window.SoundFX) window.SoundFX.playModalOpen() } else { if(window.SoundFX) window.SoundFX.playModalClose() }"
+                class="w-11 h-11 rounded-full bg-primary-gradient hover:scale-105 active:scale-95 text-white flex items-center justify-center shadow-lg transition-transform focus:outline-none"
+                title="AI Assistant">
+            <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
+        </button>
+    </div>
+
     {% block scripts %}{% endblock %}
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            if (window.lucide) {
-                window.lucide.createIcons();
-            }
-        });
-        document.addEventListener('htmx:afterSwap', () => {
-            if (window.lucide) {
-                window.lucide.createIcons();
-            }
-        });
+        // Lucide icon init
+        function initIcons() {
+            if (window.lucide) window.lucide.createIcons();
+        }
+        document.addEventListener('DOMContentLoaded', initIcons);
+        document.addEventListener('htmx:afterSwap', initIcons);
+        document.addEventListener('alpine:initialized', initIcons);
+
+        // Page loader
         document.addEventListener('htmx:beforeRequest', () => {
-            const loader = document.getElementById('page-loader');
-            if (loader) {
-                loader.classList.remove('hidden');
-            }
+            const l = document.getElementById('page-loader');
+            if (l) l.classList.remove('hidden');
         });
         document.addEventListener('htmx:afterRequest', () => {
-            const loader = document.getElementById('page-loader');
-            if (loader) {
-                loader.classList.add('hidden');
-            }
+            const l = document.getElementById('page-loader');
+            if (l) l.classList.add('hidden');
         });
     </script>
+
+    <!-- Django Messages Integration Trigger -->
+    {% if messages %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            {% for message in messages %}
+                window.showToast("{{ message|escapejs }}", "{{ message.tags|default:'info' }}");
+            {% endfor %}
+        });
+    </script>
+    {% endif %}
 </body>
 </html>

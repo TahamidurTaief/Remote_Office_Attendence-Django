@@ -117,9 +117,33 @@ def check_in(request):
         else:
             status = 'on_time'  # subsequent sessions are never "late"
 
+        # Check if project was submitted or can be inferred
+        project = None
+        project_id = data.get('project') or data.get('project_id')
+        if project_id:
+            try:
+                from apps.projects.models import Project
+                project = Project.objects.get(pk=project_id)
+            except Exception:
+                pass
+        if not project:
+            try:
+                from apps.projects.models import Project, ProjectTask
+                from django.db.models import Q
+                project = Project.objects.filter(Q(project_manager=employee) | Q(site_engineer=employee)).first()
+                if not project:
+                    task = ProjectTask.objects.filter(responsible_person=employee, planned_start__lte=today, planned_finish__gte=today).first()
+                    if task:
+                        project = task.project
+                if not project and employee.branch:
+                    project = Project.objects.filter(branch=employee.branch).first()
+            except Exception:
+                pass
+
         # Create new session
         attendance = Attendance.objects.create(
             employee=employee,
+            project=project,
             date=today,
             check_in_time=now,
             type=attendance_type,
@@ -485,8 +509,32 @@ def field_visit_submit(request):
         if photo.size > 10 * 1024 * 1024:
             return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
 
+        # Check if project was submitted or can be inferred
+        project = None
+        project_id = data.get('project') or data.get('project_id')
+        if project_id:
+            try:
+                from apps.projects.models import Project
+                project = Project.objects.get(pk=project_id)
+            except Exception:
+                pass
+        if not project:
+            try:
+                from apps.projects.models import Project, ProjectTask
+                from django.db.models import Q
+                project = Project.objects.filter(Q(project_manager=employee) | Q(site_engineer=employee)).first()
+                if not project:
+                    task = ProjectTask.objects.filter(responsible_person=employee, planned_start__lte=today, planned_finish__gte=today).first()
+                    if task:
+                        project = task.project
+                if not project and employee.branch:
+                    project = Project.objects.filter(branch=employee.branch).first()
+            except Exception:
+                pass
+
         attendance = Attendance.objects.create(
             employee=employee,
+            project=project,
             date=today,
             check_in_time=now,
             type='field',

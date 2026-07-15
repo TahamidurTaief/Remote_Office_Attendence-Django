@@ -2,10 +2,10 @@
 {% block title %}Attendance Detail | FieldTrack Admin{% endblock %}
 {% block page_title %}Attendance Detail{% endblock %}
 {% block content %}
-<div class="p-8 max-w-5xl mx-auto space-y-8">
+<div class="p-4 max-w-5xl mx-auto space-y-4">
     <div class="flex justify-between items-center">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Attendance Detail Overview</h1>
+            <h1 class="text-[14px] font-semibold text-gray-900">Attendance Detail Overview</h1>
             <p class="text-xs text-gray-500 mt-1">Detailed check-in logs and tracking history for {{ attendance.employee.full_name }} on {{ attendance.date }}.</p>
         </div>
         <a href="{% url 'admin_panel:attendance_list' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">

@@ -26,6 +26,13 @@ class Attendance(models.Model):
     )
 
     employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name='attendances')
+    project = models.ForeignKey(
+        'projects.Project',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='attendances'
+    )
     date = models.DateField()
     check_in_time = models.DateTimeField(null=True, blank=True)
     check_out_time = models.DateTimeField(null=True, blank=True)

@@ -4,11 +4,11 @@
 {% block page_title %}Leave Types{% endblock %}
 
 {% block content %}
-<div class="p-8 max-w-4xl mx-auto">
+<div class="p-4 max-w-4xl mx-auto">
     <!-- Header -->
     <div class="flex items-center justify-between gap-4 mb-8">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Leave Types</h1>
+            <h1 class="text-[14px] font-semibold text-gray-900">Leave Types</h1>
             <p class="text-sm text-gray-500 mt-1">Configure leave types and their default days allowed per year.</p>
         </div>
         <a href="{% url 'leave:admin_leave_type_add' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
@@ -17,15 +17,7 @@
         </a>
     </div>
 
-    <!-- Alert Messages -->
-    {% if messages %}
-    {% for message in messages %}
-    <div class="mb-6 p-4 {% if message.tags == 'success' %}bg-green-50 border-green-200 text-green-700{% else %}bg-red-50 border-red-200 text-red-700{% endif %} border rounded-xl flex items-center gap-3">
-        <i data-lucide="{% if message.tags == 'success' %}check-circle{% else %}alert-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
-        <p class="text-sm font-medium">{{ message }}</p>
-    </div>
-    {% endfor %}
-    {% endif %}
+
 
     <!-- Leave Types Card -->
     <div class="bg-white rounded-2xl border border-gray-150 shadow-sm overflow-hidden">

@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Initialize environment variables
 env = environ.Env(
-    DEBUG=(bool, True)
+    DEBUG=(bool, False)
 )
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
@@ -17,7 +17,7 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-placehojkbkj-ssdfsadflde
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
 CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://trackme.signtechlimited.com"]
 

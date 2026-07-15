@@ -55,3 +55,33 @@ Always build the minified production stylesheet to bundle only used utility clas
 python manage.py tailwind build
 python manage.py collectstatic --no-input
 ```
+
+## 7. HVAC Projects Module
+
+Administrators can track complex HVAC project lifecycles, task scheduling, manpower deployment, materials logs, and project sign-offs.
+
+### 7.1 Creating a Project
+1. Navigate to the **Projects** tab in the sidebar.
+2. Click **Add Project** in the upper right.
+3. Fill in details: project name, client name, consultant, main contractor, system type, capacity (TR), location, and start date.
+4. Optionally assign a **Branch**, **Project Manager**, and/or **Site Engineer** from active employee profiles.
+5. Click **Create Project**.
+
+### 7.2 Creating and Applying Task Templates
+- **Managing Templates**: Go to the **Task Templates** tab from the Projects dropdown to create or edit reusable task lists.
+- **Applying a Template**:
+  1. Open a project detail page.
+  2. Select a template from the **Apply Template** dropdown and click **Apply**.
+  3. **Note**: Applying a template sequential-schedules tasks using each task's `default_duration_days` starting from the project's start date, skipping weekends automatically. Any existing tasks will be replaced.
+
+### 7.3 Logging Project Activities & Logs
+On the project detail page, administrators can update the following:
+- **Project Tasks Checklist**: Check off tasks, edit plans, assign individuals, or delete steps.
+- **Daily Progress Logs**: Log daily supervisor names, planned vs. completed work, manpower counts, and delay reasons.
+- **Manpower Deployment**: Define required trades and counts for specific dates. Click **Auto-fill** to dynamically count actual check-ins from employees checking in via the FieldTrack attendance scanner on-site.
+- **Material Tracking**: Track project materials, total required quantity, received quantity, and balance. Use the **Quick Add** input to quickly increment received quantities.
+
+### 7.4 Project Sign-off & PDF Export
+- **Sign-off Blocks**: At the bottom of the project page, authorized parties (Project Manager, Site Engineer, Consultant, Client Representative) can register their sign-offs.
+- **Export PDF Work Plan Sheet**: Click the **Export Work Plan Sheet (PDF)** button at the top of the project detail page to download a clean, production-ready, styled PDF summarizing the current status, tasks checklist, progress logs, manpower requirements, materials list, and sign-offs.
+

@@ -92,4 +92,65 @@ class EmployeeProfileTests(TestCase):
         self.assertIn(saved_profile.department, [None, ''])
         self.assertIn(saved_profile.designation, [None, ''])
 
+    def test_invalid_profile_photo_type(self):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        # Create a valid BMP image (which is not in our allowed types: jpeg, png, webp)
+        file_obj = BytesIO()
+        image = Image.new("RGBA", size=(1, 1), color=(0, 0, 0, 0))
+        image.save(file_obj, "bmp")
+        file_obj.seek(0)
+        invalid_file = SimpleUploadedFile("test.bmp", file_obj.read(), content_type="image/bmp")
+        
+        form_data = {
+            'employee_id': 'EMP-2026-999',
+            'full_name': 'John Doe',
+            'branch': self.branch.id,
+            'phone': '+8801799999999',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'role': 'staff',
+            'password1': self.password,
+            'password2': self.password,
+        }
+        form = EmployeeCreateForm(data=form_data, files={'profile_photo': invalid_file})
+        self.assertFalse(form.is_valid())
+        self.assertIn('profile_photo', form.errors)
+        self.assertIn('Invalid file type', form.errors['profile_photo'][0])
+
+    def test_large_profile_photo(self):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        # Create a valid PNG image and pad it to be 6MB
+        file_obj = BytesIO()
+        image = Image.new("RGBA", size=(1, 1), color=(0, 0, 0, 0))
+        image.save(file_obj, "png")
+        file_obj.seek(0)
+        img_bytes = file_obj.read()
+        padded_bytes = img_bytes + b"0" * (6 * 1024 * 1024 - len(img_bytes))
+        large_file = SimpleUploadedFile("test.png", padded_bytes, content_type="image/png")
+        
+        form_data = {
+            'employee_id': 'EMP-2026-999',
+            'full_name': 'John Doe',
+            'branch': self.branch.id,
+            'phone': '+8801799999999',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'role': 'staff',
+            'password1': self.password,
+            'password2': self.password,
+        }
+        form = EmployeeCreateForm(data=form_data, files={'profile_photo': large_file})
+        self.assertFalse(form.is_valid())
+        self.assertIn('profile_photo', form.errors)
+        self.assertIn('File too large', form.errors['profile_photo'][0])
+
+
 

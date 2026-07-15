@@ -104,6 +104,17 @@ class EmployeeCreateForm(forms.ModelForm):
                 raise forms.ValidationError("A user with this phone number already exists.")
         return phone
 
+    def clean_profile_photo(self):
+        photo = self.cleaned_data.get('profile_photo')
+        if photo:
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            content_type = getattr(photo, 'content_type', '')
+            if content_type and content_type not in allowed_types:
+                raise forms.ValidationError("Invalid file type. Only JPEG, PNG, and WEBP images are allowed.")
+            if photo.size > 5 * 1024 * 1024:
+                raise forms.ValidationError("File too large. Profile photo must be less than 5MB.")
+        return photo
+
     def clean(self):
         cleaned_data = super().clean()
         password1 = cleaned_data.get('password1')
@@ -184,6 +195,17 @@ class EmployeeEditForm(forms.ModelForm):
             if qs_user.exists():
                 raise forms.ValidationError("A user with this phone number already exists.")
         return phone
+
+    def clean_profile_photo(self):
+        photo = self.cleaned_data.get('profile_photo')
+        if photo:
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            content_type = getattr(photo, 'content_type', '')
+            if content_type and content_type not in allowed_types:
+                raise forms.ValidationError("Invalid file type. Only JPEG, PNG, and WEBP images are allowed.")
+            if photo.size > 5 * 1024 * 1024:
+                raise forms.ValidationError("File too large. Profile photo must be less than 5MB.")
+        return photo
 
     def clean(self):
         cleaned_data = super().clean()

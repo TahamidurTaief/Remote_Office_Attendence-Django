@@ -79,3 +79,29 @@ class AuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, '/staff/home/')
 
+    def test_login_rate_limiting(self):
+        from django.core.cache import cache
+        cache.clear()
+        
+        # Post 5 invalid logins
+        for _ in range(5):
+            response = self.client.post(reverse('accounts:login'), {
+                'email': 'user_both@example.com',
+                'password': 'wrongpassword'
+            })
+            self.assertEqual(response.status_code, 200)
+            
+        # 6th post should be rate limited immediately (even with correct password)
+        response = self.client.post(reverse('accounts:login'), {
+            'email': 'user_both@example.com',
+            'password': self.password
+        })
+        self.assertEqual(response.status_code, 200)
+        
+        from django.contrib.messages import get_messages
+        messages_list = list(get_messages(response.wsgi_request))
+        self.assertTrue(any('Too many login attempts' in str(m) for m in messages_list))
+        
+        cache.clear()
+
+
