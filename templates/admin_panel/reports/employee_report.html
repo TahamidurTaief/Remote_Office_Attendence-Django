@@ -265,7 +265,7 @@
                     {% for row in table_rows %}
                     <tr class="{% if row.status == 'absent' %}bg-red-50{% elif row.status == 'on_leave' %}bg-blue-50/50{% elif row.is_late %}bg-amber-50{% elif row.is_weekend %}bg-gray-100{% else %}hover:bg-gray-50{% endif %} transition-colors">
                         <td class="px-4 py-2.5 font-medium {% if row.is_weekend %}text-gray-400{% else %}text-gray-900{% endif %}">
-                            {{ row.date|date:"Y-m-d" }}
+                            {{ row.date|date:"d/m/Y" }}
                         </td>
                         <td class="px-4 py-2.5 font-medium {% if row.is_weekend %}text-gray-400{% else %}text-gray-700{% endif %}">
                             {{ row.date|date:"D" }}

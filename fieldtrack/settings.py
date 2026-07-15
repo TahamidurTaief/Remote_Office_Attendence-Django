@@ -126,6 +126,13 @@ TIME_ZONE = 'Asia/Dhaka'  # Bangladesh Standard Time (UTC+6)
 USE_I18N = True
 USE_TZ = True
 
+# Global Date and Datetime formats (d/m/y)
+USE_L10N = False
+DATE_FORMAT = 'd/m/Y'
+SHORT_DATE_FORMAT = 'd/m/Y'
+DATETIME_FORMAT = 'd/m/Y g:i A'
+SHORT_DATETIME_FORMAT = 'd/m/Y g:i A'
+
 # URL Configuration
 APPEND_SLASH = True
 

@@ -14,12 +14,38 @@
                 isDisabled: false,
 
                 init() {
-                    this.options = this.$root._options || [];
-                    this.selectedValue = this.$root._value || '';
-                    this.placeholder = this.$root._placeholder || 'Select...';
-                    this.targetId = this.$root._targetId || '';
-                    this.targetName = this.$root._targetName || '';
-                    this.isDisabled = this.$root._disabled || false;
+                    const container = this.$root.closest('.custom-dropdown-container');
+                    const selectEl = container ? container.previousElementSibling : null;
+                    
+                    if (selectEl && selectEl.tagName === 'SELECT') {
+                        this.targetId = selectEl.id || '';
+                        this.targetName = selectEl.name || '';
+                        this.isDisabled = selectEl.disabled;
+                        this.placeholder = selectEl.getAttribute('placeholder') || 'Select...';
+                        
+                        this.loadOptions(selectEl);
+                        this.selectedValue = selectEl.value;
+                        
+                        // Sync when original select value changes programmatically
+                        this.changeHandler = () => {
+                            if (this.selectedValue !== selectEl.value) {
+                                this.selectedValue = selectEl.value;
+                            }
+                        };
+                        selectEl.addEventListener('change', this.changeHandler);
+                        
+                        // Watch for disabled attribute change or child option changes
+                        this.observer = new MutationObserver((mutations) => {
+                            this.loadOptions(selectEl);
+                            this.selectedValue = selectEl.value;
+                            this.isDisabled = selectEl.disabled;
+                        });
+                        this.observer.observe(selectEl, {
+                            childList: true,
+                            attributes: true,
+                            attributeFilter: ['disabled']
+                        });
+                    }
 
                     // Watch the 'open' state to dynamically raise the z-index stack when expanded
                     this.$watch('open', value => {
@@ -37,6 +63,13 @@
                     });
                 },
 
+                loadOptions(selectEl) {
+                    this.options = Array.from(selectEl.options).map(opt => ({
+                        value: opt.value,
+                        text: opt.textContent.trim()
+                    }));
+                },
+
                 get selectedText() {
                     const opt = this.options.find(o => o.value === this.selectedValue);
                     return opt ? opt.text : this.placeholder;
@@ -49,13 +82,25 @@
 
                 select(val) {
                     this.selectedValue = val;
-                    const sel = document.getElementById(this.targetId) || document.getElementsByName(this.targetName)[0];
-                    if (sel) {
-                        sel.value = val;
-                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    const container = this.$root.closest('.custom-dropdown-container');
+                    const selectEl = container ? container.previousElementSibling : null;
+                    if (selectEl) {
+                        selectEl.value = val;
+                        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                     this.open = false;
                     this.search = '';
+                },
+                
+                destroy() {
+                    const container = this.$root.closest('.custom-dropdown-container');
+                    const selectEl = container ? container.previousElementSibling : null;
+                    if (selectEl && this.changeHandler) {
+                        selectEl.removeEventListener('change', this.changeHandler);
+                    }
+                    if (this.observer) {
+                        this.observer.disconnect();
+                    }
                 }
             }));
         }
@@ -77,16 +122,6 @@
         // Hide the original select
         selectEl.style.setProperty('display', 'none', 'important');
         
-        // Get all options
-        const getOptionsData = () => {
-            return Array.from(selectEl.options).map(opt => ({
-                value: opt.value,
-                text: opt.textContent.trim(),
-                selected: opt.selected
-            }));
-        };
-
-        const options = getOptionsData();
         const name = selectEl.name || '';
         const id = selectEl.id || '';
         const placeholder = selectEl.getAttribute('placeholder') || 'Select...';
@@ -108,23 +143,15 @@
             cls.startsWith('col-') ||
             cls.startsWith('row-') ||
             cls.startsWith('grid-') ||
-            cls === 'block' ||
-            cls === 'inline-block' ||
-            cls === 'hidden'
+            cls.startsWith('block') ||
+            cls.startsWith('inline-block') ||
+            cls.startsWith('hidden')
         );
         if (layoutClasses.length) {
             wrapper.classList.add(...layoutClasses);
         }
         
-        // Store properties directly on the DOM element wrapper to be consumed by Alpine.data
-        wrapper._options = options;
-        wrapper._value = selectEl.value;
-        wrapper._placeholder = placeholder;
-        wrapper._targetId = id;
-        wrapper._targetName = name;
-        wrapper._disabled = selectEl.disabled;
-        
-        // Custom Dropdown HTML Template (extremely clean, no HTML parser breaks)
+        // Custom Dropdown HTML Template
         wrapper.innerHTML = `
             <div x-data="customDropdown" @click.away="open = false" class="w-full relative">
                 
@@ -136,7 +163,7 @@
                     <span x-text="selectedText" class="truncate"></span>
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                          class="text-gray-400 shrink-0 ml-1.5 transition-transform duration-200" :class="open ? 'transform rotate-180' : ''">
-                        <path d="m6 9 6 6 6-6"/>
+                         <path d="m6 9 6 6 6-6"/>
                     </svg>
                 </button>
                 
@@ -151,7 +178,7 @@
                      class="absolute z-[999] mt-1 w-full bg-white border border-gray-150 rounded-lg shadow-lg max-h-60 overflow-hidden flex flex-col" 
                      x-cloak>
                     
-                    <!-- Search Input Box (Google/Apple Minimalist) -->
+                    <!-- Search Input Box -->
                     <div class="px-2 py-1.5 border-b border-gray-100 bg-white shrink-0" @click.stop>
                         <div class="flex items-center gap-1.5 bg-[#F2F2F7] rounded px-2 py-1">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 shrink-0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -180,49 +207,6 @@
         
         // Insert custom dropdown adjacent to original select
         selectEl.parentNode.insertBefore(wrapper, selectEl.nextSibling);
-        
-        // Start MutationObserver to sync dynamically modified options or state
-        const observer = new MutationObserver((mutationsList) => {
-            const alpineEl = wrapper.querySelector('[x-data]');
-            if (!alpineEl || !window.Alpine) return;
-            
-            const data = window.Alpine.$data(alpineEl);
-            if (!data) return;
-            
-            let shouldUpdateOptions = false;
-            let shouldUpdateDisabled = false;
-            
-            for (const mutation of mutationsList) {
-                if (mutation.type === 'childList') {
-                    shouldUpdateOptions = true;
-                } else if (mutation.type === 'attributes') {
-                    if (mutation.attributeName === 'disabled') {
-                        shouldUpdateDisabled = true;
-                    } else if (mutation.attributeName === 'value') {
-                        if (data.selectedValue !== selectEl.value) {
-                            data.selectedValue = selectEl.value;
-                        }
-                    }
-                }
-            }
-            
-            if (shouldUpdateOptions) {
-                const newOpts = getOptionsData();
-                wrapper._options = newOpts;
-                data.options = newOpts;
-                data.selectedValue = selectEl.value;
-            }
-            if (shouldUpdateDisabled) {
-                wrapper._disabled = selectEl.disabled;
-                data.isDisabled = selectEl.disabled;
-            }
-        });
-        
-        observer.observe(selectEl, {
-            childList: true,
-            attributes: true,
-            attributeFilter: ['disabled', 'value']
-        });
     }
 
     function initCustomDropdowns() {

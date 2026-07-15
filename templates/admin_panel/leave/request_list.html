@@ -120,8 +120,8 @@
                         <!-- Duration -->
                         <td class="px-6 py-2.5 whitespace-nowrap">
                             <div class="text-xs">
-                                <p class="font-medium text-gray-900">{{ req.start_date|date:"M d, Y" }}</p>
-                                <p class="text-gray-450">to {{ req.end_date|date:"M d, Y" }}</p>
+                                <p class="font-medium text-gray-900">{{ req.start_date|date:"d/m/Y" }}</p>
+                                <p class="text-gray-450">to {{ req.end_date|date:"d/m/Y" }}</p>
                             </div>
                         </td>
                         <!-- Days -->
@@ -169,14 +169,14 @@
                                             employeeId: '{{ req.employee.employee_id|escapejs }}',
                                             photoUrl: '{% if req.employee.profile_photo %}{{ req.employee.profile_photo.url|escapejs }}{% endif %}',
                                             leaveType: '{{ req.leave_type.name|escapejs }}',
-                                            startDate: '{{ req.start_date|date:"F d, Y"|escapejs }}',
-                                            endDate: '{{ req.end_date|date:"F d, Y"|escapejs }}',
+                                            startDate: '{{ req.start_date|date:"d/m/Y"|escapejs }}',
+                                            endDate: '{{ req.end_date|date:"d/m/Y"|escapejs }}',
                                             days: '{{ req.number_of_days|escapejs }}',
                                             reason: '{{ req.reason|escapejs }}',
                                             status: '{{ req.status|escapejs }}',
-                                            requestedAt: '{{ req.requested_at|date:"M d, Y, I:i A"|escapejs }}',
+                                            requestedAt: '{{ req.requested_at|date:"d/m/Y g:i A"|escapejs }}',
                                             reviewedBy: '{% if req.reviewed_by %}{{ req.reviewed_by.email|default:req.reviewed_by.phone|escapejs }}{% endif %}',
-                                            reviewedAt: '{% if req.reviewed_at %}{{ req.reviewed_at|date:"M d, Y, I:i A"|escapejs }}{% endif %}'
+                                            reviewedAt: '{% if req.reviewed_at %}{{ req.reviewed_at|date:"d/m/Y g:i A"|escapejs }}{% endif %}'
                                         })"
                                         class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-primary-500 rounded-lg transition-colors inline-flex items-center justify-center"
                                         title="View Leave Details">
@@ -200,7 +200,7 @@
                                 {% else %}
                                 <span class="text-gray-400 text-xs mr-2">
                                     Processed by {% if req.reviewed_by %}{{ req.reviewed_by.email|default:req.reviewed_by.phone }}{% else %}System{% endif %}
-                                    {% if req.reviewed_at %} on {{ req.reviewed_at|date:"M d, Y" }}{% endif %}
+                                    {% if req.reviewed_at %} on {{ req.reviewed_at|date:"d/m/Y" }}{% endif %}
                                 </span>
                                 {% endif %}
                                 <a href="{% url 'leave:reschedule_request' req.pk %}" class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary-gradient hover:opacity-90 text-white rounded-lg transition-colors shadow-sm font-semibold">

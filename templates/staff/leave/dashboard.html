@@ -105,7 +105,7 @@
                         </span>
                     </div>
                     <p class="text-sm font-medium text-gray-800">
-                        {{ req.start_date|date:"M d, Y" }} to {{ req.end_date|date:"M d, Y" }}
+                        {{ req.start_date|date:"d/m/Y" }} to {{ req.end_date|date:"d/m/Y" }}
                     </p>
                     <p class="text-xs text-gray-500 mt-1 max-w-lg italic">
                         "{{ req.reason }}"
@@ -114,7 +114,7 @@
                 
                 <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                     <span class="text-[11px] text-gray-400">
-                        Requested: {{ req.requested_at|date:"M d, Y" }}
+                        Requested: {{ req.requested_at|date:"d/m/Y" }}
                     </span>
                     
                     {% if req.status == 'pending' %}

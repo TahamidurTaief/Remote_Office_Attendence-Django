@@ -100,7 +100,7 @@
         </div>
     </div>
     <p class="text-4xl font-bold mb-1" id="live-time">{{ now|time:"h:i A" }}</p>
-    <p class="text-slate-400 text-sm mb-6" id="live-date">{{ now|date:"l, F j, Y" }}</p>
+    <p class="text-slate-400 text-sm mb-6" id="live-date">{{ now|date:"d/m/Y" }}</p>
     <p class="text-slate-300 text-sm mb-4">You haven't checked in yet</p>
     <a href="{% url 'staff:check_in' %}" class="block w-full py-2.5 px-4 bg-green-500 hover:bg-green-400 text-white font-bold text-center rounded-xl transition-colors text-lg whitespace-nowrap min-w-fit">
         Check In

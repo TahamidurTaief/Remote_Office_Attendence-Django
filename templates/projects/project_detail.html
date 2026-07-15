@@ -150,12 +150,12 @@
                 <div class="space-y-1.5 text-[12px] text-gray-600">
                     <div class="flex justify-between">
                         <span class="text-gray-400 font-medium">Start Date:</span>
-                        <span class="font-semibold text-gray-800">{{ project.start_date|date:"M d, Y" }}</span>
+                        <span class="font-semibold text-gray-800">{{ project.start_date|date:"d/m/Y" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-gray-400 font-medium">Completion:</span>
                         <span class="font-semibold text-gray-800">
-                            {% if project.completion_date %}{{ project.completion_date|date:"M d, Y" }}{% else %}<span class="text-gray-400 italic">Ongoing</span>{% endif %}
+                            {% if project.completion_date %}{{ project.completion_date|date:"d/m/Y" }}{% else %}<span class="text-gray-400 italic">Ongoing</span>{% endif %}
                         </span>
                     </div>
                 </div>
@@ -225,8 +225,8 @@
                         </td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-700">
                             {% if task.planned_start %}
-                            <div><span class="text-gray-400 font-semibold uppercase text-[10px]">Start:</span> {{ task.planned_start|date:"M d, Y" }}</div>
-                            <div><span class="text-gray-400 font-semibold uppercase text-[10px]">End:</span> {{ task.planned_finish|date:"M d, Y" }}</div>
+                            <div><span class="text-gray-400 font-semibold uppercase text-[10px]">Start:</span> {{ task.planned_start|date:"d/m/Y" }}</div>
+                            <div><span class="text-gray-400 font-semibold uppercase text-[10px]">End:</span> {{ task.planned_finish|date:"d/m/Y" }}</div>
                             {% else %}
                             <span class="text-gray-400 italic text-[11px]">Not scheduled</span>
                             {% endif %}
@@ -277,7 +277,7 @@
                     <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 text-[12px]">
                         <div class="flex justify-between items-start gap-2 mb-2">
                             <div>
-                                <span class="font-bold text-gray-900">{{ log.date|date:"M d, Y" }}</span>
+                                <span class="font-bold text-gray-900">{{ log.date|date:"d/m/Y" }}</span>
                                 <span class="text-gray-400 mx-1.5">•</span>
                                 <span class="text-gray-500">Supervisor: <strong class="text-gray-700">{{ log.supervisor_name }}</strong></span>
                                 {% if log.manpower_count %}
@@ -312,7 +312,7 @@
                         {% endif %}
                         <div class="mt-2 text-[10px] text-gray-400 flex items-center justify-between">
                             <span>Logged by: {{ log.logged_by.email|default:"System" }}</span>
-                            <span>Created: {{ log.created_at|date:"M d, Y H:i" }}</span>
+                            <span>Created: {{ log.created_at|date:"d/m/Y H:i" }}</span>
                         </div>
                     </div>
                     {% empty %}
@@ -392,7 +392,7 @@
                         <tbody class="bg-white divide-y divide-gray-100">
                             {% for log in manpower_logs %}
                             <tr class="hover:bg-gray-50/70 transition-colors text-[12px]">
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">{{ log.date|date:"M d, Y" }}</td>
+                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">{{ log.date|date:"d/m/Y" }}</td>
                                 <td class="px-4 py-2.5 whitespace-nowrap text-gray-800 font-semibold">{{ log.trade }}</td>
                                 <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">{{ log.required_count }}</td>
                                 <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">
@@ -596,7 +596,7 @@
                             <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
                             <div>
                                 <p class="text-[12px] font-semibold">{{ sign_off.project_manager_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.project_manager_signed_at|date:"M d, Y I:M A" }}</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.project_manager_signed_at|date:"d/m/Y h:i A" }}</p>
                             </div>
                         </div>
                         {% else %}
@@ -621,7 +621,7 @@
                             <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
                             <div>
                                 <p class="text-[12px] font-semibold">{{ sign_off.site_engineer_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.site_engineer_signed_at|date:"M d, Y I:M A" }}</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.site_engineer_signed_at|date:"d/m/Y h:i A" }}</p>
                             </div>
                         </div>
                         {% else %}
@@ -646,7 +646,7 @@
                             <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
                             <div>
                                 <p class="text-[12px] font-semibold">{{ sign_off.consultant_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.consultant_signed_at|date:"M d, Y I:M A" }}</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.consultant_signed_at|date:"d/m/Y h:i A" }}</p>
                             </div>
                         </div>
                         {% else %}
@@ -671,7 +671,7 @@
                             <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
                             <div>
                                 <p class="text-[12px] font-semibold">{{ sign_off.client_representative_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.client_representative_signed_at|date:"M d, Y I:M A" }}</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.client_representative_signed_at|date:"d/m/Y h:i A" }}</p>
                             </div>
                         </div>
                         {% else %}

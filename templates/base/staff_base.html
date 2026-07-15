@@ -193,16 +193,16 @@
         }
         /* Unified Form Fields Styling */
         input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="time"], input[type="number"], input[type="tel"], select, textarea {
-            width: 100% !important;
-            padding: 0.375rem 0.625rem !important; /* py-1.5 px-2.5 */
-            border: 1px solid #E5E7EB !important;
-            border-radius: 0.25rem !important; /* rounded-md */
-            font-size: 12px !important; /* text-[12px] */
-            color: #1F2937 !important;
-            background-color: #FFFFFF !important;
-            transition: all 0.2s ease-in-out !important;
-            outline: none !important;
-            box-shadow: none !important;
+            width: 100%;
+            padding: 0.375rem 0.625rem; /* py-1.5 px-2.5 */
+            border: 1px solid #E5E7EB;
+            border-radius: 0.25rem; /* rounded-md */
+            font-size: 12px; /* text-[12px] */
+            color: #1F2937;
+            background-color: #FFFFFF;
+            transition: all 0.2s ease-in-out;
+            outline: none;
+            box-shadow: none;
         }
         select {
             /* Remove native select styles */
@@ -225,8 +225,8 @@
             -moz-appearance: textfield;
         }
         input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="date"]:focus, input[type="time"]:focus, input[type="number"]:focus, input[type="tel"]:focus, select:focus, textarea:focus {
-            border-color: #0B5FA5 !important;
-            box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.12) !important;
+            border-color: #0B5FA5;
+            box-shadow: 0 0 0 3px rgba(11, 95, 165, 0.12);
         }
         input[type="checkbox"] {
             border-radius: 0.25rem !important;
@@ -236,10 +236,10 @@
         /* Content area gradient background */
         .ft-content-bg {
             background:
-                radial-gradient(ellipse at top left,    rgba(186,230,253,0.10) 0%, transparent 60%),
-                radial-gradient(ellipse at top right,   rgba(254,243,199,0.09) 0%, transparent 60%),
-                radial-gradient(ellipse at bottom left, rgba(187,247,208,0.09) 0%, transparent 60%),
-                radial-gradient(ellipse at bottom right,rgba(254,215,170,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at top left,    rgba(186,230,253,0.30) 0%, transparent 60%),
+                radial-gradient(ellipse at top right,   rgba(254,243,199,0.25) 0%, transparent 60%),
+                radial-gradient(ellipse at bottom left, rgba(187,247,208,0.25) 0%, transparent 60%),
+                radial-gradient(ellipse at bottom right,rgba(254,215,170,0.20) 0%, transparent 60%),
                 #f9fafb !important;
         }
 
@@ -331,6 +331,11 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <link rel="apple-touch-icon" sizes="152x152" href="/static/icons/icon-152.png">
 
+    <!-- Google Fonts (Share Tech Mono) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
     {% block head %}{% endblock %}
 </head>
 <body class="bg-slate-50 bg-soft-gradient ft-content-bg" x-data="{ muted: localStorage.getItem('sound_muted') === 'true' }">
@@ -342,9 +347,6 @@
     <!-- Logo -->
     <div class="flex items-center justify-between h-16 px-4 border-b border-gray-150 bg-white">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-primary-gradient rounded-lg flex items-center justify-center shadow-sm">
-          <i data-lucide="clock" class="w-4 h-4 text-white"></i>
-        </div>
         <img src="{% static 'main_logo.jpg' %}" 
              alt="FieldTrack" 
              class="h-8 w-auto object-contain"
@@ -452,17 +454,26 @@
         {{ request.user.employeeprofile.branch.name }}
       </span>
 
+      <!-- Live Calendar & Clock -->
+      <div class="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-gray-600">
+          <div class="flex items-center gap-1.5">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 text-primary-500"></i>
+              <span id="nav-date" class="text-[11px] font-semibold text-gray-700"></span>
+          </div>
+          <div class="h-3 w-px bg-gray-200"></div>
+          <div class="flex items-center gap-1.5">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-primary-500 animate-pulse"></i>
+              <span id="nav-time" class="text-[11px] font-semibold text-gray-700" style="font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 0.5px;"></span>
+          </div>
+      </div>
+
       <!-- Mute Toggle -->
       <button type="button" 
-              @click="muted = SoundFX.toggleMute(); $nextTick(() => { if(window.lucide) window.lucide.createIcons() })" 
+              @click="muted = SoundFX.toggleMute();" 
               class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 flex items-center justify-center"
               title="Toggle sound">
-          <template x-if="!muted">
-              <i data-lucide="volume-2" class="w-4 h-4"></i>
-          </template>
-          <template x-if="muted">
-              <i data-lucide="volume-x" class="w-4 h-4"></i>
-          </template>
+          <i data-lucide="volume-2" class="w-4 h-4" x-show="!muted"></i>
+          <i data-lucide="volume-x" class="w-4 h-4" x-show="muted" x-cloak></i>
       </button>
 
       <div class="w-8 h-8 rounded-full bg-primary-gradient flex items-center justify-center text-white text-sm font-semibold shadow-sm">
@@ -790,6 +801,46 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+</script>
+
+<script>
+    function startNavbarClock() {
+        const dateEl = document.getElementById('nav-date');
+        const timeEl = document.getElementById('nav-time');
+        
+        function update() {
+            const now = new Date();
+            
+            // Format: d/m/y
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const year = now.getFullYear();
+            if (dateEl) {
+                dateEl.textContent = `${day}/${month}/${year}`;
+            }
+            
+            // Format: hh:mm:ss AM/PM
+            if (timeEl) {
+                let hours = now.getHours();
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // the hour '0' should be '12'
+                const strHours = String(hours).padStart(2, '0');
+                timeEl.textContent = `${strHours}:${minutes}:${seconds} ${ampm}`;
+            }
+        }
+        
+        update();
+        setInterval(update, 1000);
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startNavbarClock);
+    } else {
+        startNavbarClock();
+    }
 </script>
 
 <!-- Django Messages Integration Trigger -->

@@ -214,7 +214,7 @@
                         <tbody class="bg-white divide-y divide-gray-200">
                             {% for record in recent_attendance %}
                             <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-900 font-semibold">{{ record.date|date:"Y-m-d" }}</td>
+                                <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-900 font-semibold">{{ record.date|date:"d/m/Y" }}</td>
                                 <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500 font-medium">{{ record.check_in_time|time:"h:i A"|default:"-" }}</td>
                                 <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500 font-medium">{{ record.check_out_time|time:"h:i A"|default:"-" }}</td>
                                 <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">

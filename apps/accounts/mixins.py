@@ -12,7 +12,7 @@ class RoleRequiredMixin(AccessMixin):
             # Redirect to their appropriate dashboard if wrong role
             if request.user.role == 'admin':
                 return redirect('/admin-panel/dashboard/')
-            elif request.user.role == 'staff':
+            elif request.user.role in ['staff', 'manager']:
                 return redirect('/staff/home/')
             return redirect('/login/')
             
@@ -22,4 +22,4 @@ class AdminRequiredMixin(RoleRequiredMixin):
     allowed_roles = ['admin']
 
 class StaffRequiredMixin(RoleRequiredMixin):
-    allowed_roles = ['staff']
+    allowed_roles = ['staff', 'manager']

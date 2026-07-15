@@ -8,7 +8,7 @@ from apps.employees.models import EmployeeProfile
 
 
 def check_staff_role(user):
-    return user.is_authenticated and user.role == 'staff'
+    return user.is_authenticated and user.role in ['staff', 'manager']
 
 
 @login_required

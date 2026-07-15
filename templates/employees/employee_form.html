@@ -26,19 +26,19 @@
             {% endif %}
 
             <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                <!-- If create view, show email and role -->
+                <!-- If create view, show email -->
                 {% if not object %}
                 <div class="sm:col-span-3">
                     <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-gray-700">Email Address (Optional)</label>
                     <div class="mt-1">{{ form.email }}</div>
                     {% if form.email.errors %}<p class="mt-2 text-sm text-red-600">{{ form.email.errors.0 }}</p>{% endif %}
                 </div>
+                {% endif %}
                 <div class="sm:col-span-3">
                     <label for="{{ form.role.id_for_label }}" class="block text-sm font-medium text-gray-700">System Role</label>
                     <div class="mt-1">{{ form.role }}</div>
                     {% if form.role.errors %}<p class="mt-2 text-sm text-red-600">{{ form.role.errors.0 }}</p>{% endif %}
                 </div>
-                {% endif %}
 
                 <div class="sm:col-span-3">
                     <label for="{{ form.employee_id.id_for_label }}" class="block text-sm font-medium text-gray-700">Employee ID</label>
@@ -223,7 +223,9 @@
                             <p class="text-[10px] text-gray-400 uppercase tracking-wider">{{ item.category }} (Global Default: {{ item.default_days }}d)</p>
                         </div>
                         <div class="w-28 shrink-0 relative">
-                            <input type="number" 
+                            <label for="leave_override_{{ item.id }}" class="sr-only">Override Days for {{ item.name }}</label>
+                            <input id="leave_override_{{ item.id }}"
+                                   type="number" 
                                    name="leave_override_{{ item.id }}" 
                                    value="{{ item.override_days }}"
                                    placeholder="{{ item.default_days }}"

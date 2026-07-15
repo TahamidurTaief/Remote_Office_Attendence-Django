@@ -71,7 +71,7 @@ class EmployeeCreateView(AdminRequiredMixin, CreateView):
                 'name': lt.name,
                 'category': lt.category,
                 'default_days': lt.default_days_per_year,
-                'override_days': ''
+                'override_days': self.request.POST.get(f'leave_override_{lt.id}', '') if self.request.method == 'POST' else ''
             }
             for lt in leave_types
         ]
@@ -130,21 +130,32 @@ class EmployeeEditView(AdminRequiredMixin, UpdateView):
         from .models import EmployeeLeaveRule
         leave_types = LeaveType.objects.all().order_by('name')
         
-        overrides = {
-            rule.leave_type_id: rule.days_per_year 
-            for rule in EmployeeLeaveRule.objects.filter(employee=self.object)
-        }
-        
-        context['leave_types_with_overrides'] = [
-            {
-                'id': lt.id,
-                'name': lt.name,
-                'category': lt.category,
-                'default_days': lt.default_days_per_year,
-                'override_days': overrides.get(lt.id, '')
+        if self.request.method == 'POST':
+            context['leave_types_with_overrides'] = [
+                {
+                    'id': lt.id,
+                    'name': lt.name,
+                    'category': lt.category,
+                    'default_days': lt.default_days_per_year,
+                    'override_days': self.request.POST.get(f'leave_override_{lt.id}', '')
+                }
+                for lt in leave_types
+            ]
+        else:
+            overrides = {
+                rule.leave_type_id: rule.days_per_year 
+                for rule in EmployeeLeaveRule.objects.filter(employee=self.object)
             }
-            for lt in leave_types
-        ]
+            context['leave_types_with_overrides'] = [
+                {
+                    'id': lt.id,
+                    'name': lt.name,
+                    'category': lt.category,
+                    'default_days': lt.default_days_per_year,
+                    'override_days': overrides.get(lt.id, '')
+                }
+                for lt in leave_types
+            ]
         return context
 
     def form_valid(self, form):

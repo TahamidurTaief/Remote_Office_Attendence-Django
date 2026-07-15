@@ -48,7 +48,7 @@ class CustomLoginView(View):
     def redirect_based_on_role(self, user):
         if user.role == 'admin':
             return redirect('/admin-panel/dashboard/')
-        elif user.role == 'staff':
+        elif user.role in ['staff', 'manager']:
             return redirect('/staff/home/')
         return redirect('/')
 

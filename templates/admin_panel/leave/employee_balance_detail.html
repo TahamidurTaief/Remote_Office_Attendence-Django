@@ -28,7 +28,7 @@
                 <h1 class="text-[14px] font-semibold text-gray-900">{{ employee.full_name }}</h1>
                 <p class="text-sm text-primary-500 font-semibold mt-1">{{ employee.employee_id }}</p>
                 <p class="text-sm text-gray-550 mt-1">{{ employee.designation|default:"Staff" }} • {{ employee.department|default:"Unassigned" }}</p>
-                <p class="text-xs text-gray-400 mt-2">Joined Date: {{ employee.joined_date|date:"F d, Y" }}</p>
+                <p class="text-xs text-gray-400 mt-2">Joined Date: {{ employee.joined_date|date:"d/m/Y" }}</p>
             </div>
         </div>
     </div>
@@ -136,8 +136,8 @@
                                 </td>
                                 <td class="px-6 py-2.5 whitespace-nowrap">
                                     <div class="text-xs">
-                                        <p class="font-medium text-gray-800">{{ req.start_date|date:"M d, Y" }}</p>
-                                        <p class="text-gray-450">to {{ req.end_date|date:"M d, Y" }}</p>
+                                        <p class="font-medium text-gray-800">{{ req.start_date|date:"d/m/Y" }}</p>
+                                        <p class="text-gray-450">to {{ req.end_date|date:"d/m/Y" }}</p>
                                     </div>
                                 </td>
                                 <td class="px-6 py-2.5 text-center whitespace-nowrap font-semibold">

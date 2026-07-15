@@ -47,7 +47,7 @@ def generate_random_password(length=10):
 
 class EmployeeCreateForm(forms.ModelForm):
     email = forms.EmailField(required=False, label="Email Address (Optional)")
-    role = forms.ChoiceField(choices=[('staff', 'Staff')], initial='staff')
+    role = forms.ChoiceField(choices=[('staff', 'Staff'), ('manager', 'Manager')], initial='staff')
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     password1 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Set login password', 'class': TEXT_INPUT}), label="Password", required=True)
     password2 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat password', 'class': TEXT_INPUT}), label="Confirm Password", required=True)
@@ -150,6 +150,7 @@ class EmployeeCreateForm(forms.ModelForm):
         return profile
 
 class EmployeeEditForm(forms.ModelForm):
+    role = forms.ChoiceField(choices=[('staff', 'Staff'), ('manager', 'Manager')], widget=forms.Select(attrs={'class': SELECT_INPUT}), label="Role", required=True)
     new_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Leave blank to keep current'}), label="New Password", required=False)
     confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat new password', 'class': TEXT_INPUT}), label="Confirm Password", required=False)
 
@@ -173,6 +174,8 @@ class EmployeeEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if self.instance and self.instance.user:
+            self.fields['role'].initial = self.instance.user.role
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.update({'class': CHECKBOX_INPUT})
@@ -222,12 +225,15 @@ class EmployeeEditForm(forms.ModelForm):
         profile = super().save(commit=False)
         new_password = self.cleaned_data.get('new_password')
         phone = self.cleaned_data.get('phone')
+        role = self.cleaned_data.get('role')
         
-        # Sync phone to CustomUser
+        # Sync phone and role to CustomUser
         user = profile.user
         if phone:
             phone = phone.strip()
         user.phone = phone
+        if role:
+            user.role = role
         user.save()
         
         if new_password:

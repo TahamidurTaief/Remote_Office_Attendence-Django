@@ -23,7 +23,7 @@
         {% for record in attendances %}
         <div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex flex-col">
             <div class="flex justify-between items-center border-b border-gray-50 pb-2 mb-2">
-                <span class="font-bold text-gray-900">{{ record.date|date:"D, M d" }}</span>
+                <span class="font-bold text-gray-900">{{ record.date|date:"d/m/Y" }}</span>
                 <div>
                     {% if record.leave_info %}
                         {% if record.leave_info.status == 'approved' %}
@@ -93,7 +93,7 @@
                 <tbody class="bg-white divide-y divide-gray-200">
                     {% for record in attendances %}
                     <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-gray-900">{{ record.date|date:"D, M d, Y" }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-gray-900">{{ record.date|date:"d/m/Y" }}</td>
                         <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-800">{{ record.check_in_time|time:"h:i A"|default:"--" }}</td>
                         <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-800">{{ record.check_out_time|time:"h:i A"|default:"--" }}</td>
                         <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-primary-500">{{ record.total_hours|default:"0.00" }}h</td>

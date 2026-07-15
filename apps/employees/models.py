@@ -12,6 +12,8 @@ class EmployeeProfile(models.Model):
         (15, 'Every 15 minutes'),
         (30, 'Every 30 minutes'),
         (60, 'Every 1 hour'),
+        (90, 'Every 1.5 hours'),
+        (120, 'Every 2 hours'),
     )
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='employee_profile')
