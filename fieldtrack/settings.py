@@ -127,7 +127,7 @@ USE_I18N = True
 USE_TZ = True
 
 # URL Configuration
-APPEND_SLASH = False
+APPEND_SLASH = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
@@ -187,6 +187,6 @@ IMAGEKIT_CACHEFILE_DIR = 'cache'
 IMAGEKIT_HASH_FILENAMES = True
 IMAGEKIT_CACHEFILE_NAMER = 'imagekit.cachefiles.namers.hash'
 
-# Working days (Monday to Saturday, Sunday = 6 is excluded by default)
-WORKING_DAYS = [0, 1, 2, 3, 4, 5]
+# Working days (Saturday to Thursday, Friday = 4 is excluded by default)
+WORKING_DAYS = [0, 1, 2, 3, 5, 6]
 

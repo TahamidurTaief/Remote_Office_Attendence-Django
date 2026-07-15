@@ -25,14 +25,22 @@ def calculate_attendance_status(check_in_time, schedule):
     if not schedule:
         return 'on_time'
     
-    late_threshold = schedule.get_late_threshold()
-    check_in = _local_time(check_in_time)
-    
-    if check_in > late_threshold:
+    late_threshold_time = schedule.get_late_threshold()
+    if timezone.is_aware(check_in_time):
+        session_date = timezone.localtime(check_in_time).date()
+    else:
+        session_date = check_in_time.date()
+        
+    from datetime import datetime
+    threshold = datetime.combine(session_date, late_threshold_time)
+    if timezone.is_aware(check_in_time):
+        threshold = timezone.make_aware(threshold, timezone.get_current_timezone())
+        
+    if check_in_time > threshold:
         return 'late'
     return 'on_time'
 
-def calculate_overtime(check_out_time, schedule, employee):
+def calculate_overtime(check_out_time, schedule, employee, session_date=None):
     """
     Returns overtime in minutes or 0
     Only for employees with overtime_enabled=True
@@ -43,27 +51,39 @@ def calculate_overtime(check_out_time, schedule, employee):
         return 0
     
     from datetime import datetime
-    end_time = datetime.combine(
-        datetime.today(), schedule.office_end_time)
+    if session_date is None:
+        if timezone.is_aware(check_out_time):
+            session_date = timezone.localtime(check_out_time).date()
+        else:
+            session_date = check_out_time.date()
+            
+    end_time = datetime.combine(session_date, schedule.office_end_time)
+    if timezone.is_aware(check_out_time):
+        end_time = timezone.make_aware(end_time, timezone.get_current_timezone())
+        
     overtime_starts = end_time + timedelta(
         minutes=schedule.overtime_after_minutes)
     
-    checkout = datetime.combine(
-        datetime.today(),
-        _local_time(check_out_time)
-    )
-    
-    if checkout > overtime_starts:
-        diff = checkout - overtime_starts
+    if check_out_time > overtime_starts:
+        diff = check_out_time - overtime_starts
         return int(diff.total_seconds() / 60)
     return 0
 
-def calculate_early_checkout(check_out_time, schedule):
+def calculate_early_checkout(check_out_time, schedule, session_date=None):
     """Returns True if employee left early"""
     if not schedule:
         return False
     
-    threshold = schedule.get_early_checkout_threshold()
-    checkout = _local_time(check_out_time)
-    
-    return checkout < threshold
+    from datetime import datetime
+    if session_date is None:
+        if timezone.is_aware(check_out_time):
+            session_date = timezone.localtime(check_out_time).date()
+        else:
+            session_date = check_out_time.date()
+            
+    threshold_time = schedule.get_early_checkout_threshold()
+    threshold = datetime.combine(session_date, threshold_time)
+    if timezone.is_aware(check_out_time):
+        threshold = timezone.make_aware(threshold, timezone.get_current_timezone())
+        
+    return check_out_time < threshold

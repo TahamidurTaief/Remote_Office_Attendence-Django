@@ -622,8 +622,8 @@ class ProjectExportPDFView(AdminRequiredMixin, View):
                 Paragraph(str(idx), cell_style),
                 Paragraph(task.activity, cell_left),
                 Paragraph(task.responsible_person.full_name if task.responsible_person else "—", cell_left),
-                Paragraph(str(task.planned_start), cell_style),
-                Paragraph(str(task.planned_finish), cell_style),
+                Paragraph(str(task.planned_start) if task.planned_start else "—", cell_style),
+                Paragraph(str(task.planned_finish) if task.planned_finish else "—", cell_style),
                 Paragraph(task.get_status_display(), cell_style),
                 Paragraph(task.remarks or "—", cell_left),
             ])

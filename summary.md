@@ -82,31 +82,26 @@ Welcome to the comprehensive feature list, audit, and issues log for the **Field
 
 ---
 
-## 2. Issues, Warnings, and Mismatches
+## 2. Verified Resolved Issues & Warnings
 
-During our deep dive code review, we identified the following warnings, inconsistencies, and potential logic bugs:
+All warnings, inconsistencies, and potential logic bugs identified in the deep dive audit have been resolved and verified against the test suite:
 
-### ⚠️ 1. Working Days Configuration Mismatch
-* **Location**: `fieldtrack/settings.py` vs. `apps/branches/models.py` (lines 95-98)
-* **What's wrong**: In `settings.py`, `WORKING_DAYS` is set to `[0, 1, 2, 3, 4, 5]` (Monday to Saturday, Sunday excluded), which is used by the `mark_daily_absences` management command. However, the default `OfficeSchedule` created via django signals defines working days as `['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']` (Sunday included, Friday excluded).
-* **Why it matters**: If a branch operates on the default schedule, the automated daily absence cron job will not align with local weekend rules, leading to potential false absence marks on Sundays and missed absence logs on Fridays.
+### ✅ 1. Working Days Configuration Mismatch — **RESOLVED**
+* **Fix**: Updated `settings.py`'s `WORKING_DAYS` to `[0, 1, 2, 3, 5, 6]` to exclude only Friday (4) in accordance with the standard Bangladesh weekend default. Further, updated the automated absence deduction job (`mark_daily_absences.py`) and the retroactive absence logging on leave rejection (`leave/models.py`) to query each employee's branch-specific schedule (`OfficeSchedule`), falling back to settings only if no schedule is defined.
+* **Verification**: Verified using management command dry-run logs and running the leave/attendance test suites.
 
-### ⚠️ 2. Overnight / Midnight Check-out Overtime Bug
-* **Location**: `apps/attendance/schedule_utils.py` (lines 46-54)
-* **What's wrong**: The `calculate_overtime` function determines overtime by combining the check-out time with `datetime.today()`.
-* **Why it matters**: If an employee checks out after midnight (e.g. 01:00 AM on the following day), the check-out is combined with today's date, causing the checkout time (01:00 AM) to evaluate as *before* the office end time (e.g. 06:00 PM today). This deprives the employee of overtime and erroneously marks the session as an early checkout.
+### ✅ 2. Overnight / Midnight Check-out Overtime Bug — **RESOLVED**
+* **Fix**: Modified `calculate_overtime` and `calculate_early_checkout` in `apps/attendance/schedule_utils.py` to accept and utilize the actual check-in session date (`attendance.date`) instead of `datetime.today()`. Standard office thresholds are combined with the session date and cast to timezone-aware local datetimes for robust time and date comparison across day boundaries.
+* **Verification**: Tested checkout flow with cross-midnight simulations; all tests passed.
 
-### ⚠️ 3. Non-existent Manager Role in Mixins
-* **Location**: `apps/leave/views.py` (lines 12-14)
-* **What's wrong**: `StaffOrManagerMixin` explicitly lists `'manager'` as an allowed role (`allowed_roles = ['staff', 'manager']`). However, the `CustomUser.ROLE_CHOICES` only lists `'admin'` and `'staff'`.
-* **Why it matters**: A role named `'manager'` cannot be assigned to user records under the current schema, making the inclusion of `'manager'` in `allowed_roles` redundant. If a new manager role is introduced in the future, it might be allowed into staff-facing views without additional restrictions.
+### ✅ 3. Non-existent Manager Role in Mixins — **RESOLVED**
+* **Fix**: Modified `StaffOrManagerMixin` in `apps/leave/views.py` to restrict `allowed_roles` strictly to `['staff']`, removing the redundant `'manager'` entry.
+* **Verification**: Confirmed that staff-facing leave request views remain accessible and safe.
 
-### ⚠️ 4. Trailing Slashes Behavior
-* **Location**: `fieldtrack/settings.py` (line 130)
-* **What's wrong**: `APPEND_SLASH` is explicitly set to `False`.
-* **Why it matters**: Django will not automatically append slashes to request URLs. Standard URLs configured with trailing slashes (e.g., `/backups/settings/`) will return a 404 error if requested without the trailing slash, demanding strict URL formatting by front-end clients and HTMX targets.
+### ✅ 4. Trailing Slashes Behavior — **RESOLVED**
+* **Fix**: Enabled standard Django URL behavior by setting `APPEND_SLASH = True` in `fieldtrack/settings.py`.
+* **Verification**: Requests made without trailing slashes are now automatically redirected with a trailing slash as expected.
 
-### ⚠️ 5. PDF Generation Null Dates Formatting
-* **Location**: `apps/projects/views.py` (lines 625-626)
-* **What's wrong**: In the PDF generation logic for HVAC project plan sheets, `task.planned_start` and `task.planned_finish` are directly cast to strings (`str(task.planned_start)`).
-* **Why it matters**: If a task has not been planned yet (meaning the dates are null in the database), the PDF output will print the literal text `"None"` in the columns instead of a cleaner placeholder like `"—"` or empty space.
+### ✅ 5. PDF Generation Null Dates Formatting — **RESOLVED**
+* **Fix**: Updated `apps/projects/views.py` to check if `task.planned_start` and `task.planned_finish` exist before converting them to strings, falling back to `"—"` if they are null.
+* **Verification**: Checked PDF layout output with unscheduled task items; dates display cleanly as dashes.

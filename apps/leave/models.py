@@ -218,12 +218,23 @@ class LeaveRequest(models.Model):
             end_limit = min(self.end_date, yesterday)
 
             if self.start_date <= end_limit:
-                working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 4, 5])
+                from apps.attendance.schedule_utils import get_branch_schedule
+                schedule = get_branch_schedule(self.employee)
                 deduct_type = get_default_deduction_leave_type()
 
                 current_date = self.start_date
                 while current_date <= end_limit:
-                    if current_date.weekday() in working_days:
+                    is_workday = False
+                    if schedule:
+                        day_name = current_date.strftime('%A').lower()
+                        if day_name in schedule.working_days:
+                            is_workday = True
+                    else:
+                        working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
+                        if current_date.weekday() in working_days:
+                            is_workday = True
+
+                    if is_workday:
                         # Check attendance & absence logs
                         if not Attendance.objects.filter(employee=self.employee, date=current_date).exists():
                             if not AttendanceAbsentLog.objects.filter(employee=self.employee, date=current_date).exists():

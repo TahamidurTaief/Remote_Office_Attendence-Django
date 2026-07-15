@@ -249,8 +249,8 @@ def check_out(request):
 
         from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
         schedule = get_branch_schedule(employee)
-        attendance.overtime_minutes = calculate_overtime(now, schedule, employee)
-        attendance.is_early_checkout = calculate_early_checkout(now, schedule)
+        attendance.overtime_minutes = calculate_overtime(now, schedule, employee, attendance.date)
+        attendance.is_early_checkout = calculate_early_checkout(now, schedule, attendance.date)
 
         attendance.save()
 

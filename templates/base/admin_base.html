@@ -15,6 +15,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script defer src="{% static 'js/custom_dropdown.js' %}"></script>
 
     <script>
         // Web Audio API Sound Effects Engine
@@ -197,6 +198,8 @@
             transition: all 0.2s ease-in-out !important;
             outline: none !important;
             box-shadow: none !important;
+        }
+        select {
             /* Remove native select styles */
             appearance: none !important;
             -webkit-appearance: none !important;
@@ -206,6 +209,15 @@
             background-repeat: no-repeat !important;
             background-size: 1.25em 1.25em !important;
             padding-right: 2rem !important;
+        }
+        /* Hide spin buttons from number inputs */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
         }
         input[type="text"]:focus, input[type="email"]:focus,
         input[type="password"]:focus, input[type="date"]:focus,
@@ -475,76 +487,22 @@
 <body class="text-gray-900 antialiased ft-content-bg"
       x-data="{
         sidebarMobile: false,
-        activeMenu: window.location.pathname.includes('/projects/') || window.location.pathname.includes('/templates/') ? 'projects' : 
-                    window.location.pathname.includes('/notifications/') || window.location.pathname.includes('/backups/') || window.location.pathname.includes('/expired-data/') ? 'system' :
-                    window.location.pathname.includes('/branches/') || window.location.pathname.includes('/admin-panel/settings') ? 'settings' :
-                    window.location.pathname.includes('/leave/') ? 'leave' :
-                    window.location.pathname.includes('/employees/') ? 'people' :
-                    window.location.pathname.includes('/admin-panel/reports') ? 'reports' : null,
         search: '',
         muted: localStorage.getItem('sound_muted') === 'true',
-
-        openMenu(key) {
-          if (this.activeMenu === key) {
-            this.activeMenu = null;
-          } else {
-            this.activeMenu = key;
-            if (window.SoundFX) window.SoundFX.playSubmenuOpen();
-          }
-        },
-
-        closeAll() {
-          this.activeMenu = null;
-        },
 
         matchSearch(label) {
           if (!this.search) return true;
           return label.toLowerCase().includes(this.search.toLowerCase());
-        },
-
-        groupVisible(group, labels) {
-          if (!this.search) return true;
-          return labels.some(l => l.toLowerCase().includes(this.search.toLowerCase()))
-               || group.toLowerCase().includes(this.search.toLowerCase());
-        },
-
-        /* Auto-open submenu when search matches a grouped item */
-        handleSearch() {
-          if (!this.search) { return; }
-          const groups = ['reports','projects','system','settings','leave','people','attendance'];
-          for (const g of groups) {
-            const hits = this.navItems.filter(n => n.group === g && this.matchSearch(n.label));
-            if (hits.length) { 
-              this.activeMenu = g; 
-              return; 
-            }
-          }
-        },
-
-        navItems: [
-          { key: 'dashboard',     label: 'Dashboard',       group: 'overview' },
-          { key: 'attendance',    label: 'Attendance',       group: 'attendance' },
-          { key: 'reports',       label: 'Reports',          group: 'reports' },
-          { key: 'absencereport', label: 'Absence Report',   group: 'reports' },
-          { key: 'leave',         label: 'Leave Issues',     group: 'leave' },
-          { key: 'employees',     label: 'Employees',        group: 'people' },
-          { key: 'projects',      label: 'Projects',         group: 'projects' },
-          { key: 'templates',     label: 'Task Templates',   group: 'projects' },
-          { key: 'notifications', label: 'Notifications',    group: 'system' },
-          { key: 'backups',       label: 'Backups',          group: 'system' },
-          { key: 'expireddata',   label: 'Expired Data',     group: 'system' },
-          { key: 'branches',      label: 'Branches',         group: 'settings' },
-          { key: 'settings',      label: 'Settings',         group: 'settings' }
-        ]
+        }
       }"
-      @keydown.escape.window="closeAll()">
+      @keydown.escape.window="sidebarMobile = false">
 
     <div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-blue-500 z-50 hidden"></div>
 
     <!-- Mobile overlay -->
     <div id="ft-mobile-overlay"
          :class="sidebarMobile ? 'active' : ''"
-         @click="sidebarMobile = false; closeAll()"></div>
+         @click="sidebarMobile = false"></div>
 
     <!-- ================================================================
          SIDEBAR
@@ -552,266 +510,164 @@
     <aside id="ft-sidebar"
            :class="sidebarMobile ? 'mobile-open' : ''">
 
-        <!-- Logo -->
-        <div class="flex items-center h-14 px-4 border-b border-gray-100 shrink-0 overflow-hidden">
-            <div class="w-7 h-7 bg-primary-gradient rounded-lg flex items-center justify-center shadow-sm shrink-0">
-                <i data-lucide="clock" class="w-3.5 h-3.5 text-white"></i>
-            </div>
-            <div class="ft-nav-label ml-2.5 font-semibold text-gray-800 text-[13px]">
-                <img src="{% static 'main_logo.jpg' %}"
-                     alt="FieldTrack"
-                     class="h-7 w-auto object-contain"
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
-                <span style="display:none">FieldTrack</span>
-            </div>
-        </div>
+         <!-- Logo -->
+         <div class="flex items-center h-14 px-4 border-b border-gray-100 shrink-0 overflow-hidden">
+             <div class="w-7 h-7 bg-primary-gradient rounded-lg flex items-center justify-center shadow-sm shrink-0">
+                 <i data-lucide="clock" class="w-3.5 h-3.5 text-white"></i>
+             </div>
+             <div class="ft-nav-label ml-2.5 font-semibold text-gray-800 text-[13px]">
+                 <img src="{% static 'main_logo.jpg' %}"
+                      alt="FieldTrack"
+                      class="h-7 w-auto object-contain"
+                      onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                 <span style="display:none">FieldTrack</span>
+             </div>
+         </div>
 
-        <!-- Search (Apple macOS/iOS style) -->
-        <div class="px-3.5 py-2 shrink-0">
-            <div class="flex items-center gap-2 bg-[#F2F2F7] rounded-lg px-2.5 py-1.5 transition-colors focus-within:bg-[#E5E5EA]">
-                <i data-lucide="search" class="w-3.5 h-3.5 text-[#8E8E93] shrink-0"></i>
-                <input type="text"
-                       x-model="search"
-                       @input.debounce.200ms="handleSearch()"
-                       placeholder="Search"
-                       class="bg-transparent text-[12px] text-gray-800 placeholder-[#8E8E93] focus:outline-none w-full !border-0 !p-0 !shadow-none !ring-0">
-            </div>
-        </div>
+         <!-- Search (Apple macOS/iOS style) -->
+         <div class="px-3.5 py-2 shrink-0">
+             <div class="flex items-center gap-2 bg-[#F2F2F7] rounded-lg px-2.5 py-1.5 transition-colors focus-within:bg-[#E5E5EA]">
+                 <i data-lucide="search" class="w-3.5 h-3.5 text-[#8E8E93] shrink-0"></i>
+                 <input type="text"
+                        x-model="search"
+                        placeholder="Search"
+                        class="bg-transparent text-[12px] text-gray-800 placeholder-[#8E8E93] focus:outline-none w-full !border-0 !p-0 !shadow-none !ring-0">
+             </div>
+         </div>
 
-        <!-- Nav -->
-        <nav class="flex-1 py-3 overflow-y-auto scrollbar-hide space-y-0.5">
+         <!-- Nav -->
+         <nav class="flex-1 py-3 overflow-y-auto scrollbar-hide space-y-0.5">
 
-            {% with request.path as path %}
+             {% with request.path as path %}
 
-            <!-- OVERVIEW -->
-            <div x-show="groupVisible('overview', ['Dashboard'])" class="mt-1">
-                <a href="{% url 'admin_panel:dashboard' %}"
-                   class="ft-nav-item {% if path == '/admin-panel/dashboard/' %}active{% endif %}"
-                   x-show="matchSearch('Dashboard')"
-                   title="Dashboard">
-                    <i data-lucide="layout-dashboard" class="ft-icon"></i>
-                    <span class="ft-nav-label">Dashboard</span>
-                </a>
-            </div>
+             <!-- Dashboard -->
+             <a href="{% url 'admin_panel:dashboard' %}"
+                class="ft-nav-item {% if path == '/admin-panel/dashboard/' %}active{% endif %}"
+                x-show="matchSearch('Dashboard')"
+                title="Dashboard">
+                 <i data-lucide="layout-dashboard" class="ft-icon"></i>
+                 <span class="ft-nav-label">Dashboard</span>
+             </a>
 
-            <!-- ATTENDANCE -->
-            <div x-show="groupVisible('attendance', ['Attendance'])" class="mt-2">
-                <a href="{% url 'admin_panel:attendance_list' %}"
-                   class="ft-nav-item {% if '/admin-panel/attendance/' in path %}active{% endif %}"
-                   x-show="matchSearch('Attendance')"
-                   title="Attendance">
-                    <i data-lucide="clock" class="ft-icon"></i>
-                    <span class="ft-nav-label">Attendance</span>
-                </a>
-            </div>
+             <!-- Attendance -->
+             <a href="{% url 'admin_panel:attendance_list' %}"
+                class="ft-nav-item {% if '/admin-panel/attendance/' in path %}active{% endif %}"
+                x-show="matchSearch('Attendance')"
+                title="Attendance">
+                 <i data-lucide="clock" class="ft-icon"></i>
+                 <span class="ft-nav-label">Attendance</span>
+             </a>
 
-            <!-- REPORTS -->
-            <div x-show="groupVisible('reports', ['Reports', 'Absence Report'])" class="mt-2">
-                <button type="button"
-                        @click="openMenu('reports')"
-                        :class="{'submenu-open': activeMenu === 'reports'}"
-                        class="ft-nav-item w-full text-left {% if '/admin-panel/reports' in path %}active{% endif %}"
-                        title="Reports">
-                    <i data-lucide="bar-chart-2" class="ft-icon"></i>
-                    <span class="ft-nav-label">Reports</span>
-                    <i data-lucide="chevron-right" class="ft-chevron"></i>
-                </button>
-                <div x-show="activeMenu === 'reports'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'reports' && 'open'">
-                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
-                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
-                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                            <span class="font-semibold">Back</span>
-                        </button>
-                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Reports Menu</span>
-                        <div class="w-6"></div>
-                    </div>
-                    <a href="{% url 'admin_panel:reports_main' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/admin-panel/reports' in path and '/admin-panel/reports/absent/' not in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 shrink-0"></i>
-                        Reports
-                    </a>
-                    <a href="{% url 'admin_panel:reports_absent' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/admin-panel/reports/absent/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="user-x" class="w-3.5 h-3.5 shrink-0"></i>
-                        Absence Report
-                    </a>
-                </div>
-            </div>
+             <!-- Reports -->
+             <a href="{% url 'admin_panel:reports_main' %}"
+                class="ft-nav-item {% if '/admin-panel/reports/' in path and '/admin-panel/reports/absent/' not in path %}active{% endif %}"
+                x-show="matchSearch('Reports')"
+                title="Reports">
+                 <i data-lucide="bar-chart-2" class="ft-icon"></i>
+                 <span class="ft-nav-label">Reports</span>
+             </a>
 
-            <!-- LEAVE -->
-            <div x-show="groupVisible('leave', ['Leave Issues'])" class="mt-2">
-                <button type="button"
-                        @click="openMenu('leave')"
-                        :class="{'submenu-open': activeMenu === 'leave'}"
-                        class="ft-nav-item w-full text-left {% if '/leave/admin/' in path %}active{% endif %}"
-                        title="Leave">
-                    <i data-lucide="clipboard-check" class="ft-icon"></i>
-                    <span class="ft-nav-label">Leave</span>
-                    {% if pending_leave_count %}
-                    <span class="ft-badge">{{ pending_leave_count }}</span>
-                    {% endif %}
-                    <i data-lucide="chevron-right" class="ft-chevron"></i>
-                </button>
-                <div x-show="activeMenu === 'leave'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'leave' && 'open'">
-                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
-                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
-                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                            <span class="font-semibold">Back</span>
-                        </button>
-                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Leave Menu</span>
-                        <div class="w-6"></div>
-                    </div>
-                    <a href="{% url 'leave:admin_dashboard' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/leave/admin/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="clipboard-check" class="w-3.5 h-3.5 shrink-0"></i>
-                        Leave Issues
-                    </a>
-                </div>
-            </div>
+             <!-- Absence Report -->
+             <a href="{% url 'admin_panel:reports_absent' %}"
+                class="ft-nav-item {% if '/admin-panel/reports/absent/' in path %}active{% endif %}"
+                x-show="matchSearch('Absence Report')"
+                title="Absence Report">
+                 <i data-lucide="user-x" class="ft-icon"></i>
+                 <span class="ft-nav-label">Absence Report</span>
+             </a>
 
-            <!-- PEOPLE -->
-            <div x-show="groupVisible('people', ['Employees'])" class="mt-2">
-                <button type="button"
-                        @click="openMenu('people')"
-                        :class="{'submenu-open': activeMenu === 'people'}"
-                        class="ft-nav-item w-full text-left {% if '/employees/' in path %}active{% endif %}"
-                        title="People">
-                    <i data-lucide="users" class="ft-icon"></i>
-                    <span class="ft-nav-label">People</span>
-                    <i data-lucide="chevron-right" class="ft-chevron"></i>
-                </button>
-                <div x-show="activeMenu === 'people'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'people' && 'open'">
-                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
-                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
-                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                            <span class="font-semibold">Back</span>
-                        </button>
-                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">People Menu</span>
-                        <div class="w-6"></div>
-                    </div>
-                    <a href="{% url 'employees:employee_list' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/employees/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="users" class="w-3.5 h-3.5 shrink-0"></i>
-                        Employees
-                    </a>
-                </div>
-            </div>
+             <!-- Leave Issues -->
+             <a href="{% url 'leave:admin_dashboard' %}"
+                class="ft-nav-item {% if '/leave/admin/' in path %}active{% endif %}"
+                x-show="matchSearch('Leave Issues')"
+                title="Leave Issues">
+                 <i data-lucide="clipboard-check" class="ft-icon"></i>
+                 <span class="ft-nav-label">Leave Issues</span>
+                 {% if pending_leave_count %}
+                 <span class="ft-badge">{{ pending_leave_count }}</span>
+                 {% endif %}
+             </a>
 
-            <!-- PROJECTS -->
-            <div x-show="groupVisible('projects', ['Projects', 'Task Templates'])" class="mt-2">
-                <button type="button"
-                        @click="openMenu('projects')"
-                        :class="{'submenu-open': activeMenu === 'projects'}"
-                        class="ft-nav-item w-full text-left {% if '/projects/' in path or '/templates/' in path %}active{% endif %}"
-                        title="Projects">
-                    <i data-lucide="briefcase" class="ft-icon"></i>
-                    <span class="ft-nav-label">Projects</span>
-                    <i data-lucide="chevron-right" class="ft-chevron"></i>
-                </button>
-                <div x-show="activeMenu === 'projects'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'projects' && 'open'">
-                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
-                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
-                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                            <span class="font-semibold">Back</span>
-                        </button>
-                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Projects Menu</span>
-                        <div class="w-6"></div>
-                    </div>
-                    <a href="{% url 'projects:project_list' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/projects/' in path and '/templates/' not in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="briefcase" class="w-3.5 h-3.5 shrink-0"></i>
-                        Projects
-                    </a>
-                    <a href="{% url 'projects:template_list' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/templates/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="clipboard-list" class="w-3.5 h-3.5 shrink-0"></i>
-                        Task Templates
-                    </a>
-                </div>
-            </div>
+             <!-- Employees -->
+             <a href="{% url 'employees:employee_list' %}"
+                class="ft-nav-item {% if '/employees/' in path %}active{% endif %}"
+                x-show="matchSearch('Employees')"
+                title="Employees">
+                 <i data-lucide="users" class="ft-icon"></i>
+                 <span class="ft-nav-label">Employees</span>
+             </a>
 
-            <!-- SYSTEM -->
-            <div x-show="groupVisible('system', ['Notifications', 'Backups', 'Expired Data'])" class="mt-2">
-                <button type="button"
-                        @click="openMenu('system')"
-                        :class="{'submenu-open': activeMenu === 'system'}"
-                        class="ft-nav-item w-full text-left {% if '/notifications/' in path or '/backups/' in path or '/expired-data/' in path %}active{% endif %}"
-                        title="System">
-                    <i data-lucide="settings-2" class="ft-icon"></i>
-                    <span class="ft-nav-label">System</span>
-                    {% if unread_notifications or expired_data_count %}
-                    <span class="ft-badge">{{ unread_notifications|default:0|add:expired_data_count|default:0 }}</span>
-                    {% endif %}
-                    <i data-lucide="chevron-right" class="ft-chevron"></i>
-                </button>
-                <div x-show="activeMenu === 'system'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'system' && 'open'">
-                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
-                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
-                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                            <span class="font-semibold">Back</span>
-                        </button>
-                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">System Menu</span>
-                        <div class="w-6"></div>
-                    </div>
-                    <a href="{% url 'notifications:list' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/notifications/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="bell" class="w-3.5 h-3.5 shrink-0"></i>
-                        Notifications
-                        {% if unread_notifications %}
-                        <span class="ml-auto bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{{ unread_notifications }}</span>
-                        {% endif %}
-                    </a>
-                    <a href="{% url 'backups:backup_list' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/backups/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="database" class="w-3.5 h-3.5 shrink-0"></i>
-                        Backups
-                    </a>
-                    <a href="{% url 'admin_panel:expired_data' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/expired-data/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5 shrink-0"></i>
-                        Expired Data
-                        {% if expired_data_count %}
-                        <span class="ml-auto bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{{ expired_data_count }}</span>
-                        {% endif %}
-                    </a>
-                </div>
-            </div>
+             <!-- Projects -->
+             <a href="{% url 'projects:project_list' %}"
+                class="ft-nav-item {% if '/projects/' in path and '/templates/' not in path %}active{% endif %}"
+                x-show="matchSearch('Projects')"
+                title="Projects">
+                 <i data-lucide="briefcase" class="ft-icon"></i>
+                 <span class="ft-nav-label">Projects</span>
+             </a>
 
-            <!-- SETTINGS -->
-            <div x-show="groupVisible('settings', ['Branches', 'Settings'])" class="mt-2">
-                <button type="button"
-                        @click="openMenu('settings')"
-                        :class="{'submenu-open': activeMenu === 'settings'}"
-                        class="ft-nav-item w-full text-left {% if '/branches/' in path or '/admin-panel/settings' in path %}active{% endif %}"
-                        title="Settings">
-                    <i data-lucide="sliders" class="ft-icon"></i>
-                    <span class="ft-nav-label">Settings</span>
-                    <i data-lucide="chevron-right" class="ft-chevron"></i>
-                </button>
-                <div x-show="activeMenu === 'settings'" x-collapse x-cloak class="pl-7 pr-2 py-1 space-y-0.5 mobile-submenu-drawer" :class="activeMenu === 'settings' && 'open'">
-                    <div class="md:hidden flex items-center justify-between mb-4 pb-2 border-b border-gray-100 shrink-0">
-                        <button type="button" @click="closeAll()" class="flex items-center gap-1.5 text-gray-600 hover:text-gray-900">
-                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                            <span class="font-semibold">Back</span>
-                        </button>
-                        <span class="font-bold text-gray-800 uppercase tracking-wider text-[11px]">Settings Menu</span>
-                        <div class="w-6"></div>
-                    </div>
-                    <a href="{% url 'branches:branch_list' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/branches/' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="building-2" class="w-3.5 h-3.5 shrink-0"></i>
-                        Branches
-                    </a>
-                    <a href="{% url 'admin_panel:schedule_settings' %}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded text-[11px] text-[#4B5563] hover:bg-[#F2F2F7] {% if '/admin-panel/settings' in path %}bg-[#EFF6FF] text-[#0B5FA5] font-semibold{% endif %}">
-                        <i data-lucide="settings" class="w-3.5 h-3.5 shrink-0"></i>
-                        Settings
-                    </a>
-                </div>
-            </div>
+             <!-- Task Templates -->
+             <a href="{% url 'projects:template_list' %}"
+                class="ft-nav-item {% if '/templates/' in path %}active{% endif %}"
+                x-show="matchSearch('Task Templates')"
+                title="Task Templates">
+                 <i data-lucide="clipboard-list" class="ft-icon"></i>
+                 <span class="ft-nav-label">Task Templates</span>
+             </a>
 
-            {% endwith %}
-        </nav>
+             <!-- Notifications -->
+             <a href="{% url 'notifications:list' %}"
+                class="ft-nav-item {% if '/notifications/' in path %}active{% endif %}"
+                x-show="matchSearch('Notifications')"
+                title="Notifications">
+                 <i data-lucide="bell" class="ft-icon"></i>
+                 <span class="ft-nav-label">Notifications</span>
+                 {% if unread_notifications %}
+                 <span class="ft-badge">{{ unread_notifications }}</span>
+                 {% endif %}
+             </a>
+
+             <!-- Backups -->
+             <a href="{% url 'backups:backup_list' %}"
+                class="ft-nav-item {% if '/backups/' in path %}active{% endif %}"
+                x-show="matchSearch('Backups')"
+                title="Backups">
+                 <i data-lucide="database" class="ft-icon"></i>
+                 <span class="ft-nav-label">Backups</span>
+             </a>
+
+             <!-- Expired Data -->
+             <a href="{% url 'admin_panel:expired_data' %}"
+                class="ft-nav-item {% if '/expired-data/' in path %}active{% endif %}"
+                x-show="matchSearch('Expired Data')"
+                title="Expired Data">
+                 <i data-lucide="trash-2" class="ft-icon"></i>
+                 <span class="ft-nav-label">Expired Data</span>
+                 {% if expired_data_count %}
+                 <span class="ft-badge">{{ expired_data_count }}</span>
+                 {% endif %}
+             </a>
+
+             <!-- Branches -->
+             <a href="{% url 'branches:branch_list' %}"
+                class="ft-nav-item {% if '/branches/' in path %}active{% endif %}"
+                x-show="matchSearch('Branches')"
+                title="Branches">
+                 <i data-lucide="building-2" class="ft-icon"></i>
+                 <span class="ft-nav-label">Branches</span>
+             </a>
+
+             <!-- Settings -->
+             <a href="{% url 'admin_panel:schedule_settings' %}"
+                class="ft-nav-item {% if '/admin-panel/settings' in path %}active{% endif %}"
+                x-show="matchSearch('Settings')"
+                title="Settings">
+                 <i data-lucide="settings" class="ft-icon"></i>
+                 <span class="ft-nav-label">Settings</span>
+             </a>
+
+             {% endwith %}
+         </nav>
 
         <!-- User Footer -->
         <div class="border-t border-gray-100 p-3 shrink-0 overflow-hidden">

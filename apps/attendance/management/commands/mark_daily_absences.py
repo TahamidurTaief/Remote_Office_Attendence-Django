@@ -43,16 +43,11 @@ class Command(BaseCommand):
 
         self.stdout.write(f'Processing absences for date: {target_date}')
 
-        # 2. Check if working day
-        working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 4, 5])
-        if target_date.weekday() not in working_days:
-            self.stdout.write(f'Date {target_date} is not a working day. Skipping.')
-            return
-
         active_employees = EmployeeProfile.objects.filter(is_active=True)
         total_checked = active_employees.count()
         skipped_present = 0
         skipped_leave = 0
+        skipped_weekend = 0
         skipped_already_logged = 0
         skipped_no_leavetype = 0
         deducted_count = 0
@@ -61,7 +56,23 @@ class Command(BaseCommand):
         from apps.attendance.models import get_default_deduction_leave_type
         leave_type = get_default_deduction_leave_type()
 
+        from apps.attendance.schedule_utils import get_branch_schedule
+
         for emp in active_employees:
+            # Check if working day for this employee's branch schedule
+            schedule = get_branch_schedule(emp)
+            if schedule:
+                day_name = target_date.strftime('%A').lower()
+                if day_name not in schedule.working_days:
+                    skipped_weekend += 1
+                    self.stdout.write(f'Employee {emp.full_name} is off today (Branch Schedule). Skipping.')
+                    continue
+            else:
+                working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
+                if target_date.weekday() not in working_days:
+                    skipped_weekend += 1
+                    self.stdout.write(f'Employee {emp.full_name} is off today (Global Settings). Skipping.')
+                    continue
             # Check if attendance exists
             if Attendance.objects.filter(employee=emp, date=target_date).exists():
                 skipped_present += 1
@@ -140,6 +151,7 @@ class Command(BaseCommand):
         self.stdout.write(f'Total active employees checked: {total_checked}')
         self.stdout.write(f'Skipped (had attendance): {skipped_present}')
         self.stdout.write(f'Skipped (had approved/pending leave): {skipped_leave}')
+        self.stdout.write(f'Skipped (weekend/off-day): {skipped_weekend}')
         self.stdout.write(f'Skipped (already logged absent): {skipped_already_logged}')
         if skipped_no_leavetype:
             self.stdout.write(f'Skipped (no LeaveType configured): {skipped_no_leavetype}')

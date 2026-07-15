@@ -10,8 +10,8 @@ from .forms import LeaveRequestForm, LeaveTypeForm
 
 
 class StaffOrManagerMixin(RoleRequiredMixin):
-    """Allows both staff and manager roles to access employee-facing views."""
-    allowed_roles = ['staff', 'manager']
+    """Allows staff role to access employee-facing views."""
+    allowed_roles = ['staff']
 
 # ==============================================================================
 # Admin Views
