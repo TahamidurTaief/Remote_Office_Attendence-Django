@@ -419,15 +419,28 @@ def live_locations(request):
         attendance_type='check_in',
         check_out_time__isnull=True,
         is_expired=False
-    ).select_related('employee')
+    ).select_related('employee').prefetch_related('locations')
+
+    active_employee_ids = [s.employee_id for s in active_sessions]
+    
+    # Fetch all syncs for active employees, ordered by timestamp descending
+    latest_syncs_qs = EmployeeLocationSync.objects.filter(
+        employee_id__in=active_employee_ids
+    ).order_by('employee_id', '-timestamp')
+    
+    # Group by employee_id to keep only the latest sync
+    latest_sync_by_emp = {}
+    for sync in latest_syncs_qs:
+        if sync.employee_id not in latest_sync_by_emp:
+            latest_sync_by_emp[sync.employee_id] = sync
 
     result = []
     for session in active_sessions:
         emp = session.employee
-        latest_sync = EmployeeLocationSync.objects.filter(employee=emp).first()
+        latest_sync = latest_sync_by_emp.get(emp.id)
         # Fall back to check-in location if no sync yet
         if not latest_sync:
-            ci_loc = session.locations.filter(event='check_in').first()
+            ci_loc = next((loc for loc in session.locations.all() if loc.event == 'check_in'), None)
             if ci_loc:
                 result.append({
                     'employee_id': emp.employee_id,

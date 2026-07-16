@@ -83,7 +83,7 @@ class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):
     context_object_name = 'employees'
 
     def get_queryset(self):
-        return EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        return EmployeeProfile.objects.filter(is_active=True).prefetch_related('leave_balances', 'leave_rules').order_by('full_name')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -93,13 +93,14 @@ class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):
         except ValueError:
             year = timezone.localdate().year
 
-        leave_types = LeaveType.objects.all()
+        from .models import get_cached_leave_types
+        leave_types = get_cached_leave_types()
         employee_balances = {}
 
         for emp in context['employees']:
             balances = []
             for lt in leave_types:
-                balance = LeaveBalance.objects.filter(employee=emp, leave_type=lt, year=year).first()
+                balance = next((b for b in emp.leave_balances.all() if b.leave_type_id == lt.id and b.year == year), None)
                 if balance:
                     balances.append({
                         'type': lt,
@@ -108,8 +109,7 @@ class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):
                         'remaining': balance.remaining_days
                     })
                 else:
-                    from apps.employees.models import EmployeeLeaveRule
-                    rule = EmployeeLeaveRule.objects.filter(employee=emp, leave_type=lt).first()
+                    rule = next((r for r in emp.leave_rules.all() if r.leave_type_id == lt.id), None)
                     limit = rule.days_per_year if rule else lt.default_days_per_year
                     balances.append({
                         'type': lt,

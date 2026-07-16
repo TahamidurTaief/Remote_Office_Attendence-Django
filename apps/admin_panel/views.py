@@ -82,8 +82,9 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
         absent_count = sum(1 for r in absent_records if r.status == 'absent')
         not_checked_in = absent_records
 
+        from apps.branches.utils import get_cached_branches
         context.update({
-            'branches': Branch.objects.all().order_by('name'),
+            'branches': get_cached_branches(),
             'employees': EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
             'selected_date': today.strftime('%Y-%m-%d'),
             'selected_branch': branch_id or '',
@@ -217,7 +218,8 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         context['total_field'] = total_field
         
         context['employees'] = EmployeeProfile.objects.all()
-        context['branches'] = Branch.objects.all()
+        from apps.branches.utils import get_cached_branches
+        context['branches'] = get_cached_branches()
         
         get_copy = self.request.GET.copy()
         if 'page' in get_copy:
@@ -468,7 +470,7 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
         employees = employees.filter(id=employee_id)
     if branch_id:
         employees = employees.filter(branch_id=branch_id)
-    employees = employees.select_related('branch')
+    employees = employees.select_related('branch', 'branch__schedule')
 
     # Get all check-in and field-visit attendance records in the date range
     attendances = Attendance.objects.filter(

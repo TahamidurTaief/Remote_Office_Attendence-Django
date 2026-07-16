@@ -52,7 +52,8 @@ class EmployeeListView(AdminRequiredMixin, ListView):
         context['status'] = self.request.GET.get('status', '')
         
         context['departments'] = EmployeeProfile.objects.values_list('department', flat=True).distinct().exclude(department='')
-        context['branches'] = Branch.objects.all()
+        from apps.branches.utils import get_cached_branches
+        context['branches'] = get_cached_branches()
         return context
 
 class EmployeeCreateView(AdminRequiredMixin, CreateView):

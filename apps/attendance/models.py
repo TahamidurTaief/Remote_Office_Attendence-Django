@@ -33,7 +33,7 @@ class Attendance(models.Model):
         on_delete=models.SET_NULL,
         related_name='attendances'
     )
-    date = models.DateField()
+    date = models.DateField(db_index=True)
     check_in_time = models.DateTimeField(null=True, blank=True)
     check_out_time = models.DateTimeField(null=True, blank=True)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='office')
@@ -60,6 +60,7 @@ class Attendance(models.Model):
     
     is_expired = models.BooleanField(
         default=False,
+        db_index=True,
         help_text='Data older than 3 months'
     )
     expired_at = models.DateTimeField(

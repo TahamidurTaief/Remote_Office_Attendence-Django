@@ -296,14 +296,25 @@ class YearLeaveHelper(dict):
                 return default
 
             total_remaining = 0
-            leave_types = LeaveType.objects.all()
-            from apps.employees.models import EmployeeLeaveRule
+            leave_types = get_cached_leave_types()
+            
+            is_balances_prefetched = hasattr(self.employee, '_prefetched_objects_cache') and 'leave_balances' in self.employee._prefetched_objects_cache
+            is_rules_prefetched = hasattr(self.employee, '_prefetched_objects_cache') and 'leave_rules' in self.employee._prefetched_objects_cache
+
             for lt in leave_types:
-                balance = LeaveBalance.objects.filter(employee=self.employee, leave_type=lt, year=year).first()
+                if is_balances_prefetched:
+                    balance = next((b for b in self.employee.leave_balances.all() if b.leave_type_id == lt.id and b.year == year), None)
+                else:
+                    balance = LeaveBalance.objects.filter(employee=self.employee, leave_type=lt, year=year).first()
+
                 if balance:
                     total_remaining += balance.remaining_days
                 else:
-                    rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=lt).first()
+                    if is_rules_prefetched:
+                        rule = next((r for r in self.employee.leave_rules.all() if r.leave_type_id == lt.id), None)
+                    else:
+                        from apps.employees.models import EmployeeLeaveRule
+                        rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=lt).first()
                     total_remaining += rule.days_per_year if rule else lt.default_days_per_year
             return total_remaining
 
@@ -311,4 +322,27 @@ class YearLeaveHelper(dict):
         return self.get(year)
 
 EmployeeProfile.total_leave_left_by_year = property(lambda self: YearLeaveHelper(self))
+
+
+def get_cached_leave_types():
+    from django.core.cache import cache
+    leave_types = cache.get('all_leave_types')
+    if leave_types is None:
+        leave_types = list(LeaveType.objects.all().order_by('name'))
+        cache.set('all_leave_types', leave_types, 300)
+    return leave_types
+
+
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+@receiver(post_save, sender=LeaveType)
+def clear_leave_type_cache_on_save(sender, instance, **kwargs):
+    from django.core.cache import cache
+    cache.delete('all_leave_types')
+
+@receiver(post_delete, sender=LeaveType)
+def clear_leave_type_cache_on_delete(sender, instance, **kwargs):
+    from django.core.cache import cache
+    cache.delete('all_leave_types')
 

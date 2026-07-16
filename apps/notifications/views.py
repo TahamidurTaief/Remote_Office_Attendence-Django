@@ -25,14 +25,26 @@ def notification_list(request):
         recipient=request.user
     ).select_related('employee')
 
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
     if filter_type == 'unread':
         notifs = notifs.filter(is_read=False)
     elif filter_type in ['check_in', 'check_out', 'field_visit', 'late', 'missing']:
         notifs = notifs.filter(notif_type=filter_type)
 
-    notifs = notifs[:50]
+    paginator = Paginator(notifs, 20)
+    page_number = request.GET.get('page')
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
     return render(request, 'notifications/list.html', {
-        'notifs': notifs,
+        'notifs': page_obj,
+        'page_obj': page_obj,
+        'is_paginated': page_obj.has_other_pages(),
         'filter_type': filter_type,
         'unread_count': Notification.objects.filter(
             recipient=request.user, is_read=False

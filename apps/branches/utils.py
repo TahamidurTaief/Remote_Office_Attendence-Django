@@ -20,3 +20,13 @@ def is_within_geofence(lat, lng, branch):
     distance = R * c
     
     return distance <= branch.radius_meters, distance
+
+
+def get_cached_branches():
+    from django.core.cache import cache
+    from .models import Branch
+    branches = cache.get('active_branches')
+    if branches is None:
+        branches = list(Branch.objects.all().order_by('name'))
+        cache.set('active_branches', branches, 300)
+    return branches
