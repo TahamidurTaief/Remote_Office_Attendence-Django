@@ -594,6 +594,7 @@ class ProjectExportPDFView(AdminRequiredMixin, View):
             leftMargin=30,
             topMargin=30,
             bottomMargin=30,
+            pageCompression=0,
         )
         
         styles = getSampleStyleSheet()
