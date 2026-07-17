@@ -1,5 +1,5 @@
 from django import forms
-from .models import Branch
+from .models import Branch, Holiday
 
 
 TEXT_INPUT = (
@@ -31,4 +31,17 @@ class BranchForm(forms.ModelForm):
             'radius_meters': forms.NumberInput(attrs={'class': TEXT_INPUT}),
             'wifi_ip': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'is_active': forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded'}),
+        }
+
+class HolidayForm(forms.ModelForm):
+    class Meta:
+        model = Holiday
+        fields = ['name', 'date', 'branch']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Holiday Name'}),
+            'date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'branch': forms.Select(attrs={'class': SELECT_INPUT}),
+        }
+        labels = {
+            'branch': 'Branch (Leave empty for all branches)',
         }

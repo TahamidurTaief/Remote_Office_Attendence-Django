@@ -1,5 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
+from django.http import HttpResponse
+import csv
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.contrib import messages
 from django.db.models import Q
@@ -925,6 +927,164 @@ class ProjectTypeDeleteView(AdminRequiredMixin, DeleteView):
             return redirect('projects:project_type_list')
         messages.success(request, 'Project type deleted successfully.')
         return super().post(request, *args, **kwargs)
+
+
+class ExportProjectTasksCSVView(AdminRequiredMixin, View):
+    def get(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        tasks = project.tasks.select_related('responsible_person').all().order_by('order')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="project_{project.id}_tasks.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Order', 'Activity', 'Responsible Person', 'Planned Start', 'Planned Finish', 'Duration (Days)', 'Status', 'Remarks'])
+        
+        for task in tasks:
+            resp_name = task.responsible_person.full_name if task.responsible_person else '-'
+            writer.writerow([
+                task.order,
+                task.activity,
+                resp_name,
+                task.planned_start or '-',
+                task.planned_finish or '-',
+                task.duration_days or '-',
+                task.status,
+                task.remarks or ''
+            ])
+            
+        return response
+
+class ExportProjectManpowerCSVView(AdminRequiredMixin, View):
+    def get(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        logs = project.manpower_logs.all().order_by('-date', 'trade')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="project_{project.id}_manpower.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Date', 'Trade', 'Required Count', 'Present Count'])
+        
+        for log in logs:
+            writer.writerow([
+                log.date,
+                log.trade,
+                log.required_count,
+                log.present_count if log.present_count is not None else '-'
+            ])
+            
+        return response
+
+class ExportProjectMaterialsCSVView(AdminRequiredMixin, View):
+    def get(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        materials = project.materials.all().order_by('material_name')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="project_{project.id}_materials.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Material Name', 'Unit', 'Required Qty', 'Received Qty', 'Balance', 'Remarks'])
+        
+        for mat in materials:
+            writer.writerow([
+                mat.material_name,
+                mat.unit,
+                mat.required_qty,
+                mat.received_qty,
+                mat.balance,
+                mat.remarks or ''
+            ])
+            
+        return response
+
+
+class ProjectTaskShiftSubsequentView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        try:
+            task = get_object_or_404(ProjectTask, pk=pk)
+            old_finish = task.planned_finish
+            
+            # Explicit confirmation param check
+            confirm_shift = request.POST.get('confirm_shift') == 'true'
+            
+            form = ProjectTaskForm(request.POST, instance=task)
+            if form.is_valid():
+                new_finish = form.cleaned_data.get('planned_finish')
+                
+                # Save the task
+                task = form.save()
+                
+                if confirm_shift and old_finish and new_finish and new_finish > old_finish:
+                    delta = (new_finish - old_finish).days
+                    if delta > 0:
+                        subsequent_tasks = ProjectTask.objects.filter(
+                            project=task.project,
+                            order__gt=task.order
+                        )
+                        for t in subsequent_tasks:
+                            if t.planned_start:
+                                t.planned_start += timedelta(days=delta)
+                            if t.planned_finish:
+                                t.planned_finish += timedelta(days=delta)
+                            t.save()
+                        messages.success(request, f'Task updated and shifted subsequent tasks by {delta} days.')
+                    else:
+                        messages.success(request, 'Task updated successfully.')
+                else:
+                    messages.success(request, 'Task updated successfully.')
+            else:
+                messages.error(request, 'Invalid form data.')
+                
+            return redirect('projects:project_detail', pk=task.project.pk)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
+
+
+class ProjectRequestSignOffView(AdminRequiredMixin, View):
+    def post(self, request, project_id):
+        project = get_object_or_404(Project, pk=project_id)
+        role = request.POST.get('role')
+        
+        if role == 'consultant':
+            email = project.consultant_email
+            name = project.consultant
+            stakeholder_type = 'Consultant'
+        elif role == 'client_representative':
+            email = project.client_email
+            name = project.client_name
+            stakeholder_type = 'Client Representative'
+        else:
+            messages.error(request, "Invalid sign-off role specified.")
+            return redirect('projects:project_detail', pk=project_id)
+            
+        if not email:
+            messages.error(request, f"No email address on file for {stakeholder_type}.")
+            return redirect('projects:project_detail', pk=project_id)
+            
+        # Dispatch request email
+        from apps.notifications.dispatch import send_email_notification
+        from django.urls import reverse
+        
+        subject = f"Sign-off Requested: {project.name}"
+        detail_url = request.build_absolute_uri(reverse('projects:project_detail', kwargs={'pk': project.pk}))
+        message = (
+            f"Hello {name or stakeholder_type},\n\n"
+            f"You are requested to sign off on the work plan sheet for project '{project.name}'.\n"
+            f"Please visit the project page to view and sign off:\n{detail_url}\n\n"
+            f"Regards,\nFieldTrack System"
+        )
+        
+        success = send_email_notification(email, subject, message)
+        if success:
+            messages.success(request, f"Sign-off request email sent to {stakeholder_type} ({email}).")
+        else:
+            messages.error(request, f"Failed to send sign-off request email to {stakeholder_type} ({email}).")
+            
+        return redirect('projects:project_detail', pk=project_id)
 
 
 

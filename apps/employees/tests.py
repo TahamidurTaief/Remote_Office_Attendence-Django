@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model, authenticate
+from django.urls import reverse
 from apps.employees.models import EmployeeProfile
 from apps.employees.forms import EmployeeCreateForm, EmployeeEditForm
 from apps.branches.models import Branch
@@ -152,6 +153,139 @@ class EmployeeProfileTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('profile_photo', form.errors)
         self.assertIn('File too large', form.errors['profile_photo'][0])
+
+
+from apps.employees.models import EmployeeDocument
+from apps.notifications.models import Notification
+from django.core.management import call_command
+from django.utils import timezone
+import datetime
+
+class EmployeeDocumentTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        # Create an admin user to be notified
+        self.admin = User.objects.create_user(
+            phone='+8801700000001',
+            email='admin@test.com',
+            password='adminpassword123',
+            role='admin'
+        )
+        # Create an HR user to be notified
+        self.hr = User.objects.create_user(
+            phone='+8801700000002',
+            email='hr@test.com',
+            password='hrpassword123',
+            role='hr'
+        )
+        # Create normal staff employee
+        self.staff_user = User.objects.create_user(
+            phone='+8801700000003',
+            email='staff@test.com',
+            password='staffpassword123',
+            role='staff'
+        )
+        self.employee = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            employee_id='EMP-2026-001',
+            full_name='Test Employee',
+            phone='+8801700000003',
+            joined_date=date.today(),
+            branch=self.branch
+        )
+
+    def test_document_expiry_alert_cron(self):
+        today = timezone.localdate()
+        
+        # 1. Document expiring in 10 days (should trigger alert)
+        doc1 = EmployeeDocument.objects.create(
+            employee=self.employee,
+            document_type='Visa',
+            expiry_date=today + datetime.timedelta(days=10)
+        )
+        
+        # 2. Document expiring in 40 days (should NOT trigger alert)
+        doc2 = EmployeeDocument.objects.create(
+            employee=self.employee,
+            document_type='Certificate',
+            expiry_date=today + datetime.timedelta(days=40)
+        )
+
+        # 3. Document already expired yesterday (should NOT trigger alert)
+        doc3 = EmployeeDocument.objects.create(
+            employee=self.employee,
+            document_type='Old Visa',
+            expiry_date=today - datetime.timedelta(days=2)
+        )
+
+        call_command('check_expiring_documents')
+
+        # Check notifications for admin
+        admin_notifications = Notification.objects.filter(recipient=self.admin)
+        self.assertEqual(admin_notifications.count(), 1)
+        self.assertEqual(admin_notifications.first().title, f"Document Expiring: {self.employee.full_name} (Visa)")
+        
+        # Check notifications for HR
+        hr_notifications = Notification.objects.filter(recipient=self.hr)
+        self.assertEqual(hr_notifications.count(), 1)
+        self.assertEqual(hr_notifications.first().title, f"Document Expiring: {self.employee.full_name} (Visa)")
+
+        # Verify idempotency
+        call_command('check_expiring_documents')
+        self.assertEqual(Notification.objects.filter(recipient=self.admin).count(), 1)
+
+    def test_document_crud_access_control(self):
+        url_add = reverse('employees:document_add', kwargs={'employee_pk': self.employee.pk})
+        
+        # Staff cannot add document
+        self.client.login(username='staff@test.com', password='staffpassword123')
+        response = self.client.get(url_add)
+        self.assertEqual(response.status_code, 302)
+        self.client.logout()
+
+        # Admin can add document
+        self.client.login(username='admin@test.com', password='adminpassword123')
+        response = self.client.get(url_add)
+        self.assertEqual(response.status_code, 200)
+
+        # POST valid data
+        post_data = {
+            'document_type': 'Trade License',
+            'expiry_date': '2026-12-31',
+        }
+        response = self.client.post(url_add, data=post_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(EmployeeDocument.objects.filter(document_type='Trade License').exists())
+
+    def test_document_expiry_7_days_email_escalation(self):
+        import datetime
+        from django.core import mail
+        from django.core.management import call_command
+        from apps.employees.models import EmployeeDocument
+        
+        # Clear outbox
+        mail.outbox = []
+        
+        # Create a document expiring in 5 days
+        EmployeeDocument.objects.create(
+            employee=self.employee,
+            document_type='Visa',
+            expiry_date=date.today() + datetime.timedelta(days=5)
+        )
+        
+        # Call management command
+        call_command('check_expiring_documents')
+        
+        # Should have sent an email to the active admin user
+        self.assertGreaterEqual(len(mail.outbox), 1)
+        emails_to_admin = [m for m in mail.outbox if self.admin.email in m.to]
+        self.assertEqual(len(emails_to_admin), 1)
+        self.assertIn("URGENT: Document Expiring in 7 Days", emails_to_admin[0].subject)
 
 
 

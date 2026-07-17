@@ -83,6 +83,25 @@ class OfficeSchedule(models.Model):
         return (end - timedelta(
             minutes=self.early_checkout_before_minutes)).time()
 
+class Holiday(models.Model):
+    name = models.CharField(max_length=255)
+    date = models.DateField()
+    branch = models.ForeignKey(
+        'Branch',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='holidays'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        branch_name = self.branch.name if self.branch else 'All Branches'
+        return f"{self.name} ({self.date}) - {branch_name}"
+
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 

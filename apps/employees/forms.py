@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from apps.employees.models import EmployeeProfile
+from apps.employees.models import EmployeeProfile, EmployeeDocument
 from apps.branches.models import Branch
 import random
 import string
@@ -242,3 +242,14 @@ class EmployeeEditForm(forms.ModelForm):
         if commit:
             profile.save()
         return profile
+
+
+class EmployeeDocumentForm(forms.ModelForm):
+    class Meta:
+        model = EmployeeDocument
+        fields = ['document_type', 'expiry_date', 'file']
+        widgets = {
+            'document_type': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Visa, Trade License'}),
+            'expiry_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'file': forms.ClearableFileInput(attrs={'class': FILE_INPUT}),
+        }

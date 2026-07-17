@@ -24,7 +24,7 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
         fields = [
-            'name', 'project_type', 'client_name', 'consultant', 'main_contractor',
+            'name', 'project_type', 'client_name', 'client_email', 'consultant', 'consultant_email', 'main_contractor',
             'location', 'project_manager', 'site_engineer',
             'hvac_capacity_tr', 'system_type', 'start_date',
             'completion_date', 'status', 'progress_percent', 'branch'
@@ -33,7 +33,9 @@ class ProjectForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Project Name'}),
             'project_type': forms.Select(attrs={'class': SELECT_INPUT}),
             'client_name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Client Name'}),
+            'client_email': forms.EmailInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Client Email'}),
             'consultant': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Consultant Name'}),
+            'consultant_email': forms.EmailInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Consultant Email'}),
             'main_contractor': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Main Contractor'}),
             'location': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Project Location'}),
             'project_manager': forms.Select(attrs={'class': SELECT_INPUT}),

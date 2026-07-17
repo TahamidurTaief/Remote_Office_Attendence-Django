@@ -1,0 +1,137 @@
+{% extends 'base/admin_base.html' %}
+{% load static %}
+
+{% block title %}{% if object %}Edit Event{% else %}Create Event{% endif %} | FieldTrack{% endblock %}
+{% block page_title %}{% if object %}Edit Event{% else %}Create Event{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Breadcrumb / Back to Calendar -->
+    <div class="mb-3">
+        <a href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}" 
+           class="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-primary-600 transition-colors font-medium">
+            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Calendar
+        </a>
+    </div>
+
+    <!-- Main Card -->
+    <div class="bg-white border border-gray-150 rounded shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-gray-150 bg-gray-50 flex items-center justify-between">
+            <h3 class="text-[14px] font-bold text-gray-800">
+                {% if object %}Modify "{{ object.title }}"{% else %}Schedule New Event{% endif %}
+            </h3>
+            
+            {% if object %}
+            <!-- Delete Event Form -->
+            <form action="{% url 'schedule:delete' object.pk %}" 
+                  method="POST" 
+                  class="inline-block"
+                  x-data 
+                  @submit.prevent="window.confirmAction('Are you sure you want to permanently delete this event?', () => $el.submit())">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-semibold rounded transition-colors">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete Event
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
+        <form method="POST" class="p-4 space-y-4">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="p-3 bg-red-50 border border-red-200 text-red-800 text-[12px] rounded space-y-1">
+                {% for error in form.non_field_errors %}
+                <p>{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Title -->
+            <div>
+                <label for="{{ form.title.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Event Title *</label>
+                {{ form.title }}
+                {% if form.title.errors %}
+                <p class="text-red-600 text-[11px] mt-1">{{ form.title.errors.as_text }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Event Type & Date Row -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.event_type.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Event Type *</label>
+                    {{ form.event_type }}
+                    {% if form.event_type.errors %}
+                    <p class="text-red-600 text-[11px] mt-1">{{ form.event_type.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.date.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Date *</label>
+                    {{ form.date }}
+                    {% if form.date.errors %}
+                    <p class="text-red-600 text-[11px] mt-1">{{ form.date.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Start Time & End Time Row -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.start_time.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Start Time (optional)</label>
+                    {{ form.start_time }}
+                    <span class="text-[10px] text-gray-400 mt-1 block">Leave empty for an all-day event.</span>
+                    {% if form.start_time.errors %}
+                    <p class="text-red-600 text-[11px] mt-1">{{ form.start_time.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.end_time.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">End Time (optional)</label>
+                    {{ form.end_time }}
+                    {% if form.end_time.errors %}
+                    <p class="text-red-600 text-[11px] mt-1">{{ form.end_time.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Project -->
+            <div>
+                <label for="{{ form.project.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Project (optional)</label>
+                {{ form.project }}
+                {% if form.project.errors %}
+                <p class="text-red-600 text-[11px] mt-1">{{ form.project.errors.as_text }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label for="{{ form.description.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Description (optional)</label>
+                {{ form.description }}
+                {% if form.description.errors %}
+                <p class="text-red-600 text-[11px] mt-1">{{ form.description.errors.as_text }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Assigned Employees -->
+            <div>
+                <label for="{{ form.assigned_to.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Assign Employees (optional)</label>
+                {{ form.assigned_to }}
+                <span class="text-[10px] text-gray-400 mt-1 block">Hold Ctrl (or Cmd on Mac) to select multiple employees.</span>
+                {% if form.assigned_to.errors %}
+                <p class="text-red-600 text-[11px] mt-1">{{ form.assigned_to.errors.as_text }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-150">
+                <a href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}" 
+                   class="px-3.5 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 text-[12px] font-semibold rounded transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" class="px-3.5 py-2 bg-primary-gradient text-white text-[12px] font-semibold rounded shadow-sm hover:opacity-90 transition-opacity">
+                    {% if object %}Save Changes{% else %}Create Event{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

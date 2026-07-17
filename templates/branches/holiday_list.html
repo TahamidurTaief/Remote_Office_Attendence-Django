@@ -1,0 +1,132 @@
+{% extends 'base/admin_base.html' %}
+
+{% block title %}Holidays | FieldTrack{% endblock %}
+
+{% block content %}
+<div class="p-4">
+    <div class="md:flex md:items-center md:justify-between mb-6">
+        <div class="flex-1 min-w-0">
+            <h2 class="text-[14px] font-semibold text-gray-900">
+                Holidays
+            </h2>
+        </div>
+        <div class="mt-4 flex md:mt-0 md:ml-4">
+            <a href="{% url 'branches:holiday_add' %}" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-gradient hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                Add Holiday
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-150 mb-6">
+        <form method="GET" class="flex flex-col md:flex-row gap-4 items-end">
+            <div class="flex-1">
+                <label for="search" class="block text-sm font-medium text-gray-700">Search Holidays</label>
+                <input type="text" name="search" id="search" value="{{ search }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border" placeholder="Holiday Name...">
+            </div>
+            <div class="w-full md:w-48">
+                <label for="branch" class="block text-sm font-medium text-gray-700">Branch</label>
+                <select name="branch" id="branch" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
+                    <option value="">All (Global & Branch Specific)</option>
+                    {% for b in branches %}
+                    <option value="{{ b.id }}" {% if branch_filter == b.id|stringformat:"i" %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700">
+                    Filter
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scope / Branch</th>
+                        <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for holiday in holidays %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm font-medium text-gray-900">{{ holiday.name }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">{{ holiday.date }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">
+                            {% if holiday.branch %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/50">{{ holiday.branch.name }}</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200/50">Company-wide</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium space-x-4 flex justify-end items-center">
+                            <a href="{% url 'branches:holiday_edit' holiday.pk %}" class="text-primary-500 hover:text-primary-800">Edit</a>
+                            <form action="{% url 'branches:holiday_delete' holiday.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to delete this holiday?', () => $el.submit())">
+                                {% csrf_token %}
+                                <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-6 py-16 text-center">
+                            <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <p class="text-gray-500 font-medium">No holidays found.</p>
+                            <p class="text-gray-400 text-sm mt-1">Add your first holiday to get started.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="bg-gray-50 px-4 py-3 border-t border-gray-150 flex items-center justify-between sm:px-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Next</a>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Showing <span class="font-medium">{{ page_obj.start_index }}</span> to <span class="font-medium">{{ page_obj.end_index }}</span> of <span class="font-medium">{{ page_obj.paginator.count }}</span> results
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </a>
+                        {% endif %}
+                        {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <span class="relative inline-flex items-center px-4 py-2 border border-primary-500 bg-primary-50 text-sm font-medium text-primary-600">{{ num }}</span>
+                        {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
+                        <a href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">{{ num }}</a>
+                        {% endif %}
+                        {% endfor %}
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </a>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

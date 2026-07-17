@@ -28,6 +28,7 @@ urlpatterns = [
     path('<int:project_id>/tasks/add/', views.ProjectTaskCreateView.as_view(), name='project_task_add'),
     path('tasks/<int:pk>/edit/', views.ProjectTaskUpdateView.as_view(), name='project_task_edit'),
     path('tasks/<int:pk>/delete/', views.ProjectTaskDeleteView.as_view(), name='project_task_delete'),
+    path('tasks/<int:pk>/shift-subsequent/', views.ProjectTaskShiftSubsequentView.as_view(), name='project_task_shift_subsequent'),
     path('tasks/<int:pk>/update-status/', views.ProjectTaskUpdateStatusView.as_view(), name='project_task_update_status'),
     path('tasks/<int:pk>/reorder/', views.ProjectTaskReorderView.as_view(), name='project_task_reorder'),
     path('<int:project_id>/tasks/bulk-status/', views.ProjectTaskBulkStatusView.as_view(), name='project_task_bulk_status'),
@@ -52,6 +53,12 @@ urlpatterns = [
 
     # Sign-off & PDF Export
     path('<int:project_id>/confirm-signoff/', views.ProjectConfirmSignOffView.as_view(), name='confirm_signoff'),
+    path('<int:project_id>/request-signoff/', views.ProjectRequestSignOffView.as_view(), name='request_signoff'),
     path('<int:project_id>/export-pdf/', views.ProjectExportPDFView.as_view(), name='export_pdf'),
+
+    # CSV Exports
+    path('<int:pk>/export-tasks/', views.ExportProjectTasksCSVView.as_view(), name='export_tasks_csv'),
+    path('<int:pk>/export-manpower/', views.ExportProjectManpowerCSVView.as_view(), name='export_manpower_csv'),
+    path('<int:pk>/export-materials/', views.ExportProjectMaterialsCSVView.as_view(), name='export_materials_csv'),
 ]
 

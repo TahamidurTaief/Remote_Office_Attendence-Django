@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from datetime import date
+from datetime import date, timedelta
 from apps.branches.models import Branch
 from apps.projects.models import Project, ProjectType, TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff
 
@@ -1158,4 +1158,362 @@ class Phase2And3Tests(TestCase):
             content = f.read()
         self.assertIn('TODO: branch-scoping deferred', content,
                       "Expected 'TODO: branch-scoping deferred' comment in views.py")
+
+
+class ProjectCSVExportTests(TestCase):
+    def setUp(self):
+        self.password = 'testpassword123'
+        self.admin_user = User.objects.create_user(
+            email='admin@example.com',
+            phone='+8801700000100',
+            password=self.password,
+            role='admin'
+        )
+        self.staff_user = User.objects.create_user(
+            email='staff@example.com',
+            phone='+8801700000200',
+            password=self.password,
+            role='staff'
+        )
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.project_type = ProjectType.objects.create(name='Test Project Type')
+        
+        self.project = Project.objects.create(
+            name='Test Project',
+            client_name='Test Client',
+            location='Dhaka',
+            project_type=self.project_type,
+            start_date=date.today(),
+            branch=self.branch
+        )
+        
+        # Create some tasks
+        self.task1 = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Task 1 Activity',
+            status='In Progress',
+            remarks='First task remark'
+        )
+        
+        # Create some manpower deployments
+        self.manpower1 = ManpowerDeployment.objects.create(
+            project=self.project,
+            date=date.today(),
+            trade='Electrician',
+            required_count=5,
+            present_count=4
+        )
+        
+        # Create some materials
+        self.material1 = ProjectMaterial.objects.create(
+            project=self.project,
+            material_name='Copper Wire',
+            unit='meters',
+            required_qty=100,
+            received_qty=60,
+            remarks='Need urgently'
+        )
+
+    def test_export_tasks_csv_access_and_data(self):
+        url = reverse('projects:export_tasks_csv', kwargs={'pk': self.project.pk})
+        
+        # Staff is redirected
+        self.client.login(username='staff@example.com', password=self.password)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.client.logout()
+        
+        # Admin gets 200 and correct CSV data
+        self.client.login(username='admin@example.com', password=self.password)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn(f'attachment; filename="project_{self.project.id}_tasks.csv"', response['Content-Disposition'])
+        
+        content = response.content.decode('utf-8')
+        lines = content.strip().split('\r\n')
+        self.assertEqual(len(lines), 2) # header + 1 row
+        self.assertEqual(lines[0], 'Order,Activity,Responsible Person,Planned Start,Planned Finish,Duration (Days),Status,Remarks')
+        self.assertIn('1,Task 1 Activity,-,-,-,-,In Progress,First task remark', lines[1])
+
+    def test_export_manpower_csv_access_and_data(self):
+        url = reverse('projects:export_manpower_csv', kwargs={'pk': self.project.pk})
+        
+        self.client.login(username='admin@example.com', password=self.password)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn(f'attachment; filename="project_{self.project.id}_manpower.csv"', response['Content-Disposition'])
+        
+        content = response.content.decode('utf-8')
+        lines = content.strip().split('\r\n')
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0], 'Date,Trade,Required Count,Present Count')
+        self.assertIn(f'{date.today()},Electrician,5,4', lines[1])
+
+    def test_export_materials_csv_access_and_data(self):
+        url = reverse('projects:export_materials_csv', kwargs={'pk': self.project.pk})
+        
+        self.client.login(username='admin@example.com', password=self.password)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn(f'attachment; filename="project_{self.project.id}_materials.csv"', response['Content-Disposition'])
+        
+        content = response.content.decode('utf-8')
+        lines = content.strip().split('\r\n')
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0], 'Material Name,Unit,Required Qty,Received Qty,Balance,Remarks')
+        self.assertIn('Copper Wire,meters,100.00,60.00,40.00,Need urgently', lines[1])
+
+
+class ProjectTaskShiftTests(TestCase):
+    def setUp(self):
+        self.password = 'testpassword123'
+        self.admin_user = User.objects.create_user(
+            email='admin@example.com',
+            phone='+8801700000100',
+            password=self.password,
+            role='admin'
+        )
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.project_type = ProjectType.objects.create(name='Test Project Type')
+        self.project = Project.objects.create(
+            name='Test Project',
+            client_name='Test Client',
+            location='Dhaka',
+            project_type=self.project_type,
+            start_date=date(2026, 7, 1),
+            branch=self.branch
+        )
+
+        # Create three tasks in sequence
+        self.task1 = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Task 1',
+            planned_start=date(2026, 7, 1),
+            planned_finish=date(2026, 7, 5),
+            status='In Progress'
+        )
+        self.task2 = ProjectTask.objects.create(
+            project=self.project,
+            order=2,
+            activity='Task 2',
+            planned_start=date(2026, 7, 6),
+            planned_finish=date(2026, 7, 10),
+            status='Not Started'
+        )
+        self.task3 = ProjectTask.objects.create(
+            project=self.project,
+            order=3,
+            activity='Task 3',
+            planned_start=date(2026, 7, 11),
+            planned_finish=date(2026, 7, 15),
+            status='Not Started'
+        )
+
+    def test_shift_subsequent_tasks_success(self):
+        self.client.login(username='admin@example.com', password=self.password)
+        url = reverse('projects:project_task_shift_subsequent', kwargs={'pk': self.task2.pk})
+
+        # Post update for Task 2 to move planned_finish from 2026-07-10 to 2026-07-15 (+5 days)
+        # and status to "Delayed" with confirm_shift = "true"
+        post_data = {
+            'order': 2,
+            'activity': 'Task 2 Updated',
+            'planned_start': '2026-07-06',
+            'planned_finish': '2026-07-15', # +5 days
+            'status': 'Delayed',
+            'confirm_shift': 'true'
+        }
+        response = self.client.post(url, data=post_data)
+        self.assertEqual(response.status_code, 302)
+
+        # Task 2 itself should be saved
+        self.task2.refresh_from_db()
+        self.assertEqual(self.task2.status, 'Delayed')
+        self.assertEqual(self.task2.planned_finish, date(2026, 7, 15))
+
+        # Task 1 (order 1 < 2) should NOT be affected
+        self.task1.refresh_from_db()
+        self.assertEqual(self.task1.planned_start, date(2026, 7, 1))
+        self.assertEqual(self.task1.planned_finish, date(2026, 7, 5))
+
+        # Task 3 (order 3 > 2) SHOULD be shifted by 5 days:
+        # planned_start: 2026-07-11 + 5 days = 2026-07-16
+        # planned_finish: 2026-07-15 + 5 days = 2026-07-20
+        self.task3.refresh_from_db()
+        self.assertEqual(self.task3.planned_start, date(2026, 7, 16))
+        self.assertEqual(self.task3.planned_finish, date(2026, 7, 20))
+
+    def test_no_shift_without_explicit_confirm_param(self):
+        self.client.login(username='admin@example.com', password=self.password)
+        url = reverse('projects:project_task_shift_subsequent', kwargs={'pk': self.task2.pk})
+
+        post_data = {
+            'order': 2,
+            'activity': 'Task 2 Updated',
+            'planned_start': '2026-07-06',
+            'planned_finish': '2026-07-15',
+            'status': 'Delayed',
+            'confirm_shift': 'false'
+        }
+        response = self.client.post(url, data=post_data)
+        self.assertEqual(response.status_code, 302)
+
+        # Task 2 itself should be saved
+        self.task2.refresh_from_db()
+        self.assertEqual(self.task2.status, 'Delayed')
+        self.assertEqual(self.task2.planned_finish, date(2026, 7, 15))
+
+        # Task 3 should NOT be shifted
+        self.task3.refresh_from_db()
+        self.assertEqual(self.task3.planned_start, date(2026, 7, 11))
+
+
+class ProjectNotificationEmailTests(TestCase):
+    def setUp(self):
+        self.password = 'testpassword123'
+        self.admin_user = User.objects.create_user(
+            email='admin@example.com',
+            phone='+8801700000100',
+            password=self.password,
+            role='admin'
+        )
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.pm_user = User.objects.create_user(
+            email='pm@example.com',
+            phone='+8801700000300',
+            password=self.password,
+            role='manager'
+        )
+        # Create profile for PM
+        from apps.employees.models import EmployeeProfile
+        self.pm_profile = EmployeeProfile.objects.create(
+            user=self.pm_user,
+            full_name='Project Manager',
+            branch=self.branch,
+            employee_id='EMP_PM',
+            phone='+8801700000300',
+            joined_date=date.today(),
+            is_active=True
+        )
+
+        self.project_type = ProjectType.objects.create(name='Test Project Type')
+        self.project = Project.objects.create(
+            name='Test Project',
+            client_name='Test Client',
+            client_email='client@example.com',
+            consultant='Test Consultant',
+            consultant_email='consultant@example.com',
+            location='Dhaka',
+            project_type=self.project_type,
+            start_date=date(2026, 7, 1),
+            completion_date=date.today() + timedelta(days=5),
+            branch=self.branch,
+            project_manager=self.pm_profile
+        )
+
+    def test_delayed_task_sends_email_to_pm(self):
+        from django.core import mail
+        mail.outbox = []
+
+        task = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Test Task',
+            planned_start=date(2026, 7, 1),
+            planned_finish=date(2026, 7, 5),
+            status='Not Started'
+        )
+        
+        # Mark delayed
+        task.status = 'Delayed'
+        task.save()
+
+        # Email sent to PM
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['pm@example.com'])
+        self.assertIn("Task Delayed: Test Task", mail.outbox[0].subject)
+
+    def test_material_reaches_zero_received_with_near_deadline_emails_pm(self):
+        from django.core import mail
+        mail.outbox = []
+
+        # Create material with received_qty > 0
+        material = ProjectMaterial.objects.create(
+            project=self.project,
+            material_name='Copper Wire',
+            unit='meters',
+            required_qty=100,
+            received_qty=10
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+        # Update received_qty to 0
+        material.received_qty = 0
+        material.save()
+
+        # Email sent to PM
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['pm@example.com'])
+        self.assertIn("URGENT: Material Zero-Received: Copper Wire", mail.outbox[0].subject)
+
+    def test_request_signoff_emails_stakeholder(self):
+        from django.core import mail
+        mail.outbox = []
+
+        self.client.login(username='admin@example.com', password=self.password)
+        
+        # Consultant sign-off request
+        url = reverse('projects:request_signoff', kwargs={'project_id': self.project.pk})
+        response = self.client.post(url, data={'role': 'consultant'})
+        self.assertEqual(response.status_code, 302)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['consultant@example.com'])
+        self.assertIn(f"Sign-off Requested: {self.project.name}", mail.outbox[0].subject)
+
+        # Client sign-off request
+        mail.outbox = []
+        response = self.client.post(url, data={'role': 'client_representative'})
+        self.assertEqual(response.status_code, 302)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['client@example.com'])
+
+    def test_email_failure_does_not_break_underlying_action(self):
+        # Mock send_mail to raise an exception
+        from unittest.mock import patch
+        
+        task = ProjectTask.objects.create(
+            project=self.project,
+            order=2,
+            activity='Fail Safe Task',
+            status='Not Started'
+        )
+
+        with patch('apps.notifications.dispatch.send_mail', side_effect=RuntimeError("SMTP connection timed out")):
+            task.status = 'Delayed'
+            # Should not raise exception
+            task.save()
+            
+        self.assertEqual(task.status, 'Delayed')
 

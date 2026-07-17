@@ -608,6 +608,15 @@
                  <span class="ft-nav-label">Projects</span>
              </a>
 
+             <!-- Schedule -->
+             <a href="{% url 'schedule:month_view' %}"
+                class="ft-nav-item {% if '/schedule/' in path %}active{% endif %}"
+                x-show="matchSearch('Schedule')"
+                title="Schedule">
+                 <i data-lucide="calendar" class="ft-icon"></i>
+                 <span class="ft-nav-label">Schedule</span>
+             </a>
+
              <!-- Project Types -->
              <a href="{% url 'projects:project_type_list' %}"
                 class="ft-nav-item {% if '/types/' in path %}active{% endif %}"
@@ -661,11 +670,20 @@
 
              <!-- Branches -->
              <a href="{% url 'branches:branch_list' %}"
-                class="ft-nav-item {% if '/branches/' in path %}active{% endif %}"
+                class="ft-nav-item {% if '/branches/' in path and '/holidays/' not in path %}active{% endif %}"
                 x-show="matchSearch('Branches')"
                 title="Branches">
                  <i data-lucide="building-2" class="ft-icon"></i>
                  <span class="ft-nav-label">Branches</span>
+             </a>
+
+             <!-- Holidays -->
+             <a href="{% url 'branches:holiday_list' %}"
+                class="ft-nav-item {% if '/branches/holidays/' in path %}active{% endif %}"
+                x-show="matchSearch('Holidays')"
+                title="Holidays">
+                 <i data-lucide="calendar" class="ft-icon"></i>
+                 <span class="ft-nav-label">Holidays</span>
              </a>
 
              <!-- Settings -->

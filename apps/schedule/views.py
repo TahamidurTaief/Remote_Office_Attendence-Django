@@ -1,0 +1,326 @@
+from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse_lazy, reverse
+from django.views.generic import CreateView, UpdateView, DeleteView, View
+from django.utils import timezone
+from django.db.models import Q
+from collections import defaultdict
+import calendar as pycal
+from datetime import date, datetime, timedelta
+
+from apps.accounts.mixins import RoleRequiredMixin
+from .models import ScheduleEvent
+from .forms import ScheduleEventForm
+
+# Aggregation imports
+from apps.projects.models import ProjectTask, DailyProgressLog
+from apps.leave.models import LeaveRequest
+from apps.notifications.models import Notification
+from apps.notifications.dispatch import send_email_notification
+
+class CalendarMonthView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager', 'staff']
+
+    def get(self, request, *args, **kwargs):
+        today = timezone.localdate()
+        
+        # Get query parameters
+        year_str = request.GET.get('year')
+        month_str = request.GET.get('month')
+        
+        try:
+            year = int(year_str) if year_str else today.year
+            month = int(month_str) if month_str else today.month
+            
+            # Bound month between 1 and 12
+            if month < 1 or month > 12:
+                month = today.month
+                year = today.year
+        except ValueError:
+            year = today.year
+            month = today.month
+
+        # Generate month grid using python calendar
+        cal = pycal.Calendar(firstweekday=6) # 6 = Sunday
+        try:
+            weeks = cal.monthdatescalendar(year, month)
+        except pycal.IllegalMonthError:
+            year = today.year
+            month = today.month
+            weeks = cal.monthdatescalendar(year, month)
+
+        start_date = weeks[0][0]
+        end_date = weeks[-1][-1]
+
+        # Get employee profile for scoping
+        profile = getattr(request.user, 'employee_profile', None)
+        is_staff_user = (request.user.role == 'staff')
+
+        # Fetch manual events
+        events_qs = ScheduleEvent.objects.filter(date__range=(start_date, end_date))
+        if is_staff_user:
+            events_qs = events_qs.filter(assigned_to=profile)
+        events = events_qs.prefetch_related('assigned_to', 'project')
+
+        # Fetch external sources
+        # 1. Project Tasks
+        tasks_qs = ProjectTask.objects.filter(
+            Q(planned_start__range=(start_date, end_date)) |
+            Q(planned_finish__range=(start_date, end_date))
+        )
+        if is_staff_user:
+            tasks_qs = tasks_qs.filter(responsible_person=profile)
+        tasks = tasks_qs.select_related('project')
+
+        # 2. Approved Leaves
+        leaves_qs = LeaveRequest.objects.filter(
+            status='approved',
+            start_date__lte=end_date,
+            end_date__gte=start_date
+        )
+        if is_staff_user:
+            leaves_qs = leaves_qs.filter(employee=profile)
+        leaves = leaves_qs.select_related('employee', 'leave_type')
+
+        # 3. Daily Progress Logs
+        logs_qs = DailyProgressLog.objects.filter(date__range=(start_date, end_date))
+        if is_staff_user:
+            logs_qs = logs_qs.filter(logged_by=request.user)
+        logs = logs_qs.select_related('project')
+
+        # Group all items by date
+        events_by_date = defaultdict(list)
+        
+        # Add manual events
+        for event in events:
+            time_str = event.start_time.strftime('%I:%M %p') if event.start_time else ""
+            assigned_names = [emp.full_name for emp in event.assigned_to.all()]
+            project_name = event.project.name if event.project else "None"
+            events_by_date[event.date].append({
+                'id': f"event_{event.pk}",
+                'title': event.title,
+                'description': event.description or "No description provided.",
+                'source_type': 'manual_event',
+                'edit_url': reverse('schedule:edit', args=[event.pk]),
+                'time_str': time_str or "All Day",
+                'date_str': event.date.strftime('%Y-%m-%d'),
+                'assigned_employees': ", ".join(assigned_names) if assigned_names else "None",
+                'project_name': project_name,
+                'color_classes': event.color_classes,
+                'dot_color_class': event.dot_color_class,
+                'is_all_day': event.start_time is None,
+                'time_obj': event.start_time or datetime.min.time(),
+            })
+
+        # Add project tasks
+        for task in tasks:
+            proj_detail_url = reverse('projects:project_detail', args=[task.project.pk])
+            resp_person = task.responsible_person.full_name if task.responsible_person else "Unassigned"
+            start_date_str = task.planned_start.strftime('%d/%m/%Y') if task.planned_start else "—"
+            finish_date_str = task.planned_finish.strftime('%d/%m/%Y') if task.planned_finish else "—"
+            
+            if task.planned_start and start_date <= task.planned_start <= end_date:
+                title = f"Start: {task.project.name} - {task.activity} ({task.status})"
+                events_by_date[task.planned_start].append({
+                    'id': f"task_start_{task.pk}",
+                    'title': title,
+                    'source_type': 'task_deadline',
+                    'edit_url': '',
+                    'time_str': 'All Day',
+                    'project_name': task.project.name,
+                    'project_url': proj_detail_url,
+                    'responsible_person': resp_person,
+                    'status': task.status,
+                    'planned_dates': f"Planned: {start_date_str} to {finish_date_str}",
+                    'color_classes': 'bg-indigo-50 text-indigo-700 border-indigo-200/50 hover:bg-indigo-100',
+                    'dot_color_class': 'bg-indigo-500',
+                    'is_all_day': True,
+                    'time_obj': datetime.min.time(),
+                })
+            if task.planned_finish and start_date <= task.planned_finish <= end_date:
+                if task.planned_finish != task.planned_start:
+                    title = f"Finish: {task.project.name} - {task.activity} ({task.status})"
+                    events_by_date[task.planned_finish].append({
+                        'id': f"task_finish_{task.pk}",
+                        'title': title,
+                        'source_type': 'task_deadline',
+                        'edit_url': '',
+                        'time_str': 'All Day',
+                        'project_name': task.project.name,
+                        'project_url': proj_detail_url,
+                        'responsible_person': resp_person,
+                        'status': task.status,
+                        'planned_dates': f"Planned: {start_date_str} to {finish_date_str}",
+                        'color_classes': 'bg-indigo-50 text-indigo-700 border-indigo-200/50 hover:bg-indigo-100',
+                        'dot_color_class': 'bg-indigo-500',
+                        'is_all_day': True,
+                        'time_obj': datetime.min.time(),
+                    })
+
+        # Add leaves (can span multiple days)
+        for leave in leaves:
+            curr_day = max(start_date, leave.start_date)
+            limit_day = min(end_date, leave.end_date)
+            while curr_day <= limit_day:
+                title = f"Out: {leave.employee.full_name} ({leave.leave_type.name})"
+                events_by_date[curr_day].append({
+                    'id': f"leave_{leave.pk}_{curr_day.strftime('%Y%m%d')}",
+                    'title': title,
+                    'source_type': 'leave',
+                    'edit_url': '',
+                    'time_str': 'All Day',
+                    'employee_name': leave.employee.full_name,
+                    'leave_type': leave.leave_type.name,
+                    'date_range': f"{leave.start_date.strftime('%d/%m/%Y')} to {leave.end_date.strftime('%d/%m/%Y')}",
+                    'status': leave.status.capitalize(),
+                    'color_classes': 'bg-purple-50 text-purple-700 border-purple-200/50 hover:bg-purple-100',
+                    'dot_color_class': 'bg-purple-500',
+                    'is_all_day': True,
+                    'time_obj': datetime.min.time(),
+                })
+                curr_day += timedelta(days=1)
+
+        # Add daily progress logs
+        for log in logs:
+            title = f"Log: {log.project.name} ({log.supervisor_name})"
+            events_by_date[log.date].append({
+                'id': f"log_{log.pk}",
+                'title': title,
+                'source_type': 'progress_log',
+                'edit_url': '',
+                'time_str': 'All Day',
+                'project_name': log.project.name,
+                'supervisor_name': log.supervisor_name,
+                'planned_work': log.planned_work,
+                'completed_work': log.completed_work,
+                'manpower_count': log.manpower_count or 0,
+                'color_classes': 'bg-teal-50 text-teal-700 border-teal-200/50 hover:bg-teal-100',
+                'dot_color_class': 'bg-teal-500',
+                'is_all_day': True,
+                'time_obj': datetime.min.time(),
+            })
+
+        # Sort each day's events: all-day first, then by time, then by title
+        for day in events_by_date:
+            events_by_date[day] = sorted(
+                events_by_date[day],
+                key=lambda x: (not x['is_all_day'], x['time_obj'], x['title'])
+            )
+
+        # Build day-by-day weeks structures
+        weeks_data = []
+        for week in weeks:
+            week_data = []
+            for day in week:
+                day_events = events_by_date[day]
+                week_data.append({
+                    'date': day,
+                    'date_str': day.strftime('%Y-%m-%d'),
+                    'date_formatted': day.strftime('%B %d, %Y'),
+                    'day_num': day.day,
+                    'is_current_month': day.month == month,
+                    'is_today': day == today,
+                    'all_events': day_events,
+                })
+            weeks_data.append(week_data)
+
+        # Compute next/prev months
+        if month == 1:
+            prev_month = 12
+            prev_year = year - 1
+        else:
+            prev_month = month - 1
+            prev_year = year
+
+        if month == 12:
+            next_month = 1
+            next_year = year + 1
+        else:
+            next_month = month + 1
+            next_year = year
+
+        month_name = pycal.month_name[month]
+
+        is_admin_or_manager = request.user.role in ['admin', 'manager']
+
+        context = {
+            'weeks_data': weeks_data,
+            'current_year': year,
+            'current_month': month,
+            'month_name': month_name,
+            'prev_year': prev_year,
+            'prev_month': prev_month,
+            'next_year': next_year,
+            'next_month': next_month,
+            'today': today,
+            'is_admin_or_manager': is_admin_or_manager,
+        }
+        return render(request, 'schedule/calendar_month.html', context)
+
+
+class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
+    allowed_roles = ['admin', 'manager']
+    model = ScheduleEvent
+    form_class = ScheduleEventForm
+    template_name = 'schedule/event_form.html'
+
+    def get_initial(self):
+        initial = super().get_initial()
+        date_str = self.request.GET.get('date')
+        if date_str:
+            try:
+                initial['date'] = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        return initial
+
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        response = super().form_valid(form)
+        
+        # Notify assigned employees
+        event = self.object
+        for employee in event.assigned_to.all():
+            if employee.user:
+                # DB Notification
+                Notification.objects.create(
+                    recipient=employee.user,
+                    employee=employee,
+                    title=f"New Event: {event.title}",
+                    message=f"You have been assigned to event '{event.title}' scheduled on {event.date.strftime('%d/%m/%Y')}.",
+                    notif_type='field_visit'
+                )
+                # Email Notification
+                subject = f"Assigned to Event: {event.title}"
+                message = (
+                    f"Hello {employee.full_name},\n\n"
+                    f"You have been assigned to the following event:\n"
+                    f"Title: {event.title}\n"
+                    f"Date: {event.date.strftime('%d/%m/%Y')}\n"
+                    f"Description: {event.description or 'No description'}\n\n"
+                    f"Regards,\nFieldTrack System"
+                )
+                send_email_notification(employee.user, subject, message)
+                
+        return response
+
+    def get_success_url(self):
+        return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
+
+
+class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
+    allowed_roles = ['admin', 'manager']
+    model = ScheduleEvent
+    form_class = ScheduleEventForm
+    template_name = 'schedule/event_form.html'
+
+    def get_success_url(self):
+        return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
+
+
+class ScheduleEventDeleteView(RoleRequiredMixin, DeleteView):
+    allowed_roles = ['admin', 'manager']
+    model = ScheduleEvent
+
+    def get_success_url(self):
+        # Redirect to the calendar page of the deleted event's date
+        return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"

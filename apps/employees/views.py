@@ -4,8 +4,8 @@ from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, DetailView, UpdateView, View
 from django.contrib import messages
 from apps.accounts.mixins import AdminRequiredMixin
-from .models import EmployeeProfile, EmployeeLocationSync
-from .forms import EmployeeCreateForm, EmployeeEditForm
+from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument
+from .forms import EmployeeCreateForm, EmployeeEditForm, EmployeeDocumentForm
 from apps.branches.models import Branch
 from apps.attendance.models import Attendance
 from django.db.models import Q
@@ -207,6 +207,7 @@ class EmployeeDetailView(AdminRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['today'] = timezone.localdate()
         employee = self.object
         
         now = timezone.now()
@@ -309,3 +310,45 @@ class ToggleStatusView(AdminRequiredMixin, View):
         employee.is_active = not employee.is_active
         employee.save()
         return render(request, 'employees/partials/status_badge.html', {'employee': employee})
+
+class EmployeeDocumentCreateView(AdminRequiredMixin, CreateView):
+    model = EmployeeDocument
+    form_class = EmployeeDocumentForm
+    template_name = 'employees/document_form.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.employee = get_object_or_404(EmployeeProfile, pk=kwargs['employee_pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['employee'] = self.employee
+        return context
+
+    def form_valid(self, form):
+        form.instance.employee = self.employee
+        messages.success(self.request, 'Document uploaded successfully.')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('employees:employee_detail', kwargs={'pk': self.employee.pk})
+
+class EmployeeDocumentEditView(AdminRequiredMixin, UpdateView):
+    model = EmployeeDocument
+    form_class = EmployeeDocumentForm
+    template_name = 'employees/document_form.html'
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Document updated successfully.')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('employees:employee_detail', kwargs={'pk': self.object.employee.pk})
+
+class EmployeeDocumentDeleteView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        doc = get_object_or_404(EmployeeDocument, pk=pk)
+        employee_pk = doc.employee.pk
+        doc.delete()
+        messages.success(request, 'Document deleted successfully.')
+        return redirect('employees:employee_detail', pk=employee_pk)

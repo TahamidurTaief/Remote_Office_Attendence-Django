@@ -3,7 +3,11 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.contrib.messages import get_messages
-from apps.branches.models import Branch, OfficeSchedule
+from django.core.management import call_command
+from apps.branches.models import Branch, OfficeSchedule, Holiday
+from apps.employees.models import EmployeeProfile
+from apps.leave.models import LeaveType
+from apps.attendance.models import AttendanceAbsentLog
 
 User = get_user_model()
 
@@ -188,3 +192,132 @@ class BranchCRUDViewTests(TestCase):
 
         messages = [m.message for m in get_messages(response.wsgi_request)]
         self.assertIn(f'Branch "{self.branch.name}" was deactivated.', messages)
+
+class HolidayCRUDAndCronTests(TestCase):
+    def setUp(self):
+        # Create users
+        self.admin_user = User.objects.create_user(
+            phone='+8801700000001',
+            password='adminpassword123',
+            role='admin'
+        )
+        self.staff_user = User.objects.create_user(
+            phone='+8801700000002',
+            password='staffpassword123',
+            role='staff'
+        )
+
+        # Create branches
+        self.branch_dhaka = Branch.objects.create(
+            name='Dhaka Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.branch_sylhet = Branch.objects.create(
+            name='Sylhet Branch',
+            latitude=24.8949,
+            longitude=91.8687,
+            radius_meters=100
+        )
+
+        # Setup branch office schedules to include working days
+        self.branch_dhaka.schedule.working_days = ['thursday', 'friday', 'saturday', 'sunday', 'monday', 'tuesday', 'wednesday']
+        self.branch_dhaka.schedule.save()
+        self.branch_sylhet.schedule.working_days = ['thursday', 'friday', 'saturday', 'sunday', 'monday', 'tuesday', 'wednesday']
+        self.branch_sylhet.schedule.save()
+
+        # Create staff employees in both branches
+        self.emp_dhaka = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            employee_id='EMP-D01',
+            full_name='Dhaka Staff',
+            phone='+8801700000002',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch_dhaka,
+            is_active=True
+        )
+        
+        # Second staff user for Sylhet
+        self.staff_user2 = User.objects.create_user(
+            phone='+8801700000003',
+            password='staffpassword123',
+            role='staff'
+        )
+        self.emp_sylhet = EmployeeProfile.objects.create(
+            user=self.staff_user2,
+            employee_id='EMP-S01',
+            full_name='Sylhet Staff',
+            phone='+8801700000003',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch_sylhet,
+            is_active=True
+        )
+
+        # Default leave type for deduction
+        self.leave_type = LeaveType.objects.create(
+            name='Casual Leave',
+            category='casual',
+            default_days_per_year=15
+        )
+
+    def test_holiday_crud_views_access(self):
+        url_list = reverse('branches:holiday_list')
+        url_add = reverse('branches:holiday_add')
+        
+        # Staff is blocked from Holiday views
+        self.client.login(username='+8801700000002', password='staffpassword123')
+        response = self.client.get(url_list)
+        self.assertEqual(response.status_code, 302)
+        self.client.logout()
+
+        # Admin gets 200 OK
+        self.client.login(username='+8801700000001', password='adminpassword123')
+        response = self.client.get(url_list)
+        self.assertEqual(response.status_code, 200)
+
+        # Create holiday POST
+        post_data = {
+            'name': 'Victory Day',
+            'date': '2026-12-16',
+            'branch': '' # Company-wide
+        }
+        response = self.client.post(url_add, data=post_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Holiday.objects.filter(name='Victory Day').exists())
+
+    def test_branch_specific_holiday_skips_cron_for_only_affected_branch(self):
+        target_date = datetime.date(2026, 7, 16) # Thursday
+        
+        # Create a branch-specific holiday for Dhaka Branch on this date
+        Holiday.objects.create(
+            name='Dhaka Festival',
+            date=target_date,
+            branch=self.branch_dhaka
+        )
+
+        # Run command for target_date
+        call_command('mark_daily_absences', date='2026-07-16')
+
+        # Dhaka staff is on holiday -> should NOT be logged absent
+        self.assertFalse(AttendanceAbsentLog.objects.filter(employee=self.emp_dhaka, date=target_date).exists())
+
+        # Sylhet staff has no holiday -> should BE logged absent and leave deducted
+        self.assertTrue(AttendanceAbsentLog.objects.filter(employee=self.emp_sylhet, date=target_date).exists())
+
+    def test_company_wide_holiday_skips_cron_for_all(self):
+        target_date = datetime.date(2026, 7, 16) # Thursday
+        
+        # Create a company-wide holiday on this date (branch = null)
+        Holiday.objects.create(
+            name='National Day',
+            date=target_date,
+            branch=None
+        )
+
+        # Run command for target_date
+        call_command('mark_daily_absences', date='2026-07-16')
+
+        # Neither employee should be marked absent
+        self.assertFalse(AttendanceAbsentLog.objects.filter(employee=self.emp_dhaka, date=target_date).exists())
+        self.assertFalse(AttendanceAbsentLog.objects.filter(employee=self.emp_sylhet, date=target_date).exists())

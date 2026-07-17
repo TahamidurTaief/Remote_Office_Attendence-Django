@@ -13,7 +13,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from apps.accounts.mixins import AdminRequiredMixin
+from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from django.views.generic import TemplateView, ListView, View, FormView, DetailView, CreateView
 from apps.attendance.models import Attendance
 from apps.attendance.schedule_utils import (
@@ -39,7 +39,8 @@ def admin_required(view_func):
         return view_func(request, *args, **kwargs)
     return _wrapped
 
-class AdminDashboardView(AdminRequiredMixin, TemplateView):
+class AdminDashboardView(RoleRequiredMixin, TemplateView):
+    allowed_roles = ['admin', 'manager']
     template_name = 'admin_panel/admin_dashboard.html'
     
     def get_context_data(self, **kwargs):
@@ -57,10 +58,59 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
         branch_id = self.request.GET.get('branch')
         employee_id = self.request.GET.get('employee')
         
+        role_name = self.request.user.role.name if hasattr(self.request.user.role, 'name') else self.request.user.role
+        can_view_all = (role_name == 'admin')
+        
+        # Scoping variables
+        profile = getattr(self.request.user, 'employee_profile', None)
+        manager_branch = None
+        project_employees = None
+        
+        if not can_view_all and role_name == 'manager':
+            # Manager scoping
+            if profile and profile.branch:
+                manager_branch = profile.branch
+                branch_id = str(manager_branch.id)
+            else:
+                branch_id = None
+                from django.db.models import Q
+                from apps.projects.models import Project
+                managed_projects = Project.objects.filter(project_manager=profile)
+                project_employees = EmployeeProfile.objects.filter(
+                    Q(site_engineer_projects__in=managed_projects) |
+                    Q(assigned_tasks__project__in=managed_projects)
+                ).select_related('branch').distinct()
+
+        # Determine allowed employees queryset
+        if can_view_all:
+            allowed_employees = EmployeeProfile.objects.filter(is_active=True)
+        elif manager_branch:
+            allowed_employees = EmployeeProfile.objects.filter(branch=manager_branch, is_active=True)
+        elif project_employees is not None:
+            allowed_employees = project_employees.filter(is_active=True)
+        else:
+            allowed_employees = EmployeeProfile.objects.none()
+
+        if employee_id:
+            try:
+                if not allowed_employees.filter(id=employee_id).exists():
+                    employee_id = None
+            except ValueError:
+                employee_id = None
+
         todays_attendances = Attendance.objects.filter(date=today, is_expired=False).select_related('employee', 'employee__branch')
         
-        if branch_id:
-            todays_attendances = todays_attendances.filter(employee__branch_id=branch_id)
+        if can_view_all:
+            if branch_id:
+                todays_attendances = todays_attendances.filter(employee__branch_id=branch_id)
+        else:
+            if manager_branch:
+                todays_attendances = todays_attendances.filter(employee__branch=manager_branch)
+            elif project_employees is not None:
+                todays_attendances = todays_attendances.filter(employee__in=project_employees)
+            else:
+                todays_attendances = todays_attendances.none()
+                
         if employee_id:
             todays_attendances = todays_attendances.filter(employee_id=employee_id)
         
@@ -72,20 +122,97 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
         field_count = todays_attendances.filter(type='field').count()
 
         # Compute absent employees for today using get_absent_records
-        absent_records = get_absent_records(
-            date_from=today,
-            date_to=today,
-            employee_id=employee_id if employee_id else None,
-            branch_id=branch_id if branch_id else None
-        )
+        if can_view_all:
+            absent_records = get_absent_records(
+                date_from=today,
+                date_to=today,
+                employee_id=employee_id if employee_id else None,
+                branch_id=branch_id if branch_id else None
+            )
+        elif manager_branch:
+            absent_records = get_absent_records(
+                date_from=today,
+                date_to=today,
+                employee_id=employee_id if employee_id else None,
+                branch_id=manager_branch.id
+            )
+        elif project_employees is not None:
+            absent_records = get_absent_records(
+                date_from=today,
+                date_to=today,
+                employee_id=employee_id if employee_id else None,
+                employee_queryset=allowed_employees
+            )
+        else:
+            absent_records = []
+
         on_leave_today = sum(1 for r in absent_records if r.status == 'on_leave')
         absent_count = sum(1 for r in absent_records if r.status == 'absent')
         not_checked_in = absent_records
 
+        # Manager widgets context data
+        my_projects = []
+        pending_approvals = []
+        branch_summaries = []
+        report_missing_branch = False
+        has_approve_permission = self.request.user.has_perm('leave.change_leaverequest') or self.request.user.has_perm('leave.approve_leaverequest')
+
+        if not can_view_all and role_name == 'manager':
+            from apps.projects.models import Project
+            my_projects = Project.objects.filter(project_manager=profile).select_related('project_type', 'branch').prefetch_related('tasks')
+            
+            if has_approve_permission:
+                from apps.leave.models import LeaveRequest
+                if manager_branch:
+                    pending_approvals = LeaveRequest.objects.filter(
+                        status='pending',
+                        employee__branch=manager_branch
+                    ).select_related('employee', 'leave_type')
+                elif project_employees is not None:
+                    pending_approvals = LeaveRequest.objects.filter(
+                        status='pending',
+                        employee__in=allowed_employees
+                    ).select_related('employee', 'leave_type')
+
+            from apps.branches.models import Branch
+            if manager_branch:
+                branches_to_summarize = [manager_branch]
+            else:
+                from apps.branches.utils import get_cached_branches
+                branches_to_summarize = get_cached_branches()
+                report_missing_branch = True
+
+            for b in branches_to_summarize:
+                b_employees = EmployeeProfile.objects.filter(branch=b, is_active=True)
+                b_emp_count = b_employees.count()
+                b_atts = Attendance.objects.filter(date=today, employee__branch=b, is_expired=False)
+                b_present = b_atts.filter(attendance_type='check_in').values('employee_id').distinct().count()
+                b_late = b_atts.filter(attendance_type='check_in', status='late').values('employee_id').distinct().count()
+                b_absent_recs = get_absent_records(date_from=today, date_to=today, branch_id=b.id)
+                b_absent = sum(1 for r in b_absent_recs if r.status == 'absent')
+                b_on_leave = sum(1 for r in b_absent_recs if r.status == 'on_leave')
+
+                branch_summaries.append({
+                    'branch': b,
+                    'total_employees': b_emp_count,
+                    'present': b_present,
+                    'late': b_late,
+                    'absent': b_absent,
+                    'on_leave': b_on_leave,
+                })
+
         from apps.branches.utils import get_cached_branches
+        if can_view_all:
+            branches_context = get_cached_branches()
+        elif manager_branch:
+            branches_context = [manager_branch]
+        else:
+            branches_context = []
+
         context.update({
-            'branches': get_cached_branches(),
-            'employees': EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
+            'can_view_all': can_view_all,
+            'branches': branches_context,
+            'employees': allowed_employees.order_by('full_name'),
             'selected_date': today.strftime('%Y-%m-%d'),
             'selected_branch': branch_id or '',
             'selected_employee': employee_id or '',
@@ -96,7 +223,12 @@ class AdminDashboardView(AdminRequiredMixin, TemplateView):
             'on_field':      field_count,
             'todays_attendances': todays_attendances.filter(attendance_type='check_in').order_by('-check_in_time'),
             'not_checked_in': not_checked_in,
-            'today_str': today.strftime('%Y-%m-%d')
+            'today_str': today.strftime('%Y-%m-%d'),
+            'my_projects': my_projects,
+            'pending_approvals': pending_approvals,
+            'branch_summaries': branch_summaries,
+            'report_missing_branch': report_missing_branch,
+            'has_approve_permission': has_approve_permission,
         })
         return context
 
@@ -431,7 +563,7 @@ class SyntheticAttendance:
         return 'Absent'
 
 
-def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id=None):
+def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id=None, employee_queryset=None):
     """
     Computes absent employees for a date or date range.
     Returns a list of SyntheticAttendance objects representing dates on which active employees were absent.
@@ -465,7 +597,10 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
         start_date, end_date = end_date, start_date
 
     # Get active employees
-    employees = EmployeeProfile.objects.filter(is_active=True)
+    if employee_queryset is not None:
+        employees = employee_queryset
+    else:
+        employees = EmployeeProfile.objects.filter(is_active=True)
     if employee_id:
         employees = employees.filter(id=employee_id)
     if branch_id:
@@ -477,6 +612,8 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
         date__range=(start_date, end_date),
         is_expired=False
     )
+    if employee_queryset is not None:
+        attendances = attendances.filter(employee__in=employee_queryset)
     if employee_id:
         attendances = attendances.filter(employee_id=employee_id)
     if branch_id:
@@ -493,6 +630,8 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
         start_date__lte=end_date,
         end_date__gte=start_date
     )
+    if employee_queryset is not None:
+        leave_requests = leave_requests.filter(employee__in=employee_queryset)
     if employee_id:
         leave_requests = leave_requests.filter(employee_id=employee_id)
     if branch_id:

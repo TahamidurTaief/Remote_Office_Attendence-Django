@@ -82,3 +82,25 @@ class EmployeeLeaveRule(models.Model):
 
     def __str__(self):
         return f"{self.employee.full_name} - {self.leave_type.name}: {self.days_per_year} days"
+
+
+class EmployeeDocument(models.Model):
+    employee = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name='documents'
+    )
+    document_type = models.CharField(max_length=100)
+    expiry_date = models.DateField()
+    file = models.FileField(
+        upload_to='employees/documents/',
+        null=True,
+        blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['expiry_date']
+
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.document_type} (Expires: {self.expiry_date})"

@@ -28,7 +28,9 @@ class Project(models.Model):
 
     name = models.CharField(max_length=255)
     client_name = models.CharField(max_length=255)
+    client_email = models.EmailField(blank=True, null=True)
     consultant = models.CharField(max_length=255, blank=True)
+    consultant_email = models.EmailField(blank=True, null=True)
     main_contractor = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255)
     
@@ -150,6 +152,32 @@ class ProjectTask(models.Model):
     class Meta:
         ordering = ['order']
 
+    def save(self, *args, **kwargs):
+        is_delayed = False
+        if self.status == 'Delayed':
+            if self.pk:
+                try:
+                    old_status = ProjectTask.objects.get(pk=self.pk).status
+                    if old_status != 'Delayed':
+                        is_delayed = True
+                except ProjectTask.DoesNotExist:
+                    is_delayed = True
+            else:
+                is_delayed = True
+                
+        super().save(*args, **kwargs)
+        
+        if is_delayed and self.project.project_manager and self.project.project_manager.user:
+            from apps.notifications.dispatch import send_email_notification
+            subject = f"Task Delayed: {self.activity} in Project {self.project.name}"
+            message = (
+                f"Hello {self.project.project_manager.full_name},\n\n"
+                f"The task '{self.activity}' in project '{self.project.name}' has been marked as Delayed.\n"
+                f"Remarks: {self.remarks or 'None'}\n\n"
+                f"Regards,\nFieldTrack System"
+            )
+            send_email_notification(self.project.project_manager.user, subject, message)
+
     def __str__(self):
         return f"{self.project.name} - {self.order}. {self.activity}"
 
@@ -223,6 +251,36 @@ class ProjectMaterial(models.Model):
     @property
     def balance(self):
         return self.required_qty - self.received_qty
+
+    def save(self, *args, **kwargs):
+        is_trigger = False
+        if self.received_qty == 0:
+            if self.pk:
+                try:
+                    old_received = ProjectMaterial.objects.get(pk=self.pk).received_qty
+                    if old_received > 0:
+                        is_trigger = True
+                except ProjectMaterial.DoesNotExist:
+                    is_trigger = True
+            else:
+                is_trigger = True
+                
+        super().save(*args, **kwargs)
+        
+        if is_trigger and self.project.completion_date and self.project.project_manager and self.project.project_manager.user:
+            from datetime import date
+            days_left = (self.project.completion_date - date.today()).days
+            if days_left <= 7:
+                from apps.notifications.dispatch import send_email_notification
+                subject = f"URGENT: Material Zero-Received: {self.material_name} in Project {self.project.name}"
+                message = (
+                    f"Hello {self.project.project_manager.full_name},\n\n"
+                    f"The material '{self.material_name}' in project '{self.project.name}' has 0 received quantity, "
+                    f"and the project completion deadline is approaching on {self.project.completion_date} "
+                    f"(in {days_left} days).\n\n"
+                    f"Regards,\nFieldTrack System"
+                )
+                send_email_notification(self.project.project_manager.user, subject, message)
 
     def __str__(self):
         return f"{self.project.name} - {self.material_name}"

@@ -48,6 +48,7 @@ class Command(BaseCommand):
         skipped_present = 0
         skipped_leave = 0
         skipped_weekend = 0
+        skipped_holiday = 0
         skipped_already_logged = 0
         skipped_no_leavetype = 0
         deducted_count = 0
@@ -73,6 +74,14 @@ class Command(BaseCommand):
                     skipped_weekend += 1
                     self.stdout.write(f'Employee {emp.full_name} is off today (Global Settings). Skipping.')
                     continue
+            # Check if today is a Holiday (branch-specific or company-wide)
+            from django.db.models import Q
+            from apps.branches.models import Holiday
+            if Holiday.objects.filter(date=target_date).filter(Q(branch=emp.branch) | Q(branch__isnull=True)).exists():
+                skipped_holiday += 1
+                self.stdout.write(f'Employee {emp.full_name} is on Holiday today. Skipping.')
+                continue
+
             # Check if attendance exists
             if Attendance.objects.filter(employee=emp, date=target_date).exists():
                 skipped_present += 1
@@ -152,6 +161,7 @@ class Command(BaseCommand):
         self.stdout.write(f'Skipped (had attendance): {skipped_present}')
         self.stdout.write(f'Skipped (had approved/pending leave): {skipped_leave}')
         self.stdout.write(f'Skipped (weekend/off-day): {skipped_weekend}')
+        self.stdout.write(f'Skipped (Holiday): {skipped_holiday}')
         self.stdout.write(f'Skipped (already logged absent): {skipped_already_logged}')
         if skipped_no_leavetype:
             self.stdout.write(f'Skipped (no LeaveType configured): {skipped_no_leavetype}')

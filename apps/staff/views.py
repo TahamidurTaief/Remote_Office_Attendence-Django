@@ -261,9 +261,63 @@ def profile(request):
         'field':   attendances_this_month.filter(type='field').count()
     }
 
+    # Attendance history (last 30 days, paginated)
+    today = timezone.localdate()
+    thirty_days_ago = today - datetime.timedelta(days=30)
+    attendance_history_qs = Attendance.objects.filter(
+        employee=employee,
+        date__gte=thirty_days_ago,
+        date__lte=today,
+        is_expired=False
+    ).select_related('employee', 'employee__branch').order_by('-date', '-check_in_time')
+
+    from django.core.paginator import Paginator
+    paginator = Paginator(attendance_history_qs, 10)
+    page_number = request.GET.get('page')
+    attendance_page = paginator.get_page(page_number)
+
+    # Leave balances (reuse existing leave logic)
+    from apps.leave.models import get_cached_leave_types, LeaveBalance
+    leave_types = get_cached_leave_types()
+    leave_balances = []
+    
+    if employee:
+        emp_balances = list(LeaveBalance.objects.filter(employee=employee, year=today.year).select_related('leave_type'))
+        emp_rules = list(employee.leave_rules.all())
+        
+        for lt in leave_types:
+            balance = next((b for b in emp_balances if b.leave_type_id == lt.id), None)
+            if balance:
+                leave_balances.append({
+                    'type': lt,
+                    'total': balance.total_days,
+                    'used': balance.used_days,
+                    'remaining': balance.remaining_days
+                })
+            else:
+                rule = next((r for r in emp_rules if r.leave_type_id == lt.id), None)
+                limit = rule.days_per_year if rule else lt.default_days_per_year
+                leave_balances.append({
+                    'type': lt,
+                    'total': limit,
+                    'used': 0,
+                    'remaining': limit
+                })
+
+    # Assigned ProjectTasks
+    from apps.projects.models import ProjectTask
+    assigned_tasks = []
+    if employee:
+        assigned_tasks = ProjectTask.objects.filter(
+            responsible_person=employee
+        ).select_related('project', 'project__branch').order_by('status', 'planned_finish')
+
     return render(request, 'staff/profile.html', {
         'employee': employee,
-        'stats':    stats
+        'stats':    stats,
+        'attendance_page': attendance_page,
+        'leave_balances': leave_balances,
+        'assigned_tasks': assigned_tasks,
     })
 
 

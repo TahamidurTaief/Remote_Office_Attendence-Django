@@ -9,6 +9,7 @@ class Notification(models.Model):
         ('field_visit', 'Field Visit'),
         ('late', 'Late Alert'),
         ('missing', 'Missing Employee'),
+        ('document_expiry', 'Document Expiry'),
     ]
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,

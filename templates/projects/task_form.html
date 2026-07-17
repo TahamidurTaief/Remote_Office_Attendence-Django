@@ -86,6 +86,16 @@
                     <label for="{{ form.remarks.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Remarks</label>
                     {{ form.remarks }}
                 </div>
+
+                {% if object %}
+                <!-- Shift subsequent checkbox -->
+                <div class="sm:col-span-6 flex items-center gap-2 mt-2">
+                    <input type="checkbox" id="shift_subsequent_checkbox" name="confirm_shift" value="true" checked class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                    <label for="shift_subsequent_checkbox" class="text-[12px] font-medium text-gray-750 select-none cursor-pointer">
+                        Shift all subsequent tasks if this task is delayed
+                    </label>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Submit buttons -->
@@ -98,6 +108,52 @@
                     {% if object %}Save Changes{% else %}Add Task{% endif %}
                 </button>
             </div>
+
+{% if object %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    if (!form) return;
+    
+    form.addEventListener('submit', function(e) {
+        if (this.dataset.confirmed === 'true') {
+            return;
+        }
+        
+        const checkbox = document.getElementById('shift_subsequent_checkbox');
+        if (!checkbox || !checkbox.checked) {
+            return;
+        }
+
+        const statusEl = document.getElementById('id_status');
+        const finishEl = document.getElementById('id_planned_finish');
+        if (!statusEl || !finishEl) return;
+
+        const newStatus = statusEl.value;
+        const newFinishVal = finishEl.value;
+
+        const oldFinishVal = "{{ object.planned_finish|date:'Y-m-d' }}";
+
+        if (newStatus === 'Delayed' && oldFinishVal && newFinishVal && newFinishVal > oldFinishVal) {
+            e.preventDefault();
+            
+            const oldDate = new Date(oldFinishVal);
+            const newDate = new Date(newFinishVal);
+            const diffTime = newDate - oldDate;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 0) {
+                window.confirmAction(`Shift all subsequent tasks by ${diffDays} days?`, () => {
+                    this.action = "{% url 'projects:project_task_shift_subsequent' object.pk %}";
+                    this.dataset.confirmed = 'true';
+                    this.submit();
+                });
+            }
+        }
+    });
+});
+</script>
+{% endif %}
         </form>
     </div>
 </div>

@@ -39,7 +39,50 @@ class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
         context['current_status'] = self.request.GET.get('status', 'all')
         return context
 
-class ApproveLeaveRequestView(AdminRequiredMixin, View):
+class BaseProcessLeaveRequestView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+
+        if request.user.role not in self.allowed_roles:
+            if request.user.role == 'admin':
+                return redirect('/admin-panel/dashboard/')
+            elif request.user.role in ['staff', 'manager']:
+                return redirect('/staff/home/')
+            return redirect('/login/')
+
+        # Scoping check for manager
+        if request.user.role == 'manager':
+            has_perm = request.user.has_perm('leave.change_leaverequest') or request.user.has_perm('leave.approve_leaverequest')
+            if not has_perm:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You do not have permission to process leave requests.")
+
+            leave_request = get_object_or_404(LeaveRequest, pk=kwargs.get('pk'))
+            profile = getattr(request.user, 'employee_profile', None)
+            scoped = False
+            if profile:
+                if profile.branch and leave_request.employee.branch == profile.branch:
+                    scoped = True
+                elif not profile.branch:
+                    from django.db.models import Q
+                    from apps.projects.models import Project
+                    managed_projects = Project.objects.filter(project_manager=profile)
+                    project_employees = EmployeeProfile.objects.filter(
+                        Q(site_engineer_projects__in=managed_projects) |
+                        Q(assigned_tasks__project__in=managed_projects)
+                    ).distinct()
+                    if leave_request.employee in project_employees:
+                        scoped = True
+            if not scoped:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You do not have permission to process leave requests outside your scope.")
+
+        return super().dispatch(request, *args, **kwargs)
+
+class ApproveLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
         return self._process_approval(request, pk)
 
@@ -56,9 +99,12 @@ class ApproveLeaveRequestView(AdminRequiredMixin, View):
             messages.success(request, f"Leave request for {leave_request.employee.full_name} has been approved.")
         else:
             messages.error(request, "This request has already been processed.")
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
         return redirect('leave:admin_dashboard')
 
-class RejectLeaveRequestView(AdminRequiredMixin, View):
+class RejectLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
         return self._process_approval(request, pk)
 
@@ -75,6 +121,9 @@ class RejectLeaveRequestView(AdminRequiredMixin, View):
             messages.success(request, f"Leave request for {leave_request.employee.full_name} has been rejected.")
         else:
             messages.error(request, "This request has already been processed.")
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
         return redirect('leave:admin_dashboard')
 
 class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):

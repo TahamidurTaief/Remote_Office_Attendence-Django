@@ -14,7 +14,7 @@
 
     <!-- Filters -->
     <div class="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm mb-4">
-        <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <form method="GET" class="grid grid-cols-1 {% if can_view_all or branches %}md:grid-cols-4{% else %}md:grid-cols-3{% endif %} gap-4 items-end">
             <div>
                 <label class="block text-[12px] font-medium text-gray-600 mb-1">Date</label>
                 <input type="date" name="date" value="{{ selected_date }}" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
@@ -28,15 +28,19 @@
                     {% endfor %}
                 </select>
             </div>
+            {% if can_view_all or branches %}
             <div>
                 <label class="block text-[12px] font-medium text-gray-600 mb-1">Branch</label>
                 <select name="branch" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                    {% if can_view_all %}
                     <option value="">All Branches</option>
+                    {% endif %}
                     {% for b in branches %}
                     <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
                     {% endfor %}
                 </select>
             </div>
+            {% endif %}
             <div class="flex gap-2">
                 <button type="submit" class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                     <i data-lucide="filter" class="w-4 h-4"></i>

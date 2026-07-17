@@ -47,3 +47,16 @@ python manage.py mark_daily_absences --dry-run
 ```bash
 30 1 * * * cd /home/username/fieldtrack && /home/username/venv/bin/python manage.py run_backup --type=auto_3day >> /home/username/logs/backup_3day.log 2>&1
 ```
+
+## Daily Document Expiry Check Job
+Time: 3:00 AM daily
+
+Command:
+```bash
+0 3 * * * cd /home/username/fieldtrack && /home/username/venv/bin/python manage.py check_expiring_documents >> /home/username/logs/check_expiring_documents.log 2>&1
+```
+
+## Manual Run
+```bash
+python manage.py check_expiring_documents
+```

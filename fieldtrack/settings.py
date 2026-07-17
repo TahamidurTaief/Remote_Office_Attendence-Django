@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'apps.backups',
     'apps.leave',
     'apps.projects',
+    'apps.schedule',
 ]
 
 MIDDLEWARE = [
@@ -196,4 +197,14 @@ IMAGEKIT_CACHEFILE_NAMER = 'imagekit.cachefiles.namers.hash'
 
 # Working days (Saturday to Thursday, Friday = 4 is excluded by default)
 WORKING_DAYS = [0, 1, 2, 3, 5, 6]
+
+
+# Email Settings
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@fieldtrack.com')
 
