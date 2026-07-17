@@ -6,10 +6,13 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib import messages
 from django.db.models import Q
 from datetime import date, timedelta
-from apps.accounts.mixins import AdminRequiredMixin
+from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from apps.branches.models import Branch
+from apps.employees.models import EmployeeProfile
+from apps.notifications.models import Notification
+from apps.notifications.dispatch import send_email_notification
 from .models import Project, ProjectType, TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff
-from .forms import ProjectForm, ProjectTypeForm, TaskTemplateForm, TaskTemplateItemForm, ProjectTaskForm, DailyProgressLogForm, ManpowerDeploymentForm, ProjectMaterialForm
+from .forms import ProjectForm, ProjectTypeForm, TaskTemplateForm, TaskTemplateItemForm, ProjectTaskForm, DailyProgressLogForm, ManpowerDeploymentForm, ProjectMaterialForm, GlobalProjectTaskForm
 
 
 
@@ -70,7 +73,21 @@ class ProjectDetailView(AdminRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         from django.db.models import Count
         context = super().get_context_data(**kwargs)
-        context['tasks'] = self.object.tasks.select_related('responsible_person').all().order_by('order')
+        
+        tasks_qs = self.object.tasks.select_related('responsible_person').all().order_by('order')
+        member_id = self.request.GET.get('member')
+        if member_id:
+            try:
+                tasks_qs = tasks_qs.filter(responsible_person_id=int(member_id))
+            except ValueError:
+                pass
+        context['tasks'] = tasks_qs
+        
+        # Get all distinct responsible persons assigned to tasks in this project
+        project_members = EmployeeProfile.objects.filter(assigned_tasks__project=self.object).distinct().order_by('full_name')
+        context['project_members'] = project_members
+        context['selected_member_id'] = int(member_id) if member_id and member_id.isdigit() else None
+
         context['templates'] = TaskTemplate.objects.annotate(items_count=Count('items')).order_by('name')
         # #17 — removed redundant 'project' from select_related (already available via self.object)
         context['progress_logs'] = self.object.progress_logs.select_related('logged_by').all().order_by('-date', '-created_at')
@@ -211,8 +228,31 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
     def form_valid(self, form):
         project = get_object_or_404(Project, pk=self.kwargs['project_id'])
         form.instance.project = project
+        response = super().form_valid(form)
+        
+        # Notify assigned employee
+        task = self.object
+        if task.responsible_person and task.responsible_person.user:
+            Notification.objects.create(
+                recipient=task.responsible_person.user,
+                employee=task.responsible_person,
+                title=f"New Task Assigned: {task.activity}",
+                message=f"You have been assigned to task '{task.activity}' for project '{project.name}'.",
+                notif_type='field_visit'
+            )
+            subject = f"New Task Assigned: {task.activity}"
+            message = (
+                f"Hello {task.responsible_person.full_name},\n\n"
+                f"You have been assigned to the following task in project '{project.name}':\n"
+                f"Task: {task.activity}\n"
+                f"Planned: {task.planned_start or '—'} to {task.planned_finish or '—'}\n"
+                f"Status: {task.status}\n\n"
+                f"Regards,\nFieldTrack System"
+            )
+            send_email_notification(task.responsible_person.user, subject, message)
+            
         messages.success(self.request, 'Task added successfully.')
-        return super().form_valid(form)
+        return response
 
     def get_success_url(self):
         return reverse_lazy('projects:project_detail', kwargs={'pk': self.kwargs['project_id']})
@@ -229,8 +269,33 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
         return context
 
     def form_valid(self, form):
+        old_task = ProjectTask.objects.get(pk=self.get_object().pk)
+        old_resp = old_task.responsible_person
+        response = super().form_valid(form)
+        
+        new_task = self.object
+        if new_task.responsible_person and new_task.responsible_person != old_resp:
+            if new_task.responsible_person.user:
+                Notification.objects.create(
+                    recipient=new_task.responsible_person.user,
+                    employee=new_task.responsible_person,
+                    title=f"Task Assigned: {new_task.activity}",
+                    message=f"You have been assigned to task '{new_task.activity}' for project '{new_task.project.name}'.",
+                    notif_type='field_visit'
+                )
+                subject = f"Task Assigned: {new_task.activity}"
+                message = (
+                    f"Hello {new_task.responsible_person.full_name},\n\n"
+                    f"You have been assigned to the following task in project '{new_task.project.name}':\n"
+                    f"Task: {new_task.activity}\n"
+                    f"Planned: {new_task.planned_start or '—'} to {new_task.planned_finish or '—'}\n"
+                    f"Status: {new_task.status}\n\n"
+                    f"Regards,\nFieldTrack System"
+                )
+                send_email_notification(new_task.responsible_person.user, subject, message)
+
         messages.success(self.request, 'Task updated successfully.')
-        return super().form_valid(form)
+        return response
 
     def get_success_url(self):
         return reverse_lazy('projects:project_detail', kwargs={'pk': self.object.project.pk})
@@ -1085,6 +1150,87 @@ class ProjectRequestSignOffView(AdminRequiredMixin, View):
             messages.error(request, f"Failed to send sign-off request email to {stakeholder_type} ({email}).")
             
         return redirect('projects:project_detail', pk=project_id)
+
+
+class GlobalTaskListView(RoleRequiredMixin, ListView):
+    allowed_roles = ['admin', 'manager']
+    model = ProjectTask
+    template_name = 'projects/global_task_list.html'
+    context_object_name = 'tasks'
+    
+    def get_queryset(self):
+        # Optimized from the start using select_related
+        qs = ProjectTask.objects.select_related('project', 'responsible_person').all().order_by('project__name', 'order')
+        
+        # Apply filters
+        employee_id = self.request.GET.get('employee')
+        project_id = self.request.GET.get('project')
+        status = self.request.GET.get('status')
+        date_start = self.request.GET.get('date_start')
+        date_end = self.request.GET.get('date_end')
+        
+        if employee_id:
+            qs = qs.filter(responsible_person_id=employee_id)
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        if status:
+            qs = qs.filter(status=status)
+        if date_start:
+            qs = qs.filter(planned_start__gte=date_start)
+        if date_end:
+            qs = qs.filter(planned_finish__lte=date_end)
+            
+        return qs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Pass lists for filters
+        context['employees'] = EmployeeProfile.objects.all().order_by('full_name')
+        context['projects'] = Project.objects.all().order_by('name')
+        context['statuses'] = ProjectTask.STATUS_CHOICES
+        
+        # Preserve filter selections
+        context['selected_employee'] = self.request.GET.get('employee', '')
+        context['selected_project'] = self.request.GET.get('project', '')
+        context['selected_status'] = self.request.GET.get('status', '')
+        context['selected_date_start'] = self.request.GET.get('date_start', '')
+        context['selected_date_end'] = self.request.GET.get('date_end', '')
+        return context
+
+
+class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
+    allowed_roles = ['admin', 'manager']
+    model = ProjectTask
+    form_class = GlobalProjectTaskForm
+    template_name = 'projects/global_task_form.html'
+    success_url = reverse_lazy('projects:global_task_list')
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        task = self.object
+        # Notify newly assigned employee
+        if task.responsible_person and task.responsible_person.user:
+            Notification.objects.create(
+                recipient=task.responsible_person.user,
+                employee=task.responsible_person,
+                title=f"New Task Assigned: {task.activity}",
+                message=f"You have been assigned to task '{task.activity}' for project '{task.project.name}'.",
+                notif_type='field_visit'
+            )
+            subject = f"New Task Assigned: {task.activity}"
+            message = (
+                f"Hello {task.responsible_person.full_name},\n\n"
+                f"You have been assigned to the following task in project '{task.project.name}':\n"
+                f"Task: {task.activity}\n"
+                f"Planned: {task.planned_start or '—'} to {task.planned_finish or '—'}\n"
+                f"Status: {task.status}\n\n"
+                f"Regards,\nFieldTrack System"
+            )
+            send_email_notification(task.responsible_person.user, subject, message)
+
+        messages.success(self.request, 'Task created successfully.')
+        return response
+
 
 
 

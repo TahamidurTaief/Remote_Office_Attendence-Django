@@ -244,7 +244,7 @@
         </div>
 
         {# Status filter + bulk action bar #}
-        {% if tasks %}
+        {% if tasks or selected_member_id or project_members %}
         <div class="px-4 py-2.5 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">Filter:</span>
@@ -267,7 +267,17 @@
                 <button type="button"
                         @click="statusFilter = 'Completed'"
                         :class="statusFilter === 'Completed' ? 'bg-green-600 text-white' : 'bg-white text-green-600 border border-green-200 hover:bg-green-50'"
-                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">Completed</button>
+                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors mr-3">Completed</button>
+
+                <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">Assignee:</span>
+                <form method="GET" class="inline-block">
+                    <select name="member" onchange="this.form.submit()" class="no-custom-dropdown text-[11px] border border-gray-200 rounded-full px-2.5 py-0.5 bg-white text-gray-650 focus:outline-none cursor-pointer">
+                        <option value="">All Members</option>
+                        {% for member in project_members %}
+                        <option value="{{ member.id }}" {% if selected_member_id == member.id %}selected{% endif %}>{{ member.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
             </div>
             {# Bulk action — only shown when at least one task is checked #}
             <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST"

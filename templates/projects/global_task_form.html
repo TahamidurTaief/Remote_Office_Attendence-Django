@@ -1,0 +1,107 @@
+{% extends 'base/admin_base.html' %}
+{% load static %}
+
+{% block title %}Create Global Task | FieldTrack{% endblock %}
+{% block page_title %}Create Task{% endblock %}
+
+{% block content %}
+<div class="p-4 max-w-3xl mx-auto">
+    <!-- Header -->
+    <div class="mb-4 flex items-center justify-between">
+        <div>
+            <h2 class="text-[14px] font-semibold text-gray-900">Create Task</h2>
+            <p class="mt-0.5 text-[12px] text-gray-500">Add a new task checklist item to any active project workspace.</p>
+        </div>
+        <a href="{% url 'projects:global_task_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
+            <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
+            Back to List
+        </a>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden">
+        <form method="POST" class="p-4 space-y-4">
+            {% csrf_token %}
+            
+            {% if form.errors %}
+            <div class="rounded-xl bg-red-50 p-3 border border-red-200">
+                <h3 class="text-[12px] font-medium text-red-800">Please correct the errors below:</h3>
+                <ul class="mt-1.5 list-disc list-inside text-[12px] text-red-700">
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
+                <!-- Select Project -->
+                <div class="sm:col-span-6">
+                    <label for="{{ form.project.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Project *</label>
+                    {{ form.project }}
+                </div>
+
+                <!-- Sequence Order -->
+                <div class="sm:col-span-2">
+                    <label for="{{ form.order.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Sequence Order *</label>
+                    {{ form.order }}
+                </div>
+
+                <!-- Activity Description -->
+                <div class="sm:col-span-4">
+                    <label for="{{ form.activity.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Activity *</label>
+                    {{ form.activity }}
+                </div>
+
+                <!-- Responsible Person -->
+                <div class="sm:col-span-6">
+                    <label for="{{ form.responsible_person.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Responsible Person</label>
+                    {{ form.responsible_person }}
+                </div>
+
+                <!-- Planned Start -->
+                <div class="sm:col-span-3">
+                    <label for="{{ form.planned_start.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Planned Start Date</label>
+                    {{ form.planned_start }}
+                </div>
+
+                <!-- Planned Finish -->
+                <div class="sm:col-span-3">
+                    <label for="{{ form.planned_finish.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Planned Finish Date</label>
+                    {{ form.planned_finish }}
+                </div>
+
+                <!-- Duration (Days) -->
+                <div class="sm:col-span-3">
+                    <label for="{{ form.duration_days.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Duration (Days)</label>
+                    {{ form.duration_days }}
+                </div>
+
+                <!-- Status -->
+                <div class="sm:col-span-3">
+                    <label for="{{ form.status.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Status *</label>
+                    {{ form.status }}
+                </div>
+
+                <!-- Remarks -->
+                <div class="sm:col-span-6">
+                    <label for="{{ form.remarks.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Remarks</label>
+                    {{ form.remarks }}
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-150">
+                <a href="{% url 'projects:global_task_list' %}" class="px-3.5 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 text-[12px] font-semibold rounded transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" class="px-3.5 py-2 bg-primary-gradient text-white text-[12px] font-semibold rounded shadow-sm hover:opacity-90 transition-opacity">
+                    Create Task
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

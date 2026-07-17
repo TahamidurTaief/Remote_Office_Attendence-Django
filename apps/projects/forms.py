@@ -219,7 +219,32 @@ class ProjectMaterialForm(forms.ModelForm):
             )
 
         return cleaned_data
+class GlobalProjectTaskForm(forms.ModelForm):
+    class Meta:
+        model = ProjectTask
+        fields = [
+            'project', 'order', 'activity', 'responsible_person',
+            'planned_start', 'planned_finish', 'duration_days',
+            'status', 'remarks'
+        ]
+        widgets = {
+            'project': forms.Select(attrs={'class': SELECT_INPUT}),
+            'order': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
+            'activity': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Duct Installation'}),
+            'responsible_person': forms.Select(attrs={'class': SELECT_INPUT}),
+            'planned_start': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'planned_finish': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'duration_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
+            'status': forms.Select(attrs={'class': SELECT_INPUT}),
+            'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
+        }
 
+    def clean(self):
+        cleaned_data = super().clean()
+        planned_start = cleaned_data.get('planned_start')
+        planned_finish = cleaned_data.get('planned_finish')
 
+        if planned_start and planned_finish and planned_finish < planned_start:
+            self.add_error('planned_finish', 'Planned finish date cannot be before the planned start date.')
 
-
+        return cleaned_data

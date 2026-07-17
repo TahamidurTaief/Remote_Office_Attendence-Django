@@ -1,4 +1,4 @@
-(function() {
+(function () {
     // Register Alpine.js component for dropdown
     function registerAlpineDropdown() {
         if (window.Alpine && Alpine.data) {
@@ -16,16 +16,16 @@
                 init() {
                     const container = this.$root.closest('.custom-dropdown-container');
                     const selectEl = container ? container.previousElementSibling : null;
-                    
+
                     if (selectEl && selectEl.tagName === 'SELECT') {
                         this.targetId = selectEl.id || '';
                         this.targetName = selectEl.name || '';
                         this.isDisabled = selectEl.disabled;
                         this.placeholder = selectEl.getAttribute('placeholder') || 'Select...';
-                        
+
                         this.loadOptions(selectEl);
                         this.selectedValue = selectEl.value;
-                        
+
                         // Sync when original select value changes programmatically
                         this.changeHandler = () => {
                             if (this.selectedValue !== selectEl.value) {
@@ -33,7 +33,7 @@
                             }
                         };
                         selectEl.addEventListener('change', this.changeHandler);
-                        
+
                         // Watch for disabled attribute change or child option changes
                         this.observer = new MutationObserver((mutations) => {
                             this.loadOptions(selectEl);
@@ -91,7 +91,7 @@
                     this.open = false;
                     this.search = '';
                 },
-                
+
                 destroy() {
                     const container = this.$root.closest('.custom-dropdown-container');
                     const selectEl = container ? container.previousElementSibling : null;
@@ -118,28 +118,28 @@
         }
         // Mark as initialized
         selectEl.dataset.customDropdownInitialized = 'true';
-        
+
         // Hide the original select
         selectEl.style.setProperty('display', 'none', 'important');
-        
+
         const name = selectEl.name || '';
         const id = selectEl.id || '';
         const placeholder = selectEl.getAttribute('placeholder') || 'Select...';
-        
+
         // Create wrapper div
         const wrapper = document.createElement('div');
         wrapper.className = 'custom-dropdown-container relative w-full text-left inline-block';
-        
+
         // Copy layout classes from original select
-        const layoutClasses = Array.from(selectEl.classList).filter(cls => 
-            cls.startsWith('w-') || 
-            cls.startsWith('m-') || 
-            cls.startsWith('mt-') || 
-            cls.startsWith('mb-') || 
-            cls.startsWith('ml-') || 
-            cls.startsWith('mr-') || 
-            cls.startsWith('p-') || 
-            cls.startsWith('flex-') || 
+        const layoutClasses = Array.from(selectEl.classList).filter(cls =>
+            cls.startsWith('w-') ||
+            cls.startsWith('m-') ||
+            cls.startsWith('mt-') ||
+            cls.startsWith('mb-') ||
+            cls.startsWith('ml-') ||
+            cls.startsWith('mr-') ||
+            cls.startsWith('p-') ||
+            cls.startsWith('flex-') ||
             cls.startsWith('col-') ||
             cls.startsWith('row-') ||
             cls.startsWith('grid-') ||
@@ -150,7 +150,7 @@
         if (layoutClasses.length) {
             wrapper.classList.add(...layoutClasses);
         }
-        
+
         // Custom Dropdown HTML Template
         wrapper.innerHTML = `
             <div x-data="customDropdown" @click.away="open = false" class="w-full relative">
@@ -204,10 +204,10 @@
                 </div>
             </div>
         `;
-        
+
         // Insert custom dropdown adjacent to original select
         selectEl.parentNode.insertBefore(wrapper, selectEl.nextSibling);
-        
+
         // Initialize Alpine on the newly inserted tree if Alpine is loaded
         if (window.Alpine && typeof window.Alpine.initTree === 'function') {
             window.Alpine.initTree(wrapper);
