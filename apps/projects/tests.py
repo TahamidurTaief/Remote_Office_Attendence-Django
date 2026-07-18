@@ -1827,6 +1827,96 @@ class ProjectTemplateIntegrationTests(TestCase):
         self.assertRedirects(response, edit_url)
 
 
+class StaffTaskCompletePermissionsTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from apps.branches.models import Branch
+        from apps.employees.models import EmployeeProfile
+        from apps.projects.models import Project, ProjectTask, ProjectType
 
+        User = get_user_model()
+        self.password = 'pass123'
+        
+        # Branch
+        self.branch = Branch.objects.create(
+            name='Dhaka Branch',
+            latitude=23.8118,
+            longitude=90.4125,
+            radius_meters=100
+        )
 
+        # Project Type
+        self.project_type, _ = ProjectType.objects.get_or_create(name='HVAC Installation')
+        
+        # PM User
+        self.pm_user = User.objects.create_user(email='pm@example.com', phone='+8801700000888', role='manager', password=self.password)
+        self.pm_profile = EmployeeProfile.objects.create(
+            user=self.pm_user, full_name='Project Manager', branch=self.branch, joined_date=date.today(), phone='+8801700000888', employee_id='EMP901'
+        )
+        
+        # Staff User A
+        self.staff_user_a = User.objects.create_user(email='staffa@example.com', phone='+8801700000777', role='staff', password=self.password)
+        self.staff_profile_a = EmployeeProfile.objects.create(
+            user=self.staff_user_a, full_name='Staff A', branch=self.branch, joined_date=date.today(), phone='+8801700000777', employee_id='EMP902'
+        )
 
+        # Staff User B
+        self.staff_user_b = User.objects.create_user(email='staffb@example.com', phone='+8801700000666', role='staff', password=self.password)
+        self.staff_profile_b = EmployeeProfile.objects.create(
+            user=self.staff_user_b, full_name='Staff B', branch=self.branch, joined_date=date.today(), phone='+8801700000666', employee_id='EMP903'
+        )
+
+        # Project
+        self.project = Project.objects.create(
+            name='HVAC Test Project',
+            client_name='Test Client',
+            location='Test Loc',
+            start_date=date.today(),
+            branch=self.branch,
+            project_type=self.project_type
+        )
+        self.project.project_managers.add(self.pm_profile)
+        self.project.project_members.add(self.staff_profile_a)
+        self.project.project_members.add(self.staff_profile_b)
+
+        # Tasks
+        self.unassigned_task = ProjectTask.objects.create(
+            project=self.project, order=1, activity='Unassigned Task', status='Not Started', responsible_person=None
+        )
+        self.assigned_task_a = ProjectTask.objects.create(
+            project=self.project, order=2, activity='Assigned Task A', status='Not Started', responsible_person=self.staff_profile_a
+        )
+
+    def test_unassigned_task_complete_by_regular_staff_fails(self):
+        """A regular staff member cannot complete an unassigned task."""
+        self.client.login(username='+8801700000777', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': self.unassigned_task.pk})
+        response = self.client.post(url, data={'note': 'Done'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_unassigned_task_complete_by_pm_succeeds(self):
+        """The project manager can complete an unassigned task."""
+        self.client.login(username='+8801700000888', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': self.unassigned_task.pk})
+        response = self.client.post(url, data={'note': 'PM Done'})
+        self.assertEqual(response.status_code, 200)
+        self.unassigned_task.refresh_from_db()
+        self.assertEqual(self.unassigned_task.status, 'Completed')
+        self.assertEqual(self.unassigned_task.employee_note, 'PM Done')
+
+    def test_assigned_task_complete_by_other_staff_fails(self):
+        """Staff B cannot complete a task assigned to Staff A."""
+        self.client.login(username='+8801700000666', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': self.assigned_task_a.pk})
+        response = self.client.post(url, data={'note': 'Done'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_assigned_task_complete_by_assignee_succeeds(self):
+        """Staff A can complete their own assigned task."""
+        self.client.login(username='+8801700000777', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': self.assigned_task_a.pk})
+        response = self.client.post(url, data={'note': 'Done'})
+        self.assertEqual(response.status_code, 200)
+        self.assigned_task_a.refresh_from_db()
+        self.assertEqual(self.assigned_task_a.status, 'Completed')
+        self.assertEqual(self.assigned_task_a.employee_note, 'Done')

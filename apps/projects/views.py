@@ -1327,10 +1327,19 @@ def staff_task_complete(request, pk):
     
     task = get_object_or_404(ProjectTask, pk=pk)
     
-    # Verify request.user's linked EmployeeProfile == task.responsible_person
+    # Verify permissions:
+    # 1. If task is unassigned: only project managers of the project or admins can complete it
+    # 2. If task is assigned: only the assigned employee can complete it
     employee = getattr(request.user, 'employee_profile', None)
-    if not employee or task.responsible_person != employee:
-        return JsonResponse({'error': 'You are not assigned to this task.'}, status=403)
+    if not task.responsible_person:
+        is_pm = False
+        if employee and task.project.project_managers.filter(id=employee.id).exists():
+            is_pm = True
+        if not is_pm and not request.user.is_superuser:
+            return JsonResponse({'error': 'Only project managers or admins can update unassigned tasks.'}, status=403)
+    else:
+        if not employee or task.responsible_person != employee:
+            return JsonResponse({'error': 'You are not assigned to this task.'}, status=403)
         
     note = ""
     if request.content_type == 'application/json':
