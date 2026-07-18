@@ -1497,6 +1497,152 @@ def staff_task_complete(request, pk):
     })
 
 
+def check_task_view_permission(user, task):
+    if user.is_superuser or user.role in ['admin', 'manager']:
+        return True
+    employee = getattr(user, 'employee_profile', None)
+    if not employee:
+        return False
+    if task.responsible_person == employee:
+        return True
+    if task.project:
+        if task.project.project_members.filter(id=employee.id).exists():
+            return True
+        if task.project.site_engineers.filter(id=employee.id).exists():
+            return True
+        if task.project.project_managers.filter(id=employee.id).exists():
+            return True
+    return False
+
+
+@login_required
+def task_detail_api(request, pk):
+    import os
+    task = get_object_or_404(ProjectTask, pk=pk)
+    if not check_task_view_permission(request.user, task):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+        
+    attachments_data = []
+    # Fetch from TaskAttachment
+    for att in task.attachments.all():
+        name = att.filename
+        ext = os.path.splitext(name)[1].lower()
+        is_image = ext in ['.jpg', '.jpeg', '.png']
+        is_pdf = ext == '.pdf'
+        attachments_data.append({
+            'url': att.file.url,
+            'name': name,
+            'type': att.attachment_type,
+            'is_image': is_image,
+            'is_pdf': is_pdf
+        })
+        
+    # Also support legacy files if not already in TaskAttachment
+    legacy_assignment = task.assignment_attachment
+    if legacy_assignment and not any(a['url'] == legacy_assignment.url for a in attachments_data):
+        name = os.path.basename(legacy_assignment.name)
+        ext = os.path.splitext(name)[1].lower()
+        attachments_data.append({
+            'url': legacy_assignment.url,
+            'name': name,
+            'type': 'assignment',
+            'is_image': ext in ['.jpg', '.jpeg', '.png'],
+            'is_pdf': ext == '.pdf'
+        })
+    legacy_completion = task.completion_attachment
+    if legacy_completion and not any(a['url'] == legacy_completion.url for a in attachments_data):
+        name = os.path.basename(legacy_completion.name)
+        ext = os.path.splitext(name)[1].lower()
+        attachments_data.append({
+            'url': legacy_completion.url,
+            'name': name,
+            'type': 'completion',
+            'is_image': ext in ['.jpg', '.jpeg', '.png'],
+            'is_pdf': ext == '.pdf'
+        })
+
+    replies_data = []
+    for reply in task.replies.select_related('user', 'user__employee_profile').order_by('created_at'):
+        emp = getattr(reply.user, 'employee_profile', None)
+        full_name = emp.full_name if emp else (reply.user.first_name + ' ' + reply.user.last_name).strip() or reply.user.email
+        role = reply.user.role.capitalize() if hasattr(reply.user, 'role') else 'User'
+        photo_url = emp.profile_photo.url if emp and emp.profile_photo else None
+        
+        replies_data.append({
+            'author_name': full_name,
+            'author_role': role,
+            'author_photo_url': photo_url,
+            'message': reply.message,
+            'created_at': reply.created_at.strftime('%d/%m/%Y %H:%M')
+        })
+
+    data = {
+        'id': task.id,
+        'activity': task.activity,
+        'project_name': task.project.name if task.project else 'Standalone Task',
+        'branch_name': task.project.branch.name if task.project and task.project.branch else 'Global Workspace',
+        'responsible_person_name': task.responsible_person.full_name if task.responsible_person else 'Unassigned',
+        'planned_start': task.planned_start.strftime('%d/%m/%Y') if task.planned_start else '—',
+        'planned_finish': task.planned_finish.strftime('%d/%m/%Y') if task.planned_finish else '—',
+        'duration_days': f"{task.duration_days} days" if task.duration_days else '—',
+        'status': task.status,
+        'points': task.points,
+        'remarks': task.remarks or '',
+        'employee_note': task.employee_note or '',
+        'completed_at': task.completed_at.strftime('%d/%m/%Y %H:%M') if task.completed_at else '—',
+        'attachments': attachments_data,
+        'replies': replies_data
+    }
+    return JsonResponse(data)
+
+
+@login_required
+@require_POST
+def task_add_reply_api(request, pk):
+    task = get_object_or_404(ProjectTask, pk=pk)
+    if not check_task_view_permission(request.user, task):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+        
+    message = request.POST.get('message', '').strip()
+    if not message:
+        if request.content_type == 'application/json':
+            try:
+                payload = json.loads(request.body)
+                message = payload.get('message', '').strip()
+            except json.JSONDecodeError:
+                pass
+                
+    if not message:
+        return JsonResponse({'error': 'Message cannot be empty'}, status=400)
+        
+    from apps.projects.models import ProjectTaskReply
+    ProjectTaskReply.objects.create(
+        task=task,
+        user=request.user,
+        message=message
+    )
+    
+    replies_data = []
+    for r in task.replies.select_related('user', 'user__employee_profile').order_by('created_at'):
+        emp = getattr(r.user, 'employee_profile', None)
+        full_name = emp.full_name if emp else (r.user.first_name + ' ' + r.user.last_name).strip() or r.user.email
+        role = r.user.role.capitalize() if hasattr(r.user, 'role') else 'User'
+        photo_url = emp.profile_photo.url if emp and emp.profile_photo else None
+        
+        replies_data.append({
+            'author_name': full_name,
+            'author_role': role,
+            'author_photo_url': photo_url,
+            'message': r.message,
+            'created_at': r.created_at.strftime('%d/%m/%Y %H:%M')
+        })
+        
+    return JsonResponse({
+        'success': True,
+        'replies': replies_data
+    })
+
+
 
 
 

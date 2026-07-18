@@ -1952,3 +1952,24 @@ class StaffTaskCompletePermissionsTests(TestCase):
         self.assigned_task_a.refresh_from_db()
         self.assertEqual(self.assigned_task_a.status, 'Completed')
         self.assertEqual(self.assigned_task_a.attachments.filter(attachment_type='completion').count(), 2)
+
+    def test_task_detail_api_and_replies(self):
+        """Test retrieving task details and adding replies via the API."""
+        self.client.login(username='+8801700000777', password=self.password)
+        detail_url = reverse('projects:task_detail_api', kwargs={'pk': self.assigned_task_a.pk})
+        
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['id'], self.assigned_task_a.id)
+        self.assertEqual(data['activity'], self.assigned_task_a.activity)
+        self.assertEqual(len(data['replies']), 0)
+        
+        reply_url = reverse('projects:task_add_reply_api', kwargs={'pk': self.assigned_task_a.pk})
+        response = self.client.post(reply_url, data={'message': 'Here is a comment.'})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['replies']), 1)
+        self.assertEqual(data['replies'][0]['message'], 'Here is a comment.')
+        self.assertEqual(data['replies'][0]['author_name'], 'Staff A')

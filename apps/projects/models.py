@@ -433,6 +433,19 @@ class ProjectSignOff(models.Model):
         return f"Sign-off for {self.project.name}"
 
 
+class ProjectTaskReply(models.Model):
+    task = models.ForeignKey(ProjectTask, on_delete=models.CASCADE, related_name='replies')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='task_replies')
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Reply by {self.user.email} on task #{self.task.id}"
+
+
 
 
 

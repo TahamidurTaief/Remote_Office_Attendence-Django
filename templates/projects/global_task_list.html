@@ -5,7 +5,84 @@
 {% block page_title %}Task Management{% endblock %}
 
 {% block content %}
-<div class="flex flex-col h-full space-y-4" x-data="{ activeTab: localStorage.getItem('global_task_list_tab') || 'individual', expandedProject: null }">
+<div class="flex flex-col h-full space-y-4" x-data="{
+    activeTab: localStorage.getItem('global_task_list_tab') || 'individual',
+    expandedProject: null,
+    showDetailModal: false,
+    loadingDetail: false,
+    detailedTask: null,
+    newReplyMessage: '',
+    submittingReply: false,
+    activeFileIndex: 0,
+    
+    viewTaskDetails(taskId) {
+        this.showDetailModal = true;
+        this.loadingDetail = true;
+        this.detailedTask = null;
+        this.activeFileIndex = 0;
+        this.newReplyMessage = '';
+        
+        fetch(`/projects/tasks/${taskId}/detail-api/`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                this.showDetailModal = false;
+            } else {
+                this.detailedTask = data;
+                this.$nextTick(() => {
+                    if (window.lucide) {
+                        window.lucide.createIcons();
+                    }
+                    const el = document.getElementById('replies-scroll-container');
+                    if (el) el.scrollTop = el.scrollHeight;
+                });
+            }
+        })
+        .catch(err => {
+            alert('Failed to load task details.');
+            this.showDetailModal = false;
+        })
+        .finally(() => {
+            this.loadingDetail = false;
+        });
+    },
+    
+    submitReply() {
+        if (!this.newReplyMessage.trim()) return;
+        this.submittingReply = true;
+        
+        const formData = new FormData();
+        formData.append('message', this.newReplyMessage);
+        
+        fetch(`/projects/tasks/${this.detailedTask.id}/reply-api/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                this.detailedTask.replies = data.replies;
+                this.newReplyMessage = '';
+                this.$nextTick(() => {
+                    const el = document.getElementById('replies-scroll-container');
+                    if (el) el.scrollTop = el.scrollHeight;
+                });
+            } else {
+                alert(data.error || 'Failed to submit reply.');
+            }
+        })
+        .catch(err => {
+            alert('Error submitting reply.');
+        })
+        .finally(() => {
+            this.submittingReply = false;
+        });
+    }
+}">
     <!-- Header Summary & Actions -->
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-white p-4 border border-gray-150 rounded-xl shadow-sm">
         <div>
@@ -147,6 +224,7 @@
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold space-x-2">
+                                <button type="button" @click="viewTaskDetails({{ task.pk }})" class="text-indigo-605 hover:underline">View</button>
                                 <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:underline">Edit</a>
                                 <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this individual task checklist item permanently?', () => $el.submit())">
                                     {% csrf_token %}
@@ -254,6 +332,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="px-4 py-2.5 whitespace-nowrap text-right text-[10px] font-semibold space-x-2">
+                                        <button type="button" @click="viewTaskDetails({{ task.pk }})" class="text-indigo-605 hover:underline">View</button>
                                         <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:underline">Edit</a>
                                         <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this project task checklist item permanently?', () => $el.submit())">
                                             {% csrf_token %}
@@ -272,6 +351,187 @@
                 No project tasks matching search criteria.
             </div>
             {% endfor %}
+        </div>
+    </div>
+
+    <!-- Beautiful Task Details, Discussion & File Viewer Modal -->
+    <div x-show="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak x-transition>
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden" @click.outside="showDetailModal = false">
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+                <div class="min-w-0">
+                    <span class="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full" x-text="detailedTask ? detailedTask.project_name : 'Loading...'"></span>
+                    <h3 class="text-sm font-bold text-slate-800 truncate mt-1" x-text="detailedTask ? detailedTask.activity : 'Task Details'"></h3>
+                </div>
+                <button @click="showDetailModal = false" class="p-1.5 hover:bg-slate-200 text-slate-450 hover:text-slate-700 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-150">
+                <!-- Loader -->
+                <div x-show="loadingDetail" class="flex-1 flex flex-col items-center justify-center gap-2">
+                    <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-xs text-slate-400 font-medium">Fetching details & discussion...</span>
+                </div>
+
+                <template x-if="detailedTask">
+                    <!-- Left: Metadata & Status Details (Width 2/5 on large screen) -->
+                    <div class="w-full md:w-2/5 p-4 overflow-y-auto custom-scrollbar flex flex-col space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Status</span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-1"
+                                      :class="{
+                                          'bg-green-100 text-green-800 border border-green-200': detailedTask.status === 'Completed',
+                                          'bg-blue-100 text-blue-800 border border-blue-200': detailedTask.status === 'In Progress',
+                                          'bg-red-100 text-red-800 border border-red-200': detailedTask.status === 'Delayed',
+                                          'bg-slate-100 text-slate-700 border border-slate-200': detailedTask.status === 'Not Started'
+                                      }"
+                                      x-text="detailedTask.status"></span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Points</span>
+                                <span class="text-xs font-bold text-slate-800 mt-1 block" x-text="detailedTask.points"></span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Assignee</span>
+                                <span class="text-xs font-bold text-slate-850 mt-1 block" x-text="detailedTask.responsible_person_name"></span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Branch</span>
+                                <span class="text-xs font-medium text-slate-600 mt-1 block" x-text="detailedTask.branch_name"></span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Planned Timeline</span>
+                                <span class="text-xs font-medium text-slate-800 mt-1 block" x-text="detailedTask.planned_start + ' to ' + detailedTask.planned_finish"></span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Duration</span>
+                                <span class="text-xs font-medium text-slate-800 mt-1 block" x-text="detailedTask.duration_days"></span>
+                            </div>
+                        </div>
+
+                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.completed_at && detailedTask.completed_at !== '—'">
+                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Completed At</span>
+                            <span class="text-xs font-medium text-green-700 mt-1 block" x-text="detailedTask.completed_at"></span>
+                        </div>
+
+                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.remarks">
+                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Manager Remarks / Feedback</span>
+                            <p class="text-xs text-slate-600 mt-1 italic whitespace-pre-line bg-slate-50 border border-slate-100 p-2.5 rounded-lg" x-text="detailedTask.remarks"></p>
+                        </div>
+
+                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.employee_note">
+                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Employee Completion Note</span>
+                            <p class="text-xs text-slate-600 mt-1 italic whitespace-pre-line bg-emerald-50/50 border border-emerald-100 p-2.5 rounded-lg" x-text="detailedTask.employee_note"></p>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="detailedTask">
+                    <!-- Right: Discussion Replies Board & File Viewer (Width 3/5) -->
+                    <div class="w-full md:w-3/5 flex flex-col min-h-0 bg-slate-50/40">
+                        <!-- Upper half: File Viewer & Reader (if there are attachments) -->
+                        <div class="p-4 border-b border-slate-150 flex flex-col min-h-0 shrink-0 bg-white" x-show="detailedTask.attachments && detailedTask.attachments.length > 0">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider">File Viewer & Reader</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[11px] text-slate-500 font-medium">Select File:</span>
+                                    <select x-model="activeFileIndex" class="text-xs border border-slate-200 rounded p-1 bg-white focus:outline-none max-w-[200px]">
+                                        <template x-for="(file, idx) in detailedTask.attachments">
+                                            <option :value="idx" x-text="file.name + ' (' + file.type + ')'"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <template x-if="detailedTask.attachments[activeFileIndex]">
+                                <div class="border border-slate-150 rounded-xl overflow-hidden bg-slate-100 flex flex-col items-center justify-center p-2 min-h-[160px] max-h-[220px]">
+                                    <!-- Image Preview -->
+                                    <template x-if="detailedTask.attachments[activeFileIndex].is_image">
+                                        <div class="w-full h-full flex justify-center">
+                                            <img :src="detailedTask.attachments[activeFileIndex].url" class="max-w-full max-h-[200px] object-contain rounded-lg shadow-sm">
+                                        </div>
+                                    </template>
+                                    
+                                    <!-- PDF Reader -->
+                                    <template x-if="detailedTask.attachments[activeFileIndex].is_pdf">
+                                        <iframe :src="detailedTask.attachments[activeFileIndex].url" class="w-full h-[200px] border-0 rounded-lg"></iframe>
+                                    </template>
+                                    
+                                    <!-- Other Non-Previewable Formats -->
+                                    <template x-if="!detailedTask.attachments[activeFileIndex].is_image && !detailedTask.attachments[activeFileIndex].is_pdf">
+                                        <div class="flex flex-col items-center justify-center py-4 space-y-2">
+                                            <i data-lucide="file" class="w-10 h-10 text-slate-400"></i>
+                                            <span class="text-xs font-semibold text-slate-600" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                        </div>
+                                    </template>
+                                    
+                                    <!-- Download Bar -->
+                                    <div class="w-full border-t border-slate-200/50 mt-1.5 pt-1.5 flex items-center justify-between shrink-0 px-1">
+                                        <span class="text-[10px] text-slate-400 truncate max-w-[70%]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                        <a :href="detailedTask.attachments[activeFileIndex].url" download target="_blank" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-white bg-slate-800 hover:bg-slate-700 rounded-md transition-colors shadow-sm">
+                                            <i data-lucide="download" class="w-3 h-3"></i> Download
+                                        </a>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Lower half / Full: Replies / Discussion Board -->
+                        <div class="flex-1 min-h-0 flex flex-col p-4">
+                            <span class="text-[10px] text-slate-450 font-bold uppercase tracking-wider block mb-2 shrink-0">Collaborative replies & discussion</span>
+                            
+                            <!-- Replies List -->
+                            <div id="replies-scroll-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1.5 mb-3 min-h-0">
+                                <template x-if="!detailedTask.replies || detailedTask.replies.length === 0">
+                                    <div class="h-full flex flex-col items-center justify-center text-slate-400 text-xs italic py-8">
+                                        No comments or replies on this task yet.
+                                    </div>
+                                </template>
+                                
+                                <template x-for="r in detailedTask.replies">
+                                    <div class="flex items-start gap-2.5">
+                                        <div class="w-7 h-7 rounded-full bg-slate-200 overflow-hidden shrink-0 shadow-sm border border-slate-200">
+                                            <template x-if="r.author_photo_url">
+                                                <img :src="r.author_photo_url" class="w-full h-full object-cover">
+                                            </template>
+                                            <template x-if="!r.author_photo_url">
+                                                <div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-500 bg-slate-100" x-text="r.author_name.charAt(0).toUpperCase()"></div>
+                                            </template>
+                                        </div>
+                                        <div class="flex-1 min-w-0 bg-white border border-slate-150 rounded-xl p-2.5 shadow-sm">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <div class="flex items-baseline gap-1.5 min-w-0">
+                                                    <span class="text-[11px] font-bold text-slate-800 truncate" x-text="r.author_name"></span>
+                                                    <span class="text-[9px] text-indigo-600 font-semibold uppercase tracking-wider shrink-0" x-text="r.author_role"></span>
+                                                </div>
+                                                <span class="text-[9px] text-slate-405 shrink-0" x-text="r.created_at"></span>
+                                            </div>
+                                            <p class="text-xs text-slate-700 mt-1 whitespace-pre-wrap leading-relaxed" x-text="r.message"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Reply Form -->
+                            <form @submit.prevent="submitReply()" class="flex gap-2 items-end border-t border-slate-150 pt-3 shrink-0">
+                                <div class="flex-1">
+                                    <textarea x-model="newReplyMessage" rows="1" @keydown.enter.prevent="if($event.ctrlKey || $event.metaKey) { newReplyMessage += '\n' } else { submitReply() }" class="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white" placeholder="Write a reply... (Press Enter to send, Ctrl+Enter for new line)"></textarea>
+                                </div>
+                                <button type="submit" :disabled="submittingReply" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white text-[12px] font-bold rounded-lg shadow-sm transition-colors shrink-0 flex items-center gap-1.5">
+                                    <template x-if="submittingReply">
+                                        <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    </template>
+                                    <span>Send</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </template>
+            </div>
         </div>
     </div>
 </div>
