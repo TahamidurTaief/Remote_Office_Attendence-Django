@@ -459,22 +459,10 @@ class ProjectApplyTemplateView(AdminRequiredMixin, View):
 
         template = get_object_or_404(TaskTemplate, pk=template_id)
 
-        # #9 — Server-side guard: block silent task wipe.
-        # Existing tasks must be explicitly confirmed before deletion via force=true param.
-        existing_count = ProjectTask.objects.filter(project=project).count()
-        if existing_count > 0:
-            force = request.POST.get('force') == 'true'
-            if not force:
-                messages.error(
-                    request,
-                    f'This project already has {existing_count} task(s). '
-                    'Check the "Replace existing tasks" box to confirm you want to delete them and apply the new template.'
-                )
-                if referer:
-                    return redirect(referer)
-                return redirect('projects:project_detail', pk=project_id)
-            # force=true confirmed: delete existing tasks before applying template
-            ProjectTask.objects.filter(project=project).delete()
+        # Append new template tasks alongside existing ones
+        from django.db.models import Max
+        max_order = ProjectTask.objects.filter(project=project).aggregate(Max('order'))['order__max'] or 0
+        current_order = max_order + 1
 
         # Sequentially schedule tasks starting from project.start_date
         current_start = project.start_date
@@ -483,7 +471,7 @@ class ProjectApplyTemplateView(AdminRequiredMixin, View):
             planned_finish = current_start + timedelta(days=duration - 1)
             ProjectTask.objects.create(
                 project=project,
-                order=item.order,
+                order=current_order,
                 activity=item.activity,
                 responsible_person=None,
                 planned_start=current_start,
@@ -492,6 +480,7 @@ class ProjectApplyTemplateView(AdminRequiredMixin, View):
                 status='Not Started'
             )
             current_start = planned_finish + timedelta(days=1)
+            current_order += 1
 
         messages.success(request, f'Template "{template.name}" applied successfully.')
         if referer:

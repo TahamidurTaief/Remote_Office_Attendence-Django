@@ -882,44 +882,32 @@ class Phase2And3Tests(TestCase):
         self.assertTrue(form.is_valid(), msg=form.errors)
 
     # ------------------------------------------------------------------ #
-    # #9 — Apply template server guard: blocks without force=true          #
+    # #9 — Apply template: appends template tasks alongside manual tasks    #
     # ------------------------------------------------------------------ #
-    def test_apply_template_blocked_without_force_when_tasks_exist(self):
-        """Server must reject apply when tasks exist unless force=true sent."""
+    def test_apply_template_appends_when_tasks_exist(self):
+        """Applying a template does not delete existing tasks, it appends them."""
         # Create a pre-existing task
         ProjectTask.objects.create(
             project=self.project, order=1, activity='Existing Task', status='Not Started'
         )
         template = TaskTemplate.objects.get(name='HVAC Installation - Standard (28 Step)')
 
-        # Post WITHOUT force=true — should redirect back with error, no deletion
+        # Post template — should append tasks
         response = self.client.post(
             reverse('projects:project_apply_template', kwargs={'project_id': self.project.id}),
             data={'template_id': template.id}
         )
         self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.id}))
-        # Task should still exist — NOT deleted
-        self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 1)
-
-    def test_apply_template_succeeds_with_force_true(self):
-        """Server allows apply and deletes old tasks when force=true is present."""
-        # Create a pre-existing task
-        ProjectTask.objects.create(
-            project=self.project, order=1, activity='Existing Task', status='Not Started'
-        )
-        template = TaskTemplate.objects.get(name='HVAC Installation - Standard (28 Step)')
-
-        # Post WITH force=true — should clear old tasks and apply new template
-        response = self.client.post(
-            reverse('projects:project_apply_template', kwargs={'project_id': self.project.id}),
-            data={'template_id': template.id, 'force': 'true'}
-        )
-        self.assertRedirects(response, reverse('projects:project_detail', kwargs={'pk': self.project.id}))
-        # New 28 tasks should now exist (old one was deleted)
-        self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 28)
+        # Total tasks should now be 29 (1 pre-existing + 28 new)
+        self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 29)
+        # Check order is maintained correctly
+        tasks = ProjectTask.objects.filter(project=self.project).order_by('order')
+        self.assertEqual(tasks[0].activity, 'Existing Task')
+        self.assertEqual(tasks[0].order, 1)
+        self.assertEqual(tasks[1].order, 2)
 
     def test_apply_template_succeeds_without_force_when_no_tasks(self):
-        """When no tasks exist, no force parameter needed."""
+        """When no tasks exist, applying a template creates all tasks."""
         self.assertEqual(ProjectTask.objects.filter(project=self.project).count(), 0)
         template = TaskTemplate.objects.get(name='HVAC Installation - Standard (28 Step)')
 
@@ -1833,7 +1821,7 @@ class ProjectTemplateIntegrationTests(TestCase):
         
         response = self.client.post(
             apply_url, 
-            data={'template_id': template.id, 'force': 'true'},
+            data={'template_id': template.id},
             HTTP_REFERER=edit_url
         )
         self.assertRedirects(response, edit_url)

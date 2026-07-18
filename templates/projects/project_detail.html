@@ -229,32 +229,14 @@
             <div class="flex flex-wrap items-center gap-2">
                 {% if templates %}
                 <form action="{% url 'projects:project_apply_template' project.pk %}" method="POST"
-                      class="flex flex-wrap items-center gap-2"
-                      x-data="{ hasForce: false }"
-                      @submit.prevent="
-                        if ({{ tasks|length }} > 0 && !hasForce) {
-                            window.toastError
-                                ? window.toastError('Check the &quot;Replace existing tasks&quot; box to confirm.')
-                                : alert('Check the \u201cReplace existing tasks\u201d box to confirm.');
-                        } else {
-                            $el.submit();
-                        }
-                      ">
+                      class="flex flex-wrap items-center gap-2">
                     {% csrf_token %}
-                    <select name="template_id" required class="text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500">
+                    <select name="template_id" required class="text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white">
                         <option value="">-- Select Template --</option>
                         {% for t in templates %}
                         <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
                         {% endfor %}
                     </select>
-                    {% if tasks %}
-                    {# Server-side guard: force=true required when tasks already exist — see views.py #9 #}
-                    <label class="flex items-center gap-1.5 text-[11px] text-amber-700 font-semibold cursor-pointer select-none"
-                           title="Required when tasks already exist — this will permanently delete all current tasks">
-                        <input type="checkbox" name="force" value="true"
-                               /></input> Replace existing tasks
-                    </label>
-                    {% endif %}
                     <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90 whitespace-nowrap">
                         <i data-lucide="copy" class="w-3.5 h-3.5 mr-1"></i>
                         Apply Template
