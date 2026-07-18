@@ -306,11 +306,20 @@ def profile(request):
 
     # Assigned ProjectTasks
     from apps.projects.models import ProjectTask
+    from django.contrib.contenttypes.models import ContentType
+    from apps.notifications.models import ActivityLog
     assigned_tasks = []
+    activities = []
     if employee:
         assigned_tasks = ProjectTask.objects.filter(
             responsible_person=employee
         ).select_related('project', 'project__branch').order_by('status', 'planned_finish')
+        emp_task_ids = assigned_tasks.values_list('id', flat=True)
+        ct_task = ContentType.objects.get_for_model(ProjectTask)
+        activities = ActivityLog.objects.filter(
+            target_content_type=ct_task,
+            target_object_id__in=emp_task_ids
+        ).select_related('actor', 'actor__employee_profile').order_by('-created_at')[:20]
 
     return render(request, 'staff/profile.html', {
         'employee': employee,
@@ -318,6 +327,7 @@ def profile(request):
         'attendance_page': attendance_page,
         'leave_balances': leave_balances,
         'assigned_tasks': assigned_tasks,
+        'activities': activities,
     })
 
 
@@ -411,7 +421,9 @@ def my_project_detail(request, project_id):
         from django.core.exceptions import PermissionDenied
         raise PermissionDenied("Only managers or admins can access this page.")
 
-    from apps.projects.models import Project
+    from apps.projects.models import Project, ProjectTask
+    from django.contrib.contenttypes.models import ContentType
+    from apps.notifications.models import ActivityLog
     project = get_object_or_404(Project, pk=project_id)
 
     if not request.user.is_superuser:
@@ -422,9 +434,17 @@ def my_project_detail(request, project_id):
 
     tasks = project.tasks.all().select_related('responsible_person').order_by('order')
 
+    task_ids = project.tasks.values_list('id', flat=True)
+    ct_task = ContentType.objects.get_for_model(ProjectTask)
+    activities = ActivityLog.objects.filter(
+        target_content_type=ct_task,
+        target_object_id__in=task_ids
+    ).select_related('actor', 'actor__employee_profile').order_by('-created_at')[:20]
+
     return render(request, 'staff/projects/my_project_detail.html', {
         'project': project,
         'tasks': tasks,
+        'activities': activities,
     })
 
 
@@ -523,16 +543,9 @@ def my_project_add_task(request, project_id):
             
             # Send notification email if assignee exists
             if task.responsible_person and task.responsible_person.user:
-                from apps.notifications.dispatch import send_email_notification
-                from apps.notifications.models import Notification
-                Notification.objects.create(
-                    recipient=task.responsible_person.user,
-                    employee=task.responsible_person,
-                    title=f"New Task Assigned: {task.activity}",
-                    message=f"You have been assigned to task '{task.activity}' for project '{project.name}'.",
-                    notif_type='field_visit'
-                )
+                from apps.notifications.dispatch import log_activity
                 subject = f"New Task Assigned: {task.activity}"
+                notif_msg = f"You have been assigned to task '{task.activity}' for project '{project.name}'."
                 message_text = (
                     f"Hello {task.responsible_person.full_name},\n\n"
                     f"You have been assigned to the following task in project '{project.name}':\n"
@@ -543,7 +556,21 @@ def my_project_add_task(request, project_id):
                 if task.assignment_attachment:
                     message_text += f"See attached reference file: {task.assignment_attachment.url}\n\n"
                 message_text += "Regards,\nFieldTrack System"
-                send_email_notification(task.responsible_person.user, subject, message_text)
+
+                log_activity(
+                    actor=request.user,
+                    verb='task_assigned',
+                    target=task,
+                    metadata={
+                        'title': subject,
+                        'message': notif_msg,
+                        'email_subject': subject,
+                        'email_message': message_text,
+                        'notif_type': 'field_visit'
+                    },
+                    notify_users=[task.responsible_person.user],
+                    email_also=True
+                )
             
             messages.success(request, f"Task '{activity}' added successfully.")
             return redirect('staff:my_project_detail', project_id=project.id)

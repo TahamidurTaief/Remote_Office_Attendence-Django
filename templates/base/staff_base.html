@@ -506,6 +506,18 @@
           <i data-lucide="volume-x" class="w-4 h-4" x-show="muted" x-cloak></i>
       </button>
 
+      <!-- Notifications bell -->
+      <div class="relative"
+           hx-get="{% url 'notifications:count' %}"
+           hx-trigger="load, every 30s"
+           hx-target="#notif-badge"
+           hx-swap="outerHTML">
+          <a href="{% url 'notifications:list' %}" class="relative p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 flex">
+              <i data-lucide="bell" class="w-4 h-4"></i>
+              <span id="notif-badge" class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full hidden items-center justify-center font-bold"></span>
+          </a>
+      </div>
+
       <div class="w-8 h-8 rounded-full bg-primary-gradient flex items-center justify-center text-white text-sm font-semibold shadow-sm">
         {{ request.user.employeeprofile.full_name|first }}
       </div>

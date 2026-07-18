@@ -1,0 +1,57 @@
+<div class="bg-white rounded-xl border border-gray-150 p-4 mb-6">
+    <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+        <i data-lucide="history" class="w-4 h-4 text-primary-600"></i>
+        Activity Log
+    </h3>
+    {% if activities %}
+    <div class="space-y-3">
+        {% for act in activities %}
+        <div class="flex items-start gap-3 text-xs text-gray-700 py-1.5 border-b border-gray-100 last:border-b-0">
+            <div class="mt-0.5 shrink-0">
+                {% if act.verb == 'task_assigned' %}
+                <i data-lucide="user-check" class="w-4 h-4 text-blue-600"></i>
+                {% elif act.verb == 'task_completed' %}
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-green-600"></i>
+                {% elif act.verb == 'task_delayed' %}
+                <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600"></i>
+                {% elif 'permission' in act.verb %}
+                <i data-lucide="key" class="w-4 h-4 text-indigo-600"></i>
+                {% elif 'group' in act.verb or 'role' in act.verb %}
+                <i data-lucide="shield" class="w-4 h-4 text-purple-600"></i>
+                {% else %}
+                <i data-lucide="activity" class="w-4 h-4 text-gray-500"></i>
+                {% endif %}
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="leading-snug">
+                    <span class="font-bold text-gray-900">
+                        {% if act.actor %}
+                            {% if act.actor.employee_profile %}
+                                {{ act.actor.employee_profile.full_name }}
+                            {% else %}
+                                {{ act.actor.email|default:act.actor.phone }}
+                            {% endif %}
+                        {% else %}
+                            System
+                        {% endif %}
+                    </span>
+                    {% if act.verb == 'task_assigned' %}
+                        assigned task <span class="font-semibold text-gray-800">'{{ act.target.activity|default:act.target }}'</span>
+                        {% if act.target.responsible_person %} to <span class="font-semibold text-gray-800">{{ act.target.responsible_person.full_name }}</span>{% endif %}
+                    {% elif act.verb == 'task_completed' %}
+                        marked task <span class="font-semibold text-gray-800">'{{ act.target.activity|default:act.target }}'</span> complete
+                    {% elif act.verb == 'task_delayed' %}
+                        marked task <span class="font-semibold text-gray-800">'{{ act.target.activity|default:act.target }}'</span> Delayed
+                    {% else %}
+                        {{ act.verb }} on {{ act.target }}
+                    {% endif %}
+                </p>
+                <span class="text-[10px] text-gray-400 block mt-0.5">{{ act.created_at|timesince }} ago</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-400 italic">No recent activity recorded.</p>
+    {% endif %}
+</div>

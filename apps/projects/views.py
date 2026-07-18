@@ -104,6 +104,15 @@ class ProjectDetailView(AdminRequiredMixin, DetailView):
             sign_off = ProjectSignOff.objects.create(project=self.object)
         context['sign_off'] = sign_off
 
+        from django.contrib.contenttypes.models import ContentType
+        from apps.notifications.models import ActivityLog
+        task_ids = self.object.tasks.values_list('id', flat=True)
+        ct_task = ContentType.objects.get_for_model(ProjectTask)
+        context['activities'] = ActivityLog.objects.filter(
+            target_content_type=ct_task,
+            target_object_id__in=task_ids
+        ).select_related('actor', 'actor__employee_profile').order_by('-created_at')[:20]
+
         return context
 
 
@@ -233,15 +242,10 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
         # Notify assigned employee
         task = self.object
         if task.responsible_person and task.responsible_person.user:
-            Notification.objects.create(
-                recipient=task.responsible_person.user,
-                employee=task.responsible_person,
-                title=f"New Task Assigned: {task.activity}",
-                message=f"You have been assigned to task '{task.activity}' for project '{project.name}'.",
-                notif_type='field_visit'
-            )
+            from apps.notifications.dispatch import log_activity
             subject = f"New Task Assigned: {task.activity}"
-            message = (
+            notif_msg = f"You have been assigned to task '{task.activity}' for project '{project.name}'."
+            email_msg = (
                 f"Hello {task.responsible_person.full_name},\n\n"
                 f"You have been assigned to the following task in project '{project.name}':\n"
                 f"Task: {task.activity}\n"
@@ -249,9 +253,23 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
                 f"Status: {task.status}\n\n"
             )
             if task.assignment_attachment:
-                message += f"See attached reference file: {task.assignment_attachment.url}\n\n"
-            message += "Regards,\nFieldTrack System"
-            send_email_notification(task.responsible_person.user, subject, message)
+                email_msg += f"See attached reference file: {task.assignment_attachment.url}\n\n"
+            email_msg += "Regards,\nFieldTrack System"
+
+            log_activity(
+                actor=self.request.user,
+                verb='task_assigned',
+                target=task,
+                metadata={
+                    'title': subject,
+                    'message': notif_msg,
+                    'email_subject': subject,
+                    'email_message': email_msg,
+                    'notif_type': 'field_visit'
+                },
+                notify_users=[task.responsible_person.user],
+                email_also=True
+            )
             
         messages.success(self.request, 'Task added successfully.')
         return response
@@ -278,15 +296,10 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
         new_task = self.object
         if new_task.responsible_person and new_task.responsible_person != old_resp:
             if new_task.responsible_person.user:
-                Notification.objects.create(
-                    recipient=new_task.responsible_person.user,
-                    employee=new_task.responsible_person,
-                    title=f"Task Assigned: {new_task.activity}",
-                    message=f"You have been assigned to task '{new_task.activity}' for project '{new_task.project.name}'.",
-                    notif_type='field_visit'
-                )
+                from apps.notifications.dispatch import log_activity
                 subject = f"Task Assigned: {new_task.activity}"
-                message = (
+                notif_msg = f"You have been assigned to task '{new_task.activity}' for project '{new_task.project.name}'."
+                email_msg = (
                     f"Hello {new_task.responsible_person.full_name},\n\n"
                     f"You have been assigned to the following task in project '{new_task.project.name}':\n"
                     f"Task: {new_task.activity}\n"
@@ -294,9 +307,23 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
                     f"Status: {new_task.status}\n\n"
                 )
                 if new_task.assignment_attachment:
-                    message += f"See attached reference file: {new_task.assignment_attachment.url}\n\n"
-                message += "Regards,\nFieldTrack System"
-                send_email_notification(new_task.responsible_person.user, subject, message)
+                    email_msg += f"See attached reference file: {new_task.assignment_attachment.url}\n\n"
+                email_msg += "Regards,\nFieldTrack System"
+
+                log_activity(
+                    actor=self.request.user,
+                    verb='task_assigned',
+                    target=new_task,
+                    metadata={
+                        'title': subject,
+                        'message': notif_msg,
+                        'email_subject': subject,
+                        'email_message': email_msg,
+                        'notif_type': 'field_visit'
+                    },
+                    notify_users=[new_task.responsible_person.user],
+                    email_also=True
+                )
 
         messages.success(self.request, 'Task updated successfully.')
         return response

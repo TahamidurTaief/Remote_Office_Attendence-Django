@@ -122,6 +122,16 @@ class RoleMembersView(AdminRequiredMixin, DetailView):
             if user_ids:
                 group.user_set.add(*user_ids)
                 messages.success(request, f"Added {len(user_ids)} members to role '{group.name}'.")
+                from apps.notifications.dispatch import log_activity
+                added_users = User.objects.filter(pk__in=user_ids)
+                for member_user in added_users:
+                    log_activity(
+                        actor=request.user,
+                        verb='group_membership_added',
+                        target=member_user,
+                        metadata={'role': group.name},
+                        notify_users=[member_user]
+                    )
             else:
                 messages.warning(request, "No members selected to add.")
         elif action == 'remove':
@@ -130,6 +140,14 @@ class RoleMembersView(AdminRequiredMixin, DetailView):
                 user = get_object_or_404(User, pk=user_id)
                 user.groups.remove(group)
                 messages.success(request, f"Removed member from role '{group.name}'.")
+                from apps.notifications.dispatch import log_activity
+                log_activity(
+                    actor=request.user,
+                    verb='group_membership_removed',
+                    target=user,
+                    metadata={'role': group.name},
+                    notify_users=[user]
+                )
         
         return redirect('admin_panel:role_members', pk=group.pk)
 
@@ -209,6 +227,9 @@ class UserPermissionsView(AdminRequiredMixin, View):
         user = get_object_or_404(User, pk=pk)
         role_ids = request.POST.getlist('roles')
         direct_perm_ids = request.POST.getlist('permissions')
+
+        old_perm_ids = set(user.user_permissions.values_list('id', flat=True))
+        new_perm_ids = set(int(pid) for pid in direct_perm_ids if str(pid).isdigit())
         
         # Toggle is_active
         is_active = request.POST.get('is_active') == 'on'
@@ -218,6 +239,27 @@ class UserPermissionsView(AdminRequiredMixin, View):
         # Set groups and direct permissions
         user.groups.set(role_ids)
         user.user_permissions.set(direct_perm_ids)
+
+        granted = new_perm_ids - old_perm_ids
+        revoked = old_perm_ids - new_perm_ids
+
+        from apps.notifications.dispatch import log_activity
+        if granted:
+            log_activity(
+                actor=request.user,
+                verb='permission_granted',
+                target=user,
+                metadata={'permission_ids': list(granted)},
+                notify_users=[user]
+            )
+        if revoked:
+            log_activity(
+                actor=request.user,
+                verb='permission_revoked',
+                target=user,
+                metadata={'permission_ids': list(revoked)},
+                notify_users=[user]
+            )
         
         messages.success(request, f"Roles and permissions for user '{user.email or user.phone}' updated successfully.")
         

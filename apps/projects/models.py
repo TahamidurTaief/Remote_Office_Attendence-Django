@@ -227,7 +227,8 @@ class ProjectTask(models.Model):
         super().save(*args, **kwargs)
         
         if is_delayed and self.project.project_manager and self.project.project_manager.user:
-            from apps.notifications.dispatch import send_email_notification
+            from apps.notifications.dispatch import log_activity
+            pm_user = self.project.project_manager.user
             subject = f"Task Delayed: {self.activity} in Project {self.project.name}"
             message = (
                 f"Hello {self.project.project_manager.full_name},\n\n"
@@ -235,10 +236,18 @@ class ProjectTask(models.Model):
                 f"Remarks: {self.remarks or 'None'}\n\n"
                 f"Regards,\nFieldTrack System"
             )
-            send_email_notification(self.project.project_manager.user, subject, message)
+            log_activity(
+                actor=None,
+                verb='task_delayed',
+                target=self,
+                metadata={'title': subject, 'message': message, 'remarks': self.remarks or ''},
+                notify_users=[pm_user],
+                email_also=True
+            )
 
         if is_completed_transition and self.project.project_manager and self.project.project_manager.user:
-            from apps.notifications.dispatch import send_email_notification
+            from apps.notifications.dispatch import log_activity
+            pm_user = self.project.project_manager.user
             subject = f"Task Completed: {self.activity} in Project {self.project.name}"
             message = (
                 f"Hello {self.project.project_manager.full_name},\n\n"
@@ -249,7 +258,15 @@ class ProjectTask(models.Model):
             if self.completion_attachment:
                 message += f"See attached proof file: {self.completion_attachment.url}\n\n"
             message += "Regards,\nFieldTrack System"
-            send_email_notification(self.project.project_manager.user, subject, message)
+            log_activity(
+                actor=None,
+                verb='task_completed',
+                target=self,
+                metadata={'title': subject, 'message': message, 'employee_note': self.employee_note or ''},
+                notify_users=[pm_user],
+                email_also=True
+            )
+
 
     def __str__(self):
         return f"{self.project.name} - {self.order}. {self.activity}"

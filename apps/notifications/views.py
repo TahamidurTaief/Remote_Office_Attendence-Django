@@ -18,7 +18,7 @@ def _admin_required(view_func):
     return _wrapped
 
 
-@_admin_required
+@login_required
 def notification_list(request):
     filter_type = request.GET.get('type', 'all')
     notifs = Notification.objects.filter(
@@ -29,7 +29,7 @@ def notification_list(request):
 
     if filter_type == 'unread':
         notifs = notifs.filter(is_read=False)
-    elif filter_type in ['check_in', 'check_out', 'field_visit', 'late', 'missing']:
+    elif filter_type != 'all':
         notifs = notifs.filter(notif_type=filter_type)
 
     paginator = Paginator(notifs, 20)
@@ -57,6 +57,11 @@ def notification_list(request):
             ('field_visit', 'Field Visits'),
             ('late', 'Late Alerts'),
             ('missing', 'Missing'),
+            ('task_assigned', 'Task Assigned'),
+            ('task_completed', 'Task Completed'),
+            ('task_delayed', 'Task Delayed'),
+            ('role_changed', 'Role/Group Changed'),
+            ('permission_changed', 'Permission Changed'),
         ],
     })
 
@@ -86,7 +91,7 @@ def mark_read(request, pk):
     return JsonResponse({'success': True})
 
 
-@_admin_required
+@login_required
 @require_POST
 def mark_all_read(request):
     Notification.objects.filter(
