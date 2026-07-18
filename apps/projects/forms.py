@@ -1,5 +1,5 @@
 from django import forms
-from .models import Project, ProjectType
+from .models import Project, ProjectType, TaskTemplate
 
 TEXT_INPUT = (
     "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 "
@@ -21,11 +21,19 @@ class ProjectTypeForm(forms.ModelForm):
         }
 
 class ProjectForm(forms.ModelForm):
+    task_template = forms.ModelChoiceField(
+        queryset=TaskTemplate.objects.all().order_by('name'),
+        required=False,
+        label="Initialize Tasks from Template",
+        empty_label="-- No Template --",
+        widget=forms.Select(attrs={'class': SELECT_INPUT})
+    )
+
     class Meta:
         model = Project
         fields = [
             'name', 'project_type', 'client_name', 'client_email', 'consultant', 'consultant_email', 'main_contractor',
-            'location', 'project_manager', 'site_engineer',
+            'location', 'project_managers', 'site_engineers', 'project_members',
             'hvac_capacity_tr', 'system_type', 'start_date',
             'completion_date', 'status', 'progress_percent', 'branch'
         ]
@@ -38,8 +46,9 @@ class ProjectForm(forms.ModelForm):
             'consultant_email': forms.EmailInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Consultant Email'}),
             'main_contractor': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Main Contractor'}),
             'location': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Project Location'}),
-            'project_manager': forms.Select(attrs={'class': SELECT_INPUT}),
-            'site_engineer': forms.Select(attrs={'class': SELECT_INPUT}),
+            'project_managers': forms.SelectMultiple(attrs={'class': SELECT_INPUT}),
+            'site_engineers': forms.SelectMultiple(attrs={'class': SELECT_INPUT}),
+            'project_members': forms.SelectMultiple(attrs={'class': SELECT_INPUT}),
             'hvac_capacity_tr': forms.NumberInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. 150.00', 'step': '0.01'}),
             'system_type': forms.Select(attrs={'class': SELECT_INPUT}),
             'start_date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
@@ -55,16 +64,23 @@ class ProjectForm(forms.ModelForm):
         from django.db.models import Q
         active_employees = EmployeeProfile.objects.filter(is_active=True)
         active_managers = EmployeeProfile.objects.filter(
-            Q(is_active=True) & (Q(user__role='manager') | Q(user__groups__name='Manager'))
-        ).distinct()
-        self.fields['project_manager'].queryset = active_managers
-        self.fields['site_engineer'].queryset = active_employees
+            is_active=True,
+            is_project_manager=True
+        )
+        self.fields['project_managers'].queryset = active_managers
+        self.fields['site_engineers'].queryset = active_employees
+        self.fields['project_members'].queryset = active_employees
         
-        self.fields['project_manager'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
-        self.fields['site_engineer'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
+        self.fields['project_managers'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
+        self.fields['site_engineers'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
+        self.fields['project_members'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
         
         self.fields['system_type'].required = False
         self.fields['hvac_capacity_tr'].required = False
+
+        if self.instance.pk:
+            if 'task_template' in self.fields:
+                del self.fields['task_template']
 
     def clean(self):
         cleaned_data = super().clean()

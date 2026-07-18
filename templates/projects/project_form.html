@@ -1,4 +1,4 @@
-﻿{% extends 'base/admin_base.html' %}
+{% extends 'base/admin_base.html' %}
 {% load static %}
 
 {% block title %}{% if object %}Edit Project{% else %}Add Project{% endif %} | FieldTrack{% endblock %}
@@ -112,18 +112,148 @@
                     {% if form.main_contractor.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.main_contractor.errors.0 }}</p>{% endif %}
                 </div>
 
-                <!-- Project Manager -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.project_manager.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Project Manager</label>
-                    {{ form.project_manager }}
-                    {% if form.project_manager.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.project_manager.errors.0 }}</p>{% endif %}
+                <!-- Project Managers -->
+                <div class="sm:col-span-3" x-data="memberSelector('project_managers')">
+                    <label class="block text-[12px] font-semibold text-gray-700 mb-1.5">Project Managers</label>
+                    <div class="space-y-1.5 mb-2 max-h-48 overflow-y-auto pr-1">
+                        <template x-for="emp in selected" :key="emp.value">
+                            <div class="flex items-center justify-between px-3 py-1.5 bg-indigo-50/50 border border-indigo-100 rounded-xl transition-all hover:bg-indigo-50">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5.5 h-5.5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-[10px]" x-text="emp.text.charAt(0).toUpperCase()"></div>
+                                    <span class="text-[12px] font-medium text-gray-800" x-text="emp.text"></span>
+                                </div>
+                                <button type="button" @click="removeMember(emp.value)" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                        <div x-show="selected.length === 0" class="text-[12px] text-gray-400 italic py-2 px-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
+                            No project managers assigned yet.
+                        </div>
+                    </div>
+                    <div>
+                        <div x-show="!showAddDropdown">
+                            <button type="button" @click="showAddDropdown = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-indigo-200 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100/70 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3 h-3">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                                Add Project Manager
+                            </button>
+                        </div>
+                        <div x-show="showAddDropdown" class="flex items-center gap-1.5" x-cloak x-transition>
+                            <select @change="addMember($event.target.value); $event.target.value = '';" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="">-- Choose Employee --</option>
+                                <template x-for="emp in unselected" :key="emp.value">
+                                    <option :value="emp.value" x-text="emp.text"></option>
+                                </template>
+                            </select>
+                            <button type="button" @click="showAddDropdown = false" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-gray-50 bg-white transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    <div style="display: none !important;">
+                        {{ form.project_managers }}
+                    </div>
+                    {% if form.project_managers.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.project_managers.errors.0 }}</p>{% endif %}
                 </div>
 
-                <!-- Site Engineer -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.site_engineer.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Site Engineer</label>
-                    {{ form.site_engineer }}
-                    {% if form.site_engineer.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.site_engineer.errors.0 }}</p>{% endif %}
+                <!-- Site Engineers -->
+                <div class="sm:col-span-3" x-data="memberSelector('site_engineers')">
+                    <label class="block text-[12px] font-semibold text-gray-700 mb-1.5">Site Engineers</label>
+                    <div class="space-y-1.5 mb-2 max-h-48 overflow-y-auto pr-1">
+                        <template x-for="emp in selected" :key="emp.value">
+                            <div class="flex items-center justify-between px-3 py-1.5 bg-teal-50/50 border border-teal-100 rounded-xl transition-all hover:bg-teal-50">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5.5 h-5.5 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-[10px]" x-text="emp.text.charAt(0).toUpperCase()"></div>
+                                    <span class="text-[12px] font-medium text-gray-800" x-text="emp.text"></span>
+                                </div>
+                                <button type="button" @click="removeMember(emp.value)" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                        <div x-show="selected.length === 0" class="text-[12px] text-gray-400 italic py-2 px-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
+                            No site engineers assigned yet.
+                        </div>
+                    </div>
+                    <div>
+                        <div x-show="!showAddDropdown">
+                            <button type="button" @click="showAddDropdown = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-teal-200 rounded-lg text-[11px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100/70 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3 h-3">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                                Add Site Engineer
+                            </button>
+                        </div>
+                        <div x-show="showAddDropdown" class="flex items-center gap-1.5" x-cloak x-transition>
+                            <select @change="addMember($event.target.value); $event.target.value = '';" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-teal-50500">
+                                <option value="">-- Choose Employee --</option>
+                                <template x-for="emp in unselected" :key="emp.value">
+                                    <option :value="emp.value" x-text="emp.text"></option>
+                                </template>
+                            </select>
+                            <button type="button" @click="showAddDropdown = false" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-gray-50 bg-white transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    <div style="display: none !important;">
+                        {{ form.site_engineers }}
+                    </div>
+                    {% if form.site_engineers.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.site_engineers.errors.0 }}</p>{% endif %}
+                </div>
+
+                <!-- Project Members -->
+                <div class="sm:col-span-6" x-data="memberSelector('project_members')">
+                    <label class="block text-[12px] font-semibold text-gray-700 mb-1.5">Project Members</label>
+                    <div class="space-y-1.5 mb-2 max-h-48 overflow-y-auto pr-1">
+                        <template x-for="emp in selected" :key="emp.value">
+                            <div class="flex items-center justify-between px-3 py-1.5 bg-sky-50/50 border border-sky-100 rounded-xl transition-all hover:bg-sky-50">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5.5 h-5.5 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-semibold text-[10px]" x-text="emp.text.charAt(0).toUpperCase()"></div>
+                                    <span class="text-[12px] font-medium text-gray-800" x-text="emp.text"></span>
+                                </div>
+                                <button type="button" @click="removeMember(emp.value)" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                        <div x-show="selected.length === 0" class="text-[12px] text-gray-400 italic py-2 px-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
+                            No project members assigned yet.
+                        </div>
+                    </div>
+                    <div>
+                        <div x-show="!showAddDropdown">
+                            <button type="button" @click="showAddDropdown = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-sky-200 rounded-lg text-[11px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100/70 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3 h-3">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                                Add Project Member
+                            </button>
+                        </div>
+                        <div x-show="showAddDropdown" class="flex items-center gap-1.5" x-cloak x-transition>
+                            <select @change="addMember($event.target.value); $event.target.value = '';" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                                <option value="">-- Choose Employee --</option>
+                                <template x-for="emp in unselected" :key="emp.value">
+                                    <option :value="emp.value" x-text="emp.text"></option>
+                                </template>
+                            </select>
+                            <button type="button" @click="showAddDropdown = false" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-gray-50 bg-white transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    <div style="display: none !important;">
+                        {{ form.project_members }}
+                    </div>
+                    {% if form.project_members.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.project_members.errors.0 }}</p>{% endif %}
                 </div>
 
                 <!-- System Type (Conditionally Shown) -->
@@ -174,6 +304,16 @@
                     {{ form.branch }}
                     {% if form.branch.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.branch.errors.0 }}</p>{% endif %}
                 </div>
+
+                {% if not object %}
+                <!-- Initialize tasks from Template -->
+                <div class="sm:col-span-6">
+                    <label for="{{ form.task_template.id_for_label }}" class="block text-[12px] font-semibold text-gray-700 mb-1">Initialize Tasks from Template (Optional)</label>
+                    {{ form.task_template }}
+                    {% if form.task_template.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.task_template.errors.0 }}</p>{% endif %}
+                    <p class="mt-1 text-[10px] text-gray-400">If selected, the tasks from this template will be automatically added to the project scheduled from the start date.</p>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Submit buttons -->
@@ -205,7 +345,37 @@
                     <p class="text-[11px] text-gray-400">{{ tasks.count }} task{{ tasks.count|pluralize }} assigned</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-3">
+                {% if templates %}
+                <form action="{% url 'projects:project_apply_template' object.pk %}" method="POST"
+                      class="flex flex-wrap items-center gap-2"
+                      x-data="{ hasForce: false }"
+                      @submit.prevent="
+                        if ({{ tasks.count }} > 0 && !hasForce) {
+                            alert('Check the \'Replace existing tasks\' box to confirm you want to delete and replace all tasks.');
+                        } else {
+                            $el.submit();
+                        }
+                      ">
+                    {% csrf_token %}
+                    <select name="template_id" required class="text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                        <option value="">-- Apply Template --</option>
+                        {% for t in templates %}
+                        <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
+                        {% endfor %}
+                    </select>
+                    {% if tasks.count > 0 %}
+                    <label class="flex items-center gap-1 text-[10px] text-gray-500 cursor-pointer">
+                        <input type="checkbox" name="force" value="true" @change="hasForce = $el.checked" class="rounded text-indigo-600 border-gray-300 focus:ring-indigo-500 w-3 h-3">
+                        Replace existing
+                    </label>
+                    {% endif %}
+                    <button type="submit" class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-semibold rounded-lg transition-colors">
+                        Apply
+                    </button>
+                </form>
+                {% endif %}
+
                 <a href="{% url 'projects:project_detail' object.pk %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                     <i data-lucide="external-link" class="w-3 h-3"></i>
                     Full Task View
@@ -386,5 +556,74 @@
     {% endif %}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function initMemberSelector() {
+        Alpine.data('memberSelector', (fieldName) => ({
+            selected: [],
+            unselected: [],
+            showAddDropdown: false,
+            
+            init() {
+                const selectEl = this.$el.querySelector(`select[name="${fieldName}"]`);
+                if (!selectEl) return;
+                
+                const options = Array.from(selectEl.options);
+                
+                this.selected = options.filter(opt => opt.selected && opt.value).map(opt => ({
+                    value: opt.value,
+                    text: opt.text.trim()
+                }));
+                
+                this.unselected = options.filter(opt => !opt.selected && opt.value).map(opt => ({
+                    value: opt.value,
+                    text: opt.text.trim()
+                }));
+                
+                this.unselected.sort((a, b) => a.text.localeCompare(b.text));
+                
+                this.$watch('selected', (newVal) => {
+                    Array.from(selectEl.options).forEach(opt => {
+                        opt.selected = false;
+                    });
+                    newVal.forEach(item => {
+                        const opt = selectEl.querySelector(`option[value="${item.value}"]`);
+                        if (opt) opt.selected = true;
+                    });
+                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            },
+            
+            addMember(value) {
+                if (!value) return;
+                const index = this.unselected.findIndex(item => item.value === value);
+                if (index !== -1) {
+                    const item = this.unselected[index];
+                    this.selected.push(item);
+                    this.unselected.splice(index, 1);
+                }
+                this.showAddDropdown = false;
+            },
+            
+            removeMember(value) {
+                const index = this.selected.findIndex(item => item.value === value);
+                if (index !== -1) {
+                    const item = this.selected[index];
+                    this.unselected.push(item);
+                    this.selected.splice(index, 1);
+                    this.unselected.sort((a, b) => a.text.localeCompare(b.text));
+                }
+            }
+        }));
+    }
+
+    if (window.Alpine) {
+        initMemberSelector();
+    } else {
+        document.addEventListener('alpine:init', initMemberSelector);
+    }
+</script>
 {% endblock %}
 

@@ -28,7 +28,9 @@ class ProjectListView(AdminRequiredMixin, ListView):
     def get_queryset(self):
         # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
         queryset = super().get_queryset().select_related(
-            'project_manager', 'site_engineer', 'branch', 'project_type'  # #15 — add project_type to avoid N+1
+            'branch', 'project_type'
+        ).prefetch_related(
+            'project_managers', 'site_engineers', 'project_members'
         )
         search_query = self.request.GET.get('search', '')
         status_filter = self.request.GET.get('status', '')
@@ -67,14 +69,24 @@ class ProjectDetailView(AdminRequiredMixin, DetailView):
         # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
         # #16 — add project_type to select_related to avoid N+1 on template rendering
         return super().get_queryset().select_related(
-            'project_manager', 'site_engineer', 'branch', 'sign_off', 'project_type'
+            'branch', 'sign_off', 'project_type'
+        ).prefetch_related(
+            'project_managers', 'site_engineers', 'project_members'
         )
 
     def get_context_data(self, **kwargs):
         from django.db.models import Count
         context = super().get_context_data(**kwargs)
-        
         tasks_qs = self.object.tasks.select_related('responsible_person').all().order_by('order')
+        
+        # Calculate unfiltered task status counts
+        unfiltered_tasks = self.object.tasks.all()
+        context['all_count'] = unfiltered_tasks.count()
+        context['not_started_count'] = unfiltered_tasks.filter(status='Not Started').count()
+        context['in_progress_count'] = unfiltered_tasks.filter(status='In Progress').count()
+        context['delayed_count'] = unfiltered_tasks.filter(status='Delayed').count()
+        context['completed_count'] = unfiltered_tasks.filter(status='Completed').count()
+
         member_id = self.request.GET.get('member')
         if member_id:
             try:
@@ -126,8 +138,31 @@ class ProjectCreateView(AdminRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.created_by = self.request.user
-        messages.success(self.request, 'Project created successfully.')
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        
+        task_template = form.cleaned_data.get('task_template')
+        if task_template:
+            from datetime import timedelta
+            from .models import ProjectTask
+            current_start = self.object.start_date
+            for item in task_template.items.all().order_by('order'):
+                duration = item.default_duration_days or 1
+                planned_finish = current_start + timedelta(days=duration - 1)
+                ProjectTask.objects.create(
+                    project=self.object,
+                    order=item.order,
+                    activity=item.activity,
+                    responsible_person=None,
+                    planned_start=current_start,
+                    planned_finish=planned_finish,
+                    duration_days=duration,
+                    status='Not Started'
+                )
+                current_start = planned_finish + timedelta(days=1)
+            messages.success(self.request, f'Project created and tasks initialized from template "{task_template.name}".')
+        else:
+            messages.success(self.request, 'Project created successfully.')
+        return response
 
 class ProjectUpdateView(AdminRequiredMixin, UpdateView):
     model = Project
@@ -138,10 +173,13 @@ class ProjectUpdateView(AdminRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from apps.employees.models import EmployeeProfile
+        from .models import TaskTemplate
+        from django.db.models import Count
         # Tasks list for the task management section
         context['tasks'] = self.object.tasks.select_related('responsible_person').order_by('order')
         context['task_form'] = ProjectTaskForm()
         context['employees'] = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        context['templates'] = TaskTemplate.objects.annotate(items_count=Count('items')).order_by('name')
         return context
 
     def form_valid(self, form):
@@ -411,8 +449,12 @@ class ProjectApplyTemplateView(AdminRequiredMixin, View):
     def post(self, request, project_id):
         project = get_object_or_404(Project, pk=project_id)
         template_id = request.POST.get('template_id')
+        referer = request.META.get('HTTP_REFERER')
+        
         if not template_id:
             messages.error(request, 'No template selected.')
+            if referer:
+                return redirect(referer)
             return redirect('projects:project_detail', pk=project_id)
 
         template = get_object_or_404(TaskTemplate, pk=template_id)
@@ -428,6 +470,8 @@ class ProjectApplyTemplateView(AdminRequiredMixin, View):
                     f'This project already has {existing_count} task(s). '
                     'Check the "Replace existing tasks" box to confirm you want to delete them and apply the new template.'
                 )
+                if referer:
+                    return redirect(referer)
                 return redirect('projects:project_detail', pk=project_id)
             # force=true confirmed: delete existing tasks before applying template
             ProjectTask.objects.filter(project=project).delete()
@@ -450,6 +494,8 @@ class ProjectApplyTemplateView(AdminRequiredMixin, View):
             current_start = planned_finish + timedelta(days=1)
 
         messages.success(request, f'Template "{template.name}" applied successfully.')
+        if referer:
+            return redirect(referer)
         return redirect('projects:project_detail', pk=project_id)
 
 # Inline HTMX Task Status Update

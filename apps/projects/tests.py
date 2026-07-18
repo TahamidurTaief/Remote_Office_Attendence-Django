@@ -1413,7 +1413,8 @@ class ProjectNotificationEmailTests(TestCase):
             employee_id='EMP_PM',
             phone='+8801700000300',
             joined_date=date.today(),
-            is_active=True
+            is_active=True,
+            is_project_manager=True
         )
 
         self.project_type = ProjectType.objects.create(name='Test Project Type')
@@ -1428,8 +1429,8 @@ class ProjectNotificationEmailTests(TestCase):
             start_date=date(2026, 7, 1),
             completion_date=date.today() + timedelta(days=5),
             branch=self.branch,
-            project_manager=self.pm_profile
         )
+        self.project.project_managers.add(self.pm_profile)
 
     def test_delayed_task_sends_email_to_pm(self):
         from django.core import mail
@@ -1738,10 +1739,10 @@ class ProjectTaskNewFeaturesTests(TestCase):
             employee_id='EMP_PM',
             phone='+8801700000300',
             joined_date=date.today(),
-            is_active=True
+            is_active=True,
+            is_project_manager=True
         )
-        self.project.project_manager = pm_profile
-        self.project.save()
+        self.project.project_managers.add(pm_profile)
 
         task = ProjectTask.objects.create(
             project=self.project,
@@ -1760,6 +1761,83 @@ class ProjectTaskNewFeaturesTests(TestCase):
         self.assertEqual(mail.outbox[0].to, ['pm@example.com'])
         self.assertIn("Task Completed: Test Email Completion Task in Project Test Project", mail.outbox[0].subject)
         self.assertIn("Fully done!", mail.outbox[0].body)
+
+
+class ProjectTemplateIntegrationTests(TestCase):
+    def setUp(self):
+        self.password = 'testpassword123'
+        self.admin_user = User.objects.create_user(
+            email='admin_template@example.com',
+            phone='+8801700000999',
+            password=self.password,
+            role='admin'
+        )
+        self.branch = Branch.objects.create(
+            name='Dhanmondi Branch',
+            address='Dhanmondi, Dhaka',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.project_type, _ = ProjectType.objects.get_or_create(name='HVAC Installation')
+        self.project_data = {
+            'name': 'VRF HVAC Installation',
+            'project_type': self.project_type.id,
+            'client_name': 'ACME Corp',
+            'location': 'Dhaka, Bangladesh',
+            'hvac_capacity_tr': '150.00',
+            'system_type': 'VRF',
+            'start_date': date.today().isoformat(),
+            'status': 'Not Started',
+            'progress_percent': 0,
+            'branch': self.branch.id
+        }
+        self.project = Project.objects.create(
+            name='Test Project for Apply',
+            client_name='Test Client',
+            location='Dhaka',
+            project_type=self.project_type,
+            start_date=date.today(),
+            branch=self.branch,
+        )
+
+    def test_project_create_with_template(self):
+        self.client.login(username='+8801700000999', password=self.password)
+        
+        template = TaskTemplate.objects.create(name='Test Creation Template')
+        TaskTemplateItem.objects.create(template=template, order=1, activity='Step 1', default_duration_days=5)
+        TaskTemplateItem.objects.create(template=template, order=2, activity='Step 2', default_duration_days=3)
+        
+        data = self.project_data.copy()
+        data['task_template'] = template.id
+        
+        response = self.client.post(reverse('projects:project_add'), data=data)
+        self.assertRedirects(response, reverse('projects:project_list'))
+        
+        project = Project.objects.get(name='VRF HVAC Installation')
+        tasks = project.tasks.all().order_by('order')
+        self.assertEqual(tasks.count(), 2)
+        self.assertEqual(tasks[0].activity, 'Step 1')
+        self.assertEqual(tasks[0].duration_days, 5)
+        self.assertEqual(tasks[1].activity, 'Step 2')
+        self.assertEqual(tasks[1].duration_days, 3)
+
+    def test_project_apply_template_referer_redirect(self):
+        self.client.login(username='+8801700000999', password=self.password)
+        
+        template = TaskTemplate.objects.create(name='Test Apply Template')
+        TaskTemplateItem.objects.create(template=template, order=1, activity='Step A')
+        
+        edit_url = reverse('projects:project_edit', kwargs={'pk': self.project.id})
+        apply_url = reverse('projects:project_apply_template', kwargs={'project_id': self.project.id})
+        
+        response = self.client.post(
+            apply_url, 
+            data={'template_id': template.id, 'force': 'true'},
+            HTTP_REFERER=edit_url
+        )
+        self.assertRedirects(response, edit_url)
+
 
 
 
