@@ -4,7 +4,7 @@
 {% block page_title %}Project Details{% endblock %}
 
 {% block content %}
-<div class="p-4 max-w-5xl mx-auto">
+<div class="p-4">
     <!-- Header -->
     <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
@@ -105,33 +105,58 @@
         <div class="md:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Assigned Personnel</h3>
             <div class="space-y-3">
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[11px]">PM</div>
-                        <div>
-                            <p class="text-[10px] text-gray-400 font-semibold uppercase">Project Manager</p>
-                            <p class="text-[12px] font-semibold text-gray-900">
-                                {% if project.project_manager %}{{ project.project_manager.full_name }}{% else %}Unassigned{% endif %}
-                            </p>
+                <!-- Project Managers -->
+                <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <p class="text-[10px] text-gray-400 font-semibold uppercase mb-2">Project Managers</p>
+                    <div class="space-y-2">
+                        {% for pm in project.project_managers.all %}
+                        <div class="flex items-center justify-between {% if not forloop.last %}border-b border-gray-100 pb-2{% endif %}">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[10px]">PM</div>
+                                <span class="text-[12px] font-semibold text-gray-900">{{ pm.full_name }}</span>
+                            </div>
+                            <span class="text-[10px] text-gray-505 bg-white border px-1.5 py-0.5 rounded-lg font-medium">{{ pm.employee_id }}</span>
                         </div>
+                        {% empty %}
+                        <span class="text-[12px] text-gray-400 italic">No managers assigned</span>
+                        {% endfor %}
                     </div>
-                    {% if project.project_manager %}
-                    <span class="text-[11px] text-gray-500 bg-white border px-2 py-0.5 rounded-lg">{{ project.project_manager.employee_id }}</span>
-                    {% endif %}
                 </div>
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[11px]">SE</div>
-                        <div>
-                            <p class="text-[10px] text-gray-400 font-semibold uppercase">Site Engineer</p>
-                            <p class="text-[12px] font-semibold text-gray-900">
-                                {% if project.site_engineer %}{{ project.site_engineer.full_name }}{% else %}Unassigned{% endif %}
-                            </p>
+
+                <!-- Site Engineers -->
+                <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <p class="text-[10px] text-gray-400 font-semibold uppercase mb-2">Site Engineers</p>
+                    <div class="space-y-2">
+                        {% for se in project.site_engineers.all %}
+                        <div class="flex items-center justify-between {% if not forloop.last %}border-b border-gray-100 pb-2{% endif %}">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[10px]">SE</div>
+                                <span class="text-[12px] font-semibold text-gray-900">{{ se.full_name }}</span>
+                            </div>
+                            <span class="text-[10px] text-gray-505 bg-white border px-1.5 py-0.5 rounded-lg font-medium">{{ se.employee_id }}</span>
                         </div>
+                        {% empty %}
+                        <span class="text-[12px] text-gray-400 italic">No engineers assigned</span>
+                        {% endfor %}
                     </div>
-                    {% if project.site_engineer %}
-                    <span class="text-[11px] text-gray-500 bg-white border px-2 py-0.5 rounded-lg">{{ project.site_engineer.employee_id }}</span>
-                    {% endif %}
+                </div>
+
+                <!-- Project Members -->
+                <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <p class="text-[10px] text-gray-400 font-semibold uppercase mb-2">Project Members</p>
+                    <div class="space-y-2">
+                        {% for mem in project.project_members.all %}
+                        <div class="flex items-center justify-between {% if not forloop.last %}border-b border-gray-100 pb-2{% endif %}">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[10px]">MB</div>
+                                <span class="text-[12px] font-semibold text-gray-900">{{ mem.full_name }}</span>
+                            </div>
+                            <span class="text-[10px] text-gray-505 bg-white border px-1.5 py-0.5 rounded-lg font-medium">{{ mem.employee_id }}</span>
+                        </div>
+                        {% empty %}
+                        <span class="text-[12px] text-gray-400 italic">No members assigned</span>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -175,9 +200,15 @@
             statusFilter: 'all',
             selectedTasks: [],
             bulkStatus: '',
+            searchQuery: '',
+            assigneeFilter: '',
+            priorityFilter: 'all',
             get filteredCount() {
-                if (this.statusFilter === 'all') return {{ tasks|length }};
-                return document.querySelectorAll('[data-task-status=\'' + this.statusFilter + '\']').length;
+                let count = 0;
+                document.querySelectorAll('tr[data-task-id]').forEach(tr => {
+                    if (tr.style.display !== 'none') count++;
+                });
+                return count;
             }
          }">
 
@@ -190,7 +221,7 @@
         </div>
         {% endif %}{% endfor %}
 
-        <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white">
             <div>
                 <h3 class="text-[14px] font-semibold text-gray-900">Project Tasks Checklist</h3>
                 <p class="text-[12px] text-gray-500 mt-0.5">Add, update, or schedule task checklist items for this project.</p>
@@ -221,95 +252,157 @@
                     <label class="flex items-center gap-1.5 text-[11px] text-amber-700 font-semibold cursor-pointer select-none"
                            title="Required when tasks already exist — this will permanently delete all current tasks">
                         <input type="checkbox" name="force" value="true"
-                               x-model="hasForce"
-                               class="w-3.5 h-3.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500">
-                        Replace existing tasks ({{ tasks|length }} will be deleted)
+                               /></input> Replace existing tasks
                     </label>
                     {% endif %}
                     <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90 whitespace-nowrap">
-                        <i data-lucide="copy" class="w-3 h-3 mr-1"></i>
+                        <i data-lucide="copy" class="w-3.5 h-3.5 mr-1"></i>
                         Apply Template
                     </button>
                 </form>
                 {% endif %}
                 <a href="{% url 'projects:export_tasks_csv' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i data-lucide="download" class="w-3 h-3 mr-1 text-primary-500"></i>
+                    <i data-lucide="download" class="w-3.5 h-3.5 mr-1 text-primary-500"></i>
                     Export CSV
                 </a>
-                <a href="{% url 'projects:project_task_add' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i data-lucide="plus" class="w-3 h-3 mr-1"></i>
+                <a href="{% url 'projects:project_task_add' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+                    <i data-lucide="plus" class="w-3.5 h-3.5 mr-1"></i>
                     Add Task
                 </a>
             </div>
         </div>
 
-        {# Status filter + bulk action bar #}
-        {% if tasks or selected_member_id or project_members %}
-        <div class="px-4 py-2.5 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">Filter:</span>
-                <button type="button"
-                        @click="statusFilter = 'all'"
-                        :class="statusFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'"
-                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">All</button>
-                <button type="button"
-                        @click="statusFilter = 'Not Started'"
-                        :class="statusFilter === 'Not Started' ? 'bg-gray-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'"
-                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">Not Started</button>
-                <button type="button"
-                        @click="statusFilter = 'In Progress'"
-                        :class="statusFilter === 'In Progress' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-50'"
-                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">In Progress</button>
-                <button type="button"
-                        @click="statusFilter = 'Delayed'"
-                        :class="statusFilter === 'Delayed' ? 'bg-red-600 text-white' : 'bg-white text-red-600 border border-red-200 hover:bg-red-50'"
-                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors">Delayed</button>
-                <button type="button"
-                        @click="statusFilter = 'Completed'"
-                        :class="statusFilter === 'Completed' ? 'bg-green-600 text-white' : 'bg-white text-green-600 border border-green-200 hover:bg-green-50'"
-                        class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors mr-3">Completed</button>
-
-                <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">Assignee:</span>
-                <form method="GET" class="inline-block">
-                    <select name="member" onchange="this.form.submit()" class="no-custom-dropdown text-[11px] border border-gray-200 rounded-full px-2.5 py-0.5 bg-white text-gray-650 focus:outline-none cursor-pointer">
-                        <option value="">All Members</option>
-                        {% for member in project_members %}
-                        <option value="{{ member.id }}" {% if selected_member_id == member.id %}selected{% endif %}>{{ member.full_name }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
+        {# New Search & Filters Bar #}
+        <div class="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3 bg-gray-50/40">
+            <!-- Search -->
+            <div class="relative w-full sm:w-60">
+                <i data-lucide="search" class="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400"></i>
+                <input type="text"
+                       x-model="searchQuery"
+                       placeholder="Search tasks..."
+                       class="pl-8 pr-3 py-1.5 w-full bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-500">
             </div>
-            {# Bulk action — only shown when at least one task is checked #}
-            <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST"
-                  class="flex items-center gap-2"
-                  x-show="selectedTasks.length > 0"
-                  x-cloak>
+
+            <!-- Assignee -->
+            <div class="w-full sm:w-48">
+                <select x-model="assigneeFilter"
+                        class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
+                    <option value="">All Assignees</option>
+                    {% for member in project_members %}
+                    <option value="{{ member.id }}">{{ member.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Priority -->
+            <div class="w-full sm:w-40">
+                <select x-model="priorityFilter"
+                        class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
+                    <option value="all">All Priorities</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+            </div>
+
+            <!-- Status Dropdown -->
+            <div class="w-full sm:w-40">
+                <select x-model="statusFilter"
+                        class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
+                    <option value="all">All Status</option>
+                    <option value="Not Started">Not Started</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Delayed">Delayed</option>
+                    <option value="Completed">Completed</option>
+                </select>
+            </div>
+
+            <!-- Date Range -->
+            <div class="relative w-full sm:w-44">
+                <i data-lucide="calendar" class="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400"></i>
+                <input type="text"
+                       placeholder="All Time"
+                       readonly
+                       class="pl-8 pr-3 py-1.5 w-full bg-white border border-gray-200 rounded-lg text-xs cursor-pointer focus:outline-none">
+            </div>
+
+            <!-- Funnel & Clear All -->
+            <div class="flex items-center gap-2 ml-auto">
+                <button type="button" class="inline-flex items-center px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 mr-1"></i>
+                    Filters
+                </button>
+                <button type="button"
+                        @click="searchQuery = ''; assigneeFilter = ''; priorityFilter = 'all'; statusFilter = 'all';"
+                        class="text-xs text-primary-600 hover:text-primary-800 font-semibold cursor-pointer">
+                    Clear All
+                </button>
+            </div>
+        </div>
+
+        <!-- Status counts Tabs bar -->
+        <div class="px-4 py-2.5 border-b border-gray-100 flex flex-wrap items-center gap-2 bg-white">
+            <button type="button"
+                    @click="statusFilter = 'all'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
+                    :class="statusFilter === 'all' ? 'bg-green-600 text-white shadow-sm' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/50'">
+                All
+                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'all' ? 'bg-green-700 text-white' : 'bg-gray-200 text-gray-700'">{{ all_count }}</span>
+            </button>
+            <button type="button"
+                    @click="statusFilter = 'Not Started'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
+                    :class="statusFilter === 'Not Started' ? 'bg-gray-800 text-white shadow-sm' : 'bg-gray-50 text-gray-655 hover:bg-gray-100 border border-gray-200/50'">
+                Not Started
+                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'Not Started' ? 'bg-gray-900 text-gray-300' : 'bg-gray-200 text-gray-700'">{{ not_started_count }}</span>
+            </button>
+            <button type="button"
+                    @click="statusFilter = 'In Progress'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
+                    :class="statusFilter === 'In Progress' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-50 text-blue-600 hover:bg-blue-100/50 border border-blue-200'">
+                In Progress
+                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'In Progress' ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-700'">{{ in_progress_count }}</span>
+            </button>
+            <button type="button"
+                    @click="statusFilter = 'Delayed'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
+                    :class="statusFilter === 'Delayed' ? 'bg-red-600 text-white shadow-sm' : 'bg-gray-50 text-red-655 hover:bg-red-100 border border-red-200'">
+                Delayed
+                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'Delayed' ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-700'">{{ delayed_count }}</span>
+            </button>
+            <button type="button"
+                    @click="statusFilter = 'Completed'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
+                    :class="statusFilter === 'Completed' ? 'bg-green-600 text-white shadow-sm' : 'bg-gray-50 text-green-655 hover:bg-green-100 border border-green-200'">
+                Completed
+                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'Completed' ? 'bg-green-700 text-white' : 'bg-gray-200 text-gray-700'">{{ completed_count }}</span>
+            </button>
+        </div>
+
+        {# Bulk actions bar #}
+        <div class="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between" x-show="selectedTasks.length > 0" x-cloak>
+            <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST" class="flex items-center gap-2">
                 {% csrf_token %}
                 <template x-for="id in selectedTasks" :key="id">
                     <input type="hidden" name="task_ids" :value="id">
                 </template>
                 <span class="text-[11px] text-gray-500 font-medium" x-text="selectedTasks.length + ' selected'"></span>
-                <select name="new_status" x-model="bulkStatus"
-                        class="text-[11px] border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500">
+                <select name="new_status" x-model="bulkStatus" class="text-[11px] border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500">
                     <option value="">-- Set status --</option>
                     <option value="Not Started">Not Started</option>
                     <option value="In Progress">In Progress</option>
                     <option value="Delayed">Delayed</option>
                     <option value="Completed">Completed</option>
                 </select>
-                <button type="submit"
-                        :disabled="!bulkStatus"
-                        class="inline-flex items-center px-2.5 py-1 border border-transparent rounded-lg text-[11px] font-medium text-white bg-primary-gradient hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
-                    Apply to Selected
+                <button type="submit" :disabled="!bulkStatus" class="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium text-white bg-primary-gradient hover:opacity-90 disabled:opacity-40">
+                    Apply Status
                 </button>
-                <button type="button" @click="selectedTasks = []"
-                        class="text-[11px] text-gray-400 hover:text-gray-600">Clear</button>
+                <button type="button" @click="selectedTasks = []" class="text-[11px] text-gray-400 hover:text-gray-650 ml-2">Clear Selection</button>
             </form>
         </div>
-        {% endif %}
 
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100">
+            <table class="min-w-full divide-y divide-gray-100 bg-white">
                 <thead class="bg-gray-50">
                     <tr>
                         {% if tasks %}
@@ -317,24 +410,22 @@
                             <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-300"
                                    @change="
                                        if ($event.target.checked) {
-                                           selectedTasks = [...document.querySelectorAll('[data-task-id]')].map(el => el.dataset.taskId);
+                                           selectedTasks = [...document.querySelectorAll('tr[data-task-id]')].filter(el => el.style.display !== 'none').map(el => el.dataset.taskId);
                                        } else {
                                            selectedTasks = [];
                                        }"
                                    title="Select all tasks">
                         </th>
                         {% endif %}
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12">Seq</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Activity</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Points</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Responsible</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Planned Dates</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12">#</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Task</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Assignee</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Priority</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-36">Status</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Completed At</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Employee Note</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Remarks</th>
-                        <th scope="col" class="relative px-4 py-2.5 w-32"><span class="sr-only">Actions</span></th>
+                        <th scope="col" class="relative px-4 py-2.5 w-24 text-right"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-100">
@@ -342,8 +433,12 @@
                     <tr class="hover:bg-gray-50/70 transition-colors"
                         data-task-id="{{ task.pk }}"
                         data-task-status="{{ task.status }}"
-                        x-show="statusFilter === 'all' || statusFilter === '{{ task.status }}'">
-                        <td class="px-4 py-2.5">
+                        x-show="(statusFilter === 'all' || statusFilter === '{{ task.status }}') &&
+                                (!searchQuery || '{{ task.activity|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase())) &&
+                                (!assigneeFilter || '{{ task.responsible_person.id }}' === assigneeFilter) &&
+                                (priorityFilter === 'all' || (priorityFilter === 'High' && {{ task.points }} >= 20) || (priorityFilter === 'Medium' && {{ task.points }} >= 10 && {{ task.points }} < 20) || (priorityFilter === 'Low' && {{ task.points }} < 10))"
+                    >
+                        <td class="px-4 py-2.5 w-8">
                             <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-300"
                                    :checked="selectedTasks.includes('{{ task.pk }}')"
                                    @change="
@@ -354,104 +449,129 @@
                                        }">
                         </td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.order }}</td>
+                        
+                        <!-- Task Column -->
                         <td class="px-4 py-2.5 text-[12px] text-gray-800 font-medium">
-                            <div>{{ task.activity }}</div>
-                            {% if task.assignment_attachment or task.completion_attachment %}
-                            <div class="flex flex-wrap gap-2 mt-1.5">
+                            <div class="font-semibold text-gray-900 leading-tight">{{ task.activity }}</div>
+                            <div class="text-[10px] text-gray-400 mt-0.5">REF: PMP-2026-{{ task.pk }}</div>
+                            <div class="flex items-center gap-2.5 mt-1">
                                 {% if task.assignment_attachment %}
-                                <div class="flex items-center gap-1">
-                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Ref:</span>
-                                    {% if task.assignment_attachment.name|slice:"-4:"|lower == ".pdf" %}
-                                        <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-primary-600 hover:underline">
-                                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-                                            PDF
-                                        </a>
-                                    {% else %}
-                                        <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-block">
-                                            <img src="{{ task.assignment_attachment.url }}" class="w-7 h-7 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
-                                        </a>
-                                    {% endif %}
-                                </div>
+                                <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-flex items-center text-[10px] text-gray-400 hover:text-primary-600 transition-colors">
+                                    <i data-lucide="paperclip" class="w-3.5 h-3.5 mr-0.5 text-gray-400"></i>1
+                                </a>
                                 {% endif %}
-                                
                                 {% if task.completion_attachment %}
-                                <div class="flex items-center gap-1">
-                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Proof:</span>
-                                    {% if task.completion_attachment.name|slice:"-4:"|lower == ".pdf" %}
-                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-green-600 hover:underline">
-                                            <i data-lucide="file-check" class="w-3.5 h-3.5"></i>
-                                            PDF
-                                        </a>
-                                    {% else %}
-                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-block">
-                                            <img src="{{ task.completion_attachment.url }}" class="w-7 h-7 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
-                                        </a>
-                                    {% endif %}
-                                </div>
+                                <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-flex items-center text-[10px] text-green-600 hover:text-green-800 transition-colors">
+                                    <i data-lucide="check-square" class="w-3.5 h-3.5 mr-0.5"></i>Proof
+                                </a>
+                                {% endif %}
+                                {% if task.employee_note %}
+                                <span class="inline-flex items-center text-[10px] text-gray-400" title="{{ task.employee_note }}">
+                                    <i data-lucide="message-square" class="w-3.5 h-3.5 mr-0.5"></i>1
+                                </span>
                                 {% endif %}
                             </div>
-                            {% endif %}
                         </td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.points }}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-600">
+
+                        <!-- Assignee Column -->
+                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px]">
                             {% if task.responsible_person %}
-                            <div class="font-medium text-gray-900">{{ task.responsible_person.full_name }}</div>
-                            <div class="text-[11px] text-gray-400">{{ task.responsible_person.employee_id }}</div>
+                            <div class="flex items-center gap-2.5">
+                                {% if task.responsible_person.profile_photo %}
+                                <img src="{{ task.responsible_person.profile_photo.url }}" class="w-8 h-8 rounded-full object-cover">
+                                {% else %}
+                                <div class="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[10px]">
+                                    {{ task.responsible_person.full_name|slice:":2"|upper }}
+                                </div>
+                                {% endif %}
+                                <div class="min-w-0">
+                                    <div class="font-semibold text-gray-900 leading-none truncate max-w-[140px]">{{ task.responsible_person.full_name }}</div>
+                                    <div class="text-[9px] text-gray-450 uppercase font-semibold mt-1 leading-none truncate max-w-[140px]">{{ task.responsible_person.designation|default:"Staff" }}</div>
+                                </div>
+                            </div>
                             {% else %}
                             <span class="text-gray-400 italic text-[11px]">Unassigned</span>
                             {% endif %}
                         </td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-700">
+
+                        <!-- Priority Column -->
+                        <td class="px-4 py-2.5 whitespace-nowrap">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold
+                                {% if task.points >= 20 %}bg-red-50 text-red-700 border border-red-150
+                                {% elif task.points >= 10 %}bg-amber-50 text-amber-700 border border-amber-150
+                                {% else %}bg-green-50 text-green-700 border border-green-150{% endif %}">
+                                <span class="w-1.5 h-1.5 rounded-full
+                                    {% if task.points >= 20 %}bg-red-500
+                                    {% elif task.points >= 10 %}bg-amber-500
+                                    {% else %}bg-green-500{% endif %}"></span>
+                                {% if task.points >= 20 %}High{% elif task.points >= 10 %}Medium{% else %}Low{% endif %}
+                            </span>
+                        </td>
+
+                        <!-- Timeline Column -->
+                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px]">
                             {% if task.planned_start %}
-                            <div><span class="text-gray-400 font-semibold uppercase text-[10px]">Start:</span> {{ task.planned_start|date:"d/m/Y" }}</div>
-                            <div><span class="text-gray-400 font-semibold uppercase text-[10px]">End:</span> {{ task.planned_finish|date:"d/m/Y" }}</div>
+                            <div class="font-semibold text-gray-800">{{ task.planned_start|date:"d M" }} - {{ task.planned_finish|date:"d M" }}</div>
+                            <div class="text-[10px] mt-0.5 font-bold
+                                {% if task.status == 'Completed' %}text-green-600
+                                {% elif task.status == 'Delayed' %}text-red-500
+                                {% else %}text-amber-500{% endif %}">
+                                {% if task.status == 'Completed' %}Completed
+                                {% elif task.status == 'Delayed' %}Overdue
+                                {% else %}{{ task.duration_days|default:"0" }} days left{% endif %}
+                            </div>
                             {% else %}
-                            <span class="text-gray-400 italic text-[11px]">Not scheduled</span>
+                            <span class="text-gray-400 italic text-[11px]">-</span>
                             {% endif %}
                         </td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900">
-                            {% if task.duration_days %}{{ task.duration_days }} days{% else %}-{% endif %}
+
+                        <!-- Progress Column -->
+                        <td class="px-4 py-2.5 whitespace-nowrap">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden shrink-0">
+                                    <div class="h-1.5 rounded-full transition-all duration-300
+                                        {% if task.status == 'Completed' %}bg-green-500 w-full
+                                        {% elif task.status == 'In Progress' %}bg-blue-500 w-1/2
+                                        {% elif task.status == 'Delayed' %}bg-red-500 w-1/5
+                                        {% else %}bg-gray-300 w-0{% endif %}"></div>
+                                </div>
+                                <span class="text-[10px] text-gray-500 font-bold">
+                                    {% if task.status == 'Completed' %}100%
+                                    {% elif task.status == 'In Progress' %}50%
+                                    {% elif task.status == 'Delayed' %}20%
+                                    {% else %}0%{% endif %}
+                                </span>
+                            </div>
                         </td>
+
+                        <!-- Status Badge/Dropdown Column -->
                         <td class="px-4 py-2.5 whitespace-nowrap">
                             {% include 'projects/partials/task_status_dropdown.html' with task=task %}
                         </td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-700">
-                            {% if task.completed_at %}{{ task.completed_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}
+
+                        <!-- Remarks Column -->
+                        <td class="px-4 py-2.5 text-[11px] text-gray-500 max-w-xs truncate" title="{{ task.remarks }}">
+                            {{ task.remarks|default:"-" }}
                         </td>
-                        <td class="px-4 py-2.5 text-[12px] text-gray-500 max-w-xs truncate" title="{{ task.employee_note }}">{{ task.employee_note|default:"-" }}</td>
-                        <td class="px-4 py-2.5 text-[12px] text-gray-500 max-w-xs truncate" title="{{ task.remarks }}">{{ task.remarks|default:"-" }}</td>
+
+                        <!-- Actions Column -->
                         <td class="px-4 py-2.5 whitespace-nowrap text-right text-[12px] font-semibold">
-                            <div class="flex items-center justify-end gap-2">
-                                {# Reorder buttons #}
-                                <div class="flex flex-col gap-0.5">
-                                    <form action="{% url 'projects:project_task_reorder' task.pk %}" method="POST" class="inline">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="direction" value="up">
-                                        <button type="submit" class="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                                                {% if forloop.first %}disabled title="Already first"{% else %}title="Move up"{% endif %}>
-                                            <i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
-                                        </button>
-                                    </form>
-                                    <form action="{% url 'projects:project_task_reorder' task.pk %}" method="POST" class="inline">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="direction" value="down">
-                                        <button type="submit" class="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                                                {% if forloop.last %}disabled title="Already last"{% else %}title="Move down"{% endif %}>
-                                            <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                                <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:text-primary-900">Edit</a>
+                            <div class="flex items-center justify-end gap-1">
+                                <a href="{% url 'projects:project_task_edit' task.pk %}" class="p-1 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded transition-colors" title="Edit">
+                                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                </a>
                                 <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this task?', () => $el.submit())">
                                     {% csrf_token %}
-                                    <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                                    <button type="submit" class="p-1 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition-colors" title="Delete">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="12" class="px-4 py-10 text-center text-gray-400">
+                        <td colspan="10" class="px-4 py-10 text-center text-gray-400 bg-white">
                             <i data-lucide="list-todo" class="w-7 h-7 text-gray-200 mx-auto mb-1.5"></i>
                             <p class="text-[12px] italic">No tasks found. Apply a template or add tasks manually.</p>
                         </td>
