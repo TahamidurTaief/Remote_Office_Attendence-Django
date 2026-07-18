@@ -1634,12 +1634,26 @@ class ProjectTaskNewFeaturesTests(TestCase):
         
         data = response.json()
         self.assertTrue(data['success'])
-        self.assertEqual(data['progress_percent'], 100)
+        self.assertEqual(data['progress_percent'], 0) # Under Review task shouldn't increment progress yet
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'Under Review')
+        self.assertEqual(task.employee_note, 'All done and dusted')
+        self.assertIsNone(task.completed_at)
+
+        # Now approve it as Admin
+        self.client.login(email='admin@example.com', password=self.password)
+        approve_url = reverse('projects:task_approve_api', kwargs={'pk': task.pk})
+        response = self.client.post(approve_url)
+        self.assertEqual(response.status_code, 200)
+        approve_data = response.json()
+        self.assertTrue(approve_data['success'])
+        self.assertEqual(approve_data['status'], 'Completed')
 
         task.refresh_from_db()
         self.assertEqual(task.status, 'Completed')
-        self.assertEqual(task.employee_note, 'All done and dusted')
-        self.assertIsNotNone(task.completed_at)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.progress_percent, 100)
 
     def test_staff_task_complete_endpoint_forbidden_for_other_employee(self):
         from apps.employees.models import EmployeeProfile
@@ -1918,7 +1932,7 @@ class StaffTaskCompletePermissionsTests(TestCase):
         response = self.client.post(url, data={'note': 'Done'})
         self.assertEqual(response.status_code, 200)
         self.assigned_task_a.refresh_from_db()
-        self.assertEqual(self.assigned_task_a.status, 'Completed')
+        self.assertEqual(self.assigned_task_a.status, 'Under Review')
         self.assertEqual(self.assigned_task_a.employee_note, 'Done')
 
     def test_standalone_unassigned_task_complete_by_pm_succeeds(self):
@@ -1950,7 +1964,7 @@ class StaffTaskCompletePermissionsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         
         self.assigned_task_a.refresh_from_db()
-        self.assertEqual(self.assigned_task_a.status, 'Completed')
+        self.assertEqual(self.assigned_task_a.status, 'Under Review')
         self.assertEqual(self.assigned_task_a.attachments.filter(attachment_type='completion').count(), 2)
 
     def test_task_detail_api_and_replies(self):
@@ -1973,3 +1987,25 @@ class StaffTaskCompletePermissionsTests(TestCase):
         self.assertEqual(len(data['replies']), 1)
         self.assertEqual(data['replies'][0]['message'], 'Here is a comment.')
         self.assertEqual(data['replies'][0]['author_name'], 'Staff A')
+
+    def test_task_approve_api(self):
+        """A manager/admin can approve a task and mark it as Completed."""
+        self.assigned_task_a.status = 'Under Review'
+        self.assigned_task_a.save()
+        
+        # Test approval as staff (should fail)
+        self.client.login(username='+8801700000777', password=self.password)
+        approve_url = reverse('projects:task_approve_api', kwargs={'pk': self.assigned_task_a.pk})
+        response = self.client.post(approve_url)
+        self.assertEqual(response.status_code, 403)
+        
+        # Test approval as PM (should succeed)
+        self.client.login(username='+8801700000888', password=self.password)
+        response = self.client.post(approve_url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['status'], 'Completed')
+        
+        self.assigned_task_a.refresh_from_db()
+        self.assertEqual(self.assigned_task_a.status, 'Completed')

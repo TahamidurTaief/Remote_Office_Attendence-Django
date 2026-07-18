@@ -81,6 +81,28 @@
         .finally(() => {
             this.submittingReply = false;
         });
+    },
+    
+    approveTask(taskId) {
+        if (!confirm('Are you sure you want to approve this task and mark it as completed?')) return;
+        fetch(`/projects/tasks/${taskId}/approve-api/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                this.detailedTask.status = data.status;
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to approve task.');
+            }
+        })
+        .catch(err => {
+            alert('Error approving task.');
+        });
     }
 }">
     <!-- Header Summary & Actions -->
@@ -219,6 +241,8 @@
                                     <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200">In Progress</span>
                                 {% elif task.status == 'Delayed' %}
                                     <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-bold border border-red-200 animate-pulse">Delayed</span>
+                                {% elif task.status == 'Under Review' %}
+                                    <span class="px-2 py-0.5 rounded-full bg-amber-55 text-amber-800 font-bold border border-amber-200 animate-pulse">Under Review</span>
                                 {% elif task.status == 'Completed' %}
                                     <span class="px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-bold border border-green-200">Completed</span>
                                 {% endif %}
@@ -327,6 +351,8 @@
                                             <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-150">In Progress</span>
                                         {% elif task.status == 'Delayed' %}
                                             <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold border border-red-150">Delayed</span>
+                                        {% elif task.status == 'Under Review' %}
+                                            <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-150">Under Review</span>
                                         {% elif task.status == 'Completed' %}
                                             <span class="px-1.5 py-0.5 rounded bg-green-50 text-green-700 font-semibold border border-green-150">Completed</span>
                                         {% endif %}
@@ -385,6 +411,7 @@
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-1"
                                       :class="{
                                           'bg-green-100 text-green-800 border border-green-200': detailedTask.status === 'Completed',
+                                          'bg-amber-100 text-amber-800 border border-amber-200': detailedTask.status === 'Under Review',
                                           'bg-blue-100 text-blue-800 border border-blue-200': detailedTask.status === 'In Progress',
                                           'bg-red-100 text-red-800 border border-red-200': detailedTask.status === 'Delayed',
                                           'bg-slate-100 text-slate-700 border border-slate-200': detailedTask.status === 'Not Started'
@@ -427,6 +454,15 @@
                             <span class="text-[10px] text-slate-405 font-bold uppercase block">Employee Completion Note</span>
                             <p class="text-xs text-slate-600 mt-1 italic whitespace-pre-line bg-emerald-50/50 border border-emerald-100 p-2.5 rounded-lg" x-text="detailedTask.employee_note"></p>
                         </div>
+
+                        <!-- Approve Button for Managers/Admins -->
+                        {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'manager' %}
+                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.status !== 'Completed'">
+                            <button type="button" @click="approveTask(detailedTask.id)" class="w-full inline-flex justify-center items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors">
+                                <i data-lucide="check-circle" class="w-4 h-4"></i> Approve Task (Mark Completed)
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
                 </template>
 
@@ -448,32 +484,59 @@
                             </div>
 
                             <template x-if="detailedTask.attachments[activeFileIndex]">
-                                <div class="border border-slate-150 rounded-xl overflow-hidden bg-slate-100 flex flex-col items-center justify-center p-2 min-h-[160px] max-h-[220px]">
-                                    <!-- Image Preview -->
-                                    <template x-if="detailedTask.attachments[activeFileIndex].is_image">
-                                        <div class="w-full h-full flex justify-center">
-                                            <img :src="detailedTask.attachments[activeFileIndex].url" class="max-w-full max-h-[200px] object-contain rounded-lg shadow-sm">
+                                <div class="border border-slate-150 rounded-xl bg-slate-50 flex flex-col p-3 space-y-3">
+                                    <!-- File Preview Container (Click to Open) -->
+                                    <div @click="window.open(detailedTask.attachments[activeFileIndex].url, '_blank')" 
+                                         class="cursor-pointer border border-slate-200 bg-white rounded-lg overflow-hidden flex items-center justify-center p-2 min-h-[180px] max-h-[300px] hover:border-indigo-450 transition-colors group relative"
+                                         title="Click to open in new tab">
+                                        <!-- Overlay hover hint -->
+                                        <div class="absolute inset-0 bg-slate-900/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <span class="bg-slate-950/80 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                                                <i data-lucide="external-link" class="w-3 h-3"></i> Click to Open
+                                            </span>
                                         </div>
-                                    </template>
+
+                                        <!-- Image Preview -->
+                                        <template x-if="detailedTask.attachments[activeFileIndex].is_image">
+                                            <img :src="detailedTask.attachments[activeFileIndex].url" class="max-w-full max-h-[260px] object-contain rounded-md shadow-sm">
+                                        </template>
+                                        
+                                        <!-- PDF Reader -->
+                                        <template x-if="detailedTask.attachments[activeFileIndex].is_pdf">
+                                            <div class="flex flex-col items-center justify-center py-6 space-y-3">
+                                                <div class="w-14 h-14 bg-red-50 text-red-650 rounded-2xl flex items-center justify-center shadow-sm">
+                                                    <i data-lucide="file-text" class="w-8 h-8"></i>
+                                                </div>
+                                                <div class="text-center">
+                                                    <span class="text-xs font-bold text-slate-800 block truncate max-w-[240px]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                                    <span class="text-[10px] text-slate-450 mt-1 block">Click to read PDF in new tab</span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Other Formats -->
+                                        <template x-if="!detailedTask.attachments[activeFileIndex].is_image && !detailedTask.attachments[activeFileIndex].is_pdf">
+                                            <div class="flex flex-col items-center justify-center py-6 space-y-3">
+                                                <div class="w-14 h-14 bg-slate-100 text-slate-500 rounded-2xl flex items-center justify-center shadow-sm">
+                                                    <i data-lucide="file" class="w-8 h-8"></i>
+                                                </div>
+                                                <div class="text-center">
+                                                    <span class="text-xs font-semibold text-slate-800 block truncate max-w-[240px]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                                    <span class="text-[10px] text-slate-450 mt-1 block">Click to open file in new tab</span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
                                     
-                                    <!-- PDF Reader -->
-                                    <template x-if="detailedTask.attachments[activeFileIndex].is_pdf">
-                                        <iframe :src="detailedTask.attachments[activeFileIndex].url" class="w-full h-[200px] border-0 rounded-lg"></iframe>
-                                    </template>
-                                    
-                                    <!-- Other Non-Previewable Formats -->
-                                    <template x-if="!detailedTask.attachments[activeFileIndex].is_image && !detailedTask.attachments[activeFileIndex].is_pdf">
-                                        <div class="flex flex-col items-center justify-center py-4 space-y-2">
-                                            <i data-lucide="file" class="w-10 h-10 text-slate-400"></i>
-                                            <span class="text-xs font-semibold text-slate-600" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                    <!-- Download and Details Bar (Fully Visible) -->
+                                    <div class="flex items-center justify-between gap-3 bg-white border border-slate-150 rounded-lg p-2.5 shadow-sm">
+                                        <div class="min-w-0 flex-1">
+                                            <span class="text-xs font-bold text-slate-700 block truncate" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                            <span class="text-[9px] text-slate-400 block uppercase tracking-wider mt-0.5" x-text="detailedTask.attachments[activeFileIndex].type + ' File'"></span>
                                         </div>
-                                    </template>
-                                    
-                                    <!-- Download Bar -->
-                                    <div class="w-full border-t border-slate-200/50 mt-1.5 pt-1.5 flex items-center justify-between shrink-0 px-1">
-                                        <span class="text-[10px] text-slate-400 truncate max-w-[70%]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
-                                        <a :href="detailedTask.attachments[activeFileIndex].url" download target="_blank" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-white bg-slate-800 hover:bg-slate-700 rounded-md transition-colors shadow-sm">
-                                            <i data-lucide="download" class="w-3 h-3"></i> Download
+                                        <a :href="detailedTask.attachments[activeFileIndex].url" download target="_blank" 
+                                           class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors shadow shrink-0">
+                                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
                                         </a>
                                     </div>
                                 </div>

@@ -1486,7 +1486,17 @@ def staff_task_complete(request, pk):
             )
 
     task.employee_note = note
-    task.status = 'Completed'
+    is_manager_or_admin = False
+    if request.user.is_superuser or request.user.role in ['admin', 'manager']:
+        is_manager_or_admin = True
+    elif employee and task.project:
+        if task.project.project_managers.filter(id=employee.id).exists():
+            is_manager_or_admin = True
+
+    if is_manager_or_admin:
+        task.status = 'Completed'
+    else:
+        task.status = 'Under Review'
     task.save()
 
     progress = task.project.progress_percent if task.project else 0
@@ -1564,7 +1574,7 @@ def task_detail_api(request, pk):
     replies_data = []
     for reply in task.replies.select_related('user', 'user__employee_profile').order_by('created_at'):
         emp = getattr(reply.user, 'employee_profile', None)
-        full_name = emp.full_name if emp else (reply.user.first_name + ' ' + reply.user.last_name).strip() or reply.user.email
+        full_name = emp.full_name if emp else (reply.user.email or reply.user.phone or "Unknown User")
         role = reply.user.role.capitalize() if hasattr(reply.user, 'role') else 'User'
         photo_url = emp.profile_photo.url if emp and emp.profile_photo else None
         
@@ -1625,7 +1635,7 @@ def task_add_reply_api(request, pk):
     replies_data = []
     for r in task.replies.select_related('user', 'user__employee_profile').order_by('created_at'):
         emp = getattr(r.user, 'employee_profile', None)
-        full_name = emp.full_name if emp else (r.user.first_name + ' ' + r.user.last_name).strip() or r.user.email
+        full_name = emp.full_name if emp else (r.user.email or r.user.phone or "Unknown User")
         role = r.user.role.capitalize() if hasattr(r.user, 'role') else 'User'
         photo_url = emp.profile_photo.url if emp and emp.profile_photo else None
         
@@ -1640,6 +1650,23 @@ def task_add_reply_api(request, pk):
     return JsonResponse({
         'success': True,
         'replies': replies_data
+    })
+
+
+@login_required
+def task_approve_api(request, pk):
+    if not (request.user.is_superuser or request.user.role in ['admin', 'manager']):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+        
+    task = get_object_or_404(ProjectTask, pk=pk)
+    task.status = 'Completed'
+    task.save()
+    if task.project:
+        task.project.recalculate_progress()
+        
+    return JsonResponse({
+        'success': True,
+        'status': task.status
     })
 
 

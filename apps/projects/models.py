@@ -153,7 +153,13 @@ class TaskTemplateItem(models.Model):
         return f"{self.template.name} - {self.order}. {self.activity}"
 
 class ProjectTask(models.Model):
-    STATUS_CHOICES = Project.STATUS_CHOICES
+    STATUS_CHOICES = (
+        ('Not Started', 'Not Started'),
+        ('In Progress', 'In Progress'),
+        ('Delayed', 'Delayed'),
+        ('Under Review', 'Under Review'),
+        ('Completed', 'Completed'),
+    )
 
     project = models.ForeignKey(
         Project,
