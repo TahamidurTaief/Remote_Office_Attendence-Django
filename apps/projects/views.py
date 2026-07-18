@@ -283,6 +283,19 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
         context['project'] = get_object_or_404(Project, pk=self.kwargs['project_id'])
         return context
 
+    def post(self, request, *args, **kwargs):
+        attachments = request.FILES.getlist('assignment_attachments')
+        from django.core.exceptions import ValidationError
+        from apps.projects.models import validate_task_attachment
+        for attachment in attachments:
+            try:
+                validate_task_attachment(attachment)
+            except ValidationError as e:
+                form = self.get_form()
+                form.add_error(None, f"File validation failed for {attachment.name}: {e.message}")
+                return self.form_invalid(form)
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         project = get_object_or_404(Project, pk=self.kwargs['project_id'])
         form.instance.project = project
@@ -290,6 +303,19 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
         
         # Notify assigned employee
         task = self.object
+        attachments = self.request.FILES.getlist('assignment_attachments')
+        if attachments:
+            from apps.projects.models import TaskAttachment
+            for index, attachment in enumerate(attachments):
+                if index == 0 and not task.assignment_attachment:
+                    task.assignment_attachment = attachment
+                    task.save(update_fields=['assignment_attachment'])
+                TaskAttachment.objects.create(
+                    task=task,
+                    file=attachment,
+                    attachment_type='assignment'
+                )
+
         if task.responsible_person and task.responsible_person.user:
             from apps.notifications.dispatch import log_activity
             subject = f"New Task Assigned: {task.activity}"
@@ -337,12 +363,39 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
         context['project'] = self.object.project
         return context
 
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        attachments = request.FILES.getlist('assignment_attachments')
+        from django.core.exceptions import ValidationError
+        from apps.projects.models import validate_task_attachment
+        for attachment in attachments:
+            try:
+                validate_task_attachment(attachment)
+            except ValidationError as e:
+                form = self.get_form()
+                form.add_error(None, f"File validation failed for {attachment.name}: {e.message}")
+                return self.form_invalid(form)
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         old_task = ProjectTask.objects.get(pk=self.get_object().pk)
         old_resp = old_task.responsible_person
         response = super().form_valid(form)
         
         new_task = self.object
+        attachments = self.request.FILES.getlist('assignment_attachments')
+        if attachments:
+            from apps.projects.models import TaskAttachment
+            for index, attachment in enumerate(attachments):
+                if index == 0 and not new_task.assignment_attachment:
+                    new_task.assignment_attachment = attachment
+                    new_task.save(update_fields=['assignment_attachment'])
+                TaskAttachment.objects.create(
+                    task=new_task,
+                    file=attachment,
+                    attachment_type='assignment'
+                )
+
         if new_task.responsible_person and new_task.responsible_person != old_resp:
             if new_task.responsible_person.user:
                 from apps.notifications.dispatch import log_activity
@@ -1312,10 +1365,38 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
     template_name = 'projects/global_task_form.html'
     success_url = reverse_lazy('projects:global_task_list')
 
+    def post(self, request, *args, **kwargs):
+        attachments = request.FILES.getlist('assignment_attachments')
+        from django.core.exceptions import ValidationError
+        from apps.projects.models import validate_task_attachment
+        for attachment in attachments:
+            try:
+                validate_task_attachment(attachment)
+            except ValidationError as e:
+                form = self.get_form()
+                form.add_error(None, f"File validation failed for {attachment.name}: {e.message}")
+                return self.form_invalid(form)
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         response = super().form_valid(form)
         task = self.object
         project_label = task.project.name if task.project else 'Standalone Task'
+        
+        # Save multiple assignment/reference attachments if provided
+        attachments = self.request.FILES.getlist('assignment_attachments')
+        if attachments:
+            from apps.projects.models import TaskAttachment
+            for index, attachment in enumerate(attachments):
+                if index == 0 and not task.assignment_attachment:
+                    task.assignment_attachment = attachment
+                    task.save(update_fields=['assignment_attachment'])
+                TaskAttachment.objects.create(
+                    task=task,
+                    file=attachment,
+                    attachment_type='assignment'
+                )
+
         # Notify newly assigned employee
         if task.responsible_person and task.responsible_person.user:
             Notification.objects.create(
@@ -1342,7 +1423,6 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
         return response
 
 
-
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
@@ -1362,10 +1442,12 @@ def staff_task_complete(request, pk):
     # 2. If task is assigned: only the assigned employee can complete it
     employee = getattr(request.user, 'employee_profile', None)
     if not task.responsible_person:
-        is_pm = False
-        if employee and task.project.project_managers.filter(id=employee.id).exists():
-            is_pm = True
-        if not is_pm and not request.user.is_superuser:
+        is_authorized = False
+        if request.user.is_superuser or request.user.role in ['admin', 'manager']:
+            is_authorized = True
+        if employee and task.project and task.project.project_managers.filter(id=employee.id).exists():
+            is_authorized = True
+        if not is_authorized:
             return JsonResponse({'error': 'Only project managers or admins can update unassigned tasks.'}, status=403)
     else:
         if not employee or task.responsible_person != employee:
@@ -1381,15 +1463,27 @@ def staff_task_complete(request, pk):
     else:
         note = request.POST.get('note', '')
         
-    completion_attachment = request.FILES.get('completion_attachment')
-    if completion_attachment:
+    completion_attachments = request.FILES.getlist('completion_attachments')
+    if completion_attachments:
         from django.core.exceptions import ValidationError
-        from apps.projects.models import validate_task_attachment
-        try:
-            validate_task_attachment(completion_attachment)
-        except ValidationError as e:
-            return JsonResponse({'error': e.message}, status=400)
-        task.completion_attachment = completion_attachment
+        from apps.projects.models import TaskAttachment, validate_task_attachment
+        for attachment in completion_attachments:
+            try:
+                validate_task_attachment(attachment)
+            except ValidationError as e:
+                return JsonResponse({'error': f"File validation failed for {attachment.name}: {e.message}"}, status=400)
+        
+        # Save attachments
+        for index, attachment in enumerate(completion_attachments):
+            if index == 0 and not task.completion_attachment:
+                task.completion_attachment = attachment
+                task.save(update_fields=['completion_attachment'])
+            
+            TaskAttachment.objects.create(
+                task=task,
+                file=attachment,
+                attachment_type='completion'
+            )
 
     task.employee_note = note
     task.status = 'Completed'

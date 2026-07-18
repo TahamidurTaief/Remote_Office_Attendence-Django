@@ -49,7 +49,9 @@
         formData.append('note', this.completionNote);
         const fileEl = document.getElementById('modal-proof-file');
         if (fileEl && fileEl.files.length > 0) {
-            formData.append('completion_attachment', fileEl.files[0]);
+            for (let i = 0; i < fileEl.files.length; i++) {
+                formData.append('completion_attachments', fileEl.files[i]);
+            }
         }
         
         const url = `/projects/tasks/${this.activeTask.id}/complete/`;
@@ -134,7 +136,21 @@
                             employee_note: '{{ task.employee_note|escapejs }}',
                             remarks: '{{ task.remarks|escapejs }}',
                             assignment_url: '{% if task.assignment_attachment %}{{ task.assignment_attachment.url }}{% endif %}',
-                            completion_url: '{% if task.completion_attachment %}{{ task.completion_attachment.url }}{% endif %}'
+                            completion_url: '{% if task.completion_attachment %}{{ task.completion_attachment.url }}{% endif %}',
+                            assignment_attachments: [
+                                {% for att in task.attachments.all %}
+                                    {% if att.attachment_type == 'assignment' %}
+                                        { url: '{{ att.file.url }}', name: '{{ att.filename|escapejs }}' },
+                                    {% endif %}
+                                {% endfor %}
+                            ],
+                            completion_attachments: [
+                                {% for att in task.attachments.all %}
+                                    {% if att.attachment_type == 'completion' %}
+                                        { url: '{{ att.file.url }}', name: '{{ att.filename|escapejs }}' },
+                                    {% endif %}
+                                {% endfor %}
+                            ]
                         })">
                         <td class="px-4 py-3.5">
                             {% if task.project %}
@@ -253,18 +269,35 @@
                 
                 <!-- Ref and Remarks -->
                 <div class="grid grid-cols-2 gap-4">
-                    <div x-show="activeTask.assignment_url">
-                        <span class="text-[10px] text-gray-400 font-bold uppercase leading-none">Reference Document</span>
-                        <div class="mt-1">
-                            <a :href="activeTask.assignment_url" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-primary-600 font-bold hover:underline">
-                                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-                                View Reference
-                            </a>
+                    <!-- Multiple Ref Documents -->
+                    <template x-if="activeTask.assignment_attachments && activeTask.assignment_attachments.length > 0">
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase leading-none block mb-1">Reference Documents</span>
+                            <div class="space-y-1">
+                                <template x-for="att in activeTask.assignment_attachments">
+                                    <a :href="att.url" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-primary-600 font-bold hover:underline block truncate max-w-full">
+                                        <i data-lucide="file-text" class="w-3.5 h-3.5 shrink-0 text-slate-400"></i>
+                                        <span x-text="att.name" class="truncate"></span>
+                                    </a>
+                                </template>
+                            </div>
                         </div>
-                    </div>
+                    </template>
+                    <!-- Fallback single Ref Document -->
+                    <template x-if="(!activeTask.assignment_attachments || activeTask.assignment_attachments.length === 0) && activeTask.assignment_url">
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase leading-none block mb-1">Reference Document</span>
+                            <div>
+                                <a :href="activeTask.assignment_url" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-primary-600 font-bold hover:underline block truncate max-w-full">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5 shrink-0 text-slate-400"></i>
+                                    <span>View Reference</span>
+                                </a>
+                            </div>
+                        </div>
+                    </template>
                     <div x-show="activeTask.remarks">
-                        <span class="text-[10px] text-gray-400 font-bold uppercase leading-none">Manager Feedback</span>
-                        <p class="text-xs text-gray-600 mt-1 italic" x-text="activeTask.remarks"></p>
+                        <span class="text-[10px] text-gray-400 font-bold uppercase leading-none block mb-1">Manager Feedback</span>
+                        <p class="text-xs text-gray-600 italic" x-text="activeTask.remarks"></p>
                     </div>
                 </div>
 
@@ -275,15 +308,34 @@
                         <span class="text-[10px] text-gray-400">Employee Note:</span>
                         <p class="text-xs text-gray-800 italic" x-text="activeTask.employee_note"></p>
                     </div>
-                    <div x-show="activeTask.completion_url">
-                        <span class="text-[10px] text-gray-400">Attached Proof:</span>
-                        <div class="mt-1">
-                            <a :href="activeTask.completion_url" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-green-650 font-bold hover:underline">
-                                <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
-                                View Proof Document
-                            </a>
+                    
+                    <!-- Multiple Proof Documents -->
+                    <template x-if="activeTask.completion_attachments && activeTask.completion_attachments.length > 0">
+                        <div>
+                            <span class="text-[10px] text-gray-400 block mb-1">Attached Proof(s):</span>
+                            <div class="space-y-1">
+                                <template x-for="att in activeTask.completion_attachments">
+                                    <a :href="att.url" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-green-650 font-bold hover:underline block truncate max-w-full">
+                                        <i data-lucide="check-square" class="w-3.5 h-3.5 shrink-0 text-slate-400"></i>
+                                        <span x-text="att.name" class="truncate"></span>
+                                    </a>
+                                </template>
+                            </div>
                         </div>
-                    </div>
+                    </template>
+                    <!-- Fallback single Proof Document -->
+                    <template x-if="(!activeTask.completion_attachments || activeTask.completion_attachments.length === 0) && activeTask.completion_url">
+                        <div>
+                            <span class="text-[10px] text-gray-400 block mb-1">Attached Proof:</span>
+                            <div>
+                                <a :href="activeTask.completion_url" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-green-650 font-bold hover:underline block truncate max-w-full">
+                                    <i data-lucide="check-square" class="w-3.5 h-3.5 shrink-0 text-slate-400"></i>
+                                    <span>View Proof Document</span>
+                                </a>
+                            </div>
+                        </div>
+                    </template>
+
                     <div x-show="activeTask.completed_at">
                         <span class="text-[10px] text-gray-400">Submitted On:</span>
                         <p class="text-[11px] text-gray-600" x-text="activeTask.completed_at"></p>
@@ -300,8 +352,9 @@
                     </div>
                     
                     <div>
-                        <label class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Upload Proof File (Optional)</label>
-                        <input type="file" id="modal-proof-file" class="w-full text-xs text-gray-500">
+                        <label class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Upload Proof File(s) (Optional)</label>
+                        <input type="file" id="modal-proof-file" class="w-full text-xs text-gray-550" multiple>
+                        <p class="mt-1 text-[10px] text-gray-400">Allowed types: JPG, JPEG, PNG, PDF. Max size: 10MB per file. You can select multiple files.</p>
                     </div>
                 </div>
             </div>

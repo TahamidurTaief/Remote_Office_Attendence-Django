@@ -95,9 +95,35 @@
 
                 <!-- Attachment -->
                 <div class="sm:col-span-6">
-                    <label for="{{ form.assignment_attachment.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Reference File / Attachment</label>
-                    {{ form.assignment_attachment }}
-                    <p class="mt-1 text-[11px] text-gray-500">Allowed types: JPG, JPEG, PNG, PDF. Max size: 10MB.</p>
+                    <label class="block text-[12px] font-medium text-gray-700 mb-1">Reference File(s) / Attachment(s)</label>
+                    <input type="file" name="assignment_attachments" multiple class="w-full text-xs text-gray-500 border border-gray-250 rounded p-2 focus:outline-none focus:ring-1 focus:ring-primary-500">
+                    <p class="mt-1 text-[11px] text-gray-500">Allowed types: JPG, JPEG, PNG, PDF. Max size: 10MB per file. You can select multiple files.</p>
+                    
+                    {% if object and object.attachments.exists %}
+                    <div class="mt-3 space-y-1.5">
+                        <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachments ({{ object.attachments.count }}):</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {% for att in object.attachments.all %}
+                            <div class="flex items-center justify-between text-xs bg-slate-50 border border-gray-150 rounded-lg p-2">
+                                <a href="{{ att.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold truncate flex items-center gap-1.5 max-w-[85%]">
+                                    <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-slate-400"></i>
+                                    <span class="truncate">{{ att.filename }}</span>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% elif object and object.assignment_attachment %}
+                    <div class="mt-3">
+                        <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachment:</p>
+                        <div class="inline-flex items-center text-xs bg-slate-50 border border-gray-150 rounded-lg p-2 mt-1">
+                            <a href="{{ object.assignment_attachment.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold flex items-center gap-1.5">
+                                <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-slate-400"></i>
+                                <span>{{ object.assignment_attachment.name }}</span>
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 

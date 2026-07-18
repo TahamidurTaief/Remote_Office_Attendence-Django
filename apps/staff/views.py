@@ -828,7 +828,7 @@ def my_tasks(request):
     from apps.projects.models import ProjectTask
 
     # Query tasks assigned to this employee
-    tasks = ProjectTask.objects.filter(responsible_person=employee).select_related('project', 'project__branch').order_by('status', 'planned_finish')
+    tasks = ProjectTask.objects.filter(responsible_person=employee).select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
 
     status_filter = request.GET.get('status', 'pending')
 

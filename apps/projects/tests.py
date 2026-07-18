@@ -1920,3 +1920,35 @@ class StaffTaskCompletePermissionsTests(TestCase):
         self.assigned_task_a.refresh_from_db()
         self.assertEqual(self.assigned_task_a.status, 'Completed')
         self.assertEqual(self.assigned_task_a.employee_note, 'Done')
+
+    def test_standalone_unassigned_task_complete_by_pm_succeeds(self):
+        """A manager/admin can complete a standalone unassigned task."""
+        standalone_task = ProjectTask.objects.create(
+            project=None, order=3, activity='Standalone Task', status='Not Started', responsible_person=None
+        )
+        self.client.login(username='+8801700000888', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': standalone_task.pk})
+        response = self.client.post(url, data={'note': 'Standalone Done'})
+        self.assertEqual(response.status_code, 200)
+        standalone_task.refresh_from_db()
+        self.assertEqual(standalone_task.status, 'Completed')
+        self.assertEqual(standalone_task.employee_note, 'Standalone Done')
+
+    def test_standalone_task_complete_multi_attachments(self):
+        """A user can complete a task with multiple files/attachments."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        file1 = SimpleUploadedFile("proof1.png", b"file_content_1", content_type="image/png")
+        file2 = SimpleUploadedFile("proof2.pdf", b"file_content_2", content_type="application/pdf")
+        
+        self.client.login(username='+8801700000777', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': self.assigned_task_a.pk})
+        
+        response = self.client.post(url, {
+            'note': 'Completed with multiple files',
+            'completion_attachments': [file1, file2]
+        })
+        self.assertEqual(response.status_code, 200)
+        
+        self.assigned_task_a.refresh_from_db()
+        self.assertEqual(self.assigned_task_a.status, 'Completed')
+        self.assertEqual(self.assigned_task_a.attachments.filter(attachment_type='completion').count(), 2)

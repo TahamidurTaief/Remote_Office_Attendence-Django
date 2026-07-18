@@ -233,7 +233,7 @@ class ProjectTask(models.Model):
                 
         super().save(*args, **kwargs)
         
-        if is_delayed and self.project.project_managers.exists():
+        if is_delayed and self.project and self.project.project_managers.exists():
             from apps.notifications.dispatch import log_activity
             pms = self.project.project_managers.filter(is_active=True)
             for pm in pms:
@@ -255,7 +255,7 @@ class ProjectTask(models.Model):
                         email_also=True
                     )
 
-        if is_completed_transition and self.project.project_managers.exists():
+        if is_completed_transition and self.project and self.project.project_managers.exists():
             from apps.notifications.dispatch import log_activity
             pms = self.project.project_managers.filter(is_active=True)
             for pm in pms:
@@ -284,6 +284,24 @@ class ProjectTask(models.Model):
     def __str__(self):
         project_name = self.project.name if self.project_id else 'Standalone'
         return f"{project_name} - {self.order}. {self.activity}"
+
+
+class TaskAttachment(models.Model):
+    ATTACHMENT_TYPE_CHOICES = (
+        ('assignment', 'Assignment / Reference'),
+        ('completion', 'Completion / Proof'),
+    )
+    task = models.ForeignKey(ProjectTask, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='projects/task_attachments/%Y/%m/', validators=[validate_task_attachment])
+    attachment_type = models.CharField(max_length=20, choices=ATTACHMENT_TYPE_CHOICES, default='assignment')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def filename(self):
+        return os.path.basename(self.file.name)
+
+    def __str__(self):
+        return f"{self.task.activity} - {self.attachment_type} - {self.filename}"
 
 
 class DailyProgressLog(models.Model):
