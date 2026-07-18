@@ -1517,3 +1517,96 @@ class ProjectNotificationEmailTests(TestCase):
             
         self.assertEqual(task.status, 'Delayed')
 
+
+class ProjectTaskNewFeaturesTests(TestCase):
+    def setUp(self):
+        self.password = 'testpassword123'
+        self.admin_user = User.objects.create_user(
+            email='admin@example.com',
+            phone='+8801700000100',
+            password=self.password,
+            role='admin'
+        )
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.project_type = ProjectType.objects.create(name='Test Project Type')
+        self.project = Project.objects.create(
+            name='Test Project',
+            client_name='Test Client',
+            location='Dhaka',
+            project_type=self.project_type,
+            start_date=date(2026, 7, 1),
+            branch=self.branch,
+        )
+
+    def test_progress_recalculation_points(self):
+        # Create a project with 2 tasks (points=10 and points=30)
+        task1 = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Task 1',
+            points=10,
+            status='Not Started'
+        )
+        task2 = ProjectTask.objects.create(
+            project=self.project,
+            order=2,
+            activity='Task 2',
+            points=30,
+            status='Not Started'
+        )
+        
+        # Initially progress should be 0 since both are Not Started
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.progress_percent, 0)
+
+        # Mark one Completed, assert progress_percent == 25
+        task1.status = 'Completed'
+        task1.save()
+
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.progress_percent, 25)
+
+    def test_completed_at_automated_and_post_ignore(self):
+        self.client.login(email='admin@example.com', password=self.password)
+        
+        # Create task
+        task = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Task 1',
+            points=10,
+            status='Not Started'
+        )
+
+        # Confirm completed_at is None initially
+        self.assertIsNone(task.completed_at)
+
+        # Update via POST trying to supply a fake completed_at
+        fake_time = "2020-01-01 12:00:00"
+        url = reverse('projects:project_task_edit', kwargs={'pk': task.pk})
+        
+        # Send POST with status=Completed and fake completed_at
+        data = {
+            'order': task.order,
+            'activity': task.activity,
+            'points': task.points,
+            'status': 'Completed',
+            'completed_at': fake_time,
+        }
+        
+        response = self.client.post(url, data=data)
+        # Should redirect on success
+        self.assertEqual(response.status_code, 302)
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'Completed')
+        self.assertIsNotNone(task.completed_at)
+        # Verify that completed_at is NOT the fake time we posted
+        self.assertNotEqual(task.completed_at.strftime('%Y-%m-%d'), '2020-01-01')
+
+

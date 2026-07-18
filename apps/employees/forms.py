@@ -14,7 +14,7 @@ TEXT_INPUT = (
 )
 
 SELECT_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
+    "w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
     "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
 )
 
@@ -56,7 +56,7 @@ class EmployeeCreateForm(forms.ModelForm):
         model = EmployeeProfile
         fields = ['employee_id', 'full_name', 'department', 'designation', 'branch', 'phone', 'emergency_contact', 'profile_photo', 'joined_date', 'is_active', 'tracking_interval', 'overtime_enabled']
         widgets = {
-            'joined_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'joined_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'employee_id': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'full_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'department': forms.TextInput(attrs={'class': TEXT_INPUT}),
@@ -158,7 +158,7 @@ class EmployeeEditForm(forms.ModelForm):
         model = EmployeeProfile
         fields = ['employee_id', 'full_name', 'department', 'designation', 'branch', 'phone', 'emergency_contact', 'profile_photo', 'joined_date', 'is_active', 'tracking_interval', 'overtime_enabled']
         widgets = {
-            'joined_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'joined_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'employee_id': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'full_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'department': forms.TextInput(attrs={'class': TEXT_INPUT}),
@@ -250,6 +250,6 @@ class EmployeeDocumentForm(forms.ModelForm):
         fields = ['document_type', 'expiry_date', 'file']
         widgets = {
             'document_type': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Visa, Trade License'}),
-            'expiry_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'expiry_date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'file': forms.ClearableFileInput(attrs={'class': FILE_INPUT}),
         }

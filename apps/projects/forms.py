@@ -8,7 +8,7 @@ TEXT_INPUT = (
 )
 
 SELECT_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
+    "w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
     "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
 )
 
@@ -42,8 +42,8 @@ class ProjectForm(forms.ModelForm):
             'site_engineer': forms.Select(attrs={'class': SELECT_INPUT}),
             'hvac_capacity_tr': forms.NumberInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. 150.00', 'step': '0.01'}),
             'system_type': forms.Select(attrs={'class': SELECT_INPUT}),
-            'start_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
-            'completion_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'start_date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'completion_date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'progress_percent': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': '0', 'max': '100', 'placeholder': '0'}),
             'branch': forms.Select(attrs={'class': SELECT_INPUT}),
@@ -110,17 +110,19 @@ class ProjectTaskForm(forms.ModelForm):
         fields = [
             'order', 'activity', 'responsible_person',
             'planned_start', 'planned_finish', 'duration_days',
-            'status', 'remarks'
+            'points', 'status', 'remarks', 'employee_note'
         ]
         widgets = {
             'order': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
             'activity': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Duct Installation'}),
             'responsible_person': forms.Select(attrs={'class': SELECT_INPUT}),
-            'planned_start': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
-            'planned_finish': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'planned_start': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'planned_finish': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'duration_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
+            'points': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'placeholder': 'Points (default 10)'}),
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
+            'employee_note': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Employee Note...'}),
         }
 
     def clean(self):
@@ -140,7 +142,7 @@ class DailyProgressLogForm(forms.ModelForm):
         model = DailyProgressLog
         fields = ['date', 'planned_work', 'completed_work', 'manpower_count', 'delay_reason', 'supervisor_name']
         widgets = {
-            'date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'planned_work': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 3, 'placeholder': 'Planned work details...'}),
             'completed_work': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 3, 'placeholder': 'Completed work details...'}),
             'manpower_count': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'placeholder': 'Manpower count'}),
@@ -160,7 +162,7 @@ class ManpowerDeploymentForm(forms.ModelForm):
         model = ManpowerDeployment
         fields = ['date', 'trade', 'required_count', 'present_count']
         widgets = {
-            'date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'trade': forms.Select(attrs={'class': SELECT_INPUT}),
             'required_count': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'placeholder': 'Required count'}),
             'present_count': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'placeholder': 'Present count (optional)'}),
@@ -225,18 +227,20 @@ class GlobalProjectTaskForm(forms.ModelForm):
         fields = [
             'project', 'order', 'activity', 'responsible_person',
             'planned_start', 'planned_finish', 'duration_days',
-            'status', 'remarks'
+            'points', 'status', 'remarks', 'employee_note'
         ]
         widgets = {
             'project': forms.Select(attrs={'class': SELECT_INPUT}),
             'order': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
             'activity': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Duct Installation'}),
             'responsible_person': forms.Select(attrs={'class': SELECT_INPUT}),
-            'planned_start': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
-            'planned_finish': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'planned_start': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'planned_finish': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'duration_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
+            'points': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'placeholder': 'Points (default 10)'}),
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
+            'employee_note': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Employee Note...'}),
         }
 
     def clean(self):

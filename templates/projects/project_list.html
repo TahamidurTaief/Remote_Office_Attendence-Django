@@ -87,11 +87,13 @@
                             </div>
                         </td>
                         <!-- Client & Location -->
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <div class="text-[12px] text-gray-900 font-medium">{{ project.client_name }}</div>
-                            <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
-                                <i data-lucide="map-pin" class="w-3 h-3 text-gray-300"></i>
-                                {{ project.location }}
+                        <td class="px-4 py-3 whitespace-nowrap" title="{{ project.client_name }} — {{ project.location }}">
+                            <div class="max-w-[160px] truncate">
+                                <div class="text-[12px] text-gray-900 font-medium truncate">{{ project.client_name|truncatechars:20 }}</div>
+                                <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5 truncate">
+                                    <i data-lucide="map-pin" class="w-3 h-3 text-gray-300 shrink-0"></i>
+                                    <span class="truncate">{{ project.location|truncatechars:25 }}</span>
+                                </div>
                             </div>
                         </td>
                         <!-- Status & Progress -->
@@ -107,13 +109,15 @@
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-50 text-gray-600 border border-gray-100">Not Started</span>
                                 {% endif %}
                             </div>
-                            <div class="w-32">
-                                <div class="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
-                                    <span>Progress</span>
-                                    <span class="font-semibold text-gray-700">{{ project.progress_percent }}%</span>
-                                </div>
-                                <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                    <div class="bg-primary-gradient h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                            <div class="whitespace-normal">
+                                <div class="w-full min-w-[90px] max-w-[160px]">
+                                    <div class="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
+                                        <span>Progress</span>
+                                        <span class="font-semibold text-gray-700">{{ project.progress_percent }}%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-primary-gradient h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                                    </div>
                                 </div>
                             </div>
                         </td>

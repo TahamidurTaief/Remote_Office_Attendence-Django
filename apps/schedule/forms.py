@@ -10,7 +10,7 @@ TEXT_INPUT = (
 )
 
 SELECT_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded text-sm text-gray-800 bg-white "
+    "w-full px-3 py-1.5 border border-gray-200 rounded text-sm text-gray-800 bg-white "
     "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
 )
 
@@ -24,7 +24,7 @@ class ScheduleEventForm(forms.ModelForm):
         widgets = {
             'title': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Event Title'}),
             'description': forms.Textarea(attrs={'class': TEXT_INPUT, 'placeholder': 'Description (optional)', 'rows': 3}),
-            'date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'start_time': forms.TimeInput(attrs={'class': TEXT_INPUT, 'type': 'time'}),
             'end_time': forms.TimeInput(attrs={'class': TEXT_INPUT, 'type': 'time'}),
             'event_type': forms.Select(attrs={'class': SELECT_INPUT}),

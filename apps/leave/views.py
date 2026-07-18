@@ -339,8 +339,8 @@ class AdminLeaveRequestRescheduleForm(forms.ModelForm):
         fields = ['leave_type', 'start_date', 'end_date', 'reason']
         widgets = {
             'leave_type': forms.Select(attrs={'class': SELECT_INPUT}),
-            'start_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
-            'end_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'start_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'end_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'reason': forms.Textarea(attrs={'rows': 3, 'class': TEXTAREA_INPUT, 'placeholder': 'Reason for reschedule...'}),
         }
 

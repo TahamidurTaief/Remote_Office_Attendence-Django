@@ -105,6 +105,18 @@ class Project(models.Model):
     def __str__(self):
         return self.name
 
+    def recalculate_progress(self):
+        total_tasks = self.tasks.all()
+        if not total_tasks.exists():
+            return
+        total_points = sum(task.points for task in total_tasks)
+        if total_points == 0:
+            self.progress_percent = 0
+        else:
+            completed_points = sum(task.points for task in total_tasks if task.status == 'Completed')
+            self.progress_percent = round((completed_points / total_points) * 100)
+        self.save(update_fields=['progress_percent'])
+
 class TaskTemplate(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -148,11 +160,30 @@ class ProjectTask(models.Model):
         default='Not Started'
     )
     remarks = models.TextField(blank=True)
+    points = models.PositiveIntegerField(default=10)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    employee_note = models.TextField(blank=True)
 
     class Meta:
         ordering = ['order']
 
     def save(self, *args, **kwargs):
+        is_completed_transition = False
+        if self.status == 'Completed':
+            if self.pk:
+                try:
+                    old_status = ProjectTask.objects.get(pk=self.pk).status
+                    if old_status != 'Completed':
+                        is_completed_transition = True
+                except ProjectTask.DoesNotExist:
+                    is_completed_transition = True
+            else:
+                is_completed_transition = True
+
+        if is_completed_transition and not self.completed_at:
+            from django.utils import timezone
+            self.completed_at = timezone.now()
+
         is_delayed = False
         if self.status == 'Delayed':
             if self.pk:

@@ -9,7 +9,7 @@ TEXT_INPUT = (
 )
 
 SELECT_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
+    "w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
     "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
 )
 
@@ -39,7 +39,7 @@ class HolidayForm(forms.ModelForm):
         fields = ['name', 'date', 'branch']
         widgets = {
             'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Holiday Name'}),
-            'date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'branch': forms.Select(attrs={'class': SELECT_INPUT}),
         }
         labels = {

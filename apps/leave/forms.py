@@ -8,7 +8,7 @@ TEXT_INPUT = (
 )
 
 SELECT_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
+    "w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
     "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
 )
 
@@ -24,8 +24,8 @@ class LeaveRequestForm(forms.ModelForm):
         fields = ['leave_type', 'start_date', 'end_date', 'reason']
         widgets = {
             'leave_type': forms.Select(attrs={'class': SELECT_INPUT}),
-            'start_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
-            'end_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'start_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'end_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'reason': forms.Textarea(attrs={'rows': 3, 'class': TEXTAREA_INPUT, 'placeholder': 'Reason for leave request...'}),
         }
 
@@ -94,8 +94,8 @@ class AdminAddLeaveForm(forms.ModelForm):
         fields = ['employee', 'leave_type', 'start_date', 'end_date', 'reason', 'status']
         widgets = {
             'leave_type': forms.Select(attrs={'class': SELECT_INPUT}),
-            'start_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
-            'end_date': forms.DateInput(attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'start_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'end_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'reason': forms.Textarea(attrs={'rows': 3, 'class': TEXTAREA_INPUT, 'placeholder': 'Reason for leave...'}),
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
         }
