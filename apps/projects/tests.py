@@ -1609,4 +1609,158 @@ class ProjectTaskNewFeaturesTests(TestCase):
         # Verify that completed_at is NOT the fake time we posted
         self.assertNotEqual(task.completed_at.strftime('%Y-%m-%d'), '2020-01-01')
 
+    def test_staff_task_complete_endpoint_success(self):
+        from apps.employees.models import EmployeeProfile
+        # Create an employee user
+        staff_user = User.objects.create_user(
+            email='staff@example.com',
+            phone='+8801700000200',
+            password=self.password,
+            role='staff'
+        )
+        staff_profile = EmployeeProfile.objects.create(
+            user=staff_user,
+            full_name='Staff Member',
+            branch=self.branch,
+            employee_id='EMP_STAFF',
+            phone='+8801700000200',
+            joined_date=date.today(),
+            is_active=True
+        )
+
+        task = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Staff Task',
+            points=20,
+            status='Not Started',
+            responsible_person=staff_profile
+        )
+
+        self.client.login(username='+8801700000200', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': task.pk})
+        
+        response = self.client.post(url, data={'note': 'All done and dusted'})
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['progress_percent'], 100)
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'Completed')
+        self.assertEqual(task.employee_note, 'All done and dusted')
+        self.assertIsNotNone(task.completed_at)
+
+    def test_staff_task_complete_endpoint_forbidden_for_other_employee(self):
+        from apps.employees.models import EmployeeProfile
+        # Create two employee users
+        staff_user1 = User.objects.create_user(
+            email='staff1@example.com',
+            phone='+8801700000201',
+            password=self.password,
+            role='staff'
+        )
+        staff_profile1 = EmployeeProfile.objects.create(
+            user=staff_user1,
+            full_name='Staff 1',
+            branch=self.branch,
+            employee_id='EMP_S1',
+            phone='+8801700000201',
+            joined_date=date.today(),
+            is_active=True
+        )
+        staff_user2 = User.objects.create_user(
+            email='staff2@example.com',
+            phone='+8801700000202',
+            password=self.password,
+            role='staff'
+        )
+        staff_profile2 = EmployeeProfile.objects.create(
+            user=staff_user2,
+            full_name='Staff 2',
+            branch=self.branch,
+            employee_id='EMP_S2',
+            phone='+8801700000202',
+            joined_date=date.today(),
+            is_active=True
+        )
+
+        task = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Staff Task',
+            points=20,
+            status='Not Started',
+            responsible_person=staff_profile1
+        )
+
+        # Login as staff2, who is not assigned to the task
+        self.client.login(username='+8801700000202', password=self.password)
+        url = reverse('projects:staff_task_complete', kwargs={'pk': task.pk})
+        
+        response = self.client.post(url, data={'note': 'I am trying to complete someone else task'})
+        self.assertEqual(response.status_code, 403)
+
+        task.refresh_from_db()
+        self.assertNotEqual(task.status, 'Completed')
+
+    def test_staff_task_complete_endpoint_unauthorized(self):
+        task = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Staff Task',
+            points=20,
+            status='Not Started'
+        )
+
+        # Anonymous request
+        url = reverse('projects:staff_task_complete', kwargs={'pk': task.pk})
+        response = self.client.post(url, data={'note': 'Anonymous note'})
+        # Should redirect to login (since login_required decorator is used)
+        self.assertEqual(response.status_code, 302)
+
+    def test_completed_task_sends_email_to_pm(self):
+        from django.core import mail
+        from apps.employees.models import EmployeeProfile
+        mail.outbox = []
+
+        pm_user = User.objects.create_user(
+            email='pm@example.com',
+            phone='+8801700000300',
+            password=self.password,
+            role='manager'
+        )
+        pm_profile = EmployeeProfile.objects.create(
+            user=pm_user,
+            full_name='Project Manager',
+            branch=self.branch,
+            employee_id='EMP_PM',
+            phone='+8801700000300',
+            joined_date=date.today(),
+            is_active=True
+        )
+        self.project.project_manager = pm_profile
+        self.project.save()
+
+        task = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Test Email Completion Task',
+            points=10,
+            status='Not Started'
+        )
+
+        mail.outbox = []
+        task.status = 'Completed'
+        task.employee_note = 'Fully done!'
+        task.save()
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['pm@example.com'])
+        self.assertIn("Task Completed: Test Email Completion Task in Project Test Project", mail.outbox[0].subject)
+        self.assertIn("Fully done!", mail.outbox[0].body)
+
+
+
 

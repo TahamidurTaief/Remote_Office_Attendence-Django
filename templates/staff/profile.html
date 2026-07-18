@@ -112,21 +112,44 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 bg-white">
                     {% for task in assigned_tasks %}
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-2 whitespace-nowrap">
+                    <tr class="hover:bg-gray-50 transition-colors" id="task-row-{{ task.pk }}">
+                        <td class="px-4 py-3">
                             <div class="text-xs font-bold text-gray-900">{{ task.project.name }}</div>
                             <div class="text-[10px] text-gray-500">{{ task.project.branch.name|default:"No Branch" }}</div>
+                            <div class="text-[10px] text-primary-600 font-semibold mt-0.5">Points: {{ task.points }}</div>
                         </td>
-                        <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-800">{{ task.activity }}</td>
-                        <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-500">{{ task.planned_finish|default:"—" }}</td>
-                        <td class="px-4 py-2 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold
-                                {% if task.status == 'Completed' %}bg-green-100 text-green-800
-                                {% elif task.status == 'In Progress' %}bg-blue-100 text-blue-800
-                                {% elif task.status == 'Delayed' %}bg-red-100 text-red-850
-                                {% else %}bg-gray-100 text-gray-700{% endif %}">
-                                {{ task.status }}
-                            </span>
+                        <td class="px-4 py-3 text-xs text-gray-800">
+                            <div>{{ task.activity }}</div>
+                            {% if task.status == 'Completed' %}
+                                {% if task.employee_note %}
+                                <div class="text-[10px] text-gray-500 mt-1 italic">Note: {{ task.employee_note }}</div>
+                                {% endif %}
+                                <div class="text-[9px] text-gray-400 mt-0.5">Completed: {{ task.completed_at|date:"d/m/Y H:i" }}</div>
+                            {% else %}
+                                <div class="mt-2 max-w-xs">
+                                    <textarea id="task-note-{{ task.pk }}" class="w-full text-[11px] p-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 mb-1" placeholder="Add a completion note..." rows="1"></textarea>
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{{ task.planned_finish|default:"—" }}</td>
+                        <td class="px-4 py-3 whitespace-nowrap align-middle" id="task-status-col-{{ task.pk }}">
+                            {% if task.status == 'Completed' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-800">
+                                    Completed
+                                </span>
+                            {% else %}
+                                <div class="flex flex-col gap-1.5 items-start">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold
+                                        {% if task.status == 'In Progress' %}bg-blue-100 text-blue-800
+                                        {% elif task.status == 'Delayed' %}bg-red-100 text-red-850
+                                        {% else %}bg-gray-100 text-gray-700{% endif %}">
+                                        {{ task.status }}
+                                    </span>
+                                    <button type="button" onclick="completeTask({{ task.pk }})" class="text-[10px] font-bold text-white bg-green-600 hover:bg-green-700 px-2 py-1 rounded transition-colors shadow-sm">
+                                        Mark Complete
+                                    </button>
+                                </div>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -279,4 +302,63 @@
         </form>
     </div>
 </div>
+
+<script>
+function getCsrf() {
+    const el = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (el) return el.value;
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+}
+
+function completeTask(taskId) {
+    const noteEl = document.getElementById(`task-note-${taskId}`);
+    const noteValue = noteEl ? noteEl.value : '';
+
+    const url = `/projects/tasks/${taskId}/complete/`;
+    const formData = new FormData();
+    formData.append('note', noteValue);
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrf()
+        },
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error || 'Server error'); });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Update row status
+            const statusCol = document.getElementById(`task-status-col-${taskId}`);
+            if (statusCol) {
+                statusCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-800">Completed</span>`;
+            }
+            
+            // Hide textarea, replace text cell with note and date
+            const row = document.getElementById(`task-row-${taskId}`);
+            if (row) {
+                const textCell = row.cells[1];
+                let html = `<div>${textCell.querySelector('div').innerText}</div>`;
+                if (noteValue) {
+                    html += `<div class="text-[10px] text-gray-500 mt-1 italic">Note: ${noteValue}</div>`;
+                }
+                const now = new Date();
+                const pad = (n) => n.toString().padStart(2, '0');
+                const formattedDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                html += `<div class="text-[9px] text-gray-400 mt-0.5">Completed: ${formattedDate}</div>`;
+                textCell.innerHTML = html;
+            }
+        }
+    })
+    .catch(error => {
+        alert(error.message);
+    });
+}
+</script>
 {% endblock %}

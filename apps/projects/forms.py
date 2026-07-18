@@ -125,6 +125,11 @@ class ProjectTaskForm(forms.ModelForm):
             'employee_note': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Employee Note...'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['points'].required = False
+        self.fields['employee_note'].required = False
+
     def clean(self):
         cleaned_data = super().clean()
         planned_start = cleaned_data.get('planned_start')
@@ -242,6 +247,11 @@ class GlobalProjectTaskForm(forms.ModelForm):
             'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
             'employee_note': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Employee Note...'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['points'].required = False
+        self.fields['employee_note'].required = False
 
     def clean(self):
         cleaned_data = super().clean()

@@ -326,10 +326,13 @@
                         {% endif %}
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12">Seq</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Activity</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Points</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Responsible</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Planned Dates</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-36">Status</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Completed At</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Employee Note</th>
                         <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Remarks</th>
                         <th scope="col" class="relative px-4 py-2.5 w-32"><span class="sr-only">Actions</span></th>
                     </tr>
@@ -352,6 +355,7 @@
                         </td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.order }}</td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-800 font-medium">{{ task.activity }}</td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.points }}</td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-600">
                             {% if task.responsible_person %}
                             <div class="font-medium text-gray-900">{{ task.responsible_person.full_name }}</div>
@@ -374,6 +378,10 @@
                         <td class="px-4 py-2.5 whitespace-nowrap">
                             {% include 'projects/partials/task_status_dropdown.html' with task=task %}
                         </td>
+                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-700">
+                            {% if task.completed_at %}{{ task.completed_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-[12px] text-gray-500 max-w-xs truncate" title="{{ task.employee_note }}">{{ task.employee_note|default:"-" }}</td>
                         <td class="px-4 py-2.5 text-[12px] text-gray-500 max-w-xs truncate" title="{{ task.remarks }}">{{ task.remarks|default:"-" }}</td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-right text-[12px] font-semibold">
                             <div class="flex items-center justify-end gap-2">
@@ -406,7 +414,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="px-4 py-10 text-center text-gray-400">
+                        <td colspan="12" class="px-4 py-10 text-center text-gray-400">
                             <i data-lucide="list-todo" class="w-7 h-7 text-gray-200 mx-auto mb-1.5"></i>
                             <p class="text-[12px] italic">No tasks found. Apply a template or add tasks manually.</p>
                         </td>

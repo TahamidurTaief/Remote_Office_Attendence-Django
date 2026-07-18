@@ -1232,6 +1232,45 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
         return response
 
 
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from apps.staff.views import check_staff_role
+import json
+
+@login_required
+@require_POST
+def staff_task_complete(request, pk):
+    if not check_staff_role(request.user):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    
+    task = get_object_or_404(ProjectTask, pk=pk)
+    
+    # Verify request.user's linked EmployeeProfile == task.responsible_person
+    employee = getattr(request.user, 'employee_profile', None)
+    if not employee or task.responsible_person != employee:
+        return JsonResponse({'error': 'You are not assigned to this task.'}, status=403)
+        
+    note = ""
+    if request.content_type == 'application/json':
+        try:
+            data = json.loads(request.body)
+            note = data.get('note', '')
+        except json.JSONDecodeError:
+            pass
+    else:
+        note = request.POST.get('note', '')
+        
+    task.employee_note = note
+    task.status = 'Completed'
+    task.save()
+    
+    return JsonResponse({
+        'success': True,
+        'progress_percent': task.project.progress_percent
+    })
+
+
 
 
 

@@ -33,6 +33,7 @@ urlpatterns = [
     path('tasks/<int:pk>/shift-subsequent/', views.ProjectTaskShiftSubsequentView.as_view(), name='project_task_shift_subsequent'),
     path('tasks/<int:pk>/update-status/', views.ProjectTaskUpdateStatusView.as_view(), name='project_task_update_status'),
     path('tasks/<int:pk>/reorder/', views.ProjectTaskReorderView.as_view(), name='project_task_reorder'),
+    path('tasks/<int:pk>/complete/', views.staff_task_complete, name='staff_task_complete'),
     path('<int:project_id>/tasks/bulk-status/', views.ProjectTaskBulkStatusView.as_view(), name='project_task_bulk_status'),
     path('<int:project_id>/apply-template/', views.ProjectApplyTemplateView.as_view(), name='project_apply_template'),
     

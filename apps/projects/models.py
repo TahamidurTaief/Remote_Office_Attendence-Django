@@ -209,6 +209,18 @@ class ProjectTask(models.Model):
             )
             send_email_notification(self.project.project_manager.user, subject, message)
 
+        if is_completed_transition and self.project.project_manager and self.project.project_manager.user:
+            from apps.notifications.dispatch import send_email_notification
+            subject = f"Task Completed: {self.activity} in Project {self.project.name}"
+            message = (
+                f"Hello {self.project.project_manager.full_name},\n\n"
+                f"The task '{self.activity}' in project '{self.project.name}' has been marked as Completed.\n"
+                f"Employee Note: {self.employee_note or 'None'}\n"
+                f"Completed At: {self.completed_at}\n\n"
+                f"Regards,\nFieldTrack System"
+            )
+            send_email_notification(self.project.project_manager.user, subject, message)
+
     def __str__(self):
         return f"{self.project.name} - {self.order}. {self.activity}"
 
