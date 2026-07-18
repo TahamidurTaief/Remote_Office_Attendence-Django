@@ -434,7 +434,7 @@
         </div>
         Leave
       </a>
-      {% if request.user.role == 'manager' %}
+      {% if can_access_my_projects %}
       <a href="{% url 'staff:my_projects' %}"
          class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
          {% if '/staff/my-projects/' in request.path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
@@ -566,7 +566,7 @@
       <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
       {% endif %}
     </a>
-    {% if request.user.role == 'manager' %}
+    {% if can_access_my_projects %}
     <a href="{% url 'staff:my_projects' %}"
        class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if '/staff/my-projects/' in request.path %}text-primary-500{% else %}text-gray-400 hover:text-gray-600{% endif %}">
       <div class="relative">

@@ -52,8 +52,12 @@ class ProjectForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from apps.employees.models import EmployeeProfile
+        from django.db.models import Q
         active_employees = EmployeeProfile.objects.filter(is_active=True)
-        self.fields['project_manager'].queryset = active_employees
+        active_managers = EmployeeProfile.objects.filter(
+            Q(is_active=True) & (Q(user__role='manager') | Q(user__groups__name='Manager'))
+        ).distinct()
+        self.fields['project_manager'].queryset = active_managers
         self.fields['site_engineer'].queryset = active_employees
         
         self.fields['project_manager'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"

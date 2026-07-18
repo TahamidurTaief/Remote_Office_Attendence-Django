@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from apps.employees.models import EmployeeProfile, EmployeeDocument
 from apps.branches.models import Branch
 import random
@@ -48,6 +49,7 @@ def generate_random_password(length=10):
 class EmployeeCreateForm(forms.ModelForm):
     email = forms.EmailField(required=False, label="Email Address (Optional)")
     role = forms.ChoiceField(choices=[('staff', 'Staff'), ('manager', 'Manager')], initial='staff')
+    groups = forms.ModelMultipleChoiceField(queryset=Group.objects.all(), required=False, widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT}), label="Roles / Groups")
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     password1 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Set login password', 'class': TEXT_INPUT}), label="Password", required=True)
     password2 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat password', 'class': TEXT_INPUT}), label="Confirm Password", required=True)
@@ -141,6 +143,7 @@ class EmployeeCreateForm(forms.ModelForm):
             email = None
             
         user = User.objects.create_user(email=email, phone=phone, password=password, role=role)
+        user.groups.set(self.cleaned_data.get('groups', []))
         profile.user = user
         
         if commit:
@@ -151,6 +154,7 @@ class EmployeeCreateForm(forms.ModelForm):
 
 class EmployeeEditForm(forms.ModelForm):
     role = forms.ChoiceField(choices=[('staff', 'Staff'), ('manager', 'Manager')], widget=forms.Select(attrs={'class': SELECT_INPUT}), label="Role", required=True)
+    groups = forms.ModelMultipleChoiceField(queryset=Group.objects.all(), required=False, widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT}), label="Roles / Groups")
     new_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Leave blank to keep current'}), label="New Password", required=False)
     confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat new password', 'class': TEXT_INPUT}), label="Confirm Password", required=False)
 
@@ -176,6 +180,7 @@ class EmployeeEditForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.user:
             self.fields['role'].initial = self.instance.user.role
+            self.fields['groups'].initial = self.instance.user.groups.all()
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.update({'class': CHECKBOX_INPUT})
@@ -235,6 +240,7 @@ class EmployeeEditForm(forms.ModelForm):
         if role:
             user.role = role
         user.save()
+        user.groups.set(self.cleaned_data.get('groups', []))
         
         if new_password:
             user.set_password(new_password)

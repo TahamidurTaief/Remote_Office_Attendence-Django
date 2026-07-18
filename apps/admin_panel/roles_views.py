@@ -105,9 +105,33 @@ class RoleMembersView(AdminRequiredMixin, DetailView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Find users with this group
-        context['members'] = User.objects.filter(groups=self.object).order_by('email', 'phone')
+        group = self.object
+        context['members'] = User.objects.filter(groups=group).order_by('email', 'phone')
+        
+        # List employees NOT currently in this group
+        from apps.employees.models import EmployeeProfile
+        context['non_members'] = EmployeeProfile.objects.filter(user__isnull=False).exclude(user__groups=group).order_by('full_name')
         return context
+
+    def post(self, request, *args, **kwargs):
+        group = self.get_object()
+        action = request.POST.get('action')
+        
+        if action == 'add':
+            user_ids = request.POST.getlist('user_ids')
+            if user_ids:
+                group.user_set.add(*user_ids)
+                messages.success(request, f"Added {len(user_ids)} members to role '{group.name}'.")
+            else:
+                messages.warning(request, "No members selected to add.")
+        elif action == 'remove':
+            user_id = request.POST.get('user_id')
+            if user_id:
+                user = get_object_or_404(User, pk=user_id)
+                user.groups.remove(group)
+                messages.success(request, f"Removed member from role '{group.name}'.")
+        
+        return redirect('admin_panel:role_members', pk=group.pk)
 
 
 class RolePermissionsView(AdminRequiredMixin, View):

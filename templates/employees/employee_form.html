@@ -41,6 +41,13 @@
                 </div>
 
                 <div class="sm:col-span-3">
+                    <label for="{{ form.groups.id_for_label }}" class="block text-sm font-medium text-gray-700">Roles / Groups</label>
+                    <div class="mt-1">{{ form.groups }}</div>
+                    {% if form.groups.errors %}<p class="mt-2 text-sm text-red-600">{{ form.groups.errors.0 }}</p>{% endif %}
+                    <p class="mt-1.5 text-[11px] text-gray-500">Hold Ctrl (or Cmd) to select multiple.</p>
+                </div>
+
+                <div class="sm:col-span-3">
                     <label for="{{ form.employee_id.id_for_label }}" class="block text-sm font-medium text-gray-700">Employee ID</label>
                     <div class="mt-1">{{ form.employee_id }}</div>
                     {% if form.employee_id.errors %}<p class="mt-2 text-sm text-red-600">{{ form.employee_id.errors.0 }}</p>{% endif %}

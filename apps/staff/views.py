@@ -374,7 +374,8 @@ def staff_change_password(request):
 
 
 def check_manager_role(user):
-    return user.is_authenticated and (user.role == 'manager' or user.is_superuser)
+    from apps.accounts.permissions import user_can_access_my_projects
+    return user_can_access_my_projects(user)
 
 
 @login_required

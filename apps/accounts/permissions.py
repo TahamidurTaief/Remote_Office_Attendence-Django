@@ -51,3 +51,11 @@ def has_perm_cached(user, perm_codename: str) -> bool:
 
     user._has_perm_cache[perm_codename] = result
     return result
+
+
+def user_can_access_my_projects(user) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return user.role == 'manager' or user.groups.filter(name='Manager').exists()
