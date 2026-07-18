@@ -183,24 +183,30 @@ function updateClock() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  updateClock();
-  setInterval(updateClock, 1000);
+  try {
+    updateClock();
+    setInterval(updateClock, 1000);
 
-  await LocationTracker.init();
-  
-  const isCheckedIn = {{ is_checked_in|yesno:'true,false' }};
-  
-  if (isCheckedIn) {
-    if (localStorage.getItem('ft_active') !== 'true') {
-      LocationTracker.startTracking();
-    } else {
-      // Already active - resume and start countdown
-      LocationTracker.resume();
+    if (window.LocationTracker) {
+      await LocationTracker.init();
+      
+      const isCheckedIn = {{ is_checked_in|yesno:'true,false' }};
+      
+      if (isCheckedIn) {
+        if (localStorage.getItem('ft_active') !== 'true') {
+          LocationTracker.startTracking();
+        } else {
+          // Already active - resume and start countdown
+          LocationTracker.resume();
+        }
+        // Always start countdown when checked in
+        LocationTracker.startCountdown();
+      } else {
+        LocationTracker.stopTracking();
+      }
     }
-    // Always start countdown when checked in
-    LocationTracker.startCountdown();
-  } else {
-    LocationTracker.stopTracking();
+  } catch (e) {
+    console.error('[LocationTracker init failed softly]', e);
   }
 });
 </script>

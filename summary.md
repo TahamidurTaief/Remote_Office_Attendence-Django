@@ -33,7 +33,7 @@ Welcome to the comprehensive feature list, audit, and issues log for the **Field
 * **Late Check-In Detection**: Triggers automated "Late" markers on the day's first check-in if it occurs past the office start time plus the configured grace period.
 * **Real-time Map Visuals**: Detailed check-in views mapping the exact coordinates and photos of employees.
 * **Manual Attendance Overrides**: Allows administrators to log manual check-ins with audit notes ("Admin Override Reason").
-* **Background Tracking**: Auto-sync pings periodic background location logs while an employee is actively checked in.
+* **Background Tracking**: Periodically synchronizes location coordinates to `/attendance/location-sync/` at the configured branch interval while an employee is checked in. State is fully preserved in local storage (`ft_active` and `ft_next_sync`) to prevent duplicate pings and maintain precise sync alignment across page reloads and HTMX navigation, supported by a non-blocking permission guard banner.
 
 ### 🏢 5. Branch & Office Schedule Management (`apps.branches`)
 * **Branch Geofencing**: Administrators configure physical branch locations with Latitude, Longitude, Geofencing Radius (in meters), and office Wi-Fi IP address.
@@ -105,3 +105,20 @@ All warnings, inconsistencies, and potential logic bugs identified in the deep d
 ### ✅ 5. PDF Generation Null Dates Formatting — **RESOLVED**
 * **Fix**: Updated `apps/projects/views.py` to check if `task.planned_start` and `task.planned_finish` exist before converting them to strings, falling back to `"—"` if they are null.
 * **Verification**: Checked PDF layout output with unscheduled task items; dates display cleanly as dashes.
+
+### ✅ 6. Missing Category Field in LeaveTypeForm — **RESOLVED**
+* **Fix**: Added `'category'` to `LeaveTypeForm`'s `Meta.fields` definition in `apps/leave/forms.py`. Admins can now configure whether a leave type is classified as casual, sick, or other through the CRUD settings.
+* **Verification**: Checked template rendering and verified that the category drop-down successfully renders and saves to the database.
+
+### ✅ 7. Double-Deduction and Conflict Gap on Pending Requests — **RESOLVED**
+* **Fix**: Updated `mark_daily_absences` to check for both `approved` and `pending` leave requests when selecting active employees to skip. This avoids duplicate/unwarranted absence logging and balance deductions. Further, overlapping absence records are cleaned up automatically upon request approval.
+* **Verification**: Checked database queries and ran unit tests checking skip/deduction behavior on pending requests.
+
+### ✅ 8. Missing Red-for-Negative Styling on Individual Leave Balances — **RESOLVED**
+* **Fix**: Added dynamic `text-red-600` styling to individual leave balance listings (e.g. casual and sick leaves remaining) on both staff and administrator dashboard templates when remaining days fall below zero.
+* **Verification**: Visual inspection on employees with negative balance balances confirms correct CSS coloring applies.
+
+### ✅ 9. Robust Background GPS Tracking & Non-Blocking Permission Guard — **RESOLVED**
+* **Fix**: Rewrote static tracking scripts to fetch accurate branch coordinates intervals, implement `localStorage` state serialization (`ft_active` / `ft_next_sync`), and schedule pings with timeout adjustments to prevent duplicate pings. Developed a non-blocking `LocationGuard` that updates indicators and displays instructional alerts when permission is denied, keeping the check-in buttons fully accessible.
+* **Verification**: Checked local storage variables, verified state recovery across page reloads, and tested permissions denial updates.
+

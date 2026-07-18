@@ -47,7 +47,7 @@
                 if (select) {
                     const updateTypeName = () => {
                         const opt = select.options[select.selectedIndex];
-                        projectTypeName = opt ? opt.text.trim() : '';
+                        this.projectTypeName = opt ? opt.text.trim() : '';
                     };
                     select.addEventListener('change', updateTypeName);
                     updateTypeName();

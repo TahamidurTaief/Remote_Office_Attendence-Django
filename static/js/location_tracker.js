@@ -1,288 +1,228 @@
 /**
- * Location Tracker - Survives page reloads
- * Uses localStorage timestamps, NOT setInterval counter
+ * Location Tracker - Background Geolocation Sync for FieldTrack
  */
+(function () {
+    const LocationTracker = {
+        intervalId: null,
+        timeoutId: null,
+        countdownId: null,
+        isSending: false,
 
-const LocationTracker = {
-  
-  STORAGE_KEY: 'ft_last_sent',
-  LAST_SENT_KEY: 'ft_last_sent',
-  ACTIVE_KEY: 'ft_active',
-  CONFIG_KEY: 'ft_interval_ms',
-  INTERVAL_KEY: 'ft_interval_ms',
-  
-  intervalMs: 10 * 60 * 1000, // default 10 min
-  checkTimer: null,
-  timer: null,
-  countdownTimer: null,
-  CHECK_EVERY_MS: 30 * 1000,
-  isSending: false,
-  
-  async init() {
-    try {
-      const res = await fetch(
-        '/attendance/tracking-config/',
-        { credentials: 'same-origin' }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const ms = data.interval_ms;
-        localStorage.setItem(this.INTERVAL_KEY, ms);
-        this.intervalMs = ms;
-        console.log('[Tracker] Interval fetched:', ms/60000, 'min');
+        async init() {
+            // Prepared state initialization
+            console.log('[LocationTracker] Init');
+            const isActive = localStorage.getItem('ft_active') === 'true';
+            return Promise.resolve(isActive);
+        },
 
-        if (!data.is_enabled) {
-          console.log('[Tracker] Tracking disabled by admin');
-          const indicator = document.getElementById('tracker-indicator');
-          if (indicator) indicator.style.display = 'none';
-          return;
-        }
+        getCsrf() {
+            const el = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (el) return el.value;
+            const m = document.cookie.match(/csrftoken=([^;]+)/);
+            return m ? m[1] : '';
+        },
 
-        const configVersion = data.interval_minutes + '_v1';
-        const cachedVersion = localStorage.getItem('ft_config_version');
-        if (cachedVersion !== configVersion) {
-          localStorage.removeItem(this.LAST_SENT_KEY);
-          localStorage.setItem('ft_config_version', configVersion);
-          console.log('[Tracker] Config changed, resetting timer');
-        }
-      } else {
-        const cached = localStorage.getItem(this.INTERVAL_KEY);
-        this.intervalMs = cached ? parseInt(cached) : 10 * 60 * 1000;
-      }
-    } catch(e) {
-      const cached = localStorage.getItem(this.INTERVAL_KEY);
-      this.intervalMs = cached ? parseInt(cached) : 10 * 60 * 1000;
-      console.log('[Tracker] Using cached interval');
-    }
-  },
-  
-  startTracking() {
-    localStorage.setItem(this.ACTIVE_KEY, 'true');
-    this.resume();
-    this.startCountdown(); // ADD THIS
-    console.log('[Tracker] Started tracking');
-  },
-  
-  resume() {
-    if (this.checkTimer) clearInterval(this.checkTimer);
-    if (this.timer) clearInterval(this.timer);
-    this.checkAndSend();
-    this.checkTimer = setInterval(() => {
-      this.checkAndSend();
-    }, this.CHECK_EVERY_MS);
-    this.timer = this.checkTimer;
-    this.startCountdown(); // ADD THIS
-  },
-  
-  stopTracking() {
-    localStorage.setItem(this.ACTIVE_KEY, 'false');
-    localStorage.removeItem(this.LAST_SENT_KEY);
-    if (this.checkTimer) {
-      clearInterval(this.checkTimer);
-      this.checkTimer = null;
-    }
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-    this.stopCountdown(); // ADD THIS
-    console.log('[Tracker] Stopped');
-  },
-  
-  checkAndSend() {
-    const intervalMs = this.intervalMs || parseInt(localStorage.getItem(this.INTERVAL_KEY) || 10 * 60 * 1000);
-    const lastSent = localStorage.getItem(this.STORAGE_KEY);
-    const now = Date.now();
-    
-    if (!lastSent) {
-      // Never sent before - send now
-      this.sendLocation();
-      return;
-    }
-    
-    const elapsed = now - parseInt(lastSent);
-    const remaining = intervalMs - elapsed;
-    
-    if (elapsed >= intervalMs) {
-      // Interval has passed - send location
-      console.log('[Tracker] Interval reached, sending...');
-      this.sendLocation();
-    } else {
-      // Not yet time
-      console.log(
-        '[Tracker] Next send in', 
-        Math.round(remaining / 1000 / 60), 
-        'min',
-        Math.round((remaining % 60000) / 1000),
-        'sec'
-      );
-    }
-  },
-  
-  sendLocation() {
-    if (this.isSending) {
-      console.log('[Tracker] Send already in progress');
-      return;
-    }
-    if (!navigator.geolocation) {
-      console.log('[Tracker] GPS not supported');
-      return;
-    }
-    
-    this.isSending = true;
-    
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const acc = pos.coords.accuracy;
-        
-        // Get address
-        let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        try {
-          const r = await fetch(
-            `https://nominatim.openstreetmap.org/reverse` +
-            `?lat=${lat}&lon=${lng}&format=json`,
-            { headers: {'Accept-Language': 'en'} }
-          );
-          const d = await r.json();
-          address = d.display_name || address;
-        } catch(e) {}
-        
-        // Get CSRF token
-        const csrf = document.querySelector(
-          '[name=csrfmiddlewaretoken]')?.value || 
-          document.querySelector('meta[name="csrf-token"]')?.content ||
-          this.getCookie('csrftoken');
-        
-        // POST to backend
-        const fd = new FormData();
-        fd.append('latitude', lat);
-        fd.append('longitude', lng);
-        fd.append('accuracy', acc);
-        fd.append('address', address);
-        fd.append('csrfmiddlewaretoken', csrf);
-        
-        try {
-          const res = await fetch(
-            '/attendance/save-location/', 
-            {method: 'POST', body: fd}
-          );
-          const data = await res.json();
-          
-          if (data.stop_tracking) {
-            // No active shift, stop
-            console.log('[Tracker] No active shift. Stopping.');
-            this.stopTracking();
-            return;
-          }
-          
-          if (data.success) {
-            // Save timestamp of successful send
-            localStorage.setItem(
-              this.LAST_SENT_KEY, 
-              Date.now().toString()
-            );
-            console.log('[Tracker] Sent at', 
-              new Date().toLocaleTimeString());
-            
-            // Update UI indicator if exists
-            const indicator = document.getElementById(
-              'tracker-status');
-            if (indicator) {
-              indicator.textContent = 
-                'Last sync: ' + 
-                new Date().toLocaleTimeString();
+        getIntervalMinutes() {
+            const input = document.getElementById('tracking-interval');
+            if (input) {
+                const val = parseInt(input.value);
+                if (!isNaN(val)) return val;
             }
+            return 0;
+        },
+
+        startTracking() {
+            const mins = this.getIntervalMinutes();
+            if (mins <= 0) {
+                console.log('[LocationTracker] Tracking interval is 0 or disabled. Ignoring start.');
+                return;
+            }
+
+            console.log(`[LocationTracker] Starting tracking with interval: ${mins} minutes`);
+            localStorage.setItem('ft_active', 'true');
+            localStorage.setItem('ft_session_start', Date.now().toString());
             
-            this.updateCountdownUI(); // ADD THIS - reset countdown
-          }
-        } catch(e) {
-          console.log('[Tracker] Send failed:', e);
-        } finally {
-          this.isSending = false;
+            const intervalMs = mins * 60 * 1000;
+            const nextSync = Date.now() + intervalMs;
+            localStorage.setItem('ft_next_sync', nextSync.toString());
+
+            this.clearTimers();
+            this.scheduleNextSync(intervalMs, intervalMs);
+            this.startCountdown();
+        },
+
+        stopTracking() {
+            console.log('[LocationTracker] Stopping tracking');
+            localStorage.setItem('ft_active', 'false');
+            localStorage.removeItem('ft_next_sync');
+            localStorage.removeItem('ft_session_start');
+            this.clearTimers();
+            
+            const countdownEl = document.getElementById('sync-countdown');
+            if (countdownEl) {
+                countdownEl.textContent = '';
+            }
+        },
+
+        resume() {
+            const isActive = localStorage.getItem('ft_active') === 'true';
+            if (!isActive) {
+                console.log('[LocationTracker] resume called but ft_active is false');
+                return;
+            }
+
+            const mins = this.getIntervalMinutes();
+            if (mins <= 0) {
+                console.log('[LocationTracker] resume called but tracking interval is disabled');
+                return;
+            }
+
+            const intervalMs = mins * 60 * 1000;
+            const nextSyncStr = localStorage.getItem('ft_next_sync');
+            let nextSync = nextSyncStr ? parseInt(nextSyncStr) : 0;
+            let remaining = nextSync - Date.now();
+
+            console.log(`[LocationTracker] Resuming loop. Target next sync: ${new Date(nextSync).toLocaleTimeString()}, remaining: ${Math.round(remaining / 1000)}s`);
+
+            // If invalid or in the past, sync soon/immediately
+            if (isNaN(remaining) || remaining <= 0 || remaining > intervalMs) {
+                remaining = 1000; // Trigger in 1s
+                nextSync = Date.now() + remaining;
+                localStorage.setItem('ft_next_sync', nextSync.toString());
+            }
+
+            this.clearTimers();
+            this.scheduleNextSync(remaining, intervalMs);
+            this.startCountdown();
+        },
+
+        clearTimers() {
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+                this.timeoutId = null;
+            }
+            if (this.intervalId) {
+                clearInterval(this.intervalId);
+                this.intervalId = null;
+            }
+            if (this.countdownId) {
+                clearInterval(this.countdownId);
+                this.countdownId = null;
+            }
+        },
+
+        scheduleNextSync(delayMs, intervalMs) {
+            this.timeoutId = setTimeout(() => {
+                this.sendLocation();
+                
+                // Set the next regular intervals
+                const nextSync = Date.now() + intervalMs;
+                localStorage.setItem('ft_next_sync', nextSync.toString());
+                
+                this.intervalId = setInterval(() => {
+                    this.sendLocation();
+                    const tickNextSync = Date.now() + intervalMs;
+                    localStorage.setItem('ft_next_sync', tickNextSync.toString());
+                }, intervalMs);
+            }, delayMs);
+        },
+
+        sendLocation() {
+            if (this.isSending) return;
+            if (!navigator.geolocation) {
+                console.warn('[LocationTracker] Geolocation not supported by this browser.');
+                return;
+            }
+
+            this.isSending = true;
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+
+                    console.log(`[LocationTracker] Sending location: (${lat}, ${lng}) with accuracy ${accuracy}m`);
+
+                    const payload = {
+                        latitude: lat,
+                        longitude: lng,
+                        accuracy: accuracy,
+                        address: ''
+                    };
+
+                    try {
+                        const response = await fetch('/attendance/location-sync/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': this.getCsrf()
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const data = await response.json();
+                        if (response.ok && data.success) {
+                            console.log('[LocationTracker] Location sync successfully completed.');
+                            const indicator = document.getElementById('tracker-status');
+                            if (indicator) {
+                                indicator.textContent = 'Last sync: ' + new Date().toLocaleTimeString();
+                            }
+                        } else {
+                            console.warn('[LocationTracker] Server rejected location sync:', data.error || 'Unknown error');
+                        }
+                    } catch (err) {
+                        console.warn('[LocationTracker] Failed to POST location sync:', err);
+                    } finally {
+                        this.isSending = false;
+                    }
+                },
+                (error) => {
+                    console.warn('[LocationTracker] Geolocation error:', error.message);
+                    this.isSending = false;
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        },
+
+        startCountdown() {
+            if (this.countdownId) {
+                clearInterval(this.countdownId);
+            }
+
+            this.countdownId = setInterval(() => {
+                this.updateCountdownUI();
+            }, 1000);
+            
+            this.updateCountdownUI();
+        },
+
+        updateCountdownUI() {
+            const el = document.getElementById('sync-countdown');
+            if (!el) return;
+
+            const nextSyncStr = localStorage.getItem('ft_next_sync');
+            if (!nextSyncStr) {
+                el.textContent = 'Syncing...';
+                return;
+            }
+
+            const remaining = parseInt(nextSyncStr) - Date.now();
+            if (remaining <= 5000) {
+                el.textContent = 'Syncing...';
+                return;
+            }
+
+            const mins = Math.floor(remaining / 60000);
+            const secs = Math.floor((remaining % 60000) / 1000);
+            
+            const pad = (n) => String(n).padStart(2, '0');
+            el.textContent = `Next sync in ${pad(mins)}:${pad(secs)}`;
         }
-      },
-      (err) => {
-        console.log('[Tracker] GPS error:', err.message);
-        this.isSending = false;
-      },
-      {
-        enableHighAccuracy: true, 
-        timeout: 10000, 
-        maximumAge: 60000
-      }
-    );
-  },
-  
-  getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) 
-      return parts.pop().split(';').shift();
-    return '';
-  },
+    };
 
-  startCountdown() {
-    // Update countdown every second
-    if (this.countdownTimer) {
-      clearInterval(this.countdownTimer);
-    }
-    
-    this.countdownTimer = setInterval(() => {
-      this.updateCountdownUI();
-    }, 1000);
-    
-    // Update immediately
-    this.updateCountdownUI();
-  },
-  
-  updateCountdownUI() {
-    const el = document.getElementById('sync-countdown');
-    if (!el) return;
-    
-    const intervalMs = this.intervalMs || parseInt(
-      localStorage.getItem(this.INTERVAL_KEY) 
-      || 10 * 60 * 1000
-    );
-    
-    const lastSent = parseInt(
-      localStorage.getItem(this.LAST_SENT_KEY) || '0'
-    );
-    
-    if (lastSent === 0) {
-      el.textContent = 'Syncing soon...';
-      return;
-    }
-    
-    const now = Date.now();
-    const elapsed = now - lastSent;
-    const remaining = intervalMs - elapsed;
-    
-    if (remaining <= 0) {
-      el.textContent = 'Syncing...';
-      return;
-    }
-    
-    const mins = Math.floor(remaining / 60000);
-    const secs = Math.floor((remaining % 60000) / 1000);
-    const pad = (n) => String(n).padStart(2, '0');
-    
-    el.textContent = `Next sync in ${pad(mins)}:${pad(secs)}`;
-  },
-  
-  stopCountdown() {
-    if (this.countdownTimer) {
-      clearInterval(this.countdownTimer);
-      this.countdownTimer = null;
-    }
-    const el = document.getElementById('sync-countdown');
-    if (el) el.textContent = '';
-  },
-  
-  updateUI() {
-    this.updateCountdownUI();
-  }
-};
-
-window.LocationTracker = LocationTracker;
+    window.LocationTracker = LocationTracker;
+})();

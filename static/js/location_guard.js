@@ -1,204 +1,127 @@
-const LocationGuard = {
-  
-  CHECK_INTERVAL_MS: 15000,
-  timer: null,
-  modalVisible: false,
-  
-  init() {
-    // Check immediately
-    this.check();
-    
-    // Then check every 15 seconds
-    this.timer = setInterval(() => {
-      this.check();
-    }, this.CHECK_INTERVAL_MS);
-  },
-  
-  check() {
-    if (!('geolocation' in navigator)) {
-      this.showModal('not_supported');
-      return;
-    }
-    
-    navigator.permissions.query(
-      { name: 'geolocation' }
-    ).then((result) => {
-      if (result.state === 'denied') {
-        this.showModal('denied');
-      } else if (result.state === 'granted') {
-        this.hideModal();
-      } else {
-        // 'prompt' state - try to get location
-        navigator.geolocation.getCurrentPosition(
-          () => this.hideModal(),
-          (err) => {
-            if (err.code === 1) {
-              this.showModal('denied');
-            }
-          },
-          { timeout: 5000, maximumAge: 60000 }
-        );
-      }
-      
-      // Watch for permission changes
-      result.onchange = () => {
-        if (result.state === 'denied') {
-          this.showModal('denied');
-        } else if (result.state === 'granted') {
-          this.hideModal();
-        }
-      };
-    }).catch(() => {
-      // Fallback if permissions API not supported
-      navigator.geolocation.getCurrentPosition(
-        () => this.hideModal(),
-        (err) => {
-          if (err.code === 1) {
-            this.showModal('denied');
-          }
+/**
+ * Location Guard - Permission and GPS Availability Monitor for FieldTrack
+ */
+(function () {
+    const LocationGuard = {
+        timer: null,
+
+        init() {
+            this.check();
+            // Periodically check in case of browser-level toggles
+            this.timer = setInterval(() => {
+                this.check();
+            }, 10000);
         },
-        { timeout: 5000, maximumAge: 60000 }
-      );
-    });
-  },
-  
-  showModal(type) {
-    if (this.modalVisible) return;
-    this.modalVisible = true;
-    
-    const existing = document.getElementById(
-      'location-guard-modal');
-    if (existing) existing.remove();
-    
-    const content = {
-      denied: {
-        title: 'Location Required',
-        body: `To use this app:<br><br>
-         <strong>Step 1:</strong> Turn on GPS/Location 
-         on your device settings.<br><br>
-         <strong>Step 2:</strong> Allow location 
-         permission when your browser asks.<br><br>
-         After enabling, tap "Try Again" below.`,
-        icon: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 ' +
-              '7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' +
-              'M12 11.5c-1.38 0-2.5-1.12-2.5-2.5s' +
-              '1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-' +
-              '1.12 2.5-2.5 2.5z',
-        btn: 'Try Again'
-      },
-      not_supported: {
-        title: 'GPS Not Available',
-        body: 'Your device or browser does not support GPS. ' +
-              'Please use Chrome browser on an Android or ' +
-              'iOS device for best experience.',
-        icon: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 ' +
-              '7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
-        btn: 'OK'
-      }
+
+        check() {
+            if (!navigator.geolocation) {
+                this.updateIndicatorState('denied', 'GPS not supported');
+                return;
+            }
+
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'geolocation' })
+                    .then((result) => {
+                        this.handlePermissionState(result.state);
+                        result.onchange = () => {
+                            this.handlePermissionState(result.state);
+                        };
+                    })
+                    .catch(() => {
+                        // Fallback if query fails
+                        this.checkWithDirectCall();
+                    });
+            } else {
+                this.checkWithDirectCall();
+            }
+        },
+
+        checkWithDirectCall() {
+            navigator.geolocation.getCurrentPosition(
+                () => this.handlePermissionState('granted'),
+                (err) => {
+                    if (err.code === 1) { // PERMISSION_DENIED
+                        this.handlePermissionState('denied');
+                    }
+                },
+                { timeout: 5000, maximumAge: 60000 }
+            );
+        },
+
+        handlePermissionState(state) {
+            if (state === 'denied') {
+                this.updateIndicatorState('denied', 'Location tracking paused — permission denied');
+            } else if (state === 'granted') {
+                this.updateIndicatorState('granted');
+            } else {
+                // Prompt state
+                this.updateIndicatorState('prompt');
+            }
+        },
+
+        updateIndicatorState(state, message) {
+            const indicator = document.getElementById('tracker-indicator');
+            if (!indicator) return;
+
+            const dot = indicator.querySelector('span.w-2') || indicator.querySelector('.bg-emerald-400') || indicator.querySelector('.bg-red-500');
+            const label = indicator.querySelector('.text-green-100');
+
+            if (state === 'denied') {
+                if (dot) {
+                    dot.classList.remove('bg-emerald-400', 'animate-pulse');
+                    dot.classList.add('bg-red-500');
+                }
+                if (label) {
+                    label.textContent = message || 'Location tracking paused — permission denied';
+                }
+
+                // Add instruction helper if it doesn't exist
+                let helper = document.getElementById('location-permission-helper');
+                if (!helper) {
+                    helper = document.createElement('div');
+                    helper.id = 'location-permission-helper';
+                    helper.className = 'mt-2.5 p-2 bg-red-500/20 border border-red-500/30 rounded-lg text-[10px] text-red-200 leading-relaxed font-semibold';
+                    helper.innerHTML = `
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-red-300"></i>
+                            <div>
+                                Background location tracking is paused. To enable:
+                                <ol class="list-decimal list-inside mt-1 space-y-0.5 text-red-200">
+                                    <li>Click the lock/settings icon in your browser's address bar.</li>
+                                    <li>Ensure Location permissions are set to "Allow".</li>
+                                    <li>Reload the page to sync.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    `;
+                    indicator.appendChild(helper);
+                    if (window.lucide) {
+                        window.lucide.createIcons();
+                    }
+                }
+            } else if (state === 'granted') {
+                if (dot) {
+                    dot.classList.remove('bg-red-500');
+                    dot.classList.add('bg-emerald-400', 'animate-pulse');
+                }
+                if (label) {
+                    label.textContent = 'Location Tracking Active';
+                }
+
+                const helper = document.getElementById('location-permission-helper');
+                if (helper) {
+                    helper.remove();
+                }
+            }
+        }
     };
-    
-    const c = content[type] || content.denied;
-    
-    const modal = document.createElement('div');
-    modal.id = 'location-guard-modal';
-    modal.style.cssText = `
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.75);
-      z-index: 999999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1.5rem;
-      backdrop-filter: blur(4px);
-    `;
-    
-    modal.innerHTML = `
-      <div style="
-        background: white;
-        border-radius: 20px;
-        padding: 2rem;
-        max-width: 360px;
-        width: 100%;
-        text-align: center;
-        box-shadow: 0 25px 50px rgba(0,0,0,0.3);
-      ">
-        <div style="
-          width: 72px; height: 72px;
-          background: #FEE2E2;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 1.25rem;
-        ">
-          <svg width="36" height="36" 
-               viewBox="0 0 24 24" 
-               fill="#DC2626">
-            <path d="${c.icon}"/>
-          </svg>
-        </div>
-        <h3 style="
-          font-size: 18px;
-          font-weight: 700;
-          color: #111827;
-          margin: 0 0 0.75rem;
-          font-family: system-ui, sans-serif;
-        ">${c.title}</h3>
-        <p style="
-          font-size: 14px;
-          color: #6B7280;
-          margin: 0 0 1.5rem;
-          line-height: 1.6;
-          font-family: system-ui, sans-serif;
-        ">${c.body}</p>
-        <button 
-          onclick="LocationGuard.retry()"
-          style="
-            width: 100%;
-            padding: 14px;
-            background: #4F46E5;
-            color: white;
-            border: none;
-            border-radius: 14px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: system-ui, sans-serif;
-            margin-bottom: 12px;
-          ">${c.btn}</button>
-        <p style="
-          font-size: 12px;
-          color: #9CA3AF;
-          font-family: system-ui, sans-serif;
-        ">
-          Location is required for attendance tracking
-        </p>
-      </div>
-    `;
-    
-    document.body.appendChild(modal);
-  },
-  
-  hideModal() {
-    this.modalVisible = false;
-    const modal = document.getElementById(
-      'location-guard-modal');
-    if (modal) modal.remove();
-  },
-  
-  retry() {
-    this.hideModal();
-    setTimeout(() => this.check(), 500);
-  }
-};
 
-// Auto-init when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener(
-    'DOMContentLoaded', () => LocationGuard.init());
-} else {
-  LocationGuard.init();
-}
+    window.LocationGuard = LocationGuard;
 
-window.LocationGuard = LocationGuard;
+    // Auto-init
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => LocationGuard.init());
+    } else {
+        LocationGuard.init();
+    }
+})();
