@@ -12,3 +12,7 @@ staticfiles
 
 # Allow compiled tailwind css to be committed
 !theme/static/css/dist/
+
+# Database files
+db.sqlite3
+*.sqlite3
