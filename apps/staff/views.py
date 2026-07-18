@@ -812,3 +812,33 @@ def my_project_delete_task(request, task_id):
     project.recalculate_progress()
     messages.success(request, f"Task '{task_activity}' deleted successfully.")
     return redirect('staff:my_project_detail', project_id=project.id)
+
+
+@login_required
+def my_tasks(request):
+    if not check_staff_role(request.user):
+        return redirect('accounts:login')
+
+    employee = getattr(request.user, 'employee_profile', None)
+    if not employee:
+        from django.contrib import messages
+        messages.error(request, 'Employee profile not found.')
+        return redirect('staff:home')
+
+    from apps.projects.models import ProjectTask
+
+    # Query tasks assigned to this employee
+    tasks = ProjectTask.objects.filter(responsible_person=employee).select_related('project', 'project__branch').order_by('status', 'planned_finish')
+
+    status_filter = request.GET.get('status', 'pending')
+
+    if status_filter == 'pending':
+        tasks = tasks.exclude(status='Completed')
+    elif status_filter == 'completed':
+        tasks = tasks.filter(status='Completed')
+
+    return render(request, 'staff/my_tasks.html', {
+        'employee': employee,
+        'assigned_tasks': tasks,
+        'status_filter': status_filter,
+    })

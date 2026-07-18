@@ -341,3 +341,83 @@ class ProjectOwnershipTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(self.project_y.tasks.count(), 1)
 
+
+class StaffTasksViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from apps.branches.models import Branch
+        from apps.employees.models import EmployeeProfile
+        from apps.projects.models import Project, ProjectTask, ProjectType
+
+        User = get_user_model()
+        self.password = 'pass123'
+        
+        self.branch = Branch.objects.create(
+            name='Dhaka Branch',
+            latitude=23.8118,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        
+        self.user = User.objects.create_user(
+            email='staff_tasks@test.com',
+            phone='+8801700000333',
+            role='staff',
+            password=self.password
+        )
+        
+        self.profile = EmployeeProfile.objects.create(
+            user=self.user,
+            full_name='Staff Tasks Member',
+            branch=self.branch,
+            joined_date=datetime.date.today(),
+            phone='+8801700000333',
+            employee_id='EMP999'
+        )
+
+        self.project_type = ProjectType.objects.create(name='HVAC Type')
+        self.project = Project.objects.create(
+            name='Tasks Project',
+            client_name='Client Tasks',
+            location='Loc Tasks',
+            project_type=self.project_type,
+            start_date=datetime.date.today(),
+            branch=self.branch
+        )
+
+        self.pending_task = ProjectTask.objects.create(
+            project=self.project,
+            order=1,
+            activity='Pending Project Task',
+            status='In Progress',
+            responsible_person=self.profile
+        )
+
+        self.completed_task = ProjectTask.objects.create(
+            project=self.project,
+            order=2,
+            activity='Completed Project Task',
+            status='Completed',
+            responsible_person=self.profile
+        )
+
+    def test_my_tasks_page_unauthenticated_redirects(self):
+        url = reverse('staff:my_tasks')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+
+    def test_my_tasks_page_authenticated_succeeds(self):
+        self.client.login(username='+8801700000333', password=self.password)
+        url = reverse('staff:my_tasks')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pending Project Task')
+
+    def test_my_tasks_page_filter_completed(self):
+        self.client.login(username='+8801700000333', password=self.password)
+        url = reverse('staff:my_tasks') + '?status=completed'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Completed Project Task')
+        self.assertNotContains(response, 'Pending Project Task')
+

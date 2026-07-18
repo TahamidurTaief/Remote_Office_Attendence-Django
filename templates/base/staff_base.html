@@ -498,6 +498,12 @@
           <i data-lucide="calendar" class="ft-icon"></i>
           <span class="ft-nav-label">My Attendance</span>
        </a>
+       <a href="{% url 'staff:my_tasks' %}"
+          class="ft-nav-item {% if path == '/staff/my-tasks/' %}active{% endif %}"
+          x-show="matchSearch('Tasks')">
+          <i data-lucide="list-todo" class="ft-icon"></i>
+          <span class="ft-nav-label">Tasks</span>
+       </a>
        <a href="{% url 'leave:staff_dashboard' %}"
           class="ft-nav-item {% if '/leave/staff/' in path %}active{% endif %}"
           x-show="matchSearch('Leave')">
@@ -638,6 +644,16 @@
       </div>
       <span class="text-[11px] mt-1 font-medium">Leave</span>
       {% if '/leave/staff/' in request.path %}
+      <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
+      {% endif %}
+    </a>
+    <a href="{% url 'staff:my_tasks' %}"
+       class="flex-1 flex flex-col items-center py-3 px-1 transition-colors {% if request.path == '/staff/my-tasks/' %}text-primary-500{% else %}text-gray-400 hover:text-gray-600{% endif %}">
+      <div class="relative">
+        <i data-lucide="list-todo" class="w-5 h-5"></i>
+      </div>
+      <span class="text-[11px] mt-1 font-medium">Tasks</span>
+      {% if request.path == '/staff/my-tasks/' %}
       <div class="w-1.5 h-1.5 bg-primary-500 rounded-full mt-0.5 animate-pulse"></div>
       {% endif %}
     </a>

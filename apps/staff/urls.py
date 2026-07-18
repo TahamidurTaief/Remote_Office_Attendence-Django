@@ -11,6 +11,7 @@ urlpatterns = [
     path('attendance/', views.attendance_history, name='attendance'),
     path('profile/', views.profile, name='profile'),
     path('change-password/', views.staff_change_password, name='change_password'),
+    path('my-tasks/', views.my_tasks, name='my_tasks'),
     
     # Manager Projects
     path('my-projects/', views.my_projects, name='my_projects'),

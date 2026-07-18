@@ -1261,7 +1261,37 @@ class GlobalTaskListView(RoleRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Pass lists for filters
+        tasks = self.get_queryset()
+        
+        # Standalone tasks (Individual Tasks)
+        context['individual_tasks'] = tasks.filter(project__isnull=True).order_by('order')
+        
+        # Project-based tasks grouped by project
+        project_tasks = tasks.filter(project__isnull=False)
+        
+        from collections import defaultdict
+        project_groups = defaultdict(list)
+        for t in project_tasks:
+            project_groups[t.project].append(t)
+            
+        project_list = []
+        for proj, proj_tasks in project_groups.items():
+            completed = sum(1 for t in proj_tasks if t.status == 'Completed')
+            total = len(proj_tasks)
+            percent = int((completed / total) * 100) if total > 0 else 0
+            proj_tasks.sort(key=lambda x: x.order)
+            project_list.append({
+                'project': proj,
+                'tasks': proj_tasks,
+                'total_tasks': total,
+                'completed_tasks': completed,
+                'progress_percent': percent
+            })
+            
+        # Sort project_list by project name
+        project_list.sort(key=lambda x: x['project'].name)
+        
+        context['project_list'] = project_list
         context['employees'] = EmployeeProfile.objects.all().order_by('full_name')
         context['projects'] = Project.objects.all().order_by('name')
         context['statuses'] = ProjectTask.STATUS_CHOICES
