@@ -110,7 +110,7 @@ class ProjectTaskForm(forms.ModelForm):
         fields = [
             'order', 'activity', 'responsible_person',
             'planned_start', 'planned_finish', 'duration_days',
-            'points', 'status', 'remarks', 'employee_note'
+            'points', 'status', 'remarks', 'employee_note', 'assignment_attachment'
         ]
         widgets = {
             'order': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
@@ -123,6 +123,7 @@ class ProjectTaskForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
             'employee_note': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Employee Note...'}),
+            'assignment_attachment': forms.ClearableFileInput(attrs={'class': TEXT_INPUT}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -232,7 +233,7 @@ class GlobalProjectTaskForm(forms.ModelForm):
         fields = [
             'project', 'order', 'activity', 'responsible_person',
             'planned_start', 'planned_finish', 'duration_days',
-            'points', 'status', 'remarks', 'employee_note'
+            'points', 'status', 'remarks', 'employee_note', 'assignment_attachment'
         ]
         widgets = {
             'project': forms.Select(attrs={'class': SELECT_INPUT}),
@@ -246,6 +247,7 @@ class GlobalProjectTaskForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
             'employee_note': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Employee Note...'}),
+            'assignment_attachment': forms.ClearableFileInput(attrs={'class': TEXT_INPUT}),
         }
 
     def __init__(self, *args, **kwargs):

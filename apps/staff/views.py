@@ -371,3 +371,190 @@ def staff_change_password(request):
         return render(request, 'staff/change_password.html', {'errors': errors})
     
     return render(request, 'staff/change_password.html')
+
+
+def check_manager_role(user):
+    return user.is_authenticated and (user.role == 'manager' or user.is_superuser)
+
+
+@login_required
+def my_projects(request):
+    if not check_manager_role(request.user):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("Only managers or admins can access this page.")
+
+    from apps.projects.models import Project, ProjectTask
+    from apps.employees.models import EmployeeProfile
+
+    if request.user.is_superuser:
+        projects = Project.objects.all().order_by('name')
+    else:
+        employee = getattr(request.user, 'employee_profile', None)
+        if not employee:
+            projects = Project.objects.none()
+        else:
+            projects = Project.objects.filter(project_manager=employee).order_by('name')
+
+    for project in projects:
+        assigned_ids = ProjectTask.objects.filter(project=project, responsible_person__isnull=False).values_list('responsible_person_id', flat=True).distinct()
+        project.assigned_employees = EmployeeProfile.objects.filter(id__in=assigned_ids).order_by('full_name')
+
+    return render(request, 'staff/projects/my_projects.html', {
+        'projects': projects,
+    })
+
+
+@login_required
+def my_project_detail(request, project_id):
+    if not check_manager_role(request.user):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("Only managers or admins can access this page.")
+
+    from apps.projects.models import Project
+    project = get_object_or_404(Project, pk=project_id)
+
+    if not request.user.is_superuser:
+        employee = getattr(request.user, 'employee_profile', None)
+        if not employee or project.project_manager_id != employee.id:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You are not the manager of this project.")
+
+    tasks = project.tasks.all().select_related('responsible_person').order_by('order')
+
+    return render(request, 'staff/projects/my_project_detail.html', {
+        'project': project,
+        'tasks': tasks,
+    })
+
+
+@login_required
+def my_project_add_task(request, project_id):
+    if not check_manager_role(request.user):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("Only managers or admins can access this page.")
+
+    from apps.projects.models import Project, ProjectTask
+    from apps.employees.models import EmployeeProfile
+    project = get_object_or_404(Project, pk=project_id)
+
+    if not request.user.is_superuser:
+        employee = getattr(request.user, 'employee_profile', None)
+        if not employee or project.project_manager_id != employee.id:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You are not the manager of this project.")
+
+    if project.branch:
+        eligible_employees = EmployeeProfile.objects.filter(branch=project.branch, is_active=True).order_by('full_name')
+    else:
+        eligible_employees = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+
+    from django.contrib import messages
+
+    if request.method == 'POST':
+        activity = request.POST.get('activity', '').strip()
+        responsible_person_id = request.POST.get('responsible_person', '')
+        points_str = request.POST.get('points', '10')
+        planned_start_str = request.POST.get('planned_start', '')
+        planned_finish_str = request.POST.get('planned_finish', '')
+        remarks = request.POST.get('remarks', '').strip()
+        assignment_attachment = request.FILES.get('assignment_attachment')
+
+        errors = {}
+        if not activity:
+            errors['activity'] = 'Activity description is required.'
+
+        responsible_person = None
+        if responsible_person_id:
+            try:
+                responsible_person = eligible_employees.get(pk=responsible_person_id)
+            except EmployeeProfile.DoesNotExist:
+                errors['responsible_person'] = 'Selected employee is not eligible or active.'
+
+        try:
+            points = int(points_str)
+            if points < 0:
+                errors['points'] = 'Points cannot be negative.'
+        except ValueError:
+            errors['points'] = 'Invalid number format for points.'
+
+        planned_start = None
+        planned_finish = None
+        if planned_start_str:
+            try:
+                planned_start = datetime.datetime.strptime(planned_start_str, '%Y-%m-%d').date()
+            except ValueError:
+                errors['planned_start'] = 'Invalid date format.'
+
+        if planned_finish_str:
+            try:
+                planned_finish = datetime.datetime.strptime(planned_finish_str, '%Y-%m-%d').date()
+            except ValueError:
+                errors['planned_finish'] = 'Invalid date format.'
+
+        if planned_start and planned_finish and planned_finish < planned_start:
+            errors['planned_finish'] = 'Planned finish date cannot be before planned start date.'
+
+        if assignment_attachment:
+            from django.core.exceptions import ValidationError
+            from apps.projects.models import validate_task_attachment
+            try:
+                validate_task_attachment(assignment_attachment)
+            except ValidationError as e:
+                errors['assignment_attachment'] = e.message
+
+        if not errors:
+            from django.db.models import Max
+            max_order = project.tasks.aggregate(Max('order'))['order__max'] or 0
+            
+            task = ProjectTask.objects.create(
+                project=project,
+                order=max_order + 1,
+                activity=activity,
+                responsible_person=responsible_person,
+                planned_start=planned_start,
+                planned_finish=planned_finish,
+                points=points,
+                remarks=remarks,
+                status='Not Started',
+                assignment_attachment=assignment_attachment
+            )
+            project.recalculate_progress()
+            
+            # Send notification email if assignee exists
+            if task.responsible_person and task.responsible_person.user:
+                from apps.notifications.dispatch import send_email_notification
+                from apps.notifications.models import Notification
+                Notification.objects.create(
+                    recipient=task.responsible_person.user,
+                    employee=task.responsible_person,
+                    title=f"New Task Assigned: {task.activity}",
+                    message=f"You have been assigned to task '{task.activity}' for project '{project.name}'.",
+                    notif_type='field_visit'
+                )
+                subject = f"New Task Assigned: {task.activity}"
+                message_text = (
+                    f"Hello {task.responsible_person.full_name},\n\n"
+                    f"You have been assigned to the following task in project '{project.name}':\n"
+                    f"Task: {task.activity}\n"
+                    f"Planned: {task.planned_start or '—'} to {task.planned_finish or '—'}\n"
+                    f"Status: {task.status}\n\n"
+                )
+                if task.assignment_attachment:
+                    message_text += f"See attached reference file: {task.assignment_attachment.url}\n\n"
+                message_text += "Regards,\nFieldTrack System"
+                send_email_notification(task.responsible_person.user, subject, message_text)
+            
+            messages.success(request, f"Task '{activity}' added successfully.")
+            return redirect('staff:my_project_detail', project_id=project.id)
+        
+        return render(request, 'staff/projects/add_task_form.html', {
+            'project': project,
+            'employees': eligible_employees,
+            'errors': errors,
+            'data': request.POST,
+        })
+
+    return render(request, 'staff/projects/add_task_form.html', {
+        'project': project,
+        'employees': eligible_employees,
+    })

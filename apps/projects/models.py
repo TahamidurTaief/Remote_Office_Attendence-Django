@@ -3,6 +3,19 @@ from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.employees.models import EmployeeProfile
 from apps.branches.models import Branch
+import os
+from django.core.exceptions import ValidationError
+
+def validate_task_attachment(file):
+    if not file:
+        return
+    ext = os.path.splitext(file.name)[1].lower()
+    valid_extensions = ['.jpg', '.jpeg', '.png', '.pdf']
+    if ext not in valid_extensions:
+        raise ValidationError('Unsupported file extension. Only JPG, JPEG, PNG, and PDF files are allowed.')
+    limit = 10 * 1024 * 1024
+    if file.size > limit:
+        raise ValidationError('File size too large. Maximum size allowed is 10MB.')
 
 class ProjectType(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -163,6 +176,18 @@ class ProjectTask(models.Model):
     points = models.PositiveIntegerField(default=10)
     completed_at = models.DateTimeField(null=True, blank=True)
     employee_note = models.TextField(blank=True)
+    assignment_attachment = models.FileField(
+        upload_to='projects/task_attachments/%Y/%m/',
+        null=True,
+        blank=True,
+        validators=[validate_task_attachment]
+    )
+    completion_attachment = models.FileField(
+        upload_to='projects/task_attachments/%Y/%m/',
+        null=True,
+        blank=True,
+        validators=[validate_task_attachment]
+    )
 
     class Meta:
         ordering = ['order']
@@ -220,8 +245,10 @@ class ProjectTask(models.Model):
                 f"The task '{self.activity}' in project '{self.project.name}' has been marked as Completed.\n"
                 f"Employee Note: {self.employee_note or 'None'}\n"
                 f"Completed At: {self.completed_at}\n\n"
-                f"Regards,\nFieldTrack System"
             )
+            if self.completion_attachment:
+                message += f"See attached proof file: {self.completion_attachment.url}\n\n"
+            message += "Regards,\nFieldTrack System"
             send_email_notification(self.project.project_manager.user, subject, message)
 
     def __str__(self):

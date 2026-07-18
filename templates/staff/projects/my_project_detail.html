@@ -1,0 +1,182 @@
+{% extends 'base/staff_base.html' %}
+
+{% block title %}Project: {{ project.name }} | FieldTrack{% endblock %}
+{% block page_title %}Project Details{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header Card -->
+    <div class="bg-white p-4 rounded-xl border border-gray-150 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <div>
+            <span class="text-[10px] text-gray-400 font-semibold uppercase">Project Management</span>
+            <h2 class="text-sm font-bold text-gray-900 mt-0.5">{{ project.name }}</h2>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'staff:my_project_add_task' project.pk %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-gradient text-white font-bold rounded-lg text-xs hover:opacity-90 transition-opacity">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                Add Task
+            </a>
+            <a href="{% url 'staff:my_projects' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-lg text-xs transition-colors">
+                <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                Back to Projects
+            </a>
+        </div>
+    </div>
+
+    <!-- Details Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Project Stats/Details -->
+        <div class="bg-white p-6 rounded-xl border border-gray-150 shadow-sm space-y-4 lg:col-span-1">
+            <h3 class="text-xs font-bold text-gray-900 border-b border-gray-100 pb-2">Overview</h3>
+            <dl class="space-y-3">
+                <div>
+                    <dt class="text-[10px] font-semibold text-gray-400 uppercase">Client</dt>
+                    <dd class="text-xs text-gray-900 mt-0.5">{{ project.client_name }}</dd>
+                </div>
+                <div>
+                    <dt class="text-[10px] font-semibold text-gray-400 uppercase">Location</dt>
+                    <dd class="text-xs text-gray-900 mt-0.5">{{ project.location }}</dd>
+                </div>
+                <div>
+                    <dt class="text-[10px] font-semibold text-gray-400 uppercase">System / Capacity</dt>
+                    <dd class="text-xs text-gray-900 mt-0.5">
+                        {{ project.system_type|default:"Not specified" }} 
+                        {% if project.hvac_capacity_tr %}({{ project.hvac_capacity_tr }} TR){% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-[10px] font-semibold text-gray-400 uppercase">Status & Progress</dt>
+                    <dd class="mt-1 space-y-2">
+                        <div>
+                            {% if project.status == 'Completed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-100">Completed</span>
+                            {% elif project.status == 'In Progress' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">In Progress</span>
+                            {% elif project.status == 'Delayed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-50 text-red-700 border border-red-100">Delayed</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-100">Not Started</span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
+                                <span>Progress</span>
+                                <span class="font-semibold text-gray-700">{{ project.progress_percent }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                <div class="bg-primary-gradient h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                            </div>
+                        </div>
+                    </dd>
+                </div>
+                <div class="grid grid-cols-2 gap-4 pt-2">
+                    <div>
+                        <dt class="text-[10px] font-semibold text-gray-400 uppercase">Start Date</dt>
+                        <dd class="text-xs text-gray-900 mt-0.5">{{ project.start_date|date:"d/m/Y" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-[10px] font-semibold text-gray-400 uppercase">Completion</dt>
+                        <dd class="text-xs text-gray-900 mt-0.5">{{ project.completion_date|date:"d/m/Y"|default:"Ongoing" }}</dd>
+                    </div>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Task List (2 cols) -->
+        <div class="bg-white p-6 rounded-xl border border-gray-150 shadow-sm space-y-4 lg:col-span-2">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                <h3 class="text-xs font-bold text-gray-900">Task List</h3>
+                <span class="text-[10px] bg-primary-50 text-primary-750 px-2 py-0.5 rounded-full font-bold">
+                    {{ tasks.count }} Tasks
+                </span>
+            </div>
+            
+            <div class="divide-y divide-gray-100">
+                {% for task in tasks %}
+                <div class="py-3.5 {% if forloop.first %}pt-0{% endif %} {% if forloop.last %}pb-0{% endif %}">
+                    <div class="flex justify-between items-start gap-4">
+                        <div class="space-y-1 min-w-0">
+                            <h4 class="text-xs font-bold text-gray-900 leading-normal">{{ task.order }}. {{ task.activity }}</h4>
+                            <div class="flex flex-wrap gap-2 text-[10px] text-gray-400 mt-1.5 items-center">
+                                <span class="font-medium">Assigned:</span> 
+                                <span class="text-gray-700 font-semibold">{{ task.responsible_person.full_name|default:"Unassigned" }}</span>
+                                <span class="text-gray-300">|</span>
+                                <span class="font-medium">Points:</span> 
+                                <span class="text-gray-700 font-semibold">{{ task.points }}</span>
+                                {% if task.completed_at %}
+                                <span class="text-gray-300">|</span>
+                                <span class="font-medium text-green-600">Completed:</span> 
+                                <span class="text-green-700 font-semibold">{{ task.completed_at|date:"d/m/Y" }}</span>
+                                {% endif %}
+                            </div>
+                            {% if task.assignment_attachment or task.completion_attachment %}
+                            <div class="flex flex-wrap gap-4 mt-2">
+                                {% if task.assignment_attachment %}
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Ref:</span>
+                                    {% if task.assignment_attachment.name|slice:"-4:"|lower == ".pdf" %}
+                                        <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-primary-600 hover:underline">
+                                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                                            PDF Reference
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-block">
+                                            <img src="{{ task.assignment_attachment.url }}" class="w-8 h-8 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
+                                        </a>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
+                                {% if task.completion_attachment %}
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Proof:</span>
+                                    {% if task.completion_attachment.name|slice:"-4:"|lower == ".pdf" %}
+                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-green-600 hover:underline">
+                                            <i data-lucide="file-check" class="w-3.5 h-3.5"></i>
+                                            PDF Proof
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-block">
+                                            <img src="{{ task.completion_attachment.url }}" class="w-8 h-8 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
+                                        </a>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if task.employee_note %}
+                            <div class="mt-2 p-2 bg-gray-50 border rounded-lg text-[10px] text-gray-500 italic">
+                                <span class="font-bold text-gray-700 not-italic block mb-0.5">Employee Note:</span>
+                                "{{ task.employee_note }}"
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="text-right shrink-0">
+                            {% if task.status == 'Completed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold">
+                                Completed
+                            </span>
+                            {% elif task.status == 'In Progress' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold animate-pulse">
+                                In Progress
+                            </span>
+                            {% elif task.status == 'Delayed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold">
+                                Delayed
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 text-[10px] font-medium">
+                                Not Started
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-xs text-gray-500 text-center py-8">No tasks added to this project yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

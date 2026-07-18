@@ -119,15 +119,57 @@
                             <div class="text-[10px] text-primary-600 font-semibold mt-0.5">Points: {{ task.points }}</div>
                         </td>
                         <td class="px-4 py-3 text-xs text-gray-800">
-                            <div>{{ task.activity }}</div>
+                            <div class="font-medium">{{ task.activity }}</div>
+                            
+                            <!-- Display assignment_attachment if exists -->
+                            {% if task.assignment_attachment %}
+                            <div class="mt-1 flex items-center gap-1.5 assignment-attachment-container">
+                                <span class="text-[10px] text-gray-400 font-semibold uppercase">Ref:</span>
+                                {% if task.assignment_attachment.name|slice:"-4:"|lower == ".pdf" %}
+                                    <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-primary-600 hover:underline">
+                                        <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                                        PDF Reference
+                                    </a>
+                                {% else %}
+                                    <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-block">
+                                        <img src="{{ task.assignment_attachment.url }}" class="w-8 h-8 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
+                                    </a>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
                             {% if task.status == 'Completed' %}
                                 {% if task.employee_note %}
                                 <div class="text-[10px] text-gray-500 mt-1 italic">Note: {{ task.employee_note }}</div>
                                 {% endif %}
+                                
+                                <!-- Display completion_attachment if exists -->
+                                {% if task.completion_attachment %}
+                                <div class="mt-1 flex items-center gap-1.5">
+                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Proof:</span>
+                                    {% if task.completion_attachment.name|slice:"-4:"|lower == ".pdf" %}
+                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-green-600 hover:underline">
+                                            <i data-lucide="file-check" class="w-3.5 h-3.5"></i>
+                                            PDF Proof
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-block">
+                                            <img src="{{ task.completion_attachment.url }}" class="w-8 h-8 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
+                                        </a>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
                                 <div class="text-[9px] text-gray-400 mt-0.5">Completed: {{ task.completed_at|date:"d/m/Y H:i" }}</div>
                             {% else %}
-                                <div class="mt-2 max-w-xs">
-                                    <textarea id="task-note-{{ task.pk }}" class="w-full text-[11px] p-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 mb-1" placeholder="Add a completion note..." rows="1"></textarea>
+                                <div class="mt-2 max-w-xs space-y-1.5">
+                                    <textarea id="task-note-{{ task.pk }}" class="w-full text-[11px] p-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500" placeholder="Add a completion note..." rows="1"></textarea>
+                                    
+                                    <!-- File input for completion_attachment -->
+                                    <div class="flex flex-col gap-1">
+                                        <label for="task-file-{{ task.pk }}" class="text-[10px] font-semibold text-gray-400 uppercase">Proof File (Optional)</label>
+                                        <input type="file" id="task-file-{{ task.pk }}" class="w-full text-[10px] text-gray-500">
+                                    </div>
                                 </div>
                             {% endif %}
                         </td>
@@ -314,10 +356,15 @@ function getCsrf() {
 function completeTask(taskId) {
     const noteEl = document.getElementById(`task-note-${taskId}`);
     const noteValue = noteEl ? noteEl.value : '';
+    const fileEl = document.getElementById(`task-file-${taskId}`);
+    const file = fileEl && fileEl.files.length > 0 ? fileEl.files[0] : null;
 
     const url = `/projects/tasks/${taskId}/complete/`;
     const formData = new FormData();
     formData.append('note', noteValue);
+    if (file) {
+        formData.append('completion_attachment', file);
+    }
 
     fetch(url, {
         method: 'POST',
@@ -340,19 +387,44 @@ function completeTask(taskId) {
                 statusCol.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-800">Completed</span>`;
             }
             
-            // Hide textarea, replace text cell with note and date
+            // Hide textarea, replace text cell with note, attachment and date
             const row = document.getElementById(`task-row-${taskId}`);
             if (row) {
                 const textCell = row.cells[1];
-                let html = `<div>${textCell.querySelector('div').innerText}</div>`;
+                let html = `<div class="font-medium">${textCell.querySelector('div').innerText}</div>`;
+                
+                // Keep the assignment attachment if it was already there
+                const assignmentEl = textCell.querySelector('.assignment-attachment-container');
+                if (assignmentEl) {
+                    html += `<div class="mt-1 flex items-center gap-1.5 assignment-attachment-container">${assignmentEl.innerHTML}</div>`;
+                }
+                
                 if (noteValue) {
                     html += `<div class="text-[10px] text-gray-500 mt-1 italic">Note: ${noteValue}</div>`;
+                }
+                if (data.completion_attachment_url) {
+                    const isPdf = data.completion_attachment_url.toLowerCase().endsWith('.pdf');
+                    html += `<div class="mt-1 flex items-center gap-1.5">
+                        <span class="text-[10px] text-gray-400 font-semibold uppercase">Proof:</span>`;
+                    if (isPdf) {
+                        html += `<a href="${data.completion_attachment_url}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-green-600 hover:underline">
+                            <i data-lucide="file-check" class="w-3.5 h-3.5"></i>
+                            PDF Proof
+                        </a>`;
+                    } else {
+                        html += `<a href="${data.completion_attachment_url}" target="_blank" class="inline-block">
+                            <img src="${data.completion_attachment_url}" class="w-8 h-8 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
+                        </a>`;
+                    }
+                    html += `</div>`;
                 }
                 const now = new Date();
                 const pad = (n) => n.toString().padStart(2, '0');
                 const formattedDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
                 html += `<div class="text-[9px] text-gray-400 mt-0.5">Completed: ${formattedDate}</div>`;
                 textCell.innerHTML = html;
+                
+                if (window.lucide) window.lucide.createIcons();
             }
         }
     })

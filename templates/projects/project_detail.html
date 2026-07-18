@@ -354,7 +354,44 @@
                                        }">
                         </td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.order }}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-800 font-medium">{{ task.activity }}</td>
+                        <td class="px-4 py-2.5 text-[12px] text-gray-800 font-medium">
+                            <div>{{ task.activity }}</div>
+                            {% if task.assignment_attachment or task.completion_attachment %}
+                            <div class="flex flex-wrap gap-2 mt-1.5">
+                                {% if task.assignment_attachment %}
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Ref:</span>
+                                    {% if task.assignment_attachment.name|slice:"-4:"|lower == ".pdf" %}
+                                        <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-primary-600 hover:underline">
+                                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                                            PDF
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-block">
+                                            <img src="{{ task.assignment_attachment.url }}" class="w-7 h-7 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
+                                        </a>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
+                                {% if task.completion_attachment %}
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[10px] text-gray-400 font-semibold uppercase">Proof:</span>
+                                    {% if task.completion_attachment.name|slice:"-4:"|lower == ".pdf" %}
+                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[10px] text-green-600 hover:underline">
+                                            <i data-lucide="file-check" class="w-3.5 h-3.5"></i>
+                                            PDF
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-block">
+                                            <img src="{{ task.completion_attachment.url }}" class="w-7 h-7 object-cover rounded border border-gray-150 hover:scale-105 transition-transform">
+                                        </a>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.points }}</td>
                         <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-600">
                             {% if task.responsible_person %}

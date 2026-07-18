@@ -247,8 +247,10 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
                 f"Task: {task.activity}\n"
                 f"Planned: {task.planned_start or '—'} to {task.planned_finish or '—'}\n"
                 f"Status: {task.status}\n\n"
-                f"Regards,\nFieldTrack System"
             )
+            if task.assignment_attachment:
+                message += f"See attached reference file: {task.assignment_attachment.url}\n\n"
+            message += "Regards,\nFieldTrack System"
             send_email_notification(task.responsible_person.user, subject, message)
             
         messages.success(self.request, 'Task added successfully.')
@@ -290,8 +292,10 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
                     f"Task: {new_task.activity}\n"
                     f"Planned: {new_task.planned_start or '—'} to {new_task.planned_finish or '—'}\n"
                     f"Status: {new_task.status}\n\n"
-                    f"Regards,\nFieldTrack System"
                 )
+                if new_task.assignment_attachment:
+                    message += f"See attached reference file: {new_task.assignment_attachment.url}\n\n"
+                message += "Regards,\nFieldTrack System"
                 send_email_notification(new_task.responsible_person.user, subject, message)
 
         messages.success(self.request, 'Task updated successfully.')
@@ -1224,8 +1228,10 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
                 f"Task: {task.activity}\n"
                 f"Planned: {task.planned_start or '—'} to {task.planned_finish or '—'}\n"
                 f"Status: {task.status}\n\n"
-                f"Regards,\nFieldTrack System"
             )
+            if task.assignment_attachment:
+                message += f"See attached reference file: {task.assignment_attachment.url}\n\n"
+            message += "Regards,\nFieldTrack System"
             send_email_notification(task.responsible_person.user, subject, message)
 
         messages.success(self.request, 'Task created successfully.')
@@ -1261,13 +1267,24 @@ def staff_task_complete(request, pk):
     else:
         note = request.POST.get('note', '')
         
+    completion_attachment = request.FILES.get('completion_attachment')
+    if completion_attachment:
+        from django.core.exceptions import ValidationError
+        from apps.projects.models import validate_task_attachment
+        try:
+            validate_task_attachment(completion_attachment)
+        except ValidationError as e:
+            return JsonResponse({'error': e.message}, status=400)
+        task.completion_attachment = completion_attachment
+
     task.employee_note = note
     task.status = 'Completed'
     task.save()
     
     return JsonResponse({
         'success': True,
-        'progress_percent': task.project.progress_percent
+        'progress_percent': task.project.progress_percent,
+        'completion_attachment_url': task.completion_attachment.url if task.completion_attachment else None
     })
 
 

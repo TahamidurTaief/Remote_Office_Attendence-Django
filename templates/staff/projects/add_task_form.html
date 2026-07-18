@@ -1,0 +1,112 @@
+{% extends 'base/staff_base.html' %}
+
+{% block title %}Add Task | {{ project.name }} | FieldTrack{% endblock %}
+{% block page_title %}Add Project Task{% endblock %}
+
+{% block content %}
+<div class="p-4 max-w-xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <span class="text-[10px] text-gray-400 font-semibold uppercase">Project: {{ project.name }}</span>
+            <h2 class="text-sm font-bold text-gray-900 mt-0.5">Assign New Task</h2>
+        </div>
+        <a href="{% url 'staff:my_project_detail' project.pk %}" class="flex items-center gap-2 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-lg transition-colors">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            Cancel
+        </a>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white shadow-sm border border-gray-150 rounded-xl p-6">
+        <form method="POST" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+            
+            <!-- Activity Description -->
+            <div>
+                <label for="activity" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Activity / Task Description</label>
+                <input type="text" name="activity" id="activity" required value="{{ data.activity|default:'' }}" placeholder="e.g. Install ducting on 3rd floor">
+                {% if errors.activity %}
+                <p class="text-red-500 text-[10px] mt-1">{{ errors.activity }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Responsible Person -->
+            <div>
+                <label for="responsible_person" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Responsible Person</label>
+                <select name="responsible_person" id="responsible_person">
+                    <option value="">-- Select Employee ({{ project.branch.name|default:"Any Branch" }}) --</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if data.responsible_person|stringformat:"s" == emp.id|stringformat:"s" %}selected{% endif %}>
+                        {{ emp.full_name }} ({{ emp.designation|default:"Staff" }})
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if errors.responsible_person %}
+                <p class="text-red-500 text-[10px] mt-1">{{ errors.responsible_person }}</p>
+                {% endif %}
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Points -->
+                <div>
+                    <label for="points" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Points</label>
+                    <input type="number" name="points" id="points" min="0" value="{{ data.points|default:'10' }}">
+                    {% if errors.points %}
+                    <p class="text-red-500 text-[10px] mt-1">{{ errors.points }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Empty space or other field if needed -->
+                <div></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Planned Start Date -->
+                <div>
+                    <label for="planned_start" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Planned Start Date</label>
+                    <input type="date" name="planned_start" id="planned_start" value="{{ data.planned_start|default:'' }}">
+                    {% if errors.planned_start %}
+                    <p class="text-red-500 text-[10px] mt-1">{{ errors.planned_start }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Planned Finish Date -->
+                <div>
+                    <label for="planned_finish" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Planned Finish Date</label>
+                    <input type="date" name="planned_finish" id="planned_finish" value="{{ data.planned_finish|default:'' }}">
+                    {% if errors.planned_finish %}
+                    <p class="text-red-500 text-[10px] mt-1">{{ errors.planned_finish }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Remarks -->
+            <div>
+                <label for="remarks" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Remarks / Instructions</label>
+                <textarea name="remarks" id="remarks" rows="3" placeholder="Optional notes..."></textarea>
+            </div>
+
+            <!-- Reference File Attachment -->
+            <div>
+                <label for="assignment_attachment" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Reference File / Attachment</label>
+                <input type="file" name="assignment_attachment" id="assignment_attachment" class="w-full text-xs text-gray-500">
+                <p class="mt-1 text-[10px] text-gray-400">Allowed formats: JPG, JPEG, PNG, PDF. Max size: 10MB.</p>
+                {% if errors.assignment_attachment %}
+                <p class="text-red-500 text-[10px] mt-1">{{ errors.assignment_attachment }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="flex justify-end gap-3 pt-3 border-t border-gray-100">
+                <a href="{% url 'staff:my_project_detail' project.pk %}" class="px-4 py-2 border rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-bold transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" class="px-4 py-2 bg-primary-gradient text-white font-bold rounded-lg text-xs hover:opacity-90 transition-opacity">
+                    Assign Task
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
