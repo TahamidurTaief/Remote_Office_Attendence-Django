@@ -85,6 +85,9 @@ class GoogleDriveConfig(models.Model):
 
     class Meta:
         verbose_name = "Google Drive Config"
+        permissions = [
+            ('run_backup', 'Can run manual backup'),
+        ]
 
     def save(self, *args, **kwargs):
         self.pk = 1

@@ -166,6 +166,9 @@ class ProjectTask(models.Model):
 
     class Meta:
         ordering = ['order']
+        permissions = [
+            ('assign_projecttask', 'Can assign project task'),
+        ]
 
     def save(self, *args, **kwargs):
         is_completed_transition = False

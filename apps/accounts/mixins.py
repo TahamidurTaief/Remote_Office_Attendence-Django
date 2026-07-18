@@ -23,3 +23,23 @@ class AdminRequiredMixin(RoleRequiredMixin):
 
 class StaffRequiredMixin(RoleRequiredMixin):
     allowed_roles = ['staff', 'manager']
+
+
+class PermissionRequiredMixin(StaffRequiredMixin):
+    required_permission = None
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+            
+        if request.user.role not in self.allowed_roles:
+            if request.user.role == 'admin':
+                return redirect('/admin-panel/dashboard/')
+            elif request.user.role in ['staff', 'manager']:
+                return redirect('/staff/home/')
+            return redirect('/login/')
+
+        if self.required_permission and not request.user.has_perm(self.required_permission):
+            return self.handle_no_permission()
+
+        return super().dispatch(request, *args, **kwargs)

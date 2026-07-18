@@ -52,5 +52,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
+    class Meta:
+        permissions = [
+            ('manage_roles', 'Can manage user roles and groups'),
+        ]
+
     def __str__(self):
         return self.email or self.phone or "No Identifier"

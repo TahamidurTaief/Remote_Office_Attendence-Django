@@ -76,6 +76,9 @@ class LeaveRequest(models.Model):
 
     class Meta:
         ordering = ['-requested_at']
+        permissions = [
+            ('approve_leaverequest', 'Can approve or reject leave requests'),
+        ]
 
     def save(self, *args, **kwargs):
         # Autocalculate number of days inclusive of start and end date

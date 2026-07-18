@@ -50,6 +50,11 @@ class EmployeeProfile(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        permissions = [
+            ('view_reports', 'Can view analytical reports'),
+        ]
+
     def __str__(self):
         return f"{self.employee_id} - {self.full_name}"
 

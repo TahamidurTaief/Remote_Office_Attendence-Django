@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import roles_views
 
 app_name = 'admin_panel'
 
@@ -32,4 +33,14 @@ urlpatterns = [
     path('expired-data/', views.ExpiredDataView.as_view(), name='expired_data'),
     path('expired-data/delete/', views.delete_expired_selected, name='delete_expired_selected'),
     path('expired-data/delete-all/', views.delete_all_expired, name='delete_all_expired'),
+
+    # Roles & Access
+    path('roles/', roles_views.RoleListView.as_view(), name='role_list'),
+    path('roles/add/', roles_views.RoleCreateView.as_view(), name='role_create'),
+    path('roles/<int:pk>/edit/', roles_views.RoleUpdateView.as_view(), name='role_edit'),
+    path('roles/<int:pk>/delete/', roles_views.RoleDeleteView.as_view(), name='role_delete'),
+    path('roles/<int:pk>/clone/', roles_views.RoleCloneView.as_view(), name='role_clone'),
+    path('roles/<int:pk>/permissions/', roles_views.RolePermissionsView.as_view(), name='role_permissions'),
+    path('roles/<int:pk>/members/', roles_views.RoleMembersView.as_view(), name='role_members'),
+    path('users/<int:pk>/permissions/', roles_views.UserPermissionsView.as_view(), name='user_permissions'),
 ]

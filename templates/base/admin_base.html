@@ -714,6 +714,15 @@
                  <span class="ft-nav-label">Holidays</span>
              </a>
 
+             <!-- Roles & Access -->
+             <a href="{% url 'admin_panel:role_list' %}"
+                class="ft-nav-item {% if '/admin-panel/roles/' in path or '/admin-panel/users/' in path %}active{% endif %}"
+                x-show="matchSearch('Roles & Access')"
+                title="Roles & Access">
+                 <i data-lucide="shield" class="ft-icon"></i>
+                 <span class="ft-nav-label">Roles & Access</span>
+             </a>
+
              <!-- Settings -->
              <a href="{% url 'admin_panel:schedule_settings' %}"
                 class="ft-nav-item {% if '/admin-panel/settings' in path %}active{% endif %}"
