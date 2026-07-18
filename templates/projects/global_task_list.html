@@ -97,7 +97,11 @@
                     {% for task in tasks %}
                     <tr class="hover:bg-slate-50/50 transition-colors">
                         <td class="px-4 py-3.5 whitespace-nowrap text-[12px] font-bold text-primary-600">
+                            {% if task.project %}
                             <a href="{% url 'projects:project_detail' task.project.pk %}" class="hover:underline">{{ task.project.name }}</a>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-200">Standalone</span>
+                            {% endif %}
                         </td>
                         <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-500 font-semibold">
                             #{{ task.order }}

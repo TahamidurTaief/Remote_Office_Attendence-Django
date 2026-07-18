@@ -256,6 +256,8 @@ class GlobalProjectTaskForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['project'].required = False
+        self.fields['project'].empty_label = '— Standalone Task (no project) —'
         self.fields['points'].required = False
         self.fields['employee_note'].required = False
 
@@ -268,3 +270,4 @@ class GlobalProjectTaskForm(forms.ModelForm):
             self.add_error('planned_finish', 'Planned finish date cannot be before the planned start date.')
 
         return cleaned_data
+

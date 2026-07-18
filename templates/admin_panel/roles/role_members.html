@@ -72,7 +72,7 @@
                 <input type="hidden" name="action" value="add">
 
                 <!-- Search Input Bar -->
-                <div class="mb-3.5 flex-shrink-0 relative flex items-center">
+                <div class="!m-2 flex-shrink-0 relative flex items-center">
                     <i data-lucide="search"
                         class="w-4 h-4 text-gray-400 absolute top-1/2 transform -translate-y-1/2 pointer-events-none z-10"
                         style="left: 0.75rem !important;"></i>
@@ -93,11 +93,13 @@
                         <label
                             x-show="!searchQuery || '{{ emp.full_name|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ emp.phone|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ emp.employee_id|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase())"
                             data-phone="{{ emp.phone }}"
-                            class="flex items-center gap-3 p-2.5 border border-gray-150 rounded-xl hover:border-primary-200 hover:bg-primary-50/20 cursor-pointer transition-all">
+                            class="flex items-center gap-2 p-2 border border-gray-150 rounded-xl hover:border-primary-200 hover:bg-primary-50/20 cursor-pointer transition-all">
                             <input type="checkbox" name="user_ids" value="{{ emp.user.id }}" x-model="selectedIds"
                                 class="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0">
                             <div class="min-w-0 flex-1">
+                                <!-- prettier-ignore -->
                                 <span class="text-xs font-semibold text-gray-900 block truncate leading-tight">{{ emp.full_name }}</span>
+                                <!-- prettier-ignore -->
                                 <span class="text-[10px] text-gray-400 font-mono block truncate mt-0.5">{{ emp.employee_id }}</span>
                             </div>
                         </label>
@@ -154,10 +156,8 @@
                                     <img class="h-10 w-10 rounded-full object-cover"
                                         src="{{ member.employee_profile.profile_photo.url }}" alt="">
                                     {% else %}
-                                    <div
-                                        class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold">
-                                        {{ member.employee_profile.full_name|default:member.email|make_list|first|upper }}
-                                    </div>
+                                    <!-- prettier-ignore -->
+                                    <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold">{{ member.employee_profile.full_name|default:member.email|make_list|first|upper }}</div>
                                     {% endif %}
                                 </div>
                                 <div class="ml-4">

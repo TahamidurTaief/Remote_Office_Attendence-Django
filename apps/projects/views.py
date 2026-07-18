@@ -135,9 +135,20 @@ class ProjectUpdateView(AdminRequiredMixin, UpdateView):
     template_name = 'projects/project_form.html'
     success_url = reverse_lazy('projects:project_list')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.employees.models import EmployeeProfile
+        # Tasks list for the task management section
+        context['tasks'] = self.object.tasks.select_related('responsible_person').order_by('order')
+        context['task_form'] = ProjectTaskForm()
+        context['employees'] = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        return context
+
     def form_valid(self, form):
         messages.success(self.request, 'Project updated successfully.')
         return super().form_valid(form)
+
+
 
 class ProjectDeleteView(AdminRequiredMixin, View):
     def post(self, request, pk):
@@ -1239,19 +1250,20 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
     def form_valid(self, form):
         response = super().form_valid(form)
         task = self.object
+        project_label = task.project.name if task.project else 'Standalone Task'
         # Notify newly assigned employee
         if task.responsible_person and task.responsible_person.user:
             Notification.objects.create(
                 recipient=task.responsible_person.user,
                 employee=task.responsible_person,
                 title=f"New Task Assigned: {task.activity}",
-                message=f"You have been assigned to task '{task.activity}' for project '{task.project.name}'.",
+                message=f"You have been assigned to task '{task.activity}' ({project_label}).",
                 notif_type='field_visit'
             )
             subject = f"New Task Assigned: {task.activity}"
             message = (
                 f"Hello {task.responsible_person.full_name},\n\n"
-                f"You have been assigned to the following task in project '{task.project.name}':\n"
+                f"You have been assigned to the following task ({project_label}):\n"
                 f"Task: {task.activity}\n"
                 f"Planned: {task.planned_start or '—'} to {task.planned_finish or '—'}\n"
                 f"Status: {task.status}\n\n"
@@ -1263,6 +1275,7 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
 
         messages.success(self.request, 'Task created successfully.')
         return response
+
 
 
 from django.http import JsonResponse
@@ -1307,12 +1320,14 @@ def staff_task_complete(request, pk):
     task.employee_note = note
     task.status = 'Completed'
     task.save()
-    
+
+    progress = task.project.progress_percent if task.project else 0
     return JsonResponse({
         'success': True,
-        'progress_percent': task.project.progress_percent,
+        'progress_percent': progress,
         'completion_attachment_url': task.completion_attachment.url if task.completion_attachment else None
     })
+
 
 
 

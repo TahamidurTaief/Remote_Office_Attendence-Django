@@ -130,6 +130,7 @@ class Project(models.Model):
             self.progress_percent = round((completed_points / total_points) * 100)
         self.save(update_fields=['progress_percent'])
 
+
 class TaskTemplate(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -154,7 +155,13 @@ class TaskTemplateItem(models.Model):
 class ProjectTask(models.Model):
     STATUS_CHOICES = Project.STATUS_CHOICES
 
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='tasks',
+        null=True,
+        blank=True
+    )
     order = models.PositiveIntegerField()
     activity = models.CharField(max_length=255)
     responsible_person = models.ForeignKey(
@@ -269,7 +276,8 @@ class ProjectTask(models.Model):
 
 
     def __str__(self):
-        return f"{self.project.name} - {self.order}. {self.activity}"
+        project_name = self.project.name if self.project_id else 'Standalone'
+        return f"{project_name} - {self.order}. {self.activity}"
 
 
 class DailyProgressLog(models.Model):

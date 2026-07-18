@@ -36,18 +36,29 @@ def home(request):
 
     total_leave_left = None
     pending_leave_count = 0
+    pending_tasks = []
     if employee:
         total_leave_left = employee.total_leave_left_by_year[today.year]
         from apps.leave.models import LeaveRequest
         pending_leave_count = LeaveRequest.objects.filter(employee=employee, status='pending').count()
+        from apps.projects.models import ProjectTask
+        pending_tasks = (
+            ProjectTask.objects
+            .filter(responsible_person=employee)
+            .exclude(status='Completed')
+            .select_related('project')
+            .order_by('planned_finish')[:10]
+        )
 
     return render(request, 'staff/home.html', {
         'employee': employee,
         'field_visits': field_visits,
         'is_checked_in': active_session,
         'total_leave_left': total_leave_left,
-        'pending_leave_count': pending_leave_count
+        'pending_leave_count': pending_leave_count,
+        'pending_tasks': pending_tasks,
     })
+
 
 
 @login_required
