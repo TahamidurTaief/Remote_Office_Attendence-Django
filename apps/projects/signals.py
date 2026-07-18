@@ -9,5 +9,8 @@ def update_project_progress_on_save(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=ProjectTask)
 def update_project_progress_on_delete(sender, instance, **kwargs):
-    if instance.project:
-        instance.project.recalculate_progress()
+    try:
+        if instance.project:
+            instance.project.recalculate_progress()
+    except Exception:
+        pass

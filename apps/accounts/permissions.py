@@ -56,6 +56,14 @@ def has_perm_cached(user, perm_codename: str) -> bool:
 def user_can_access_my_projects(user) -> bool:
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser:
+    if user.is_superuser or user.role == 'admin':
         return True
-    return user.role == 'manager' or user.groups.filter(name='Manager').exists()
+    if user.role == 'manager' or user.groups.filter(name='Manager').exists():
+        return True
+    
+    # Check if user has an EmployeeProfile with is_project_manager=True
+    employee_profile = getattr(user, 'employee_profile', None)
+    if employee_profile and employee_profile.is_active and employee_profile.is_project_manager:
+        return True
+            
+    return False

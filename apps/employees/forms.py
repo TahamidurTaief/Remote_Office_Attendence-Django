@@ -56,7 +56,7 @@ class EmployeeCreateForm(forms.ModelForm):
 
     class Meta:
         model = EmployeeProfile
-        fields = ['employee_id', 'full_name', 'department', 'designation', 'branch', 'phone', 'emergency_contact', 'profile_photo', 'joined_date', 'is_active', 'tracking_interval', 'overtime_enabled']
+        fields = ['employee_id', 'full_name', 'department', 'designation', 'branch', 'phone', 'emergency_contact', 'profile_photo', 'joined_date', 'is_active', 'tracking_interval', 'overtime_enabled', 'is_project_manager']
         widgets = {
             'joined_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'employee_id': forms.TextInput(attrs={'class': TEXT_INPUT}),
@@ -70,6 +70,7 @@ class EmployeeCreateForm(forms.ModelForm):
             'tracking_interval': forms.Select(attrs={'class': SELECT_INPUT}),
             'overtime_enabled': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
             'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+            'is_project_manager': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -160,7 +161,7 @@ class EmployeeEditForm(forms.ModelForm):
 
     class Meta:
         model = EmployeeProfile
-        fields = ['employee_id', 'full_name', 'department', 'designation', 'branch', 'phone', 'emergency_contact', 'profile_photo', 'joined_date', 'is_active', 'tracking_interval', 'overtime_enabled']
+        fields = ['employee_id', 'full_name', 'department', 'designation', 'branch', 'phone', 'emergency_contact', 'profile_photo', 'joined_date', 'is_active', 'tracking_interval', 'overtime_enabled', 'is_project_manager']
         widgets = {
             'joined_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'employee_id': forms.TextInput(attrs={'class': TEXT_INPUT}),
@@ -174,6 +175,7 @@ class EmployeeEditForm(forms.ModelForm):
             'tracking_interval': forms.Select(attrs={'class': SELECT_INPUT}),
             'overtime_enabled': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
             'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+            'is_project_manager': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
 
     def __init__(self, *args, **kwargs):

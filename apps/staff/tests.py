@@ -206,11 +206,11 @@ class ProjectOwnershipTests(TestCase):
             client_name='Client X',
             location='Location X',
             project_type=self.project_type,
-            project_manager=self.profile_a,
             start_date=datetime.date(2026, 1, 1),
             status='In Progress',
             branch=self.branch
         )
+        self.project_x.project_managers.add(self.profile_a)
 
         # Project Y owned by Manager B
         self.project_y = Project.objects.create(
@@ -218,11 +218,11 @@ class ProjectOwnershipTests(TestCase):
             client_name='Client Y',
             location='Location Y',
             project_type=self.project_type,
-            project_manager=self.profile_b,
             start_date=datetime.date(2026, 1, 1),
             status='In Progress',
             branch=self.branch
         )
+        self.project_y.project_managers.add(self.profile_b)
 
     def test_manager_a_cannot_view_project_y(self):
         # Log in as Manager A
@@ -264,4 +264,80 @@ class ProjectOwnershipTests(TestCase):
         response = self.client.post(url, data=data)
         self.assertEqual(response.status_code, 302) # redirect on success
         self.assertEqual(self.project_x.tasks.count(), 1)
+
+    def test_manager_can_edit_task_on_owned_project(self):
+        from apps.projects.models import ProjectTask
+        task = ProjectTask.objects.create(
+            project=self.project_x,
+            order=1,
+            activity='Task to Edit',
+            points=10,
+            status='Not Started'
+        )
+        self.client.login(email='manager_a@test.com', password=self.password)
+        url = reverse('staff:my_project_edit_task', kwargs={'task_id': task.pk})
+        data = {
+            'activity': 'Task Edited Successfully',
+            'points': '20',
+            'status': 'In Progress',
+            'remarks': 'Manager Feedback Note',
+        }
+        response = self.client.post(url, data=data)
+        self.assertEqual(response.status_code, 302)
+        task.refresh_from_db()
+        self.assertEqual(task.activity, 'Task Edited Successfully')
+        self.assertEqual(task.points, 20)
+        self.assertEqual(task.status, 'In Progress')
+        self.assertEqual(task.remarks, 'Manager Feedback Note')
+
+    def test_manager_cannot_edit_task_on_unowned_project(self):
+        from apps.projects.models import ProjectTask
+        task = ProjectTask.objects.create(
+            project=self.project_y,
+            order=1,
+            activity='Task on Project Y',
+            points=10,
+            status='Not Started'
+        )
+        self.client.login(email='manager_a@test.com', password=self.password)
+        url = reverse('staff:my_project_edit_task', kwargs={'task_id': task.pk})
+        data = {
+            'activity': 'Illegal Edit Try',
+            'points': '20',
+            'status': 'In Progress',
+        }
+        response = self.client.post(url, data=data)
+        self.assertEqual(response.status_code, 403)
+        task.refresh_from_db()
+        self.assertEqual(task.activity, 'Task on Project Y')
+
+    def test_manager_can_delete_task_on_owned_project(self):
+        from apps.projects.models import ProjectTask
+        task = ProjectTask.objects.create(
+            project=self.project_x,
+            order=1,
+            activity='Task to Delete',
+            points=10,
+            status='Not Started'
+        )
+        self.client.login(email='manager_a@test.com', password=self.password)
+        url = reverse('staff:my_project_delete_task', kwargs={'task_id': task.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.project_x.tasks.count(), 0)
+
+    def test_manager_cannot_delete_task_on_unowned_project(self):
+        from apps.projects.models import ProjectTask
+        task = ProjectTask.objects.create(
+            project=self.project_y,
+            order=1,
+            activity='Task to Delete on Project Y',
+            points=10,
+            status='Not Started'
+        )
+        self.client.login(email='manager_a@test.com', password=self.password)
+        url = reverse('staff:my_project_delete_task', kwargs={'task_id': task.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.project_y.tasks.count(), 1)
 

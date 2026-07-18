@@ -4,28 +4,30 @@
 {% block page_title %}Add Project Task{% endblock %}
 
 {% block content %}
-<div class="p-4 max-w-xl mx-auto">
+<div class="p-2 max-w-md mx-auto">
     <!-- Header -->
-    <div class="mb-6 flex items-center justify-between">
+    <div class="mb-4 flex items-center justify-between">
         <div>
-            <span class="text-[10px] text-gray-400 font-semibold uppercase">Project: {{ project.name }}</span>
-            <h2 class="text-sm font-bold text-gray-900 mt-0.5">Assign New Task</h2>
+            <span class="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Project: {{ project.name }}</span>
+            <h2 class="text-xs font-bold text-gray-900 mt-1 uppercase tracking-tight">Assign New Task</h2>
         </div>
-        <a href="{% url 'staff:my_project_detail' project.pk %}" class="flex items-center gap-2 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-lg transition-colors">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        <a href="{% url 'staff:my_project_detail' project.pk %}" class="flex items-center gap-1 px-2.5 py-1.5 border border-gray-200 hover:bg-gray-50 text-gray-650 text-[11px] font-semibold rounded-lg transition-colors">
+            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
             Cancel
         </a>
     </div>
 
     <!-- Form Card -->
-    <div class="bg-white shadow-sm border border-gray-150 rounded-xl p-6">
-        <form method="POST" enctype="multipart/form-data" class="space-y-4">
+    <div class="bg-white shadow-sm border border-gray-150 rounded-xl p-5">
+        <form method="POST" enctype="multipart/form-data" class="space-y-3.5">
             {% csrf_token %}
             
             <!-- Activity Description -->
             <div>
-                <label for="activity" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Activity / Task Description</label>
-                <input type="text" name="activity" id="activity" required value="{{ data.activity|default:'' }}" placeholder="e.g. Install ducting on 3rd floor">
+                <label for="activity" class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Activity Description *</label>
+                <input type="text" name="activity" id="activity" required value="{{ data.activity|default:'' }}" 
+                       placeholder="e.g. Install ducting on 3rd floor"
+                       class="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
                 {% if errors.activity %}
                 <p class="text-red-500 text-[10px] mt-1">{{ errors.activity }}</p>
                 {% endif %}
@@ -33,8 +35,9 @@
 
             <!-- Responsible Person -->
             <div>
-                <label for="responsible_person" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Responsible Person</label>
-                <select name="responsible_person" id="responsible_person">
+                <label for="responsible_person" class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Responsible Person</label>
+                <select name="responsible_person" id="responsible_person"
+                        class="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer bg-white">
                     <option value="">-- Select Employee ({{ project.branch.name|default:"Any Branch" }}) --</option>
                     {% for emp in employees %}
                     <option value="{{ emp.id }}" {% if data.responsible_person|stringformat:"s" == emp.id|stringformat:"s" %}selected{% endif %}>
@@ -47,25 +50,34 @@
                 {% endif %}
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-3.5">
                 <!-- Points -->
                 <div>
-                    <label for="points" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Points</label>
-                    <input type="number" name="points" id="points" min="0" value="{{ data.points|default:'10' }}">
+                    <label for="points" class="block text-[10px] font-semibold text-gray-455 uppercase mb-1">Points</label>
+                    <input type="number" name="points" id="points" min="0" value="{{ data.points|default:'10' }}"
+                           class="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
                     {% if errors.points %}
                     <p class="text-red-500 text-[10px] mt-1">{{ errors.points }}</p>
                     {% endif %}
                 </div>
 
-                <!-- Empty space or other field if needed -->
-                <div></div>
+                <!-- Reference File Attachment -->
+                <div>
+                    <label for="assignment_attachment" class="block text-[10px] font-semibold text-gray-455 uppercase mb-1">Reference File</label>
+                    <input type="file" name="assignment_attachment" id="assignment_attachment" 
+                           class="w-full text-xs text-gray-500">
+                    {% if errors.assignment_attachment %}
+                    <p class="text-red-500 text-[10px] mt-1">{{ errors.assignment_attachment }}</p>
+                    {% endif %}
+                </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-3.5">
                 <!-- Planned Start Date -->
                 <div>
-                    <label for="planned_start" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Planned Start Date</label>
-                    <input type="date" name="planned_start" id="planned_start" value="{{ data.planned_start|default:'' }}">
+                    <label for="planned_start" class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Planned Start</label>
+                    <input type="date" name="planned_start" id="planned_start" value="{{ data.planned_start|default:'' }}"
+                           class="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
                     {% if errors.planned_start %}
                     <p class="text-red-500 text-[10px] mt-1">{{ errors.planned_start }}</p>
                     {% endif %}
@@ -73,8 +85,9 @@
 
                 <!-- Planned Finish Date -->
                 <div>
-                    <label for="planned_finish" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Planned Finish Date</label>
-                    <input type="date" name="planned_finish" id="planned_finish" value="{{ data.planned_finish|default:'' }}">
+                    <label for="planned_finish" class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Planned Finish</label>
+                    <input type="date" name="planned_finish" id="planned_finish" value="{{ data.planned_finish|default:'' }}"
+                           class="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
                     {% if errors.planned_finish %}
                     <p class="text-red-500 text-[10px] mt-1">{{ errors.planned_finish }}</p>
                     {% endif %}
@@ -83,26 +96,20 @@
 
             <!-- Remarks -->
             <div>
-                <label for="remarks" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Remarks / Instructions</label>
-                <textarea name="remarks" id="remarks" rows="3" placeholder="Optional notes..."></textarea>
+                <label for="remarks" class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Remarks / Instructions</label>
+                <textarea name="remarks" id="remarks" rows="2" placeholder="Task guidelines or remarks..."
+                          class="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500"></textarea>
             </div>
 
-            <!-- Reference File Attachment -->
-            <div>
-                <label for="assignment_attachment" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Reference File / Attachment</label>
-                <input type="file" name="assignment_attachment" id="assignment_attachment" class="w-full text-xs text-gray-500">
-                <p class="mt-1 text-[10px] text-gray-400">Allowed formats: JPG, JPEG, PNG, PDF. Max size: 10MB.</p>
-                {% if errors.assignment_attachment %}
-                <p class="text-red-500 text-[10px] mt-1">{{ errors.assignment_attachment }}</p>
-                {% endif %}
-            </div>
+            <p class="text-[9px] text-gray-400 leading-normal">File formats allowed: JPG, JPEG, PNG, PDF. Max upload size: 10MB.</p>
 
             <!-- Submit Buttons -->
-            <div class="flex justify-end gap-3 pt-3 border-t border-gray-100">
-                <a href="{% url 'staff:my_project_detail' project.pk %}" class="px-4 py-2 border rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-bold transition-colors">
+            <div class="flex justify-end gap-2 pt-3.5 border-t border-gray-100">
+                <a href="{% url 'staff:my_project_detail' project.pk %}" 
+                   class="px-3 py-1.5 border border-gray-250 bg-white text-gray-700 hover:bg-gray-50 text-xs font-semibold rounded transition-colors">
                     Cancel
                 </a>
-                <button type="submit" class="px-4 py-2 bg-primary-gradient text-white font-bold rounded-lg text-xs hover:opacity-90 transition-opacity">
+                <button type="submit" class="px-3 py-1.5 bg-primary-gradient text-white font-semibold rounded text-xs hover:opacity-90 transition-opacity">
                     Assign Task
                 </button>
             </div>

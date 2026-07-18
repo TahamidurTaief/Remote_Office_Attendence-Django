@@ -415,7 +415,7 @@ def my_projects(request):
         if not employee:
             projects = Project.objects.none()
         else:
-            projects = Project.objects.filter(project_manager=employee).order_by('name')
+            projects = Project.objects.filter(project_managers=employee).order_by('name')
 
     for project in projects:
         assigned_ids = ProjectTask.objects.filter(project=project, responsible_person__isnull=False).values_list('responsible_person_id', flat=True).distinct()
@@ -439,11 +439,25 @@ def my_project_detail(request, project_id):
 
     if not request.user.is_superuser:
         employee = getattr(request.user, 'employee_profile', None)
-        if not employee or project.project_manager_id != employee.id:
+        if not employee or not project.project_managers.filter(id=employee.id).exists():
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You are not the manager of this project.")
 
     tasks = project.tasks.all().select_related('responsible_person').order_by('order')
+
+    # Fetch assigned employees for the team roster card
+    from django.db.models import Q
+    from apps.employees.models import EmployeeProfile
+    assigned_employees = EmployeeProfile.objects.filter(
+        Q(is_active=True) & (
+            Q(managed_projects=project) |
+            Q(site_engineer_projects=project) |
+            Q(member_projects=project)
+        )
+    ).distinct().order_by('full_name')
+
+    for emp in assigned_employees:
+        emp.project_tasks = project.tasks.filter(responsible_person=emp).order_by('order')
 
     task_ids = project.tasks.values_list('id', flat=True)
     ct_task = ContentType.objects.get_for_model(ProjectTask)
@@ -455,7 +469,13 @@ def my_project_detail(request, project_id):
     return render(request, 'staff/projects/my_project_detail.html', {
         'project': project,
         'tasks': tasks,
+        'assigned_employees': assigned_employees,
         'activities': activities,
+        'all_count': tasks.count(),
+        'not_started_count': tasks.filter(status='Not Started').count(),
+        'in_progress_count': tasks.filter(status='In Progress').count(),
+        'delayed_count': tasks.filter(status='Delayed').count(),
+        'completed_count': tasks.filter(status='Completed').count(),
     })
 
 
@@ -471,14 +491,18 @@ def my_project_add_task(request, project_id):
 
     if not request.user.is_superuser:
         employee = getattr(request.user, 'employee_profile', None)
-        if not employee or project.project_manager_id != employee.id:
+        if not employee or not project.project_managers.filter(id=employee.id).exists():
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You are not the manager of this project.")
 
-    if project.branch:
-        eligible_employees = EmployeeProfile.objects.filter(branch=project.branch, is_active=True).order_by('full_name')
-    else:
-        eligible_employees = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+    from django.db.models import Q
+    eligible_employees = EmployeeProfile.objects.filter(
+        Q(is_active=True) & (
+            Q(managed_projects=project) |
+            Q(site_engineer_projects=project) |
+            Q(member_projects=project)
+        )
+    ).distinct().order_by('full_name')
 
     from django.contrib import messages
 
@@ -597,3 +621,194 @@ def my_project_add_task(request, project_id):
         'project': project,
         'employees': eligible_employees,
     })
+
+
+@login_required
+def my_project_edit_task(request, task_id):
+    if not check_manager_role(request.user):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("Only managers or admins can access this page.")
+
+    from apps.projects.models import Project, ProjectTask
+    from apps.employees.models import EmployeeProfile
+    from django.contrib import messages
+
+    task = get_object_or_404(ProjectTask, pk=task_id)
+    project = task.project
+
+    if not request.user.is_superuser:
+        employee = getattr(request.user, 'employee_profile', None)
+        if not employee or not project.project_managers.filter(id=employee.id).exists():
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You are not the manager of this project.")
+
+    from django.db.models import Q
+    eligible_employees = EmployeeProfile.objects.filter(
+        Q(is_active=True) & (
+            Q(managed_projects=project) |
+            Q(site_engineer_projects=project) |
+            Q(member_projects=project)
+        )
+    ).distinct().order_by('full_name')
+
+    if request.method == 'POST':
+        activity = request.POST.get('activity', '').strip()
+        responsible_person_id = request.POST.get('responsible_person', '')
+        points_str = request.POST.get('points', '10')
+        planned_start_str = request.POST.get('planned_start', '')
+        planned_finish_str = request.POST.get('planned_finish', '')
+        remarks = request.POST.get('remarks', '').strip()
+        status = request.POST.get('status', 'Not Started')
+        assignment_attachment = request.FILES.get('assignment_attachment')
+
+        errors = {}
+        if not activity:
+            errors['activity'] = 'Activity description is required.'
+
+        responsible_person = None
+        if responsible_person_id:
+            try:
+                responsible_person = eligible_employees.get(pk=responsible_person_id)
+            except EmployeeProfile.DoesNotExist:
+                errors['responsible_person'] = 'Selected employee is not eligible or active.'
+
+        try:
+            points = int(points_str)
+            if points < 0:
+                errors['points'] = 'Points cannot be negative.'
+        except ValueError:
+            errors['points'] = 'Invalid number format for points.'
+
+        planned_start = None
+        planned_finish = None
+        if planned_start_str:
+            try:
+                planned_start = datetime.datetime.strptime(planned_start_str, '%Y-%m-%d').date()
+            except ValueError:
+                errors['planned_start'] = 'Invalid date format.'
+
+        if planned_finish_str:
+            try:
+                planned_finish = datetime.datetime.strptime(planned_finish_str, '%Y-%m-%d').date()
+            except ValueError:
+                errors['planned_finish'] = 'Invalid date format.'
+
+        if planned_start and planned_finish and planned_finish < planned_start:
+            errors['planned_finish'] = 'Planned finish date cannot be before planned start date.'
+
+        if assignment_attachment:
+            from django.core.exceptions import ValidationError
+            from apps.projects.models import validate_task_attachment
+            try:
+                validate_task_attachment(assignment_attachment)
+            except ValidationError as e:
+                errors['assignment_attachment'] = e.message
+
+        if not errors:
+            old_resp = task.responsible_person
+            
+            task.activity = activity
+            task.responsible_person = responsible_person
+            task.points = points
+            task.planned_start = planned_start
+            task.planned_finish = planned_finish
+            task.remarks = remarks
+            task.status = status
+            if assignment_attachment:
+                task.assignment_attachment = assignment_attachment
+            
+            task.save()
+            project.recalculate_progress()
+
+            # Send notification email if assignee changed
+            if task.responsible_person and task.responsible_person != old_resp and task.responsible_person.user:
+                from apps.notifications.dispatch import log_activity
+                subject = f"Task Assigned: {task.activity}"
+                notif_msg = f"You have been assigned to task '{task.activity}' for project '{project.name}'."
+                message_text = (
+                    f"Hello {task.responsible_person.full_name},\n\n"
+                    f"You have been assigned to the following task in project '{project.name}':\n"
+                    f"Task: {task.activity}\n"
+                    f"Planned: {task.planned_start or '—'} to {task.planned_finish or '—'}\n"
+                    f"Status: {task.status}\n\n"
+                )
+                if task.assignment_attachment:
+                    message_text += f"See attached reference file: {task.assignment_attachment.url}\n\n"
+                message_text += "Regards,\nFieldTrack System"
+
+                log_activity(
+                    actor=request.user,
+                    verb='task_assigned',
+                    target=task,
+                    metadata={
+                        'title': subject,
+                        'message': notif_msg,
+                        'email_subject': subject,
+                        'email_message': message_text,
+                        'notif_type': 'field_visit'
+                    },
+                    notify_users=[task.responsible_person.user],
+                    email_also=True
+                )
+
+            messages.success(request, f"Task '{activity}' updated successfully.")
+            return redirect('staff:my_project_detail', project_id=project.id)
+
+        form_data = {
+            'activity': activity,
+            'responsible_person': responsible_person_id,
+            'points': points,
+            'planned_start': planned_start_str,
+            'planned_finish': planned_finish_str,
+            'remarks': remarks,
+            'status': status,
+        }
+        return render(request, 'staff/projects/edit_task_form.html', {
+            'project': project,
+            'task': task,
+            'employees': eligible_employees,
+            'errors': errors,
+            'data': form_data,
+        })
+
+    # GET request: populate data dictionary with task values
+    form_data = {
+        'activity': task.activity,
+        'responsible_person': task.responsible_person.id if task.responsible_person else '',
+        'points': task.points,
+        'planned_start': task.planned_start.strftime('%Y-%m-%d') if task.planned_start else '',
+        'planned_finish': task.planned_finish.strftime('%Y-%m-%d') if task.planned_finish else '',
+        'remarks': task.remarks,
+        'status': task.status,
+    }
+    return render(request, 'staff/projects/edit_task_form.html', {
+        'project': project,
+        'task': task,
+        'employees': eligible_employees,
+        'data': form_data,
+    })
+
+
+@login_required
+def my_project_delete_task(request, task_id):
+    if not check_manager_role(request.user):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("Only managers or admins can access this page.")
+
+    from apps.projects.models import Project, ProjectTask
+    from django.contrib import messages
+
+    task = get_object_or_404(ProjectTask, pk=task_id)
+    project = task.project
+
+    if not request.user.is_superuser:
+        employee = getattr(request.user, 'employee_profile', None)
+        if not employee or not project.project_managers.filter(id=employee.id).exists():
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You are not the manager of this project.")
+
+    task_activity = task.activity
+    task.delete()
+    project.recalculate_progress()
+    messages.success(request, f"Task '{task_activity}' deleted successfully.")
+    return redirect('staff:my_project_detail', project_id=project.id)

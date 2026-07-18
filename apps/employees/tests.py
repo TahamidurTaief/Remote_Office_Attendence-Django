@@ -154,6 +154,45 @@ class EmployeeProfileTests(TestCase):
         self.assertIn('profile_photo', form.errors)
         self.assertIn('File too large', form.errors['profile_photo'][0])
 
+    def test_is_project_manager_toggle(self):
+        # 1. Create with is_project_manager=True
+        form_data = {
+            'employee_id': 'EMP-2026-777',
+            'full_name': 'Project Manager One',
+            'branch': self.branch.id,
+            'phone': '+8801777777777',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'role': 'staff',
+            'password1': self.password,
+            'password2': self.password,
+            'is_project_manager': True,
+        }
+        form = EmployeeCreateForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors.as_data())
+        profile = form.save()
+        self.assertTrue(profile.is_project_manager)
+
+        # 2. Edit with is_project_manager=False
+        edit_data = {
+            'employee_id': 'EMP-2026-777',
+            'full_name': 'Project Manager One',
+            'role': 'staff',
+            'branch': self.branch.id,
+            'phone': '+8801777777777',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'new_password': '',
+            'confirm_password': '',
+            'is_project_manager': False,
+        }
+        edit_form = EmployeeEditForm(data=edit_data, instance=profile)
+        self.assertTrue(edit_form.is_valid(), edit_form.errors.as_data())
+        profile = edit_form.save()
+        self.assertFalse(profile.is_project_manager)
+
 
 from apps.employees.models import EmployeeDocument
 from apps.notifications.models import Notification

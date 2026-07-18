@@ -117,11 +117,11 @@ class DashboardScopingTests(TestCase):
             client_name='Test Client',
             location='Test Location',
             project_type=self.project_type,
-            project_manager=self.manager2_profile,
-            site_engineer=self.emp2_profile,  # Emp2 is site engineer for Manager 2's project
             start_date=datetime.date(2026, 1, 1),
             status='In Progress'
         )
+        self.project.project_managers.add(self.manager2_profile)
+        self.project.site_engineers.add(self.emp2_profile)
 
         # 5. Create Attendance records for today
         self.today = timezone.localdate()

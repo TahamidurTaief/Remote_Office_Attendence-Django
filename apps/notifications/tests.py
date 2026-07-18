@@ -117,9 +117,9 @@ class ActivityTimelineViewsTest(TestCase):
             client_name='Client',
             location='Dhaka',
             project_type=self.project_type,
-            project_manager=self.manager_emp,
             start_date=date.today()
         )
+        self.project.project_managers.add(self.manager_emp)
         self.task = ProjectTask.objects.create(
             project=self.project,
             order=1,

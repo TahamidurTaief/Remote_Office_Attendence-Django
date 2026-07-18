@@ -52,20 +52,20 @@ class Project(models.Model):
         on_delete=models.PROTECT,
         related_name='projects'
     )
-    
-    project_manager = models.ForeignKey(
+    project_managers = models.ManyToManyField(
         EmployeeProfile,
-        null=True,
         blank=True,
-        on_delete=models.SET_NULL,
         related_name='managed_projects'
     )
-    site_engineer = models.ForeignKey(
+    site_engineers = models.ManyToManyField(
         EmployeeProfile,
-        null=True,
         blank=True,
-        on_delete=models.SET_NULL,
         related_name='site_engineer_projects'
+    )
+    project_members = models.ManyToManyField(
+        EmployeeProfile,
+        blank=True,
+        related_name='member_projects'
     )
     
     hvac_capacity_tr = models.DecimalField(
@@ -233,46 +233,52 @@ class ProjectTask(models.Model):
                 
         super().save(*args, **kwargs)
         
-        if is_delayed and self.project.project_manager and self.project.project_manager.user:
+        if is_delayed and self.project.project_managers.exists():
             from apps.notifications.dispatch import log_activity
-            pm_user = self.project.project_manager.user
-            subject = f"Task Delayed: {self.activity} in Project {self.project.name}"
-            message = (
-                f"Hello {self.project.project_manager.full_name},\n\n"
-                f"The task '{self.activity}' in project '{self.project.name}' has been marked as Delayed.\n"
-                f"Remarks: {self.remarks or 'None'}\n\n"
-                f"Regards,\nFieldTrack System"
-            )
-            log_activity(
-                actor=None,
-                verb='task_delayed',
-                target=self,
-                metadata={'title': subject, 'message': message, 'remarks': self.remarks or ''},
-                notify_users=[pm_user],
-                email_also=True
-            )
+            pms = self.project.project_managers.filter(is_active=True)
+            for pm in pms:
+                if pm.user:
+                    pm_user = pm.user
+                    subject = f"Task Delayed: {self.activity} in Project {self.project.name}"
+                    message = (
+                        f"Hello {pm.full_name},\n\n"
+                        f"The task '{self.activity}' in project '{self.project.name}' has been marked as Delayed.\n"
+                        f"Remarks: {self.remarks or 'None'}\n\n"
+                        f"Regards,\nFieldTrack System"
+                    )
+                    log_activity(
+                        actor=None,
+                        verb='task_delayed',
+                        target=self,
+                        metadata={'title': subject, 'message': message, 'remarks': self.remarks or ''},
+                        notify_users=[pm_user],
+                        email_also=True
+                    )
 
-        if is_completed_transition and self.project.project_manager and self.project.project_manager.user:
+        if is_completed_transition and self.project.project_managers.exists():
             from apps.notifications.dispatch import log_activity
-            pm_user = self.project.project_manager.user
-            subject = f"Task Completed: {self.activity} in Project {self.project.name}"
-            message = (
-                f"Hello {self.project.project_manager.full_name},\n\n"
-                f"The task '{self.activity}' in project '{self.project.name}' has been marked as Completed.\n"
-                f"Employee Note: {self.employee_note or 'None'}\n"
-                f"Completed At: {self.completed_at}\n\n"
-            )
-            if self.completion_attachment:
-                message += f"See attached proof file: {self.completion_attachment.url}\n\n"
-            message += "Regards,\nFieldTrack System"
-            log_activity(
-                actor=None,
-                verb='task_completed',
-                target=self,
-                metadata={'title': subject, 'message': message, 'employee_note': self.employee_note or ''},
-                notify_users=[pm_user],
-                email_also=True
-            )
+            pms = self.project.project_managers.filter(is_active=True)
+            for pm in pms:
+                if pm.user:
+                    pm_user = pm.user
+                    subject = f"Task Completed: {self.activity} in Project {self.project.name}"
+                    message = (
+                        f"Hello {pm.full_name},\n\n"
+                        f"The task '{self.activity}' in project '{self.project.name}' has been marked as Completed.\n"
+                        f"Employee Note: {self.employee_note or 'None'}\n"
+                        f"Completed At: {self.completed_at}\n\n"
+                    )
+                    if self.completion_attachment:
+                        message += f"See attached proof file: {self.completion_attachment.url}\n\n"
+                    message += "Regards,\nFieldTrack System"
+                    log_activity(
+                        actor=None,
+                        verb='task_completed',
+                        target=self,
+                        metadata={'title': subject, 'message': message, 'employee_note': self.employee_note or ''},
+                        notify_users=[pm_user],
+                        email_also=True
+                    )
 
 
     def __str__(self):
@@ -365,20 +371,23 @@ class ProjectMaterial(models.Model):
                 
         super().save(*args, **kwargs)
         
-        if is_trigger and self.project.completion_date and self.project.project_manager and self.project.project_manager.user:
+        if is_trigger and self.project.completion_date and self.project.project_managers.exists():
             from datetime import date
             days_left = (self.project.completion_date - date.today()).days
             if days_left <= 7:
                 from apps.notifications.dispatch import send_email_notification
-                subject = f"URGENT: Material Zero-Received: {self.material_name} in Project {self.project.name}"
-                message = (
-                    f"Hello {self.project.project_manager.full_name},\n\n"
-                    f"The material '{self.material_name}' in project '{self.project.name}' has 0 received quantity, "
-                    f"and the project completion deadline is approaching on {self.project.completion_date} "
-                    f"(in {days_left} days).\n\n"
-                    f"Regards,\nFieldTrack System"
-                )
-                send_email_notification(self.project.project_manager.user, subject, message)
+                pms = self.project.project_managers.filter(is_active=True)
+                for pm in pms:
+                    if pm.user:
+                        subject = f"URGENT: Material Zero-Received: {self.material_name} in Project {self.project.name}"
+                        message = (
+                            f"Hello {pm.full_name},\n\n"
+                            f"The material '{self.material_name}' in project '{self.project.name}' has 0 received quantity, "
+                            f"and the project completion deadline is approaching on {self.project.completion_date} "
+                            f"(in {days_left} days).\n\n"
+                            f"Regards,\nFieldTrack System"
+                        )
+                        send_email_notification(pm.user, subject, message)
 
     def __str__(self):
         return f"{self.project.name} - {self.material_name}"

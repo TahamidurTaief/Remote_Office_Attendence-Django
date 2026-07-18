@@ -48,6 +48,10 @@ class EmployeeProfile(models.Model):
         default=False,
         help_text='Enable overtime tracking for this employee'
     )
+    is_project_manager = models.BooleanField(
+        default=False,
+        help_text='Allow this employee to work as a Project Manager and manage projects'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

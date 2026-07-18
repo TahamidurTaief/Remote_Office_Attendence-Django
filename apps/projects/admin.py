@@ -9,9 +9,13 @@ class ProjectTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ('name', 'client_name', 'status', 'progress_percent', 'project_manager', 'branch', 'start_date')
+    list_display = ('name', 'client_name', 'status', 'progress_percent', 'display_managers', 'branch', 'start_date')
     list_filter = ('status', 'system_type', 'branch')
     search_fields = ('name', 'client_name', 'location')
+
+    def display_managers(self, obj):
+        return ", ".join([pm.full_name for pm in obj.project_managers.all()])
+    display_managers.short_description = 'Project Managers'
 
 class TaskTemplateItemInline(admin.TabularInline):
     model = TaskTemplateItem

@@ -75,7 +75,7 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
                 branch_id = None
                 from django.db.models import Q
                 from apps.projects.models import Project
-                managed_projects = Project.objects.filter(project_manager=profile)
+                managed_projects = Project.objects.filter(project_managers=profile)
                 project_employees = EmployeeProfile.objects.filter(
                     Q(site_engineer_projects__in=managed_projects) |
                     Q(assigned_tasks__project__in=managed_projects)
@@ -159,7 +159,7 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
 
         if not can_view_all and role_name == 'manager':
             from apps.projects.models import Project
-            my_projects = Project.objects.filter(project_manager=profile).select_related('project_type', 'branch').prefetch_related('tasks')
+            my_projects = Project.objects.filter(project_managers=profile).select_related('project_type', 'branch').prefetch_related('tasks')
             
             if has_approve_permission:
                 from apps.leave.models import LeaveRequest

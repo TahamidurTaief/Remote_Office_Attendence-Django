@@ -356,124 +356,186 @@
         ::-webkit-scrollbar-thumb:hover {
             background-color: rgba(11, 95, 165, 0.4);
         }
+
+        /* Admin style sidebar overrides */
+        #ft-sidebar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 100vh;
+            width: 220px;
+            background: #ffffff;
+            border-right: 1px solid #f0f0f0;
+            z-index: 45;
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+            box-shadow: none;
+        }
+        .ft-nav-label {
+            opacity: 1;
+            width: auto;
+            overflow: hidden;
+            white-space: nowrap;
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+        }
+        .ft-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 14px;
+            margin: 1px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            color: #4B5563;
+            transition: background 140ms ease, color 140ms ease;
+            position: relative;
+        }
+        .ft-nav-item:hover {
+            background: #F0F7FF;
+            color: #0B5FA5;
+        }
+        .ft-nav-item.active {
+            background: #EFF6FF;
+            color: #0B5FA5;
+        }
+        .ft-nav-item .ft-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            color: inherit;
+        }
+        .ft-main-offset {
+            margin-left: 220px;
+            transition: margin-left 200ms cubic-bezier(0.4,0,0.2,1);
+        }
+        @media (max-width: 767px) {
+            #ft-sidebar {
+                display: none !important;
+            }
+            .ft-main-offset {
+                margin-left: 0 !important;
+            }
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
-<body class="bg-slate-50 bg-soft-gradient ft-content-bg" x-data="{ muted: localStorage.getItem('sound_muted') === 'true' }">
+<body class="bg-slate-50 bg-soft-gradient ft-content-bg"
+      x-data="{
+        sidebarMobile: false,
+        search: '',
+        muted: localStorage.getItem('sound_muted') === 'true',
+        matchSearch(label) {
+          if (!this.search) return true;
+          return label.toLowerCase().includes(this.search.toLowerCase());
+        }
+      }">
 <div id="page-loader" class="fixed top-0 left-0 right-0 h-0.5 bg-primary-500 z-50 hidden"></div>
 
 <!-- DESKTOP: Sidebar (hidden on mobile) -->
-<div class="hidden md:flex md:flex-col fixed top-0 left-0 h-screen w-64 bg-white border-r border-gray-150 text-gray-600 z-40 overflow-y-auto scrollbar-hide">
-  <div class="flex flex-col grow">
-    <!-- Logo -->
-    <div class="flex items-center justify-between h-16 px-4 border-b border-gray-150 bg-white">
-      <div class="flex items-center gap-3">
-        <img src="{% static 'main_logo.jpg' %}" 
-             alt="FieldTrack" 
-             class="h-8 w-auto object-contain"
-             onerror="this.style.display='none'; 
-                      document.getElementById('logo-text')
-                      .style.display='block'">
-        <span id="logo-text" 
-              style="display:none"
-              class="text-gray-800 font-semibold text-lg">
-          FieldTrack
-        </span>
-      </div>
-      <span class="text-[10px] bg-primary-50 text-primary-600 border border-primary-200/50 px-2.5 py-0.5 rounded-full shrink-0 font-bold">Staff</span>
-    </div>
+<aside id="ft-sidebar">
+     <!-- Logo -->
+     <div class="flex items-center h-14 px-4 border-b border-gray-100 shrink-0 overflow-hidden">
+         <div class="ft-nav-label font-semibold text-gray-800 text-[13px] flex items-center gap-2 w-full">
+             <img src="{% static 'main_logo.jpg' %}"
+                  alt="FieldTrack"
+                  class="h-7 w-auto object-contain"
+                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+             <span style="display:none">FieldTrack</span>
+             <span class="text-[9px] bg-primary-50 text-primary-600 border border-primary-200/50 px-2 py-0.5 rounded shrink-0 font-bold ml-auto">Staff</span>
+         </div>
+     </div>
 
-    <!-- Staff info -->
-    <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-150 bg-gray-50/30">
-      {% if request.user.employeeprofile.profile_photo %}
-      <img src="{{ request.user.employeeprofile.profile_photo.url }}"
-           class="w-10 h-10 rounded-full object-cover bg-gray-150 border border-gray-200 shadow-sm">
-      {% else %}
-      <div class="w-10 h-10 rounded-full bg-primary-gradient flex items-center justify-center text-white font-bold text-sm shadow-sm">
-        {{ request.user.employeeprofile.full_name|first|upper }}
-      </div>
-      {% endif %}
-      <div class="min-w-0">
-        <p class="text-gray-800 text-sm font-medium truncate">
-          {{ request.user.employeeprofile.full_name }}</p>
-        <p class="text-gray-500 text-xs truncate">
-          {{ request.user.employeeprofile.employee_id }}</p>
-      </div>
-    </div>
+     <!-- Search (Apple macOS/iOS style) -->
+     <div class="px-3.5 py-2 shrink-0">
+         <div class="flex items-center gap-2 bg-[#F2F2F7] rounded px-2.5 py-1.5 transition-colors focus-within:bg-[#E5E5EA]">
+             <i data-lucide="search" class="w-3.5 h-3.5 text-[#8E8E93] shrink-0"></i>
+             <input type="text"
+                    x-model="search"
+                    placeholder="Search"
+                    class="bg-transparent text-[12px] text-gray-800 placeholder-[#8E8E93] focus:outline-none w-full !border-0 !p-0 !shadow-none !ring-0">
+         </div>
+     </div>
 
-    <!-- Nav items -->
-    <nav class="flex-1 px-3 py-4 space-y-1">
-      <a href="{% url 'staff:home' %}"
-         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
-         {% if request.path == '/staff/home/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
-        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/home/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-          <i data-lucide="home" class="w-4 h-4 shrink-0"></i>
-        </div>
-        Home
-      </a>
-      <a href="{% url 'staff:check_in' %}"
-         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
-         {% if request.path == '/staff/check-in/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
-        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/check-in/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-          <i data-lucide="map-pin" class="w-4 h-4 shrink-0"></i>
-        </div>
-        Check In / Out
-      </a>
-      <a href="{% url 'staff:attendance' %}"
-         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
-         {% if request.path == '/staff/attendance/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
-        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/attendance/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-          <i data-lucide="calendar" class="w-4 h-4 shrink-0"></i>
-        </div>
-        My Attendance
-      </a>
-      <a href="{% url 'leave:staff_dashboard' %}"
-         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
-         {% if '/leave/staff/' in request.path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
-        <div class="p-2 rounded-md transition-colors {% if '/leave/staff/' in request.path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-          <i data-lucide="clipboard-list" class="w-4 h-4 shrink-0"></i>
-        </div>
-        Leave
-      </a>
-      {% if can_access_my_projects %}
-      <a href="{% url 'staff:my_projects' %}"
-         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
-         {% if '/staff/my-projects/' in request.path %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
-        <div class="p-2 rounded-md transition-colors {% if '/staff/my-projects/' in request.path %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-          <i data-lucide="briefcase" class="w-4 h-4 shrink-0"></i>
-        </div>
-        My Projects
-      </a>
-      {% endif %}
-      <a href="{% url 'staff:profile' %}"
-         class="group flex items-center gap-3 px-3 py-2 mx-3 rounded-lg text-[12px] font-medium transition-all duration-150
-         {% if request.path == '/staff/profile/' %}bg-primary-50 text-primary-600{% else %}text-gray-600 hover:bg-primary-50/50 hover:text-primary-600{% endif %}">
-        <div class="p-2 rounded-md transition-colors {% if request.path == '/staff/profile/' %}bg-primary-100/50 text-primary-600{% else %}bg-gray-50 text-gray-500 group-hover:bg-primary-100/50 group-hover:text-primary-600{% endif %}">
-          <i data-lucide="user" class="w-4 h-4 shrink-0"></i>
-        </div>
-        Profile
-      </a>
-    </nav>
+     <!-- Staff info -->
+     <div class="flex items-center gap-2.5 px-3.5 py-3 border-b border-gray-100 bg-gray-50/50">
+       {% if request.user.employeeprofile.profile_photo %}
+       <img src="{{ request.user.employeeprofile.profile_photo.url }}"
+            class="w-8 h-8 rounded-full object-cover bg-gray-150 border border-gray-200">
+       {% else %}
+       <div class="w-8 h-8 rounded-full bg-primary-gradient flex items-center justify-center text-white font-bold text-[10px]">
+         {{ request.user.employeeprofile.full_name|first|upper }}
+       </div>
+       {% endif %}
+       <div class="min-w-0">
+         <p class="text-gray-800 text-[11px] font-semibold truncate">
+           {{ request.user.employeeprofile.full_name }}</p>
+         <p class="text-gray-500 text-[10px] truncate">
+           {{ request.user.employeeprofile.employee_id }}</p>
+       </div>
+     </div>
 
-    <!-- Logout at bottom -->
-    <div class="px-6 py-4 border-t border-gray-150 bg-gray-50/50">
-      <form action="{% url 'accounts:logout' %}" method="POST">
-        {% csrf_token %}
-        <button type="submit"
-                class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-medium
-                       text-red-500 hover:bg-red-50 hover:text-red-600 transition-all duration-150">
-          <div class="p-2 rounded-md bg-red-50 text-red-500 group-hover:bg-red-100/50 transition-colors">
-            <i data-lucide="log-out" class="w-4 h-4 shrink-0"></i>
-          </div>
-          Sign Out
-        </button>
-      </form>
-    </div>
-  </div>
-</div>
+     <!-- Nav items -->
+     <nav class="flex-1 py-3 overflow-y-auto scrollbar-hide space-y-0.5">
+       {% with request.path as path %}
+       <a href="{% url 'staff:home' %}"
+          class="ft-nav-item {% if path == '/staff/home/' %}active{% endif %}"
+          x-show="matchSearch('Home')">
+          <i data-lucide="home" class="ft-icon"></i>
+          <span class="ft-nav-label">Home</span>
+       </a>
+       <a href="{% url 'staff:check_in' %}"
+          class="ft-nav-item {% if path == '/staff/check-in/' %}active{% endif %}"
+          x-show="matchSearch('Check In / Out')">
+          <i data-lucide="map-pin" class="ft-icon"></i>
+          <span class="ft-nav-label">Check In / Out</span>
+       </a>
+       <a href="{% url 'staff:attendance' %}"
+          class="ft-nav-item {% if path == '/staff/attendance/' %}active{% endif %}"
+          x-show="matchSearch('My Attendance')">
+          <i data-lucide="calendar" class="ft-icon"></i>
+          <span class="ft-nav-label">My Attendance</span>
+       </a>
+       <a href="{% url 'leave:staff_dashboard' %}"
+          class="ft-nav-item {% if '/leave/staff/' in path %}active{% endif %}"
+          x-show="matchSearch('Leave')">
+          <i data-lucide="clipboard-list" class="ft-icon"></i>
+          <span class="ft-nav-label">Leave</span>
+       </a>
+       {% if can_access_my_projects %}
+       <a href="{% url 'staff:my_projects' %}"
+          class="ft-nav-item {% if '/staff/my-projects/' in path %}active{% endif %}"
+          x-show="matchSearch('My Projects')">
+          <i data-lucide="briefcase" class="ft-icon"></i>
+          <span class="ft-nav-label">My Projects</span>
+       </a>
+       {% endif %}
+       <a href="{% url 'staff:profile' %}"
+          class="ft-nav-item {% if path == '/staff/profile/' %}active{% endif %}"
+          x-show="matchSearch('Profile')">
+          <i data-lucide="user" class="ft-icon"></i>
+          <span class="ft-nav-label">Profile</span>
+       </a>
+       {% endwith %}
+     </nav>
+
+     <!-- Logout at bottom -->
+     <div class="px-3.5 py-2.5 border-t border-gray-100 bg-gray-50/50">
+       <form action="{% url 'accounts:logout' %}" method="POST">
+         {% csrf_token %}
+         <button type="submit"
+                 class="w-full flex items-center gap-2.5 px-3 py-1.5 rounded text-red-500 hover:bg-red-50 hover:text-red-650 transition-all duration-150">
+            <i data-lucide="log-out" class="w-4 h-4 shrink-0 text-red-500"></i>
+            <span class="text-[12px] font-medium text-red-500">Sign Out</span>
+         </button>
+       </form>
+     </div>
+</aside>
 
 <!-- DESKTOP: Main content with left margin -->
-<div class="md:ml-64 min-h-screen flex flex-col bg-slate-50 bg-soft-gradient ft-content-bg">
+<div class="ft-main-offset min-h-screen flex flex-col bg-slate-50 bg-soft-gradient ft-content-bg">
 
   <!-- Desktop top header (hidden on mobile) -->
   <header class="hidden md:flex sticky top-0 z-30 h-16 bg-white border-b border-gray-150 items-center justify-between px-6">
