@@ -410,7 +410,7 @@ def live_locations(request):
     Returns the latest location ping for every employee who is currently checked in.
     Used by the admin live-map.
     """
-    if not (request.user.is_authenticated and request.user.role in ['admin', 'superadmin']):
+    if not (request.user.is_authenticated and request.user.role == 'admin'):
         return JsonResponse({'success': False, 'error': 'Unauthorized.'}, status=403)
 
     today = timezone.localdate()
