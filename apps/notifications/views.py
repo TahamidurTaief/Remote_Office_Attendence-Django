@@ -25,6 +25,38 @@ def notification_list(request):
         recipient=request.user
     ).select_related('employee')
 
+    if request.user.role != 'admin':
+        allowed_types = ['task_assigned', 'task_completed', 'task_delayed']
+        notifs = notifs.filter(notif_type__in=allowed_types)
+        unread_count = Notification.objects.filter(
+            recipient=request.user, is_read=False, notif_type__in=allowed_types
+        ).count()
+        filter_tabs = [
+            ('all', 'All'),
+            ('unread', 'Unread'),
+            ('task_assigned', 'Task Assigned'),
+            ('task_completed', 'Task Completed'),
+            ('task_delayed', 'Task Delayed'),
+        ]
+    else:
+        unread_count = Notification.objects.filter(
+            recipient=request.user, is_read=False
+        ).count()
+        filter_tabs = [
+            ('all', 'All'),
+            ('unread', 'Unread'),
+            ('check_in', 'Check-ins'),
+            ('check_out', 'Check-outs'),
+            ('field_visit', 'Field Visits'),
+            ('late', 'Late Alerts'),
+            ('missing', 'Missing'),
+            ('task_assigned', 'Task Assigned'),
+            ('task_completed', 'Task Completed'),
+            ('task_delayed', 'Task Delayed'),
+            ('role_changed', 'Role/Group Changed'),
+            ('permission_changed', 'Permission Changed'),
+        ]
+
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
     if filter_type == 'unread':
@@ -41,36 +73,28 @@ def notification_list(request):
     except EmptyPage:
         page_obj = paginator.page(paginator.num_pages)
 
+    base_template = 'base/admin_base.html' if request.user.role == 'admin' else 'base/staff_base.html'
     return render(request, 'notifications/list.html', {
         'notifs': page_obj,
         'page_obj': page_obj,
         'is_paginated': page_obj.has_other_pages(),
         'filter_type': filter_type,
-        'unread_count': Notification.objects.filter(
-            recipient=request.user, is_read=False
-        ).count(),
-        'filter_tabs': [
-            ('all', 'All'),
-            ('unread', 'Unread'),
-            ('check_in', 'Check-ins'),
-            ('check_out', 'Check-outs'),
-            ('field_visit', 'Field Visits'),
-            ('late', 'Late Alerts'),
-            ('missing', 'Missing'),
-            ('task_assigned', 'Task Assigned'),
-            ('task_completed', 'Task Completed'),
-            ('task_delayed', 'Task Delayed'),
-            ('role_changed', 'Role/Group Changed'),
-            ('permission_changed', 'Permission Changed'),
-        ],
+        'unread_count': unread_count,
+        'base_template': base_template,
+        'filter_tabs': filter_tabs,
     })
 
 
 @login_required
 def notification_count(request):
-    count = Notification.objects.filter(
+    count_query = Notification.objects.filter(
         recipient=request.user, is_read=False
-    ).count()
+    )
+    if request.user.role != 'admin':
+        count_query = count_query.filter(
+            notif_type__in=['task_assigned', 'task_completed', 'task_delayed']
+        )
+    count = count_query.count()
     badge = str(count) if count else ''
     hidden_class = '' if count else ' hidden'
     return HttpResponse(

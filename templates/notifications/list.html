@@ -1,4 +1,4 @@
-{% extends "base/admin_base.html" %}
+{% extends base_template %}
 {% load static %}
 
 {% block title %}Notifications | FieldTrack{% endblock %}
@@ -13,7 +13,13 @@
             {% if unread_count %}
             <p class="text-sm text-gray-500 mt-1">{{ unread_count }} unread</p>
             {% else %}
-            <p class="text-sm text-gray-500 mt-1">Recent activity from your employees</p>
+            <p class="text-sm text-gray-500 mt-1">
+                {% if request.user.role == 'admin' %}
+                Recent activity from your employees
+                {% else %}
+                Recent updates and alerts
+                {% endif %}
+            </p>
             {% endif %}
         </div>
         {% if notifs %}
@@ -41,12 +47,27 @@
     {% if notifs %}
     <div class="space-y-2">
         {% for notif in notifs %}
-        <a href="{% if notif.employee %}{% url 'employees:employee_detail' notif.employee.pk %}{% else %}{% url 'notifications:list' %}{% endif %}"
+        
+        {% if request.user.role == 'admin' %}
+            {% if notif.employee %}
+                {% url 'employees:employee_detail' notif.employee.pk as item_redirect_url %}
+            {% else %}
+                {% url 'notifications:list' as item_redirect_url %}
+            {% endif %}
+        {% else %}
+            {% if notif.notif_type == 'task_assigned' or notif.notif_type == 'task_completed' or notif.notif_type == 'task_delayed' %}
+                {% url 'staff:my_tasks' as item_redirect_url %}
+            {% else %}
+                {% url 'notifications:list' as item_redirect_url %}
+            {% endif %}
+        {% endif %}
+        
+        <a href="{{ item_redirect_url }}"
            class="flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-colors
                   {% if not notif.is_read %}bg-white border-l-4 border-primary-500 shadow-sm{% else %}bg-gray-50 border border-gray-100{% endif %}"
            data-notif-id="{{ notif.pk }}"
            data-read-url="{% url 'notifications:mark_read' notif.pk %}"
-           data-redirect="{% if notif.employee %}{% url 'employees:employee_detail' notif.employee.pk %}{% else %}{% url 'notifications:list' %}{% endif %}">
+           data-redirect="{{ item_redirect_url }}">
 
             {% if notif.employee and notif.employee.profile_photo %}
               <img src="{{ notif.employee.profile_photo.url }}"
