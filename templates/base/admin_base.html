@@ -658,6 +658,15 @@
                  {% endif %}
              </a>
 
+             <!-- Expenses -->
+             <a href="{% url 'expense:admin_expense_list' %}"
+                class="ft-nav-item {% if '/expense/admin/' in path %}active{% endif %}"
+                x-show="matchSearch('Expenses')"
+                title="Expenses">
+                 <i data-lucide="receipt" class="ft-icon"></i>
+                 <span class="ft-nav-label">Expenses</span>
+             </a>
+
              <!-- Employees -->
              <a href="{% url 'employees:employee_list' %}"
                 class="ft-nav-item {% if '/employees/' in path %}active{% endif %}"

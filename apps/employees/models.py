@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.conf import settings
 from apps.branches.models import Branch
@@ -73,6 +74,10 @@ class EmployeeLocationSync(models.Model):
     accuracy = models.FloatField(default=0)
     address = models.CharField(max_length=500, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    client_event_time = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-timestamp']

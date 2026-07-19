@@ -26,21 +26,22 @@ def get_drive_service(service_account_json_str):
         raise Exception(f"Drive auth failed: {str(e)}")
 
 
-def upload_to_drive(backup_record, filepath, config):
+def upload_to_drive(backup_record, filepath, config, filename=None, mimetype="application/json", is_primary=True):
     """Upload backup file to Google Drive."""
     if not config.service_account_json:
         raise Exception("Google Drive not configured")
 
     service = get_drive_service(config.service_account_json)
 
+    upload_name = filename or backup_record.file_name
     file_metadata = {
-        "name": backup_record.file_name,
-        "mimeType": "application/json",
+        "name": upload_name,
+        "mimeType": mimetype,
         "parents": [config.folder_id],
     }
 
     media = MediaFileUpload(
-        filepath, mimetype="application/json", resumable=True
+        filepath, mimetype=mimetype, resumable=True
     )
 
     file = (
@@ -54,10 +55,11 @@ def upload_to_drive(backup_record, filepath, config):
         .execute()
     )
 
-    backup_record.gdrive_uploaded = True
-    backup_record.gdrive_file_id = file.get("id", "")
-    backup_record.gdrive_link = file.get("webViewLink", "")
-    backup_record.save(update_fields=["gdrive_uploaded", "gdrive_file_id", "gdrive_link"])
+    if is_primary:
+        backup_record.gdrive_uploaded = True
+        backup_record.gdrive_file_id = file.get("id", "")
+        backup_record.gdrive_link = file.get("webViewLink", "")
+        backup_record.save(update_fields=["gdrive_uploaded", "gdrive_file_id", "gdrive_link"])
 
     return file
 

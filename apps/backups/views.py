@@ -123,6 +123,9 @@ def delete_backup(request, pk):
     backup = get_object_or_404(BackupRecord, pk=pk)
     if backup.file_path and os.path.exists(backup.file_path):
         os.remove(backup.file_path)
+        db_filepath = backup.file_path.replace(".json", ".sqlite3")
+        if os.path.exists(db_filepath):
+            os.remove(db_filepath)
     backup.delete()
     messages.success(request, "Backup deleted.")
     return redirect("backups:backup_list")

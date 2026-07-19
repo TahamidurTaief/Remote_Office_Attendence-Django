@@ -1,9 +1,13 @@
+import json
+from django.http import JsonResponse
+from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.http import HttpResponse
 import csv
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.contrib import messages
+from apps.attendance.sync_utils import parse_and_validate_client_time
 from django.db.models import Q
 from datetime import date, timedelta
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
@@ -556,17 +560,77 @@ class DailyProgressLogCreateView(AdminRequiredMixin, CreateView):
     form_class = DailyProgressLogForm
     template_name = 'projects/log_form.html'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        content_type = self.request.content_type or ''
+        if 'application/json' in content_type and self.request.method in ('POST', 'PUT'):
+            try:
+                import json
+                kwargs['data'] = json.loads(self.request.body)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['project'] = get_object_or_404(Project, pk=self.kwargs['project_id'])
         return context
 
+    def post(self, request, *args, **kwargs):
+        content_type = request.content_type or ''
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(request.body)
+            except (json.JSONDecodeError, ValueError):
+                data = request.POST
+        else:
+            data = request.POST
+
+        sync_uuid = data.get('sync_uuid')
+        if sync_uuid:
+            existing = DailyProgressLog.objects.filter(sync_uuid=sync_uuid).first()
+            if existing:
+                if 'application/json' in content_type or request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'id': existing.id})
+                messages.success(request, 'Daily progress log added successfully.')
+                return redirect(self.get_success_url())
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         project = get_object_or_404(Project, pk=self.kwargs['project_id'])
         form.instance.project = project
         form.instance.logged_by = self.request.user
+
+        content_type = self.request.content_type or ''
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(self.request.body)
+            except (json.JSONDecodeError, ValueError):
+                data = self.request.POST
+        else:
+            data = self.request.POST
+
+        sync_uuid = data.get('sync_uuid')
+        if sync_uuid:
+            form.instance.sync_uuid = sync_uuid
+
+        client_event_time_str = data.get('client_event_time')
+        client_time = parse_and_validate_client_time(client_event_time_str)
+
+        if client_time:
+            form.instance.client_event_time = client_time
+            form.instance.synced_at = timezone.now()
+
+        response = super().form_valid(form)
+
+        if client_time:
+            DailyProgressLog.objects.filter(pk=form.instance.pk).update(created_at=client_time)
+
+        if 'application/json' in content_type or self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'id': form.instance.id})
+
         messages.success(self.request, 'Daily progress log added successfully.')
-        return super().form_valid(form)
+        return response
 
     def get_success_url(self):
         return reverse_lazy('projects:project_detail', kwargs={'pk': self.kwargs['project_id']})
@@ -606,16 +670,73 @@ class ManpowerDeploymentCreateView(AdminRequiredMixin, CreateView):
     form_class = ManpowerDeploymentForm
     template_name = 'projects/manpower_form.html'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        content_type = self.request.content_type or ''
+        if 'application/json' in content_type and self.request.method in ('POST', 'PUT'):
+            try:
+                import json
+                kwargs['data'] = json.loads(self.request.body)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['project'] = get_object_or_404(Project, pk=self.kwargs['project_id'])
         return context
 
+    def post(self, request, *args, **kwargs):
+        content_type = request.content_type or ''
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(request.body)
+            except (json.JSONDecodeError, ValueError):
+                data = request.POST
+        else:
+            data = request.POST
+
+        sync_uuid = data.get('sync_uuid')
+        if sync_uuid:
+            existing = ManpowerDeployment.objects.filter(sync_uuid=sync_uuid).first()
+            if existing:
+                if 'application/json' in content_type or request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'id': existing.id})
+                messages.success(request, 'Manpower requirement added successfully.')
+                return redirect(self.get_success_url())
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         project = get_object_or_404(Project, pk=self.kwargs['project_id'])
         form.instance.project = project
+
+        content_type = self.request.content_type or ''
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(self.request.body)
+            except (json.JSONDecodeError, ValueError):
+                data = self.request.POST
+        else:
+            data = self.request.POST
+
+        sync_uuid = data.get('sync_uuid')
+        if sync_uuid:
+            form.instance.sync_uuid = sync_uuid
+
+        client_event_time_str = data.get('client_event_time')
+        client_time = parse_and_validate_client_time(client_event_time_str)
+
+        if client_time:
+            form.instance.client_event_time = client_time
+            form.instance.synced_at = timezone.now()
+
+        response = super().form_valid(form)
+
+        if 'application/json' in content_type or self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'id': form.instance.id})
+
         messages.success(self.request, 'Manpower requirement added successfully.')
-        return super().form_valid(form)
+        return response
 
     def get_success_url(self):
         return reverse_lazy('projects:project_detail', kwargs={'pk': self.kwargs['project_id']})

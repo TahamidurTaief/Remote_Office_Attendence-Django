@@ -549,12 +549,18 @@
           <span class="ft-nav-label">My Projects</span>
        </a>
        {% endif %}
-       <a href="{% url 'staff:profile' %}"
-          class="ft-nav-item {% if path == '/staff/profile/' %}active{% endif %}"
-          x-show="matchSearch('Profile')">
-          <i data-lucide="user" class="ft-icon"></i>
-          <span class="ft-nav-label">Profile</span>
-       </a>
+        <a href="{% url 'expense:staff_expense_list' %}"
+           class="ft-nav-item {% if '/expense/staff/' in path %}active{% endif %}"
+           x-show="matchSearch('Expenses')">
+           <i data-lucide="receipt" class="ft-icon"></i>
+           <span class="ft-nav-label">Expenses</span>
+        </a>
+        <a href="{% url 'staff:profile' %}"
+           class="ft-nav-item {% if path == '/staff/profile/' %}active{% endif %}"
+           x-show="matchSearch('Profile')">
+           <i data-lucide="user" class="ft-icon"></i>
+           <span class="ft-nav-label">Profile</span>
+        </a>
        {% endwith %}
      </nav>
 

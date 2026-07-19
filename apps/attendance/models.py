@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from apps.employees.models import EmployeeProfile
 from imagekit.models import ProcessedImageField
@@ -68,6 +69,9 @@ class Attendance(models.Model):
         help_text='When this record was marked expired'
     )
     
+    sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    client_event_time = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -98,6 +102,10 @@ class AttendanceLocation(models.Model):
     accuracy = models.FloatField()
     event_photo = models.ImageField(upload_to='attendance/photos/%Y/%m/%d/', null=True, blank=True)
     timestamp = models.DateTimeField()
+    
+    sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    client_event_time = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.attendance} - {self.event}"
@@ -135,5 +143,20 @@ def get_default_deduction_leave_type():
     if not leave_type:
         leave_type = LeaveType.objects.order_by('id').first()
     return leave_type
+
+
+class SyncLog(models.Model):
+    sync_batch_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name='sync_logs')
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField()
+    records_total = models.PositiveIntegerField()
+    records_success = models.PositiveIntegerField()
+    records_failed = models.PositiveIntegerField()
+    failure_reason = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"SyncLog - {self.employee.full_name} - {self.sync_batch_id}"
+
 
 

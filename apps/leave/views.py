@@ -1,8 +1,11 @@
+import json
+from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View, TemplateView
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.contrib import messages
+from apps.attendance.sync_utils import parse_and_validate_client_time
 from apps.accounts.mixins import AdminRequiredMixin, StaffRequiredMixin, RoleRequiredMixin
 from apps.employees.models import EmployeeProfile
 from .models import LeaveType, LeaveBalance, LeaveRequest
@@ -316,7 +319,35 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['employee'] = getattr(self.request.user, 'employee_profile', None)
+        
+        content_type = self.request.content_type or ''
+        if 'application/json' in content_type and self.request.method in ('POST', 'PUT'):
+            try:
+                import json
+                kwargs['data'] = json.loads(self.request.body)
+            except (json.JSONDecodeError, ValueError):
+                pass
         return kwargs
+
+    def post(self, request, *args, **kwargs):
+        content_type = request.content_type or ''
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(request.body)
+            except (json.JSONDecodeError, ValueError):
+                data = request.POST
+        else:
+            data = request.POST
+
+        sync_uuid = data.get('sync_uuid')
+        if sync_uuid:
+            existing = LeaveRequest.objects.filter(sync_uuid=sync_uuid).first()
+            if existing:
+                if 'application/json' in content_type or request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'id': existing.id})
+                messages.success(request, "Your leave request has been submitted successfully.")
+                return redirect(self.success_url)
+        return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         employee = getattr(self.request.user, 'employee_profile', None)
@@ -326,8 +357,37 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
             
         form.instance.employee = employee
         form.instance.status = 'pending'
+
+        content_type = self.request.content_type or ''
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(self.request.body)
+            except (json.JSONDecodeError, ValueError):
+                data = self.request.POST
+        else:
+            data = self.request.POST
+
+        sync_uuid = data.get('sync_uuid')
+        if sync_uuid:
+            form.instance.sync_uuid = sync_uuid
+
+        client_event_time_str = data.get('client_event_time')
+        client_time = parse_and_validate_client_time(client_event_time_str)
+
+        if client_time:
+            form.instance.client_event_time = client_time
+            form.instance.synced_at = timezone.now()
+
+        response = super().form_valid(form)
+
+        if client_time:
+            LeaveRequest.objects.filter(pk=form.instance.pk).update(requested_at=client_time)
+
+        if 'application/json' in content_type or self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'id': form.instance.id})
+
         messages.success(self.request, "Your leave request has been submitted successfully.")
-        return super().form_valid(form)
+        return response
 
 
 from django import forms

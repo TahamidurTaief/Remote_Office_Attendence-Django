@@ -111,6 +111,25 @@ window.addEventListener('appinstalled', () => {
     </a>
     {% endif %}
 
+    <!-- Expense Summary Widget -->
+    {% if employee %}
+    <a href="{% url 'expense:staff_expense_list' %}" class="block bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-sm transition-shadow">
+        <div class="flex items-center justify-between gap-4">
+            <div class="space-y-1">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Expense Claims</p>
+                <div class="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-bold bg-blue-50 border-blue-200 text-blue-700">
+                        Claim Expenses & View Claims
+                    </span>
+                </div>
+            </div>
+            <div class="p-2 bg-primary-50 text-primary-600 rounded-xl">
+                <i data-lucide="receipt" class="w-5 h-5"></i>
+            </div>
+        </div>
+    </a>
+    {% endif %}
+
     <!-- My Tasks Widget -->
     {% if pending_tasks %}
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

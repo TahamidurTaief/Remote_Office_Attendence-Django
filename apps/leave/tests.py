@@ -1,5 +1,7 @@
 import datetime
+import json
 from django.test import TestCase
+from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.utils import timezone
@@ -350,3 +352,111 @@ class DefaultLeaveTypeAndYearValidationTests(TestCase):
         )
         self.assertFalse(form_invalid.is_valid())
         self.assertIn("Leave request cannot span across multiple calendar years", form_invalid.errors['__all__'][0])
+
+
+class LeaveIdempotencyAndClientTimestampTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(
+            name='HQ',
+            address='Dhaka',
+            latitude=23.7925,
+            longitude=90.4078,
+            radius_meters=150,
+            wifi_ip='192.168.1.1',
+            is_active=True
+        )
+        self.staff_user = User.objects.create_user(
+            phone='+8801700000010',
+            password='password123',
+            role='staff'
+        )
+        self.employee = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            employee_id='EMP-2026-555',
+            full_name='Staff Ten',
+            phone='+8801700000010',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        self.leave_type = LeaveType.objects.create(
+            name='Casual Leave',
+            category='casual',
+            default_days_per_year=10
+        )
+        LeaveBalance.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            year=2026,
+            total_days=10,
+            used_days=0
+        )
+
+    def test_leave_request_idempotency_ajax(self):
+        self.client.login(username='+8801700000010', password='password123')
+        sync_uuid_str = 'f8b8c8d8-e8f8-48a8-b8c8-d8e8f8a8b8c8'
+        
+        post_data = {
+            'leave_type': self.leave_type.pk,
+            'start_date': '2026-08-01',
+            'end_date': '2026-08-03',
+            'reason': 'Trip to Sylhet',
+            'sync_uuid': sync_uuid_str
+        }
+
+        # First call (AJAX/JSON)
+        response1 = self.client.post(
+            reverse('leave:staff_request_create'),
+            data=json.dumps(post_data),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response1.status_code, 200)
+        data1 = response1.json()
+        self.assertTrue(data1['success'])
+        req_id = data1['id']
+
+        self.assertEqual(LeaveRequest.objects.filter(sync_uuid=sync_uuid_str).count(), 1)
+
+        # Second call (AJAX/JSON) with same sync_uuid
+        response2 = self.client.post(
+            reverse('leave:staff_request_create'),
+            data=json.dumps(post_data),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response2.status_code, 200)
+        data2 = response2.json()
+        self.assertTrue(data2['success'])
+        self.assertEqual(data2['id'], req_id)
+
+        # Verify no duplicates
+        self.assertEqual(LeaveRequest.objects.filter(sync_uuid=sync_uuid_str).count(), 1)
+
+    def test_leave_request_client_timestamp_trust(self):
+        self.client.login(username='+8801700000010', password='password123')
+        sync_uuid_str = '08b8c8d8-e8f8-48a8-b8c8-d8e8f8a8b8c8'
+        client_time = timezone.now() - datetime.timedelta(hours=3)
+
+        post_data = {
+            'leave_type': self.leave_type.pk,
+            'start_date': '2026-08-05',
+            'end_date': '2026-08-06',
+            'reason': 'Personal work',
+            'sync_uuid': sync_uuid_str,
+            'client_event_time': client_time.isoformat()
+        }
+
+        response = self.client.post(
+            reverse('leave:staff_request_create'),
+            data=json.dumps(post_data),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        req = LeaveRequest.objects.get(sync_uuid=sync_uuid_str)
+        self.assertAlmostEqual(req.requested_at.timestamp(), client_time.timestamp(), delta=1)
+        self.assertIsNotNone(req.client_event_time)
+        self.assertIsNotNone(req.synced_at)
+

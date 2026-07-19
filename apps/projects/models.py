@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -340,6 +341,10 @@ class DailyProgressLog(models.Model):
         on_delete=models.SET_NULL,
         related_name='progress_logs'
     )
+    
+    sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    client_event_time = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -367,6 +372,10 @@ class ManpowerDeployment(models.Model):
     trade = models.CharField(max_length=50, choices=TRADE_CHOICES)
     required_count = models.PositiveIntegerField()
     present_count = models.PositiveIntegerField(null=True, blank=True)
+    
+    sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    client_event_time = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('project', 'date', 'trade')

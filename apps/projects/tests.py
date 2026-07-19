@@ -1555,6 +1555,7 @@ class ProjectTaskNewFeaturesTests(TestCase):
 
         # Mark one Completed, assert progress_percent == 25
         task1.status = 'Completed'
+        task1.progress_percent = 100
         task1.save()
 
         self.project.refresh_from_db()
@@ -1638,7 +1639,7 @@ class ProjectTaskNewFeaturesTests(TestCase):
 
         task.refresh_from_db()
         self.assertEqual(task.status, 'Under Review')
-        self.assertEqual(task.employee_note, 'All done and dusted')
+        self.assertEqual(task.pending_employee_note, 'All done and dusted')
         self.assertIsNone(task.completed_at)
 
         # Now approve it as Admin
@@ -1652,6 +1653,8 @@ class ProjectTaskNewFeaturesTests(TestCase):
 
         task.refresh_from_db()
         self.assertEqual(task.status, 'Completed')
+        self.assertEqual(task.employee_note, 'All done and dusted')
+        self.assertEqual(task.pending_employee_note, '')
         self.project.refresh_from_db()
         self.assertEqual(self.project.progress_percent, 100)
 
@@ -1933,7 +1936,7 @@ class StaffTaskCompletePermissionsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assigned_task_a.refresh_from_db()
         self.assertEqual(self.assigned_task_a.status, 'Under Review')
-        self.assertEqual(self.assigned_task_a.employee_note, 'Done')
+        self.assertEqual(self.assigned_task_a.pending_employee_note, 'Done')
 
     def test_standalone_unassigned_task_complete_by_pm_succeeds(self):
         """A manager/admin can complete a standalone unassigned task."""
@@ -2009,3 +2012,101 @@ class StaffTaskCompletePermissionsTests(TestCase):
         
         self.assigned_task_a.refresh_from_db()
         self.assertEqual(self.assigned_task_a.status, 'Completed')
+
+
+class ProjectLogIdempotencyTests(TestCase):
+    def setUp(self):
+        import datetime
+        self.password = 'password123'
+        self.branch = Branch.objects.create(name='HQ', address='Dhaka', latitude=23.7, longitude=90.4)
+        self.project_type = ProjectType.objects.create(name='HVAC')
+        self.user = User.objects.create_user(
+            email='admin@example.com',
+            phone='+8801700000888',
+            password=self.password,
+            role='admin'
+        )
+        self.project = Project.objects.create(
+            name='Test Project',
+            branch=self.branch,
+            project_type=self.project_type,
+            start_date=datetime.date(2026, 1, 1)
+        )
+
+    def test_daily_progress_log_idempotency_ajax(self):
+        import json
+        self.client.login(email='admin@example.com', password=self.password)
+        sync_uuid_str = 'a8b8c8d8-e8f8-48a8-b8c8-d8e8f8a8b8c8'
+        post_data = {
+            'date': '2026-07-19',
+            'planned_work': 'Planned tasks',
+            'completed_work': 'Completed tasks',
+            'manpower_count': 5,
+            'supervisor_name': 'Supervisor Ten',
+            'sync_uuid': sync_uuid_str
+        }
+        
+        url = reverse('projects:progress_log_add', kwargs={'project_id': self.project.pk})
+        
+        response1 = self.client.post(
+            url,
+            data=json.dumps(post_data),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response1.status_code, 200)
+        data1 = response1.json()
+        self.assertTrue(data1['success'])
+        log_id = data1['id']
+        
+        response2 = self.client.post(
+            url,
+            data=json.dumps(post_data),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response2.status_code, 200)
+        data2 = response2.json()
+        self.assertTrue(data2['success'])
+        self.assertEqual(data2['id'], log_id)
+        
+        self.assertEqual(DailyProgressLog.objects.filter(sync_uuid=sync_uuid_str).count(), 1)
+
+    def test_manpower_deployment_idempotency_ajax(self):
+        import json
+        self.client.login(email='admin@example.com', password=self.password)
+        sync_uuid_str = 'b8b8c8d8-e8f8-48a8-b8c8-d8e8f8a8b8c8'
+        post_data = {
+            'date': '2026-07-19',
+            'trade': 'Electrician',
+            'required_count': 10,
+            'present_count': 8,
+            'sync_uuid': sync_uuid_str
+        }
+        
+        url = reverse('projects:manpower_add', kwargs={'project_id': self.project.pk})
+        
+        response1 = self.client.post(
+            url,
+            data=json.dumps(post_data),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response1.status_code, 200)
+        data1 = response1.json()
+        self.assertTrue(data1['success'])
+        dep_id = data1['id']
+        
+        response2 = self.client.post(
+            url,
+            data=json.dumps(post_data),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response2.status_code, 200)
+        data2 = response2.json()
+        self.assertTrue(data2['success'])
+        self.assertEqual(data2['id'], dep_id)
+        
+        self.assertEqual(ManpowerDeployment.objects.filter(sync_uuid=sync_uuid_str).count(), 1)
+

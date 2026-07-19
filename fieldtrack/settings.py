@@ -1,25 +1,18 @@
 import os
 from pathlib import Path
-import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Initialize environment variables
-env = environ.Env(
-    DEBUG=(bool, False)
-)
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
-
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY', default='django-insecure-placehojkbkj-ssdfsadflder')
+SECRET_KEY = 'django-insecure-placehojkbkj-ssdfsadflder'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env('DEBUG')
+DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ['demotrackme.signtechlimited.com', 'trackme.signtechlimited.com', 'localhost', '127.0.0.1']
 
-CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://trackme.signtechlimited.com"]
+CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://demotrackme.signtechlimited.com"]
 
 # Production security hardening (skipped in local DEBUG mode so `runserver`
 # over plain http still works during development).
@@ -62,6 +55,7 @@ INSTALLED_APPS = [
     'apps.leave',
     'apps.projects',
     'apps.schedule',
+    'apps.expense',
 ]
 
 MIDDLEWARE = [
@@ -98,10 +92,14 @@ WSGI_APPLICATION = 'fieldtrack.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+# Intentionally SQLite — see WAL/busy_timeout config below. Do not migrate to Postgres/MySQL without explicit sign-off.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 5.0,
+        }
     }
 }
 
@@ -200,11 +198,11 @@ WORKING_DAYS = [0, 1, 2, 3, 5, 6]
 
 
 # Email Settings
-EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = env.int('EMAIL_PORT', default=587)
-EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
-EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@fieldtrack.com')
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = ''
+EMAIL_HOST_PASSWORD = ''
+DEFAULT_FROM_EMAIL = 'noreply@fieldtrack.com'
 

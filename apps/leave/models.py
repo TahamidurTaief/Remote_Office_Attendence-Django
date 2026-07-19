@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.db.models import F
 from django.conf import settings
@@ -65,6 +66,10 @@ class LeaveRequest(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     requested_at = models.DateTimeField(auto_now_add=True)
     
+    sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    client_event_time = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
+
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
         on_delete=models.SET_NULL, 
