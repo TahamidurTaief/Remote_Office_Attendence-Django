@@ -513,7 +513,7 @@ def my_project_add_task(request, project_id):
         planned_start_str = request.POST.get('planned_start', '')
         planned_finish_str = request.POST.get('planned_finish', '')
         remarks = request.POST.get('remarks', '').strip()
-        assignment_attachment = request.FILES.get('assignment_attachment')
+        assignment_attachments = request.FILES.getlist('assignment_attachments')
 
         errors = {}
         if not activity:
@@ -550,13 +550,13 @@ def my_project_add_task(request, project_id):
         if planned_start and planned_finish and planned_finish < planned_start:
             errors['planned_finish'] = 'Planned finish date cannot be before planned start date.'
 
-        if assignment_attachment:
+        for attachment in assignment_attachments:
             from django.core.exceptions import ValidationError
             from apps.projects.models import validate_task_attachment
             try:
-                validate_task_attachment(assignment_attachment)
+                validate_task_attachment(attachment)
             except ValidationError as e:
-                errors['assignment_attachment'] = e.message
+                errors['assignment_attachment'] = f"File {attachment.name} validation failed: {e.message}"
 
         if not errors:
             from django.db.models import Max
@@ -572,8 +572,18 @@ def my_project_add_task(request, project_id):
                 points=points,
                 remarks=remarks,
                 status='Not Started',
-                assignment_attachment=assignment_attachment
             )
+            if assignment_attachments:
+                from apps.projects.models import TaskAttachment
+                for index, attachment in enumerate(assignment_attachments):
+                    if index == 0:
+                        task.assignment_attachment = attachment
+                        task.save(update_fields=['assignment_attachment'])
+                    TaskAttachment.objects.create(
+                        task=task,
+                        file=attachment,
+                        attachment_type='assignment'
+                    )
             project.recalculate_progress()
             
             # Send notification email if assignee exists
@@ -659,7 +669,8 @@ def my_project_edit_task(request, task_id):
         planned_finish_str = request.POST.get('planned_finish', '')
         remarks = request.POST.get('remarks', '').strip()
         status = request.POST.get('status', 'Not Started')
-        assignment_attachment = request.FILES.get('assignment_attachment')
+        progress_percent_str = request.POST.get('progress_percent', '0')
+        assignment_attachments = request.FILES.getlist('assignment_attachments')
 
         errors = {}
         if not activity:
@@ -696,13 +707,20 @@ def my_project_edit_task(request, task_id):
         if planned_start and planned_finish and planned_finish < planned_start:
             errors['planned_finish'] = 'Planned finish date cannot be before planned start date.'
 
-        if assignment_attachment:
+        try:
+            progress_percent = int(progress_percent_str)
+            if progress_percent < 0 or progress_percent > 100:
+                errors['progress_percent'] = 'Progress must be between 0 and 100.'
+        except ValueError:
+            errors['progress_percent'] = 'Invalid number format for progress.'
+
+        for attachment in assignment_attachments:
             from django.core.exceptions import ValidationError
             from apps.projects.models import validate_task_attachment
             try:
-                validate_task_attachment(assignment_attachment)
+                validate_task_attachment(attachment)
             except ValidationError as e:
-                errors['assignment_attachment'] = e.message
+                errors['assignment_attachment'] = f"File {attachment.name} validation failed: {e.message}"
 
         if not errors:
             old_resp = task.responsible_person
@@ -713,9 +731,28 @@ def my_project_edit_task(request, task_id):
             task.planned_start = planned_start
             task.planned_finish = planned_finish
             task.remarks = remarks
-            task.status = status
-            if assignment_attachment:
-                task.assignment_attachment = assignment_attachment
+            
+            task.progress_percent = progress_percent
+            if progress_percent == 100:
+                task.status = 'Completed'
+                if not task.completed_at:
+                    task.completed_at = timezone.now()
+            else:
+                if status == 'Completed':
+                    task.status = 'In Progress'
+                else:
+                    task.status = status
+                    
+            if assignment_attachments:
+                from apps.projects.models import TaskAttachment
+                for index, attachment in enumerate(assignment_attachments):
+                    if index == 0 and not task.assignment_attachment:
+                        task.assignment_attachment = attachment
+                    TaskAttachment.objects.create(
+                        task=task,
+                        file=attachment,
+                        attachment_type='assignment'
+                    )
             
             task.save()
             project.recalculate_progress()
@@ -762,6 +799,7 @@ def my_project_edit_task(request, task_id):
             'planned_finish': planned_finish_str,
             'remarks': remarks,
             'status': status,
+            'progress_percent': progress_percent,
         }
         return render(request, 'staff/projects/edit_task_form.html', {
             'project': project,
@@ -780,6 +818,7 @@ def my_project_edit_task(request, task_id):
         'planned_finish': task.planned_finish.strftime('%Y-%m-%d') if task.planned_finish else '',
         'remarks': task.remarks,
         'status': task.status,
+        'progress_percent': task.progress_percent,
     }
     return render(request, 'staff/projects/edit_task_form.html', {
         'project': project,

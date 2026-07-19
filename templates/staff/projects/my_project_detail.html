@@ -43,7 +43,7 @@
     </div>
 
     <!-- Details Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Project Stats/Details -->
         <div class="bg-white p-6 rounded-xl border border-gray-150 shadow-sm space-y-4 lg:col-span-1">
             <h3 class="text-xs font-bold text-gray-900 border-b border-gray-100 pb-2">Overview</h3>
@@ -161,7 +161,7 @@
         </div>
 
         <!-- Task List Card (Redesigned as impressive Apple/Tailwind table) -->
-        <div id="task-list-section" class="bg-white rounded-xl border border-gray-150 shadow-sm overflow-hidden space-y-0 lg:col-span-3">
+        <div id="task-list-section" class="bg-white rounded-xl border border-gray-150 shadow-sm overflow-hidden space-y-0 lg:col-span-2">
             <div class="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white">
                 <div>
                     <h3 class="text-xs font-bold text-gray-900 uppercase tracking-wider">Project Tasks Checklist</h3>
@@ -358,30 +358,46 @@
                             <td class="px-4 py-2.5 whitespace-nowrap">
                                 <div class="flex items-center gap-2.5">
                                     <div class="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden shrink-0">
-                                        <div class="h-1.5 rounded-full transition-all duration-300
-                                            {% if task.status == 'Completed' %}bg-green-500 w-full
-                                            {% elif task.status == 'In Progress' %}bg-blue-500 w-1/2
-                                            {% elif task.status == 'Delayed' %}bg-red-500 w-1/5
-                                            {% else %}bg-gray-300 w-0{% endif %}"></div>
+                                        <div id="task-progress-bar-{{ task.id }}" class="h-1.5 rounded-full transition-all duration-300 bg-blue-500" style="width: {{ task.progress_percent }}%"></div>
                                     </div>
-                                    <span class="text-[10px] text-gray-500 font-bold">
-                                        {% if task.status == 'Completed' %}100%
-                                        {% elif task.status == 'In Progress' %}50%
-                                        {% elif task.status == 'Delayed' %}20%
-                                        {% else %}0%{% endif %}
+                                    <span id="task-progress-text-{{ task.id }}" class="text-[10px] text-gray-500 font-bold">
+                                        {{ task.progress_percent }}%
                                     </span>
                                 </div>
                             </td>
 
                             <!-- Status Badge Column -->
                             <td class="px-4 py-2.5 whitespace-nowrap">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold
-                                    {% if task.status == 'Completed' %}bg-green-50 text-green-700 border border-green-200
-                                    {% elif task.status == 'In Progress' %}bg-blue-50 text-blue-700 border border-blue-200
-                                    {% elif task.status == 'Delayed' %}bg-red-50 text-red-700 border border-red-200
-                                    {% else %}bg-gray-100 text-gray-650 border border-gray-200{% endif %}">
-                                    {{ task.status }}
-                                </span>
+                                <div class="flex flex-col gap-1.5">
+                                    <span id="task-status-badge-{{ task.id }}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold self-start
+                                        {% if task.status == 'Completed' %}bg-green-50 text-green-700 border border-green-200
+                                        {% elif task.status == 'In Progress' %}bg-blue-50 text-blue-700 border border-blue-200
+                                        {% elif task.status == 'Delayed' %}bg-red-50 text-red-700 border border-red-200
+                                        {% elif task.status == 'Under Review' %}bg-amber-50 text-amber-700 border border-amber-200
+                                        {% else %}bg-gray-100 text-gray-650 border border-gray-200{% endif %}">
+                                        {{ task.status }}
+                                    </span>
+                                    
+                                    {% if task.pending_progress_percent is not None %}
+                                    <div id="approval-actions-{{ task.id }}" class="flex items-center gap-1.5 mt-0.5">
+                                        <span class="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 shrink-0">Proposed: {{ task.pending_progress_percent }}%</span>
+                                        <!-- Approve -->
+                                        <button type="button" 
+                                                onclick="handleTaskApproval({{ task.id }}, 'approve')" 
+                                                class="p-1 bg-green-50 hover:bg-green-100 text-green-600 rounded border border-green-200 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                                                title="Approve Progress">
+                                            <i data-lucide="check" class="w-3 h-3"></i>
+                                        </button>
+                                        <!-- Reject -->
+                                        <button type="button" 
+                                                onclick="handleTaskApproval({{ task.id }}, 'reject')" 
+                                                class="p-1 bg-red-50 hover:bg-red-100 text-red-600 rounded border border-red-200 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                                                title="Reject Progress">
+                                            <i data-lucide="x" class="w-3 h-3"></i>
+                                        </button>
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </td>
 
                             <!-- Remarks Column -->
@@ -473,14 +489,41 @@
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Points</label>
-                            <input type="number" name="points" value="10" min="0" class="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
+                    <div>
+                        <label class="block text-[10px] font-semibold text-gray-455 uppercase mb-1">Points</label>
+                        <input type="number" name="points" value="10" min="0" class="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
+                    </div>
+                    
+                    <!-- Dynamic Multiple File Uploader -->
+                    <div x-data="{ 
+                        attachments: [],
+                        addAttachment() {
+                            this.attachments.push({ id: Date.now() });
+                            this.$nextTick(() => {
+                                if (window.lucide) window.lucide.createIcons();
+                            });
+                        },
+                        removeAttachment(id) {
+                            this.attachments = this.attachments.filter(a => a.id !== id);
+                        }
+                    }" class="space-y-2 bg-gray-50/50 border border-gray-100 p-3 rounded-xl">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-[10px] font-semibold text-gray-455 uppercase">Reference Files / Attachments</label>
+                            <button type="button" @click="addAttachment()" class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 border border-primary-200/50 rounded-lg text-[9px] font-bold transition-all duration-200 cursor-pointer">
+                                <i data-lucide="plus" class="w-3 h-3"></i> Add File
+                            </button>
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-semibold text-gray-450 uppercase mb-1">Reference File</label>
-                            <input type="file" name="assignment_attachment" class="w-full text-xs text-gray-550">
+                        
+                        <div class="space-y-2">
+                            <template x-for="(att, index) in attachments" :key="att.id">
+                                <div class="flex items-center gap-2 bg-white border border-gray-200 p-2 rounded-xl">
+                                    <input type="file" name="assignment_attachments" class="w-full text-xs text-gray-600 focus:outline-none file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer" required>
+                                    <button type="button" @click="removeAttachment(att.id)" class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Remove">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
+                            </template>
+                            <div x-show="attachments.length === 0" class="text-[10px] text-gray-400 italic">No attachments selected.</div>
                         </div>
                     </div>
                     
@@ -504,5 +547,67 @@
     </div>
 
     {% include 'notifications/includes/activity_timeline.html' %}
+    
+    <script>
+        function handleTaskApproval(taskId, action) {
+            const formData = new FormData();
+            formData.append('action', action);
+            
+            fetch(`/projects/tasks/${taskId}/approve-api/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (window.SoundFX) window.SoundFX.playClick();
+                    
+                    const actionWord = action === 'approve' ? 'approved' : 'rejected';
+                    if (window.showToast) {
+                        window.showToast(`Task progress ${actionWord} successfully!`, 'success');
+                    } else {
+                        alert(`Task progress ${actionWord} successfully!`);
+                    }
+                    
+                    const badge = document.getElementById(`task-status-badge-${taskId}`);
+                    if (badge) {
+                        badge.textContent = data.status;
+                        badge.className = "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold self-start ";
+                        if (data.status === 'Completed') {
+                            badge.className += "bg-green-50 text-green-700 border border-green-200";
+                        } else if (data.status === 'In Progress') {
+                            badge.className += "bg-blue-50 text-blue-700 border border-blue-200";
+                        } else if (data.status === 'Delayed') {
+                            badge.className += "bg-red-50 text-red-700 border border-red-200";
+                        } else if (data.status === 'Under Review') {
+                            badge.className += "bg-amber-50 text-amber-700 border border-amber-200";
+                        } else {
+                            badge.className += "bg-gray-100 text-gray-650 border border-gray-200";
+                        }
+                    }
+                    
+                    const bar = document.getElementById(`task-progress-bar-${taskId}`);
+                    const txt = document.getElementById(`task-progress-text-${taskId}`);
+                    if (bar) bar.style.width = `${data.progress_percent}%`;
+                    if (txt) txt.textContent = `${data.progress_percent}%`;
+                    
+                    const actionsBox = document.getElementById(`approval-actions-${taskId}`);
+                    if (actionsBox) actionsBox.remove();
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    alert(data.error || 'Failed to update task progress.');
+                }
+            })
+            .catch(err => {
+                alert('Network error updating task progress.');
+            });
+        }
+    </script>
 </div>
 {% endblock %}

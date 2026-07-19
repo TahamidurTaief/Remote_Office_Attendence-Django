@@ -688,3 +688,44 @@ def save_location(request):
         'message': 'Location saved',
         'timestamp': timezone.now().isoformat()
     })
+
+
+@login_required
+@require_POST
+def save_mandatory_location(request):
+    """Saves mandatory employee location when they access the dashboard"""
+    try:
+        employee = request.user.employee_profile
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        data = request.POST
+
+    lat = data.get('latitude')
+    lng = data.get('longitude')
+    accuracy = data.get('accuracy', 0)
+    address = data.get('address', '')
+
+    if not lat or not lng:
+        return JsonResponse({'success': False, 'error': 'Coordinates required.'}, status=400)
+
+    try:
+        lat = float(lat)
+        lng = float(lng)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
+
+    EmployeeLocationSync.objects.create(
+        employee=employee,
+        latitude=lat,
+        longitude=lng,
+        accuracy=float(accuracy) if accuracy else 0.0,
+        address=address
+    )
+
+    request.session['location_approved'] = True
+
+    return JsonResponse({'success': True})

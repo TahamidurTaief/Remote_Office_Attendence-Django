@@ -50,13 +50,14 @@
 
     <!-- Form Card -->
     <div class="bg-white shadow-sm border border-gray-150 rounded-xl p-6">
-        <form method="POST" enctype="multipart/form-data" class="space-y-4">
+        <form method="POST" enctype="multipart/form-data" class="space-y-5">
             {% csrf_token %}
             
             <!-- Activity Description -->
             <div>
-                <label for="activity" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Activity / Task Description</label>
-                <input type="text" name="activity" id="activity" required value="{{ data.activity|default:'' }}" placeholder="e.g. Install ducting on 3rd floor">
+                <label for="activity" class="block text-[11px] font-bold text-gray-555 uppercase mb-1.5">Activity / Task Description</label>
+                <input type="text" name="activity" id="activity" required value="{{ data.activity|default:'' }}" placeholder="e.g. Install ducting on 3rd floor"
+                       class="w-full text-xs p-2.5 border border-gray-250 bg-gray-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all duration-200">
                 {% if errors.activity %}
                 <p class="text-red-500 text-[10px] mt-1">{{ errors.activity }}</p>
                 {% endif %}
@@ -64,8 +65,9 @@
 
             <!-- Responsible Person -->
             <div>
-                <label for="responsible_person" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Responsible Person</label>
-                <select name="responsible_person" id="responsible_person">
+                <label for="responsible_person" class="block text-[11px] font-bold text-gray-555 uppercase mb-1.5">Responsible Person</label>
+                <select name="responsible_person" id="responsible_person"
+                        class="w-full text-xs p-2.5 border border-gray-255 bg-gray-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all duration-200 cursor-pointer">
                     <option value="">-- Select Employee --</option>
                     {% for emp in employees %}
                     <option value="{{ emp.id }}" {% if data.responsible_person|stringformat:"s" == emp.id|stringformat:"s" %}selected{% endif %}>
@@ -78,11 +80,25 @@
                 {% endif %}
             </div>
 
+            <!-- Progress Range Slider -->
+            <div x-data="{ progress: {{ data.progress_percent|default:0 }} }" class="bg-gray-50/50 border border-gray-100 p-4 rounded-xl space-y-2">
+                <div class="flex justify-between items-center">
+                    <label for="progress_percent" class="block text-[11px] font-bold text-gray-555 uppercase">Task Progress</label>
+                    <span class="text-xs font-bold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-lg border border-primary-100" x-text="progress + '%'"></span>
+                </div>
+                <input type="range" name="progress_percent" id="progress_percent" min="0" max="100" x-model="progress"
+                       class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600 focus:outline-none">
+                {% if errors.progress_percent %}
+                <p class="text-red-500 text-[10px] mt-1">{{ errors.progress_percent }}</p>
+                {% endif %}
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Status -->
                 <div>
-                    <label for="status" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Status</label>
-                    <select name="status" id="status">
+                    <label for="status" class="block text-[11px] font-bold text-gray-555 uppercase mb-1.5">Status</label>
+                    <select name="status" id="status"
+                            class="w-full text-xs p-2.5 border border-gray-255 bg-gray-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all duration-200 cursor-pointer">
                         <option value="Not Started" {% if data.status == 'Not Started' %}selected{% endif %}>Not Started</option>
                         <option value="In Progress" {% if data.status == 'In Progress' %}selected{% endif %}>In Progress</option>
                         <option value="Delayed" {% if data.status == 'Delayed' %}selected{% endif %}>Delayed</option>
@@ -95,8 +111,9 @@
 
                 <!-- Points -->
                 <div>
-                    <label for="points" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Points</label>
-                    <input type="number" name="points" id="points" min="0" value="{{ data.points|default:'10' }}">
+                    <label for="points" class="block text-[11px] font-bold text-gray-555 uppercase mb-1.5">Points</label>
+                    <input type="number" name="points" id="points" min="0" value="{{ data.points|default:'10' }}"
+                           class="w-full text-xs p-2.5 border border-gray-250 bg-gray-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all duration-200">
                     {% if errors.points %}
                     <p class="text-red-500 text-[10px] mt-1">{{ errors.points }}</p>
                     {% endif %}
@@ -106,8 +123,9 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Planned Start Date -->
                 <div>
-                    <label for="planned_start" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Planned Start Date</label>
-                    <input type="date" name="planned_start" id="planned_start" value="{{ data.planned_start|default:'' }}">
+                    <label for="planned_start" class="block text-[11px] font-bold text-gray-555 uppercase mb-1.5">Planned Start Date</label>
+                    <input type="date" name="planned_start" id="planned_start" value="{{ data.planned_start|default:'' }}"
+                           class="w-full text-xs p-2.5 border border-gray-250 bg-gray-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all duration-200 cursor-pointer">
                     {% if errors.planned_start %}
                     <p class="text-red-500 text-[10px] mt-1">{{ errors.planned_start }}</p>
                     {% endif %}
@@ -115,8 +133,9 @@
 
                 <!-- Planned Finish Date -->
                 <div>
-                    <label for="planned_finish" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Planned Finish Date</label>
-                    <input type="date" name="planned_finish" id="planned_finish" value="{{ data.planned_finish|default:'' }}">
+                    <label for="planned_finish" class="block text-[11px] font-bold text-gray-555 uppercase mb-1.5">Planned Finish Date</label>
+                    <input type="date" name="planned_finish" id="planned_finish" value="{{ data.planned_finish|default:'' }}"
+                           class="w-full text-xs p-2.5 border border-gray-250 bg-gray-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all duration-200 cursor-pointer">
                     {% if errors.planned_finish %}
                     <p class="text-red-500 text-[10px] mt-1">{{ errors.planned_finish }}</p>
                     {% endif %}
@@ -125,29 +144,79 @@
 
             <!-- Remarks -->
             <div>
-                <label for="remarks" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Remarks / Manager Feedback</label>
-                <textarea name="remarks" id="remarks" rows="3" placeholder="Add optional remarks or review feedback...">{{ data.remarks|default:'' }}</textarea>
+                <label for="remarks" class="block text-[11px] font-bold text-gray-555 uppercase mb-1.5">Remarks / Manager Feedback</label>
+                <textarea name="remarks" id="remarks" rows="3" placeholder="Add optional remarks or review feedback..."
+                          class="w-full text-xs p-2.5 border border-gray-250 bg-gray-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all duration-200">{{ data.remarks|default:'' }}</textarea>
             </div>
 
             <!-- Reference File Attachment -->
-            <div>
-                <label for="assignment_attachment" class="block text-[11px] font-bold text-gray-550 uppercase mb-1.5">Update Reference File / Attachment</label>
-                <input type="file" name="assignment_attachment" id="assignment_attachment" class="w-full text-xs text-gray-500">
-                {% if task.assignment_attachment %}
-                <div class="mt-1 text-[10px] text-gray-400 flex items-center gap-1.5">
-                    <span>Current Reference:</span>
-                    <a href="{{ task.assignment_attachment.url }}" target="_blank" class="text-primary-600 hover:underline font-semibold">{{ task.assignment_attachment.name }}</a>
+            <div class="space-y-3">
+                <label class="block text-[11px] font-bold text-gray-555 uppercase">Reference Files / Attachments</label>
+                
+                <!-- Existing files -->
+                {% if task.attachments.exists or task.assignment_attachment %}
+                <div class="space-y-1.5 bg-gray-50/50 border border-gray-100 p-3 rounded-xl">
+                    <span class="text-[10px] text-gray-400 font-semibold block">Current Attachments:</span>
+                    <div class="flex flex-wrap gap-2">
+                        {% if task.assignment_attachment %}
+                        <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-primary-700 bg-primary-50 border border-primary-200/50 hover:bg-primary-100/50 px-2.5 py-1.5 rounded-xl transition-colors font-semibold">
+                            <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
+                            {{ task.assignment_attachment.name|slice:"15:"|default:"Legacy Attachment" }}
+                        </a>
+                        {% endif %}
+                        {% for att in task.attachments.all %}
+                        {% if att.attachment_type == 'assignment' %}
+                        <a href="{{ att.file.url }}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200/50 hover:bg-indigo-100/50 px-2.5 py-1.5 rounded-xl transition-colors font-semibold">
+                            <i data-lucide="file" class="w-3.5 h-3.5"></i>
+                            {{ att.filename }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
                 </div>
                 {% endif %}
-                <p class="mt-1 text-[10px] text-gray-400">Allowed formats: JPG, JPEG, PNG, PDF. Max size: 10MB.</p>
-                {% if errors.assignment_attachment %}
-                <p class="text-red-500 text-[10px] mt-1">{{ errors.assignment_attachment }}</p>
-                {% endif %}
+                
+                <!-- Dynamic Multiple File Uploader -->
+                <div x-data="{ 
+                    attachments: [],
+                    addAttachment() {
+                        this.attachments.push({ id: Date.now() });
+                        this.$nextTick(() => {
+                            if (window.lucide) window.lucide.createIcons();
+                        });
+                    },
+                    removeAttachment(id) {
+                        this.attachments = this.attachments.filter(a => a.id !== id);
+                    }
+                }" class="space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] text-gray-400 font-semibold">Add New Attachments:</span>
+                        <button type="button" @click="addAttachment()" class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 border border-primary-200/50 rounded-lg text-[10px] font-bold transition-all duration-200 cursor-pointer">
+                            <i data-lucide="plus" class="w-3 h-3"></i> Add File
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <template x-for="(att, index) in attachments" :key="att.id">
+                            <div class="flex items-center gap-2 bg-gray-50 border border-gray-200 p-2 rounded-xl">
+                                <input type="file" name="assignment_attachments" class="w-full text-xs text-gray-600 focus:outline-none file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer" required>
+                                <button type="button" @click="removeAttachment(att.id)" class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Remove">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </template>
+                        <div x-show="attachments.length === 0" class="text-[10px] text-gray-400 italic">No new attachments selected.</div>
+                    </div>
+                    
+                    {% if errors.assignment_attachment %}
+                    <p class="text-red-500 text-[10px] mt-1">{{ errors.assignment_attachment }}</p>
+                    {% endif %}
+                </div>
             </div>
 
             <!-- Submit Buttons -->
-            <div class="flex justify-end gap-3 pt-3 border-t border-gray-100">
-                <a href="{% url 'staff:my_project_detail' project.pk %}" class="px-4 py-2 border rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-bold transition-colors">
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <a href="{% url 'staff:my_project_detail' project.pk %}" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-bold transition-colors">
                     Cancel
                 </a>
                 <button type="submit" class="px-4 py-2 bg-primary-gradient text-white font-bold rounded-lg text-xs hover:opacity-90 transition-opacity">

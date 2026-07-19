@@ -126,8 +126,8 @@ class Project(models.Model):
         if total_points == 0:
             self.progress_percent = 0
         else:
-            completed_points = sum(task.points for task in total_tasks if task.status == 'Completed')
-            self.progress_percent = round((completed_points / total_points) * 100)
+            weighted_progress = sum(task.points * (task.progress_percent / 100.0) for task in total_tasks)
+            self.progress_percent = round((weighted_progress / total_points) * 100)
         self.save(update_fields=['progress_percent'])
 
 
@@ -189,6 +189,9 @@ class ProjectTask(models.Model):
     points = models.PositiveIntegerField(default=10)
     completed_at = models.DateTimeField(null=True, blank=True)
     employee_note = models.TextField(blank=True)
+    progress_percent = models.IntegerField(default=0)
+    pending_progress_percent = models.IntegerField(null=True, blank=True)
+    pending_employee_note = models.TextField(blank=True)
     assignment_attachment = models.FileField(
         upload_to='projects/task_attachments/%Y/%m/',
         null=True,

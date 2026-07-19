@@ -50,26 +50,50 @@
                 {% endif %}
             </div>
 
-            <div class="grid grid-cols-2 gap-3.5">
-                <!-- Points -->
-                <div>
-                    <label for="points" class="block text-[10px] font-semibold text-gray-455 uppercase mb-1">Points</label>
-                    <input type="number" name="points" id="points" min="0" value="{{ data.points|default:'10' }}"
-                           class="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
-                    {% if errors.points %}
-                    <p class="text-red-500 text-[10px] mt-1">{{ errors.points }}</p>
-                    {% endif %}
-                </div>
+            <div>
+                <label for="points" class="block text-[10px] font-semibold text-gray-455 uppercase mb-1">Points</label>
+                <input type="number" name="points" id="points" min="0" value="{{ data.points|default:'10' }}"
+                       class="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500">
+                {% if errors.points %}
+                <p class="text-red-500 text-[10px] mt-1">{{ errors.points }}</p>
+                {% endif %}
+            </div>
 
-                <!-- Reference File Attachment -->
-                <div>
-                    <label for="assignment_attachment" class="block text-[10px] font-semibold text-gray-455 uppercase mb-1">Reference File</label>
-                    <input type="file" name="assignment_attachment" id="assignment_attachment" 
-                           class="w-full text-xs text-gray-500">
-                    {% if errors.assignment_attachment %}
-                    <p class="text-red-500 text-[10px] mt-1">{{ errors.assignment_attachment }}</p>
-                    {% endif %}
+            <!-- Dynamic Multiple File Uploader -->
+            <div x-data="{ 
+                attachments: [],
+                addAttachment() {
+                    this.attachments.push({ id: Date.now() });
+                    this.$nextTick(() => {
+                        if (window.lucide) window.lucide.createIcons();
+                    });
+                },
+                removeAttachment(id) {
+                    this.attachments = this.attachments.filter(a => a.id !== id);
+                }
+            }" class="space-y-2 bg-gray-50/50 border border-gray-100 p-3.5 rounded-xl">
+                <div class="flex items-center justify-between">
+                    <label class="block text-[10px] font-semibold text-gray-455 uppercase">Reference Files / Attachments</label>
+                    <button type="button" @click="addAttachment()" class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 border border-primary-200/50 rounded-lg text-[9px] font-bold transition-all duration-200 cursor-pointer">
+                        <i data-lucide="plus" class="w-3 h-3"></i> Add File
+                    </button>
                 </div>
+                
+                <div class="space-y-2">
+                    <template x-for="(att, index) in attachments" :key="att.id">
+                        <div class="flex items-center gap-2 bg-white border border-gray-200 p-2 rounded-xl">
+                            <input type="file" name="assignment_attachments" class="w-full text-xs text-gray-600 focus:outline-none file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer" required>
+                            <button type="button" @click="removeAttachment(att.id)" class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Remove">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </template>
+                    <div x-show="attachments.length === 0" class="text-[10px] text-gray-400 italic">No attachments selected.</div>
+                </div>
+                
+                {% if errors.assignment_attachment %}
+                <p class="text-red-500 text-[10px] mt-1">{{ errors.assignment_attachment }}</p>
+                {% endif %}
             </div>
 
             <div class="grid grid-cols-2 gap-3.5">

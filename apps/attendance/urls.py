@@ -12,4 +12,5 @@ urlpatterns = [
     path('live-locations/', views.live_locations,     name='live_locations'),
     path('tracking-config/', views.get_tracking_config, name='tracking_config'),
     path('save-location/', views.save_location, name='save_location'),
+    path('save-location-mandatory/', views.save_mandatory_location, name='save_mandatory_location'),
 ]

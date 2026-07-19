@@ -27,114 +27,115 @@
                 localStorage.setItem('sound_muted', this.isMuted ? 'true' : 'false');
                 return this.isMuted;
             },
-            playClick() {
+            runAudio(callback) {
                 if (this.isMuted) return;
                 this.init();
                 const ctx = this.ctx;
                 if (!ctx) return;
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(600, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
-                gain.gain.setValueAtTime(0.03, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-                osc.start(ctx.currentTime);
-                osc.stop(ctx.currentTime + 0.08);
+                if (ctx.state === 'suspended') {
+                    ctx.resume().then(() => {
+                        try { callback(ctx); } catch(e) { console.error(e); }
+                    }).catch(err => console.error('AudioContext resume failed:', err));
+                } else {
+                    try { callback(ctx); } catch(e) { console.error(e); }
+                }
+            },
+            playClick() {
+                this.runAudio((ctx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.03, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.08);
+                });
             },
             playToastSuccess() {
-                if (this.isMuted) return;
-                this.init();
-                const ctx = this.ctx;
-                if (!ctx) return;
-                const playTone = (freq, time, duration) => {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, time);
-                    gain.gain.setValueAtTime(0.03, time);
-                    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-                    osc.start(time);
-                    osc.stop(time + duration);
-                };
-                const now = ctx.currentTime;
-                playTone(523.25, now, 0.12);
-                playTone(659.25, now + 0.06, 0.15);
+                this.runAudio((ctx) => {
+                    const playTone = (freq, time, duration) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, time);
+                        gain.gain.setValueAtTime(0.03, time);
+                        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                        osc.start(time);
+                        osc.stop(time + duration);
+                    };
+                    const now = ctx.currentTime;
+                    playTone(523.25, now, 0.12);
+                    playTone(659.25, now + 0.06, 0.15);
+                });
             },
             playToastError() {
-                if (this.isMuted) return;
-                this.init();
-                const ctx = this.ctx;
-                if (!ctx) return;
-                const playTone = (freq, time, duration) => {
+                this.runAudio((ctx) => {
+                    const playTone = (freq, time, duration) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, time);
+                        gain.gain.setValueAtTime(0.04, time);
+                        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                        osc.start(time);
+                        osc.stop(time + duration);
+                    };
+                    const now = ctx.currentTime;
+                    playTone(392, now, 0.12);
+                    playTone(349.23, now + 0.08, 0.18);
+                });
+            },
+            playModalOpen() {
+                this.runAudio((ctx) => {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
                     osc.connect(gain);
                     gain.connect(ctx.destination);
                     osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, time);
-                    gain.gain.setValueAtTime(0.04, time);
-                    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-                    osc.start(time);
-                    osc.stop(time + duration);
-                };
-                const now = ctx.currentTime;
-                playTone(392, now, 0.12);
-                playTone(349.23, now + 0.08, 0.18);
-            },
-            playModalOpen() {
-                if (this.isMuted) return;
-                this.init();
-                const ctx = this.ctx;
-                if (!ctx) return;
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(300, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(450, ctx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.02, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-                osc.start(ctx.currentTime);
-                osc.stop(ctx.currentTime + 0.15);
+                    osc.frequency.setValueAtTime(300, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(450, ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.15);
+                });
             },
             playModalClose() {
-                if (this.isMuted) return;
-                this.init();
-                const ctx = this.ctx;
-                if (!ctx) return;
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(450, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.12);
-                gain.gain.setValueAtTime(0.02, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-                osc.start(ctx.currentTime);
-                osc.stop(ctx.currentTime + 0.12);
+                this.runAudio((ctx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(450, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.12);
+                });
             },
             playSubmenuOpen() {
-                if (this.isMuted) return;
-                this.init();
-                const ctx = this.ctx;
-                if (!ctx) return;
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(800, ctx.currentTime);
-                gain.gain.setValueAtTime(0.015, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-                osc.start(ctx.currentTime);
-                osc.stop(ctx.currentTime + 0.05);
+                this.runAudio((ctx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.015, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.05);
+                });
             }
         };
 
@@ -154,16 +155,56 @@
         document.addEventListener('click', (e) => {
             const target = e.target.closest('button, a');
             if (!target) return;
-            const isPrimary = target.classList.contains('bg-primary-600') || 
-                              target.classList.contains('btn-primary') ||
-                              target.classList.contains('bg-primary-gradient') ||
-                              target.type === 'submit' ||
-                              target.getAttribute('type') === 'submit' ||
-                              target.classList.contains('text-red-600') ||
-                              target.classList.contains('bg-red-600') ||
-                              target.dataset.sound === 'click';
-            if (isPrimary) {
+            
+            // Check if it's a sidebar/nav menu item
+            const isSidebarMenu = target.closest('.ft-nav-item') || 
+                                  target.closest('#ft-sidebar a') || 
+                                  target.closest('nav a');
+            
+            // Check if it's a notification trigger (bell in header or card in notification list)
+            const isNotification = target.closest('[data-notif-id]') ||
+                                   target.closest('a[href*="/notifications/"]') ||
+                                   target.closest('#notif-badge') ||
+                                   target.closest('[hx-get*="/notifications/"]');
+            
+            // Check if it's an action button
+            const classList = String(target.className || '');
+            const isActionButton = target.tagName === 'BUTTON' || 
+                                   target.getAttribute('role') === 'button' ||
+                                   target.type === 'submit' ||
+                                   target.getAttribute('type') === 'submit' ||
+                                   classList.includes('btn') ||
+                                   classList.includes('bg-') ||
+                                   classList.includes('border') ||
+                                   classList.includes('text-red') ||
+                                   classList.includes('text-green') ||
+                                   classList.includes('text-blue') ||
+                                   target.dataset.sound === 'click';
+
+            if (isSidebarMenu || isActionButton || isNotification) {
                 SoundFX.playClick();
+                
+                // If it's a standard link navigation, delay it slightly so the sound can play
+                const isStandardNavigationLink = target.tagName === 'A' && 
+                                                  target.href && 
+                                                  !target.href.startsWith('#') && 
+                                                  !target.href.includes('javascript:') && 
+                                                  !target.getAttribute('target') && 
+                                                  !target.hasAttribute('hx-get') && 
+                                                  !target.hasAttribute('hx-post') && 
+                                                  !target.hasAttribute('data-notif-id') &&
+                                                  !target.closest('[data-notif-id]') &&
+                                                  !target.hasAttribute('@click') && 
+                                                  !target.hasAttribute('x-on:click');
+                                                  
+                if (isStandardNavigationLink) {
+                    // Prevent immediate navigation to let the click sound play
+                    e.preventDefault();
+                    const href = target.href;
+                    setTimeout(() => {
+                        window.location.href = href;
+                    }, 120);
+                }
             }
         });
     </script>

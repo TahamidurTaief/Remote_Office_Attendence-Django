@@ -1454,15 +1454,28 @@ def staff_task_complete(request, pk):
             return JsonResponse({'error': 'You are not assigned to this task.'}, status=403)
         
     note = ""
+    progress_percent = None
     if request.content_type == 'application/json':
         try:
             data = json.loads(request.body)
             note = data.get('note', '')
+            progress_percent = data.get('progress_percent')
         except json.JSONDecodeError:
             pass
     else:
         note = request.POST.get('note', '')
+        progress_percent = request.POST.get('progress_percent')
         
+    if progress_percent is not None:
+        try:
+            progress_percent = int(progress_percent)
+            if progress_percent < 0 or progress_percent > 100:
+                return JsonResponse({'error': 'Progress percent must be between 0 and 100.'}, status=400)
+        except (ValueError, TypeError):
+            return JsonResponse({'error': 'Invalid progress percent.'}, status=400)
+    else:
+        progress_percent = 100
+
     completion_attachments = request.FILES.getlist('completion_attachments')
     if completion_attachments:
         from django.core.exceptions import ValidationError
@@ -1485,7 +1498,6 @@ def staff_task_complete(request, pk):
                 attachment_type='completion'
             )
 
-    task.employee_note = note
     is_manager_or_admin = False
     if request.user.is_superuser or request.user.role in ['admin', 'manager']:
         is_manager_or_admin = True
@@ -1494,10 +1506,24 @@ def staff_task_complete(request, pk):
             is_manager_or_admin = True
 
     if is_manager_or_admin:
-        task.status = 'Completed'
+        task.progress_percent = progress_percent
+        task.pending_progress_percent = None
+        task.employee_note = note
+        task.pending_employee_note = ""
+        if progress_percent == 100:
+            task.status = 'Completed'
+            if not task.completed_at:
+                task.completed_at = timezone.now()
+        else:
+            task.status = 'In Progress'
     else:
+        task.pending_progress_percent = progress_percent
+        task.pending_employee_note = note
         task.status = 'Under Review'
+        
     task.save()
+    if task.project:
+        task.project.recalculate_progress()
 
     progress = task.project.progress_percent if task.project else 0
     return JsonResponse({
@@ -1599,6 +1625,9 @@ def task_detail_api(request, pk):
         'points': task.points,
         'remarks': task.remarks or '',
         'employee_note': task.employee_note or '',
+        'progress_percent': task.progress_percent,
+        'pending_progress_percent': task.pending_progress_percent,
+        'pending_employee_note': task.pending_employee_note or '',
         'completed_at': task.completed_at.strftime('%d/%m/%Y %H:%M') if task.completed_at else '—',
         'attachments': attachments_data,
         'replies': replies_data
@@ -1654,19 +1683,55 @@ def task_add_reply_api(request, pk):
 
 
 @login_required
+@require_POST
 def task_approve_api(request, pk):
     if not (request.user.is_superuser or request.user.role in ['admin', 'manager']):
         return JsonResponse({'error': 'Permission denied'}, status=403)
         
     task = get_object_or_404(ProjectTask, pk=pk)
-    task.status = 'Completed'
-    task.save()
-    if task.project:
-        task.project.recalculate_progress()
+    action = request.POST.get('action', 'approve')
+    
+    if action == 'approve':
+        if task.pending_progress_percent is not None:
+            task.progress_percent = task.pending_progress_percent
+        else:
+            task.progress_percent = 100
         
+        if task.pending_employee_note:
+            task.employee_note = task.pending_employee_note
+            
+        task.pending_progress_percent = None
+        task.pending_employee_note = ""
+        
+        if task.progress_percent == 100:
+            task.status = 'Completed'
+            if not task.completed_at:
+                task.completed_at = timezone.now()
+        else:
+            task.status = 'In Progress'
+            
+        task.save()
+        if task.project:
+            task.project.recalculate_progress()
+            
+    elif action == 'reject':
+        task.pending_progress_percent = None
+        task.pending_employee_note = ""
+        
+        if task.progress_percent > 0:
+            task.status = 'In Progress'
+        else:
+            task.status = 'Not Started'
+            
+        task.save()
+        if task.project:
+            task.project.recalculate_progress()
+            
     return JsonResponse({
         'success': True,
-        'status': task.status
+        'status': task.status,
+        'progress_percent': task.progress_percent,
+        'project_progress': task.project.progress_percent if task.project else 0
     })
 
 
