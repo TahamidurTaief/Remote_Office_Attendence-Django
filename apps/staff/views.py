@@ -789,7 +789,7 @@ def my_project_edit_task(request, task_id):
                 )
 
             messages.success(request, f"Task '{activity}' updated successfully.")
-            return redirect('staff:my_project_detail', project_id=project.id)
+            return redirect(f"/staff/my-projects/{project.id}/#task-row-{task.id}")
 
         form_data = {
             'activity': activity,

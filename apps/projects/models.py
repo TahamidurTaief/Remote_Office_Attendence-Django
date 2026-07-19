@@ -290,6 +290,14 @@ class ProjectTask(models.Model):
                     )
 
 
+    @property
+    def assignment_attachments(self):
+        return self.attachments.filter(attachment_type='assignment')
+
+    @property
+    def completion_attachments(self):
+        return self.attachments.filter(attachment_type='completion')
+
     def __str__(self):
         project_name = self.project.name if self.project_id else 'Standalone'
         return f"{project_name} - {self.order}. {self.activity}"
