@@ -13,3 +13,5 @@ staticfiles
 # Allow compiled tailwind css to be committed
 !theme/static/css/dist/
 
+.django_tailwind_cli
+./.django_tailwind_cli
