@@ -39,8 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     # Third-party apps
-    'tailwind',
-    'theme',
+    'django_tailwind_cli',
     'imagekit',
     'django_cotton',
     'django_browser_reload',
@@ -181,13 +180,9 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 SESSION_COOKIE_AGE = 86400  # 1 day
 
-# Tailwind config (if using django-tailwind)
-TAILWIND_APP_NAME = 'theme'
-
-import platform
-if platform.system() == 'Windows':
-    # On Windows, use npm.cmd to bypass PowerShell script execution restrictions
-    NPM_BIN_PATH = r"C:\Program Files\nodejs\npm.cmd"
+# Tailwind CLI Configuration
+TAILWIND_CLI_SRC_CSS = 'static/css/source.css'
+TAILWIND_CLI_DIST_CSS = 'css/dist/styles.css'
 
 # Custom user model
 AUTH_USER_MODEL = 'accounts.CustomUser'

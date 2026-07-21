@@ -13,15 +13,18 @@
         <div class="space-y-4">
             {% for item in schedules %}
             {% with schedule=item.schedule branch=item.branch %}
-            <c-card padding="sm">
-                <c-slot name="header">
-                    <div class="flex justify-between items-center w-full">
-                        <h2 class="text-xs font-semibold" style="color:var(--text)">{{ branch.name }}</h2>
-                        <span class="text-[11px]" style="color:var(--text-muted)">
-                            Start: {{ schedule.office_start_time|time:"g:i A" }} | End: {{ schedule.office_end_time|time:"g:i A" }}
-                        </span>
-                    </div>
-                </c-slot>
+            <div class="border rounded-lg p-4 transition-all duration-200
+                {% if forloop.counter0|divisibleby:4 == 0 %}bg-yellow-500/5 border-yellow-200/70 dark:bg-yellow-500/5 dark:border-yellow-900/30
+                {% elif forloop.counter0|divisibleby:4 == 1 %}bg-sky-500/5 border-sky-200/70 dark:bg-sky-500/5 dark:border-sky-900/30
+                {% elif forloop.counter0|divisibleby:4 == 2 %}bg-emerald-500/5 border-emerald-200/70 dark:bg-emerald-500/5 dark:border-emerald-900/30
+                {% else %}bg-orange-500/5 border-orange-200/70 dark:bg-orange-500/5 dark:border-orange-900/30{% endif %}">
+                
+                <div class="flex justify-between items-center pb-2 border-b" style="border-color:var(--border-subtle)">
+                    <h2 class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">{{ branch.name }} Settings</h2>
+                    <span class="text-[11px] font-medium text-[var(--text-muted)]">
+                        Start: {{ schedule.office_start_time|time:"g:i A" }} | End: {{ schedule.office_end_time|time:"g:i A" }}
+                    </span>
+                </div>
 
                 <form method="POST" action="{% url 'admin_panel:schedule_settings' %}" class="space-y-4 mt-2">
                     {% csrf_token %}
@@ -49,7 +52,7 @@
                         <c-button type="submit" variant="primary" label="Save {{ branch.name }} Schedule" />
                     </div>
                 </form>
-            </c-card>
+            </div>
             {% endwith %}
             {% endfor %}
         </div>

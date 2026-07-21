@@ -16,10 +16,10 @@
 module.exports = {
     darkMode: 'class',
     content: [
-        '../templates/**/*.html',
-        '../../templates/**/*.html',
-        '../../**/templates/**/*.html',
-        '../../templates/cotton/**/*.html',
+        'templates/**/*.html',
+        'apps/**/*.py',
+        'fieldtrack/**/*.py',
+        'static/**/*.js',
     ],
     theme: {
         extend: {

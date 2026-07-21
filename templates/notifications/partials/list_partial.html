@@ -1,0 +1,139 @@
+{# Notifications partial template for Meta-style right side drawer #}
+<div class="flex flex-col h-full bg-[var(--surface)]">
+
+  {# Horizontal Scrollable Tabs #}
+  <div class="px-4 py-2 border-b flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0" style="border-color:var(--border-subtle)">
+    {% for key, label in filter_tabs %}
+      <button hx-get="{% url 'notifications:list' %}?partial=true&type={{ key }}"
+              hx-target="#notifications-drawer-content"
+              hx-swap="innerHTML"
+              type="button"
+              class="ft-btn ft-btn-sm whitespace-nowrap transition-all duration-150
+                     {% if filter_type == key %}bg-[rgba(11,95,165,0.08)] text-[var(--primary)] font-bold border-transparent{% else %}bg-transparent text-[var(--text-muted)] border-transparent hover:bg-[var(--surface-2)]{% endif %}"
+              style="padding: 4px 10px; font-size: 11px;">
+        {{ label }}
+      </button>
+    {% endfor %}
+  </div>
+
+  {# All Activity sub-header #}
+  <div class="px-5 py-2.5 bg-[var(--surface-2)] flex items-center justify-between shrink-0">
+    <span class="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Activity Feed</span>
+    {% if unread_count %}
+      <c-badge variant="danger" label="{{ unread_count }} unread" />
+    {% endif %}
+  </div>
+
+  {# Notifications list content #}
+  <div class="flex-1 overflow-y-auto divide-y" style="border-color:var(--border-subtle)">
+    {% for notif in notifs %}
+      {% if request.user.role == 'admin' %}
+        {% if notif.employee %}
+          {% url 'employees:employee_detail' notif.employee.pk as item_redirect_url %}
+        {% else %}
+          {% url 'notifications:list' as item_redirect_url %}
+        {% endif %}
+      {% else %}
+        {% if notif.notif_type == 'task_assigned' or notif.notif_type == 'task_completed' or notif.notif_type == 'task_delayed' %}
+          {% url 'staff:my_tasks' as item_redirect_url %}
+        {% else %}
+          {% url 'notifications:list' as item_redirect_url %}
+        {% endif %}
+      {% endif %}
+
+      <div class="p-3.5 flex items-start gap-3 transition-colors hover:bg-[var(--surface-2)] relative {% if not notif.is_read %}bg-[rgba(11,95,165,0.02)]{% endif %}">
+        
+        {# Unread dot indicator on the left edge #}
+        {% if not notif.is_read %}
+          <div class="absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[var(--primary)]"></div>
+        {% endif %}
+
+        {# User Avatar #}
+        <div class="shrink-0 relative">
+          <c-avatar src="{% if notif.employee and notif.employee.profile_photo %}{{ notif.employee.profile_photo.url }}{% endif %}"
+                    initials="{% if notif.employee %}{{ notif.employee.full_name|make_list|first|upper }}{% else %}N{% endif %}"
+                    size="sm" />
+          {# Mini source badge at bottom right of avatar #}
+          <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] text-white border border-[var(--surface)]
+            {% if notif.notif_type == 'check_in' or notif.notif_type == 'check_out' %}bg-accent-500
+            {% elif notif.notif_type == 'late' or notif.notif_type == 'missing' %}bg-red-500
+            {% elif notif.notif_type == 'task_completed' %}bg-emerald-500
+            {% else %}bg-blue-500{% endif %}">
+            {% if notif.notif_type == 'check_in' %}I
+            {% elif notif.notif_type == 'check_out' %}O
+            {% elif notif.notif_type == 'late' %}L
+            {% elif notif.notif_type == 'missing' %}M
+            {% else %}T{% endif %}
+          </span>
+        </div>
+
+        {# Message Body #}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-1.5">
+            <a href="{{ item_redirect_url }}" class="text-[11px] font-semibold hover:underline leading-tight block text-[var(--text)]">
+              {{ notif.title }}
+            </a>
+            <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider block shrink-0
+              {% if notif.notif_type == 'check_in' or notif.notif_type == 'check_out' %}bg-accent-50 text-accent-700 dark:bg-accent-950 dark:text-accent-300
+              {% elif notif.notif_type == 'late' or notif.notif_type == 'missing' %}bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300
+              {% elif notif.notif_type == 'task_completed' %}bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300
+              {% else %}bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300{% endif %}">
+              {{ notif.notif_type }}
+            </span>
+          </div>
+
+          {% if notif.message %}
+            <p class="text-[10px] text-[var(--text-secondary)] mt-1 leading-normal line-clamp-2">{{ notif.message }}</p>
+          {% endif %}
+
+          <div class="flex items-center gap-1.5 mt-1.5">
+            <span class="text-[9px] text-[var(--text-muted)]">{{ notif.created_at|timesince }} ago</span>
+            {% if not notif.is_read %}
+              <span class="w-1 h-1 rounded-full bg-[var(--text-disabled)]"></span>
+              <button hx-post="{% url 'notifications:mark_read' notif.pk %}"
+                      hx-target="#notifications-drawer-content"
+                      hx-swap="innerHTML"
+                      class="text-[9px] font-semibold text-[var(--primary)] hover:underline">
+                Mark read
+              </button>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+    {% empty %}
+      <div class="py-16 text-center text-[var(--text-muted)] italic text-xs">
+        <i data-lucide="bell-off" class="w-8 h-8 mx-auto mb-2 text-[var(--text-disabled)]"></i>
+        No notifications in this view.
+      </div>
+    {% endfor %}
+  </div>
+
+  {# Pagination / Load More #}
+  {% if page_obj.has_other_pages %}
+    <div class="p-3 border-t bg-[var(--surface-2)] flex items-center justify-between shrink-0" style="border-color:var(--border-subtle)">
+      <span class="text-[10px] text-[var(--text-muted)]">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+      </span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <button hx-get="{% url 'notifications:list' %}?partial=true&type={{ filter_type }}&page={{ page_obj.previous_page_number }}"
+                  hx-target="#notifications-drawer-content"
+                  hx-swap="innerHTML"
+                  class="ft-btn ft-btn-secondary ft-btn-sm" style="padding: 2px 8px; font-size: 10px;">
+            Prev
+          </button>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <button hx-get="{% url 'notifications:list' %}?partial=true&type={{ filter_type }}&page={{ page_obj.next_page_number }}"
+                  hx-target="#notifications-drawer-content"
+                  hx-swap="innerHTML"
+                  class="ft-btn ft-btn-secondary ft-btn-sm" style="padding: 2px 8px; font-size: 10px;">
+            Next
+          </button>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>

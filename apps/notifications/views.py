@@ -73,6 +73,16 @@ def notification_list(request):
     except EmptyPage:
         page_obj = paginator.page(paginator.num_pages)
 
+    if request.GET.get('partial') == 'true' or request.headers.get('HX-Request') == 'true':
+        return render(request, 'notifications/partials/list_partial.html', {
+            'notifs': page_obj,
+            'page_obj': page_obj,
+            'is_paginated': page_obj.has_other_pages(),
+            'filter_type': filter_type,
+            'unread_count': unread_count,
+            'filter_tabs': filter_tabs,
+        })
+
     base_template = 'base/admin_base.html' if request.user.role == 'admin' else 'base/staff_base.html'
     return render(request, 'notifications/list.html', {
         'notifs': page_obj,

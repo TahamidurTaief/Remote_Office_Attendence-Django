@@ -16,10 +16,10 @@
         <c-badge variant="danger" label="{{ unread_count }} unread" />
       {% endif %}
     </div>
-    <cotton-slot name="actions" />
+    {{ actions }}
   </div>
 
-  <div class="divide-y overflow-y-auto max-h-[360px]" style="border-color:var(--border-subtle)">
-    <cotton-slot />
+  <div class="divide-y h-auto" style="border-color:var(--border-subtle)">
+    {{ slot }}
   </div>
 </div>

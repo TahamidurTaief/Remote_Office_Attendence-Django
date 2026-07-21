@@ -15,7 +15,7 @@
   {# Optional toolbar #}
   {% if toolbar %}
   <div class="px-4 py-3 border-b" style="border-color:var(--border); background:var(--surface)">
-    <cotton-slot name="toolbar" />
+    {{ toolbar }}
   </div>
   {% endif %}
 
@@ -23,11 +23,11 @@
     <table class="ft-table">
       <thead>
         <tr>
-          <cotton-slot name="header" />
+          {{ header }}
         </tr>
       </thead>
       <tbody id="{{ id }}-body">
-        <cotton-slot name="body" />
+        {{ body }}
       </tbody>
     </table>
   </div>
@@ -35,7 +35,7 @@
   {# Empty state fallback — shown via Django template logic in body slot #}
   {% if empty %}
   <div class="py-16 flex flex-col items-center gap-3" style="color:var(--text-muted)">
-    <cotton-slot name="empty" />
+    {{ empty }}
   </div>
   {% endif %}
 </div>

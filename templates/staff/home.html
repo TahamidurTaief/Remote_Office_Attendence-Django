@@ -181,7 +181,7 @@ window.addEventListener('appinstalled', () => {
         </div>
         <div class="p-4 md:p-6 space-y-3">
             {% for visit in field_visits %}
-                <div class="flex items-start gap-4 p-4 rounded-card border transition-colors" style="background:var(--surface); border-color:var(--border)">
+                <div class="flex items-start gap-4 py-3 border-b last:border-0 transition-colors" style="border-color:var(--border-subtle)">
                     <div class="shrink-0 text-right min-w-[4.5rem]">
                         <p class="text-sm font-bold" style="color:var(--text)">{{ visit.check_in_time|time:"h:i A" }}</p>
                         <p class="text-[11px] uppercase tracking-wider" style="color:var(--text-muted)">Time</p>

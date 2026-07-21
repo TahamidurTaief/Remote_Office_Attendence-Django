@@ -933,7 +933,33 @@
       </div>
 
       {% endwith %}
-    </nav>
+    {# Bottom Quick Icons (Meta Style) #}
+    <div class="px-2 py-1.5 flex flex-col gap-1 border-t shrink-0" style="border-color:var(--border)">
+      {# Create (+) #}
+      <button type="button" @click="$dispatch('open-command-palette')" class="ft-nav-item w-full flex items-center justify-center p-2 transition-all" style="background:var(--primary); color:white; border-radius:6px" title="Create"
+              :class="collapsed ? 'w-9 h-9 mx-auto' : 'px-3 py-2 gap-2 justify-start'">
+        <i data-lucide="plus" class="w-4 h-4 text-white"></i>
+        <span x-show="!collapsed" class="font-bold text-xs">Create</span>
+      </button>
+
+      {# Search #}
+      <button type="button" @click="$dispatch('open-command-palette')" class="ft-nav-item" :class="collapsed ? 'justify-center mx-auto w-9 h-9' : 'gap-2'" title="Search">
+        <i data-lucide="search" class="ft-icon"></i>
+        <span x-show="!collapsed" class="ft-nav-label">Search</span>
+      </button>
+
+      {# Settings #}
+      <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" :class="collapsed ? 'justify-center mx-auto w-9 h-9' : 'gap-2'" title="Settings">
+        <i data-lucide="settings" class="ft-icon"></i>
+        <span x-show="!collapsed" class="ft-nav-label">Settings</span>
+      </a>
+
+      {# Help #}
+      <a href="#" class="ft-nav-item" :class="collapsed ? 'justify-center mx-auto w-9 h-9' : 'gap-2'" title="Help">
+        <i data-lucide="help-circle" class="ft-icon"></i>
+        <span x-show="!collapsed" class="ft-nav-label">Help</span>
+      </a>
+    </div>
 
     {# ── User footer ──────────────────────────────────────────────── #}
     <div class="border-t p-3 shrink-0 flex items-center gap-2.5"

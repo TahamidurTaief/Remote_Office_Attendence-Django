@@ -27,7 +27,7 @@
     {% if required %}required{% endif %}
     {% if disabled %}disabled{% endif %}
     class="ft-input resize-y {% if error %}!border-red-500{% endif %}"
-  ><cotton-slot /></textarea>
+  >{{ slot }}</textarea>
 
   {% if error %}
     <p class="ft-error-text">{{ error }}</p>

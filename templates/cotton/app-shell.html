@@ -1,4 +1,4 @@
-{% load static tailwind_tags %}
+{% load static tailwind_cli %}
 {% comment %}
    c-app-shell — Full page shell
    Replaces extends 'base/admin_base.html' / 'base/staff_base.html'
@@ -31,7 +31,7 @@
   <title>{{ page_title|default:"FieldTrack" }}</title>
 
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#0B5FA5">
+  <meta name="theme-color" content="#1877F2">
 
   {# ── Styles ────────────────────────────────────────────────────────── #}
   {% tailwind_css %}
@@ -161,7 +161,7 @@
     .ft-mono { font-family: "Courier New", Courier, monospace; letter-spacing: 0.04em; }
   </style>
 
-  <cotton-slot name="head" />
+  {{ head }}
 </head>
 
 <body class="ft-page-bg antialiased"
@@ -171,21 +171,21 @@
       @keydown.escape.window="$dispatch('close-modal'); $dispatch('close-drawer')">
 
   {# ── Sidebar ────────────────────────────────────────────────────────── #}
-  <cotton-slot name="sidebar">
+  {% if sidebar %}{{ sidebar }}{% else %}
     <c-sidebar shell_type="{{ shell_type|default:'admin' }}" active_href="{{ active_href }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" pending_expense_count="{{ pending_expense_count }}" />
-  </cotton-slot>
+  {% endif %}
 
   {# ── Main area ──────────────────────────────────────────────────────── #}
   <div id="ft-main-content" class="ft-main flex flex-col min-h-screen transition-all duration-220">
 
     {# ── Topbar ──────────────────────────────────────────────────────── #}
-    <cotton-slot name="topbar">
+    {% if topbar %}{{ topbar }}{% else %}
       <c-topbar title="{{ page_title }}">
         <c-slot name="topbar_actions">
-          <cotton-slot name="topbar_actions" />
+          {{ topbar_actions }}
         </c-slot>
       </c-topbar>
-    </cotton-slot>
+    {% endif %}
 
     {# ── Page content ────────────────────────────────────────────────── #}
     <main class="flex-1 flex flex-col p-4 overflow-y-auto">
@@ -309,6 +309,16 @@
     document.addEventListener('alpine:initialized', () => { if(window.lucide) lucide.createIcons(); });
   </script>
 
-  <cotton-slot name="scripts" />
+  {# ── Notifications Drawer ────────────────────────────────────────── #}
+  <c-right-drawer id="notifications-drawer" title="Notifications" width="md">
+    <div id="notifications-drawer-content"
+         hx-get="{% url 'notifications:list' %}?partial=true"
+         hx-trigger="open-drawer-notifications from:body"
+         class="flex-1 overflow-y-auto flex flex-col h-full">
+      <div class="p-8 text-center"><c-skeleton type="card" /></div>
+    </div>
+  </c-right-drawer>
+
+  {{ scripts }}
 </body>
 </html>

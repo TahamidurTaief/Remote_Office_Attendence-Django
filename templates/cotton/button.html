@@ -20,7 +20,7 @@
    {{ attrs }}>
   {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>{% endif %}
   {% if label %}{{ label }}{% endif %}
-  <cotton-slot />
+  {{ slot }}
   {% if icon_right %}<i data-lucide="{{ icon_right }}" class="w-3.5 h-3.5 ml-auto"></i>{% endif %}
 </a>
 {% else %}
@@ -38,7 +38,7 @@
     <i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>
   {% endif %}
   {% if label %}{{ label }}{% endif %}
-  <cotton-slot />
+  {{ slot }}
   {% if icon_right %}<i data-lucide="{{ icon_right }}" class="w-3.5 h-3.5 ml-auto"></i>{% endif %}
 </button>
 {% endif %}

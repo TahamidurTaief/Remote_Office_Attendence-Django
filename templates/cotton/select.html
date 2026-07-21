@@ -26,7 +26,7 @@
     {% if disabled %}disabled{% endif %}
     class="ft-input ft-select {% if error %}!border-red-500{% endif %}"
   >
-    <cotton-slot />
+    {{ slot }}
   </select>
 
   {% if error %}

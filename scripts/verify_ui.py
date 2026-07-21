@@ -137,9 +137,12 @@ def run_tailwind_build():
         return False
 
 def spot_check_raw_html_content():
-    print("\n--- 6. RAW HTML CONTENT-PRESENCE SPOT CHECK ---")
+    print("\n--- 6. RAW HTML CONTENT-PRESENCE SPOT CHECK WITH REAL DATA ---")
     from django.test import Client
     from apps.employees.models import EmployeeProfile
+    from apps.projects.models import Project
+    from apps.leave.models import LeaveRequest
+    from apps.notifications.models import Notification
     
     admin_client = Client()
     admin_user = User.objects.filter(is_superuser=True).first() or User.objects.first()
@@ -150,15 +153,28 @@ def spot_check_raw_html_content():
     staff_user = emp_profile.user if emp_profile else admin_user
     staff_client.force_login(staff_user)
 
+    # Gather real database records to search for in raw HTML
+    first_page_emp = EmployeeProfile.objects.order_by('full_name', 'employee_id').first()
+    first_page_emp_name = first_page_emp.full_name if first_page_emp else "Employees"
+    
+    first_proj = Project.objects.first()
+    first_proj_name = first_proj.name if first_proj else "Projects"
+    
+    first_leave = LeaveRequest.objects.first()
+    first_leave_emp_name = first_leave.employee.full_name if first_leave else "Leave Requests"
+    
+    first_notif = Notification.objects.filter(recipient=admin_user).first()
+    first_notif_snippet = first_notif.message[:30] if first_notif else "Notifications"
+
     admin_urls = [
         ("/schedule/", ["visibleSources", "Add Event"]),
         ("/admin-panel/dashboard/", ["Live attendance tracking", "Dashboard"]),
-        ("/leave/admin/", ["Leave Requests"]),
+        ("/leave/admin/", ["Leave Requests", first_leave_emp_name]),
         ("/expense/admin/", ["Expense Claims"]),
-        ("/projects/", ["Projects"]),
-        ("/employees/", ["Employees"]),
+        ("/projects/", ["Projects", first_proj_name]),
+        ("/employees/", ["Employees", first_page_emp_name]),
         ("/branches/", ["Branches"]),
-        ("/notifications/", ["Notifications"]),
+        ("/notifications/", ["Notifications", first_notif_snippet]),
         ("/change-password/", ["Change Password"]),
     ]
 

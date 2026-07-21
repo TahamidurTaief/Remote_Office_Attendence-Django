@@ -68,13 +68,14 @@
          hx-trigger="load, every 30s"
          hx-target="#ft-notif-badge"
          hx-swap="outerHTML">
-      <a href="{% url 'notifications:list' %}"
-         class="relative ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center">
+      <button type="button"
+              @click.prevent="$dispatch('open-drawer', {id: 'notifications-drawer'}); $dispatch('open-drawer-notifications')"
+              class="relative ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center">
         <i data-lucide="bell" class="w-4 h-4"></i>
         <span id="ft-notif-badge"
               class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full hidden items-center justify-center font-bold">
         </span>
-      </a>
+      </button>
     </div>
 
     {# Theme toggle #}
@@ -92,7 +93,7 @@
     </button>
 
     {# Slot: page-specific action buttons #}
-    <cotton-slot name="actions" />
+    {{ actions }}
 
     {# User avatar menu #}
     <div class="relative" x-data="{ open: false }">

@@ -7,8 +7,10 @@ The FieldTrack Django application template layer has been migrated to a modern, 
 
 ## 1. What Was Built
 
-### A. Design System & CSS Tokens
-- **Custom CSS Variables**: Consolidated tokens in `static/css/custom.css` for background, surface layers (`--surface`, `--surface-2`), text hierarchy (`--text`, `--text-secondary`, `--text-muted`), borders (`--border`), primary blue gradients, accent teal hues, and custom shadows (`--shadow-card`, `--shadow-dropdown`, `--shadow-modal`).
+### A. Design System, CSS Tokens & Build Tooling
+- **Zero-Dependency Build Tooling**: Swapped `django-tailwind` with `django-tailwind-cli`, adopting a standalone Tailwind binary that completely removes all Node.js, npm, and `node_modules` dependencies from the codebase.
+- **Custom CSS Variables & Source CSS**: Consolidated all Design System CSS variables and layers inside `static/css/source.css` (Phase B Meta Business Suite tokens applied for backgrounds, borders, text, radius, and shadow overlays).
+- **Output CSS**: Automatically compiled to `static/css/dist/styles.css` using `python manage.py tailwind build`.
 - **Typography & Dark Mode**: Integrated Inter / Share Tech Mono typography tokens, system-level theme toggle, and anti-FODT script execution before page paint.
 - **Sound Effects Engine**: Implemented Web Audio API sound FX engine (`SoundFX.playClick`, `SoundFX.playToastSuccess`, `SoundFX.playToastError`, `SoundFX.playModalOpen`, `SoundFX.playModalClose`) with persistent mute state in `localStorage`.
 
@@ -41,9 +43,24 @@ The FieldTrack Django application template layer has been migrated to a modern, 
 - **Issue**: Mixing legacy `{% extends %}` / `{% block %}` syntax with Cotton tags caused `TemplateSyntaxError` exceptions (e.g. `{% block scripts %}` inside `<c-app-shell>` without `{% load cotton %}` or closing `</c-app-shell>`).
 - **Fix**: Standardized all page templates to use `<c-slot name="scripts">` or `<c-slot name="topbar">` and balanced all opening `<c-app-shell>` tags with `</c-app-shell>`.
 
-### 4. GET Executing Destructive Actions
-- **Issue**: Actions like item deletion or status state changes were previously triggered via standard `<a>` tags with `href="..."` or un-guarded forms.
-- **Fix**: Wrapped all destructive actions in POST forms with `{% csrf_token %}` and integrated global confirmation modal dialog triggers (`window.confirmAction(...)`).
+### 5. The `<cotton-slot>` Systemic Rendering Bug
+- **Issue**: Standard `django-cotton` compiles template components to access slots via standard context variables (`{{ slot }}` for default, and `{{ header }}`, `{{ actions }}` for named slots). The codebase incorrectly used literal `<cotton-slot />` and `<cotton-slot name="..." />` tags inside the component templates (e.g., `card.html`, `table.html`, `button.html`). Since these tags are not compiled by Cotton, they were outputted as literal HTML tags, discarding all children and rendering pages completely blank/empty inside resting cards.
+- **Fix**: Refactored all 24 cotton components under `templates/cotton/` to use standard context variables:
+  - `{{ slot }}` instead of `<cotton-slot />`
+  - `{{ name }}` instead of `<cotton-slot name="name" />`
+  - Conditionals like `{% if sidebar %}{{ sidebar }}{% else %}<c-sidebar ... />{% endif %}` for slot fallbacks.
+
+### 6. Empty Page Context and Data Binding Mismatch
+- **Issue**: Standard static string checks in test client gates (e.g. checking for "Employees") passed even if the actual table queryset returned 0 results or failed to render.
+- **Fix**: Upgraded `scripts/verify_ui.py` to query live database records (first page employee name, project title, leave request employee, notification text) and assert that they are populated in the raw HTML response.
+
+### 7. Visual Flattening & Spacing Density (Meta Business Suite Style)
+- **Issue**: Legacy styles had bulky shadows and high padding, cluttering vertical whitespace.
+- **Fix**: 
+  - Removed static resting-state shadows from `.ft-topbar` and `.ft-card` (keeping shadows only on overlays like modals, dropdowns, and drawers).
+  - Reduced default body/section card padding from `p-4` (16px) to `p-3` (12px), `sm` to `p-2` (8px), and `lg` to `p-4` (16px).
+  - Reduced default table padding from `8px 12px` to `6px 10px` for denser list layout density.
+  - Adjusted border-radius on cards, modals, and drawers from `12px/16px` to a flatter, cleaner `8px`.
 
 ---
 
@@ -57,12 +74,12 @@ uv run python scripts/verify_ui.py
 
 ### What `scripts/verify_ui.py` Validates:
 1. **Block-Tag Balance Check**: Ensures `with`, `if`, `for`, and `comment` tags are matched across all `templates/cotton/*.html`.
-2. **Full Render Test (126 Templates)**: Compiles and renders all 126 application templates using a test request to catch any `TemplateSyntaxError` or `TemplateDoesNotExist` exceptions.
+2. **Full Render Test (103+ Templates)**: Compiles and renders all application templates using a test request to catch any `TemplateSyntaxError` or `TemplateDoesNotExist` exceptions.
 3. **Comment Leak Check**: Scans rendered template strings to verify no literal `{#` or `{% comment` leaks appear in final HTML.
 4. **Design-Token Compliance Check**: Scans `templates/cotton/` for non-standard utility classes (bare `shadow` instead of `--shadow-*` tokens).
 5. **Django System Check**: Runs `uv run manage.py check`.
 6. **Tailwind Build Check**: Runs `uv run python manage.py tailwind build`.
-7. **Raw HTML Spot Check**: Executes live Django test client HTTP GET requests against 10 representative URLs (`/schedule/`, `/admin-panel/dashboard/`, `/staff/home/`, `/leave/admin/`, `/expense/admin/`, `/projects/`, `/employees/`, `/branches/`, `/notifications/`, `/change-password/`) and verifies that real content strings exist in the raw response body.
+7. **Raw HTML Spot Check with Real Data**: Executes live Django test client HTTP GET requests against 10 representative URLs (`/schedule/`, `/admin-panel/dashboard/`, `/staff/home/`, `/leave/admin/`, `/expense/admin/`, `/projects/`, `/employees/`, `/branches/`, `/notifications/`, `/change-password/`) and verifies that real, dynamic database values (names, titles, counts) exist in the raw response body.
 
 ---
 
@@ -71,3 +88,9 @@ uv run python scripts/verify_ui.py
 2. To add topbar buttons, use `<c-slot name="topbar"><c-topbar title="..."><c-slot name="actions">...</c-slot></c-topbar></c-slot>`.
 3. To add page-specific scripts, use `<c-slot name="scripts"><script>...</script></c-slot>`.
 4. Run `uv run python scripts/verify_ui.py` before committing. **All checks must pass clean (`SUCCESS`).**
+5. Do NOT use `<cotton-slot>` or `<cotton-slot name="..." />` in any component layout templates. Use `{{ slot }}` and `{{ name }}` context variables instead.
+6. **Tailwind CLI Commands (Zero Node dependency)**:
+   - Compile CSS for production: `uv run python manage.py tailwind build`
+   - Watch and compile CSS automatically in development: `uv run python manage.py tailwind watch`
+   - Run Django and watch CSS concurrently: `uv run python manage.py tailwind runserver`
+
