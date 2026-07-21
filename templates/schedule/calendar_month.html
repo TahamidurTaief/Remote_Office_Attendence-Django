@@ -4,7 +4,13 @@
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Schedule Calendar" />
+        <c-topbar title="Schedule Calendar">
+            <c-slot name="actions">
+                {% if is_admin_or_manager %}
+                <c-button href="{% url 'schedule:create' %}" variant="accent" icon="plus" label="Add Event" />
+                {% endif %}
+            </c-slot>
+        </c-topbar>
     </c-slot>
 
     <c-command-palette />

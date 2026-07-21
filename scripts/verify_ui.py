@@ -139,12 +139,19 @@ def run_tailwind_build():
 def spot_check_raw_html_content():
     print("\n--- 6. RAW HTML CONTENT-PRESENCE SPOT CHECK ---")
     from django.test import Client
-    client = Client()
-    user = User.objects.filter(is_superuser=True).first() or User.objects.first()
-    client.force_login(user)
+    from apps.employees.models import EmployeeProfile
+    
+    admin_client = Client()
+    admin_user = User.objects.filter(is_superuser=True).first() or User.objects.first()
+    admin_client.force_login(admin_user)
 
-    urls = [
-        ("/schedule/", ["visibleSources"]),
+    staff_client = Client()
+    emp_profile = EmployeeProfile.objects.first()
+    staff_user = emp_profile.user if emp_profile else admin_user
+    staff_client.force_login(staff_user)
+
+    admin_urls = [
+        ("/schedule/", ["visibleSources", "Add Event"]),
         ("/admin-panel/dashboard/", ["Live attendance tracking", "Dashboard"]),
         ("/leave/admin/", ["Leave Requests"]),
         ("/expense/admin/", ["Expense Claims"]),
@@ -152,11 +159,26 @@ def spot_check_raw_html_content():
         ("/employees/", ["Employees"]),
         ("/branches/", ["Branches"]),
         ("/notifications/", ["Notifications"]),
+        ("/change-password/", ["Change Password"]),
+    ]
+
+    staff_urls = [
+        ("/staff/home/", ["Leave Summary", "Good morning"]),
     ]
 
     failures = []
-    for url, strings in urls:
-        resp = client.get(url, HTTP_HOST="localhost")
+    for url, strings in admin_urls:
+        resp = admin_client.get(url, HTTP_HOST="localhost")
+        if resp.status_code != 200:
+            failures.append(f"{url}: Status code {resp.status_code} != 200")
+            continue
+        content = resp.content.decode("utf-8")
+        for expected in strings:
+            if expected not in content:
+                failures.append(f"{url}: Missing expected content string '{expected}'")
+
+    for url, strings in staff_urls:
+        resp = staff_client.get(url, HTTP_HOST="localhost")
         if resp.status_code != 200:
             failures.append(f"{url}: Status code {resp.status_code} != 200")
             continue
@@ -171,7 +193,7 @@ def spot_check_raw_html_content():
             print(f"  - {fail}")
         return False
     else:
-        print(f"PASSED: Spot check verified content on {len(urls)} representative URLs.")
+        print(f"PASSED: Spot check verified content on {len(admin_urls) + len(staff_urls)} representative URLs.")
         return True
 
 def main():
