@@ -4,13 +4,7 @@
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Schedule Calendar">
-            {% if is_admin_or_manager %}
-            <c-slot name="actions">
-                <c-button href="{% url 'schedule:create' %}" variant="accent" icon="plus" label="Add Event" />
-            </c-slot>
-            {% endif %}
-        </c-topbar>
+        <c-topbar title="Schedule Calendar" />
     </c-slot>
 
     <c-command-palette />
@@ -571,24 +565,5 @@
             </div>
         </div>
 
-        <style>
-            /* Thin custom scrollbar */
-            .custom-scrollbar::-webkit-scrollbar {
-                width: 4px;
-                height: 4px;
-            }
-
-            .custom-scrollbar::-webkit-scrollbar-track {
-                background: transparent;
-            }
-
-            .custom-scrollbar::-webkit-scrollbar-thumb {
-                background-color: #cbd5e1;
-                border-radius: 2px;
-            }
-
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background-color: #94a3b8;
-            }
-
-            </div></c-app-shell>
+        </style>
+</c-app-shell>
