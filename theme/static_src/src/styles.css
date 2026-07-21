@@ -1,3 +1,5 @@
+/* Meta Business Suite–accurate font stack — no Google Fonts import needed for Segoe UI */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,26 +12,27 @@
 
 :root,
 html:not(.dark) {
-    /* Backgrounds */
-    --bg:           #F9FAFB;        /* page background */
-    --surface:      #FFFFFF;        /* card / panel surface */
-    --surface-2:    #F3F4F6;        /* nested surface, table header, inputs */
-    --surface-3:    #E5E7EB;        /* active/selected row bg, tag bg */
+    /* Backgrounds — Meta --web-wash / --surface-background */
+    --bg:           #F0F2F5;        /* Meta --web-wash page bg */
+    --surface:      #FFFFFF;        /* Meta --surface-background / --card-background */
+    --surface-2:    #F0F2F5;        /* Meta --background-deemphasized / --card-background-flat */
+    --surface-3:    #E4E6EB;        /* Meta --wash / --disabled-button-background */
 
-    /* Text */
-    --text:         #111827;        /* primary text */
-    --text-secondary: #374151;      /* secondary/body text */
-    --text-muted:   #6B7280;        /* captions, meta, placeholders */
-    --text-disabled: #9CA3AF;       /* disabled state */
+    /* Text — Meta exact tokens */
+    --text:         #050505;        /* Meta --primary-text (#050505) */
+    --text-secondary: #65676B;      /* Meta --secondary-text */
+    --text-muted:   #65676B;        /* Meta --placeholder-text (same as secondary per Meta) */
+    --text-disabled: #BCC0C4;       /* Meta --disabled-text */
 
-    /* Borders */
-    --border:       #E5E7EB;        /* default 1px border */
-    --border-subtle:#F3F4F6;        /* very subtle dividers */
+    /* Borders — Meta FDS tokens */
+    --border:       #DADDE1;        /* Meta --fds-divider-on-white */
+    --border-subtle:#CED0D4;        /* Meta --divider / --fds-divider-on-wash */
+    --divider:      #CED0D4;        /* Meta --divider — list rows, table rows */
 
-    /* Brand */
-    --primary:      #0B5FA5;
-    --primary-hover:#094E8A;
-    --primary-light:#E1EFF9;        /* primary tint bg */
+    /* Brand — Meta #1877F2 */
+    --primary:      #1877F2;        /* Meta --base-blue / --fds-blue-60 */
+    --primary-hover:#166FE5;        /* Meta hover/active (darker) */
+    --primary-light:#E7F3FF;        /* Meta --fds-blue-95 / deemphasized bg */
     --primary-fg:   #FFFFFF;        /* text on primary bg */
 
     /* Accent (emerald — success/positive only) */
@@ -44,18 +47,38 @@ html:not(.dark) {
     --danger-border:#FCA5A5;
     --warning:      #F59E0B;
     --warning-light:#FEF3C7;
-    --info:         #3B82F6;
-    --info-light:   #DBEAFE;
+    --info:         #1877F2;        /* Meta info = same primary blue */
+    --info-light:   #E7F3FF;
 
-    /* Shadows — used by @layer components */
-    --shadow-soft:     0 1px 3px rgba(0,0,0,0.08);
-    --shadow-elevated: 0 8px 24px rgba(0,0,0,0.10);
-    --shadow-dropdown: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+    /* Shadows — Meta geodesic-elevation flat values — overlays only */
+    --shadow-soft:     0 1px 2px rgba(0,0,0,0.10);
+    --shadow-elevated: 0 2px 12px 2px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.10);
+    --shadow-dropdown: 0 2px 8px rgba(0,0,0,0.10), 0 1px 1px rgba(0,0,0,0.10);
+
+    /* Radius — Meta geodesic tokens (exact) */
+    --radius-card:   8px;           /* --geodesic-appearance-radius-container */
+    --radius-btn:    6px;           /* --geodesic-appearance-radius-control */
+    --radius-input:  6px;           /* --geodesic-appearance-radius-content */
+    --radius-modal:  8px;           /* --geodesic-appearance-radius-layer */
+    --radius-drawer: 8px;           /* --geodesic-appearance-radius-layer */
+    --radius-chip:   6px;
+    --radius-avatar: 999px;
+
+    /* Hover / press overlays — Meta --non-media-hovered / --non-media-pressed */
+    --hover-overlay:  rgba(0,0,0,0.05);       /* Meta --non-media-hovered */
+    --press-overlay:  rgba(68,73,80,0.15);     /* Meta --non-media-pressed */
+
+    /* Secondary button — Meta exact */
+    --secondary-btn-bg:         #E4E6EB;       /* Meta --secondary-button-background */
+    --secondary-btn-text:       #050505;       /* Meta --secondary-button-text */
+    --secondary-btn-hover-bg:   rgba(0,0,0,0.05);
+    --secondary-btn-press-bg:   rgba(68,73,80,0.15);
 
     /* Sidebar widths */
-    --sidebar-w:    224px;
-    --sidebar-w-collapsed: 64px;
+    --sidebar-w:    240px;          /* Meta --fds-sidebar-nav-width-expanded */
+    --sidebar-w-collapsed: 72px;    /* Meta --fds-sidebar-nav-width-collapsed */
 }
+
 
 html.dark {
     /* Backgrounds */
@@ -117,7 +140,7 @@ html.dark {
     body {
         background-color: var(--bg);
         color: var(--text);
-        font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        font-family: "Segoe UI Historic", "Segoe UI", Helvetica, Arial, sans-serif;
         font-size: 13px;
         line-height: 1.5;
         -webkit-font-smoothing: antialiased;
@@ -130,16 +153,16 @@ html.dark {
     /* Thin scrollbar — app-wide */
     * {
         scrollbar-width: thin;
-        scrollbar-color: rgba(11, 95, 165, 0.2) transparent;
+        scrollbar-color: rgba(24,119,242,0.2) transparent;
     }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb {
-        background-color: rgba(11, 95, 165, 0.18);
+        background-color: rgba(24,119,242,0.18);
         border-radius: 3px;
     }
     ::-webkit-scrollbar-thumb:hover {
-        background-color: rgba(11, 95, 165, 0.35);
+        background-color: rgba(24,119,242,0.35);
     }
 
     /* Scrollbar hide utility */
@@ -155,6 +178,7 @@ html.dark {
     input[type=number] { -moz-appearance: textfield; }
 }
 
+
 /* =============================================================================
    COMPONENTS LAYER — Reusable design-system patterns
    ============================================================================= */
@@ -163,10 +187,7 @@ html.dark {
 
     /* ── Page layout ─────────────────────────────────────────────────────── */
     .ft-page-bg {
-        background: var(--bg);
-        background-image:
-            radial-gradient(ellipse at top left,    rgba(186,230,253,0.18) 0%, transparent 55%),
-            radial-gradient(ellipse at bottom right, rgba(187,247,208,0.12) 0%, transparent 55%);
+        background: var(--bg);   /* Meta --web-wash #F0F2F5 — flat, no color gradient */
         min-height: 100vh;
     }
 
@@ -193,38 +214,47 @@ html.dark {
         min-height: 100vh;
         display: flex;
         flex-direction: column;
-        background: var(--bg);
+        background: transparent;
     }
     .ft-main.sidebar-collapsed {
         margin-left: var(--sidebar-w-collapsed);
     }
 
-    /* ── Nav items ───────────────────────────────────────────────────────── */
+    /* ── Nav items — Meta --non-media-hovered / navigation states ───────── */
     .ft-nav-item {
         display: flex;
         align-items: center;
         gap: 8px;
         padding: 6px 12px;
         margin: 1px 8px;
-        border-radius: 8px;
+        border-radius: var(--radius-btn);  /* 6px — Meta control radius */
         cursor: pointer;
         text-decoration: none;
-        color: var(--text-secondary);
+        color: var(--text-secondary);      /* #65676B */
         font-size: 12px;
         font-weight: 500;
         white-space: nowrap;
         overflow: hidden;
-        transition: background 130ms ease, color 130ms ease, box-shadow 130ms ease;
+        transition: background 100ms ease, color 100ms ease;  /* Meta extra-extra-short */
         position: relative;
     }
+    /* Hover — Meta rgba(0,0,0,0.05) wash overlay */
     .ft-nav-item:hover {
-        background: var(--primary-light);
-        color: var(--primary);
+        background: var(--hover-overlay);
+        color: var(--text);
     }
+    /* Active/pressed — Meta rgba(68,73,80,0.15) */
+    .ft-nav-item:active {
+        background: var(--press-overlay);
+    }
+    /* Selected/current page — Meta navigation-idle rgba(24,119,242,0.1) */
     .ft-nav-item.active {
-        background: var(--primary-light);
-        color: var(--primary);
+        background: rgba(24,119,242,0.10);  /* Meta --geodesic-color-interactive-background-navigation-idle */
+        color: var(--primary);              /* #1877F2 */
         font-weight: 600;
+    }
+    .ft-nav-item.active:hover {
+        background: rgba(24,119,242,0.20);  /* Meta navigation-focused */
     }
     .ft-sidebar.collapsed .ft-nav-item {
         margin: 2px auto;
@@ -232,7 +262,21 @@ html.dark {
         width: 38px;
         height: 38px;
         justify-content: center;
-        border-radius: 10px;
+        border-radius: var(--radius-btn);
+    }
+    .ft-sidebar.collapsed .ft-nav-item.active {
+        background: #1877F2 !important;  /* Meta primary */
+        color: #FFFFFF !important;
+    }
+    .ft-sidebar.collapsed .ft-nav-item.active .ft-icon {
+        color: #FFFFFF !important;
+    }
+    html.dark .ft-sidebar.collapsed .ft-nav-item.active {
+        background: #38BDF8 !important;
+        color: #0F172A !important;
+    }
+    html.dark .ft-sidebar.collapsed .ft-nav-item.active .ft-icon {
+        color: #0F172A !important;
     }
     .ft-nav-item .ft-icon {
         width: 16px;
@@ -295,40 +339,58 @@ html.dark {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 16px;
-        box-shadow: var(--shadow-soft);
+        padding: 0 12px;
+        box-shadow: none;
     }
 
-    /* ── Cards ───────────────────────────────────────────────────────────── */
+    /* ── Cards — Meta flat / asymmetric padding ──────────────────────────── */
     .ft-card {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    /* Content list card — asymmetric Meta padding: 10px horizontal, 20px vertical */
+    .ft-card-content {
         background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: 12px;
-        box-shadow: var(--shadow-soft);
+        border-radius: var(--radius-card);  /* 8px */
+        padding: 20px 10px;
+        box-shadow: none;
     }
 
-    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .ft-kpi {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);  /* 8px */
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    /* ── Buttons — Meta-accurate states ─────────────────────────────────── */
     .ft-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 6px;
-        padding: 6px 14px;
-        border-radius: 8px;
+        padding: 5px 12px;
+        border-radius: var(--radius-btn);  /* 6px — Meta control radius */
         font-size: 12px;
-        font-weight: 500;
-        line-height: 1;
+        font-weight: 600;
+        line-height: 1.25;
         white-space: nowrap;
         cursor: pointer;
-        transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
-        border: none;
+        transition: background 100ms ease, color 100ms ease, border-color 100ms ease, opacity 100ms ease;
+        border: 1px solid transparent;
         outline: none;
         text-decoration: none;
         user-select: none;
     }
     .ft-btn:focus-visible {
         outline: 2px solid var(--primary);
-        outline-offset: 2px;
+        outline-offset: 1px;
     }
     .ft-btn:disabled, .ft-btn[disabled] {
         opacity: 0.45;
@@ -336,57 +398,72 @@ html.dark {
         pointer-events: none;
     }
     /* sizes */
-    .ft-btn-sm { padding: 4px 10px; font-size: 11px; }
-    .ft-btn-lg { padding: 9px 20px; font-size: 14px; }
-    /* variants */
+    .ft-btn-sm { padding: 3px 8px; font-size: 11px; border-radius: var(--radius-btn); }
+    .ft-btn-lg { padding: 8px 16px; font-size: 13px; border-radius: var(--radius-btn); }
+    /* Primary — Meta --primary-button-background #1B74E4 / idle #1877F2 */
     .ft-btn-primary {
-        background: var(--primary);
+        background: var(--primary);      /* #1877F2 */
         color: var(--primary-fg);
+        border-color: var(--primary);
     }
-    .ft-btn-primary:hover { background: var(--primary-hover); }
+    .ft-btn-primary:hover  { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .ft-btn-primary:active { background: #0A53B2; border-color: #0A53B2; }  /* Meta primary-active */
+    /* Secondary — Meta --secondary-button-background #E4E6EB / text #050505 */
     .ft-btn-secondary {
-        background: var(--surface-2);
-        color: var(--text-secondary);
-        border: 1px solid var(--border);
+        background: var(--secondary-btn-bg);   /* #E4E6EB */
+        color: var(--secondary-btn-text);      /* #050505 */
+        border: none;
     }
-    .ft-btn-secondary:hover { background: var(--surface-3); }
+    .ft-btn-secondary:hover  { background: #D8DADF; }  /* rgba(0,0,0,0.05) overlay on #E4E6EB */
+    .ft-btn-secondary:active { background: #CDCFD4; }  /* rgba(68,73,80,0.15) overlay */
+    /* Ghost / flat — Meta --non-media-hovered rgba(0,0,0,0.05) */
     .ft-btn-ghost {
         background: transparent;
-        color: var(--text-muted);
+        color: var(--text-secondary);   /* #65676B */
+        border-color: transparent;
     }
-    .ft-btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+    .ft-btn-ghost:hover  { background: var(--hover-overlay); color: var(--text); }   /* rgba(0,0,0,0.05) */
+    .ft-btn-ghost:active { background: var(--press-overlay); }                         /* rgba(68,73,80,0.15) */
     .ft-btn-danger {
         background: var(--danger);
         color: white;
+        border-color: var(--danger);
     }
-    .ft-btn-danger:hover { opacity: 0.88; }
+    .ft-btn-danger:hover { opacity: 0.90; }
     .ft-btn-accent {
         background: var(--accent);
         color: var(--accent-fg);
+        border-color: var(--accent);
     }
-    .ft-btn-accent:hover { background: var(--accent-hover); }
+    .ft-btn-accent:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 
-    /* ── Inputs ──────────────────────────────────────────────────────────── */
+    /* ── Inputs — Meta text-input spec ─────────────────────────────────────── */
     .ft-input {
         width: 100%;
-        padding: 6px 10px;
+        padding: 7px 11px;          /* Meta --geodesic-spacing-input-internal-vertical/horizontal */
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: var(--radius-input);  /* 6px */
         font-size: 12px;
         color: var(--text);
         background: var(--surface);
         outline: none;
-        transition: border-color 150ms, box-shadow 150ms;
+        transition: border-color 100ms ease, box-shadow 100ms ease, background-color 100ms ease;
     }
-    .ft-input::placeholder { color: var(--text-disabled); }
+    /* Meta --placeholder-text: #65676B */
+    .ft-input::placeholder { color: var(--text-muted); }  /* #65676B */
+    .ft-input:hover {
+        background-color: var(--surface);
+        border-color: var(--border);  /* no border change on hover per Meta spec */
+    }
     .ft-input:focus {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(11,95,165,0.12);
+        border-color: var(--primary);                         /* #1877F2 */
+        background-color: var(--surface);
+        box-shadow: 0 0 0 2px rgba(24,119,242,0.15);          /* Meta --fds-x-box-shadow-focus */
     }
     .ft-input:disabled { background: var(--surface-2); color: var(--text-disabled); }
     .ft-select {
         appearance: none;
-        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2365676B' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
         background-position: right 0.5rem center;
         background-repeat: no-repeat;
         background-size: 1.2em 1.2em;
@@ -396,7 +473,7 @@ html.dark {
         display: block;
         font-size: 11px;
         font-weight: 600;
-        color: var(--text-muted);
+        color: var(--text-muted);    /* #65676B */
         margin-bottom: 4px;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -409,8 +486,8 @@ html.dark {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 2px 7px;
-        border-radius: 999px;
+        padding: 2px 6px;
+        border-radius: 4px;
         font-size: 10px;
         font-weight: 600;
         white-space: nowrap;
@@ -427,9 +504,13 @@ html.dark {
         width: 100%;
         border-collapse: collapse;
         font-size: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
     }
     .ft-table th {
-        padding: 8px 12px;
+        padding: 6px 10px;
         text-align: left;
         font-size: 10px;
         font-weight: 700;
@@ -444,7 +525,7 @@ html.dark {
         white-space: nowrap;
     }
     .ft-table td {
-        padding: 8px 12px;
+        padding: 6px 10px;
         border-bottom: 1px solid var(--border-subtle);
         color: var(--text-secondary);
         vertical-align: middle;
@@ -502,8 +583,8 @@ html.dark {
     .ft-kpi {
         background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 16px;
+        border-radius: 8px;
+        padding: 12px;
         display: flex;
         align-items: flex-start;
         gap: 12px;
