@@ -2504,7 +2504,7 @@ def delete_expired_selected(request):
                 is_expired=True
             ).delete()
             messages.success(request, f"Deleted {len(ids)} selected records.")
-        return redirect('admin_panel:expired_data')
+    return redirect('admin_panel:expired_data')
 
 @admin_required
 def delete_all_expired(request):
@@ -2515,7 +2515,7 @@ def delete_all_expired(request):
         count, _ = Attendance.objects.filter(
             is_expired=True).delete()
         messages.success(request, f"Deleted all {count} expired records.")
-        return redirect('admin_panel:expired_data')
+    return redirect('admin_panel:expired_data')
 
 
 class AbsentReportView(AdminRequiredMixin, ListView):

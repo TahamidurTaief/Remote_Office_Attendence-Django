@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}{% if object %}Edit Template{% else %}Create Template{% endif %} | FieldTrack{% endblock %}
-{% block page_title %}{% if object %}Edit Template{% else %}Create Template{% endif %}{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="{% if object %}Edit Template{% else %}Create Template{% endif %} | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4 max-w-4xl mx-auto">
     <!-- Header -->
     <div class="mb-4 flex items-center justify-between">
@@ -13,14 +8,14 @@
             </h2>
             <p class="mt-0.5 text-[12px] text-gray-500">Define the steps and roles for this installation template.</p>
         </div>
-        <a href="{% url 'projects:template_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
+        <a href="{% url 'projects:template_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
             <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
             Back to List
         </a>
     </div>
 
     <!-- Main Card -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden mb-4">
+    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden mb-4">
         <form method="POST" class="p-4 space-y-4">
             {% csrf_token %}
 
@@ -45,10 +40,10 @@
             </div>
 
             <div class="pt-3 flex justify-end gap-2.5 border-t border-gray-100 mt-4">
-                <a href="{% url 'projects:template_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 hover:bg-gray-50">
+                <a href="{% url 'projects:template_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 hover:bg-gray-50">
                     Cancel
                 </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-sm text-[12px] font-medium rounded-lg text-white bg-primary-gradient hover:opacity-90">
+                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-soft text-[12px] font-medium rounded-lg text-white bg-primary-gradient hover:opacity-90">
                     <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
                     {% if object %}Save Template{% else %}Create Template{% endif %}
                 </button>
@@ -58,7 +53,7 @@
 
     <!-- Items Section (Only visible when updating template) -->
     {% if object %}
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden">
+    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden">
         <div class="p-4 border-b border-gray-100">
             <h3 class="text-[14px] font-semibold text-gray-900">Template Steps & Checklist Items</h3>
             <p class="text-[12px] text-gray-500 mt-0.5">Configure sequence, activities, responsible departments/roles, and duration offsets.</p>
@@ -122,7 +117,7 @@
                     {{ item_form.default_duration_days }}
                 </div>
                 <div class="sm:col-span-12 flex justify-end">
-                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-soft text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
                         <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
                         Add Step
                     </button>
@@ -130,6 +125,4 @@
             </form>
         </div>
     </div>
-    {% endif %}
-</div>
-{% endblock %}
+</c-app-shell>

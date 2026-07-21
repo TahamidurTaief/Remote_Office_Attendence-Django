@@ -1,0 +1,283 @@
+{# Universal Enterprise Table Component #}
+{# Usage: #}
+{# {% include "components/universal_table.html" with columns=column_list data=row_list key_field="id" is_loading=False %} #}
+
+{% comment %}
+  Parameters:
+  - columns: list of { key, label, sortable, hide_mobile, permission }
+  - data: list of row objects/dictionaries
+  - key_field: string (default: 'id')
+  - is_loading: boolean
+  - empty_title: string (default: 'No records found')
+  - empty_desc: string (default: 'Try adjusting your search or filters to find what you are looking for.')
+  - selectable: boolean (default: True)
+  - permissions: dict of permissions { can_edit, can_delete, can_export }
+  - pagination: dict { current_page, total_pages, page_size, total_records }
+  - extra_classes: string
+{% endcomment %}
+
+<div x-data="{
+        allSelected: false,
+        selectedKeys: [],
+        sortKey: '',
+        sortDirection: 'asc',
+        hiddenColumns: [],
+        columnMenuOpen: false,
+
+        toggleSelectAll(dataKeys) {
+            this.allSelected = !this.allSelected;
+            if (this.allSelected) {
+                this.selectedKeys = [...dataKeys];
+            } else {
+                this.selectedKeys = [];
+            }
+        },
+
+        toggleSelectRow(key) {
+            if (this.selectedKeys.includes(key)) {
+                this.selectedKeys = this.selectedKeys.filter(k => k !== key);
+                this.allSelected = false;
+            } else {
+                this.selectedKeys.push(key);
+            }
+        },
+
+        sortBy(key) {
+            if (this.sortKey === key) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortKey = key;
+                this.sortDirection = 'asc';
+            }
+        },
+
+        toggleColumn(key) {
+            if (this.hiddenColumns.includes(key)) {
+                this.hiddenColumns = this.hiddenColumns.filter(k => k !== key);
+            } else {
+                this.hiddenColumns.push(key);
+            }
+        }
+     }"
+     class="w-full font-sans bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs overflow-hidden select-none {{ extra_classes }}">
+
+    <!-- 1. TABLE TOP CONTROLS & BULK ACTION BAR -->
+    <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/50">
+
+        <!-- Selected Items Bulk Action Bar -->
+        <div x-show="selectedKeys.length > 0" class="flex items-center gap-3 animate-fade-in" x-cloak>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary-50 dark:bg-primary-950 text-primary-700 dark:text-primary-300 text-xs font-semibold">
+                <span x-text="selectedKeys.length"></span> Selected
+            </span>
+
+            <!-- Bulk Actions Dropdown / Buttons -->
+            <div class="flex items-center gap-1.5">
+                {% if permissions.can_edit|default:True %}
+                <button type="button" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    Bulk Edit
+                </button>
+                {% endif %}
+
+                {% if permissions.can_delete|default:True %}
+                <button type="button" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors">
+                    Delete Selected
+                </button>
+                {% endif %}
+
+                {% if permissions.can_export|default:True %}
+                <button type="button" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    Export
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Default Header Action Status when no items selected -->
+        <div x-show="selectedKeys.length === 0" class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            Showing <span class="font-semibold text-slate-900 dark:text-slate-100">{{ data|length|default:0 }}</span> entries
+        </div>
+
+        <!-- Column Hide / Visibility Dropdown Menu -->
+        <div class="relative">
+            <button @click="columnMenuOpen = !columnMenuOpen"
+                    type="button"
+                    class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none">
+                <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2m0 10V7m6 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+                <span>Columns</span>
+            </button>
+
+            <!-- Column Visibility Menu -->
+            <div x-show="columnMenuOpen"
+                 @click.away="columnMenuOpen = false"
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 class="absolute right-0 mt-1.5 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 py-1.5 z-30 text-xs"
+                 x-cloak>
+                <div class="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Toggle Columns</div>
+                {% for col in columns %}
+                <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-slate-700 dark:text-slate-200">
+                    <input type="checkbox"
+                           :checked="!hiddenColumns.includes('{{ col.key }}')"
+                           @change="toggleColumn('{{ col.key }}')"
+                           class="rounded border-slate-300 dark:border-slate-700 text-primary-600 focus:ring-primary-500">
+                    <span>{{ col.label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. DESKTOP TABLE VIEW -->
+    <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+
+            <!-- Sticky Table Header -->
+            <thead class="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/80 backdrop-blur-xs border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                <tr>
+                    <!-- Checkbox Column Header -->
+                    {% if selectable|default:True %}
+                    <th scope="col" class="w-10 px-4 py-3">
+                        <input type="checkbox"
+                               @click="toggleSelectAll([{% for row in data %}'{{ row.id|default:forloop.counter }}'{% if not forloop.last %},{% endif %}{% endfor %}])"
+                               :checked="allSelected"
+                               class="rounded border-slate-300 dark:border-slate-700 text-primary-600 focus:ring-primary-500">
+                    </th>
+                    {% endif %}
+
+                    <!-- Column Headers -->
+                    {% for col in columns %}
+                    <th scope="col"
+                        x-show="!hiddenColumns.includes('{{ col.key }}')"
+                        class="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300 group text-left"
+                        x-cloak>
+                        <div class="inline-flex items-center gap-1.5 cursor-pointer select-none" @click="sortBy('{{ col.key }}')">
+                            <span>{{ col.label }}</span>
+                            <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                            </svg>
+                        </div>
+                    </th>
+                    {% endfor %}
+
+                    <!-- Action Header -->
+                    <th scope="col" class="px-4 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+
+            <!-- Table Body -->
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/70 text-slate-700 dark:text-slate-200">
+
+                <!-- Loading Skeleton Rows -->
+                {% if is_loading %}
+                {% for i in "12345" %}
+                <tr class="animate-pulse">
+                    {% if selectable|default:True %}<td class="px-4 py-3.5"><div class="w-4 h-4 bg-slate-200 dark:bg-slate-800 rounded"></div></td>{% endif %}
+                    {% for col in columns %}
+                    <td class="px-4 py-3.5"><div class="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-3/4"></div></td>
+                    {% endfor %}
+                    <td class="px-4 py-3.5 text-right"><div class="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-12 ml-auto"></div></td>
+                </tr>
+                {% endfor %}
+
+                <!-- Data Rows -->
+                {% else %}
+                {% for row in data %}
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors group"
+                    :class="selectedKeys.includes('{{ row.id|default:forloop.counter }}') ? 'bg-primary-50/40 dark:bg-primary-950/30' : ''">
+
+                    <!-- Checkbox Column -->
+                    {% if selectable|default:True %}
+                    <td class="px-4 py-3">
+                        <input type="checkbox"
+                               :checked="selectedKeys.includes('{{ row.id|default:forloop.counter }}')"
+                               @click="toggleSelectRow('{{ row.id|default:forloop.counter }}')"
+                               class="rounded border-slate-300 dark:border-slate-700 text-primary-600 focus:ring-primary-500">
+                    </td>
+                    {% endif %}
+
+                    <!-- Data Columns -->
+                    {% for col in columns %}
+                    <td x-show="!hiddenColumns.includes('{{ col.key }}')"
+                        class="px-4 py-3 whitespace-nowrap text-left"
+                        x-cloak>
+                        {% if col.key == 'status' %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                Active
+                            </span>
+                        {% else %}
+                            <span class="font-normal">{{ row.name|default:row.id|default:"—" }}</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+
+                    <!-- Inline Actions Column -->
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end gap-1">
+                            <button type="button" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Edit row">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            </button>
+                            <button type="button" class="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Delete row">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 3. RESPONSIVE MOBILE CARD VIEW -->
+    <div class="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+        {% if is_loading %}
+        <div class="p-4 text-center text-xs text-slate-400">Loading records...</div>
+        {% else %}
+        {% for row in data %}
+        <div class="p-4 space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">#{{ forloop.counter }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700">Active</span>
+            </div>
+            {% for col in columns %}
+            <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-500 dark:text-slate-400 font-medium">{{ col.label }}</span>
+                <span class="text-slate-900 dark:text-slate-100 font-semibold">{{ row.name|default:row.id|default:"—" }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- 4. EMPTY STATE VIEW -->
+    {% if not is_loading and not data %}
+    <div class="p-8 sm:p-12 text-center flex flex-col items-center justify-center">
+        <div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
+        </div>
+        <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{{ empty_title|default:"No records found" }}</h4>
+        <p class="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-4">{{ empty_desc|default:"Try adjusting your filters or search terms to find what you need." }}</p>
+    </div>
+    {% endif %}
+
+    <!-- 5. PAGINATION FOOTER -->
+    <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+        <div>
+            Showing <span class="font-semibold text-slate-900 dark:text-slate-100">1</span> to <span class="font-semibold text-slate-900 dark:text-slate-100">{{ data|length|default:0 }}</span> of <span class="font-semibold text-slate-900 dark:text-slate-100">{{ pagination.total_records|default:data|length|default:0 }}</span> entries
+        </div>
+        <div class="flex items-center gap-1">
+            <button type="button" class="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <button type="button" class="px-2.5 py-1 rounded-md bg-primary-500 text-white font-semibold">1</button>
+            <button type="button" class="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">2</button>
+            <button type="button" class="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">Next</button>
+        </div>
+    </div>
+</div>

@@ -1,8 +1,4 @@
-{% extends 'base/staff_base.html' %}
-
-{% block page_title %}New Field Visit{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="New Field Visit | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div class="px-6 py-6">
     <form id="field-visit-form" action="{% url 'attendance:field_visit_submit' %}" method="POST" enctype="multipart/form-data">
         {% csrf_token %}
@@ -120,23 +116,23 @@
         <div class="mb-6 space-y-4">
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">Visit Title *</label>
-                <input type="text" id="id_visit_title" name="visit_title" required class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="e.g. AC Repair at Client Site">
+                <input type="text" id="id_visit_title" name="visit_title" required class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="e.g. Client Meeting / Site Survey">
             </div>
             
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">Client Name (Optional)</label>
-                <input type="text" id="id_client_name" name="client_name" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Client or Company Name">
+                <input type="text" id="id_client_name" name="client_name" class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Client or Company Name">
             </div>
 
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">Site Address (Optional)</label>
-                <input type="text" id="id_site_address" name="site_address" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Enter manual address if different from GPS">
+                <input type="text" id="id_site_address" name="site_address" class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Location details if different from GPS">
             </div>
         </div>
 
         <div class="mb-8">
             <label class="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
-            <textarea name="note" id="id_note" rows="3" class="w-full rounded-xl border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Any details for this visit..."></textarea>
+            <textarea name="note" id="id_note" rows="3" class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Purpose, agenda, or notes..."></textarea>
         </div>
 
         <button type="button"
@@ -157,7 +153,7 @@
     </form>
 </div>
 
-{% block scripts %}
+<c-slot name="scripts">
 <script>
 let gpsReady = false;
 let photoReady = false;
@@ -369,9 +365,6 @@ function submitFieldVisit() {
     btn.textContent = 'Submit Visit';
   });
 }
-
-// Start GPS on page load
-window.addEventListener('load', getLocation);
 </script>
-{% endblock %}
-{% endblock %}
+</c-slot>
+</c-app-shell>

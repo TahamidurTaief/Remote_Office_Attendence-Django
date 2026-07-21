@@ -1,34 +1,18 @@
-{% extends 'base/staff_base.html' %}
-
-{% block page_title %}Home{% endblock %}
-
-{% block content %}
-<div id="install-banner"
-     class="hidden mb-4 mx-0">
-  <div class="bg-primary-gradient rounded-2xl p-4 
-              flex items-center justify-between gap-3">
+<c-app-shell page_title="Home | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
+<div id="install-banner" class="hidden mb-4 mx-0">
+  <div class="bg-primary-gradient rounded-card p-4 flex items-center justify-between gap-3">
     <div class="flex items-center gap-3">
-      <img src="/static/icons/icon-72.png" 
-           class="w-10 h-10 rounded-xl">
+      <img src="/static/icons/icon-72.png" class="w-10 h-10 rounded-xl">
       <div>
-        <p class="text-white font-semibold text-sm">
-          Install FieldTrack
-        </p>
-        <p class="text-primary-200 text-xs">
-          Add to home screen
-        </p>
+        <p class="text-white font-semibold text-sm">Install FieldTrack</p>
+        <p class="text-primary-200 text-xs">Add to home screen</p>
       </div>
     </div>
     <div class="flex items-center gap-2">
-      <button onclick="dismissInstall()"
-              class="text-primary-300 p-1">
+      <button onclick="dismissInstall()" class="text-primary-300 p-1">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
-      <button onclick="installPWA()"
-              class="bg-white text-primary-500 
-                     text-sm font-semibold 
-                     px-4 py-2 rounded-xl
-                     whitespace-nowrap">
+      <button onclick="installPWA()" class="bg-white text-primary-500 text-sm font-semibold px-4 py-2 rounded-xl whitespace-nowrap">
         Install
       </button>
     </div>
@@ -37,57 +21,47 @@
 
 <script>
 let deferredPrompt = null;
-
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  
-  // Show banner if not dismissed before
   if (!localStorage.getItem('pwa_dismissed')) {
-    document.getElementById('install-banner')
-      ?.classList.remove('hidden');
+    document.getElementById('install-banner')?.classList.remove('hidden');
   }
 });
-
 function installPWA() {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
   deferredPrompt.userChoice.then((result) => {
     if (result.outcome === 'accepted') {
-      document.getElementById('install-banner')
-        ?.classList.add('hidden');
+      document.getElementById('install-banner')?.classList.add('hidden');
     }
     deferredPrompt = null;
   });
 }
-
 function dismissInstall() {
   localStorage.setItem('pwa_dismissed', 'true');
-  document.getElementById('install-banner')
-    ?.classList.add('hidden');
+  document.getElementById('install-banner')?.classList.add('hidden');
 }
-
 window.addEventListener('appinstalled', () => {
-  document.getElementById('install-banner')
-    ?.classList.add('hidden');
+  document.getElementById('install-banner')?.classList.add('hidden');
   deferredPrompt = null;
 });
 </script>
 
-<div class="px-4 md:px-6 py-6 md:py-8 space-y-6">
+<div class="space-y-6">
     <div class="flex items-start justify-between gap-4">
         <div>
-            <p class="text-sm text-gray-500">Good morning</p>
-            <h1 class="text-2xl font-bold text-gray-900">{{ employee.full_name }}</h1>
+            <p class="text-sm" style="color:var(--text-secondary)">Good morning</p>
+            <h1 class="text-2xl font-bold" style="color:var(--text)">{{ employee.full_name }}</h1>
         </div>
     </div>
 
     <!-- Leave Summary Widget -->
     {% if employee %}
-    <a href="{% url 'leave:staff_dashboard' %}" class="block bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-sm transition-shadow">
+    <a href="{% url 'leave:staff_dashboard' %}" class="block rounded-card border p-5 transition-shadow" style="background:var(--surface); border-color:var(--border)">
         <div class="flex items-center justify-between gap-4">
             <div class="space-y-1">
-                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Leave Summary</p>
+                <p class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Leave Summary</p>
                 <div class="flex items-center gap-3 mt-1.5 flex-wrap">
                     <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-black {% if total_leave_left < 0 %}bg-red-50 border-red-200 text-red-700{% else %}bg-green-50 border-green-200 text-green-700{% endif %}">
                         Leave Left: {{ total_leave_left }} day{% if total_leave_left != 1 and total_leave_left != -1 %}s{% endif %}
@@ -98,13 +72,13 @@ window.addEventListener('appinstalled', () => {
                         Pending Requests: {{ pending_leave_count }}
                     </span>
                     {% else %}
-                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-medium bg-gray-50 border-gray-150 text-gray-600">
+                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-medium" style="background:var(--surface-2); border-color:var(--border); color:var(--text-secondary)">
                         Pending Requests: 0
                     </span>
                     {% endif %}
                 </div>
             </div>
-            <div class="p-2 bg-primary-50 text-primary-600 rounded-xl">
+            <div class="p-2 rounded-xl" style="background:var(--surface-2); color:var(--primary)">
                 <i data-lucide="chevron-right" class="w-5 h-5"></i>
             </div>
         </div>
@@ -113,17 +87,17 @@ window.addEventListener('appinstalled', () => {
 
     <!-- Expense Summary Widget -->
     {% if employee %}
-    <a href="{% url 'expense:staff_expense_list' %}" class="block bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-sm transition-shadow">
+    <a href="{% url 'expense:staff_expense_list' %}" class="block rounded-card border p-5 transition-shadow" style="background:var(--surface); border-color:var(--border)">
         <div class="flex items-center justify-between gap-4">
             <div class="space-y-1">
-                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Expense Claims</p>
+                <p class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Expense Claims</p>
                 <div class="flex items-center gap-3 mt-1.5 flex-wrap">
                     <span class="inline-flex items-center px-3 py-1.5 rounded-xl border text-sm font-bold bg-blue-50 border-blue-200 text-blue-700">
                         Claim Expenses & View Claims
                     </span>
                 </div>
             </div>
-            <div class="p-2 bg-primary-50 text-primary-600 rounded-xl">
+            <div class="p-2 rounded-xl" style="background:var(--surface-2); color:var(--primary)">
                 <i data-lucide="receipt" class="w-5 h-5"></i>
             </div>
         </div>
@@ -132,20 +106,19 @@ window.addEventListener('appinstalled', () => {
 
     <!-- My Tasks Widget -->
     {% if pending_tasks %}
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+    <c-card extra_class="overflow-hidden p-0">
+        <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border)">
             <div>
-                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">My Tasks</p>
-                <p class="text-sm font-bold text-gray-900 mt-0.5">{{ pending_tasks|length }} pending task{{ pending_tasks|length|pluralize }}</p>
+                <p class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">My Tasks</p>
+                <p class="text-sm font-bold mt-0.5" style="color:var(--text)">{{ pending_tasks|length }} pending task{{ pending_tasks|length|pluralize }}</p>
             </div>
-            <div class="p-2 bg-indigo-50 rounded-xl">
-                <i data-lucide="list-checks" class="w-4 h-4 text-indigo-600"></i>
+            <div class="p-2 rounded-xl" style="background:var(--surface-2); color:var(--primary)">
+                <i data-lucide="list-checks" class="w-4 h-4"></i>
             </div>
         </div>
-        <div class="divide-y divide-gray-50">
+        <div class="divide-y" style="border-color:var(--border)">
             {% for task in pending_tasks %}
-            <div class="px-5 py-3.5 flex items-start gap-3 hover:bg-gray-50/60 transition-colors">
-                <!-- Status dot -->
+            <div class="px-5 py-3.5 flex items-start gap-3 transition-colors" style="background:var(--surface)">
                 <div class="mt-1 flex-shrink-0">
                     {% if task.status == 'In Progress' %}
                     <span class="w-2 h-2 rounded-full bg-blue-500 block"></span>
@@ -156,8 +129,8 @@ window.addEventListener('appinstalled', () => {
                     {% endif %}
                 </div>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-gray-900 truncate">{{ task.activity }}</p>
-                    <p class="text-xs text-gray-400 mt-0.5 truncate">
+                    <p class="text-sm font-semibold truncate" style="color:var(--text)">{{ task.activity }}</p>
+                    <p class="text-xs mt-0.5 truncate" style="color:var(--text-secondary)">
                         {% if task.project %}
                             <i data-lucide="folder" class="w-3 h-3 inline mr-0.5 -mt-0.5"></i>{{ task.project.name }}
                         {% else %}
@@ -165,19 +138,19 @@ window.addEventListener('appinstalled', () => {
                         {% endif %}
                     </p>
                     {% if task.planned_finish %}
-                    <p class="text-[11px] text-gray-400 mt-0.5">Due: {{ task.planned_finish|date:"d M Y" }}</p>
+                    <p class="text-[11px] mt-0.5" style="color:var(--text-muted)">Due: {{ task.planned_finish|date:"d M Y" }}</p>
                     {% endif %}
                 </div>
                 <div class="flex-shrink-0 flex items-center gap-2">
                     {% if task.status == 'In Progress' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">In Progress</span>
+                    <c-badge label="In Progress" variant="soft" status_color="blue" />
                     {% elif task.status == 'Delayed' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-red-50 text-red-700 border border-red-100">Delayed</span>
+                    <c-badge label="Delayed" variant="soft" status_color="rose" />
                     {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-gray-100 text-gray-600">Not Started</span>
+                    <c-badge label="Not Started" variant="soft" status_color="slate" />
                     {% endif %}
                     {% if task.project %}
-                    <a href="{% url 'staff:my_project_detail' task.project.pk %}" class="p-1 text-gray-300 hover:text-indigo-500 transition-colors" title="View project">
+                    <a href="{% url 'staff:my_project_detail' task.project.pk %}" class="p-1 transition-colors" style="color:var(--text-muted)" title="View project">
                         <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
                     </a>
                     {% endif %}
@@ -185,64 +158,61 @@ window.addEventListener('appinstalled', () => {
             </div>
             {% endfor %}
         </div>
-    </div>
+    </c-card>
     {% endif %}
 
-
-
     <div hx-get="{% url 'staff:attendance_card' %}" hx-trigger="load, every 30s">
-        <div class="w-full h-52 bg-white rounded-2xl border border-gray-100 shadow-sm animate-pulse flex flex-col justify-center items-center">
-            <div class="w-8 h-8 rounded-full border-2 border-primary-500 border-t-transparent animate-spin mb-2"></div>
-            <p class="text-sm text-gray-500">Loading status...</p>
+        <div class="w-full h-52 rounded-card border animate-pulse flex flex-col justify-center items-center" style="background:var(--surface); border-color:var(--border)">
+            <div class="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mb-2" style="border-color:var(--primary)"></div>
+            <p class="text-sm" style="color:var(--text-secondary)">Loading status...</p>
         </div>
     </div>
 
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-6 py-2.5 border-b border-gray-100 flex items-center justify-between">
+    <c-card extra_class="overflow-hidden p-0">
+        <div class="px-6 py-3 border-b flex items-center justify-between" style="border-color:var(--border)">
             <div>
-                <h2 class="text-lg font-bold text-gray-900">Field Visits Today</h2>
-                <p class="text-xs text-gray-500 mt-1">Track client work and site visits.</p>
+                <h2 class="text-lg font-bold" style="color:var(--text)">Field Visits Today</h2>
+                <p class="text-xs mt-1" style="color:var(--text-secondary)">Track client work and site visits.</p>
             </div>
-            <a href="{% url 'staff:field_visit' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
+            <a href="{% url 'staff:field_visit' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Add Visit
             </a>
         </div>
         <div class="p-4 md:p-6 space-y-3">
             {% for visit in field_visits %}
-                <div class="flex items-start gap-4 p-4 rounded-2xl border border-gray-100 hover:bg-gray-50 transition-colors">
+                <div class="flex items-start gap-4 p-4 rounded-card border transition-colors" style="background:var(--surface); border-color:var(--border)">
                     <div class="shrink-0 text-right min-w-[4.5rem]">
-                        <p class="text-sm font-bold text-gray-900">{{ visit.check_in_time|time:"h:i A" }}</p>
-                        <p class="text-[11px] text-gray-400 uppercase tracking-wider">Time</p>
+                        <p class="text-sm font-bold" style="color:var(--text)">{{ visit.check_in_time|time:"h:i A" }}</p>
+                        <p class="text-[11px] uppercase tracking-wider" style="color:var(--text-muted)">Time</p>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <h3 class="font-semibold text-gray-900 truncate">{{ visit.visit_title|default:"Field Visit" }}</h3>
+                        <h3 class="font-semibold truncate" style="color:var(--text)">{{ visit.visit_title|default:"Field Visit" }}</h3>
                         {% if visit.client_name %}
-                        <p class="text-sm text-gray-500 mt-0.5 truncate">{{ visit.client_name }}</p>
+                        <p class="text-sm mt-0.5 truncate" style="color:var(--text-secondary)">{{ visit.client_name }}</p>
                         {% endif %}
                         {% if visit.site_address %}
-                        <p class="mt-2 text-xs text-gray-500 flex items-start gap-1.5">
-                            <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0 mt-0.5 text-gray-400"></i>
+                        <p class="mt-2 text-xs flex items-start gap-1.5" style="color:var(--text-secondary)">
+                            <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0 mt-0.5" style="color:var(--text-muted)"></i>
                             <span class="truncate">{{ visit.site_address }}</span>
                         </p>
                         {% endif %}
                     </div>
-                    <button type="button" class="shrink-0 p-2 rounded-xl text-gray-400 hover:text-primary-500 hover:bg-primary-50 transition-colors" title="Add follow-up">
+                    <button type="button" class="shrink-0 p-2 rounded-xl transition-colors" style="color:var(--text-muted)" title="Add follow-up">
                         <i data-lucide="plus" class="w-4 h-4"></i>
                     </button>
                 </div>
             {% empty %}
-                <div class="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-150">
-                    <i data-lucide="map" class="w-10 h-10 mx-auto text-gray-300 mb-3"></i>
-                    <p class="text-gray-500 text-sm">No field visits yet</p>
+                <div class="text-center py-10 rounded-card border border-dashed" style="background:var(--surface-2); border-color:var(--border)">
+                    <i data-lucide="map" class="w-10 h-10 mx-auto mb-3" style="color:var(--text-muted)"></i>
+                    <p class="text-sm" style="color:var(--text-secondary)">No field visits yet</p>
                 </div>
             {% endfor %}
         </div>
-    </div>
+    </c-card>
 </div>
-{% endblock %}
 
-{% block scripts %}
+<c-slot name="scripts">
 <script>
 function updateClock() {
   const now = new Date();
@@ -268,17 +238,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (window.LocationTracker) {
       await LocationTracker.init();
-      
       const isCheckedIn = {{ is_checked_in|yesno:'true,false' }};
-      
       if (isCheckedIn) {
         if (localStorage.getItem('ft_active') !== 'true') {
           LocationTracker.startTracking();
         } else {
-          // Already active - resume and start countdown
           LocationTracker.resume();
         }
-        // Always start countdown when checked in
         LocationTracker.startCountdown();
       } else {
         LocationTracker.stopTracking();
@@ -289,4 +255,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 </script>
-{% endblock %}
+</c-slot>
+</c-app-shell>
+

@@ -1,299 +1,245 @@
-{% extends 'base/admin_base.html' %}
+<c-app-shell page_title="{% if object %}Edit Employee{% else %}Add Employee{% endif %} | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block title %}{% if object %}Edit Employee{% else %}Add Employee{% endif %} | Signtech Track{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="{% if object %}Edit Employee: {{ object.full_name }}{% else %}Add New Employee{% endif %}" />
+    </c-slot>
 
-{% block content %}
-<div class="p-4 max-w-4xl mx-auto">
-    <div class="mb-6">
-        <h2 class="text-[14px] font-semibold text-gray-900">
-            {% if object %}Edit Employee: {{ object.full_name }}{% else %}Add New Employee{% endif %}
-        </h2>
-    </div>
+    <c-command-palette />
 
-    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
-        <form method="POST" enctype="multipart/form-data" class="p-6 space-y-6">
-            {% csrf_token %}
-            
-            {% if form.errors %}
-            <div class="rounded-md bg-red-50 p-4 border border-red-200">
-                <div class="flex">
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-red-800">Please fix the errors below.</h3>
-                        {{ form.non_field_errors }}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                <!-- If create view, show email -->
-                {% if not object %}
-                <div class="sm:col-span-3">
-                    <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-gray-700">Email Address (Optional)</label>
-                    <div class="mt-1">{{ form.email }}</div>
-                    {% if form.email.errors %}<p class="mt-2 text-sm text-red-600">{{ form.email.errors.0 }}</p>{% endif %}
-                </div>
-                {% endif %}
-                <div class="sm:col-span-3">
-                    <label for="{{ form.role.id_for_label }}" class="block text-sm font-medium text-gray-700">System Role</label>
-                    <div class="mt-1">{{ form.role }}</div>
-                    {% if form.role.errors %}<p class="mt-2 text-sm text-red-600">{{ form.role.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.groups.id_for_label }}" class="block text-sm font-medium text-gray-700">Roles / Groups</label>
-                    <div class="mt-1">{{ form.groups }}</div>
-                    {% if form.groups.errors %}<p class="mt-2 text-sm text-red-600">{{ form.groups.errors.0 }}</p>{% endif %}
-                    <p class="mt-1.5 text-[11px] text-gray-500">Hold Ctrl (or Cmd) to select multiple.</p>
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.employee_id.id_for_label }}" class="block text-sm font-medium text-gray-700">Employee ID</label>
-                    <div class="mt-1">{{ form.employee_id }}</div>
-                    {% if form.employee_id.errors %}<p class="mt-2 text-sm text-red-600">{{ form.employee_id.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.full_name.id_for_label }}" class="block text-sm font-medium text-gray-700">Full Name</label>
-                    <div class="mt-1">{{ form.full_name }}</div>
-                    {% if form.full_name.errors %}<p class="mt-2 text-sm text-red-600">{{ form.full_name.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.department.id_for_label }}" class="block text-sm font-medium text-gray-700">Department</label>
-                    <div class="mt-1">{{ form.department }}</div>
-                    {% if form.department.errors %}<p class="mt-2 text-sm text-red-600">{{ form.department.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.designation.id_for_label }}" class="block text-sm font-medium text-gray-700">Designation</label>
-                    <div class="mt-1">{{ form.designation }}</div>
-                    {% if form.designation.errors %}<p class="mt-2 text-sm text-red-600">{{ form.designation.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-6">
-                    <label for="{{ form.branch.id_for_label }}" class="block text-sm font-medium text-gray-700">Assigned Branch</label>
-                    <div class="mt-1">{{ form.branch }}</div>
-                    {% if form.branch.errors %}<p class="mt-2 text-sm text-red-600">{{ form.branch.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.phone.id_for_label }}" class="block text-sm font-medium text-gray-700">Phone Number (Login ID)</label>
-                    <div class="mt-1">{{ form.phone }}</div>
-                    {% if form.phone.errors %}<p class="mt-2 text-sm text-red-600">{{ form.phone.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.emergency_contact.id_for_label }}" class="block text-sm font-medium text-gray-700">Emergency Contact</label>
-                    <div class="mt-1">{{ form.emergency_contact }}</div>
-                    {% if form.emergency_contact.errors %}<p class="mt-2 text-sm text-red-600">{{ form.emergency_contact.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.joined_date.id_for_label }}" class="block text-sm font-medium text-gray-700">Join Date</label>
-                    <div class="mt-1">{{ form.joined_date }}</div>
-                    {% if form.joined_date.errors %}<p class="mt-2 text-sm text-red-600">{{ form.joined_date.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.profile_photo.id_for_label }}" class="block text-sm font-medium text-gray-700">Profile Photo</label>
-                    <div class="mt-2 flex items-center gap-4">
-                        <img id="photo-preview" src="{% if object and object.profile_photo %}{{ object.profile_photo.url }}{% else %}#{% endif %}" alt="Photo preview"
-                             class="w-16 h-16 rounded-full object-cover border border-gray-150 {% if not object or not object.profile_photo %}hidden{% endif %}" />
-                        <div class="flex-1">
-                            <div class="mt-1">{{ form.profile_photo }}</div>
-                            {% if form.profile_photo.errors %}<p class="mt-2 text-sm text-red-600">{{ form.profile_photo.errors.0 }}</p>{% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                {% if not object %}
-                <div class="sm:col-span-6">
-                    <div class="flex items-start">
-                        <div class="flex items-center h-5">{{ form.send_email }}</div>
-                        <div class="ml-3 text-sm">
-                            <label for="{{ form.send_email.id_for_label }}" class="font-medium text-gray-700">Send Welcome Email</label>
-                            <p class="text-gray-500">Sends the generated password to the employee's email.</p>
-                        </div>
-                    </div>
+    <div class="p-4 max-w-4xl mx-auto space-y-4">
+        <c-card>
+            <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                <div class="rounded-btn bg-red-50 p-4 border border-red-200 dark:bg-red-950 dark:border-red-900">
+                    <h3 class="text-xs font-semibold text-red-800 dark:text-red-200">Please fix the errors below.</h3>
+                    <div class="text-xs text-red-700 dark:text-red-300 mt-1">{{ form.non_field_errors }}</div>
                 </div>
                 {% endif %}
 
-                <div class="sm:col-span-6">
-                    <label for="{{ form.is_active.id_for_label }}" class="block text-sm font-medium text-gray-700">Is Active</label>
-                    <div class="flex items-center h-5 mt-1">{{ form.is_active }}</div>
-                </div>
-
-                <!-- Location Tracking -->
-                <div class="sm:col-span-6 pt-4 border-t border-gray-100">
-                    <div class="flex items-center gap-2 mb-1">
-                        <i data-lucide="map-pin" class="w-4 h-4 text-primary-500"></i>
-                        <label for="{{ form.tracking_interval.id_for_label }}" class="block text-sm font-semibold text-gray-700">
-                            Auto Location Tracking Interval
-                        </label>
-                    </div>
-                    <div class="mt-1">{{ form.tracking_interval }}</div>
-                    <p class="mt-1 text-xs text-gray-500">
-                        How often to sync this employee's GPS location while they are checked in.
-                        Set to <strong>Disabled</strong> if you don't need real-time tracking.
-                    </p>
-                    {% if form.tracking_interval.errors %}<p class="mt-1 text-sm text-red-600">{{ form.tracking_interval.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Overtime Tracking -->
-                <div class="sm:col-span-6 pt-4 border-t border-gray-100">
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-150">
-                      <div>
-                        <p class="text-sm font-medium text-gray-800">
-                          Overtime Tracking
-                        </p>
-                        <p class="text-xs text-gray-500 mt-0.5">
-                          Track and report overtime hours for this employee
-                        </p>
-                      </div>
-                      <label class="relative inline-flex items-center cursor-pointer ml-4 flex-shrink-0">
-                        <input type="checkbox" 
-                               name="overtime_enabled"
-                               id="overtime_enabled"
-                               class="sr-only peer"
-                               {% if form.overtime_enabled.value %}
-                               checked
-                               {% endif %}>
-                        <div class="w-11 h-6 bg-gray-200 rounded-full 
-                                    peer peer-checked:bg-primary-gradient
-                                    peer-focus:ring-2 
-                                    peer-focus:ring-primary-300
-                                    after:content-[''] after:absolute 
-                                    after:top-0.5 after:left-0.5
-                                    after:bg-white after:rounded-full 
-                                    after:h-5 after:w-5 
-                                    after:transition-all
-                                    peer-checked:after:translate-x-5">
-                        </div>
-                      </label>
-                    </div>
-                    {% if form.overtime_enabled.errors %}<p class="mt-1 text-sm text-red-600">{{ form.overtime_enabled.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Project Manager Toggle -->
-                <div class="sm:col-span-6 pt-4 border-t border-gray-100">
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-150">
-                      <div>
-                        <p class="text-sm font-medium text-gray-800">
-                          Project Manager
-                        </p>
-                        <p class="text-xs text-gray-500 mt-0.5">
-                          Allow this employee to work as a Project Manager and manage projects
-                        </p>
-                      </div>
-                      <label class="relative inline-flex items-center cursor-pointer ml-4 flex-shrink-0">
-                        <input type="checkbox" 
-                               name="is_project_manager"
-                               id="is_project_manager"
-                               class="sr-only peer"
-                               {% if form.is_project_manager.value %}
-                               checked
-                               {% endif %}>
-                        <div class="w-11 h-6 bg-gray-200 rounded-full 
-                                    peer peer-checked:bg-primary-gradient
-                                    peer-focus:ring-2 
-                                    peer-focus:ring-primary-300
-                                    after:content-[''] after:absolute 
-                                    after:top-0.5 after:left-0.5
-                                    after:bg-white after:rounded-full 
-                                    after:h-5 after:w-5 
-                                    after:transition-all
-                                    peer-checked:after:translate-x-5">
-                        </div>
-                      </label>
-                    </div>
-                    {% if form.is_project_manager.errors %}<p class="mt-1 text-sm text-red-600">{{ form.is_project_manager.errors.0 }}</p>{% endif %}
-                </div>
-            </div>
-
-            <div class="mt-8 pt-6 border-t border-gray-150">
-                <h3 class="text-lg font-medium text-gray-900 flex items-center mb-4">
-                    <i data-lucide="lock" class="w-5 h-5 mr-2 text-gray-500"></i>
-                    Login Credentials
-                </h3>
-                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6 bg-gray-50 p-4 rounded-lg border border-gray-150">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-6">
                     {% if not object %}
                     <div class="sm:col-span-3">
-                        <label for="{{ form.password1.id_for_label }}" class="block text-sm font-medium text-gray-700">Password</label>
-                        <div class="mt-1">{{ form.password1 }}</div>
-                        {% if form.password1.errors %}<p class="mt-2 text-sm text-red-600">{{ form.password1.errors.0 }}</p>{% endif %}
-                        <p class="mt-2 text-xs text-gray-500">Minimum 8 characters</p>
-                    </div>
-                    <div class="sm:col-span-3">
-                        <label for="{{ form.password2.id_for_label }}" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-                        <div class="mt-1">{{ form.password2 }}</div>
-                        {% if form.password2.errors %}<p class="mt-2 text-sm text-red-600">{{ form.password2.errors.0 }}</p>{% endif %}
-                    </div>
-                    {% else %}
-                    <div class="sm:col-span-3">
-                        <label for="{{ form.new_password.id_for_label }}" class="block text-sm font-medium text-gray-700">New Password</label>
-                        <div class="mt-1">{{ form.new_password }}</div>
-                        {% if form.new_password.errors %}<p class="mt-2 text-sm text-red-600">{{ form.new_password.errors.0 }}</p>{% endif %}
-                        <p class="mt-2 text-xs text-gray-500">Minimum 8 characters. Leave blank to keep current password.</p>
-                    </div>
-                    <div class="sm:col-span-3">
-                        <label for="{{ form.confirm_password.id_for_label }}" class="block text-sm font-medium text-gray-700">Confirm New Password</label>
-                        <div class="mt-1">{{ form.confirm_password }}</div>
-                        {% if form.confirm_password.errors %}<p class="mt-2 text-sm text-red-600">{{ form.confirm_password.errors.0 }}</p>{% endif %}
+                        <label for="{{ form.email.id_for_label }}" class="ft-label">Email Address (Optional)</label>
+                        {{ form.email }}
+                        {% if form.email.errors %}<p class="ft-error-text">{{ form.email.errors.0 }}</p>{% endif %}
                     </div>
                     {% endif %}
-                </div>
-            </div>
+                    
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.role.id_for_label }}" class="ft-label">System Role</label>
+                        {{ form.role }}
+                        {% if form.role.errors %}<p class="ft-error-text">{{ form.role.errors.0 }}</p>{% endif %}
+                    </div>
 
-            <!-- Leave Override Policies -->
-            <div class="sm:col-span-6 pt-6 border-t border-gray-150 mt-6">
-                <div class="flex items-center gap-2 mb-1">
-                    <i data-lucide="calendar-days" class="w-4 h-4 text-primary-500"></i>
-                    <label class="block text-sm font-semibold text-gray-750">
-                        Leave Override Rules
-                    </label>
-                </div>
-                <p class="text-xs text-gray-500 mb-4">
-                    Specify custom yearly leave allowances for this employee to override global settings. Leave blank to use global default values.
-                </p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-150">
-                    {% for item in leave_types_with_overrides %}
-                    <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-150 shadow-sm gap-3">
-                        <div class="min-w-0">
-                            <p class="text-sm font-bold text-gray-900 truncate">{{ item.name }}</p>
-                            <p class="text-[10px] text-gray-400 uppercase tracking-wider">{{ item.category }} (Global Default: {{ item.default_days }}d)</p>
-                        </div>
-                        <div class="w-28 shrink-0 relative">
-                            <label for="leave_override_{{ item.id }}" class="sr-only">Override Days for {{ item.name }}</label>
-                            <input id="leave_override_{{ item.id }}"
-                                   type="number" 
-                                   name="leave_override_{{ item.id }}" 
-                                   value="{{ item.override_days }}"
-                                   placeholder="{{ item.default_days }}"
-                                   min="0"
-                                   class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-right pr-9">
-                            <span class="absolute inset-y-0 right-3 flex items-center pointer-events-none text-xs text-gray-400">days</span>
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.groups.id_for_label }}" class="ft-label">Roles / Groups</label>
+                        {{ form.groups }}
+                        {% if form.groups.errors %}<p class="ft-error-text">{{ form.groups.errors.0 }}</p>{% endif %}
+                        <p class="ft-help-text">Hold Ctrl (or Cmd) to select multiple.</p>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.employee_id.id_for_label }}" class="ft-label">Employee ID</label>
+                        {{ form.employee_id }}
+                        {% if form.employee_id.errors %}<p class="ft-error-text">{{ form.employee_id.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.full_name.id_for_label }}" class="ft-label">Full Name</label>
+                        {{ form.full_name }}
+                        {% if form.full_name.errors %}<p class="ft-error-text">{{ form.full_name.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.department.id_for_label }}" class="ft-label">Department</label>
+                        {{ form.department }}
+                        {% if form.department.errors %}<p class="ft-error-text">{{ form.department.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.designation.id_for_label }}" class="ft-label">Designation</label>
+                        {{ form.designation }}
+                        {% if form.designation.errors %}<p class="ft-error-text">{{ form.designation.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-6">
+                        <label for="{{ form.branch.id_for_label }}" class="ft-label">Assigned Branch</label>
+                        {{ form.branch }}
+                        {% if form.branch.errors %}<p class="ft-error-text">{{ form.branch.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.phone.id_for_label }}" class="ft-label">Phone Number (Login ID)</label>
+                        {{ form.phone }}
+                        {% if form.phone.errors %}<p class="ft-error-text">{{ form.phone.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.emergency_contact.id_for_label }}" class="ft-label">Emergency Contact</label>
+                        {{ form.emergency_contact }}
+                        {% if form.emergency_contact.errors %}<p class="ft-error-text">{{ form.emergency_contact.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.joined_date.id_for_label }}" class="ft-label">Join Date</label>
+                        {{ form.joined_date }}
+                        {% if form.joined_date.errors %}<p class="ft-error-text">{{ form.joined_date.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.profile_photo.id_for_label }}" class="ft-label">Profile Photo</label>
+                        <div class="mt-1 flex items-center gap-3">
+                            <img id="photo-preview" src="{% if object and object.profile_photo %}{{ object.profile_photo.url }}{% else %}#{% endif %}" alt="Photo preview"
+                                 class="w-12 h-12 rounded-full object-cover border {% if not object or not object.profile_photo %}hidden{% endif %}"
+                                 style="border-color:var(--border)" />
+                            <div class="flex-1">
+                                {{ form.profile_photo }}
+                                {% if form.profile_photo.errors %}<p class="ft-error-text">{{ form.profile_photo.errors.0 }}</p>{% endif %}
+                            </div>
                         </div>
                     </div>
-                    {% endfor %}
+
+                    {% if not object %}
+                    <div class="sm:col-span-6">
+                        <div class="flex items-start gap-2">
+                            {{ form.send_email }}
+                            <div>
+                                <label for="{{ form.send_email.id_for_label }}" class="text-xs font-semibold" style="color:var(--text)">Send Welcome Email</label>
+                                <p class="ft-help-text">Sends the generated password to the employee's email.</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="sm:col-span-6">
+                        <div class="flex items-center gap-2">
+                            {{ form.is_active }}
+                            <label for="{{ form.is_active.id_for_label }}" class="text-xs font-semibold" style="color:var(--text)">Is Active</label>
+                        </div>
+                    </div>
+
+                    <!-- Location Tracking -->
+                    <div class="sm:col-span-6 pt-4 border-t" style="border-color:var(--border)">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i data-lucide="map-pin" class="w-4 h-4" style="color:var(--primary)"></i>
+                            <label for="{{ form.tracking_interval.id_for_label }}" class="text-xs font-semibold" style="color:var(--text)">
+                                Auto Location Tracking Interval
+                            </label>
+                        </div>
+                        {{ form.tracking_interval }}
+                        <p class="ft-help-text">
+                            How often to sync GPS location while checked in. Set to <strong>Disabled</strong> if not needed.
+                        </p>
+                        {% if form.tracking_interval.errors %}<p class="ft-error-text">{{ form.tracking_interval.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <!-- Overtime Tracking -->
+                    <div class="sm:col-span-6 pt-4 border-t" style="border-color:var(--border)">
+                        <div class="flex items-center justify-between p-3 rounded-btn border" style="background:var(--surface-2); border-color:var(--border)">
+                            <div>
+                                <p class="text-xs font-semibold" style="color:var(--text)">Overtime Tracking</p>
+                                <p class="ft-help-text">Track and report overtime hours for this employee</p>
+                            </div>
+                            <input type="checkbox" name="overtime_enabled" id="overtime_enabled" {% if form.overtime_enabled.value %}checked{% endif %}>
+                        </div>
+                        {% if form.overtime_enabled.errors %}<p class="ft-error-text">{{ form.overtime_enabled.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <!-- Project Manager Toggle -->
+                    <div class="sm:col-span-6 pt-4 border-t" style="border-color:var(--border)">
+                        <div class="flex items-center justify-between p-3 rounded-btn border" style="background:var(--surface-2); border-color:var(--border)">
+                            <div>
+                                <p class="text-xs font-semibold" style="color:var(--text)">Project Manager</p>
+                                <p class="ft-help-text">Allow this employee to manage projects as a Project Manager</p>
+                            </div>
+                            <input type="checkbox" name="is_project_manager" id="is_project_manager" {% if form.is_project_manager.value %}checked{% endif %}>
+                        </div>
+                        {% if form.is_project_manager.errors %}<p class="ft-error-text">{{ form.is_project_manager.errors.0 }}</p>{% endif %}
+                    </div>
                 </div>
-            </div>
 
-            <div class="pt-5 flex justify-end gap-3 border-t border-gray-150 mt-6 sm:col-span-6">
-                <a href="{% url 'employees:employee_list' %}" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    Cancel
-                </a>
-                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-gradient hover:opacity-90">
-                    Save
-                </button>
-            </div>
-        </form>
+                <div class="mt-6 pt-4 border-t" style="border-color:var(--border)">
+                    <h3 class="text-xs font-semibold flex items-center mb-3" style="color:var(--text)">
+                        <i data-lucide="lock" class="w-4 h-4 mr-1.5" style="color:var(--text-muted)"></i>
+                        Login Credentials
+                    </h3>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-6 p-3 rounded-btn border" style="background:var(--surface-2); border-color:var(--border)">
+                        {% if not object %}
+                        <div class="sm:col-span-3">
+                            <label for="{{ form.password1.id_for_label }}" class="ft-label">Password</label>
+                            {{ form.password1 }}
+                            {% if form.password1.errors %}<p class="ft-error-text">{{ form.password1.errors.0 }}</p>{% endif %}
+                            <p class="ft-help-text">Minimum 8 characters</p>
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label for="{{ form.password2.id_for_label }}" class="ft-label">Confirm Password</label>
+                            {{ form.password2 }}
+                            {% if form.password2.errors %}<p class="ft-error-text">{{ form.password2.errors.0 }}</p>{% endif %}
+                        </div>
+                        {% else %}
+                        <div class="sm:col-span-3">
+                            <label for="{{ form.new_password.id_for_label }}" class="ft-label">New Password</label>
+                            {{ form.new_password }}
+                            {% if form.new_password.errors %}<p class="ft-error-text">{{ form.new_password.errors.0 }}</p>{% endif %}
+                            <p class="ft-help-text">Minimum 8 characters. Leave blank to keep current password.</p>
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label for="{{ form.confirm_password.id_for_label }}" class="ft-label">Confirm New Password</label>
+                            {{ form.confirm_password }}
+                            {% if form.confirm_password.errors %}<p class="ft-error-text">{{ form.confirm_password.errors.0 }}</p>{% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Leave Override Policies -->
+                <div class="sm:col-span-6 pt-4 border-t mt-4" style="border-color:var(--border)">
+                    <div class="flex items-center gap-2 mb-1">
+                        <i data-lucide="calendar-days" class="w-4 h-4" style="color:var(--primary)"></i>
+                        <label class="text-xs font-semibold" style="color:var(--text)">
+                            Leave Override Rules
+                        </label>
+                    </div>
+                    <p class="ft-help-text mb-3">
+                        Specify custom yearly leave allowances for this employee to override global settings.
+                    </p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-btn border" style="background:var(--surface-2); border-color:var(--border)">
+                        {% for item in leave_types_with_overrides %}
+                        <div class="flex items-center justify-between p-2.5 rounded-btn border gap-3" style="background:var(--surface); border-color:var(--border)">
+                            <div class="min-w-0">
+                                <p class="text-xs font-semibold truncate" style="color:var(--text)">{{ item.name }}</p>
+                                <p class="text-[10px] uppercase tracking-wider" style="color:var(--text-muted)">Default: {{ item.default_days }}d</p>
+                            </div>
+                            <div class="w-24 shrink-0 relative">
+                                <input id="leave_override_{{ item.id }}"
+                                       type="number" 
+                                       name="leave_override_{{ item.id }}" 
+                                       value="{{ item.override_days }}"
+                                       placeholder="{{ item.default_days }}"
+                                       min="0"
+                                       class="ft-input text-right pr-8">
+                                <span class="absolute inset-y-0 right-2 flex items-center pointer-events-none text-[10px]" style="color:var(--text-muted)">days</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+                    <c-button href="{% url 'employees:employee_list' %}" variant="secondary" label="Cancel" />
+                    <c-button type="submit" variant="primary" label="Save Employee" />
+                </div>
+            </form>
+        </c-card>
     </div>
-</div>
-{% endblock %}
+</c-app-shell>
 
-{% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const input = document.getElementById('{{ form.profile_photo.id_for_label }}');
@@ -313,4 +259,3 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
-{% endblock %}

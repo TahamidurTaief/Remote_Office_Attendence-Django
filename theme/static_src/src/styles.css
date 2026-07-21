@@ -1,3 +1,583 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* =============================================================================
+   FIELDTRACK DESIGN SYSTEM — CSS CUSTOM PROPERTIES
+   Light mode default. Dark mode activated by <html class="dark">.
+   These variables are consumed by all cotton components.
+   ============================================================================= */
+
+:root,
+html:not(.dark) {
+    /* Backgrounds */
+    --bg:           #F9FAFB;        /* page background */
+    --surface:      #FFFFFF;        /* card / panel surface */
+    --surface-2:    #F3F4F6;        /* nested surface, table header, inputs */
+    --surface-3:    #E5E7EB;        /* active/selected row bg, tag bg */
+
+    /* Text */
+    --text:         #111827;        /* primary text */
+    --text-secondary: #374151;      /* secondary/body text */
+    --text-muted:   #6B7280;        /* captions, meta, placeholders */
+    --text-disabled: #9CA3AF;       /* disabled state */
+
+    /* Borders */
+    --border:       #E5E7EB;        /* default 1px border */
+    --border-subtle:#F3F4F6;        /* very subtle dividers */
+
+    /* Brand */
+    --primary:      #0B5FA5;
+    --primary-hover:#094E8A;
+    --primary-light:#E1EFF9;        /* primary tint bg */
+    --primary-fg:   #FFFFFF;        /* text on primary bg */
+
+    /* Accent (emerald — success/positive only) */
+    --accent:       #10B981;
+    --accent-hover: #059669;
+    --accent-light: #D1FAE5;
+    --accent-fg:    #FFFFFF;
+
+    /* Semantic (NOT brand accents) */
+    --danger:       #EF4444;
+    --danger-light: #FEE2E2;
+    --danger-border:#FCA5A5;
+    --warning:      #F59E0B;
+    --warning-light:#FEF3C7;
+    --info:         #3B82F6;
+    --info-light:   #DBEAFE;
+
+    /* Shadows — used by @layer components */
+    --shadow-soft:     0 1px 3px rgba(0,0,0,0.08);
+    --shadow-elevated: 0 8px 24px rgba(0,0,0,0.10);
+    --shadow-dropdown: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+
+    /* Sidebar widths */
+    --sidebar-w:    224px;
+    --sidebar-w-collapsed: 64px;
+}
+
+html.dark {
+    /* Backgrounds */
+    --bg:           #0F172A;
+    --surface:      #1E293B;
+    --surface-2:    #273549;
+    --surface-3:    #334155;
+
+    /* Text */
+    --text:         #F1F5F9;
+    --text-secondary:#CBD5E1;
+    --text-muted:   #94A3B8;
+    --text-disabled:#475569;
+
+    /* Borders — in dark mode prefer border over shadow */
+    --border:       rgba(255,255,255,0.08);
+    --border-subtle:rgba(255,255,255,0.04);
+
+    /* Brand */
+    --primary:      #3BA3DD;        /* lighter blue for dark bg contrast */
+    --primary-hover:#7EC3E9;
+    --primary-light:#0B2A47;
+    --primary-fg:   #0F172A;
+
+    /* Accent */
+    --accent:       #34D399;
+    --accent-hover: #6EE7B7;
+    --accent-light: #064E3B;
+    --accent-fg:    #0F172A;
+
+    /* Semantic */
+    --danger:       #F87171;
+    --danger-light: #450A0A;
+    --danger-border:#7F1D1D;
+    --warning:      #FCD34D;
+    --warning-light:#451A03;
+    --info:         #60A5FA;
+    --info-light:   #1E3A5F;
+
+    /* Dark mode shadows → replaced by border lines */
+    --shadow-soft:     0 0 0 1px rgba(255,255,255,0.06);
+    --shadow-elevated: 0 0 0 1px rgba(255,255,255,0.08);
+    --shadow-dropdown: 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+/* =============================================================================
+   BASE LAYER — Global resets & typography
+   ============================================================================= */
+
+@layer base {
+    *, *::before, *::after {
+        box-sizing: border-box;
+    }
+
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Alpine x-cloak */
+    [x-cloak] { display: none !important; }
+
+    /* Thin scrollbar — app-wide */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(11, 95, 165, 0.2) transparent;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+        background-color: rgba(11, 95, 165, 0.18);
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(11, 95, 165, 0.35);
+    }
+
+    /* Scrollbar hide utility */
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+    /* Hide spin buttons on number inputs */
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+}
+
+/* =============================================================================
+   COMPONENTS LAYER — Reusable design-system patterns
+   ============================================================================= */
+
+@layer components {
+
+    /* ── Page layout ─────────────────────────────────────────────────────── */
+    .ft-page-bg {
+        background: var(--bg);
+        background-image:
+            radial-gradient(ellipse at top left,    rgba(186,230,253,0.18) 0%, transparent 55%),
+            radial-gradient(ellipse at bottom right, rgba(187,247,208,0.12) 0%, transparent 55%);
+        min-height: 100vh;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    .ft-sidebar {
+        position: fixed;
+        top: 0; left: 0;
+        height: 100vh;
+        width: var(--sidebar-w);
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        z-index: 45;
+        display: flex;
+        flex-direction: column;
+        overflow: visible;
+        transition: width 220ms cubic-bezier(0.4,0,0.2,1);
+    }
+    .ft-sidebar.collapsed {
+        width: var(--sidebar-w-collapsed);
+    }
+    .ft-main {
+        margin-left: var(--sidebar-w);
+        transition: margin-left 220ms cubic-bezier(0.4,0,0.2,1);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+    }
+    .ft-main.sidebar-collapsed {
+        margin-left: var(--sidebar-w-collapsed);
+    }
+
+    /* ── Nav items ───────────────────────────────────────────────────────── */
+    .ft-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        margin: 1px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        text-decoration: none;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        transition: background 130ms ease, color 130ms ease, box-shadow 130ms ease;
+        position: relative;
+    }
+    .ft-nav-item:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+    }
+    .ft-nav-item.active {
+        background: var(--primary-light);
+        color: var(--primary);
+        font-weight: 600;
+    }
+    .ft-sidebar.collapsed .ft-nav-item {
+        margin: 2px auto;
+        padding: 8px 0;
+        width: 38px;
+        height: 38px;
+        justify-content: center;
+        border-radius: 10px;
+    }
+    .ft-nav-item .ft-icon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+    .ft-nav-label {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transition: opacity 150ms, width 150ms;
+    }
+    .ft-group-header {
+        padding: 14px 16px 6px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--primary);
+        white-space: nowrap;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        opacity: 0.88;
+    }
+    html.dark .ft-group-header {
+        color: var(--text);
+        opacity: 0.95;
+    }
+    .ft-group-header i {
+        color: var(--primary);
+        opacity: 0.95;
+    }
+    .ft-badge-pill {
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        background: var(--danger);
+        color: white;
+        font-size: 9px;
+        font-weight: 700;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-left: auto;
+    }
+
+    /* ── Topbar ──────────────────────────────────────────────────────────── */
+    .ft-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        height: 48px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        box-shadow: var(--shadow-soft);
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .ft-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow-soft);
+    }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .ft-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+        border: none;
+        outline: none;
+        text-decoration: none;
+        user-select: none;
+    }
+    .ft-btn:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+    }
+    .ft-btn:disabled, .ft-btn[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    /* sizes */
+    .ft-btn-sm { padding: 4px 10px; font-size: 11px; }
+    .ft-btn-lg { padding: 9px 20px; font-size: 14px; }
+    /* variants */
+    .ft-btn-primary {
+        background: var(--primary);
+        color: var(--primary-fg);
+    }
+    .ft-btn-primary:hover { background: var(--primary-hover); }
+    .ft-btn-secondary {
+        background: var(--surface-2);
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+    }
+    .ft-btn-secondary:hover { background: var(--surface-3); }
+    .ft-btn-ghost {
+        background: transparent;
+        color: var(--text-muted);
+    }
+    .ft-btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+    .ft-btn-danger {
+        background: var(--danger);
+        color: white;
+    }
+    .ft-btn-danger:hover { opacity: 0.88; }
+    .ft-btn-accent {
+        background: var(--accent);
+        color: var(--accent-fg);
+    }
+    .ft-btn-accent:hover { background: var(--accent-hover); }
+
+    /* ── Inputs ──────────────────────────────────────────────────────────── */
+    .ft-input {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--text);
+        background: var(--surface);
+        outline: none;
+        transition: border-color 150ms, box-shadow 150ms;
+    }
+    .ft-input::placeholder { color: var(--text-disabled); }
+    .ft-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(11,95,165,0.12);
+    }
+    .ft-input:disabled { background: var(--surface-2); color: var(--text-disabled); }
+    .ft-select {
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.2em 1.2em;
+        padding-right: 2rem;
+    }
+    .ft-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .ft-error-text { font-size: 11px; color: var(--danger); margin-top: 3px; }
+    .ft-help-text  { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ── Badges ──────────────────────────────────────────────────────────── */
+    .ft-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .ft-badge-success  { background: var(--accent-light);  color: var(--accent-hover); }
+    .ft-badge-danger   { background: var(--danger-light);  color: var(--danger); }
+    .ft-badge-warning  { background: var(--warning-light); color: #92400E; }
+    .ft-badge-info     { background: var(--info-light);    color: var(--info); }
+    .ft-badge-primary  { background: var(--primary-light); color: var(--primary); }
+    .ft-badge-neutral  { background: var(--surface-2);     color: var(--text-muted); }
+
+    /* ── Table ───────────────────────────────────────────────────────────── */
+    .ft-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .ft-table th {
+        padding: 8px 12px;
+        text-align: left;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        white-space: nowrap;
+    }
+    .ft-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-secondary);
+        vertical-align: middle;
+    }
+    .ft-table tr:last-child td { border-bottom: none; }
+    .ft-table tbody tr:hover td { background: var(--surface-2); }
+
+    /* ── Modal ───────────────────────────────────────────────────────────── */
+    .ft-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        backdrop-filter: blur(2px);
+        z-index: 60;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+    .ft-modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow-elevated);
+        width: 100%;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .ft-modal-sm { max-width: 400px; }
+    .ft-modal-md { max-width: 560px; }
+    .ft-modal-lg { max-width: 768px; }
+    .ft-modal-xl { max-width: 1024px; }
+
+    /* ── Right Drawer ────────────────────────────────────────────────────── */
+    .ft-drawer {
+        position: fixed;
+        top: 0; right: 0; bottom: 0;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        border-radius: 16px 0 0 16px;
+        box-shadow: var(--shadow-elevated);
+        z-index: 55;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition: transform 220ms cubic-bezier(0.4,0,0.2,1);
+    }
+    .ft-drawer-sm { width: 320px; }
+    .ft-drawer-md { width: 480px; }
+    .ft-drawer-lg { width: 640px; }
+
+    /* ── KPI Widget ──────────────────────────────────────────────────────── */
+    .ft-kpi {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .ft-kpi-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* ── Command Palette ─────────────────────────────────────────────────── */
+    .ft-command-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(4px);
+        z-index: 70;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 100px;
+    }
+    .ft-command-box {
+        width: 100%;
+        max-width: 540px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+    }
+
+    /* ── Skeleton ────────────────────────────────────────────────────────── */
+    .ft-skeleton {
+        background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+        background-size: 200% 100%;
+        animation: ft-shimmer 1.4s infinite;
+        border-radius: 6px;
+    }
+    @keyframes ft-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+}
+
+/* =============================================================================
+   UTILITIES LAYER
+   ============================================================================= */
+
+@layer utilities {
+    .text-balance { text-wrap: balance; }
+
+    /* Mobile sidebar overlay */
+    .ft-mobile-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 40;
+    }
+
+    @media (max-width: 767px) {
+        .ft-sidebar {
+            transform: translateX(-100%);
+            transition: transform 220ms cubic-bezier(0.4,0,0.2,1), width 220ms cubic-bezier(0.4,0,0.2,1);
+        }
+        .ft-sidebar.mobile-open {
+            transform: translateX(0);
+        }
+        .ft-main {
+            margin-left: 0 !important;
+        }
+    }
+}

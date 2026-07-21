@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Project Details: {{ project.name }} | FieldTrack{% endblock %}
-{% block page_title %}Project Details{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Project Details: {{ project.name }} | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4">
     <!-- Header -->
     <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -1027,6 +1022,4 @@
         </div>
 
         {% include 'notifications/includes/activity_timeline.html' %}
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

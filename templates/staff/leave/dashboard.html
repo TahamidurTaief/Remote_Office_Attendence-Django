@@ -1,148 +1,108 @@
-{% extends 'base/staff_base.html' %}
 {% load leave_extras %}
+<c-app-shell page_title="My Leaves | FieldTrack" active_href="{{ request.path }}" shell_type="staff">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block page_title %}My Leaves{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="My Leave Balances">
+            <c-slot name="actions">
+                <c-button href="{% url 'leave:staff_request_create' %}" variant="accent" icon="plus-circle" label="Request Leave" />
+            </c-slot>
+        </c-topbar>
+    </c-slot>
 
-{% block content %}
-<div class="px-4 md:px-6 py-6 md:py-8 space-y-6">
-    <!-- Header -->
-    <div class="flex items-start justify-between gap-4">
-        <div>
-            <p class="text-sm text-gray-500">Year: {{ year }}</p>
-            <h1 class="text-2xl font-bold text-gray-900">My Leave Balances</h1>
-        </div>
-        <a href="{% url 'leave:staff_request_create' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
-            <i data-lucide="plus-circle" class="w-4 h-4"></i>
-            Request Leave
-        </a>
-    </div>
+    <c-command-palette />
 
-
-
-    <!-- Combined Total Leave Left Counter -->
-    {% if employee %}
-    {% with total_left=employee.total_leave_left_by_year|dictget:year %}
-    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <h2 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Total Leave Left</h2>
-            <p class="text-xs text-gray-400 mt-1">Combined balance across all active leave categories for {{ year }}</p>
-        </div>
-        <div>
-            <span class="inline-flex items-center px-4 py-2 rounded-xl border text-2xl font-black {% if total_left < 0 %}bg-red-50 border-red-200 text-red-700{% else %}bg-green-50 border-green-200 text-green-700{% endif %} shadow-inner">
-                {{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}
-            </span>
-        </div>
-    </div>
-    {% endwith %}
-    {% endif %}
-
-    <!-- Balance Cards Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {% for balance in balances %}
-        <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-            <div class="flex items-center justify-between mb-3">
-                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    {% if balance.leave_type %}
-                        {{ balance.leave_type.name }}
-                    {% else %}
-                        {{ balance.name }}
-                    {% endif %}
-                </span>
-                <span class="p-1.5 bg-primary-50 text-primary-600 rounded-lg">
-                    <i data-lucide="calendar" class="w-4 h-4"></i>
-                </span>
-            </div>
-            
-            <div class="flex items-baseline justify-between">
-                <div class="space-y-0.5">
-                    <p class="text-2xl font-extrabold {% if balance.remaining_days is not None %}{% if balance.remaining_days < 0 %}text-red-700{% else %}text-gray-900{% endif %}{% else %}{% if balance.remaining < 0 %}text-red-700{% else %}text-gray-900{% endif %}{% endif %}">
-                        {% if balance.remaining_days is not None %}
-                            {{ balance.remaining_days }}
-                        {% else %}
-                            {{ balance.remaining }}
-                        {% endif %}
-                    </p>
-                    <p class="text-xs text-gray-500">Days Remaining</p>
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        {% if employee %}
+        {% with total_left=employee.total_leave_left_by_year|dictget:year %}
+        <c-card padding="sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-muted)">Total Leave Left ({{ year }})</h2>
+                    <p class="text-xs mt-0.5" style="color:var(--text-muted)">Combined balance across active categories</p>
                 </div>
-                <div class="text-right text-xs text-gray-400">
-                    <p>Total: {% if balance.total_days is not None %}{{ balance.total_days }}{% else %}{{ balance.total }}{% endif %} days</p>
-                    <p class="mt-0.5">Used: {% if balance.used_days is not None %}{{ balance.used_days }}{% else %}{{ balance.used }}{% endif %} days</p>
+                <div>
+                    <c-badge variant="{% if total_left < 0 %}danger{% else %}success{% endif %}" size="md" label="{{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}" />
                 </div>
             </div>
+        </c-card>
+        {% endwith %}
+        {% endif %}
 
-            <!-- Progress bar -->
-            <div class="w-full bg-gray-100 h-2 rounded-full mt-4 overflow-hidden">
-                <div class="bg-primary-gradient h-full rounded-full" 
-                     style="width: {% widthratio balance.used_days|default:balance.used balance.total_days|default:balance.total 100 %}%">
-                </div>
-            </div>
-        </div>
-        {% empty %}
-        <div class="col-span-full bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-500 shadow-sm">
-            <i data-lucide="info" class="w-8 h-8 text-gray-300 mx-auto mb-2 animate-bounce"></i>
-            <p class="font-medium text-sm text-gray-600">No leave configurations found for this year.</p>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- Requests History list -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-6 py-2.5 border-b border-gray-100 bg-gray-50/50">
-            <h2 class="text-lg font-bold text-gray-900">Request History</h2>
-            <p class="text-xs text-gray-500 mt-0.5">Track status of your submitted leave requests.</p>
-        </div>
-
-        <div class="divide-y divide-gray-100">
-            {% for req in history %}
-            <div class="p-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:bg-gray-50/50 transition-colors">
-                <div class="space-y-1">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold bg-primary-50 text-primary-600">
-                            {{ req.leave_type.name }}
-                        </span>
-                        <span class="text-xs font-bold text-gray-900">
-                            {{ req.number_of_days }} day{% if req.number_of_days > 1 %}s{% endif %}
-                        </span>
-                    </div>
-                    <p class="text-sm font-medium text-gray-800">
-                        {{ req.start_date|date:"d/m/Y" }} to {{ req.end_date|date:"d/m/Y" }}
-                    </p>
-                    <p class="text-xs text-gray-500 mt-1 max-w-lg italic">
-                        "{{ req.reason }}"
-                    </p>
+        <!-- Balance Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {% for balance in balances %}
+            <c-card padding="sm">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-muted)">
+                        {% if balance.leave_type %}{{ balance.leave_type.name }}{% else %}{{ balance.name }}{% endif %}
+                    </span>
+                    <i data-lucide="calendar" class="w-4 h-4" style="color:var(--primary)"></i>
                 </div>
                 
-                <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                    <span class="text-[11px] text-gray-400">
-                        Requested: {{ req.requested_at|date:"d/m/Y" }}
-                    </span>
-                    
-                    {% if req.status == 'pending' %}
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                        Pending
-                    </span>
-                    {% elif req.status == 'approved' %}
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-800 border border-green-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-600"></span>
-                        Approved
-                    </span>
-                    {% else %}
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-800 border border-red-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-red-650"></span>
-                        Rejected
-                    </span>
-                    {% endif %}
+                <div class="flex items-baseline justify-between">
+                    <div>
+                        <span class="text-xl font-bold" style="color:var(--text)">
+                            {% if balance.remaining_days is not None %}{{ balance.remaining_days }}{% else %}{{ balance.remaining }}{% endif %}
+                        </span>
+                        <span class="text-xs block" style="color:var(--text-muted)">Days Remaining</span>
+                    </div>
+                    <div class="text-right text-[11px]" style="color:var(--text-muted)">
+                        <p>Total: {% if balance.total_days is not None %}{{ balance.total_days }}{% else %}{{ balance.total }}{% endif %}d</p>
+                        <p>Used: {% if balance.used_days is not None %}{{ balance.used_days }}{% else %}{{ balance.used }}{% endif %}d</p>
+                    </div>
                 </div>
-            </div>
+
+                <div class="w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div class="bg-primary-500 h-full rounded-full" 
+                         style="width: {% widthratio balance.used_days|default:balance.used balance.total_days|default:balance.total 100 %}%">
+                    </div>
+                </div>
+            </c-card>
             {% empty %}
-            <div class="p-8 text-center text-gray-500">
-                <i data-lucide="clipboard-list" class="w-10 h-10 text-gray-300 mx-auto mb-2"></i>
-                <p class="text-sm font-semibold text-gray-650">No leave requests yet</p>
-                <p class="text-xs text-gray-400 mt-1">Submit your first request using the button above.</p>
+            <div class="col-span-full">
+                <c-card>
+                    <c-empty-state icon="calendar" title="No Leave Configurations" description="No leave balances configured for this year." />
+                </c-card>
             </div>
             {% endfor %}
         </div>
+
+        <!-- History -->
+        <c-card title="Request History" padding="none">
+            <div class="divide-y" style="border-color:var(--border)">
+                {% for req in history %}
+                <div class="p-3 flex items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-xs" style="color:var(--text)">{{ req.leave_type.name }}</span>
+                            <c-badge variant="neutral" label="{{ req.total_days }} day{% if req.total_days != 1 %}s{% endif %}" />
+                        </div>
+                        <p class="text-xs mt-0.5" style="color:var(--text-muted)">
+                            {{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}
+                        </p>
+                        {% if req.reason %}
+                        <p class="text-[11px] mt-0.5 italic" style="color:var(--text-muted)">"{{ req.reason }}"</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if req.status == 'APPROVED' %}
+                            <c-status-pill status="approved" />
+                        {% elif req.status == 'REJECTED' %}
+                            <c-status-pill status="rejected" />
+                        {% else %}
+                            <c-status-pill status="pending" />
+                        {% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="p-8">
+                    <c-empty-state icon="clock" title="No Requests Yet" description="Your submitted leave requests will appear here." />
+                </div>
+                {% endfor %}
+            </div>
+        </c-card>
     </div>
-</div>
-{% endblock %}
+</c-app-shell>

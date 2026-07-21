@@ -1,8 +1,4 @@
-{% extends 'base/admin_base.html' %}
-{% block title %}Expired Data | FieldTrack Admin{% endblock %}
-{% block page_title %}Expired Data{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Expired Data | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
     showModal: false,
     deleteMode: '', // 'all' or 'selected'
@@ -276,4 +272,4 @@
          </div>
     </div>
 </div>
-{% endblock %}
+</c-app-shell>

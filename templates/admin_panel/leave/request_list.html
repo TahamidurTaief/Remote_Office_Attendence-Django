@@ -1,437 +1,128 @@
-{% extends 'base/admin_base.html' %}
+<c-app-shell page_title="Leave Requests | FieldTrack Admin" active_href="{{ request.path }}" pending_leave_count="{{ pending_count }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" pending_leave_count="{{ pending_count }}" />
+    </c-slot>
 
-{% block title %}Leave Requests | FieldTrack Admin{% endblock %}
-{% block page_title %}Leave Requests{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="Leave Requests">
+            <c-slot name="actions">
+                <c-button href="{% url 'leave:admin_balances' %}" variant="secondary" icon="users" label="Balances" />
+                <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" icon="settings" label="Leave Types" />
+                <c-button href="{% url 'admin_panel:reports_absent_add_leave' %}" variant="accent" icon="plus" label="Add Leave" />
+            </c-slot>
+        </c-topbar>
+    </c-slot>
 
-{% block content %}
-<div class="p-4 max-w-7xl mx-auto">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-        <div>
-            <h1 class="text-[14px] font-semibold text-gray-900">Leave Requests</h1>
-            <p class="text-sm text-gray-500 mt-1">Review and manage employee leave requests and approvals.</p>
-        </div>
-        <div class="flex gap-3">
-            <a href="{% url 'leave:admin_balances' %}"
-                class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors bg-white">
-                <i data-lucide="users" class="w-4 h-4"></i>
-                Employee Balances
-            </a>
-            <a href="{% url 'leave:admin_leave_types' %}"
-                class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors bg-white">
-                <i data-lucide="settings" class="w-4 h-4"></i>
-                Leave Types
-            </a>
-            <a href="{% url 'admin_panel:reports_absent_add_leave' %}"
-                class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                Add Leave
-            </a>
-        </div>
-    </div>
+    <c-command-palette />
 
-
-
-    <!-- Stats grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-        <div class="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm flex items-center gap-4">
-            <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
-                <i data-lucide="clock" class="w-6 h-6"></i>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Pending Requests</p>
-                <p class="text-2xl font-bold text-gray-900 mt-1">{{ pending_count }}</p>
-            </div>
-        </div>
-        <div class="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm flex items-center gap-4">
-            <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center text-green-600">
-                <i data-lucide="check-circle" class="w-6 h-6"></i>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Approved Requests</p>
-                <p class="text-2xl font-bold text-gray-900 mt-1">{{ approved_count }}</p>
-            </div>
-        </div>
-        <div class="bg-white p-6 rounded-2xl border border-gray-150 shadow-sm flex items-center gap-4">
-            <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
-                <i data-lucide="x-circle" class="w-6 h-6"></i>
-            </div>
-            <div>
-                <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Rejected Requests</p>
-                <p class="text-2xl font-bold text-gray-900 mt-1">{{ rejected_count }}</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filters and List Table -->
-    <div class="bg-white rounded-2xl border border-gray-150 shadow-sm overflow-hidden">
-        <!-- Filter Tabs -->
-        <div class="px-6 py-2.5 border-b border-gray-150 bg-gray-50/50 flex flex-wrap gap-2">
-            <a href="?status=all"
-                class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'all' or not current_status %}bg-primary-gradient text-white{% else %}bg-white text-gray-600 border border-gray-150 hover:bg-gray-100{% endif %}">
-                All
-            </a>
-            <a href="?status=pending"
-                class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'pending' %}bg-amber-50 text-amber-700 border border-amber-200/50{% else %}bg-white text-gray-600 border border-gray-150 hover:bg-gray-100{% endif %}">
-                Pending
-            </a>
-            <a href="?status=approved"
-                class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'approved' %}bg-green-600 text-white{% else %}bg-white text-gray-600 border border-gray-150 hover:bg-gray-100{% endif %}">
-                Approved
-            </a>
-            <a href="?status=rejected"
-                class="px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors {% if current_status == 'rejected' %}bg-red-600 text-white{% else %}bg-white text-gray-600 border border-gray-150 hover:bg-gray-100{% endif %}">
-                Rejected
-            </a>
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <!-- Stats grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <c-kpi-widget label="Pending Requests" value="{{ pending_count }}" icon="clock" color="warning" />
+            <c-kpi-widget label="Approved Requests" value="{{ approved_count }}" icon="check-circle" color="accent" />
+            <c-kpi-widget label="Rejected Requests" value="{{ rejected_count }}" icon="x-circle" color="danger" />
         </div>
 
-        <!-- Table -->
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
-                <thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    <tr>
-                        <th class="px-6 py-2.5">Employee</th>
-                        <th class="px-6 py-2.5">Leave Type</th>
-                        <th class="px-6 py-2.5">Duration</th>
-                        <th class="px-6 py-2.5 text-center">Days</th>
-                        <th class="px-6 py-2.5">Reason</th>
-                        <th class="px-6 py-2.5">Status</th>
-                        <th class="px-6 py-2.5 text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 bg-white text-gray-700">
-                    {% for req in requests %}
-                    <tr class="hover:bg-gray-50/50 transition-colors">
-                        <!-- Employee Info -->
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <div class="flex items-center gap-3">
-                                {% if req.employee.profile_photo %}
-                                <img src="{{ req.employee.profile_photo.url }}"
-                                    class="w-9 h-9 rounded-full object-cover bg-gray-100 border border-gray-150">
-                                {% else %}
-                                <div
-                                    class="w-9 h-9 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center border border-primary-200/50">
-                                    {{ req.employee.full_name|first|upper }}
+        <!-- Table Card -->
+        <c-card padding="none">
+            <c-slot name="header">
+                <div class="flex gap-1.5 flex-wrap">
+                    <a href="?status=all" class="ft-btn ft-btn-sm {% if current_status == 'all' or not current_status %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">All</a>
+                    <a href="?status=pending" class="ft-btn ft-btn-sm {% if current_status == 'pending' %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">Pending</a>
+                    <a href="?status=approved" class="ft-btn ft-btn-sm {% if current_status == 'approved' %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">Approved</a>
+                    <a href="?status=rejected" class="ft-btn ft-btn-sm {% if current_status == 'rejected' %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">Rejected</a>
+                </div>
+            </c-slot>
+
+            <div class="overflow-x-auto">
+                <table class="ft-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Leave Type</th>
+                            <th>Duration</th>
+                            <th class="text-center">Days</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in requests %}
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <c-avatar src="{% if req.employee.profile_photo %}{{ req.employee.profile_photo.url }}{% endif %}" initials="{{ req.employee.full_name|make_list|first|upper }}" size="sm" />
+                                    <div>
+                                        <a href="{% url 'employees:employee_detail' req.employee.pk %}" class="font-semibold hover:underline" style="color:var(--text)">{{ req.employee.full_name }}</a>
+                                        <div class="text-[11px]" style="color:var(--text-muted)">{{ req.employee.department }}</div>
+                                    </div>
                                 </div>
-                                {% endif %}
-                                <div>
-                                    <p class="font-medium text-gray-900">{{ req.employee.full_name }}</p>
-                                    <p class="text-xs text-gray-450">{{ req.employee.employee_id }}</p>
-                                </div>
-                            </div>
-                        </td>
-                        <!-- Leave Type -->
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <span
-                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                                {{ req.leave_type.name }}
-                            </span>
-                        </td>
-                        <!-- Duration -->
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <div class="text-xs">
-                                <p class="font-medium text-gray-900">{{ req.start_date|date:"d/m/Y" }}</p>
-                                <p class="text-gray-450">to {{ req.end_date|date:"d/m/Y" }}</p>
-                            </div>
-                        </td>
-                        <!-- Days -->
-                        <td class="px-6 py-2.5 text-center whitespace-nowrap font-semibold text-gray-900">
-                            {{ req.number_of_days }}
-                        </td>
-                        <!-- Reason -->
-                        <td class="px-6 py-2.5 max-w-xs">
-                            <div x-data="{ expanded: false }">
-                                <p class="text-sm text-gray-700 truncate" x-show="!expanded" title="{{ req.reason }}">{{ req.reason }}</p>
-                                <p class="text-sm text-gray-700 whitespace-pre-line" x-show="expanded" x-cloak>{{ req.reason }}</p>
-                                {% if req.reason|length > 30 %}
-                                <button type="button" @click="expanded = !expanded"
-                                    class="text-[10px] text-primary-500 hover:text-primary-700 font-bold focus:outline-none mt-0.5">
-                                    <span x-show="!expanded">Show More</span>
-                                    <span x-show="expanded" x-cloak>Show Less</span>
-                                </button>
-                                {% endif %}
-                            </div>
-                        </td>
-                        <!-- Status Badge -->
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            {% if req.status == 'pending' %}
-                            <span
-                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-250">
-                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                Pending
-                            </span>
-                            {% elif req.status == 'approved' %}
-                            <span
-                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-800 border border-green-250">
-                                <span class="w-1.5 h-1.5 rounded-full bg-green-600"></span>
-                                Approved
-                            </span>
-                            {% else %}
-                            <span
-                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-800 border border-red-250">
-                                <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-                                Rejected
-                            </span>
-                            {% endif %}
-                        </td>
-                        <!-- Actions -->
-                        <td class="px-6 py-2.5 text-right whitespace-nowrap text-xs font-medium">
-                            <div class="flex items-center justify-end gap-2">
-                                <button type="button" onclick="openLeaveDetailModal({
-                                            employeeName: '{{ req.employee.full_name|escapejs }}',
-                                            employeeId: '{{ req.employee.employee_id|escapejs }}',
-                                            photoUrl: '{% if req.employee.profile_photo %}{{ req.employee.profile_photo.url|escapejs }}{% endif %}',
-                                            leaveType: '{{ req.leave_type.name|escapejs }}',
-                                            startDate: '{{ req.start_date|date:" d/m/Y"|escapejs }}',
-                                    endDate: '{{ req.end_date|date:"d/m/Y"|escapejs }}' ,
-                                    days: '{{ req.number_of_days|escapejs }}' , reason: '{{ req.reason|escapejs }}' ,
-                                    status: '{{ req.status|escapejs }}' ,
-                                    requestedAt: '{{ req.requested_at|date:"d/m/Y g:i A"|escapejs }}' ,
-                                    reviewedBy: '{% if req.reviewed_by %}{{ req.reviewed_by.email|default:req.reviewed_by.phone|escapejs }}{% endif %}'
-                                    ,
-                                    reviewedAt: '{% if req.reviewed_at %}{{ req.reviewed_at|date:"d/m/Y g:i A"|escapejs }}{% endif %}'
-                                    })"
-                                    class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-primary-500 rounded-lg transition-colors inline-flex items-center justify-center"
-                                    title="View Leave Details">
-                                    <i data-lucide="eye" class="w-4 h-4"></i>
-                                </button>
-                                {% if req.status == 'pending' %}
-                                <form method="POST" action="{% url 'leave:approve_request' req.pk %}" class="inline">
-                                    {% csrf_token %}
-                                    <button type="submit"
-                                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm font-semibold">
-                                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
-                                        Approve
-                                    </button>
-                                </form>
-                                <form method="POST" action="{% url 'leave:reject_request' req.pk %}" class="inline">
-                                    {% csrf_token %}
-                                    <button type="submit"
-                                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm font-semibold">
-                                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                                        Reject
-                                    </button>
-                                </form>
+                            </td>
+                            <td>
+                                <span class="font-medium text-xs" style="color:var(--text)">{{ req.leave_type.name }}</span>
+                            </td>
+                            <td>
+                                <div class="text-xs" style="color:var(--text)">{{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}</div>
+                            </td>
+                            <td class="text-center">
+                                <c-badge variant="neutral" label="{{ req.total_days }}d" />
+                            </td>
+                            <td>
+                                <span class="text-xs truncate max-w-xs block" style="color:var(--text-muted)">{{ req.reason|default:"-" }}</span>
+                            </td>
+                            <td>
+                                {% if req.status == 'APPROVED' %}
+                                    <c-status-pill status="approved" />
+                                {% elif req.status == 'REJECTED' %}
+                                    <c-status-pill status="rejected" />
                                 {% else %}
-                                <span class="text-gray-400 text-xs mr-2">
-                                    Processed by {% if req.reviewed_by %}{{ req.reviewed_by.employee_profile.full_name|default:req.reviewed_by.email|default:req.reviewed_by.phone }}{% else %}System{% endif %}
-                                    {% if req.reviewed_at %} on {{ req.reviewed_at|date:"d/m/Y" }}{% endif %}
-                                </span>
+                                    <c-status-pill status="pending" />
                                 {% endif %}
-                                <a href="{% url 'leave:reschedule_request' req.pk %}"
-                                    class="inline-flex items-center gap-1 px-3 py-1.5 bg-primary-gradient hover:opacity-90 text-white rounded-lg transition-colors shadow-sm font-semibold">
-                                    <i data-lucide="calendar-range" class="w-3.5 h-3.5"></i>
-                                    Reschedule
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="px-6 py-12 text-center text-gray-500">
-                            <div class="flex flex-col items-center justify-center">
-                                <i data-lucide="inbox" class="w-10 h-10 text-gray-300 mb-3"></i>
-                                <p class="font-medium text-gray-600 text-sm">No leave requests found</p>
-                                <p class="text-xs text-gray-400 mt-1">Requests matching the status filter will appear
-                                    here.</p>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Pagination -->
-        {% if is_paginated %}
-        <div class="px-6 py-2.5 border-t border-gray-150 bg-gray-50 flex items-center justify-between">
-            <span class="text-xs text-gray-500">
-                Showing page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-            </span>
-            <div class="flex gap-2">
-                {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}"
-                    class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-100 bg-white">
-                    Previous
-                </a>
-                {% endif %}
-                {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}"
-                    class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-100 bg-white">
-                    Next
-                </a>
-                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {% if req.status == 'PENDING' %}
+                                <div class="flex items-center justify-end gap-1">
+                                    <form action="{% url 'leave:admin_approve' req.pk %}" method="POST" class="inline">
+                                        {% csrf_token %}
+                                        <c-button type="submit" variant="accent" size="sm" label="Approve" />
+                                    </form>
+                                    <form action="{% url 'leave:admin_reject' req.pk %}" method="POST" class="inline">
+                                        {% csrf_token %}
+                                        <c-button type="submit" variant="danger" size="sm" label="Reject" />
+                                    </form>
+                                </div>
+                                {% else %}
+                                <span class="text-xs" style="color:var(--text-muted)">Processed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="py-12">
+                                <c-empty-state icon="clipboard-check" title="No Leave Requests Found" description="There are no requests matching the current status filter." />
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-        </div>
-        {% endif %}
+
+            {% if is_paginated %}
+            <div class="px-4 py-3 border-t flex items-center justify-between" style="border-color:var(--border); background:var(--surface-2)">
+                <span class="text-xs" style="color:var(--text-muted)">
+                    Page <strong style="color:var(--text)">{{ page_obj.number }}</strong> of <strong style="color:var(--text)">{{ page_obj.paginator.num_pages }}</strong>
+                </span>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}
+                    <c-button href="?page={{ page_obj.previous_page_number }}&status={{ current_status }}" variant="secondary" size="sm" label="Previous" />
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <c-button href="?page={{ page_obj.next_page_number }}&status={{ current_status }}" variant="secondary" size="sm" label="Next" />
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </c-card>
     </div>
-</div>
-
-<!-- Leave Detail Modal -->
-<div id="leaveDetailModal"
-    class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all duration-300 opacity-0"
-    onclick="closeLeaveDetailModal(event)">
-    <div class="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform scale-95 transition-all duration-300"
-        onclick="event.stopPropagation()">
-        <!-- Header -->
-        <div class="px-6 py-2.5 border-b border-gray-150 flex items-center justify-between bg-gray-50/50">
-            <h3 class="font-bold text-gray-900 text-lg flex items-center gap-2">
-                <i data-lucide="info" class="w-5 h-5 text-primary-500"></i>
-                Leave Request Details
-            </h3>
-            <button onclick="hideLeaveDetailModal()"
-                class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors p-1.5 rounded-lg hover:bg-gray-100">
-                <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-        </div>
-        <!-- Body -->
-        <div class="p-6 space-y-6">
-            <!-- Employee Header info -->
-            <div class="flex items-center gap-4 bg-primary-50/30 p-4 rounded-xl border border-primary-200/50/50">
-                <div id="modal-emp-photo-container" class="shrink-0">
-                    <!-- Photo dynamic -->
-                </div>
-                <div>
-                    <h4 id="modal-emp-name" class="font-bold text-gray-900 text-base"></h4>
-                    <p id="modal-emp-id" class="text-xs text-gray-500"></p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Leave Type</p>
-                    <p id="modal-leave-type" class="font-semibold text-primary-500 mt-1"></p>
-                </div>
-                <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Number of Days</p>
-                    <p id="modal-days" class="font-semibold text-gray-950 mt-1"></p>
-                </div>
-                <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Start Date</p>
-                    <p id="modal-start-date" class="font-medium text-gray-950 mt-1"></p>
-                </div>
-                <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">End Date</p>
-                    <p id="modal-end-date" class="font-medium text-gray-950 mt-1"></p>
-                </div>
-                <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</p>
-                    <div id="modal-status" class="mt-1"></div>
-                </div>
-                <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Requested At</p>
-                    <p id="modal-requested-at" class="font-medium text-gray-950 mt-1"></p>
-                </div>
-            </div>
-
-            <div class="border-t border-gray-100 pt-4">
-                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Reason for Leave</p>
-                <p id="modal-reason"
-                    class="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border border-gray-150 whitespace-pre-line">
-                </p>
-            </div>
-
-            <div id="modal-review-section" class="border-t border-gray-100 pt-4 hidden">
-                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Review Information</p>
-                <div class="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-150 space-y-1">
-                    <p><strong>Reviewed By:</strong> <span id="modal-reviewed-by"></span></p>
-                    <p><strong>Reviewed At:</strong> <span id="modal-reviewed-at"></span></p>
-                </div>
-            </div>
-        </div>
-        <!-- Footer -->
-        <div class="px-6 py-2.5 border-t border-gray-100 flex justify-end bg-gray-50/30">
-            <button onclick="hideLeaveDetailModal()"
-                class="px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors bg-white shadow-sm text-sm">
-                Close
-            </button>
-        </div>
-    </div>
-</div>
-
-<script>
-    function openLeaveDetailModal(data) {
-        const modal = document.getElementById('leaveDetailModal');
-        const inner = modal.querySelector('.relative');
-
-        // Set Employee Photo/Initial
-        const photoContainer = document.getElementById('modal-emp-photo-container');
-        if (data.photoUrl) {
-            photoContainer.innerHTML = `<img src="${data.photoUrl}" class="w-12 h-12 rounded-full object-cover border border-gray-150">`;
-        } else {
-            const initial = data.employeeName.charAt(0).toUpperCase();
-            photoContainer.innerHTML = `<div class="w-12 h-12 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-lg border border-primary-200/50">${initial}</div>`;
-        }
-
-        document.getElementById('modal-emp-name').textContent = data.employeeName;
-        document.getElementById('modal-emp-id').textContent = `ID: ${data.employeeId}`;
-        document.getElementById('modal-leave-type').textContent = data.leaveType;
-        document.getElementById('modal-days').textContent = `${data.days} day${data.days != 1 ? 's' : ''}`;
-        document.getElementById('modal-start-date').textContent = data.startDate;
-        document.getElementById('modal-end-date').textContent = data.endDate;
-        document.getElementById('modal-requested-at').textContent = data.requestedAt || '—';
-        document.getElementById('modal-reason').textContent = data.reason || 'No reason provided';
-
-        // Set Status Badge
-        const statusContainer = document.getElementById('modal-status');
-        if (data.status === 'pending') {
-            statusContainer.innerHTML = `
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-250">
-                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                        Pending
-                    </span>
-                `;
-        } else if (data.status === 'approved') {
-            statusContainer.innerHTML = `
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-800 border border-green-255">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-600"></span>
-                        Approved
-                    </span>
-                `;
-        } else {
-            statusContainer.innerHTML = `
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-800 border border-red-255">
-                        <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-                        Rejected
-                    </span>
-                `;
-        }
-
-        // Review section
-        const reviewSection = document.getElementById('modal-review-section');
-        if (data.status !== 'pending') {
-            document.getElementById('modal-reviewed-by').textContent = data.reviewedBy || 'System';
-            document.getElementById('modal-reviewed-at').textContent = data.reviewedAt || '—';
-            reviewSection.classList.remove('hidden');
-        } else {
-            reviewSection.classList.add('hidden');
-        }
-
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        setTimeout(() => {
-            modal.classList.remove('opacity-0');
-            inner.classList.remove('scale-95');
-        }, 10);
-
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-    }
-
-    function hideLeaveDetailModal() {
-        const modal = document.getElementById('leaveDetailModal');
-        const inner = modal.querySelector('.relative');
-        modal.classList.add('opacity-0');
-        inner.classList.add('scale-95');
-        setTimeout(() => {
-            modal.classList.remove('flex');
-            modal.classList.add('hidden');
-        }, 300);
-    }
-
-    function closeLeaveDetailModal(event) {
-        hideLeaveDetailModal();
-    }
-</script>
-{% endblock %}
+</c-app-shell>

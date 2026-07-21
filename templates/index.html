@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         body {
@@ -73,9 +73,7 @@
             background-size: 300% 300%;
             animation: spin-gradient 8s infinite ease-in-out;
         }
-    </style>
-</head>
-<body class="bg-[#F8FAFC] min-h-screen overflow-x-hidden flex flex-col justify-between text-[#0F172A] antialiased selection:bg-[#0B5FA5] selection:text-white relative">
+    <body class="min-h-screen overflow-x-hidden flex flex-col justify-between antialiased selection:bg-[#0B5FA5] selection:text-white relative" style="background:var(--background); color:var(--text)">
 
     <!-- Glowing Animated Background Blobs (Motion Blue & Blur Effects) -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none -z-10">

@@ -1,0 +1,38 @@
+{% comment %} c-textarea component
+   Props:
+   - name: textarea name (required)
+   - label: visible label (optional)
+   - rows: number of rows (default 4)
+   - placeholder: placeholder text
+   - required: required attribute
+   - disabled: disabled attribute
+   - error: error message string
+   - help: help text
+   - extra_class: wrapper classes
+   - id: textarea id (defaults to name)
+{% endcomment %}
+
+<div class="flex flex-col gap-0.5 {{ extra_class }}">
+  {% if label %}
+    <label for="{{ id|default:name }}" class="ft-label">
+      {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+  {% endif %}
+
+  <textarea
+    name="{{ name }}"
+    id="{{ id|default:name }}"
+    rows="{{ rows|default:4 }}"
+    placeholder="{{ placeholder }}"
+    {% if required %}required{% endif %}
+    {% if disabled %}disabled{% endif %}
+    class="ft-input resize-y {% if error %}!border-red-500{% endif %}"
+  ><cotton-slot /></textarea>
+
+  {% if error %}
+    <p class="ft-error-text">{{ error }}</p>
+  {% endif %}
+  {% if help and not error %}
+    <p class="ft-help-text">{{ help }}</p>
+  {% endif %}
+</div>

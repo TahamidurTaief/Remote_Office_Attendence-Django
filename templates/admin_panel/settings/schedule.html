@@ -1,199 +1,57 @@
-{% extends "base/admin_base.html" %}
-{% block title %}Office Schedule Settings{% endblock %}
-{% block page_title %}Settings{% endblock %}
+<c-app-shell page_title="Office Schedule Settings | FieldTrack Admin" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block content %}
-<div class="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+    <c-slot name="topbar">
+        <c-topbar title="Office Schedule Settings" />
+    </c-slot>
 
-    <!-- Page Header -->
-    <div class="sm:flex sm:justify-between sm:items-center mb-8">
-        <div class="mb-4 sm:mb-0">
-            <h1 class="text-[14px] font-semibold text-gray-900">Office Schedule Settings</h1>
-            <p class="text-gray-500 text-sm mt-1">Configure timings and attendance rules per branch.</p>
-        </div>
-    </div>
+    <c-command-palette />
 
-    <!-- Branches List -->
-    <div class="space-y-6">
-        {% for item in schedules %}
-        {% with schedule=item.schedule branch=item.branch %}
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div class="px-6 py-2.5 border-b border-gray-100 flex justify-between items-center">
-                <h2 class="font-semibold text-gray-800">{{ branch.name }}</h2>
-                <div class="text-xs text-gray-500">
-                    Summary: {{ schedule.office_start_time|time:"g:i A" }} <i data-lucide="arrow-right" class="w-3 h-3 text-gray-400 inline mx-1"></i> {{ schedule.office_end_time|time:"g:i A" }} | 
-                    Late after {{ schedule.late_after_minutes }} mins | 
-                    Tracking every {{ schedule.tracking_interval_minutes }} mins
-                </div>
-            </div>
-            <div class="p-6">
-                <form method="POST" action="{% url 'admin_panel:schedule_settings' %}">
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <div class="space-y-4">
+            {% for item in schedules %}
+            {% with schedule=item.schedule branch=item.branch %}
+            <c-card padding="sm">
+                <c-slot name="header">
+                    <div class="flex justify-between items-center w-full">
+                        <h2 class="text-xs font-semibold" style="color:var(--text)">{{ branch.name }}</h2>
+                        <span class="text-[11px]" style="color:var(--text-muted)">
+                            Start: {{ schedule.office_start_time|time:"g:i A" }} | End: {{ schedule.office_end_time|time:"g:i A" }}
+                        </span>
+                    </div>
+                </c-slot>
+
+                <form method="POST" action="{% url 'admin_panel:schedule_settings' %}" class="space-y-4 mt-2">
                     {% csrf_token %}
                     <input type="hidden" name="branch_id" value="{{ branch.id }}">
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Office Start Time -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" for="office_start_time_{{ branch.id }}">
-                                Office Start Time
-                            </label>
-                            <input id="office_start_time_{{ branch.id }}" name="office_start_time" type="time" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" value="{{ schedule.office_start_time|time:'H:i' }}" required>
-                        </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <c-input type="time" id="office_start_time_{{ branch.id }}" name="office_start_time" label="Office Start Time" value="{{ schedule.office_start_time|time:'H:i' }}" required="true" />
 
-                        <!-- Office End Time -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" for="office_end_time_{{ branch.id }}">
-                                Office End Time
-                            </label>
-                            <input id="office_end_time_{{ branch.id }}" name="office_end_time" type="time" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" value="{{ schedule.office_end_time|time:'H:i' }}" required>
-                        </div>
+                        <c-input type="time" id="office_end_time_{{ branch.id }}" name="office_end_time" label="Office End Time" value="{{ schedule.office_end_time|time:'H:i' }}" required="true" />
 
-                        <!-- Late After -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" for="late_after_{{ branch.id }}">
-                                Late After (minutes)
-                            </label>
-                            <div class="relative">
-                                <input id="late_after_{{ branch.id }}" name="late_after_minutes" type="number" min="0" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" value="{{ schedule.late_after_minutes }}" required>
-                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs text-gray-500">mins</div>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-1">Employee is late if check-in is more than X minutes after start time.</p>
-                        </div>
+                        <c-input type="number" id="late_after_{{ branch.id }}" name="late_after_minutes" label="Late After (minutes)" value="{{ schedule.late_after_minutes }}" required="true" help="Late if check-in > X mins after start." />
 
-                        <!-- Early Checkout -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" for="early_checkout_{{ branch.id }}">
-                                Early Checkout (minutes)
-                            </label>
-                            <div class="relative">
-                                <input id="early_checkout_{{ branch.id }}" name="early_checkout_before_minutes" type="number" min="0" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" value="{{ schedule.early_checkout_before_minutes }}" required>
-                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs text-gray-500">mins</div>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-1">Employee left early if checkout is more than X minutes before end time.</p>
-                        </div>
+                        <c-input type="number" id="early_checkout_{{ branch.id }}" name="early_checkout_before_minutes" label="Early Checkout (minutes)" value="{{ schedule.early_checkout_before_minutes }}" required="true" help="Early checkout if > X mins before end." />
 
-                        <!-- Overtime After -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" for="overtime_after_{{ branch.id }}">
-                                Overtime Starts After (minutes)
-                            </label>
-                            <div class="relative">
-                                <input id="overtime_after_{{ branch.id }}" name="overtime_after_minutes" type="number" min="0" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" value="{{ schedule.overtime_after_minutes }}" required>
-                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs text-gray-500">mins</div>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-1">Minutes after end time before overtime is counted.</p>
-                        </div>
+                        <c-input type="number" id="overtime_after_{{ branch.id }}" name="overtime_after_minutes" label="Overtime Starts After (minutes)" value="{{ schedule.overtime_after_minutes }}" required="true" help="Mins after end time before OT starts." />
 
-                        <!-- Auto Location Track -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1" for="tracking_{{ branch.id }}">
-                                Auto Location Track Every (minutes)
-                            </label>
-                            <div class="relative">
-                                <select id="tracking_{{ branch.id }}" name="tracking_interval_minutes"
-                                        class="w-full px-3 py-2.5 border border-gray-150 
-                                               rounded-xl text-sm text-gray-800 bg-white
-                                               focus:outline-none focus:ring-2 
-                                               focus:ring-primary-500 
-                                               focus:border-transparent">
-                                  {% for value, label in tracking_choices %}
-                                  <option value="{{ value }}"
-                                    {% if schedule.tracking_interval_minutes == value %}
-                                    selected
-                                    {% endif %}>
-                                    {{ label }}
-                                  </option>
-                                  {% endfor %}
-                                </select>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-1">How often to record employee location after check-in.</p>
-                        </div>
-                    </div>
-
-                    <!-- Working Days -->
-                    <div class="mt-6">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Working Days</label>
-                        <div class="flex flex-wrap gap-4">
-                            {% for day_val, day_label in schedule.DAYS %}
-                            <label class="flex items-center">
-                                <input type="checkbox" name="working_days_{{ branch.id }}" value="{{ day_val }}" class="h-4 w-4 text-primary-500 focus:ring-primary-500 border-gray-300 rounded" {% if day_val in schedule.working_days %}checked{% endif %}>
-                                <span class="text-sm ml-2">{{ day_label }}</span>
-                            </label>
+                        <c-select id="tracking_{{ branch.id }}" name="tracking_interval_minutes" label="Auto Location Track Interval">
+                            {% for value, label in tracking_choices %}
+                            <option value="{{ value }}" {% if schedule.tracking_interval_minutes == value %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
-                        </div>
+                        </c-select>
                     </div>
 
-                    <!-- Actions -->
-                    <div class="mt-6 flex justify-end">
-                        <button type="submit" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                            <i data-lucide="save" class="w-4 h-4"></i>
-                            Save Schedule
-                        </button>
+                    <div class="flex justify-end pt-3 border-t" style="border-color:var(--border)">
+                        <c-button type="submit" variant="primary" label="Save {{ branch.name }} Schedule" />
                     </div>
                 </form>
-            </div>
-        </div>
-        {% endwith %}
-        {% endfor %}
-    </div>
-
-    <!-- Leave Configuration Section -->
-    <div class="mt-8">
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div class="px-6 py-2.5 border-b border-gray-100 flex justify-between items-center">
-                <div>
-                    <h2 class="font-semibold text-gray-800 text-lg">Leave Configuration</h2>
-                    <p class="text-xs text-gray-550 mt-0.5">Configure default leave allowances per type.</p>
-                </div>
-                <a href="{% url 'leave:admin_leave_type_add' %}?next=/admin-panel/settings/schedule/" class="flex items-center gap-2 px-4 py-2 bg-primary-gradient hover:opacity-90 text-white text-xs font-semibold rounded-xl transition-colors">
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                    Add Leave Type
-                </a>
-            </div>
-            
-            <div class="p-6">
-                {% if leave_types %}
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-100">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Leave Type Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Default Days Per Year</th>
-                                <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-50">
-                            {% for lt in leave_types %}
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-2.5 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {{ lt.name }}
-                                </td>
-                                <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-550 uppercase">
-                                    {{ lt.category }}
-                                </td>
-                                <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                                    {{ lt.default_days_per_year }} day{% if lt.default_days_per_year != 1 %}s{% endif %}
-                                </td>
-                                <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium">
-                                    <a href="{% url 'leave:admin_leave_type_edit' lt.pk %}?next=/admin-panel/settings/schedule/" class="text-primary-500 hover:text-primary-800 transition-colors">
-                                        Edit
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-150">
-                    <i data-lucide="clipboard-list" class="w-10 h-10 mx-auto text-gray-300 mb-3"></i>
-                    <p class="text-gray-500 text-sm">No leave types configured yet</p>
-                </div>
-                {% endif %}
-            </div>
+            </c-card>
+            {% endwith %}
+            {% endfor %}
         </div>
     </div>
-
-</div>
-{% endblock %}
+</c-app-shell>

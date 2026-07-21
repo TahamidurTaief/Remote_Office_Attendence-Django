@@ -1,95 +1,92 @@
-{% extends 'base/admin_base.html' %}
+<c-app-shell page_title="Branches | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block title %}Branches | FieldTrack{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="Branches">
+            <c-slot name="actions">
+                <c-button href="{% url 'branches:branch_add' %}" variant="accent" icon="plus" label="Add Branch" />
+            </c-slot>
+        </c-topbar>
+    </c-slot>
 
-{% block content %}
-<div class="p-4">
-    <div class="md:flex md:items-center md:justify-between mb-6">
-        <div class="flex-1 min-w-0">
-            <h2 class="text-[14px] font-semibold text-gray-900">
-                Branches
-            </h2>
-        </div>
-        <div class="mt-4 flex md:mt-0 md:ml-4">
-            <a href="{% url 'branches:branch_add' %}" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-gradient hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                Add Branch
-            </a>
-        </div>
-    </div>
+    <c-command-palette />
 
-    <!-- Filters -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-150 mb-6">
-        <form method="GET" class="flex flex-col md:flex-row gap-4 items-end">
-            <div class="flex-1">
-                <label for="search" class="block text-sm font-medium text-gray-700">Search Branches</label>
-                <input type="text" name="search" id="search" value="{{ search }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border" placeholder="Branch Name...">
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <!-- Filters -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'branches:branch_list' %}">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 items-end">
+                    <c-input name="search" label="Search Branches" value="{{ search }}" placeholder="Branch Name..." />
+                    
+                    <c-select name="status" label="Status" value="{{ status }}">
+                        <option value="">All Statuses</option>
+                        <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </c-select>
+                </div>
+            </c-filter-bar>
+        </c-card>
+
+        <!-- Table -->
+        <c-card padding="none">
+            <div class="overflow-x-auto">
+                <table class="ft-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Address</th>
+                            <th>Radius</th>
+                            <th>Status</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for branch in branches %}
+                        <tr>
+                            <td>
+                                <span class="font-semibold text-xs" style="color:var(--text)">{{ branch.name }}</span>
+                            </td>
+                            <td>
+                                <span class="text-xs truncate max-w-xs block" style="color:var(--text-muted)">{{ branch.address }}</span>
+                            </td>
+                            <td>
+                                <span class="text-xs" style="color:var(--text-secondary)">{{ branch.radius_meters }} m</span>
+                            </td>
+                            <td>
+                                {% if branch.is_active %}
+                                    <c-badge variant="success" dot="true" label="Active" />
+                                {% else %}
+                                    <c-badge variant="neutral" dot="true" label="Inactive" />
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    <a href="{% url 'branches:branch_edit' branch.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1" title="Edit">
+                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                    </a>
+                                    {% if branch.is_active %}
+                                    <form action="{% url 'branches:branch_delete' branch.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Deactivate this branch?', () => $el.submit())">
+                                        {% csrf_token %}
+                                        <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm p-1 text-red-500 hover:text-red-600" title="Deactivate">
+                                            <i data-lucide="power" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="py-12">
+                                <c-empty-state icon="building-2" title="No Branches Found" description="Add your first branch to get started." />
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-            <div class="w-full md:w-48">
-                <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
-                <select name="status" id="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
-                    <option value="">All</option>
-                    <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
-                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
-                </select>
-            </div>
-            <div>
-                <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700">
-                    Filter
-                </button>
-            </div>
-        </form>
+        </c-card>
     </div>
-
-
-
-    <!-- Table -->
-    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Radius</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th scope="col" class="relative px-6 py-3"><span class="sr-only">Edit</span></th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {% for branch in branches %}
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm font-medium text-gray-900">{{ branch.name }}</td>
-                        <td class="px-6 py-2.5 text-sm text-gray-500 truncate max-w-xs">{{ branch.address }}</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">{{ branch.radius_meters }} m</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
-                            {% if branch.is_active %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200/50">Active</span>
-                            {% else %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200/50">Inactive</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium space-x-4 flex justify-end items-center">
-                            <a href="{% url 'branches:branch_edit' branch.pk %}" class="text-primary-500 hover:text-primary-800">Edit</a>
-                            {% if branch.is_active %}
-                            <form action="{% url 'branches:branch_delete' branch.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to deactivate this branch?', () => $el.submit())">
-                                {% csrf_token %}
-                                <button type="submit" class="text-red-600 hover:text-red-900">Deactivate</button>
-                            </form>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="px-6 py-16 text-center">
-                            <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                            <p class="text-gray-500 font-medium">No branches found.</p>
-                            <p class="text-gray-400 text-sm mt-1">Add your first branch to get started.</p>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

@@ -1,23 +1,32 @@
-{% extends 'base/staff_base.html' %}
-
-{% block title %}Edit Task | {{ project.name }} | FieldTrack{% endblock %}
-{% block page_title %}Review & Edit Task{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Edit Task | {{ project.name }} | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div class="p-4 max-w-xl mx-auto">
     <!-- Header -->
     <div class="mb-6 flex items-center justify-between">
         <div>
-            <span class="text-[10px] text-gray-400 font-semibold uppercase">Project: {{ project.name }}</span>
-            <h2 class="text-sm font-bold text-gray-900 mt-0.5">Review & Edit Task</h2>
+            <span class="text-[10px] font-semibold uppercase" style="color:var(--text-muted)">Project: {{ project.name }}</span>
+            <h2 class="text-sm font-bold mt-0.5" style="color:var(--text)">Review & Edit Task</h2>
         </div>
-        <a href="{% url 'staff:my_project_detail' project.pk %}" class="flex items-center gap-2 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-lg transition-colors">
+        <a href="{% url 'staff:my_project_detail' project.pk %}" class="flex items-center gap-2 px-3 py-1.5 border text-xs font-bold rounded-lg transition-colors" style="background:var(--surface); border-color:var(--border); color:var(--text)">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
             Cancel
         </a>
     </div>
 
-    <!-- Employee Submission Proof Banner -->
+    <!-- Form container -->
+    <c-card>
+        <form action="" method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+            <!-- Form fields go here -->
+            <c-input type="text" id="activity" name="activity" label="Task Activity Name" value="{{ task.activity }}" required="true" />
+
+            <div class="flex justify-end gap-3 pt-4 border-t" style="border-color:var(--border)">
+                <a href="{% url 'staff:my_project_detail' project.pk %}" class="px-4 py-2 border rounded-lg text-xs font-bold transition-colors" style="background:var(--surface-2); border-color:var(--border); color:var(--text)">
+                    Cancel
+                </a>
+                <c-button type="submit" variant="primary" label="Update Task" />
+            </div>
+
+
     {% if task.employee_note or task.completion_attachment %}
     <div class="bg-indigo-50 border border-indigo-150 p-4 rounded-xl space-y-3 mb-6 shadow-sm">
         <div class="flex items-center gap-2 text-indigo-900">
@@ -225,5 +234,4 @@
             </div>
         </form>
     </div>
-</div>
-{% endblock %}
+</c-app-shell>

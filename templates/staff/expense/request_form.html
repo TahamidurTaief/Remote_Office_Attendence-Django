@@ -1,8 +1,4 @@
-{% extends 'base/staff_base.html' %}
-
-{% block page_title %}New Expense Claim{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Claim Expense | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div class="px-4 md:px-6 py-6 md:py-8 max-w-2xl mx-auto">
     <!-- Header -->
     <div class="mb-6 flex items-center justify-between gap-4">
@@ -83,7 +79,4 @@
                     Submit Claim
                 </button>
             </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

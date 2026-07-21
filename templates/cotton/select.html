@@ -1,0 +1,38 @@
+{% comment %} c-select component
+   Props:
+   - name: select name attribute (required)
+   - label: visible label (optional)
+   - value: currently selected value (for comparison)
+   - required: required attribute
+   - disabled: disabled attribute
+   - error: error message string
+   - help: help text
+   - extra_class: additional classes on wrapper
+   - id: select id (defaults to name)
+   Slot: <option> elements
+{% endcomment %}
+
+<div class="flex flex-col gap-0.5 {{ extra_class }}">
+  {% if label %}
+    <label for="{{ id|default:name }}" class="ft-label">
+      {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+  {% endif %}
+
+  <select
+    name="{{ name }}"
+    id="{{ id|default:name }}"
+    {% if required %}required{% endif %}
+    {% if disabled %}disabled{% endif %}
+    class="ft-input ft-select {% if error %}!border-red-500{% endif %}"
+  >
+    <cotton-slot />
+  </select>
+
+  {% if error %}
+    <p class="ft-error-text">{{ error }}</p>
+  {% endif %}
+  {% if help and not error %}
+    <p class="ft-help-text">{{ help }}</p>
+  {% endif %}
+</div>

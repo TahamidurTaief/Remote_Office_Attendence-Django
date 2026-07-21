@@ -1,9 +1,4 @@
-{% extends "base/admin_base.html" %}
-{% load static %}
-
-{% block title %}Absence Report | FieldTrack{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Absence Report | FieldTrack" active_href="{{ request.path }}">
 <div class="p-6 max-w-7xl mx-auto">
 
     <!-- Breadcrumb + Header -->
@@ -360,8 +355,4 @@
             }, 300);
         }
 
-        function closeDeductionDetailModal(event) {
-            hideDeductionDetailModal();
-        }
-    </script>
-{% endblock %}
+</c-app-shell>

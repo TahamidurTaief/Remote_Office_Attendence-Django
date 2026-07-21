@@ -1,210 +1,150 @@
-{% extends 'base/admin_base.html' %}
+<c-app-shell page_title="Projects | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block title %}Projects | FieldTrack{% endblock %}
-{% block page_title %}Projects{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="Project Management">
+            <c-slot name="actions">
+                <c-button href="{% url 'projects:project_type_create' %}" variant="secondary" icon="plus" label="Add Project Type" />
+                <c-button href="{% url 'projects:project_add' %}" variant="accent" icon="plus" label="Add Project" />
+            </c-slot>
+        </c-topbar>
+    </c-slot>
 
-{% block content %}
-<div class="p-4">
-    <!-- Header -->
-    <div class="md:flex md:items-center md:justify-between mb-4">
-        <div class="flex-1 min-w-0">
-            <h2 class="text-[14px] font-semibold text-gray-900">Project Management</h2>
-        </div>
-        <div class="mt-3 flex md:mt-0 md:ml-4 gap-2">
-            <a href="{% url 'projects:project_type_create' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">
-                <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5 text-gray-500"></i>
-                Add Project Type
-            </a>
-            <a href="{% url 'projects:project_add' %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90 focus:outline-none">
-                <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
-                Add Project
-            </a>
-        </div>
-    </div>
+    <c-command-palette />
 
-    <!-- Filters -->
-    <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4">
-        <form method="GET" class="flex flex-col md:flex-row gap-3 items-end">
-            <div class="flex-1">
-                <label for="search" class="block text-[12px] font-medium text-gray-600 mb-1">Search Projects</label>
-                <input type="text" name="search" id="search" value="{{ search }}" placeholder="Name, client, location…">
-            </div>
-            <div class="w-full md:w-40">
-                <label for="status" class="block text-[12px] font-medium text-gray-600 mb-1">Status</label>
-                <select name="status" id="status">
-                    <option value="">All Statuses</option>
-                    {% for val, label in status_choices %}
-                    <option value="{{ val }}" {% if status_val == val %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="w-full md:w-40">
-                <label for="branch" class="block text-[12px] font-medium text-gray-600 mb-1">Branch</label>
-                <select name="branch" id="branch">
-                    <option value="">All Branches</option>
-                    {% for br in branches %}
-                    <option value="{{ br.id }}" {% if branch_id == br.id|stringformat:"s" %}selected{% endif %}>{{ br.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <button type="submit" class="w-full md:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
-                    <i data-lucide="filter" class="w-3.5 h-3.5"></i>
-                    Filter
-                </button>
-            </div>
-        </form>
-    </div>
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <!-- Filters -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'projects:project_list' %}">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-end">
+                    <c-input name="search" label="Search Projects" value="{{ search }}" placeholder="Name, client, location…" />
+                    
+                    <c-select name="status" label="Status" value="{{ status_val }}">
+                        <option value="">All Statuses</option>
+                        {% for val, label in status_choices %}
+                        <option value="{{ val }}" {% if status_val == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </c-select>
 
+                    <c-select name="branch" label="Branch" value="{{ branch_id }}">
+                        <option value="">All Branches</option>
+                        {% for br in branches %}
+                        <option value="{{ br.id }}" {% if branch_id == br.id|stringformat:"s" %}selected{% endif %}>{{ br.name }}</option>
+                        {% endfor %}
+                    </c-select>
+                </div>
+            </c-filter-bar>
+        </c-card>
 
-
-    <!-- Table -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Project Name</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Client & Location</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status & Progress</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Manager</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Dates</th>
-                        <th scope="col" class="relative px-4 py-2.5"><span class="sr-only">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-100">
-                    {% for project in projects %}
-                    <tr class="hover:bg-gray-50/70 transition-colors">
-                        <!-- Project Name -->
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <div class="text-[12px] font-semibold text-gray-900">
-                                <a href="{% url 'projects:project_detail' project.pk %}" class="text-primary-600 hover:underline">
+        <!-- Table -->
+        <c-card padding="none">
+            <div class="overflow-x-auto">
+                <table class="ft-table">
+                    <thead>
+                        <tr>
+                            <th>Project Name</th>
+                            <th>Client & Location</th>
+                            <th>Status & Progress</th>
+                            <th>Manager</th>
+                            <th>Dates</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in projects %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'projects:project_detail' project.pk %}" class="font-semibold hover:underline" style="color:var(--primary)">
                                     {{ project.name }}
                                 </a>
-                            </div>
-                            <div class="text-[11px] text-gray-400 mt-0.5">
-                                {{ project.project_type.name }}{% if project.system_type %} - {{ project.system_type }}{% endif %}{% if project.hvac_capacity_tr %} ({{ project.hvac_capacity_tr }} TR){% endif %}
-                            </div>
-                        </td>
-                        <!-- Client & Location -->
-                        <td class="px-4 py-3 whitespace-nowrap" title="{{ project.client_name }} — {{ project.location }}">
-                            <div class="max-w-[160px] truncate">
-                                <div class="text-[12px] text-gray-900 font-medium truncate">{{ project.client_name|truncatechars:20 }}</div>
-                                <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5 truncate">
-                                    <i data-lucide="map-pin" class="w-3 h-3 text-gray-300 shrink-0"></i>
-                                    <span class="truncate">{{ project.location|truncatechars:25 }}</span>
+                                <div class="text-[11px]" style="color:var(--text-muted)">
+                                    {{ project.project_type.name }}{% if project.system_type %} - {{ project.system_type }}{% endif %}{% if project.hvac_capacity_tr %} ({{ project.hvac_capacity_tr }} TR){% endif %}
                                 </div>
-                            </div>
-                        </td>
-                        <!-- Status & Progress -->
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <div class="mb-1.5">
-                                {% if project.status == 'Completed' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 border border-green-100">Completed</span>
-                                {% elif project.status == 'In Progress' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-100">In Progress</span>
-                                {% elif project.status == 'Delayed' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-red-700 border border-red-100">Delayed</span>
-                                {% else %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-50 text-gray-600 border border-gray-100">Not Started</span>
-                                {% endif %}
-                            </div>
-                            <div class="whitespace-normal">
-                                <div class="w-full min-w-[90px] max-w-[160px]">
-                                    <div class="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
+                            </td>
+                            <td>
+                                <div class="font-medium truncate max-w-[180px]" style="color:var(--text)">{{ project.client_name }}</div>
+                                <div class="text-[11px] flex items-center gap-1 truncate max-w-[180px]" style="color:var(--text-muted)">
+                                    <i data-lucide="map-pin" class="w-3 h-3 shrink-0"></i>
+                                    <span class="truncate">{{ project.location }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="mb-1">
+                                    {% if project.status == 'Completed' %}
+                                        <c-status-pill status="approved" label="Completed" />
+                                    {% elif project.status == 'In Progress' %}
+                                        <c-status-pill status="wfh" label="In Progress" />
+                                    {% elif project.status == 'Delayed' %}
+                                        <c-status-pill status="rejected" label="Delayed" />
+                                    {% else %}
+                                        <c-status-pill status="unknown" label="Not Started" />
+                                    {% endif %}
+                                </div>
+                                <div class="w-28">
+                                    <div class="flex justify-between text-[10px]" style="color:var(--text-muted)">
                                         <span>Progress</span>
-                                        <span class="font-semibold text-gray-700">{{ project.progress_percent }}%</span>
+                                        <span class="font-semibold" style="color:var(--text)">{{ project.progress_percent }}%</span>
                                     </div>
-                                    <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                        <div class="bg-primary-gradient h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden mt-0.5">
+                                        <div class="bg-primary-500 h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
                                     </div>
                                 </div>
-                            </div>
-                        </td>
-                        <!-- Manager -->
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            {% for pm in project.project_managers.all %}
-                            <div class="text-[12px] text-gray-900 font-medium">{{ pm.full_name }}</div>
-                            <div class="text-[11px] text-gray-400 mb-1">{{ pm.employee_id }}</div>
-                            {% empty %}
-                            <span class="text-[12px] text-gray-400 italic">Unassigned</span>
-                            {% endfor %}
-                        </td>
-                        <!-- Dates -->
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <div class="text-[12px] text-gray-700">
-                                <span class="font-medium text-gray-400">Start:</span> {{ project.start_date|date:"d/m/Y" }}
-                            </div>
-                            {% if project.completion_date %}
-                            <div class="text-[12px] text-gray-700 mt-0.5">
-                                <span class="font-medium text-gray-400">End:</span> {{ project.completion_date|date:"d/m/Y" }}
-                            </div>
-                            {% else %}
-                            <div class="text-[11px] text-gray-400 italic mt-0.5">End: Ongoing</div>
-                            {% endif %}
-                        </td>
-                        <!-- Actions -->
-                        <td class="px-4 py-3 whitespace-nowrap text-right text-[12px] font-medium space-x-3">
-                            <a href="{% url 'projects:project_edit' project.pk %}" class="text-primary-600 hover:text-primary-900">Edit</a>
-                            <form action="{% url 'projects:project_delete' project.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to permanently delete this project?', () => $el.submit())">
-                                {% csrf_token %}
-                                <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="6" class="px-4 py-12 text-center">
-                            <i data-lucide="briefcase" class="w-10 h-10 text-gray-200 mx-auto mb-2"></i>
-                            <p class="text-[12px] text-gray-500 font-medium">No projects found.</p>
-                            <p class="text-[11px] text-gray-400 mt-1">Create your first HVAC installation project to begin.</p>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <!-- Pagination -->
-        {% if is_paginated %}
-        <div class="bg-white px-4 py-2.5 flex items-center justify-between border-t border-gray-100">
-            <div class="flex-1 flex justify-between sm:hidden">
-                {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}&search={{ search }}&status={{ status_val }}&branch={{ branch_id }}" class="relative inline-flex items-center px-3 py-1.5 border border-gray-200 text-[12px] font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50">Previous</a>
-                {% endif %}
-                {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}&search={{ search }}&status={{ status_val }}&branch={{ branch_id }}" class="ml-3 relative inline-flex items-center px-3 py-1.5 border border-gray-200 text-[12px] font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50">Next</a>
-                {% endif %}
-            </div>
-            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                    <p class="text-[12px] text-gray-500">
-                        Showing <span class="font-medium">{{ page_obj.start_index }}</span> to <span class="font-medium">{{ page_obj.end_index }}</span> of <span class="font-medium">{{ paginator.count }}</span> results
-                    </p>
-                </div>
-                <div>
-                    <nav class="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px">
-                        {% if page_obj.has_previous %}
-                        <a href="?page={{ page_obj.previous_page_number }}&search={{ search }}&status={{ status_val }}&branch={{ branch_id }}" class="relative inline-flex items-center px-2 py-1.5 rounded-l-lg border border-gray-200 bg-white text-[12px] font-medium text-gray-500 hover:bg-gray-50">
-                            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
-                        </a>
-                        {% endif %}
-                        {% for num in paginator.page_range %}
-                        {% if page_obj.number == num %}
-                        <span class="z-10 bg-primary-50 border-primary-500 text-primary-600 relative inline-flex items-center px-3 py-1.5 border text-[12px] font-medium">{{ num }}</span>
-                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                        <a href="?page={{ num }}&search={{ search }}&status={{ status_val }}&branch={{ branch_id }}" class="bg-white border-gray-200 text-gray-500 hover:bg-gray-50 relative inline-flex items-center px-3 py-1.5 border text-[12px] font-medium">{{ num }}</a>
-                        {% endif %}
+                            </td>
+                            <td>
+                                {% for pm in project.project_managers.all %}
+                                <div class="font-medium text-xs" style="color:var(--text)">{{ pm.full_name }}</div>
+                                {% empty %}
+                                <span class="text-xs italic" style="color:var(--text-muted)">Unassigned</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <div class="text-xs" style="color:var(--text)">Start: {{ project.start_date|date:"d/m/Y" }}</div>
+                                <div class="text-[11px]" style="color:var(--text-muted)">
+                                    {% if project.completion_date %}End: {{ project.completion_date|date:"d/m/Y" }}{% else %}End: Ongoing{% endif %}
+                                </div>
+                            </td>
+                            <td class="text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    <a href="{% url 'projects:project_edit' project.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1" title="Edit">
+                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                    </a>
+                                    <form action="{% url 'projects:project_delete' project.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this project?', () => $el.submit())">
+                                        {% csrf_token %}
+                                        <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm p-1 text-red-500 hover:text-red-600" title="Delete">
+                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="py-12">
+                                <c-empty-state icon="briefcase" title="No Projects Found" description="Try adjusting search or status filters." />
+                            </td>
+                        </tr>
                         {% endfor %}
-                        {% if page_obj.has_next %}
-                        <a href="?page={{ page_obj.next_page_number }}&search={{ search }}&status={{ status_val }}&branch={{ branch_id }}" class="relative inline-flex items-center px-2 py-1.5 rounded-r-lg border border-gray-200 bg-white text-[12px] font-medium text-gray-500 hover:bg-gray-50">
-                            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
-                        </a>
-                        {% endif %}
-                    </nav>
+                    </tbody>
+                </table>
+            </div>
+
+            {% if is_paginated %}
+            <div class="px-4 py-3 border-t flex items-center justify-between" style="border-color:var(--border); background:var(--surface-2)">
+                <span class="text-xs" style="color:var(--text-muted)">
+                    Page <strong style="color:var(--text)">{{ page_obj.number }}</strong> of <strong style="color:var(--text)">{{ page_obj.paginator.num_pages }}</strong>
+                </span>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}
+                    <c-button href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status_val %}&status={{ status_val }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}" variant="secondary" size="sm" label="Previous" />
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <c-button href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status_val %}&status={{ status_val }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}" variant="secondary" size="sm" label="Next" />
+                    {% endif %}
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
+        </c-card>
     </div>
-</div>
-{% endblock %}
+</c-app-shell>

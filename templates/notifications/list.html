@@ -1,179 +1,70 @@
-{% extends base_template %}
-{% load static %}
+<c-app-shell page_title="Notifications | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block title %}Notifications | FieldTrack{% endblock %}
-{% block page_title %}Notifications{% endblock %}
-
-{% block content %}
-<div class="p-6 max-w-4xl mx-auto">
-
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h1 class="text-[14px] font-semibold text-gray-900">Notifications</h1>
-            {% if unread_count %}
-            <p class="text-sm text-gray-500 mt-1">{{ unread_count }} unread</p>
-            {% else %}
-            <p class="text-sm text-gray-500 mt-1">
-                {% if request.user.role == 'admin' %}
-                Recent activity from your employees
-                {% else %}
-                Recent updates and alerts
-                {% endif %}
-            </p>
+    <c-slot name="topbar">
+        <c-topbar title="Notifications">
+            {% if notifs %}
+            <c-slot name="actions">
+                <form method="post" action="{% url 'notifications:mark_all_read' %}" class="inline">
+                    {% csrf_token %}
+                    <c-button type="submit" variant="secondary" icon="check-circle" label="Mark all read" />
+                </form>
+            </c-slot>
             {% endif %}
-        </div>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette />
+
+    <div class="p-4 max-w-4xl mx-auto space-y-4">
+        <!-- Filter Tabs -->
+        <c-card padding="sm">
+            <div class="flex gap-1.5 flex-wrap">
+                {% for key, label in filter_tabs %}
+                <a href="?type={{ key }}" class="ft-btn ft-btn-sm {% if filter_type == key %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">
+                    {{ label }}
+                </a>
+                {% endfor %}
+            </div>
+        </c-card>
+
         {% if notifs %}
-        <form method="post" action="{% url 'notifications:mark_all_read' %}">
-            {% csrf_token %}
-            <button type="submit"
-                    class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                <i data-lucide="check-circle" class="w-4 h-4"></i>
-                Mark all as read
-            </button>
-        </form>
-        {% endif %}
-    </div>
-
-    <div class="flex gap-2 mb-4 overflow-x-auto pb-1">
-        {% for key, label in filter_tabs %}
-        <a href="?type={{ key }}"
-           class="px-4 py-2 rounded-full text-sm whitespace-nowrap font-medium
-                  {% if filter_type == key %}bg-primary-gradient text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
-            {{ label }}
-        </a>
-        {% endfor %}
-    </div>
-
-    {% if notifs %}
-    <div class="space-y-2">
-        {% for notif in notifs %}
-        
-        {% if request.user.role == 'admin' %}
-            {% if notif.employee %}
-                {% url 'employees:employee_detail' notif.employee.pk as item_redirect_url %}
-            {% else %}
-                {% url 'notifications:list' as item_redirect_url %}
-            {% endif %}
-        {% else %}
-            {% if notif.notif_type == 'task_assigned' or notif.notif_type == 'task_completed' or notif.notif_type == 'task_delayed' %}
-                {% url 'staff:my_tasks' as item_redirect_url %}
-            {% else %}
-                {% url 'notifications:list' as item_redirect_url %}
-            {% endif %}
-        {% endif %}
-        
-        <a href="{{ item_redirect_url }}"
-           class="flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-colors
-                  {% if not notif.is_read %}bg-white border-l-4 border-primary-500 shadow-sm{% else %}bg-gray-50 border border-gray-100{% endif %}"
-           data-notif-id="{{ notif.pk }}"
-           data-read-url="{% url 'notifications:mark_read' notif.pk %}"
-           data-redirect="{{ item_redirect_url }}">
-
-            {% if notif.employee and notif.employee.profile_photo %}
-              <img src="{{ notif.employee.profile_photo.url }}"
-                  alt="{{ notif.employee.full_name }}"
-                  class="w-10 h-10 rounded-full object-cover shrink-0">
-            {% else %}
-            <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center shrink-0 text-primary-600">
+        <c-notification-panel title="All Activity" unread_count="{{ unread_count }}">
+            {% for notif in notifs %}
+            {% if request.user.role == 'admin' %}
                 {% if notif.employee %}
-                <span class="text-sm font-semibold">{{ notif.employee.full_name|make_list|first|upper }}</span>
+                    {% url 'employees:employee_detail' notif.employee.pk as item_redirect_url %}
                 {% else %}
-                <i data-lucide="bell" class="w-5 h-5"></i>
+                    {% url 'notifications:list' as item_redirect_url %}
                 {% endif %}
-            </div>
+            {% else %}
+                {% if notif.notif_type == 'task_assigned' or notif.notif_type == 'task_completed' or notif.notif_type == 'task_delayed' %}
+                    {% url 'staff:my_tasks' as item_redirect_url %}
+                {% else %}
+                    {% url 'notifications:list' as item_redirect_url %}
+                {% endif %}
             {% endif %}
-
-            <div class="flex-1 min-w-0">
-                <p class="text-sm {% if not notif.is_read %}font-semibold text-gray-900{% else %}font-medium text-gray-700{% endif %}">
-                    {{ notif.title }}
-                </p>
-                {% if notif.message %}
-                <p class="text-xs text-gray-500 mt-0.5 truncate">{{ notif.message }}</p>
-                {% endif %}
-                <p class="text-xs text-gray-400 mt-1">{{ notif.created_at|timesince }} ago</p>
-            </div>
-
-            <div class="shrink-0">
-                <span class="text-xs px-2 py-1 rounded-full
-                    {% if notif.notif_type == 'check_in' %}bg-green-100 text-green-700
-                    {% elif notif.notif_type == 'check_out' %}bg-blue-100 text-blue-700
-                    {% elif notif.notif_type == 'field_visit' %}bg-purple-100 text-purple-700
-                    {% elif notif.notif_type == 'late' %}bg-amber-100 text-amber-700
-                    {% else %}bg-red-100 text-red-700{% endif %}">
-                    {{ notif.get_notif_type_display }}
-                </span>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="text-center py-20">
-        <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i data-lucide="bell" class="w-8 h-8 text-gray-400"></i>
-        </div>
-        <p class="text-gray-500 font-medium">No notifications yet</p>
-        <p class="text-gray-400 text-sm mt-1">Attendance events will appear here</p>
-    </div>
-    {% endif %}
-
-    <!-- Pagination -->
-    {% if is_paginated %}
-    <div class="mt-6 bg-white px-4 py-3 border border-gray-100 rounded-xl shadow-sm sm:px-6 flex items-center justify-between">
-        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-                <p class="text-sm text-gray-700">
-                    Showing page <span class="font-medium">{{ page_obj.number }}</span> of <span class="font-medium">{{ page_obj.paginator.num_pages }}</span>
-                </p>
-            </div>
-            <div>
-                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                    {% if page_obj.has_previous %}
-                    <a href="?page={{ page_obj.previous_page_number }}{% if filter_type %}&type={{ filter_type }}{% endif %}" class="relative inline-flex items-center px-4 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        Previous
-                    </a>
+            <a href="{{ item_redirect_url }}" class="p-3 flex items-start gap-3 hover:bg-opacity-50 transition-colors block text-decoration-none" style="background: {% if not notif.is_read %}var(--surface){% else %}var(--surface-2){% endif %}">
+                <c-avatar src="{% if notif.employee and notif.employee.profile_photo %}{{ notif.employee.profile_photo.url }}{% endif %}" initials="{% if notif.employee %}{{ notif.employee.full_name|make_list|first|upper }}{% else %}N{% endif %}" size="sm" />
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs {% if not notif.is_read %}font-semibold{% else %}font-medium{% endif %} truncate" style="color:var(--text)">
+                        {{ notif.title }}
+                    </p>
+                    {% if notif.message %}
+                    <p class="text-[11px] truncate mt-0.5" style="color:var(--text-muted)">{{ notif.message }}</p>
                     {% endif %}
-                    {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}{% if filter_type %}&type={{ filter_type }}{% endif %}" class="relative inline-flex items-center px-4 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        Next
-                    </a>
-                    {% endif %}
-                </nav>
-            </div>
-        </div>
+                    <p class="text-[10px] mt-1" style="color:var(--text-muted)">{{ notif.created_at|timesince }} ago</p>
+                </div>
+                <c-badge variant="neutral" label="{{ notif.notif_type }}" />
+            </a>
+            {% endfor %}
+        </c-notification-panel>
+        {% else %}
+        <c-card>
+            <c-empty-state icon="bell-off" title="No Notifications" description="You have no notifications in this filter view." />
+        </c-card>
+        {% endif %}
     </div>
-    {% endif %}
-
-</div>
-
-<script>
-function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) {
-        return parts.pop().split(';').shift();
-    }
-    return '';
-}
-
-function markRead(readUrl, redirectUrl) {
-    fetch(readUrl, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken')
-        }
-    }).finally(() => {
-        window.location.href = redirectUrl;
-    });
-    return false;
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-notif-id]').forEach((row) => {
-        row.addEventListener('click', function (event) {
-            event.preventDefault();
-            markRead(this.dataset.readUrl, this.dataset.redirect);
-        });
-    });
-});
-</script>
-{% endblock %}
+</c-app-shell>

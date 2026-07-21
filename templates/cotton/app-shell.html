@@ -1,0 +1,314 @@
+{% load static tailwind_tags %}
+{% comment %}
+   c-app-shell — Full page shell
+   Replaces extends 'base/admin_base.html' / 'base/staff_base.html'
+   Props:
+   - page_title: string shown in <title> tag and topbar (required)
+   - shell_type: admin (default) | staff — controls which sidebar nav loads
+   - active_href: request.path for active nav highlighting
+   - pending_leave_count: integer (admin nav badge)
+   - unread_notifications: integer (admin nav badge)
+   - expired_data_count: integer (admin nav badge)
+   - pending_expense_count: integer (admin nav badge)
+   Slots:
+   - head: extra <head> content (scripts, meta)
+   - content (default): page body
+   - topbar_actions: CTA buttons in topbar right zone
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+  {# ── Anti-FODT: apply saved theme BEFORE paint ─────────────────────── #}
+  <script>
+    (function(){
+      var t = localStorage.getItem('ft_theme');
+      if (t === 'dark') { document.documentElement.classList.add('dark'); }
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page_title|default:"FieldTrack" }}</title>
+
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0B5FA5">
+
+  {# ── Styles ────────────────────────────────────────────────────────── #}
+  {% tailwind_css %}
+
+  {# ── Scripts ───────────────────────────────────────────────────────── #}
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  {% if debug %}<script src="{% url '__reload__:events' %}" type="text/javascript" defer></script>{% endif %}
+
+  {# ── Sound FX ──────────────────────────────────────────────────────── #}
+  <script>
+    const SoundFX = {
+      ctx: null,
+      isMuted: localStorage.getItem('sound_muted') === 'true',
+      init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+      toggleMute() {
+        this.isMuted = !this.isMuted;
+        localStorage.setItem('sound_muted', this.isMuted ? 'true' : 'false');
+        return this.isMuted;
+      },
+      runAudio(cb) {
+        if (this.isMuted) return;
+        this.init();
+        const ctx = this.ctx;
+        if (!ctx) return;
+        if (ctx.state === 'suspended') ctx.resume().then(() => { try { cb(ctx); } catch(e){} });
+        else { try { cb(ctx); } catch(e){} }
+      },
+      playClick() {
+        this.runAudio(ctx => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(650, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.08);
+          g.gain.setValueAtTime(0.08, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+          o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.08);
+        });
+      },
+      playToastSuccess() {
+        this.runAudio(ctx => {
+          const play = (f,t,d) => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.frequency.setValueAtTime(f, t);
+            g.gain.setValueAtTime(0.09, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t+d);
+            o.start(t); o.stop(t+d);
+          };
+          const n = ctx.currentTime;
+          play(523.25, n, 0.12); play(659.25, n+0.06, 0.15);
+        });
+      },
+      playToastError() {
+        this.runAudio(ctx => {
+          const play = (f,t,d) => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            g.gain.setValueAtTime(0.12, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t+d);
+            o.frequency.setValueAtTime(f, t); o.start(t); o.stop(t+d);
+          };
+          const n = ctx.currentTime;
+          play(392, n, 0.12); play(349.23, n+0.08, 0.18);
+        });
+      },
+      playModalOpen() {
+        this.runAudio(ctx => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.setValueAtTime(300, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(450, ctx.currentTime + 0.15);
+          g.gain.setValueAtTime(0.07, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+          o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.15);
+        });
+      },
+      playModalClose() {
+        this.runAudio(ctx => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.setValueAtTime(450, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.12);
+          g.gain.setValueAtTime(0.07, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+          o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.12);
+        });
+      }
+    };
+    window.SoundFX = SoundFX;
+
+    window.confirmAction = (message, onConfirm) =>
+      window.dispatchEvent(new CustomEvent('open-confirm-modal', { detail: { message, onConfirm } }));
+
+    window.showToast = (message, type = 'info') =>
+      window.dispatchEvent(new CustomEvent('new-toast', { detail: { message, type } }));
+
+    // Sound on nav/button clicks
+    document.addEventListener('click', e => {
+      const t = e.target.closest('button, a');
+      if (!t) return;
+      const isNav = t.closest('.ft-nav-item') || t.closest('#ft-sidebar');
+      const cls = String(t.className || '');
+      const isBtn = t.tagName === 'BUTTON' || cls.includes('ft-btn') || t.type === 'submit';
+      if (isNav || isBtn) {
+        SoundFX.playClick();
+        const isLink = t.tagName === 'A' && t.href && !t.href.startsWith('#') &&
+                       !t.href.includes('javascript:') && !t.getAttribute('target') &&
+                       !t.hasAttribute('hx-get') && !t.hasAttribute('hx-post');
+        if (isLink) {
+          e.preventDefault();
+          const href = t.href;
+          setTimeout(() => { window.location.href = href; }, 100);
+        }
+      }
+    });
+  </script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    /* Share Tech Mono only for clock readout */
+    .ft-mono { font-family: "Courier New", Courier, monospace; letter-spacing: 0.04em; }
+  </style>
+
+  <cotton-slot name="head" />
+</head>
+
+<body class="ft-page-bg antialiased"
+      x-data="{
+        muted: localStorage.getItem('sound_muted') === 'true',
+      }"
+      @keydown.escape.window="$dispatch('close-modal'); $dispatch('close-drawer')">
+
+  {# ── Sidebar ────────────────────────────────────────────────────────── #}
+  <cotton-slot name="sidebar">
+    <c-sidebar shell_type="{{ shell_type|default:'admin' }}" active_href="{{ active_href }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" pending_expense_count="{{ pending_expense_count }}" />
+  </cotton-slot>
+
+  {# ── Main area ──────────────────────────────────────────────────────── #}
+  <div id="ft-main-content" class="ft-main flex flex-col min-h-screen transition-all duration-220">
+
+    {# ── Topbar ──────────────────────────────────────────────────────── #}
+    <cotton-slot name="topbar">
+      <c-topbar title="{{ page_title }}">
+        <c-slot name="topbar_actions">
+          <cotton-slot name="topbar_actions" />
+        </c-slot>
+      </c-topbar>
+    </cotton-slot>
+
+    {# ── Page content ────────────────────────────────────────────────── #}
+    <main class="flex-1 flex flex-col p-4 overflow-y-auto">
+      <div class="flex-1">
+        <cotton-slot />
+      </div>
+      <footer class="mt-6 pt-3 border-t text-center text-[11px]"
+              style="border-color:var(--border); color:var(--text-muted)">
+        Developed by
+        <a href="https://tahamidurtaief.com" target="_blank"
+           style="color:var(--primary)"
+           class="font-semibold hover:underline">Tahamidur Taief</a>
+      </footer>
+    </main>
+  </div>
+
+  {# ── Global Toast Notifications ──────────────────────────────────── #}
+  <div x-data="{
+         toasts: [],
+         addToast(msg, type) {
+           const id = Date.now() + Math.random();
+           this.toasts.push({ id, message: msg, type });
+           if (window.SoundFX) {
+             type === 'error' ? SoundFX.playToastError() : SoundFX.playToastSuccess();
+           }
+           this.$nextTick(() => { if(window.lucide) lucide.createIcons(); });
+           setTimeout(() => this.removeToast(id), 4500);
+         },
+         removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); }
+       }"
+       @new-toast.window="addToast($event.detail.message, $event.detail.type)"
+       class="fixed top-4 right-4 z-[80] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div x-show="true"
+           x-transition:enter="transition ease-out duration-250"
+           x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+           x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0 scale-95"
+           @click="removeToast(toast.id)"
+           class="pointer-events-auto cursor-pointer px-4 py-3 rounded-card border flex items-center gap-3"
+           :class="{
+             'bg-accent-50 border-accent-200 text-accent-800': toast.type==='success',
+             'bg-red-50 border-red-200 text-red-800': toast.type==='error',
+             'bg-amber-50 border-amber-200 text-amber-800': toast.type==='warning',
+             'bg-primary-50 border-primary-200 text-primary-800': toast.type==='info',
+           }"
+           style="box-shadow: var(--shadow-dropdown)">
+        <template x-if="toast.type==='success'"><i data-lucide="check-circle" class="w-4 h-4 shrink-0 text-accent-600"></i></template>
+        <template x-if="toast.type==='error'"><i data-lucide="alert-triangle" class="w-4 h-4 shrink-0 text-red-600"></i></template>
+        <template x-if="toast.type==='warning'"><i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-amber-600"></i></template>
+        <template x-if="toast.type==='info'"><i data-lucide="info" class="w-4 h-4 shrink-0 text-primary-600"></i></template>
+        <span class="text-[12px] font-semibold truncate flex-1" x-text="toast.message"></span>
+        <button class="opacity-50 hover:opacity-100 transition-opacity">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </template>
+  </div>
+
+  {# ── Global Confirm Modal ─────────────────────────────────────────── #}
+  <div x-data="{
+         open: false,
+         message: '',
+         onConfirmCb: null,
+         init() {
+           window.addEventListener('open-confirm-modal', e => {
+             this.message = e.detail.message;
+             this.onConfirmCb = () => { e.detail.onConfirm(); this.close(); };
+             this.open = true;
+             if(window.SoundFX) SoundFX.playModalOpen();
+           });
+         },
+         close() {
+           this.open = false;
+           if(window.SoundFX) SoundFX.playModalClose();
+         }
+       }"
+       x-show="open"
+       x-cloak
+       x-transition.opacity
+       class="ft-modal-backdrop">
+    <div class="ft-modal ft-modal-sm" @click.stop>
+      <div class="px-5 py-4 border-b" style="border-color:var(--border)">
+        <h3 class="text-[13px] font-semibold" style="color:var(--text)">Confirm Action</h3>
+      </div>
+      <div class="p-5 text-[12px]" style="color:var(--text-secondary)" x-text="message"></div>
+      <div class="px-5 py-3 flex gap-2 justify-end border-t" style="border-color:var(--border); background:var(--surface-2)">
+        <button @click="close()" class="ft-btn ft-btn-secondary ft-btn-sm">Cancel</button>
+        <button @click="onConfirmCb && onConfirmCb()" class="ft-btn ft-btn-danger ft-btn-sm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  {# ── Django Messages → Auto Toast ────────────────────────────────── #}
+  {% if messages %}
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      {% for msg in messages %}
+        {% if msg.tags == 'error' %}
+          window.showToast("{{ msg|escapejs }}", 'error');
+        {% elif msg.tags == 'warning' %}
+          window.showToast("{{ msg|escapejs }}", 'warning');
+        {% elif msg.tags == 'success' %}
+          window.showToast("{{ msg|escapejs }}", 'success');
+        {% else %}
+          window.showToast("{{ msg|escapejs }}", 'info');
+        {% endif %}
+      {% endfor %}
+    });
+  </script>
+  {% endif %}
+
+  {# ── Init lucide icons after each htmx swap ──────────────────────── #}
+  <script>
+    document.addEventListener('DOMContentLoaded', () => { if(window.lucide) lucide.createIcons(); });
+    document.addEventListener('htmx:afterSwap', () => { if(window.lucide) lucide.createIcons(); });
+    document.addEventListener('htmx:afterSettle', () => { if(window.lucide) lucide.createIcons(); });
+    // Re-init icons after Alpine DOM changes
+    document.addEventListener('alpine:initialized', () => { if(window.lucide) lucide.createIcons(); });
+  </script>
+
+  <cotton-slot name="scripts" />
+</body>
+</html>

@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Attendance Records | FieldTrack Admin{% endblock %}
-{% block page_title %}Attendance{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Attendance Records | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-7xl mx-auto">
     
     <div class="flex justify-between items-end mb-4">
@@ -371,9 +366,4 @@
             }, 300);
         }
 
-        function closePhotoModal(event) {
-            hidePhotoModal();
-        }
-    </script>
-</div>
-{% endblock %}
+</c-app-shell>

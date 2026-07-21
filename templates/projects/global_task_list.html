@@ -1,10 +1,20 @@
-{% extends 'base/admin_base.html' %}
-{% load static %}
+<c-app-shell page_title="Task Management | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block title %}Task Management | FieldTrack{% endblock %}
-{% block page_title %}Task Management{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="Task Management">
+            <c-slot name="actions">
+                <c-button href="{% url 'projects:global_task_add' %}" variant="accent" icon="plus" label="Create Individual Task" />
+            </c-slot>
+        </c-topbar>
+    </c-slot>
 
-{% block content %}
+    <c-command-palette />
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+
 <div class="flex flex-col h-full space-y-4" x-data="{
     activeTab: localStorage.getItem('global_task_list_tab') || 'individual',
     expandedProject: null,
@@ -597,5 +607,8 @@
             </div>
         </div>
     </div>
+        </div>
+    </div>
 </div>
-{% endblock %}
+</c-app-shell>
+

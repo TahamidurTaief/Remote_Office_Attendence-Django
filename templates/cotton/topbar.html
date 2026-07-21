@@ -1,0 +1,168 @@
+{% comment %} c-topbar — Sticky top header bar
+   Props:
+   - title: page title string (h1)
+   - breadcrumb: optional breadcrumb string or path
+   Slots:
+   - actions: right-side CTA buttons zone
+   - extra: additional topbar elements (before actions)
+{% endcomment %}
+
+<header class="ft-topbar">
+  {# Left: mobile menu + title #}
+  <div class="flex items-center gap-2.5 min-w-0">
+    {# Mobile hamburger #}
+    <button type="button"
+            @click="$dispatch('toggle-mobile-sidebar')"
+            class="ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center lg:hidden">
+      <i data-lucide="menu" class="w-4 h-4"></i>
+    </button>
+
+    {# Page title / breadcrumb #}
+    <div class="min-w-0">
+      {% if breadcrumb %}
+        <nav class="flex items-center gap-1 text-[11px]" style="color:var(--text-muted)">
+          {% for crumb in breadcrumb %}
+            {% if not forloop.last %}
+              <a href="{{ crumb.href }}" class="hover:underline" style="color:var(--text-muted)">{{ crumb.label }}</a>
+              <i data-lucide="chevron-right" class="w-3 h-3 flex-shrink-0"></i>
+            {% else %}
+              <span style="color:var(--text)" class="font-medium">{{ crumb.label }}</span>
+            {% endif %}
+          {% endfor %}
+        </nav>
+      {% else %}
+        <h1 class="text-[14px] font-semibold truncate" style="color:var(--text)">{{ title }}</h1>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Right: clock + utils + actions #}
+  <div class="flex items-center gap-2 flex-shrink-0">
+    {# Live date + clock #}
+    <div class="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-btn border"
+         style="background:var(--surface-2); border-color:var(--border)">
+      <div class="flex items-center gap-1.5">
+        <i data-lucide="calendar" class="w-3.5 h-3.5" style="color:var(--primary)"></i>
+        <span id="ft-nav-date" class="text-[11px] font-semibold" style="color:var(--text-secondary)"></span>
+      </div>
+      <div class="h-3 w-px" style="background:var(--border)"></div>
+      <div class="flex items-center gap-1.5">
+        <i data-lucide="clock" class="w-3.5 h-3.5 animate-pulse" style="color:var(--primary)"></i>
+        <span id="ft-nav-time" class="ft-mono text-[11px] font-semibold" style="color:var(--text-secondary)"></span>
+      </div>
+    </div>
+
+    {# Mute toggle #}
+    <button type="button"
+            x-data
+            @click="$el.closest('body').__x && ($el.closest('body').__x.muted = window.SoundFX.toggleMute())"
+            class="ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center"
+            title="Toggle sound">
+      <i data-lucide="volume-2" class="w-4 h-4" x-show="!$el.closest('body').__x?.muted"></i>
+      <i data-lucide="volume-x" class="w-4 h-4" x-show="$el.closest('body').__x?.muted" x-cloak></i>
+    </button>
+
+    {# Notifications bell #}
+    <div class="relative"
+         hx-get="{% url 'notifications:count' %}"
+         hx-trigger="load, every 30s"
+         hx-target="#ft-notif-badge"
+         hx-swap="outerHTML">
+      <a href="{% url 'notifications:list' %}"
+         class="relative ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center">
+        <i data-lucide="bell" class="w-4 h-4"></i>
+        <span id="ft-notif-badge"
+              class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full hidden items-center justify-center font-bold">
+        </span>
+      </a>
+    </div>
+
+    {# Theme toggle #}
+    <c-theme-toggle />
+
+    {# Divider #}
+    <div class="h-5 w-px" style="background:var(--border)"></div>
+
+    {# Command palette trigger #}
+    <button type="button"
+            @click="$dispatch('open-command-palette')"
+            class="ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center"
+            title="Command Palette (Ctrl+K)">
+      <i data-lucide="search" class="w-4 h-4"></i>
+    </button>
+
+    {# Slot: page-specific action buttons #}
+    <cotton-slot name="actions" />
+
+    {# User avatar menu #}
+    <div class="relative" x-data="{ open: false }">
+      <button type="button"
+              @click="open = !open"
+              class="flex items-center gap-1.5 px-2 py-1 rounded-btn hover:bg-opacity-10 transition-colors"
+              style="background:transparent">
+        <div class="w-7 h-7 rounded-full bg-primary-gradient flex items-center justify-center text-white text-[11px] font-semibold">
+          {{ request.user.email|default:"User"|make_list|first|upper }}
+        </div>
+        <span class="hidden md:block text-[12px] font-medium max-w-[120px] truncate" style="color:var(--text-secondary)">
+          {{ request.user.email|default:"User" }}
+        </span>
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5" style="color:var(--text-muted)"></i>
+      </button>
+
+      <div x-show="open"
+           @click.away="open = false"
+           x-transition:enter="transition ease-out duration-150"
+           x-transition:enter-start="opacity-0 scale-95"
+           x-transition:enter-end="opacity-100 scale-100"
+           x-transition:leave="transition ease-in duration-100"
+           x-transition:leave-start="opacity-100 scale-100"
+           x-transition:leave-end="opacity-0 scale-95"
+           class="absolute right-0 mt-2 w-48 rounded-card border py-1.5 z-50"
+           style="background:var(--surface); border-color:var(--border); box-shadow:var(--shadow-dropdown)"
+           x-cloak>
+        <div class="px-3 py-1.5 border-b mb-1" style="border-color:var(--border)">
+          <p class="text-[12px] font-semibold truncate" style="color:var(--text)">
+            {{ request.user.email|default:"User" }}
+          </p>
+          <p class="text-[10px]" style="color:var(--text-muted)">Administrator</p>
+        </div>
+        <a href="{% url 'accounts:change_password' %}"
+           class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-opacity-10"
+           style="color:var(--text-secondary)"
+           onmouseover="this.style.background='var(--surface-2)'"
+           onmouseout="this.style.background=''">
+          <i data-lucide="user-circle" class="w-3.5 h-3.5"></i>
+          My Profile
+        </a>
+        <div class="h-px my-1" style="background:var(--border)"></div>
+        <a href="{% url 'accounts:logout' %}"
+           class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors"
+           style="color:var(--danger)"
+           onmouseover="this.style.background='var(--danger-light)'"
+           onmouseout="this.style.background=''">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          Logout
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ── Clock script (only runs once from the topbar) ──── #}
+  <script>
+    (function() {
+      function updateClock() {
+        var now = new Date();
+        var d = document.getElementById('ft-nav-date');
+        var t = document.getElementById('ft-nav-time');
+        if (d) {
+          d.textContent = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        if (t) {
+          t.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        }
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+    })();
+  </script>
+</header>

@@ -1,8 +1,4 @@
-{% extends 'base/staff_base.html' %}
-
-{% block page_title %}My Expenses{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Expense Claims | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div class="px-4 md:px-6 py-6 md:py-8 space-y-6">
     <!-- Header -->
     <div class="flex items-start justify-between gap-4">
@@ -96,5 +92,4 @@
             {% endfor %}
         </div>
     </div>
-</div>
-{% endblock %}
+</c-app-shell>

@@ -1,0 +1,25 @@
+{% comment %} c-notification-panel component
+   Props:
+   - title: Title of panel (default: "Notifications")
+   - unread_count: Unread items counter (int)
+   - extra_class: Additional CSS classes
+   Slots:
+   - default: List of notification items
+   - actions: Top-right header actions
+{% endcomment %}
+
+<div class="ft-card flex flex-col {{ extra_class }}">
+  <div class="flex items-center justify-between px-4 py-3 border-b" style="border-color:var(--border)">
+    <div class="flex items-center gap-2">
+      <h3 class="text-[13px] font-semibold" style="color:var(--text)">{{ title|default:"Notifications" }}</h3>
+      {% if unread_count %}
+        <c-badge variant="danger" label="{{ unread_count }} unread" />
+      {% endif %}
+    </div>
+    <cotton-slot name="actions" />
+  </div>
+
+  <div class="divide-y overflow-y-auto max-h-[360px]" style="border-color:var(--border-subtle)">
+    <cotton-slot />
+  </div>
+</div>

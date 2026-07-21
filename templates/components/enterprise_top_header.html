@@ -171,7 +171,7 @@
                     type="button"
                     class="flex items-center gap-2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
                 <div class="w-7 h-7 rounded-full bg-primary-600 text-white flex items-center justify-center font-semibold text-xs ring-2 ring-white dark:ring-slate-900">
-                    {{ user.username|default:"US"|slice:":2"|upper }}
+                    {% if user and user.username %}{{ user.username|slice:":2"|upper }}{% else %}US{% endif %}
                 </div>
             </button>
 
@@ -187,8 +187,8 @@
                  class="absolute right-0 rtl:left-0 rtl:right-auto mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs"
                  x-cloak>
                 <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700/60">
-                    <p class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{ user.get_full_name|default:user.username|default:"Enterprise Admin" }}</p>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">{{ user.email|default:"admin@issl.com" }}</p>
+                    <p class="font-semibold text-slate-900 dark:text-slate-100 truncate">{% if user and user.get_full_name %}{{ user.get_full_name }}{% elif user and user.username %}{{ user.username }}{% else %}Enterprise Admin{% endif %}</p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">{% if user and user.email %}{{ user.email }}{% else %}admin@issl.com{% endif %}</p>
                 </div>
                 <a href="/staff/profile/" class="flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors">
                     <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>

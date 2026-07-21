@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Roles & Access | FieldTrack{% endblock %}
-{% block page_title %}Roles & Access{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Roles & Access | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4">
     <div class="md:flex md:items-center md:justify-between mb-6">
         <div class="flex-1 min-w-0">
@@ -92,7 +87,4 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

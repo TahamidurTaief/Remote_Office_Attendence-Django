@@ -1,0 +1,36 @@
+{% comment %} c-kanban-column component
+   Props:
+   - title: column heading
+   - count: number of cards
+   - color: primary | accent | warning | danger | neutral (default)
+   - id: column id for drag-drop target (optional)
+   Slot: c-kanban-card elements
+{% endcomment %}
+
+<div class="flex flex-col gap-2 min-w-[240px] w-full" id="kanban-col-{{ id }}">
+  {# Column header #}
+  <div class="flex items-center justify-between px-3 py-2 rounded-btn"
+       style="background:var(--surface-2)">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full
+        {% if color == 'accent' %}bg-accent-500
+        {% elif color == 'warning' %}bg-amber-400
+        {% elif color == 'danger' %}bg-red-500
+        {% elif color == 'primary' %}bg-primary-500
+        {% else %}bg-gray-400{% endif %}">
+      </span>
+      <span class="text-[12px] font-semibold" style="color:var(--text)">{{ title }}</span>
+    </div>
+    {% if count is not None %}
+    <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+          style="background:var(--surface-3); color:var(--text-muted)">
+      {{ count }}
+    </span>
+    {% endif %}
+  </div>
+
+  {# Cards #}
+  <div class="flex flex-col gap-2 min-h-[80px]">
+    <cotton-slot />
+  </div>
+</div>

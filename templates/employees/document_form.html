@@ -1,71 +1,55 @@
-{% extends 'base/admin_base.html' %}
+<c-app-shell page_title="{% if object %}Edit Document{% else %}Add Document{% endif %} | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block title %}{% if object %}Edit Document{% else %}Add Document{% endif %} | FieldTrack{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="{% if object %}Edit Document: {{ object.document_type }}{% else %}Add Document for {{ employee.full_name }}{% endif %}" />
+    </c-slot>
 
-{% block content %}
-<div class="p-4 max-w-3xl mx-auto">
-    <div class="mb-6">
-        <h2 class="text-[14px] font-semibold text-gray-900">
-            {% if object %}Edit Document: {{ object.document_type }}{% else %}Add Document for {{ employee.full_name }}{% endif %}
-        </h2>
-    </div>
+    <c-command-palette />
 
-    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
-        <form method="POST" enctype="multipart/form-data" class="p-6 space-y-6">
-            {% csrf_token %}
-            
-            {% if form.errors %}
-            <div class="rounded-md bg-red-50 p-4 border border-red-200">
-                <div class="flex">
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-red-800">Please fix the errors below.</h3>
-                        {{ form.non_field_errors }}
-                    </div>
+    <div class="p-4 max-w-3xl mx-auto space-y-4">
+        <c-card>
+            <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                <div class="rounded-btn bg-red-50 p-4 border border-red-200 dark:bg-red-950 dark:border-red-900">
+                    <h3 class="text-xs font-semibold text-red-800 dark:text-red-200">Please fix the errors below.</h3>
+                    <div class="text-xs text-red-700 dark:text-red-300 mt-1">{{ form.non_field_errors }}</div>
                 </div>
-            </div>
-            {% endif %}
-
-            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                <div class="sm:col-span-6">
-                    <label for="{{ form.document_type.id_for_label }}" class="block text-sm font-medium text-gray-700">Document Type</label>
-                    <div class="mt-1">
-                        {{ form.document_type }}
-                    </div>
-                    {% if form.document_type.errors %}<p class="mt-2 text-sm text-red-600">{{ form.document_type.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.expiry_date.id_for_label }}" class="block text-sm font-medium text-gray-700">Expiry Date</label>
-                    <div class="mt-1">
-                        {{ form.expiry_date }}
-                    </div>
-                    {% if form.expiry_date.errors %}<p class="mt-2 text-sm text-red-600">{{ form.expiry_date.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label for="{{ form.file.id_for_label }}" class="block text-sm font-medium text-gray-700">File Attachment (Optional)</label>
-                    <div class="mt-1">
-                        {{ form.file }}
-                    </div>
-                    {% if form.file.errors %}<p class="mt-2 text-sm text-red-600">{{ form.file.errors.0 }}</p>{% endif %}
-                </div>
-            </div>
-
-            <div class="pt-5 flex justify-end gap-3 border-t border-gray-150 mt-6">
-                {% if employee %}
-                <a href="{% url 'employees:employee_detail' employee.pk %}" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                    Cancel
-                </a>
-                {% else %}
-                <a href="{% url 'employees:employee_detail' object.employee.pk %}" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                    Cancel
-                </a>
                 {% endif %}
-                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-gradient hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                    Save
-                </button>
-            </div>
-        </form>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-6">
+                    <div class="sm:col-span-6">
+                        <label for="{{ form.document_type.id_for_label }}" class="ft-label">Document Type</label>
+                        {{ form.document_type }}
+                        {% if form.document_type.errors %}<p class="ft-error-text">{{ form.document_type.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.expiry_date.id_for_label }}" class="ft-label">Expiry Date</label>
+                        {{ form.expiry_date }}
+                        {% if form.expiry_date.errors %}<p class="ft-error-text">{{ form.expiry_date.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.file.id_for_label }}" class="ft-label">File Attachment (Optional)</label>
+                        {{ form.file }}
+                        {% if form.file.errors %}<p class="ft-error-text">{{ form.file.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+                    {% if employee %}
+                    <c-button href="{% url 'employees:employee_detail' employee.pk %}" variant="secondary" label="Cancel" />
+                    {% else %}
+                    <c-button href="{% url 'employees:employee_detail' object.employee.pk %}" variant="secondary" label="Cancel" />
+                    {% endif %}
+                    <c-button type="submit" variant="primary" label="Save Document" />
+                </div>
+            </form>
+        </c-card>
     </div>
-</div>
-{% endblock %}
+</c-app-shell>

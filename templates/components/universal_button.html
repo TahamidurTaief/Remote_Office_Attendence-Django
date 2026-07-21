@@ -4,13 +4,15 @@
 
 {% comment %}
   Default Parameters:
-  - variant: 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger' | 'success' (default: 'primary')
-  - size: 'xs' | 'sm' | 'md' | 'lg' | 'icon' (default: 'md')
+  - label: string
+  - variant: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success' | 'link' | 'icon' (default: 'primary')
+  - size: 'xs' | 'sm' | 'md' | 'lg' (default: 'md')
   - type: 'button' | 'submit' | 'reset' (default: 'button')
-  - href: string (if provided, renders an <a> tag instead of <button>)
+  - href: string (if provided or variant='link', renders <a> link tag)
   - is_loading: boolean (default: False)
+  - loading_label: string
   - is_disabled: boolean (default: False)
-  - tooltip: string (optional tooltip text)
+  - tooltip: string
   - permission: string (optional permission key)
   - icon_left: string / SVG block
   - icon_right: string / SVG block
@@ -23,8 +25,12 @@
     {# Permission check failed: hide button or render disabled fallback #}
 {% else %}
 
-{% if href and not is_disabled and not is_loading %}
-<a href="{{ href }}"
+{% if href or btn_variant == 'link' %}
+{% if not is_disabled and not is_loading %}
+<a href="{{ href|default:'#' }}"
+{% else %}
+<span aria-disabled="true"
+{% endif %}
 {% else %}
 <button type="{{ btn_type }}"
         {% if is_disabled or is_loading %}disabled aria-disabled="true"{% endif %}
@@ -42,11 +48,20 @@
                {% if is_disabled or is_loading %} opacity-50 cursor-not-allowed pointer-events-none {% else %} cursor-pointer active:scale-[0.98] {% endif %}
                
                {# Sizes #}
-               {% if btn_size == 'xs' %} px-2 py-1 text-[11px] gap-1.5 h-7
-               {% elif btn_size == 'sm' %} px-3 py-1.5 text-xs gap-1.5 h-8
-               {% elif btn_size == 'lg' %} px-5 py-2.5 text-sm gap-2.5 h-12
-               {% elif btn_size == 'icon' %} p-2 text-xs h-9 w-9 justify-center
-               {% else %} px-4 py-2 text-xs gap-2 h-10 {# md default #}
+               {% if btn_variant == 'icon' or btn_size == 'icon' %}
+                   {% if btn_size == 'xs' %} p-1 text-[11px] h-6 w-6
+                   {% elif btn_size == 'sm' %} p-1.5 text-xs h-8 w-8
+                   {% elif btn_size == 'lg' %} p-2.5 text-sm h-12 w-12
+                   {% else %} p-2 text-xs h-10 w-10 {# md default #}
+                   {% endif %}
+               {% elif btn_variant == 'link' %}
+                   p-0 h-auto text-xs font-semibold
+               {% else %}
+                   {% if btn_size == 'xs' %} px-2 py-1 text-[11px] gap-1.5 h-7
+                   {% elif btn_size == 'sm' %} px-3 py-1.5 text-xs gap-1.5 h-8
+                   {% elif btn_size == 'lg' %} px-5 py-2.5 text-sm gap-2.5 h-12
+                   {% else %} px-4 py-2 text-xs gap-2 h-10 {# md default #}
+                   {% endif %}
                {% endif %}
 
                {# Variants #}
@@ -60,6 +75,10 @@
                    bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 dark:bg-rose-600 dark:hover:bg-rose-500 focus-visible:ring-rose-500 shadow-2xs
                {% elif btn_variant == 'success' %}
                    bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 focus-visible:ring-emerald-500 shadow-2xs
+               {% elif btn_variant == 'link' %}
+                   bg-transparent text-primary-600 dark:text-primary-400 hover:underline active:opacity-80 focus-visible:ring-primary-500 rounded-none
+               {% elif btn_variant == 'icon' %}
+                   bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 active:bg-slate-300 focus-visible:ring-primary-500
                {% else %} {# primary default #}
                    bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 dark:bg-primary-600 dark:hover:bg-primary-500 focus-visible:ring-primary-500 shadow-2xs
                {% endif %}
@@ -77,7 +96,7 @@
     </svg>
     {% endif %}
 
-    <!-- Icon Left (Hidden when loading) -->
+    <!-- Icon Left -->
     {% if not is_loading and icon_left %}
     <span class="flex-shrink-0">
         {% if icon_left == 'plus' %}
@@ -86,16 +105,14 @@
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
         {% elif icon_left == 'trash' %}
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-        {% elif icon_left == 'edit' %}
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
         {% else %}
             {{ icon_left|safe }}
         {% endif %}
     </span>
     {% endif %}
 
-    <!-- Button Label / Text -->
-    {% if label %}
+    <!-- Button Label -->
+    {% if label and btn_variant != 'icon' %}
     <span class="truncate">
         {% if is_loading and loading_label %}
             {{ loading_label }}
@@ -118,7 +135,7 @@
     </span>
     {% endif %}
 
-    <!-- Accessible Tooltip Popup -->
+    <!-- Tooltip Popup -->
     {% if tooltip %}
     <div x-show="showTooltip"
          x-transition:enter="transition ease-out duration-150"
@@ -134,8 +151,12 @@
     </div>
     {% endif %}
 
-{% if href and not is_disabled and not is_loading %}
+{% if href or btn_variant == 'link' %}
+{% if not is_disabled and not is_loading %}
 </a>
+{% else %}
+</span>
+{% endif %}
 {% else %}
 </button>
 {% endif %}

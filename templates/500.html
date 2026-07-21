@@ -1,9 +1,42 @@
-{% extends "base/admin_base.html" %}
-{% block content %}
-<div class="p-8 text-center mt-20">
-    <h1 class="text-6xl font-black text-red-600 mb-4">500</h1>
-    <h2 class="text-2xl font-bold text-gray-900 mb-2">Server Error</h2>
-    <p class="text-gray-500 mb-6">Something went wrong on our end. We're looking into it.</p>
-    <a href="/" class="bg-primary-gradient text-white px-6 py-3 rounded-lg font-bold hover:bg-primary-600">Go Home</a>
-</div>
-{% endblock %}
+{% load static tailwind_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function(){
+      var t = localStorage.getItem('ft_theme');
+      if (t === 'dark') { document.documentElement.classList.add('dark'); }
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>500 Internal Server Error | FieldTrack</title>
+  {% tailwind_css %}
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="ft-page-bg antialiased min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md text-center">
+    <div class="rounded-card border p-8 shadow-soft space-y-4" style="background:var(--surface); border-color:var(--border)">
+      <div class="w-16 h-16 rounded-full border flex items-center justify-center mx-auto" style="background:var(--danger-light); border-color:var(--danger-border); color:var(--danger)">
+        <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+      </div>
+      <div>
+        <h1 class="text-4xl font-extrabold mb-1" style="color:var(--danger)">500</h1>
+        <h2 class="text-xl font-bold" style="color:var(--text)">Internal Server Error</h2>
+        <p class="text-xs mt-2" style="color:var(--text-secondary)">Something went wrong on our server. We are looking into the issue.</p>
+      </div>
+      <div class="flex items-center justify-center gap-3 pt-4 border-t" style="border-color:var(--border)">
+        <button onclick="window.location.reload()" class="ft-btn ft-btn-ghost rounded-btn font-semibold">
+          Try Refreshing
+        </button>
+        <a href="/" class="ft-btn ft-btn-primary rounded-btn font-semibold">
+          Go to Home
+        </a>
+      </div>
+    </div>
+  </div>
+  <script>
+    if (window.lucide) { lucide.createIcons(); }
+  </script>
+</body>
+</html>

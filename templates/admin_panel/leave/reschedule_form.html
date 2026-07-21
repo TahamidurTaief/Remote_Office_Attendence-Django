@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Reschedule Leave Request | FieldTrack Admin{% endblock %}
-{% block page_title %}Reschedule Leave Request{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Reschedule Leave Request | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="px-4 md:px-6 py-6 md:py-8 max-w-2xl mx-auto">
     <!-- Header -->
     <div class="mb-6 flex items-center justify-between gap-4">
@@ -78,7 +73,4 @@
                     Save Changes
                 </button>
             </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

@@ -1,9 +1,4 @@
-{% extends 'base/staff_base.html' %}
-
-{% block title %}Project: {{ project.name }} | FieldTrack{% endblock %}
-{% block page_title %}Project Details{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Project: {{ project.name }} | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div class="w-full mx-auto space-y-6"
      x-data="{
         addTaskOpen: false,
@@ -942,12 +937,4 @@
                     }, 1000);
                 } else {
                     alert(data.error || 'Failed to update task progress.');
-                }
-            })
-            .catch(err => {
-                alert('Network error updating task progress.');
-            });
-        }
-    </script>
-</div>
-{% endblock %}
+</c-app-shell>

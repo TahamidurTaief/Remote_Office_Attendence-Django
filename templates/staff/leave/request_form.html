@@ -1,33 +1,28 @@
-{% extends 'base/staff_base.html' %}
-
-{% block page_title %}New Leave Request{% endblock %}
-
-{% block content %}
-<div class="px-4 md:px-6 py-6 md:py-8 max-w-2xl mx-auto">
+<c-app-shell page_title="Request Leave | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
+<div class="max-w-2xl mx-auto space-y-6">
     <!-- Header -->
-    <div class="mb-6 flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Request Leave</h1>
-            <p class="text-sm text-gray-500 mt-1">Submit a new request for leave approval.</p>
+            <h1 class="text-2xl font-bold" style="color:var(--text)">Request Leave</h1>
+            <p class="text-sm mt-1" style="color:var(--text-secondary)">Submit a new request for leave approval.</p>
         </div>
-        <a href="{% url 'leave:staff_dashboard' %}" class="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors bg-white shadow-sm">
+        <a href="{% url 'leave:staff_dashboard' %}" class="flex items-center gap-2 px-4 py-2 border text-sm font-semibold rounded-xl transition-colors" style="background:var(--surface); border-color:var(--border); color:var(--text)">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
             Back
         </a>
     </div>
 
-    <!-- Form Card -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <form method="POST" class="p-6 space-y-6">
+    <c-card>
+        <form action="" method="POST" enctype="multipart/form-data" class="space-y-4">
             {% csrf_token %}
-            
+
             {% if form.errors or form.non_field_errors %}
             <div class="rounded-xl bg-red-50 p-4 border border-red-200">
                 <div class="flex">
                     <div class="ml-1 text-sm font-medium text-red-800">
                         <div class="flex items-center gap-2 mb-1.5 font-bold">
-                            <i data-lucide="alert-circle" class="w-4.5 h-4.5"></i>
-                            Please correct the following:
+                            <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                            Please correct the following errors:
                         </div>
                         {{ form.non_field_errors }}
                         {% for field in form %}
@@ -88,6 +83,7 @@
                 </button>
             </div>
         </form>
-    </div>
+    </c-card>
 </div>
-{% endblock %}
+</c-app-shell>
+

@@ -1,8 +1,4 @@
-{% extends 'base/staff_base.html' %}
-
-{% block page_title %}My Profile{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="My Profile | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div class="px-6 py-8">
     <h1 class="text-2xl font-bold text-gray-900 mb-6">My Profile</h1>
 
@@ -266,5 +262,4 @@ function getCsrf() {
 }
 
 
-</script>
-{% endblock %}
+</script></c-app-shell>

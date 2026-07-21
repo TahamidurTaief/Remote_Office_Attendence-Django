@@ -1,51 +1,27 @@
 /**
- * This is a minimal config.
+ * FieldTrack Design System — Tailwind Config
  *
- * If you need the full config, get it from here:
- * https://unpkg.com/browse/tailwindcss@latest/stubs/defaultConfig.stub.js
+ * Primary: #0B5FA5 blue scale (LOCKED — do not change)
+ * Accent:  #10B981 emerald (success / positive / CTA-secondary only)
+ * Semantic: red-500 (danger), amber-500 (warning) — NOT brand accents
+ * Dark mode: class-based (toggled via <html class="dark"> from Alpine + localStorage)
+ * Grid: 8px base (spacing scale already covers multiples of 2/4/8)
  */
 
 module.exports = {
+    darkMode: 'class',
     content: [
-        /**
-         * HTML. Paths to Django template files that will contain Tailwind CSS classes.
-         */
-
-        /*  Templates within theme app (<tailwind_app_name>/templates), e.g. base.html. */
         '../templates/**/*.html',
-
-        /*
-         * Main templates directory of the project (BASE_DIR/templates).
-         * Adjust the following line to match your project structure.
-         */
         '../../templates/**/*.html',
-
-        /*
-         * Templates in other django apps (BASE_DIR/<any_app_name>/templates).
-         * Adjust the following line to match your project structure.
-         */
         '../../**/templates/**/*.html',
-
-        /**
-         * JS: If you use Tailwind CSS in JavaScript, uncomment the following lines and make sure
-         * patterns match your project structure.
-         */
-        /* JS 1: Ignore any JavaScript in node_modules folder. */
-        // '!../../**/node_modules',
-        /* JS 2: Process all JavaScript files in the project. */
-        // '../../**/*.js',
-
-        /**
-         * Python: If you use Tailwind CSS classes in Python, uncomment the following line
-         * and make sure the pattern below matches your project structure.
-         */
-        // '../../**/*.py'
+        '../../templates/cotton/**/*.html',
     ],
     theme: {
         extend: {
             colors: {
+                // ── Primary brand (blue) ──────────────────────────────
                 primary: {
-                    50: '#F0F7FC',
+                    50:  '#F0F7FC',
                     100: '#E1EFF9',
                     200: '#BCDFF2',
                     300: '#7EC3E9',
@@ -55,20 +31,44 @@ module.exports = {
                     700: '#083F6F',
                     800: '#073258',
                     900: '#052541',
-                }
+                },
+                // ── Accent (emerald) — success/positive/CTA-secondary ─
+                accent: {
+                    50:  '#ECFDF5',
+                    100: '#D1FAE5',
+                    200: '#A7F3D0',
+                    300: '#6EE7B7',
+                    400: '#34D399',
+                    500: '#10B981',
+                    600: '#059669',
+                    700: '#047857',
+                    800: '#065F46',
+                    900: '#064E3B',
+                },
             },
+            // ── Border radius tokens ──────────────────────────────────
+            borderRadius: {
+                'card':   '12px',
+                'btn':    '8px',
+                'input':  '8px',
+                'modal':  '16px',
+                'drawer': '16px',
+            },
+            // ── Shadow tokens ─────────────────────────────────────────
+            boxShadow: {
+                'soft':     '0 1px 3px rgba(0,0,0,0.08)',
+                'elevated': '0 8px 24px rgba(0,0,0,0.10)',
+                'none-dark': '0 0 0 1px rgba(255,255,255,0.06)',
+            },
+            // ── Background images ─────────────────────────────────────
             backgroundImage: {
                 'primary-gradient': 'linear-gradient(135deg, #0B5FA5 0%, #3B8BD4 100%)',
-                'soft-gradient': 'linear-gradient(135deg, rgba(254, 240, 138, 0.04) 0%, rgba(186, 230, 253, 0.06) 25%, rgba(187, 247, 208, 0.04) 50%, rgba(254, 215, 170, 0.04) 100%)',
-            }
+                // Soft page-bg wash only — NEVER on cards or buttons
+                'soft-gradient': 'linear-gradient(135deg, rgba(254,240,138,0.04) 0%, rgba(186,230,253,0.06) 25%, rgba(187,247,208,0.04) 50%, rgba(254,215,170,0.04) 100%)',
+            },
         },
     },
     plugins: [
-        /**
-         * '@tailwindcss/forms' is the forms plugin that provides a minimal styling
-         * for forms. If you don't like it or have own styling for forms,
-         * comment the line below to disable '@tailwindcss/forms'.
-         */
         require('@tailwindcss/forms'),
         require('@tailwindcss/typography'),
         require('@tailwindcss/aspect-ratio'),

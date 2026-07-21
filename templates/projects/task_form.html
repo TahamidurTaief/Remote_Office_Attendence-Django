@@ -1,10 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}{% if object %}Edit Task{% else %}Add Task{% endif %} | FieldTrack{% endblock %}
-
-{% block page_title %}{% if object %}Edit Task{% else %}Add Task{% endif %}{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="{% if object %}Edit Task{% else %}Add Task{% endif %} | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4 max-w-3xl mx-auto">
     <!-- Header -->
     <div class="mb-4 flex items-center justify-between">
@@ -187,7 +181,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endif %}
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

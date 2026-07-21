@@ -1,11 +1,5 @@
-{% extends 'base/staff_base.html' %}
-{% load static %}
-
-{% block title %}My Tasks | FieldTrack{% endblock %}
-{% block page_title %}My Tasks{% endblock %}
-
-{% block content %}
-<div class="px-4 md:px-6 py-6 md:py-8 space-y-6" x-data="{
+<c-app-shell page_title="My Tasks | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
+<div class="space-y-6" x-data="{
     showModal: false,
     loadingDetail: false,
     detailedTask: null,
@@ -141,12 +135,12 @@
     <!-- Header/Filter Segment -->
     <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
         <div>
-            <h1 class="text-xl font-bold text-gray-900">Task Center</h1>
-            <p class="text-xs text-gray-500 mt-0.5">Manage and submit completion reports for your assigned activities.</p>
+            <h1 class="text-xl font-bold" style="color:var(--text)">Task Center</h1>
+            <p class="text-xs mt-0.5" style="color:var(--text-secondary)">Manage and submit completion reports for your assigned activities.</p>
         </div>
         
         <!-- Status Tab-filters -->
-        <div class="inline-flex bg-white border border-gray-150 rounded-xl p-1 shadow-sm">
+        <div class="inline-flex rounded-card border p-1" style="background:var(--surface); border-color:var(--border)">
             <a href="?status=pending" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if status_filter == 'pending' %}bg-primary-50 text-primary-700{% else %}text-gray-500 hover:text-gray-700{% endif %}">
                 Pending
             </a>
@@ -160,39 +154,39 @@
     </div>
 
     <!-- Tasks List Container -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <c-card extra_class="overflow-hidden p-0">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 bg-white">
-                <thead class="bg-gray-50">
+            <table class="min-w-full divide-y" style="border-color:var(--border)">
+                <thead style="background:var(--surface-2)">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Project / Label</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Task / Activity</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Planned Finish</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Project / Label</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Task / Activity</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Planned Finish</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100 bg-white">
+                <tbody class="divide-y" style="border-color:var(--border); background:var(--surface)">
                     {% for task in assigned_tasks %}
-                    <tr class="hover:bg-gray-50 transition-colors cursor-pointer"
+                    <tr class="transition-colors cursor-pointer" style="border-color:var(--border)"
                         id="task-row-{{ task.pk }}"
                         @click="openModal({{ task.pk }})">
                         <td class="px-4 py-3.5">
                             {% if task.project %}
-                            <div class="text-xs font-bold text-gray-900 leading-tight">{{ task.project.name }}</div>
-                            <div class="text-[10px] text-gray-400 mt-1 leading-none">{{ task.project.branch.name|default:"No Branch" }}</div>
+                            <div class="text-xs font-bold leading-tight" style="color:var(--text)">{{ task.project.name }}</div>
+                            <div class="text-[10px] mt-1 leading-none" style="color:var(--text-muted)">{{ task.project.branch.name|default:"No Branch" }}</div>
                             {% else %}
-                            <div class="text-xs font-bold text-gray-500 leading-tight">Standalone Task</div>
-                            <div class="text-[10px] text-gray-400 mt-1 leading-none">Global Workspace</div>
+                            <div class="text-xs font-bold leading-tight" style="color:var(--text-secondary)">Standalone Task</div>
+                            <div class="text-[10px] mt-1 leading-none" style="color:var(--text-muted)">Global Workspace</div>
                             {% endif %}
-                            <div class="text-[10px] text-primary-650 font-bold mt-1">Points: {{ task.points }}</div>
+                            <div class="text-[10px] font-bold mt-1" style="color:var(--primary)">Points: {{ task.points }}</div>
                         </td>
                         <td class="px-4 py-3.5">
-                            <div class="text-xs font-semibold text-gray-900 leading-tight">{{ task.activity }}</div>
+                            <div class="text-xs font-semibold leading-tight" style="color:var(--text)">{{ task.activity }}</div>
                             {% if task.assignment_attachment or task.completion_attachment %}
                             <div class="flex items-center gap-2 mt-1.5">
                                 {% if task.assignment_attachment %}
-                                <span class="inline-flex items-center text-[10px] text-gray-450">
+                                <span class="inline-flex items-center text-[10px]" style="color:var(--text-muted)">
                                     <i data-lucide="paperclip" class="w-3 h-3 mr-0.5"></i> Ref File
                                 </span>
                                 {% endif %}
@@ -204,20 +198,25 @@
                             </div>
                             {% endif %}
                         </td>
-                        <td class="px-4 py-3.5 whitespace-nowrap text-xs text-gray-500 font-medium">
+                        <td class="px-4 py-3.5 whitespace-nowrap text-xs font-medium" style="color:var(--text-secondary)">
                             {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
                         </td>
                         <td class="px-4 py-3.5 whitespace-nowrap">
                             <div class="flex flex-col">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold self-start
-                                    {% if task.status == 'Completed' %}bg-green-100 text-green-800
-                                    {% elif task.status == 'Under Review' %}bg-amber-100 text-amber-800
-                                    {% elif task.status == 'In Progress' %}bg-blue-100 text-blue-800
-                                    {% elif task.status == 'Delayed' %}bg-red-100 text-red-800
-                                    {% else %}bg-gray-100 text-gray-700{% endif %}">
-                                    {{ task.status }}
+                                <span class="self-start">
+                                    {% if task.status == 'Completed' %}
+                                    <c-badge label="Completed" variant="soft" status_color="emerald" />
+                                    {% elif task.status == 'Under Review' %}
+                                    <c-badge label="Under Review" variant="soft" status_color="amber" />
+                                    {% elif task.status == 'In Progress' %}
+                                    <c-badge label="In Progress" variant="soft" status_color="blue" />
+                                    {% elif task.status == 'Delayed' %}
+                                    <c-badge label="Delayed" variant="soft" status_color="rose" />
+                                    {% else %}
+                                    <c-badge label="Not Started" variant="soft" status_color="slate" />
+                                    {% endif %}
                                 </span>
-                                <span class="text-[10px] text-gray-500 font-semibold mt-1">
+                                <span class="text-[10px] font-semibold mt-1" style="color:var(--text-muted)">
                                     Progress: {{ task.progress_percent }}%
                                     {% if task.pending_progress_percent is not None %}
                                     <span class="text-amber-600 block text-[9px]">(Pending: {{ task.pending_progress_percent }}%)</span>
@@ -226,12 +225,12 @@
                             </div>
                         </td>
                         <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold">
-                            <button type="button" @click.stop="openModal({{ task.pk }})" class="text-indigo-605 hover:underline">View</button>
+                            <button type="button" @click.stop="openModal({{ task.pk }})" style="color:var(--primary)" class="hover:underline">View</button>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-4 py-12 text-center text-gray-400 italic text-xs bg-white">
+                        <td colspan="5" class="px-4 py-12 text-center italic text-xs" style="color:var(--text-muted)">
                             No tasks found matching your filter selection.
                         </td>
                     </tr>
@@ -239,7 +238,7 @@
                 </tbody>
             </table>
         </div>
-    </div>
+    </c-card>
 
     <!-- Task Details, Discussion & File Viewer Modal -->
     <div x-show="showModal"
@@ -247,34 +246,34 @@
          x-cloak
          @keydown.escape.window="closeModal()">
         
-        <div class="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden"
+        <div class="rounded-card border w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden" style="background:var(--surface); border-color:var(--border)"
              @click.away="closeModal()">
             
             <!-- Modal Header -->
-            <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+            <div class="p-4 border-b flex items-center justify-between shrink-0" style="background:var(--surface-2); border-color:var(--border)">
                 <div class="min-w-0">
-                    <span class="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full" x-text="detailedTask ? detailedTask.project_name : 'Loading...'"></span>
-                    <h3 class="text-sm font-bold text-slate-800 truncate mt-1" x-text="detailedTask ? detailedTask.activity : 'Task Details'"></h3>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" style="background:var(--surface); color:var(--text-secondary)" x-text="detailedTask ? detailedTask.project_name : 'Loading...'"></span>
+                    <h3 class="text-sm font-bold truncate mt-1" style="color:var(--text)" x-text="detailedTask ? detailedTask.activity : 'Task Details'"></h3>
                 </div>
-                <button @click="closeModal()" class="p-1.5 hover:bg-slate-200 text-slate-450 hover:text-slate-700 rounded-lg transition-colors">
+                <button @click="closeModal()" class="p-1.5 rounded-lg transition-colors" style="color:var(--text-muted)">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
             
             <!-- Modal Body -->
-            <div class="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-150">
+            <div class="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x" style="border-color:var(--border)">
                 <!-- Loader -->
                 <div x-show="loadingDetail" class="flex-1 flex flex-col items-center justify-center gap-2">
-                    <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-xs text-slate-400 font-medium">Fetching details & discussion...</span>
+                    <div class="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style="border-color:var(--primary)"></div>
+                    <span class="text-xs font-medium" style="color:var(--text-muted)">Fetching details & discussion...</span>
                 </div>
 
                 <template x-if="detailedTask">
-                    <!-- Left: Metadata, Status Details & Completion Submission Form (Width 2/5) -->
+                    <!-- Left: Metadata -->
                     <div class="w-full md:w-2/5 p-4 overflow-y-auto custom-scrollbar flex flex-col space-y-4">
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Status</span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider block" style="color:var(--text-muted)">Status</span>
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-1"
                                       :class="{
                                           'bg-green-100 text-green-800 border border-green-200': detailedTask.status === 'Completed',
@@ -286,28 +285,28 @@
                                       x-text="detailedTask.status"></span>
                             </div>
                             <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Points</span>
-                                <span class="text-xs font-bold text-slate-800 mt-1 block" x-text="detailedTask.points"></span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider block" style="color:var(--text-muted)">Points</span>
+                                <span class="text-xs font-bold mt-1 block" style="color:var(--text)" x-text="detailedTask.points"></span>
                             </div>
                             <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Assignee</span>
-                                <span class="text-xs font-bold text-slate-850 mt-1 block" x-text="detailedTask.responsible_person_name"></span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider block" style="color:var(--text-muted)">Assignee</span>
+                                <span class="text-xs font-bold mt-1 block" style="color:var(--text)" x-text="detailedTask.responsible_person_name"></span>
                             </div>
                             <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Branch</span>
-                                <span class="text-xs font-medium text-slate-600 mt-1 block" x-text="detailedTask.branch_name"></span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider block" style="color:var(--text-muted)">Branch</span>
+                                <span class="text-xs font-medium mt-1 block" style="color:var(--text-secondary)" x-text="detailedTask.branch_name"></span>
                             </div>
                             <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Planned Timeline</span>
-                                <span class="text-xs font-medium text-slate-800 mt-1 block" x-text="detailedTask.planned_start + ' to ' + detailedTask.planned_finish"></span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider block" style="color:var(--text-muted)">Planned Timeline</span>
+                                <span class="text-xs font-medium mt-1 block" style="color:var(--text)" x-text="detailedTask.planned_start + ' to ' + detailedTask.planned_finish"></span>
                             </div>
                             <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Duration</span>
-                                <span class="text-xs font-medium text-slate-800 mt-1 block" x-text="detailedTask.duration_days"></span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider block" style="color:var(--text-muted)">Duration</span>
+                                <span class="text-xs font-medium mt-1 block" style="color:var(--text)" x-text="detailedTask.duration_days"></span>
                             </div>
                             <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Approved Progress</span>
-                                <span class="text-xs font-bold text-slate-800 mt-1 block" x-text="detailedTask.progress_percent + '%'"></span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider block" style="color:var(--text-muted)">Approved Progress</span>
+                                <span class="text-xs font-bold mt-1 block" style="color:var(--text)" x-text="detailedTask.progress_percent + '%'"></span>
                             </div>
                             <div x-show="detailedTask.pending_progress_percent !== null">
                                 <span class="text-[10px] text-amber-500 font-bold uppercase tracking-wider block">Proposed Progress</span>
@@ -315,97 +314,84 @@
                             </div>
                         </div>
 
-                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.completed_at && detailedTask.completed_at !== '—'">
-                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Completed At</span>
+                        <div class="border-t pt-3" style="border-color:var(--border)" x-show="detailedTask.completed_at && detailedTask.completed_at !== '—'">
+                            <span class="text-[10px] font-bold uppercase block" style="color:var(--text-muted)">Completed At</span>
                             <span class="text-xs font-medium text-green-700 mt-1 block" x-text="detailedTask.completed_at"></span>
                         </div>
 
-                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.remarks">
-                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Manager Remarks / Feedback</span>
-                            <p class="text-xs text-slate-600 mt-1 italic whitespace-pre-line bg-slate-50 border border-slate-100 p-2.5 rounded-lg" x-text="detailedTask.remarks"></p>
+                        <div class="border-t pt-3" style="border-color:var(--border)" x-show="detailedTask.remarks">
+                            <span class="text-[10px] font-bold uppercase block" style="color:var(--text-muted)">Manager Remarks / Feedback</span>
+                            <p class="text-xs mt-1 italic whitespace-pre-line border p-2.5 rounded-lg" style="background:var(--surface-2); border-color:var(--border); color:var(--text-secondary)" x-text="detailedTask.remarks"></p>
                         </div>
 
-                        <!-- Employee Note (if already completed or under review) -->
-                        <div class="border-t border-slate-100 pt-3" x-show="(detailedTask.status === 'Completed' || detailedTask.status === 'Under Review') && detailedTask.employee_note">
-                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Employee Completion Note</span>
-                            <p class="text-xs text-slate-600 mt-1 italic whitespace-pre-line bg-emerald-50/50 border border-emerald-100 p-2.5 rounded-lg" x-text="detailedTask.employee_note"></p>
+                        <!-- Employee Note -->
+                        <div class="border-t pt-3" style="border-color:var(--border)" x-show="(detailedTask.status === 'Completed' || detailedTask.status === 'Under Review') && detailedTask.employee_note">
+                            <span class="text-[10px] font-bold uppercase block" style="color:var(--text-muted)">Employee Completion Note</span>
+                            <p class="text-xs mt-1 italic whitespace-pre-line bg-emerald-50/50 border border-emerald-100 p-2.5 rounded-lg text-emerald-900" x-text="detailedTask.employee_note"></p>
                         </div>
 
-                        <!-- Complete Task Submission Form (if status is not Completed) -->
-                        <div class="border-t border-slate-100 pt-3 flex flex-col space-y-3" x-show="detailedTask.status !== 'Completed'">
-                            <span class="text-[11px] font-bold text-slate-800 block">Update Task Progress</span>
+                        <!-- Complete Task Submission Form -->
+                        <div class="border-t pt-3 flex flex-col space-y-3" style="border-color:var(--border)" x-show="detailedTask.status !== 'Completed'">
+                            <span class="text-[11px] font-bold block" style="color:var(--text)">Update Task Progress</span>
                             
                             <div>
-                                <label class="block text-[10px] font-semibold text-slate-450 uppercase mb-1">
-                                    Progress Level: <span class="text-primary-600 font-bold" x-text="completionProgress + '%'"></span>
+                                <label class="block text-[10px] font-semibold uppercase mb-1" style="color:var(--text-muted)">
+                                    Progress Level: <span class="font-bold" style="color:var(--primary)" x-text="completionProgress + '%'"></span>
                                 </label>
-                                <input type="range" min="0" max="100" x-model="completionProgress" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary-600 focus:outline-none">
+                                <input type="range" min="0" max="100" x-model="completionProgress" class="w-full h-1 rounded-lg appearance-none cursor-pointer focus:outline-none" style="background:var(--surface-2)">
                             </div>
 
                             <div>
-                                <label class="block text-[10px] font-semibold text-slate-450 uppercase mb-1">Completion Note / Remarks</label>
-                                <textarea x-model="completionNote" class="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white" placeholder="Describe progress details..." rows="2"></textarea>
+                                <c-textarea id="completion_note" name="completion_note" label="Completion Note / Remarks" x-model="completionNote" rows="2" />
                             </div>
                             
-                            <!-- Dynamic Multiple File Uploader for Completion -->
                             <div x-data="{ 
                                 attachments: [],
                                 addAttachment() {
                                     this.attachments.push({ id: Date.now() });
-                                    this.$nextTick(() => {
-                                        if (window.lucide) window.lucide.createIcons();
-                                    });
+                                    this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
                                 },
                                 removeAttachment(id) {
                                     this.attachments = this.attachments.filter(a => a.id !== id);
                                 }
-                            }" class="space-y-2 bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                            }" class="space-y-2 border p-3 rounded-xl" style="background:var(--surface-2); border-color:var(--border)">
                                 <div class="flex items-center justify-between">
-                                    <label class="block text-[10px] font-semibold text-slate-450 uppercase">Upload Reference/Proof File(s)</label>
-                                    <button type="button" @click="addAttachment()" class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 border border-primary-200/50 rounded-lg text-[9px] font-bold transition-all duration-200 cursor-pointer">
+                                    <label class="block text-[10px] font-semibold uppercase" style="color:var(--text-muted)">Upload Reference/Proof File(s)</label>
+                                    <button type="button" @click="addAttachment()" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all cursor-pointer" style="background:var(--surface); color:var(--primary); border:1px solid var(--border)">
                                         <i data-lucide="plus" class="w-3 h-3"></i> Add File
                                     </button>
                                 </div>
                                 
                                 <div class="space-y-2">
                                     <template x-for="(att, index) in attachments" :key="att.id">
-                                        <div class="flex items-center gap-2 bg-white border border-slate-200 p-2 rounded-xl">
-                                            <input type="file" name="completion_attachments" class="w-full text-xs text-slate-600 focus:outline-none file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer" required>
-                                            <button type="button" @click="removeAttachment(att.id)" class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer" title="Remove">
+                                        <div class="flex items-center gap-2 border p-2 rounded-xl" style="background:var(--surface); border-color:var(--border)">
+                                            <input type="file" name="completion_attachments" class="w-full text-xs focus:outline-none cursor-pointer" required style="color:var(--text-secondary)">
+                                            <button type="button" @click="removeAttachment(att.id)" class="p-1.5 text-red-500 rounded-lg transition-colors cursor-pointer" title="Remove">
                                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                             </button>
                                         </div>
                                     </template>
-                                    <div x-show="attachments.length === 0" class="text-[10px] text-slate-400 italic">No files selected.</div>
+                                    <div x-show="attachments.length === 0" class="text-[10px] italic" style="color:var(--text-muted)">No files selected.</div>
                                 </div>
-                                <p class="text-[9px] text-slate-400">Allowed formats: JPG, JPEG, PNG, PDF. Max 10MB.</p>
+                                <p class="text-[9px]" style="color:var(--text-muted)">Allowed formats: JPG, JPEG, PNG, PDF. Max 10MB.</p>
                             </div>
 
                             <div class="pt-2 flex justify-end">
-                                <button type="button"
-                                        @click="submitCompletion()"
-                                        :disabled="submittingCompletion"
-                                        class="px-4 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-semibold transition-colors shadow flex items-center gap-1.5">
-                                    <template x-if="submittingCompletion">
-                                        <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    </template>
-                                    <span x-text="submittingCompletion ? 'Submitting...' : 'Submit Progress Update'"></span>
-                                </button>
+                                <c-button type="button" variant="primary" label="Submit Progress Update" @click="submitCompletion()" />
                             </div>
                         </div>
                     </div>
                 </template>
 
                 <template x-if="detailedTask">
-                    <!-- Right: Discussion Replies Board & File Viewer (Width 3/5) -->
-                    <div class="w-full md:w-3/5 flex flex-col min-h-0 bg-slate-50/40">
-                        <!-- Upper half: File Viewer & Reader (if there are attachments) -->
-                        <div class="p-4 border-b border-slate-150 flex flex-col min-h-0 shrink-0 bg-white" x-show="detailedTask.attachments && detailedTask.attachments.length > 0">
+                    <!-- Right: Discussion Board -->
+                    <div class="w-full md:w-3/5 flex flex-col min-h-0" style="background:var(--surface-2)">
+                        <div class="p-4 border-b flex flex-col min-h-0 shrink-0" style="background:var(--surface); border-color:var(--border)" x-show="detailedTask.attachments && detailedTask.attachments.length > 0">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider">File Viewer & Reader</span>
+                                <span class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">File Viewer & Reader</span>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-[11px] text-slate-500 font-medium">Select File:</span>
-                                    <select x-model="activeFileIndex" class="text-xs border border-slate-200 rounded p-1 bg-white focus:outline-none max-w-[200px]">
+                                    <span class="text-[11px] font-medium" style="color:var(--text-secondary)">Select File:</span>
+                                    <select x-model="activeFileIndex" class="text-xs border rounded p-1 focus:outline-none max-w-[200px]" style="background:var(--surface); border-color:var(--border); color:var(--text)">
                                         <template x-for="(file, idx) in detailedTask.attachments">
                                             <option :value="idx" x-text="file.name + ' (' + file.type + ')'"></option>
                                         </template>
@@ -414,112 +400,70 @@
                             </div>
 
                             <template x-if="detailedTask.attachments[activeFileIndex]">
-                                <div class="border border-slate-150 rounded-xl bg-slate-50 flex flex-col p-3 space-y-3">
-                                    <!-- File Preview Container (Click to Open) -->
+                                <div class="border rounded-xl flex flex-col p-3 space-y-3" style="background:var(--surface-2); border-color:var(--border)">
                                     <div @click="window.open(detailedTask.attachments[activeFileIndex].url, '_blank')" 
-                                         class="cursor-pointer border border-slate-200 bg-white rounded-lg overflow-hidden flex items-center justify-center p-2 min-h-[180px] max-h-[300px] hover:border-indigo-450 transition-colors group relative"
+                                         class="cursor-pointer border rounded-lg overflow-hidden flex items-center justify-center p-2 min-h-[180px] max-h-[300px] transition-colors group relative" style="background:var(--surface); border-color:var(--border)"
                                          title="Click to open in new tab">
-                                        <!-- Overlay hover hint -->
-                                        <div class="absolute inset-0 bg-slate-900/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <span class="bg-slate-950/80 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                                                <i data-lucide="external-link" class="w-3 h-3"></i> Click to Open
-                                            </span>
-                                        </div>
-
-                                        <!-- Image Preview -->
                                         <template x-if="detailedTask.attachments[activeFileIndex].is_image">
                                             <img :src="detailedTask.attachments[activeFileIndex].url" class="max-w-full max-h-[260px] object-contain rounded-md shadow-sm">
                                         </template>
-                                        
-                                        <!-- PDF Reader -->
-                                        <template x-if="detailedTask.attachments[activeFileIndex].is_pdf">
+                                        <template x-if="!detailedTask.attachments[activeFileIndex].is_image">
                                             <div class="flex flex-col items-center justify-center py-6 space-y-3">
-                                                <div class="w-14 h-14 bg-red-50 text-red-650 rounded-2xl flex items-center justify-center shadow-sm">
+                                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style="background:var(--surface-2); color:var(--text-muted)">
                                                     <i data-lucide="file-text" class="w-8 h-8"></i>
                                                 </div>
                                                 <div class="text-center">
-                                                    <span class="text-xs font-bold text-slate-800 block truncate max-w-[240px]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
-                                                    <span class="text-[10px] text-slate-450 mt-1 block">Click to read PDF in new tab</span>
+                                                    <span class="text-xs font-bold block truncate max-w-[240px]" style="color:var(--text)" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                                    <span class="text-[10px] mt-1 block" style="color:var(--text-muted)">Click to open file in new tab</span>
                                                 </div>
                                             </div>
                                         </template>
-                                        
-                                        <!-- Other Formats -->
-                                        <template x-if="!detailedTask.attachments[activeFileIndex].is_image && !detailedTask.attachments[activeFileIndex].is_pdf">
-                                            <div class="flex flex-col items-center justify-center py-6 space-y-3">
-                                                <div class="w-14 h-14 bg-slate-100 text-slate-500 rounded-2xl flex items-center justify-center shadow-sm">
-                                                    <i data-lucide="file" class="w-8 h-8"></i>
-                                                </div>
-                                                <div class="text-center">
-                                                    <span class="text-xs font-semibold text-slate-800 block truncate max-w-[240px]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
-                                                    <span class="text-[10px] text-slate-450 mt-1 block">Click to open file in new tab</span>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    
-                                    <!-- Download and Details Bar (Fully Visible) -->
-                                    <div class="flex items-center justify-between gap-3 bg-white border border-slate-150 rounded-lg p-2.5 shadow-sm">
-                                        <div class="min-w-0 flex-1">
-                                            <span class="text-xs font-bold text-slate-700 block truncate" x-text="detailedTask.attachments[activeFileIndex].name"></span>
-                                            <span class="text-[9px] text-slate-400 block uppercase tracking-wider mt-0.5" x-text="detailedTask.attachments[activeFileIndex].type + ' File'"></span>
-                                        </div>
-                                        <a :href="detailedTask.attachments[activeFileIndex].url" download target="_blank" 
-                                           class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors shadow shrink-0">
-                                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
-                                        </a>
                                     </div>
                                 </div>
                             </template>
                         </div>
 
-                        <!-- Lower half / Full: Replies / Discussion Board -->
+                        <!-- Discussion Board -->
                         <div class="flex-1 min-h-0 flex flex-col p-4">
-                            <span class="text-[10px] text-slate-450 font-bold uppercase tracking-wider block mb-2 shrink-0">Collaborative replies & discussion</span>
+                            <span class="text-[10px] font-bold uppercase tracking-wider block mb-2 shrink-0" style="color:var(--text-muted)">Collaborative replies & discussion</span>
                             
-                            <!-- Replies List -->
                             <div id="replies-scroll-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1.5 mb-3 min-h-0">
                                 <template x-if="!detailedTask.replies || detailedTask.replies.length === 0">
-                                    <div class="h-full flex flex-col items-center justify-center text-slate-400 text-xs italic py-8">
+                                    <div class="h-full flex flex-col items-center justify-center text-xs italic py-8" style="color:var(--text-muted)">
                                         No comments or replies on this task yet.
                                     </div>
                                 </template>
                                 
                                 <template x-for="r in detailedTask.replies">
                                     <div class="flex items-start gap-2.5">
-                                        <div class="w-7 h-7 rounded-full bg-slate-200 overflow-hidden shrink-0 shadow-sm border border-slate-200">
+                                        <div class="w-7 h-7 rounded-full overflow-hidden shrink-0 shadow-sm border" style="background:var(--surface-2); border-color:var(--border)">
                                             <template x-if="r.author_photo_url">
                                                 <img :src="r.author_photo_url" class="w-full h-full object-cover">
                                             </template>
                                             <template x-if="!r.author_photo_url">
-                                                <div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-500 bg-slate-100" x-text="r.author_name.charAt(0).toUpperCase()"></div>
+                                                <div class="w-full h-full flex items-center justify-center text-[10px] font-bold" style="color:var(--text-muted)" x-text="r.author_name.charAt(0).toUpperCase()"></div>
                                             </template>
                                         </div>
-                                        <div class="flex-1 min-w-0 bg-white border border-slate-150 rounded-xl p-2.5 shadow-sm">
+                                        <div class="flex-1 min-w-0 border rounded-xl p-2.5 shadow-sm" style="background:var(--surface); border-color:var(--border)">
                                             <div class="flex items-center justify-between gap-2">
                                                 <div class="flex items-baseline gap-1.5 min-w-0">
-                                                    <span class="text-[11px] font-bold text-slate-800 truncate" x-text="r.author_name"></span>
-                                                    <span class="text-[9px] text-indigo-600 font-semibold uppercase tracking-wider shrink-0" x-text="r.author_role"></span>
+                                                    <span class="text-[11px] font-bold truncate" style="color:var(--text)" x-text="r.author_name"></span>
+                                                    <span class="text-[9px] font-semibold uppercase tracking-wider shrink-0" style="color:var(--primary)" x-text="r.author_role"></span>
                                                 </div>
-                                                <span class="text-[9px] text-slate-405 shrink-0" x-text="r.created_at"></span>
+                                                <span class="text-[9px] shrink-0" style="color:var(--text-muted)" x-text="r.created_at"></span>
                                             </div>
-                                            <p class="text-xs text-slate-700 mt-1 whitespace-pre-wrap leading-relaxed" x-text="r.message"></p>
+                                            <p class="text-xs mt-1 whitespace-pre-wrap leading-relaxed" style="color:var(--text-secondary)" x-text="r.message"></p>
                                         </div>
                                     </div>
                                 </template>
                             </div>
 
                             <!-- Reply Form -->
-                            <form @submit.prevent="submitReply()" class="flex gap-2 items-end border-t border-slate-150 pt-3 shrink-0">
+                            <form @submit.prevent="submitReply()" class="flex gap-2 items-end border-t pt-3 shrink-0" style="border-color:var(--border)">
                                 <div class="flex-1">
-                                    <textarea x-model="newReplyMessage" rows="1" @keydown.enter.prevent="if($event.ctrlKey || $event.metaKey) { newReplyMessage += '\n' } else { submitReply() }" class="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white" placeholder="Write a reply... (Press Enter to send, Ctrl+Enter for new line)"></textarea>
+                                    <textarea x-model="newReplyMessage" rows="1" @keydown.enter.prevent="if($event.ctrlKey || $event.metaKey) { newReplyMessage += '\n' } else { submitReply() }" class="w-full text-xs p-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500" style="background:var(--surface); border-color:var(--border); color:var(--text)" placeholder="Write a reply... (Press Enter to send, Ctrl+Enter for new line)"></textarea>
                                 </div>
-                                <button type="submit" :disabled="submittingReply" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white text-[12px] font-bold rounded-lg shadow-sm transition-colors shrink-0 flex items-center gap-1.5">
-                                    <template x-if="submittingReply">
-                                        <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    </template>
-                                    <span>Send</span>
-                                </button>
+                                <c-button type="submit" variant="primary" label="Send" size="sm" />
                             </form>
                         </div>
                     </div>
@@ -528,4 +472,5 @@
         </div>
     </div>
 </div>
-{% endblock %}
+</c-app-shell>
+

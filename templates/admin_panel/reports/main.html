@@ -1,9 +1,4 @@
-{% extends "base/admin_base.html" %}
-{% load static %}
-
-{% block title %}Reports | FieldTrack{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Reports | FieldTrack" active_href="{{ request.path }}">
 <div class="p-6 max-w-7xl mx-auto">
 
     <!-- Header -->
@@ -83,5 +78,4 @@
         </div>
     </div>
 
-</div>
-{% endblock %}
+</c-app-shell>

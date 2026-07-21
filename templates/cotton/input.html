@@ -1,0 +1,49 @@
+{% comment %} c-input component
+   Props:
+   - name: input name attribute (required)
+   - type: text (default) | email | password | date | time | number | tel | search | url
+   - label: visible label text (optional)
+   - value: field value
+   - placeholder: placeholder text
+   - required: required attribute (truthy)
+   - disabled: disabled attribute (truthy)
+   - error: error message string (adds red border + error text)
+   - help: help text below input
+   - icon: lucide icon name shown inside left of input
+   - extra_class: additional classes on wrapper
+   - id: input id (defaults to name)
+{% endcomment %}
+
+<div class="flex flex-col gap-0.5 {{ extra_class }}">
+  {% if label %}
+    <label for="{{ id|default:name }}" class="ft-label">
+      {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+  {% endif %}
+
+  <div class="relative">
+    {% if icon %}
+      <div class="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none">
+        <i data-lucide="{{ icon }}" class="w-3.5 h-3.5" style="color:var(--text-disabled)"></i>
+      </div>
+    {% endif %}
+
+    <input
+      type="{{ type|default:'text' }}"
+      name="{{ name }}"
+      id="{{ id|default:name }}"
+      value="{{ value }}"
+      placeholder="{{ placeholder }}"
+      {% if required %}required{% endif %}
+      {% if disabled %}disabled{% endif %}
+      class="ft-input {% if icon %}pl-8{% endif %} {% if error %}!border-red-500 focus:!box-shadow-[0_0_0_3px_rgba(239,68,68,0.15)]{% endif %}"
+    >
+  </div>
+
+  {% if error %}
+    <p class="ft-error-text">{{ error }}</p>
+  {% endif %}
+  {% if help and not error %}
+    <p class="ft-help-text">{{ help }}</p>
+  {% endif %}
+</div>

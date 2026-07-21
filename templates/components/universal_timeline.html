@@ -1,0 +1,73 @@
+{# Universal Timeline Component #}
+{# Usage: #}
+{# {% include "components/universal_timeline.html" with events=timeline_events %} #}
+
+{% comment %}
+  Parameters:
+  - events: list of { type, title, subtitle, user, timestamp, description, status, avatar }
+    - type: 'activity' | 'approval' | 'audit' | 'comment'
+  - extra_classes: string
+{% endcomment %}
+
+<div class="w-full font-sans select-none {{ extra_classes }}">
+    <div class="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2.5 before:bottom-2.5 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
+        {% if events %}
+            {% for evt in events %}
+            <div class="relative flex items-start justify-between gap-4 text-xs group">
+
+                <!-- Status Node Icon Dot -->
+                <div class="absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center ring-4 ring-white dark:ring-slate-900 flex-shrink-0
+                            {% if evt.type == 'approval' %} bg-emerald-500 text-white
+                            {% elif evt.type == 'audit' %} bg-purple-500 text-white
+                            {% elif evt.type == 'comment' %} bg-sky-500 text-white
+                            {% else %} bg-primary-500 text-white {% endif %}">
+                    {% if evt.type == 'approval' %}
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                    {% elif evt.type == 'audit' %}
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {% elif evt.type == 'comment' %}
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                    {% else %}
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {% endif %}
+                </div>
+
+                <!-- Event Details -->
+                <div class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 shadow-2xs space-y-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            {% if evt.avatar %}
+                            <img src="{{ evt.avatar }}" class="w-5 h-5 rounded-full object-cover" alt="User">
+                            {% endif %}
+                            <p class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{ evt.title }}</p>
+                        </div>
+                        <span class="text-[10px] text-slate-400 dark:text-slate-500 flex-shrink-0">{{ evt.timestamp }}</span>
+                    </div>
+
+                    {% if evt.description %}
+                    <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{{ evt.description }}</p>
+                    {% endif %}
+
+                    {% if evt.user %}
+                    <p class="text-[11px] text-slate-400 pt-0.5">By <span class="font-medium text-slate-700 dark:text-slate-300">{{ evt.user }}</span></p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <!-- Demo Items -->
+            <div class="relative flex items-start justify-between gap-4 text-xs">
+                <div class="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-4 ring-white dark:ring-slate-900">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <div class="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 shadow-2xs">
+                    <div class="flex items-center justify-between">
+                        <p class="font-semibold text-slate-900 dark:text-slate-100">Leave Request Approved</p>
+                        <span class="text-[10px] text-slate-400">10m ago</span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Manager approved 3-day leave request.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>

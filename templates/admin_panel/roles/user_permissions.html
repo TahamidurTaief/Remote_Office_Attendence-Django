@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Permissions for {{ target_user.email|default:target_user.phone }} | FieldTrack{% endblock %}
-{% block page_title %}User Permissions{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Permissions for {{ target_user.email|default:target_user.phone }} | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4">
     <!-- Header -->
     <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -205,7 +200,4 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </form>
-</div>
-{% endblock %}
+</c-app-shell>

@@ -1,0 +1,154 @@
+{# Notification Center Component #}
+{# Usage: #}
+{# {% include "components/notification_center.html" with notifications=notification_list unread_count=5 %} #}
+
+{% comment %}
+  Parameters:
+  - notifications: list of { id, type, title, message, author, timestamp, is_read, action_url }
+  - unread_count: integer
+  - extra_classes: string
+{% endcomment %}
+
+<div x-data="{
+        isOpen: false,
+        activeFilter: 'all',
+        unreadCount: {{ unread_count|default:3 }},
+        items: [
+            { id: 1, type: 'approval', title: 'Leave Request Pending', message: 'Rahim Uddin submitted a 3-day sick leave request.', author: 'Rahim Uddin', timestamp: '10m ago', is_read: false },
+            { id: 2, type: 'mention', title: '@mentioned in Project Alpha', message: 'Tahamid tagged you in #task-104: Review database schema.', author: 'Tahamidur Taief', timestamp: '1h ago', is_read: false },
+            { id: 3, type: 'task', title: 'New Task Assigned', message: 'You were assigned to: Update API response structure.', author: 'System', timestamp: '3h ago', is_read: false },
+            { id: 4, type: 'reminder', title: 'Monthly Payroll Audit', message: 'Payroll disbursal process scheduled for 4:00 PM today.', author: 'Finance Bot', timestamp: '1d ago', is_read: true }
+        ],
+
+        get filteredItems() {
+            if (this.activeFilter === 'unread') return this.items.filter(i => !i.is_read);
+            if (this.activeFilter !== 'all') return this.items.filter(i => i.type === this.activeFilter);
+            return this.items;
+        },
+
+        markAllAsRead() {
+            this.items.forEach(i => i.is_read = true);
+            this.unreadCount = 0;
+        },
+
+        markAsRead(id) {
+            const item = this.items.find(i => i.id === id);
+            if (item && !item.is_read) {
+                item.is_read = true;
+                if (this.unreadCount > 0) this.unreadCount--;
+            }
+        }
+     }"
+     @open-notifications.window="isOpen = true"
+     @close-notifications.window="isOpen = false"
+     @keydown.window.escape="if (isOpen) isOpen = false"
+     class="relative z-50 font-sans select-none">
+
+    <!-- BACKDROP OVERLAY -->
+    <div x-show="isOpen"
+         x-transition:enter="transition-opacity ease-linear duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-linear duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @click="isOpen = false"
+         class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"
+         x-cloak></div>
+
+    <!-- SLIDE-OVER NOTIFICATION TRAY -->
+    <div x-show="isOpen"
+         class="fixed inset-y-0 right-0 max-w-full flex pl-10 rtl:pr-10 rtl:pl-0"
+         x-cloak>
+
+        <div x-show="isOpen"
+             x-transition:enter="transform transition ease-in-out duration-200"
+             x-transition:enter-start="translate-x-full rtl:-translate-x-full"
+             x-transition:enter-end="translate-x-0"
+             x-transition:leave="transform transition ease-in-out duration-200"
+             x-transition:leave-start="translate-x-0"
+             x-transition:leave-end="translate-x-full rtl:-translate-x-full"
+             class="w-screen max-w-sm sm:max-w-md bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col">
+
+            <!-- TRAY HEADER -->
+            <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</h3>
+                    <span x-show="unreadCount > 0" class="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold" x-text="unreadCount" x-cloak></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="markAllAsRead()" class="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline">Mark all read</button>
+                    <button type="button" @click="isOpen = false" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                </div>
+            </div>
+
+            <!-- CATEGORY FILTER TABS -->
+            <div class="px-4 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1 overflow-x-auto scrollbar-none text-xs bg-slate-50/50 dark:bg-slate-900/50">
+                <button @click="activeFilter = 'all'" :class="activeFilter === 'all' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="px-2.5 py-1 rounded-md transition-colors whitespace-nowrap">All</button>
+                <button @click="activeFilter = 'unread'" :class="activeFilter === 'unread' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="px-2.5 py-1 rounded-md transition-colors whitespace-nowrap">Unread</button>
+                <button @click="activeFilter = 'approval'" :class="activeFilter === 'approval' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="px-2.5 py-1 rounded-md transition-colors whitespace-nowrap">Approvals</button>
+                <button @click="activeFilter = 'mention'" :class="activeFilter === 'mention' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="px-2.5 py-1 rounded-md transition-colors whitespace-nowrap">Mentions</button>
+                <button @click="activeFilter = 'task'" :class="activeFilter === 'task' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="px-2.5 py-1 rounded-md transition-colors whitespace-nowrap">Tasks</button>
+            </div>
+
+            <!-- NOTIFICATIONS LIST BODY -->
+            <div class="flex-1 p-4 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
+                <template x-for="item in filteredItems" :key="item.id">
+                    <div @click="markAsRead(item.id)"
+                         :class="!item.is_read ? 'bg-primary-50/30 dark:bg-primary-950/20' : ''"
+                         class="py-3 px-2 rounded-xl transition-colors flex items-start gap-3 cursor-pointer group">
+
+                        <!-- Notification Type Icon -->
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                             :class="{
+                                 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400': item.type === 'approval',
+                                 'bg-primary-100 text-primary-600 dark:bg-primary-950 dark:text-primary-400': item.type === 'mention',
+                                 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400': item.type === 'task',
+                                 'bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400': item.type === 'reminder'
+                             }">
+                            <template x-if="item.type === 'approval'">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </template>
+                            <template x-if="item.type === 'mention'">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>
+                            </template>
+                            <template x-if="item.type === 'task'">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                            </template>
+                            <template x-if="item.type === 'reminder'">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </template>
+                        </div>
+
+                        <!-- Content & Inline Actions -->
+                        <div class="flex-1 min-w-0 space-y-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate" x-text="item.title"></p>
+                                <span class="text-[10px] text-slate-400 flex-shrink-0" x-text="item.timestamp"></span>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 leading-snug" x-text="item.message"></p>
+
+                            <!-- Inline Action Buttons for Approvals -->
+                            <template x-if="item.type === 'approval'">
+                                <div class="flex items-center gap-2 pt-1.5">
+                                    <button type="button" @click.stop="markAsRead(item.id)" class="px-2.5 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-medium hover:bg-emerald-700">Approve</button>
+                                    <button type="button" @click.stop="markAsRead(item.id)" class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-medium hover:bg-slate-200">Reject</button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Empty Filter Results -->
+                <div x-show="filteredItems.length === 0" class="py-12 text-center text-xs text-slate-400" x-cloak>
+                    No notifications in this category
+                </div>
+            </div>
+
+            <!-- FOOTER -->
+            <div class="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-center">
+                <a href="/notifications/" class="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline">View All Notifications</a>
+            </div>
+        </div>
+    </div>
+</div>

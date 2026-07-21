@@ -87,12 +87,6 @@ class BaseProcessLeaveRequestView(RoleRequiredMixin, View):
 
 class ApproveLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def get(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def _process_approval(self, request, pk):
         leave_request = get_object_or_404(LeaveRequest, pk=pk)
         if leave_request.status == 'pending':
             leave_request.status = 'approved'
@@ -109,12 +103,6 @@ class ApproveLeaveRequestView(BaseProcessLeaveRequestView):
 
 class RejectLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def get(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def _process_approval(self, request, pk):
         leave_request = get_object_or_404(LeaveRequest, pk=pk)
         if leave_request.status == 'pending':
             leave_request.status = 'rejected'

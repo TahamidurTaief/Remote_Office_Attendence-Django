@@ -1,0 +1,37 @@
+{% comment %} c-tabs component
+   Alpine-driven tab switcher.
+   Props:
+   - active: id of the initially active tab (default: first tab)
+   Slot: <c-tab> children (see c-tab.html)
+
+   Usage pattern:
+   <c-tabs active="tab1">
+     <c-tab id="tab1" label="Overview">... content ...</c-tab>
+     <c-tab id="tab2" label="Details">... content ...</c-tab>
+   </c-tabs>
+
+   This file handles the tab bar wrapper.
+   Individual tabs are rendered inline — the slot pattern passes content directly.
+{% endcomment %}
+
+<div x-data="{
+       active: '{{ active|default:'' }}',
+       init() {
+         // Set first tab as active if not specified
+         const first = this.$el.querySelector('[data-tab-id]');
+         if (first && !this.active) this.active = first.dataset.tabId;
+       }
+     }"
+     class="{{ extra_class }}">
+
+  {# Tab list bar #}
+  <div class="flex items-center gap-0 border-b mb-4 overflow-x-auto scrollbar-hide"
+       role="tablist"
+       style="border-color:var(--border)">
+    {# Tab buttons are injected here via Alpine template scanning #}
+    <div id="ft-tab-list-{{ id }}" class="flex items-center gap-0"></div>
+  </div>
+
+  {# Tab panels — slot #}
+  <cotton-slot />
+</div>

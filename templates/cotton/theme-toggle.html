@@ -1,0 +1,38 @@
+{% comment %} c-theme-toggle component
+   No props needed.
+   Reads/writes localStorage key 'ft_theme'.
+   Toggles 'dark' class on <html> element.
+   Anti-FODT: handled by the c-app-shell inline script.
+{% endcomment %}
+
+<button
+  type="button"
+  x-data="{
+    dark: document.documentElement.classList.contains('dark'),
+    toggle() {
+      this.dark = !this.dark;
+      if (this.dark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('ft_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('ft_theme', 'light');
+      }
+    }
+  }"
+  @click="toggle()"
+  :title="dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+  :aria-label="dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+  class="ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center"
+>
+  {# Sun icon — shown in dark mode #}
+  <i data-lucide="sun"
+     class="w-4 h-4"
+     x-show="dark"
+     x-cloak></i>
+  {# Moon icon — shown in light mode #}
+  <i data-lucide="moon"
+     class="w-4 h-4"
+     x-show="!dark"
+     x-cloak></i>
+</button>

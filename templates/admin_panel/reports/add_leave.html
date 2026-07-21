@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Add Leave Record | Signtech Track{% endblock %}
-{% block page_title %}Add Leave Record{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Add Leave Record | Signtech Track" active_href="{{ request.path }}">
 <div class="p-4 max-w-2xl mx-auto">
     <div class="mb-6 flex items-center justify-between">
         <div>
@@ -301,7 +296,4 @@
     #add-leave-form textarea:focus {
         outline: none;
         border-color: #4f46e5;
-        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-    }
-</style>
-{% endblock %}
+</c-app-shell>

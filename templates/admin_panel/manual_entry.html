@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Manual Entry | FieldTrack Admin{% endblock %}
-{% block page_title %}Manual Entry{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Manual Entry | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-3xl mx-auto">
     <div class="mb-6 flex items-center justify-between">
         <div>
@@ -82,8 +77,4 @@
                     <i data-lucide="save" class="w-4 h-4"></i>
                     Save Record
                 </button>
-            </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

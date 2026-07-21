@@ -1,0 +1,154 @@
+{% comment %} c-command-palette — Global Ctrl/Cmd+K fuzzy search modal
+   No props. Listens to 'open-command-palette' custom event.
+   Nav items are hardcoded (no backend needed for navigation).
+   Future: could add htmx-driven results for records.
+{% endcomment %}
+
+<div x-data="{
+       open: false,
+       query: '',
+       selectedIndex: 0,
+       items: [
+         { label: 'Dashboard',       href: '/admin-panel/dashboard/',        icon: 'layout-dashboard', group: 'Overview' },
+         { label: 'Attendance',      href: '/admin-panel/attendance/',       icon: 'clock',            group: 'Operations' },
+         { label: 'Reports',         href: '/admin-panel/reports/',          icon: 'bar-chart-2',      group: 'Operations' },
+         { label: 'Absence Report',  href: '/admin-panel/reports/absent/',   icon: 'user-x',           group: 'Operations' },
+         { label: 'Schedule',        href: '/schedule/',                     icon: 'calendar',         group: 'Operations' },
+         { label: 'Employees',       href: '/employees/',                    icon: 'users',            group: 'People' },
+         { label: 'Leave',           href: '/leave/admin/',                  icon: 'clipboard-check',  group: 'People' },
+         { label: 'Expenses',        href: '/expense/admin/',                icon: 'receipt',          group: 'People' },
+         { label: 'Projects',        href: '/projects/',                     icon: 'briefcase',        group: 'Work' },
+         { label: 'Tasks',           href: '/projects/tasks/',               icon: 'check-square',     group: 'Work' },
+         { label: 'Project Types',   href: '/projects/types/',               icon: 'tag',              group: 'Work' },
+         { label: 'Task Templates',  href: '/projects/templates/',           icon: 'clipboard-list',   group: 'Work' },
+         { label: 'Branches',        href: '/branches/',                     icon: 'building-2',       group: 'Organization' },
+         { label: 'Holidays',        href: '/branches/holidays/',            icon: 'sun',              group: 'Organization' },
+         { label: 'Notifications',   href: '/notifications/',               icon: 'bell',             group: 'Organization' },
+         { label: 'Roles & Access',  href: '/admin-panel/roles/',            icon: 'shield',           group: 'Admin' },
+         { label: 'Backups',         href: '/backups/',                      icon: 'database',         group: 'Admin' },
+         { label: 'Expired Data',    href: '/admin-panel/expired-data/',     icon: 'trash-2',          group: 'Admin' },
+         { label: 'Settings',        href: '/admin-panel/settings/',         icon: 'settings',         group: 'Admin' },
+       ],
+       get filtered() {
+         if (!this.query) return this.items.slice(0, 8);
+         const q = this.query.toLowerCase();
+         return this.items.filter(i =>
+           i.label.toLowerCase().includes(q) || i.group.toLowerCase().includes(q)
+         ).slice(0, 10);
+       },
+       init() {
+         window.addEventListener('open-command-palette', () => this.openPalette());
+       },
+       openPalette() {
+         this.open = true;
+         this.query = '';
+         this.selectedIndex = 0;
+         this.$nextTick(() => {
+           const inp = this.$el.querySelector('#ft-cmd-input');
+           if (inp) inp.focus();
+           if (window.lucide) lucide.createIcons();
+         });
+       },
+       closePalette() {
+         this.open = false;
+         this.query = '';
+       },
+       navigate() {
+         const item = this.filtered[this.selectedIndex];
+         if (item) { window.location.href = item.href; this.closePalette(); }
+       },
+       moveDown() {
+         this.selectedIndex = Math.min(this.selectedIndex + 1, this.filtered.length - 1);
+       },
+       moveUp() {
+         this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+       }
+     }"
+     @keydown.window.cmd.k.prevent="openPalette()"
+     @keydown.window.ctrl.k.prevent="openPalette()"
+     @open-command-palette.window="openPalette()">
+
+  {# Backdrop #}
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       @click="closePalette()"
+       class="ft-command-backdrop"
+       x-cloak>
+
+    {# Command box #}
+    <div class="ft-command-box" @click.stop
+         @keydown.escape.prevent="closePalette()"
+         @keydown.arrow-down.prevent="moveDown()"
+         @keydown.arrow-up.prevent="moveUp()"
+         @keydown.enter.prevent="navigate()">
+
+      {# Search input #}
+      <div class="flex items-center gap-3 px-4 py-3 border-b" style="border-color:var(--border)">
+        <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color:var(--text-muted)"></i>
+        <input id="ft-cmd-input"
+               type="text"
+               x-model.debounce.100="query"
+               @input="selectedIndex = 0"
+               placeholder="Search pages, actions…"
+               class="flex-1 bg-transparent outline-none text-[13px] border-0 p-0 ring-0 shadow-none"
+               style="color:var(--text)">
+        <button type="button" @click="closePalette()"
+                class="ft-btn ft-btn-ghost ft-btn-sm px-2 py-1 text-[10px] rounded"
+                style="color:var(--text-muted)">
+          ESC
+        </button>
+      </div>
+
+      {# Results list #}
+      <div class="py-1 max-h-80 overflow-y-auto scrollbar-hide">
+        <template x-if="filtered.length === 0">
+          <div class="px-4 py-8 text-center text-[12px]" style="color:var(--text-muted)">
+            No results for "<span x-text="query"></span>"
+          </div>
+        </template>
+
+        <template x-for="(item, idx) in filtered" :key="item.label">
+          <a :href="item.href"
+             @click="closePalette()"
+             @mouseover="selectedIndex = idx"
+             class="flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer"
+             :style="selectedIndex === idx ? 'background:var(--primary-light); color:var(--primary)' : 'color:var(--text-secondary)'"
+             x-data>
+            <div class="w-7 h-7 rounded-btn flex items-center justify-center flex-shrink-0 transition-colors"
+                 :style="selectedIndex === idx ? 'background:var(--primary); color:white' : 'background:var(--surface-2); color:var(--text-muted)'">
+              <i :data-lucide="item.icon" class="w-3.5 h-3.5"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[12px] font-medium truncate" x-text="item.label"></p>
+            </div>
+            <span class="text-[10px] px-1.5 py-0.5 rounded"
+                  style="background:var(--surface-2); color:var(--text-muted)"
+                  x-text="item.group"></span>
+            <template x-if="selectedIndex === idx">
+              <i data-lucide="corner-down-left" class="w-3.5 h-3.5 flex-shrink-0"></i>
+            </template>
+          </a>
+        </template>
+      </div>
+
+      {# Footer hint #}
+      <div class="px-4 py-2.5 border-t flex items-center gap-4 text-[10px]"
+           style="border-color:var(--border); color:var(--text-muted); background:var(--surface-2)">
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.5 rounded border" style="border-color:var(--border)">↑↓</kbd> Navigate
+        </span>
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.5 rounded border" style="border-color:var(--border)">↵</kbd> Open
+        </span>
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.5 rounded border" style="border-color:var(--border)">ESC</kbd> Close
+        </span>
+      </div>
+    </div>
+  </div>
+</div>

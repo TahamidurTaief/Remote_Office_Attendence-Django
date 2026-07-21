@@ -1,10 +1,4 @@
-{% extends 'base/admin_base.html' %}
-{% load static %}
-
-{% block title %}{% if object %}Edit Event{% else %}Create Event{% endif %} | FieldTrack{% endblock %}
-{% block page_title %}{% if object %}Edit Event{% else %}Create Event{% endif %}{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="{% if object %}Edit Event{% else %}Create Event{% endif %} | FieldTrack" active_href="{{ request.path }}">
 <div class="max-w-2xl mx-auto">
     <!-- Breadcrumb / Back to Calendar -->
     <div class="mb-3">
@@ -131,7 +125,4 @@
                     {% if object %}Save Changes{% else %}Create Event{% endif %}
                 </button>
             </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

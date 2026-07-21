@@ -1,9 +1,5 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}{{ employee.full_name }} - Leave Profile | FieldTrack Admin{% endblock %}
-{% block page_title %}Employee Leave Profile{% endblock %}
-
-{% block content %}
+{% load leave_extras %}
+<c-app-shell page_title="{{ employee.full_name }} - Leave Profile | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-7xl mx-auto">
     <!-- Back Button -->
     <div class="mb-6">
@@ -175,8 +171,4 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

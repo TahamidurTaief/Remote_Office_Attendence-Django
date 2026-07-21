@@ -1,10 +1,4 @@
-{% extends 'base/admin_base.html' %}
-{% load static %}
-
-{% block title %}Create Global Task | FieldTrack{% endblock %}
-{% block page_title %}Create Task{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Create Global Task | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4 max-w-3xl mx-auto">
     <!-- Header -->
     <div class="mb-4 flex items-center justify-between">
@@ -136,7 +130,4 @@
                     Create Task
                 </button>
             </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

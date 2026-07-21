@@ -1,0 +1,44 @@
+{% comment %} c-button component
+   Props:
+   - variant: primary (default) | secondary | ghost | danger | accent
+   - size: md (default) | sm | lg
+   - href: if set, renders <a> tag instead of <button>
+   - type: button (default) | submit | reset
+   - icon: lucide icon name (optional, rendered before label)
+   - icon_right: lucide icon name after label (optional)
+   - label: button text (can also use default slot)
+   - disabled: renders disabled state
+   - loading: shows spinner, disables interaction
+   - extra_class: additional CSS classes
+   - hx_*: any htmx attrs pass through via slot
+{% endcomment %}
+
+{% if href %}
+<a href="{{ href }}"
+   class="ft-btn ft-btn-{{ variant|default:'primary' }} ft-btn-{{ size|default:'md' }} {{ extra_class }}"
+   {% if disabled %}aria-disabled="true" tabindex="-1"{% endif %}
+   {{ attrs }}>
+  {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>{% endif %}
+  {% if label %}{{ label }}{% endif %}
+  <cotton-slot />
+  {% if icon_right %}<i data-lucide="{{ icon_right }}" class="w-3.5 h-3.5 ml-auto"></i>{% endif %}
+</a>
+{% else %}
+<button type="{{ type|default:'button' }}"
+        class="ft-btn ft-btn-{{ variant|default:'primary' }} ft-btn-{{ size|default:'md' }} {{ extra_class }}"
+        {% if disabled %}disabled{% endif %}
+        {% if loading %}disabled aria-busy="true"{% endif %}
+        {{ attrs }}>
+  {% if loading %}
+    <svg class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+    </svg>
+  {% elif icon %}
+    <i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>
+  {% endif %}
+  {% if label %}{{ label }}{% endif %}
+  <cotton-slot />
+  {% if icon_right %}<i data-lucide="{{ icon_right }}" class="w-3.5 h-3.5 ml-auto"></i>{% endif %}
+</button>
+{% endif %}

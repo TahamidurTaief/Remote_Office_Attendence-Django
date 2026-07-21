@@ -1,0 +1,50 @@
+{% comment %} c-status-pill component
+   Opinionated badge for attendance/HR statuses.
+   Props:
+   - status: present | absent | late | on_leave | wfh | pending | approved | rejected | unknown
+   - label: override display text (defaults to status capitalized)
+{% endcomment %}
+
+{% if status == 'present' %}
+  <span class="ft-badge ft-badge-success" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-accent-500 inline-block"></span>
+    {{ label|default:"Present" }}
+  </span>
+{% elif status == 'late' %}
+  <span class="ft-badge ft-badge-warning" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
+    {{ label|default:"Late" }}
+  </span>
+{% elif status == 'absent' %}
+  <span class="ft-badge ft-badge-danger" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
+    {{ label|default:"Absent" }}
+  </span>
+{% elif status == 'on_leave' %}
+  <span class="ft-badge ft-badge-info" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"></span>
+    {{ label|default:"On Leave" }}
+  </span>
+{% elif status == 'wfh' %}
+  <span class="ft-badge ft-badge-primary" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-primary-400 inline-block"></span>
+    {{ label|default:"WFH" }}
+  </span>
+{% elif status == 'approved' %}
+  <span class="ft-badge ft-badge-success" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-accent-500 inline-block"></span>
+    {{ label|default:"Approved" }}
+  </span>
+{% elif status == 'rejected' %}
+  <span class="ft-badge ft-badge-danger" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
+    {{ label|default:"Rejected" }}
+  </span>
+{% elif status == 'pending' %}
+  <span class="ft-badge ft-badge-warning" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
+    {{ label|default:"Pending" }}
+  </span>
+{% else %}
+  <span class="ft-badge ft-badge-neutral">{{ label|default:status }}</span>
+{% endif %}

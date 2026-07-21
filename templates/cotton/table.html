@@ -1,0 +1,41 @@
+{% comment %} c-table component
+   Props:
+   - id: unique id for the table wrapper
+   - extra_class: additional classes on the wrapper div
+   - empty_label: text shown in empty state (default: "No records found")
+   - empty_icon: lucide icon for empty state (default: "inbox")
+   Slots:
+   - header: <th> elements
+   - body: <tr> rows (or empty state)
+   - toolbar: filter bar / action buttons above table
+   - empty: custom empty state (overrides default)
+{% endcomment %}
+
+<div id="{{ id }}" class="ft-card overflow-hidden {{ extra_class }}">
+  {# Optional toolbar #}
+  {% if toolbar %}
+  <div class="px-4 py-3 border-b" style="border-color:var(--border); background:var(--surface)">
+    <cotton-slot name="toolbar" />
+  </div>
+  {% endif %}
+
+  <div class="overflow-x-auto">
+    <table class="ft-table">
+      <thead>
+        <tr>
+          <cotton-slot name="header" />
+        </tr>
+      </thead>
+      <tbody id="{{ id }}-body">
+        <cotton-slot name="body" />
+      </tbody>
+    </table>
+  </div>
+
+  {# Empty state fallback — shown via Django template logic in body slot #}
+  {% if empty %}
+  <div class="py-16 flex flex-col items-center gap-3" style="color:var(--text-muted)">
+    <cotton-slot name="empty" />
+  </div>
+  {% endif %}
+</div>

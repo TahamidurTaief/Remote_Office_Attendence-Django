@@ -1,0 +1,36 @@
+{% comment %} c-empty-state component
+   Props:
+   - icon: lucide icon name (default: inbox)
+   - title: heading text (default: No records found)
+   - description: body text (optional)
+   - action_label: CTA button text (optional)
+   - action_href: CTA button link (optional)
+   - action_variant: primary (default) | secondary | accent
+   Slot: custom action content (overrides action_href)
+{% endcomment %}
+
+<div class="flex flex-col items-center justify-center gap-3 py-16 px-4 text-center">
+  {# Icon circle #}
+  <div class="w-12 h-12 rounded-full flex items-center justify-center"
+       style="background:var(--surface-2)">
+    <i data-lucide="{{ icon|default:'inbox' }}" class="w-6 h-6" style="color:var(--text-muted)"></i>
+  </div>
+
+  {# Text #}
+  <div>
+    <p class="text-[13px] font-semibold" style="color:var(--text)">
+      {{ title|default:"No records found" }}
+    </p>
+    {% if description %}
+    <p class="text-[12px] mt-1 max-w-xs" style="color:var(--text-muted)">{{ description }}</p>
+    {% endif %}
+  </div>
+
+  {# Action #}
+  {% if action_label and action_href %}
+    <a href="{{ action_href }}" class="ft-btn ft-btn-{{ action_variant|default:'primary' }} ft-btn-sm mt-1">
+      {{ action_label }}
+    </a>
+  {% endif %}
+  <cotton-slot />
+</div>

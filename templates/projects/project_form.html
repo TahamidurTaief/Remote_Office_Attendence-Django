@@ -1,12 +1,4 @@
-{% extends 'base/admin_base.html' %}
-{% load static %}
-
-{% block title %}{% if object %}Edit Project{% else %}Add Project{% endif %} | FieldTrack{% endblock %}
-
-{% block page_title %}{% if object %}Edit Project{% else %}Add Project{% endif %}{% endblock %}
-
-{% block content %}
-<script src="https://cdn.tailwindcss.com"></script>
+<c-app-shell page_title="{% if object %}Edit Project{% else %}Add Project{% endif %} | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4 max-w-5xl mx-auto space-y-6">
     <div class="mb-4 flex items-center justify-between">
         <div>
@@ -15,13 +7,13 @@
             </h2>
             <p class="mt-0.5 text-[12px] text-gray-500">Provide details for the project below. HVAC-specific fields will appear after selecting the project type.</p>
         </div>
-        <a href="{% url 'projects:project_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
+        <a href="{% url 'projects:project_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
             <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
             Back to List
         </a>
     </div>
 
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden">
+    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden">
         <form method="POST" class="p-4 space-y-4">
             {% csrf_token %}
             
@@ -318,10 +310,10 @@
 
             <!-- Submit buttons -->
             <div class="pt-3 flex justify-end gap-2.5 border-t border-gray-100 mt-4">
-                <a href="{% url 'projects:project_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 hover:bg-gray-50">
+                <a href="{% url 'projects:project_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 hover:bg-gray-50">
                     Cancel
                 </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-sm text-[12px] font-medium rounded-lg text-white bg-primary-gradient hover:opacity-90">
+                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-soft text-[12px] font-medium rounded-lg text-white bg-primary-gradient hover:opacity-90">
                     <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
                     {% if object %}Save Changes{% else %}Create Project{% endif %}
                 </button>
@@ -333,7 +325,7 @@
     <!-- =========================================================
          TASK MANAGEMENT SECTION (edit mode only)
          ========================================================= -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden" x-data="{ showAddForm: false }">
+    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden" x-data="{ showAddForm: false }">
         <!-- Section Header -->
         <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
             <div class="flex items-center gap-2">
@@ -542,7 +534,7 @@
     {% endif %}
 
 </div>
-{% endblock %}
+
 
 {% block scripts %}
 <script>
@@ -611,5 +603,5 @@
         document.addEventListener('alpine:init', initMemberSelector);
     }
 </script>
-{% endblock %}
+</c-app-shell>
 

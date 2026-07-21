@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}{% if object %}Edit{% else %}Add{% endif %} Leave Type | FieldTrack Admin{% endblock %}
-{% block page_title %}Leave Types{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="{% if object %}Edit{% else %}Add{% endif %} Leave Type | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-xl mx-auto">
     <!-- Header -->
     <div class="mb-6 flex items-center justify-between">
@@ -83,7 +78,4 @@
                     Save Leave Type
                 </button>
             </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

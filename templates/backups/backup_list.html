@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Backup & Restore | FieldTrack Admin{% endblock %}
-{% block page_title %}Backups{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Backup & Restore | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{ showSettings: false }">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -265,7 +260,4 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

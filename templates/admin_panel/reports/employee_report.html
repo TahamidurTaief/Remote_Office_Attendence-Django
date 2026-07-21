@@ -1,9 +1,4 @@
-{% extends "base/admin_base.html" %}
-{% load static %}
-
-{% block title %}{{ employee.full_name }} Report | FieldTrack{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="{{ employee.full_name }} Report | FieldTrack" active_href="{{ request.path }}">
 <div class="p-6 max-w-5xl mx-auto">
 
     <!-- Breadcrumb -->
@@ -353,5 +348,4 @@
         </div>
     </div>
 
-</div>
-{% endblock %}
+</c-app-shell>

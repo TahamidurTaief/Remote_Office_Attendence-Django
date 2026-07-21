@@ -1,9 +1,9 @@
-{% extends "base/admin_base.html" %}
-{% block content %}
+<c-app-shell page_title="404 Page Not Found | FieldTrack" active_href="{{ request.path }}">
 <div class="p-8 text-center mt-20">
     <h1 class="text-6xl font-black text-primary-500 mb-4">404</h1>
-    <h2 class="text-2xl font-bold text-gray-900 mb-2">Page Not Found</h2>
-    <p class="text-gray-500 mb-6">The page you are looking for doesn't exist or has been moved.</p>
-    <a href="/" class="bg-primary-gradient text-white px-6 py-3 rounded-lg font-bold hover:bg-primary-600">Go Home</a>
+    <h2 class="text-2xl font-bold mb-2" style="color:var(--text)">Page Not Found</h2>
+    <p class="mb-6" style="color:var(--text-secondary)">The page you are looking for doesn't exist or has been moved.</p>
+    <a href="/" class="bg-primary-gradient text-white px-6 py-3 rounded-xl font-bold hover:opacity-90">Go Home</a>
 </div>
-{% endblock %}
+</c-app-shell>
+

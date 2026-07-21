@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Permissions for {{ role.name }} | FieldTrack{% endblock %}
-{% block page_title %}Role Permissions{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Permissions for {{ role.name }} | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4">
     <form method="POST" class="space-y-6">
         {% csrf_token %}
@@ -55,7 +50,4 @@
             <button type="submit" class="px-4 py-2 bg-primary-gradient text-white font-medium rounded-lg text-xs hover:opacity-90 transition-opacity">
                 Save Changes
             </button>
-        </div>
-    </form>
-</div>
-{% endblock %}
+</c-app-shell>

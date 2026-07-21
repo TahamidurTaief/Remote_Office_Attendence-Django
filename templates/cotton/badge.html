@@ -1,0 +1,22 @@
+{% comment %} c-badge component
+   Props:
+   - variant: primary | success | danger | warning | info | neutral (default)
+   - label: text inside badge (or use slot)
+   - dot: show colored dot before label (true|false)
+   - size: sm (default) | md
+{% endcomment %}
+
+<span class="ft-badge ft-badge-{{ variant|default:'neutral' }} {% if size == 'md' %}text-[11px] px-2.5 py-1{% endif %} {{ extra_class }}">
+  {% if dot %}
+    <span class="inline-block w-1.5 h-1.5 rounded-full
+      {% if variant == 'success' %}bg-accent-500
+      {% elif variant == 'danger' %}bg-red-500
+      {% elif variant == 'warning' %}bg-amber-500
+      {% elif variant == 'info' %}bg-blue-500
+      {% elif variant == 'primary' %}bg-primary-500
+      {% else %}bg-gray-400{% endif %}">
+    </span>
+  {% endif %}
+  {% if label %}{{ label }}{% endif %}
+  <cotton-slot />
+</span>

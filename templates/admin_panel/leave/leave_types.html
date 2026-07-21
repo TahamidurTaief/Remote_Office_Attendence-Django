@@ -1,9 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}Manage Leave Types | FieldTrack Admin{% endblock %}
-{% block page_title %}Leave Types{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Manage Leave Types | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-4xl mx-auto">
     <!-- Header -->
     <div class="flex items-center justify-between gap-4 mb-8">
@@ -63,9 +58,8 @@
                         </td>
                     </tr>
                     {% endfor %}
-                </tbody>
             </table>
         </div>
     </div>
 </div>
-{% endblock %}
+</c-app-shell>

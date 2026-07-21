@@ -143,12 +143,6 @@ class BaseProcessExpenseView(RoleRequiredMixin):
 
 class ApproveExpenseView(BaseProcessExpenseView, View):
     def post(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def get(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def _process_approval(self, request, pk):
         expense = get_object_or_404(Expense, pk=pk)
         if expense.status == 'pending':
             expense.status = 'approved'
@@ -165,18 +159,12 @@ class ApproveExpenseView(BaseProcessExpenseView, View):
 
 class RejectExpenseView(BaseProcessExpenseView, View):
     def post(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def get(self, request, pk):
-        return self._process_approval(request, pk)
-
-    def _process_approval(self, request, pk):
         expense = get_object_or_404(Expense, pk=pk)
         if expense.status == 'pending':
             expense.status = 'rejected'
             expense.reviewed_by = request.user
             expense.reviewed_at = timezone.now()
-            expense.rejection_reason = request.POST.get('rejection_reason', '') or request.GET.get('rejection_reason', '')
+            expense.rejection_reason = request.POST.get('rejection_reason', '')
             expense.save()
             messages.success(request, f"Expense request for {expense.employee.full_name} has been rejected.")
         else:

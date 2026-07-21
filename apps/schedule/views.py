@@ -113,20 +113,21 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         # Add project tasks
         for task in tasks:
-            proj_detail_url = reverse('projects:project_detail', args=[task.project.pk])
+            proj_name = task.project.name if task.project else "Unassigned / General Task"
+            proj_detail_url = reverse('projects:project_detail', args=[task.project.pk]) if task.project else ""
             resp_person = task.responsible_person.full_name if task.responsible_person else "Unassigned"
             start_date_str = task.planned_start.strftime('%d/%m/%Y') if task.planned_start else "—"
             finish_date_str = task.planned_finish.strftime('%d/%m/%Y') if task.planned_finish else "—"
             
             if task.planned_start and start_date <= task.planned_start <= end_date:
-                title = f"Start: {task.project.name} - {task.activity} ({task.status})"
+                title = f"Start: {proj_name} - {task.activity} ({task.status})"
                 events_by_date[task.planned_start].append({
                     'id': f"task_start_{task.pk}",
                     'title': title,
                     'source_type': 'task_deadline',
                     'edit_url': '',
                     'time_str': 'All Day',
-                    'project_name': task.project.name,
+                    'project_name': proj_name,
                     'project_url': proj_detail_url,
                     'responsible_person': resp_person,
                     'status': task.status,
@@ -138,14 +139,14 @@ class CalendarMonthView(RoleRequiredMixin, View):
                 })
             if task.planned_finish and start_date <= task.planned_finish <= end_date:
                 if task.planned_finish != task.planned_start:
-                    title = f"Finish: {task.project.name} - {task.activity} ({task.status})"
+                    title = f"Finish: {proj_name} - {task.activity} ({task.status})"
                     events_by_date[task.planned_finish].append({
                         'id': f"task_finish_{task.pk}",
                         'title': title,
                         'source_type': 'task_deadline',
                         'edit_url': '',
                         'time_str': 'All Day',
-                        'project_name': task.project.name,
+                        'project_name': proj_name,
                         'project_url': proj_detail_url,
                         'responsible_person': resp_person,
                         'status': task.status,

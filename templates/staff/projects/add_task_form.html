@@ -1,9 +1,4 @@
-{% extends 'base/staff_base.html' %}
-
-{% block title %}Add Task | {{ project.name }} | FieldTrack{% endblock %}
-{% block page_title %}Add Project Task{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="Add Task | {{ project.name }} | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div class="p-2 max-w-md mx-auto">
     <!-- Header -->
     <div class="mb-4 flex items-center justify-between">
@@ -137,7 +132,4 @@
                     Assign Task
                 </button>
             </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

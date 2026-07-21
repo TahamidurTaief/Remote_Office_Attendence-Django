@@ -1,174 +1,128 @@
-{% extends 'base/admin_base.html' %}
+<c-app-shell page_title="Employees | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
 
-{% block title %}Employees | FieldTrack{% endblock %}
-{% block page_title %}Employees{% endblock %}
+    <c-slot name="topbar">
+        <c-topbar title="Employees">
+            <c-slot name="actions">
+                <c-button href="{% url 'employees:employee_add' %}" variant="accent" icon="plus" label="Add Employee" />
+            </c-slot>
+        </c-topbar>
+    </c-slot>
 
-{% block content %}
-<div class="p-4">
-    <div class="md:flex md:items-center md:justify-between mb-6">
-        <div class="flex-1 min-w-0">
-            <h2 class="text-[14px] font-semibold text-gray-900">
-                Employees
-            </h2>
-        </div>
-        <div class="mt-4 flex md:mt-0 md:ml-4">
-            <a href="{% url 'employees:employee_add' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                Add Employee
-            </a>
-        </div>
-    </div>
+    <c-command-palette />
 
-    <!-- Filters -->
-    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-150 mb-6">
-        <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-            <div class="md:col-span-2">
-                <label for="search" class="block text-sm font-medium text-gray-700">Search Name/ID</label>
-                <input type="text" name="search" id="search" value="{{ search }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border" placeholder="...">
-            </div>
-            <div>
-                <label for="department" class="block text-sm font-medium text-gray-700">Department</label>
-                <select name="department" id="department" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
-                    <option value="">All</option>
-                    {% for dept in departments %}
-                    <option value="{{ dept }}" {% if department == dept %}selected{% endif %}>{{ dept }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label for="branch" class="block text-sm font-medium text-gray-700">Branch</label>
-                <select name="branch" id="branch" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
-                    <option value="">All</option>
-                    {% for b in branches %}
-                    <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
-                <select name="status" id="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-3 py-2 border">
-                    <option value="">All</option>
-                    <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
-                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
-                </select>
-            </div>
-            <div>
-                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                    <i data-lucide="filter" class="w-4 h-4"></i>
-                    Filter
-                </button>
-            </div>
-        </form>
-    </div>
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <!-- Filters -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'employees:employee_list' %}">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 flex-1 items-end">
+                    <c-input name="search" label="Search Name/ID" value="{{ search }}" placeholder="Name or ID..." />
+                    
+                    <c-select name="department" label="Department" value="{{ department }}">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept }}" {% if department == dept %}selected{% endif %}>{{ dept }}</option>
+                        {% endfor %}
+                    </c-select>
 
+                    <c-select name="branch" label="Branch" value="{{ branch_id }}">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </c-select>
 
+                    <c-select name="status" label="Status" value="{{ status }}">
+                        <option value="">All Statuses</option>
+                        <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </c-select>
+                </div>
+            </c-filter-bar>
+        </c-card>
 
-    <!-- Table -->
-    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department/Role</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {% for emp in employees %}
-                    <tr class="hover:bg-gray-50/80 transition-colors">
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 h-10 w-10">
-                                    {% if emp.profile_photo %}
-                                    <img class="h-10 w-10 rounded-full object-cover" src="{{ emp.profile_photo.url }}" alt="">
-                                    {% else %}
-                                    <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold">
-                                        {{ emp.full_name|make_list|first|upper }}
+        <!-- Table -->
+        <c-card padding="none">
+            <div class="overflow-x-auto">
+                <table class="ft-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Department / Designation</th>
+                            <th>Branch</th>
+                            <th>Contact</th>
+                            <th>Status</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employees %}
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <c-avatar src="{% if emp.profile_photo %}{{ emp.profile_photo.url }}{% endif %}" initials="{{ emp.full_name|make_list|first|upper }}" size="sm" />
+                                    <div>
+                                        <a href="{% url 'employees:employee_detail' emp.pk %}" class="font-semibold hover:underline" style="color:var(--text)">{{ emp.full_name }}</a>
+                                        <div class="text-[11px]" style="color:var(--text-muted)">{{ emp.employee_id }}</div>
                                     </div>
-                                    {% endif %}
                                 </div>
-                                <div class="ml-4">
-                                    <div class="text-sm font-medium text-gray-900">{{ emp.full_name }}</div>
-                                    <div class="text-sm text-gray-500">{{ emp.employee_id }}</div>
+                            </td>
+                            <td>
+                                <div class="font-medium" style="color:var(--text)">{{ emp.department }}</div>
+                                <div class="text-[11px]" style="color:var(--text-muted)">{{ emp.designation }}</div>
+                            </td>
+                            <td>
+                                <span class="text-[12px]" style="color:var(--text-secondary)">{{ emp.branch.name|default:"Unassigned" }}</span>
+                            </td>
+                            <td>
+                                <span class="text-[12px]" style="color:var(--text-secondary)">{{ emp.phone }}</span>
+                            </td>
+                            <td>
+                                {% include 'employees/partials/status_badge.html' with employee=emp %}
+                            </td>
+                            <td class="text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    <a href="{% url 'admin_panel:reports_employee' emp.pk %}" title="View Report" class="ft-btn ft-btn-ghost ft-btn-sm p-1">
+                                        <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+                                    </a>
+                                    <a href="{% url 'employees:employee_detail' emp.pk %}" title="View" class="ft-btn ft-btn-ghost ft-btn-sm p-1">
+                                        <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                    </a>
+                                    <a href="{% url 'employees:employee_edit' emp.pk %}" title="Edit" class="ft-btn ft-btn-ghost ft-btn-sm p-1">
+                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                    </a>
                                 </div>
-                            </div>
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <div class="text-sm text-gray-900">{{ emp.department }}</div>
-                            <div class="text-sm text-gray-500">{{ emp.designation }}</div>
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">
-                            {{ emp.branch.name|default:"Unassigned" }}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">
-                            {{ emp.phone }}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            {% include 'employees/partials/status_badge.html' with employee=emp %}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium">
-                            <div class="flex items-center justify-end gap-1">
-                                <a href="{% url 'admin_panel:reports_employee' emp.pk %}"
-                                   title="View Report"
-                                   class="p-1.5 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 transition-colors">
-                                    <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
-                                </a>
-                                <a href="{% url 'employees:employee_detail' emp.pk %}"
-                                   title="View"
-                                   class="p-1.5 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 transition-colors">
-                                    <i data-lucide="eye" class="w-4 h-4"></i>
-                                </a>
-                                <a href="{% url 'employees:employee_edit' emp.pk %}"
-                                   title="Edit"
-                                   class="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
-                                    <i data-lucide="pencil" class="w-4 h-4"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="6" class="px-6 py-16 text-center">
-                            <i data-lucide="users" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
-                            <p class="text-gray-500 font-medium">No employees found.</p>
-                            <p class="text-gray-400 text-sm mt-1">Try adjusting the search or filters.</p>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <!-- Pagination -->
-        {% if is_paginated %}
-        <div class="bg-white px-4 py-3 border-t border-gray-150 sm:px-6 flex items-center justify-between">
-            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                    <p class="text-sm text-gray-700">
-                        Showing page <span class="font-medium">{{ page_obj.number }}</span> of <span class="font-medium">{{ page_obj.paginator.num_pages }}</span>
-                    </p>
-                </div>
-                <div>
-                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                        {% if page_obj.has_previous %}
-                        <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if department %}&department={{ department }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                            Previous
-                        </a>
-                        {% endif %}
-                        {% if page_obj.has_next %}
-                        <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if department %}&department={{ department }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                            Next
-                        </a>
-                        {% endif %}
-                    </nav>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="py-12">
+                                <c-empty-state icon="users" title="No Employees Found" description="Try adjusting search criteria or filter options." />
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <div class="px-4 py-3 border-t flex items-center justify-between" style="border-color:var(--border); background:var(--surface-2)">
+                <span class="text-xs" style="color:var(--text-muted)">
+                    Showing page <strong style="color:var(--text)">{{ page_obj.number }}</strong> of <strong style="color:var(--text)">{{ page_obj.paginator.num_pages }}</strong>
+                </span>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}
+                    <c-button href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if department %}&department={{ department }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}" variant="secondary" size="sm" label="Previous" />
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <c-button href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if department %}&department={{ department }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}" variant="secondary" size="sm" label="Next" />
+                    {% endif %}
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
+        </c-card>
     </div>
-</div>
-{% endblock %}
+</c-app-shell>

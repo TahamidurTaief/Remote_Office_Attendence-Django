@@ -1,10 +1,4 @@
-{% extends 'base/admin_base.html' %}
-
-{% block title %}{% if object %}Edit Material Entry{% else %}Add Material Entry{% endif %} | FieldTrack{% endblock %}
-
-{% block page_title %}{% if object %}Edit Material Entry{% else %}Add Material Entry{% endif %}{% endblock %}
-
-{% block content %}
+<c-app-shell page_title="{% if object %}Edit Material Entry{% else %}Add Material Entry{% endif %} | FieldTrack" active_href="{{ request.path }}">
 <div class="p-4 max-w-3xl mx-auto">
     <!-- Header -->
     <div class="mb-4 flex items-center justify-between">
@@ -79,8 +73,4 @@
                     <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
                     {% if object %}Save Changes{% else %}Add Material{% endif %}
                 </button>
-            </div>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</c-app-shell>

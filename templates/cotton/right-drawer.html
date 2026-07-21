@@ -1,0 +1,70 @@
+{% comment %} c-right-drawer — Figma-style slide-in inspector panel
+   Props:
+   - id: unique drawer id (required)
+   - title: drawer heading
+   - width: sm (320px) | md (480px, default) | lg (640px)
+   Slots:
+   - body (default): drawer content
+   Open via: $dispatch('open-drawer', {id: 'my-drawer'})
+   Close via: $dispatch('close-drawer')
+{% endcomment %}
+
+<div x-data="{
+       open: false,
+       init() {
+         window.addEventListener('open-drawer', e => {
+           if (e.detail && e.detail.id === '{{ id }}') {
+             this.open = true;
+             this.$nextTick(() => { if(window.lucide) lucide.createIcons(); });
+           }
+         });
+         window.addEventListener('close-drawer', e => {
+           if (!e.detail || e.detail.id === '{{ id }}' || !e.detail.id) {
+             this.open = false;
+           }
+         });
+       }
+     }"
+     id="drawer-{{ id }}">
+
+  {# Backdrop #}
+  <div x-show="open"
+       x-transition:enter="transition-opacity duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition-opacity duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       @click="open = false"
+       class="fixed inset-0 z-50"
+       style="background:rgba(0,0,0,0.35); backdrop-filter:blur(2px)"
+       x-cloak></div>
+
+  {# Drawer panel #}
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-220"
+       x-transition:enter-start="translate-x-full"
+       x-transition:enter-end="translate-x-0"
+       x-transition:leave="transition ease-in duration-180"
+       x-transition:leave-start="translate-x-0"
+       x-transition:leave-end="translate-x-full"
+       class="ft-drawer ft-drawer-{{ width|default:'md' }} z-[55]"
+       x-cloak>
+
+    {# Header #}
+    <div class="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0"
+         style="border-color:var(--border)">
+      <h3 class="text-[13px] font-semibold" style="color:var(--text)">{{ title }}</h3>
+      <button type="button"
+              @click="open = false"
+              class="ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 flex items-center justify-center">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    {# Body #}
+    <div class="flex-1 overflow-y-auto p-5">
+      <cotton-slot />
+    </div>
+  </div>
+</div>
