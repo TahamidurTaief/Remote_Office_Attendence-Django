@@ -1,0 +1,333 @@
+{# Enterprise Sidebar Component #}
+{# Usage: {% include "components/enterprise_sidebar.html" with active_href=request.path workspaces=user_workspaces nav_groups=nav_groups %} #}
+
+<div x-data="{
+    isCollapsed: false,
+    mobileOpen: false,
+    activeWorkspace: 'issl-main',
+    searchQuery: '',
+    workspacesOpen: false,
+    openMenus: {},
+    favorites: ['dashboard', 'attendance'],
+    
+    toggleMenu(id) {
+        this.openMenus[id] = !this.openMenus[id];
+    },
+    toggleFavorite(id) {
+        if (this.favorites.includes(id)) {
+            this.favorites = this.favorites.filter(item => item !== id);
+        } else {
+            this.favorites.push(id);
+        }
+    }
+}"
+@keydown.window.cmd.k.prevent="$dispatch('open-command-palette')"
+@keydown.window.ctrl.k.prevent="$dispatch('open-command-palette')"
+@toggle-sidebar.window="isCollapsed = !isCollapsed"
+@toggle-mobile-sidebar.window="mobileOpen = !mobileOpen"
+class="relative select-none">
+
+    <!-- Mobile Backdrop -->
+    <div x-show="mobileOpen" 
+         x-transition:enter="transition-opacity ease-linear duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-linear duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @click="mobileOpen = false"
+         class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden"
+         aria-hidden="true"
+         x-cloak></div>
+
+    <!-- Sidebar Wrapper (Desktop + Mobile Drawer) -->
+    <aside id="enterprise-sidebar"
+           :class="{
+               'translate-x-0': mobileOpen,
+               '-translate-x-full lg:translate-x-0': !mobileOpen,
+               'w-64': !isCollapsed,
+               'w-16': isCollapsed
+           }"
+           class="fixed top-0 bottom-0 left-0 z-50 flex flex-col flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-200 ease-in-out ltr:left-0 rtl:right-0 rtl:left-auto rtl:border-r-0 rtl:border-l"
+           aria-label="Main Navigation">
+
+        <!-- 1. Header & Workspace Switcher -->
+        <div class="h-16 px-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80">
+            <!-- Brand & Workspace -->
+            <div class="flex items-center gap-3 overflow-hidden" :class="isCollapsed ? 'justify-center w-full' : ''">
+                <!-- Logo Icon -->
+                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-primary-500 text-white flex items-center justify-center font-bold text-base shadow-sm ring-1 ring-primary-600/20">
+                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </div>
+
+                <!-- Workspace Switcher Title (Hidden when collapsed) -->
+                <div x-show="!isCollapsed" class="flex-1 min-w-0 transition-opacity duration-150" x-cloak>
+                    <div class="relative">
+                        <button @click="workspacesOpen = !workspacesOpen" 
+                                type="button"
+                                class="w-full flex items-center justify-between text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded-md p-1 -m-1 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+                                aria-expanded="false"
+                                aria-haspopup="true">
+                            <div class="truncate">
+                                <span class="block text-xs font-semibold text-slate-900 dark:text-slate-100 truncate leading-tight">ISSL Enterprise</span>
+                                <span class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate leading-tight">Production Workspace</span>
+                            </div>
+                            <svg class="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors flex-shrink-0 ml-1 rtl:mr-1 rtl:ml-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+
+                        <!-- Workspace Dropdown -->
+                        <div x-show="workspacesOpen" 
+                             @click.away="workspacesOpen = false"
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-100"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             class="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 py-1.5 z-50"
+                             x-cloak>
+                            <div class="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700/60">
+                                <p class="text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-400">Workspaces</p>
+                            </div>
+                            <button type="button" @click="activeWorkspace = 'issl-main'; workspacesOpen = false" class="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 text-xs text-slate-700 dark:text-slate-200">
+                                <span class="font-medium truncate">ISSL Enterprise</span>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-primary-50 dark:bg-primary-950 text-primary-600 dark:text-primary-400 font-medium">Active</span>
+                            </button>
+                            <button type="button" @click="activeWorkspace = 'hr-portal'; workspacesOpen = false" class="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 text-xs text-slate-700 dark:text-slate-200">
+                                <span class="font-medium truncate">HR & Payroll Portal</span>
+                            </button>
+                            <button type="button" @click="activeWorkspace = 'sales-crm'; workspacesOpen = false" class="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 text-xs text-slate-700 dark:text-slate-200">
+                                <span class="font-medium truncate">CRM & Global Sales</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Desktop Collapse Toggle Button -->
+            <button @click="isCollapsed = !isCollapsed" 
+                    type="button"
+                    class="hidden lg:flex items-center justify-center w-7 h-7 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    :title="isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'">
+                <svg class="w-4 h-4 transition-transform duration-200" :class="isCollapsed ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+            </button>
+
+            <!-- Mobile Close Button -->
+            <button @click="mobileOpen = false" 
+                    type="button"
+                    class="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg focus:outline-none"
+                    aria-label="Close Mobile Navigation">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- 2. Search Trigger -->
+        <div class="p-3 border-b border-slate-100 dark:border-slate-800/80">
+            <button @click="$dispatch('open-command-palette')"
+                    type="button"
+                    class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-200/70 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    :class="isCollapsed ? 'justify-center px-0' : ''"
+                    title="Search or jump to (Ctrl+K)">
+                <svg class="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <span x-show="!isCollapsed" class="flex-1 text-left truncate" x-cloak>Quick Search...</span>
+                <kbd x-show="!isCollapsed" class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-2xs" x-cloak>⌘K</kbd>
+            </button>
+        </div>
+
+        <!-- 3. Navigation List -->
+        <div class="flex-1 overflow-y-auto px-2 py-3 space-y-4 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+
+            <!-- Favorites Group -->
+            <div x-show="favorites.length > 0 && !isCollapsed">
+                <div class="px-2 mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    <span>Favorites</span>
+                </div>
+                <ul class="space-y-0.5">
+                    <template x-if="favorites.includes('dashboard')">
+                        <li>
+                            <a href="/admin/dashboard/" 
+                               class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white transition-colors group">
+                                <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                </svg>
+                                <span class="truncate">Executive Dashboard</span>
+                            </a>
+                        </li>
+                    </template>
+                    <template x-if="favorites.includes('attendance')">
+                        <li>
+                            <a href="/staff/attendance/" 
+                               class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white transition-colors group">
+                                <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                </svg>
+                                <span class="truncate">Live Attendance</span>
+                            </a>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+
+            <!-- Core Apps Group -->
+            <div>
+                <div x-show="!isCollapsed" class="px-2 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500" x-cloak>
+                    Core ERP
+                </div>
+
+                <ul class="space-y-1">
+                    <!-- Dashboard Item (Active State Demo) -->
+                    <li>
+                        <a href="/admin/" 
+                           class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-150 group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
+                                  {% if active_href == '/admin/' %} bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 font-semibold {% else %} text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white {% endif %}"
+                           :class="isCollapsed ? 'justify-center px-0' : ''"
+                           title="Dashboard">
+                            <svg class="w-4 h-4 flex-shrink-0 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                            <span x-show="!isCollapsed" class="truncate flex-1" x-cloak>Dashboard</span>
+                            <span x-show="!isCollapsed" class="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-primary-100 dark:bg-primary-900/80 text-primary-700 dark:text-primary-300" x-cloak>v2</span>
+                        </a>
+                    </li>
+
+                    <!-- Employees / HR (Nested Submenu Demo) -->
+                    <li data-permission="hr.view_employees">
+                        <button @click="toggleMenu('hr')"
+                                type="button"
+                                class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                                :class="isCollapsed ? 'justify-center px-0' : ''"
+                                title="HR & Attendance">
+                            <svg class="w-4 h-4 flex-shrink-0 text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-slate-200 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                            <span x-show="!isCollapsed" class="truncate flex-1 text-left" x-cloak>HR & Employees</span>
+                            <svg x-show="!isCollapsed" 
+                                 class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200" 
+                                 :class="openMenus['hr'] ? 'rotate-90' : ''"
+                                 fill="none" viewBox="0 0 24 24" stroke="currentColor" x-cloak>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
+
+                        <!-- Nested Submenu -->
+                        <div x-show="openMenus['hr'] && !isCollapsed" 
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             class="pl-7 pr-2 py-1 space-y-1"
+                             x-cloak>
+                            <a href="/employees/" class="block px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/50 transition-colors">All Employees</a>
+                            <a href="/staff/attendance/" class="block px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/50 transition-colors">Attendance Logs</a>
+                            <a href="/admin/reports/add_leave/" class="block px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/50 transition-colors">Leave Requests</a>
+                        </div>
+                    </li>
+
+                    <!-- Projects & Tasks -->
+                    <li>
+                        <a href="/projects/" 
+                           class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                           :class="isCollapsed ? 'justify-center px-0' : ''"
+                           title="Projects & Tasks">
+                            <svg class="w-4 h-4 flex-shrink-0 text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-slate-200 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span x-show="!isCollapsed" class="truncate flex-1" x-cloak>Projects & Tasks</span>
+                            <span x-show="!isCollapsed" class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" x-cloak>8 Active</span>
+                        </a>
+                    </li>
+
+                    <!-- Finance & Accounting -->
+                    <li data-permission="finance.view_ledger">
+                        <button @click="toggleMenu('finance')"
+                                type="button"
+                                class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                                :class="isCollapsed ? 'justify-center px-0' : ''"
+                                title="Finance & Ledger">
+                            <svg class="w-4 h-4 flex-shrink-0 text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-slate-200 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span x-show="!isCollapsed" class="truncate flex-1 text-left" x-cloak>Finance & Payroll</span>
+                            <svg x-show="!isCollapsed" 
+                                 class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200" 
+                                 :class="openMenus['finance'] ? 'rotate-90' : ''"
+                                 fill="none" viewBox="0 0 24 24" stroke="currentColor" x-cloak>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
+
+                        <div x-show="openMenus['finance'] && !isCollapsed" class="pl-7 pr-2 py-1 space-y-1" x-cloak>
+                            <a href="/finance/invoices/" class="block px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/50 transition-colors">Invoices & Billing</a>
+                            <a href="/finance/payroll/" class="block px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/50 transition-colors">Payroll Disbursal</a>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Recent Items Group -->
+            <div x-show="!isCollapsed" x-cloak>
+                <div class="px-2 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Recent Activity
+                </div>
+                <ul class="space-y-0.5">
+                    <li>
+                        <a href="#" class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors">
+                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            <span class="truncate">July Payroll Sheet #1042</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors">
+                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            <span class="truncate">Employee Attendance Audit</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 4. User Profile & Settings Footer -->
+        <div class="p-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50">
+            <div class="flex items-center gap-3" :class="isCollapsed ? 'justify-center' : ''">
+                <!-- User Avatar -->
+                <div class="relative flex-shrink-0">
+                    <div class="w-8 h-8 rounded-full bg-primary-600 text-white flex items-center justify-center font-semibold text-xs ring-2 ring-white dark:ring-slate-800">
+                        {{ user.username|default:"US"|slice:":2"|upper }}
+                    </div>
+                    <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
+                </div>
+
+                <!-- User Info (Hidden when collapsed) -->
+                <div x-show="!isCollapsed" class="flex-1 min-w-0" x-cloak>
+                    <p class="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate leading-tight">
+                        {{ user.get_full_name|default:user.username|default:"Enterprise Admin" }}
+                    </p>
+                    <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate leading-tight">
+                        {{ user.email|default:"admin@issl.com" }}
+                    </p>
+                </div>
+
+                <!-- Settings Action -->
+                <a x-show="!isCollapsed" 
+                   href="/admin_panel/" 
+                   class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                   title="System Settings"
+                   x-cloak>
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+</div>

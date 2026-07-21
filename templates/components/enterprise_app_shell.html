@@ -1,0 +1,273 @@
+{% comment %}
+  Enterprise App Shell Layout Component
+  Goal: Reusable main application layout following Meta Business Suite & Linear design philosophy.
+  Includes:
+    - Left Sidebar (includes enterprise_sidebar.html)
+    - Top Header (breadcrumbs, quick search, notifications trigger, theme toggle, profile menu)
+    - Workspace (main content slot)
+    - Right Drawer Placeholder (contextual panels / slide-overs)
+    - Notification Panel Placeholder (slide-over tray)
+    - Command Palette Modal Placeholder (Ctrl+K overlay)
+{% endcomment %}
+
+<!DOCTYPE html>
+<html lang="{{ request.LANGUAGE_CODE|default:'en' }}" 
+      dir="{% if request.LANGUAGE_CODE == 'ar' or request.LANGUAGE_CODE == 'he' %}rtl{% else %}ltr{% endif %}" 
+      class="h-full font-sans antialiased">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Enterprise Platform{% endblock %}</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS Assets -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body class="h-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 selection:bg-primary-500 selection:text-white"
+      x-data="{
+          sidebarCollapsed: false,
+          mobileSidebarOpen: false,
+          notificationsOpen: false,
+          rightDrawerOpen: false,
+          commandPaletteOpen: false,
+          darkMode: localStorage.getItem('theme') === 'dark',
+          toggleTheme() {
+              this.darkMode = !this.darkMode;
+              localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');
+              if (this.darkMode) {
+                  document.documentElement.classList.add('dark');
+              } else {
+                  document.documentElement.classList.remove('dark');
+              }
+          }
+      }"
+      x-init="
+          if (darkMode || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+              document.documentElement.classList.add('dark');
+              darkMode = true;
+          } else {
+              document.documentElement.classList.remove('dark');
+              darkMode = false;
+          }
+      "
+      @open-command-palette.window="commandPaletteOpen = true"
+      @open-notifications.window="notificationsOpen = true"
+      @open-right-drawer.window="rightDrawerOpen = true">
+
+    <div class="min-h-full flex flex-col">
+
+        <!-- 1. LEFT SIDEBAR COMPONENT -->
+        {% include "components/enterprise_sidebar.html" %}
+
+        <!-- MAIN LAYOUT CONTAINER (Adjusts margin based on sidebar state) -->
+        <div class="flex-1 flex flex-col transition-all duration-200 ease-in-out lg:pl-64 rtl:lg:pl-0 rtl:lg:pr-64"
+             :class="sidebarCollapsed ? 'lg:pl-16 rtl:lg:pr-16' : 'lg:pl-64 rtl:lg:pr-64'">
+
+            <!-- 2. TOP HEADER -->
+            <header class="sticky top-0 z-30 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between gap-4">
+                
+                <!-- Left Header: Mobile Toggle & Breadcrumbs -->
+                <div class="flex items-center gap-3 min-w-0">
+                    <!-- Mobile Sidebar Trigger -->
+                    <button @click="$dispatch('toggle-mobile-sidebar')" 
+                            type="button"
+                            class="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none"
+                            aria-label="Open Mobile Menu">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+
+                    <!-- Breadcrumbs Placeholder -->
+                    <nav class="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+                        <a href="/admin/" class="hover:text-slate-900 dark:hover:text-slate-100 transition-colors">Enterprise</a>
+                        <svg class="w-3.5 h-3.5 text-slate-400 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        {% block breadcrumb %}
+                        <span class="text-slate-900 dark:text-slate-100 font-semibold truncate">Overview</span>
+                        {% endblock %}
+                    </nav>
+                </div>
+
+                <!-- Right Header: Actions, Notifications & User Settings -->
+                <div class="flex items-center gap-2 sm:gap-3">
+                    
+                    <!-- Command Palette Button Trigger -->
+                    <button @click="commandPaletteOpen = true"
+                            type="button"
+                            class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-medium hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
+                        <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <span>Search</span>
+                        <kbd class="px-1.5 py-0.5 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">⌘K</kbd>
+                    </button>
+
+                    <!-- Theme Toggle Button -->
+                    <button @click="toggleTheme()" 
+                            type="button"
+                            class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                            title="Toggle Dark Mode">
+                        <svg x-show="!darkMode" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                        <svg x-show="darkMode" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" x-cloak>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                    </button>
+
+                    <!-- Notifications Drawer Trigger -->
+                    <button @click="notificationsOpen = true"
+                            type="button"
+                            class="relative p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                            aria-label="Open Notifications">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
+                    </button>
+
+                    <!-- Right Drawer Trigger Button -->
+                    <button @click="rightDrawerOpen = true"
+                            type="button"
+                            class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                            aria-label="Toggle Side Drawer">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 3. MAIN WORKSPACE CONTENT -->
+            <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+                {% block content %}
+                <!-- Default Workspace Empty State / Placeholder -->
+                <div class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
+                    <div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-4">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">Enterprise Workspace Ready</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mb-6">This layout shell provides responsive navigation, dark mode, right drawers, and command palette integration for all module pages.</p>
+                </div>
+                {% endblock %}
+            </main>
+
+            <!-- Workspace Footer -->
+            <footer class="border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4 text-xs text-slate-500 dark:text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <p>&copy; 2026 Intelligent Systems and Solutions Ltd. All rights reserved.</p>
+                <div class="flex items-center gap-4 text-slate-400">
+                    <a href="#" class="hover:text-slate-600 dark:hover:text-slate-300">Privacy</a>
+                    <a href="#" class="hover:text-slate-600 dark:hover:text-slate-300">Terms</a>
+                    <a href="#" class="hover:text-slate-600 dark:hover:text-slate-300">Support</a>
+                </div>
+            </footer>
+        </div>
+
+        <!-- 4. RIGHT DRAWER PLACEHOLDER (Slide-over) -->
+        <div x-show="rightDrawerOpen"
+             x-transition:enter="transition ease-in-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in-out duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 z-50 overflow-hidden"
+             x-cloak>
+            <div @click="rightDrawerOpen = false" class="absolute inset-0 bg-slate-900/50 backdrop-blur-xs"></div>
+            <div class="fixed inset-y-0 right-0 max-w-full flex pl-10 rtl:pr-10 rtl:pl-0">
+                <div x-show="rightDrawerOpen"
+                     x-transition:enter="transform transition ease-in-out duration-200"
+                     x-transition:enter-start="translate-x-full rtl:-translate-x-full"
+                     x-transition:enter-end="translate-x-0"
+                     x-transition:leave="transform transition ease-in-out duration-200"
+                     x-transition:leave-start="translate-x-0"
+                     x-transition:leave-end="translate-x-full rtl:-translate-x-full"
+                     class="w-screen max-w-md bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Contextual Drawer</h3>
+                        <button @click="rightDrawerOpen = false" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div class="flex-1 p-4 overflow-y-auto text-xs text-slate-500 dark:text-slate-400">
+                        <p>Right drawer placeholder slot for quick inspection, user details, or filter configuration.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. NOTIFICATION PANEL PLACEHOLDER -->
+        <div x-show="notificationsOpen"
+             x-transition:enter="transition ease-in-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in-out duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 z-50 overflow-hidden"
+             x-cloak>
+            <div @click="notificationsOpen = false" class="absolute inset-0 bg-slate-900/50 backdrop-blur-xs"></div>
+            <div class="fixed inset-y-0 right-0 max-w-full flex pl-10 rtl:pr-10 rtl:pl-0">
+                <div x-show="notificationsOpen"
+                     x-transition:enter="transform transition ease-in-out duration-200"
+                     x-transition:enter-start="translate-x-full rtl:-translate-x-full"
+                     x-transition:enter-end="translate-x-0"
+                     x-transition:leave="transform transition ease-in-out duration-200"
+                     x-transition:leave-start="translate-x-0"
+                     x-transition:leave-end="translate-x-full rtl:-translate-x-full"
+                     class="w-screen max-w-sm bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
+                    <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</h3>
+                        <button @click="notificationsOpen = false" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div class="flex-1 p-4 overflow-y-auto space-y-3">
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
+                            <p class="font-semibold text-slate-900 dark:text-slate-100">System Notification</p>
+                            <p class="text-slate-500 dark:text-slate-400 mt-0.5">Enterprise layout shell active.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. COMMAND PALETTE MODAL PLACEHOLDER -->
+        <div x-show="commandPaletteOpen"
+             x-transition:enter="transition ease-out duration-150"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-100"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="fixed inset-0 z-50 p-4 sm:p-6 md:p-20 flex items-start justify-center overflow-y-auto"
+             x-cloak>
+            <div @click="commandPaletteOpen = false" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"></div>
+            <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden z-10">
+                <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input type="text" placeholder="Type a command or search..." class="w-full bg-transparent border-0 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-0">
+                    <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 rounded">ESC</kbd>
+                </div>
+                <div class="p-4 max-h-64 overflow-y-auto text-xs text-slate-500 dark:text-slate-400">
+                    <p>Command palette placeholder for global actions & instant page search.</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
