@@ -90,12 +90,12 @@
         {% endif %}
 
         {% if expense.status != 'pending' %}
-        <div class="border-t border-gray-150 pt-4 bg-gray-50/50 -mx-6 -mb-6 p-6 space-y-4">
-            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Review Info</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl border border-gray-150 p-6 shadow-sm space-y-4">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Review Information</h3>
+            <div class="grid grid-cols-2 gap-4">
                 <div>
                     <p class="text-[11px] text-gray-400 font-bold uppercase">Reviewed By</p>
-                    <p class="text-sm font-semibold text-gray-800 mt-0.5">{{ expense.reviewed_by.get_full_name|default:expense.reviewed_by.email }}</p>
+                    <p class="text-sm font-semibold text-gray-800 mt-0.5">{{ expense.reviewed_by.get_full_name|default:expense.reviewed_by.email|default:"Manager" }}</p>
                 </div>
                 <div>
                     <p class="text-[11px] text-gray-400 font-bold uppercase">Date Reviewed</p>
@@ -109,6 +109,8 @@
                     "{{ expense.rejection_reason }}"
                 </div>
             </div>
+            {% endif %}
+        </div>
         {% endif %}
     </div>
 </div>
