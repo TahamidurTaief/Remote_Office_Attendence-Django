@@ -277,7 +277,7 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Live Attendance</span>
           </a>
-          <a href="{% url 'admin_panel:attendance_list' %}" class="ft-nav-item {% if '/admin-panel/attendance/' in path %}active{% endif %}" x-show="matchSearch('Attendance Logs')">
+          <a href="{% url 'admin_panel:attendance_list' %}" class="ft-nav-item {% if path == '/admin-panel/attendance/' or '/admin-panel/attendance/' in path and '/manual' not in path %}active{% endif %}" x-show="matchSearch('Attendance Logs')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Attendance Logs</span>
           </a>
