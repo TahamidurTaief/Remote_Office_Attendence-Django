@@ -1,0 +1,33 @@
+{% comment %} c-loading-spinner component
+   Simple CSS spinner using the ft-spinner design token classes.
+   Props:
+   - size: sm | md (default) | lg
+   - label: accessible screen-reader label (default: "Loading...")
+   - color: primary (default) | success | danger | warning | muted
+   - center: true = wrap in flex centering container (default: false)
+   - extra_class: additional classes
+
+   Usage:
+     <c-loading-spinner />
+     <c-loading-spinner size="lg" center="true" label="Loading employees..." />
+{% endcomment %}
+
+{% if center == "true" %}
+<div class="flex items-center justify-center {{ extra_class }}" aria-busy="true">
+{% endif %}
+
+<span class="ft-spinner ft-spinner-{{ size|default:'md' }} {{ extra_class }}"
+      role="status"
+      aria-label="{{ label|default:'Loading...' }}"
+      style="
+        {% if color == 'success' %}border-top-color: var(--success);
+        {% elif color == 'danger' %}border-top-color: var(--danger);
+        {% elif color == 'warning' %}border-top-color: var(--warning);
+        {% elif color == 'muted' %}border-top-color: var(--text-muted);
+        {% else %}border-top-color: var(--primary);{% endif %}
+      ">
+</span>
+
+{% if center == "true" %}
+</div>
+{% endif %}

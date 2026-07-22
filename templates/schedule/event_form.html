@@ -107,9 +107,9 @@
 
             <!-- Assigned Employees -->
             <div>
-                <label for="{{ form.assigned_to.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Assign Employees (optional)</label>
-                {{ form.assigned_to }}
-                <span class="text-[10px] text-gray-400 mt-1 block">Hold Ctrl (or Cmd on Mac) to select multiple employees.</span>
+                <c-employee-picker label="Assign Employees (optional)">
+                    {{ form.assigned_to }}
+                </c-employee-picker>
                 {% if form.assigned_to.errors %}
                 <p class="text-red-600 text-[11px] mt-1">{{ form.assigned_to.errors.as_text }}</p>
                 {% endif %}

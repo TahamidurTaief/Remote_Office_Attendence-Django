@@ -376,6 +376,28 @@ def attendance_status(request):
                 'type': s.type,
             })
 
+        # If requested directly in browser (HTML page request)
+        accept_header = request.headers.get('accept', '')
+        is_html_request = ('text/html' in accept_header or 'application/xhtml+xml' in accept_header) and not request.headers.get('x-requested-with') == 'XMLHttpRequest' and request.GET.get('format') != 'json'
+
+        if is_html_request:
+            from django.shortcuts import render
+            recent_locations = AttendanceLocation.objects.filter(
+                attendance__employee=employee,
+                attendance__date=today
+            ).order_by('-timestamp')[:10]
+
+            branch = employee.branch
+            context = {
+                'employee': employee,
+                'active_session': active,
+                'sessions_today': all_sessions,
+                'tracking_interval': employee.tracking_interval,
+                'recent_locations': recent_locations,
+                'branch': branch,
+            }
+            return render(request, 'attendance/status.html', context)
+
         return JsonResponse({
             'success': True,
             'has_active_session': active is not None,

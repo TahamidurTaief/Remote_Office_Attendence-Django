@@ -1,0 +1,52 @@
+{% comment %} c-breadcrumb component
+   Simple breadcrumb navigation.
+   Props:
+   - items: list of dicts passed as JSON-like string (use slot pattern instead — see below)
+   - separator: separator char/icon (default: /)
+   - extra_class: additional classes
+   Slot: default — sequence of <c-breadcrumb-item> components or raw <a>/<span> elements.
+
+   Usage:
+     <c-breadcrumb>
+       <a href="/" class="ft-breadcrumb-link">Home</a>
+       <a href="/projects/" class="ft-breadcrumb-link">Projects</a>
+       <span class="ft-breadcrumb-current">Alpha Project</span>
+     </c-breadcrumb>
+
+   Or supply items prop for auto-rendering:
+     <c-breadcrumb home_href="/" home_label="Home"
+                   page1_href="/projects/" page1_label="Projects"
+                   current="Alpha Project" />
+{% endcomment %}
+
+<nav aria-label="Breadcrumb" class="ft-breadcrumb {{ extra_class }}">
+
+  {# Auto-render up to 3 ancestor links when props provided #}
+  {% if home_href or home_label %}
+  <a href="{{ home_href|default:'/' }}" class="ft-breadcrumb-link">
+    {% if home_icon %}<i data-lucide="{{ home_icon }}" class="w-3.5 h-3.5"></i>{% endif %}
+    {{ home_label|default:'Home' }}
+  </a>
+  <span class="ft-breadcrumb-sep" aria-hidden="true">
+    {{ separator|default:'/' }}
+  </span>
+  {% endif %}
+
+  {% if page1_href %}
+  <a href="{{ page1_href }}" class="ft-breadcrumb-link">{{ page1_label }}</a>
+  <span class="ft-breadcrumb-sep" aria-hidden="true">{{ separator|default:'/' }}</span>
+  {% endif %}
+
+  {% if page2_href %}
+  <a href="{{ page2_href }}" class="ft-breadcrumb-link">{{ page2_label }}</a>
+  <span class="ft-breadcrumb-sep" aria-hidden="true">{{ separator|default:'/' }}</span>
+  {% endif %}
+
+  {% if current %}
+  <span class="ft-breadcrumb-current" aria-current="page">{{ current }}</span>
+  {% endif %}
+
+  {# Slot-based usage (fully custom) #}
+  {% if slot %}{{ slot }}{% endif %}
+
+</nav>

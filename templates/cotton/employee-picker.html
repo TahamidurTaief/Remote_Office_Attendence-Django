@@ -1,0 +1,215 @@
+{% comment %} c-employee-picker component
+   Ultra-minimal multi-employee selector with modal picker.
+   Syncs seamlessly with underlying hidden Django <select multiple>.
+   Props:
+   - label: field label (default: "Assigned Employees")
+   - name: field name (default: "assigned_to")
+   Slots:
+   - slot: raw <select> from Django form
+{% endcomment %}
+
+<div x-data="{
+       open: false,
+       search: '',
+       selectedIds: [],
+       options: [],
+
+       getSelect() {
+         const wrapper = this.$refs.rawSelect || this.$el;
+         if (wrapper && wrapper.tagName === 'SELECT') return wrapper;
+         return wrapper ? wrapper.querySelector('select') : null;
+       },
+
+       parseOptions() {
+         const sel = this.getSelect();
+         if (!sel) return;
+         sel.style.display = 'none';
+         this.options = Array.from(sel.options || [])
+           .filter(opt => opt.value)
+           .map(opt => ({
+             id: String(opt.value),
+             label: opt.text.trim(),
+             selected: opt.selected
+           }));
+         this.selectedIds = this.options.filter(o => o.selected).map(o => o.id);
+       },
+
+       init() {
+         this.$nextTick(() => this.parseOptions());
+         setTimeout(() => {
+           if (this.options.length === 0) this.parseOptions();
+         }, 150);
+       },
+
+       toggleEmployee(id) {
+         id = String(id);
+         if (this.selectedIds.includes(id)) {
+           this.selectedIds = this.selectedIds.filter(i => i !== id);
+         } else {
+           this.selectedIds.push(id);
+         }
+         this.syncSelect();
+       },
+
+       removeEmployee(id) {
+         id = String(id);
+         this.selectedIds = this.selectedIds.filter(i => i !== id);
+         this.syncSelect();
+       },
+
+       syncSelect() {
+         const sel = this.getSelect();
+         if (!sel) return;
+         Array.from(sel.options || []).forEach(opt => {
+           opt.selected = this.selectedIds.includes(String(opt.value));
+         });
+         sel.dispatchEvent(new Event('change', { bubbles: true }));
+       },
+
+       get filteredOptions() {
+         if (!this.search) return this.options;
+         const q = this.search.toLowerCase();
+         return this.options.filter(o => o.label.toLowerCase().includes(q));
+       },
+
+       get selectedObjects() {
+         return this.options.filter(o => this.selectedIds.includes(o.id));
+       }
+     }"
+     class="space-y-2">
+
+  {# Label & Add Employee Text Button (0 padding) #}
+  <div class="flex items-center justify-between">
+    <label class="ft-label mb-0" style="margin-bottom:0">{{ label|default:"Assign Employees" }}</label>
+    <button type="button"
+            @click="parseOptions(); open = true; search = ''; $nextTick(() => $refs.searchInput?.focus())"
+            class="text-[12px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer transition-all"
+            style="padding: 0 !important; background: transparent !important; border: none !important;">
+      <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+      Add Employee
+    </button>
+  </div>
+
+  {# Raw select slot (hidden visually, stays in DOM for Django form POST) #}
+  <div class="hidden" x-ref="rawSelect">
+    {{ slot }}
+  </div>
+
+  {# Selected Employees Chips Container #}
+  <div class="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-white border border-gray-200 rounded-[4px] items-center"
+       style="border-color: #E4E6EB;">
+    
+    <template x-for="emp in selectedObjects" :key="emp.id">
+      <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-primary-50 text-primary-700 text-[11px] font-medium rounded border border-primary-100 transition-all">
+        <span class="w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center shrink-0"
+              x-text="emp.label.charAt(0).toUpperCase()"></span>
+        <span x-text="emp.label" class="truncate max-w-[180px]"></span>
+        <button type="button"
+                @click.stop="removeEmployee(emp.id)"
+                class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-primary-200 text-primary-600 transition-colors"
+                style="padding:0; border:none; background:transparent">
+          <i data-lucide="x" class="w-2.5 h-2.5"></i>
+        </button>
+      </span>
+    </template>
+
+    <template x-if="selectedObjects.length === 0">
+      <span class="text-[11px] text-gray-400 italic">No employees assigned yet. Click "Add Employee" above.</span>
+    </template>
+  </div>
+
+  {# Ultra Minimal Selection Modal #}
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       @click="open = false"
+       @keydown.escape.window="open = false"
+       class="fixed inset-0 z-[250] flex items-center justify-center p-4"
+       style="background: rgba(15, 20, 35, 0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);"
+       x-cloak>
+
+    <div class="w-full bg-white overflow-hidden flex flex-col max-h-[85vh]"
+         style="max-width: 460px; border-radius: 10px; box-shadow: 0 16px 56px rgba(24,119,242,0.14), 0 2px 16px rgba(0,0,0,0.06); border: none;"
+         @click.stop
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+
+      {# Modal Header & Search #}
+      <div class="p-4 border-b space-y-3" style="border-color: rgba(228,230,235,0.6)">
+        <div class="flex items-center justify-between">
+          <h3 class="text-[13px] font-bold text-gray-900 flex items-center gap-2">
+            <i data-lucide="users" class="w-4 h-4 text-primary"></i>
+            Select Employees
+          </h3>
+          <button type="button" @click="open = false"
+                  class="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
+                  style="border:none; background:transparent">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        {# Minimal Search Input #}
+        <div class="relative flex items-center">
+          <i data-lucide="search" class="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none"></i>
+          <input type="text"
+                 x-ref="searchInput"
+                 x-model="search"
+                 placeholder="Search by name or ID…"
+                 class="ft-search-input w-full text-[12px]"
+                 style="padding-left: 28px">
+        </div>
+      </div>
+
+      {# Options List #}
+      <div class="p-2 overflow-y-auto flex-1 max-h-72 space-y-1 scrollbar-hide">
+        <template x-for="emp in filteredOptions" :key="emp.id">
+          <div @click="toggleEmployee(emp.id)"
+               class="flex items-center justify-between p-2.5 rounded-md cursor-pointer transition-colors"
+               :class="selectedIds.includes(emp.id) ? 'bg-primary-50 text-primary-700 font-semibold' : 'hover:bg-gray-50 text-gray-700'">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                   :class="selectedIds.includes(emp.id) ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'"
+                   x-text="emp.label.charAt(0).toUpperCase()"></div>
+              <span class="text-[12px] truncate" x-text="emp.label"></span>
+            </div>
+
+            <div class="w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
+                 :class="selectedIds.includes(emp.id) ? 'bg-primary border-primary text-white' : 'border-gray-300 bg-white'">
+              <template x-if="selectedIds.includes(emp.id)">
+                <i data-lucide="check" class="w-3 h-3"></i>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="filteredOptions.length === 0">
+          <div class="py-8 text-center text-[12px] text-gray-400">
+            No employees match "<span x-text="search"></span>"
+          </div>
+        </template>
+      </div>
+
+      {# Footer #}
+      <div class="p-3 border-t bg-gray-50/50 flex items-center justify-between shrink-0"
+           style="border-color: rgba(228,230,235,0.6)">
+        <span class="text-[11px] text-gray-500 font-medium">
+          <span x-text="selectedIds.length"></span> selected
+        </span>
+        <button type="button"
+                @click="open = false"
+                class="ft-btn ft-btn-primary ft-btn-sm">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>

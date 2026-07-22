@@ -1,0 +1,23 @@
+{% comment %} c-accordion component
+   Alpine-driven collapsible accordion. Single or multi-open modes.
+   Props:
+   - multi: true = allow multiple sections open simultaneously (default: false — single open)
+   - extra_class: additional classes on wrapper
+
+   Slot: sequence of <c-accordion-item> components
+
+   Usage:
+     <c-accordion>
+       <c-accordion-item title="What is FieldTrack?">
+         FieldTrack is an attendance and HR management system...
+       </c-accordion-item>
+       <c-accordion-item title="How do I clock in?">
+         Use the Check-In button on the dashboard...
+       </c-accordion-item>
+     </c-accordion>
+{% endcomment %}
+
+<div class="ft-accordion {{ extra_class }}"
+     x-data="{ active: null, multi: {% if multi == 'true' %}true{% else %}false{% endif %} }">
+  {{ slot }}
+</div>

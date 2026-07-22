@@ -1,0 +1,21 @@
+{% comment %} c-timeline component
+   Vertical timeline for activity feeds and audit logs.
+   Rebuilt cleanly from the universal_timeline.html legacy pattern.
+   Props:
+   - extra_class: additional classes on wrapper
+   Slot: sequence of <c-timeline-item> components
+
+   Usage:
+     <c-timeline>
+       <c-timeline-item title="Check-In" meta="Today, 9:02 AM" dot="success">
+         John Doe checked in from Branch A.
+       </c-timeline-item>
+       <c-timeline-item title="Leave Approved" meta="Yesterday" dot="primary">
+         Annual leave 2 days approved by Manager.
+       </c-timeline-item>
+     </c-timeline>
+{% endcomment %}
+
+<div class="ft-timeline {{ extra_class }}" role="list">
+  {{ slot }}
+</div>

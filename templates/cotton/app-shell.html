@@ -132,25 +132,25 @@
     window.showToast = (message, type = 'info') =>
       window.dispatchEvent(new CustomEvent('new-toast', { detail: { message, type } }));
 
-    // Sound on nav/button clicks
+    // Universal sound effect on all buttons, links & interactive controls
     document.addEventListener('click', e => {
-      const t = e.target.closest('button, a');
+      const t = e.target.closest('button, a, input[type=submit], input[type=button], [role=button], .ft-btn, .ft-nav-item, .ft-topbar-icon, .ft-page-btn, summary, [onclick], [hx-get], [hx-post]');
       if (!t) return;
-      const isNav = t.closest('.ft-nav-item') || t.closest('#ft-sidebar');
-      const cls = String(t.className || '');
-      const isBtn = t.tagName === 'BUTTON' || cls.includes('ft-btn') || t.type === 'submit';
-      if (isNav || isBtn) {
+
+      if (window.SoundFX) {
         SoundFX.playClick();
-        const isLink = t.tagName === 'A' && t.href && !t.href.startsWith('#') &&
-                       !t.href.includes('javascript:') && !t.getAttribute('target') &&
-                       !t.hasAttribute('hx-get') && !t.hasAttribute('hx-post');
-        if (isLink) {
-          e.preventDefault();
-          const href = t.href;
-          setTimeout(() => { window.location.href = href; }, 100);
-        }
       }
-    });
+
+      // For standard link navigation, delay 80ms to let audio chime play before unload
+      if (t.tagName === 'A' && t.href && !t.href.startsWith('#') &&
+          !t.href.includes('javascript:') && !t.getAttribute('target') &&
+          !t.hasAttribute('hx-get') && !t.hasAttribute('hx-post') &&
+          !t.getAttribute('download') && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const href = t.href;
+        e.preventDefault();
+        setTimeout(() => { window.location.href = href; }, 80);
+      }
+    }, true);
   </script>
 
   <style>
@@ -178,17 +178,21 @@
   {# ── Main area ──────────────────────────────────────────────────────── #}
   <div id="ft-main-content" class="ft-main flex flex-col min-h-screen transition-all duration-220">
 
-    {# ── Topbar ──────────────────────────────────────────────────────── #}
+    {# ── Topbar (fixed & uniform across every page) ───────────────────── #}
     {% if topbar %}{{ topbar }}{% else %}
-      <c-topbar title="{{ page_title }}">
-        <c-slot name="topbar_actions">
-          {{ topbar_actions }}
-        </c-slot>
-      </c-topbar>
+      <c-topbar title="{{ page_title }}" />
     {% endif %}
 
     {# ── Page content ────────────────────────────────────────────────── #}
     <main class="flex-1 flex flex-col p-4 overflow-y-auto">
+      {% if topbar_actions %}
+      <div class="flex items-center justify-between gap-3 mb-4 pb-2 border-b" style="border-color:var(--border)">
+        <h2 class="text-[16px] font-bold" style="color:var(--text)">{{ page_title }}</h2>
+        <div class="flex items-center gap-2 flex-wrap">
+          {{ topbar_actions }}
+        </div>
+      </div>
+      {% endif %}
       <div class="flex-1">
         {{ slot }}
       </div>

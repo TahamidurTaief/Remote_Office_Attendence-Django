@@ -1,95 +1,186 @@
 {% load leave_extras %}
 <c-app-shell page_title="Employee Leave Balances | FieldTrack Admin" active_href="{{ request.path }}">
-<div class="p-4 max-w-7xl mx-auto">
+<div class="p-6 max-w-7xl mx-auto space-y-6">
+
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-            <h1 class="text-[14px] font-semibold text-gray-900">Employee Leave Balances</h1>
-            <p class="text-sm text-gray-500 mt-1">Directory of employee leave limits, usage, and remaining allowances.</p>
+            <h1 class="text-[18px] font-bold text-gray-900">Employee Leave Balances</h1>
+            <p class="text-[12px] text-gray-500 mt-0.5">Directory of employee leave limits, usage, and remaining allowances.</p>
         </div>
         <div class="flex items-center gap-3">
             <!-- Year Selector Form -->
             <form method="GET" class="flex items-center gap-2">
-                <label class="text-xs font-semibold text-gray-500 uppercase">Year:</label>
-                <select name="year" onchange="this.form.submit()" class="px-3 py-2 border border-gray-150 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <label class="text-[11px] font-semibold text-gray-500 uppercase">Year:</label>
+                <select name="year" onchange="this.form.submit()" class="ft-select text-[12px]">
                     {% for y in available_years %}
                     <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
                     {% endfor %}
                 </select>
             </form>
-            <a href="{% url 'leave:admin_dashboard' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors bg-white">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                Requests Dashboard
-            </a>
+            <c-button href="{% url 'leave:admin_dashboard' %}" variant="secondary" icon="arrow-left" label="Requests Dashboard" size="md" />
         </div>
     </div>
 
-    <!-- Employee Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for emp in employees %}
-        <div class="bg-white rounded-2xl border border-gray-150 shadow-sm p-6 hover:shadow-sm transition-shadow flex flex-col justify-between">
-            <div>
-                <!-- Employee Card Header -->
-                <div class="flex items-center gap-3 border-b border-gray-100 pb-4 mb-4">
-                    {% if emp.profile_photo %}
-                    <img src="{{ emp.profile_photo.url }}" class="w-12 h-12 rounded-full object-cover bg-gray-100 border border-gray-150">
-                    {% else %}
-                    <div class="w-12 h-12 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-lg border border-primary-200/50">
-                        {{ emp.full_name|first|upper }}
-                    </div>
-                    {% endif %}
-                    <div class="min-w-0">
-                        <h3 class="font-bold text-gray-900 truncate">{{ emp.full_name }}</h3>
-                        <p class="text-xs text-gray-500 truncate">{{ emp.designation|default:"Staff" }} • {{ emp.employee_id }}</p>
-                    </div>
-                </div>
+    <!-- Employee Balances Cotton Table -->
+    <div class="ft-card overflow-hidden bg-white">
+        <table class="ft-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Total Leave Left</th>
+                    <th>Leave Allowances ({{ year }})</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                {% with total_left=emp.total_leave_left_by_year|dictget:year %}
+                <tr>
+                    <!-- Employee Cell (Clickable Name) -->
+                    <td>
+                        <div class="flex items-center gap-3 cursor-pointer group"
+                             @click="$dispatch('open-modal', {id: 'emp-modal-{{ emp.id }}'})">
+                            {% if emp.profile_photo %}
+                            <img src="{{ emp.profile_photo.url }}" class="w-8 h-8 rounded-full object-cover shrink-0">
+                            {% else %}
+                            <div class="w-8 h-8 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-[12px] shrink-0">
+                                {{ emp.full_name|first|upper }}
+                            </div>
+                            {% endif %}
+                            <div class="min-w-0">
+                                <p class="text-[13px] font-bold text-gray-900 group-hover:text-primary transition-colors truncate">
+                                    {{ emp.full_name }}
+                                </p>
+                                <p class="text-[11px] text-gray-500 truncate">
+                                    {{ emp.designation|default:"Staff" }} • {{ emp.employee_id }}
+                                </p>
+                            </div>
+                        </div>
+                    </td>
 
-                <!-- Balances Breakdown -->
-                <div class="space-y-4">
-                    {% with total_left=emp.total_leave_left_by_year|dictget:year %}
-                    <div class="flex justify-between items-center bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-150">
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Leave Left</span>
-                        <span class="text-sm font-black {% if total_left < 0 %}text-red-600{% else %}text-gray-900{% endif %}">
-                            {{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}
+                    <!-- Total Leave Left Badge -->
+                    <td>
+                        <span class="ft-badge {% if total_left < 0 %}ft-badge-danger{% else %}ft-badge-primary{% endif %}">
+                            {{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %} left
                         </span>
+                    </td>
+
+                    <!-- Leave Allowances Pills -->
+                    <td>
+                        <div class="flex flex-wrap gap-1.5">
+                            {% for balance in employee_balances|dictget:emp.id %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-gray-100 border border-gray-200 text-gray-700">
+                                <span class="font-semibold">{{ balance.type.name }}:</span>
+                                <span class="{% if balance.remaining < 0 %}text-red-600 font-bold{% else %}text-gray-900 font-medium{% endif %}">
+                                    {{ balance.remaining }}/{{ balance.total }}
+                                </span>
+                            </span>
+                            {% empty %}
+                            <span class="text-[11px] text-gray-400">None</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <button type="button"
+                                    @click="$dispatch('open-modal', {id: 'emp-modal-{{ emp.id }}'})"
+                                    class="ft-btn ft-btn-secondary ft-btn-sm">
+                                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                View Details
+                            </button>
+                            <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="ghost" icon="external-link" label="History" size="sm" />
+                        </div>
+                    </td>
+                </tr>
+                {% endwith %}
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="py-12 text-center text-gray-500">
+                        <div class="flex flex-col items-center justify-center gap-2">
+                            <i data-lucide="users" class="w-8 h-8 text-gray-300"></i>
+                            <p class="font-semibold text-gray-700 text-sm">No active employees found</p>
+                            <p class="text-[12px] text-gray-400">Add employees to the system first to manage their leaves.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+{# ── Employee Detail Modals (Cotton Component Modals) ─────────────────────── #}
+{% for emp in employees %}
+{% with total_left=emp.total_leave_left_by_year|dictget:year %}
+<c-modal id="emp-modal-{{ emp.id }}" title="{{ emp.full_name }} — Leave & Attendance Summary" size="lg">
+    <div class="space-y-5">
+
+        <!-- Employee Info Bar -->
+        <div class="flex items-center gap-4 p-4 rounded-card bg-gray-50 border border-gray-200">
+            {% if emp.profile_photo %}
+            <img src="{{ emp.profile_photo.url }}" class="w-12 h-12 rounded-full object-cover shrink-0">
+            {% else %}
+            <div class="w-12 h-12 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-lg shrink-0">
+                {{ emp.full_name|first|upper }}
+            </div>
+            {% endif %}
+            <div class="min-w-0 flex-1">
+                <h3 class="text-[15px] font-bold text-gray-900 truncate">{{ emp.full_name }}</h3>
+                <p class="text-[12px] text-primary font-semibold">{{ emp.employee_id }}</p>
+                <p class="text-[11px] text-gray-500 truncate mt-0.5">
+                    {{ emp.designation|default:"Staff" }} • {{ emp.department|default:"Unassigned" }} • Joined {{ emp.joined_date|date:"d/m/Y" }}
+                </p>
+            </div>
+            <div class="text-right shrink-0">
+                <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Total Leave Left</span>
+                <span class="text-[20px] font-extrabold {% if total_left < 0 %}text-red-600{% else %}text-gray-900{% endif %}">
+                    {{ total_left }} days
+                </span>
+            </div>
+        </div>
+
+        <!-- Leave Allowances Grid -->
+        <div>
+            <h4 class="text-[12px] font-bold text-gray-500 uppercase tracking-wider mb-3">Leave Allowances Breakdown ({{ year }})</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {% for balance in employee_balances|dictget:emp.id %}
+                <div class="p-3.5 rounded-card bg-white border border-gray-200 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[12px] font-bold text-gray-800">{{ balance.type.name }}</span>
+                        <span class="text-[11px] text-gray-500">{{ balance.used }} / {{ balance.total }} used</span>
                     </div>
-                    {% endwith %}
-                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Leave Allowances ({{ year }})</p>
-                    <div class="grid grid-cols-2 gap-3">
-                        {% for balance in employee_balances|dictget:emp.id %}
-                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                            <p class="text-xs font-semibold text-gray-600 truncate">{{ balance.type.name }}</p>
-                            <div class="flex items-baseline justify-between mt-2">
-                                <span class="text-lg font-bold {% if balance.remaining < 0 %}text-red-600{% else %}text-gray-900{% endif %}">{{ balance.remaining }}</span>
-                                <span class="text-xs text-gray-550">/ {{ balance.total }} left</span>
-                            </div>
-                            <div class="w-full bg-gray-250 h-1.5 rounded-full mt-2 overflow-hidden flex">
-                                <div class="bg-primary h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
-                            </div>
-                            <p class="text-[10px] text-gray-500 mt-1">{{ balance.used }} days used</p>
-                        </div>
-                        {% empty %}
-                        <div class="col-span-2 text-center text-xs text-gray-500 py-2">
-                            No leave types configured.
-                        </div>
-                        {% endfor %}
+                    <div class="flex justify-between items-baseline">
+                        <span class="text-[22px] font-black {% if balance.remaining < 0 %}text-red-600{% else %}text-gray-900{% endif %}">
+                            {{ balance.remaining }}
+                        </span>
+                        <span class="text-[11px] text-gray-500">days left</span>
+                    </div>
+                    <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden flex">
+                        <div class="bg-primary h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
                     </div>
                 </div>
+                {% empty %}
+                <div class="col-span-2 text-center text-[12px] text-gray-400 py-4">
+                    No leave types configured.
+                </div>
+                {% endfor %}
             </div>
+        </div>
 
-            <!-- View History Link -->
-            <div class="mt-6 border-t border-gray-100 pt-4 flex justify-end">
-                <a href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" class="inline-flex items-center gap-1 text-xs font-bold text-primary-500 hover:text-primary-700 hover:underline">
-                    View History & Adjust
-                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                </a>
-            </div>
-        </div>
-        {% empty %}
-        <div class="col-span-full bg-white rounded-2xl border border-gray-150 p-12 text-center text-gray-500 shadow-sm">
-            <i data-lucide="users" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
-            <p class="font-medium text-gray-700">No active employees found</p>
-            <p class="text-xs text-gray-400 mt-1">Add employees to the system first to manage their leaves.</p>
-        </div>
-        {% endfor %}
+    </div>
+
+    <c-slot name="footer">
+        <button type="button" @click="$dispatch('close-modal', {id: 'emp-modal-{{ emp.id }}'})" class="ft-btn ft-btn-secondary ft-btn-sm">
+            Close
+        </button>
+        <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="primary" icon="external-link" label="Full History & Adjust" size="sm" />
+    </c-slot>
+</c-modal>
+{% endwith %}
+{% endfor %}
+
 </c-app-shell>

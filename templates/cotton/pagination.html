@@ -1,0 +1,67 @@
+{% comment %} c-pagination component
+   Renders a pagination row with prev/next buttons and page number links.
+   Props:
+   - current_page: active page number (int, default 1)
+   - total_pages: total pages (int, required)
+   - base_url: base URL for page links, e.g. "/employees/?page=". Page number is appended.
+   - show_info: true | false — show "Page X of Y" text (default true)
+   - extra_class: additional classes on wrapper
+
+   Usage:
+     <c-pagination current_page="{{ page_obj.number }}"
+                   total_pages="{{ page_obj.paginator.num_pages }}"
+                   base_url="/employees/?page=" />
+{% endcomment %}
+
+{% with cp=current_page|default:1 tp=total_pages|default:1 %}
+<div class="flex items-center justify-between gap-4 {{ extra_class }}" aria-label="Pagination">
+
+  {# Info text #}
+  {% if show_info != "false" %}
+  <span class="text-[13px]" style="color:var(--text-muted)">
+    Page {{ cp }} of {{ tp }}
+  </span>
+  {% endif %}
+
+  {# Page buttons #}
+  <div class="ft-pagination">
+
+    {# Prev #}
+    {% if cp > 1 %}
+    <a href="{{ base_url }}{{ cp|add:'-1' }}"
+       class="ft-page-btn"
+       aria-label="Previous page">
+      <i data-lucide="chevron-left" class="w-4 h-4" style="stroke-width:1.5"></i>
+    </a>
+    {% else %}
+    <button class="ft-page-btn" disabled aria-label="Previous page">
+      <i data-lucide="chevron-left" class="w-4 h-4" style="stroke-width:1.5"></i>
+    </button>
+    {% endif %}
+
+    {# Page numbers — show at most 5 centered around current #}
+    {% for p in paginator.page_range %}
+    <a href="{{ base_url }}{{ p }}"
+       class="ft-page-btn {% if p == cp %}active{% endif %}"
+       aria-label="Page {{ p }}"
+       {% if p == cp %}aria-current="page"{% endif %}>
+      {{ p }}
+    </a>
+    {% endfor %}
+
+    {# Next #}
+    {% if cp < tp %}
+    <a href="{{ base_url }}{{ cp|add:'1' }}"
+       class="ft-page-btn"
+       aria-label="Next page">
+      <i data-lucide="chevron-right" class="w-4 h-4" style="stroke-width:1.5"></i>
+    </a>
+    {% else %}
+    <button class="ft-page-btn" disabled aria-label="Next page">
+      <i data-lucide="chevron-right" class="w-4 h-4" style="stroke-width:1.5"></i>
+    </button>
+    {% endif %}
+
+  </div>
+</div>
+{% endwith %}

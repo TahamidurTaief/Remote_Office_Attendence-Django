@@ -1,0 +1,398 @@
+{% comment %} c-datetime-picker — Fully dynamic & functional date-time picker
+   Props:
+   - name: hidden input name (required)
+   - value: initial ISO datetime string (optional)
+   - label: label text
+   - required: 'true' | ''
+   - time: 'true' to show time picker (default: false — date only)
+   - min: minimum date (YYYY-MM-DD)
+   - max: maximum date (YYYY-MM-DD)
+   - id: unique id for the input (optional)
+{% endcomment %}
+
+<div x-data="{
+  open: false,
+  viewMode: 'days',      /* days | months | years */
+  displayYear: 0,
+  displayMonth: 0,
+  selectedYear: null,
+  selectedMonth: null,
+  selectedDay: null,
+  hour: 0,
+  minute: 0,
+  ampm: 'AM',
+  showTime: '{{ time|default:false }}' === 'true',
+
+  get today() { return new Date(); },
+
+  get monthName() {
+    return new Date(this.displayYear, this.displayMonth, 1)
+      .toLocaleString('en-US', { month: 'long' });
+  },
+
+  get daysInMonth() {
+    return new Date(this.displayYear, this.displayMonth + 1, 0).getDate();
+  },
+
+  get firstWeekday() {
+    return new Date(this.displayYear, this.displayMonth, 1).getDay();
+  },
+
+  get yearRange() {
+    const base = Math.floor(this.displayYear / 12) * 12;
+    return Array.from({ length: 12 }, (_, i) => base + i);
+  },
+
+  get formattedValue() {
+    if (!this.selectedDay) return '';
+    const y = this.selectedYear;
+    const m = String(this.selectedMonth + 1).padStart(2, '0');
+    const d = String(this.selectedDay).padStart(2, '0');
+    if (!this.showTime) return `${y}-${m}-${d}`;
+    let h = this.hour;
+    if (this.ampm === 'PM' && h < 12) h += 12;
+    if (this.ampm === 'AM' && h === 12) h = 0;
+    return `${y}-${m}-${d}T${String(h).padStart(2,'0')}:${String(this.minute).padStart(2,'0')}`;
+  },
+
+  get displayLabel() {
+    if (!this.selectedDay) return '';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const base = `${months[this.selectedMonth]} ${this.selectedDay}, ${this.selectedYear}`;
+    if (!this.showTime) return base;
+    return `${base}  ${String(this.hour).padStart(2,'0')}:${String(this.minute).padStart(2,'0')} ${this.ampm}`;
+  },
+
+  isSelected(day) {
+    return day === this.selectedDay &&
+           this.displayMonth === this.selectedMonth &&
+           this.displayYear === this.selectedYear;
+  },
+
+  isToday(day) {
+    const t = this.today;
+    return day === t.getDate() &&
+           this.displayMonth === t.getMonth() &&
+           this.displayYear === t.getFullYear();
+  },
+
+  prevMonth() {
+    if (this.displayMonth === 0) { this.displayMonth = 11; this.displayYear--; }
+    else this.displayMonth--;
+  },
+
+  nextMonth() {
+    if (this.displayMonth === 11) { this.displayMonth = 0; this.displayYear++; }
+    else this.displayMonth++;
+  },
+
+  selectDay(day) {
+    this.selectedDay = day;
+    this.selectedMonth = this.displayMonth;
+    this.selectedYear = this.displayYear;
+    if (!this.showTime) { this.open = false; }
+    this.$nextTick(() => { const el = this.$el.querySelector('[x-ref=hidden]'); if(el) el.dispatchEvent(new Event('change',{bubbles:true})); });
+  },
+
+  selectMonth(m) {
+    this.displayMonth = m;
+    this.viewMode = 'days';
+  },
+
+  selectYear(y) {
+    this.displayYear = y;
+    this.viewMode = 'months';
+  },
+
+  confirm() {
+    this.open = false;
+    this.$nextTick(() => { const el = this.$el.querySelector('[x-ref=hidden]'); if(el) el.dispatchEvent(new Event('change',{bubbles:true})); });
+  },
+
+  init() {
+    const now = new Date();
+    const initVal = '{{ value|default:'' }}';
+    if (initVal) {
+      const d = new Date(initVal);
+      if (!isNaN(d)) {
+        this.displayYear = d.getFullYear();
+        this.displayMonth = d.getMonth();
+        this.selectedYear = d.getFullYear();
+        this.selectedMonth = d.getMonth();
+        this.selectedDay = d.getDate();
+        if (this.showTime) {
+          let h = d.getHours();
+          this.minute = d.getMinutes();
+          this.ampm = h >= 12 ? 'PM' : 'AM';
+          this.hour = h % 12 || 12;
+        }
+        return;
+      }
+    }
+    this.displayYear = now.getFullYear();
+    this.displayMonth = now.getMonth();
+    if (this.showTime) {
+      let h = now.getHours();
+      this.minute = now.getMinutes();
+      this.ampm = h >= 12 ? 'PM' : 'AM';
+      this.hour = h % 12 || 12;
+    }
+  }
+}" @click.away="open = false" class="relative w-full">
+
+  {% if label %}
+  <label class="ft-label">{{ label }}{% if required %} <span style="color:var(--danger)">*</span>{% endif %}</label>
+  {% endif %}
+
+  {# Hidden input carrying the value #}
+  <input type="hidden" x-ref="hidden" name="{{ name }}" :value="formattedValue"
+         id="{{ id|default:name }}" {% if required %}required{% endif %}>
+
+  {# Trigger #}
+  <button type="button"
+          @click="open = !open"
+          class="ft-input w-full text-left flex items-center gap-2 cursor-pointer"
+          style="justify-content: flex-start; background:#fff">
+    <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0" style="color: #B0B3B8"></i>
+    <span x-text="displayLabel || '{{ placeholder|default:'Select date…' }}'"
+          :style="displayLabel ? 'color:#1C1E21' : 'color:#B0B3B8'"
+          class="text-[12px] flex-1 text-left truncate"></span>
+    <i data-lucide="chevron-down" class="w-3.5 h-3.5 flex-shrink-0" style="color:#B0B3B8"
+       :class="open ? 'rotate-180' : ''" class="transition-transform duration-150"></i>
+  </button>
+
+  {# Dropdown panel #}
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
+       x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100 scale-100"
+       x-transition:leave-end="opacity-0 scale-95"
+       @click.stop
+       class="absolute top-full left-0 mt-1 z-[300] bg-white select-none"
+       style="min-width: 280px; border-radius: 8px; box-shadow: 0 12px 40px rgba(24,119,242,0.12), 0 2px 12px rgba(0,0,0,0.05); border: none; padding: 12px;"
+       x-cloak>
+
+    {# ── CALENDAR HEADER ── #}
+    <div class="flex items-center justify-between mb-2" x-show="viewMode === 'days'">
+      <button type="button" @click="prevMonth()"
+              class="w-6 h-6 flex items-center justify-center rounded transition-colors"
+              style="background:transparent; border:none; cursor:pointer; color:#65676B"
+              onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+              onmouseout="this.style.background='transparent'">
+        <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+      </button>
+      <div class="flex items-center gap-1">
+        <button type="button" @click="viewMode = 'months'"
+                class="px-2 py-0.5 rounded text-[12px] font-semibold transition-colors"
+                style="border:none; background:transparent; cursor:pointer; color:#1C1E21"
+                onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                onmouseout="this.style.background='transparent'"
+                x-text="monthName"></button>
+        <button type="button" @click="viewMode = 'years'"
+                class="px-2 py-0.5 rounded text-[12px] font-semibold transition-colors"
+                style="border:none; background:transparent; cursor:pointer; color:#1C1E21"
+                onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                onmouseout="this.style.background='transparent'"
+                x-text="displayYear"></button>
+      </div>
+      <button type="button" @click="nextMonth()"
+              class="w-6 h-6 flex items-center justify-center rounded transition-colors"
+              style="background:transparent; border:none; cursor:pointer; color:#65676B"
+              onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+              onmouseout="this.style.background='transparent'">
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+
+    {# ── MONTHS VIEW ── #}
+    <div x-show="viewMode === 'months'" class="mb-1">
+      <div class="flex items-center justify-between mb-2">
+        <button type="button" @click="viewMode = 'years'"
+                class="text-[12px] font-semibold px-2 py-0.5 rounded"
+                style="border:none; background:transparent; cursor:pointer; color:#1C1E21"
+                onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                onmouseout="this.style.background='transparent'"
+                x-text="displayYear"></button>
+        <div class="flex gap-1">
+          <button type="button" @click="displayYear--"
+                  class="w-6 h-6 flex items-center justify-center rounded"
+                  style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                  onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="this.style.background='transparent'">
+            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" @click="displayYear++"
+                  class="w-6 h-6 flex items-center justify-center rounded"
+                  style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                  onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="this.style.background='transparent'">
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-1">
+        <template x-for="(mn, idx) in ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']" :key="idx">
+          <button type="button"
+                  @click="selectMonth(idx)"
+                  class="py-1.5 rounded text-[11px] font-medium transition-colors"
+                  :style="idx === displayMonth
+                    ? 'background:#1877F2; color:white; border:none; cursor:pointer'
+                    : 'background:transparent; color:#65676B; border:none; cursor:pointer'"
+                  onmouseover="if(this.style.background!=='rgb(24, 119, 242)') this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="if(this.style.background!=='rgb(24, 119, 242)') this.style.background='transparent'"
+                  x-text="mn"></button>
+        </template>
+      </div>
+    </div>
+
+    {# ── YEARS VIEW ── #}
+    <div x-show="viewMode === 'years'" class="mb-1">
+      <div class="flex items-center justify-between mb-2">
+        <button type="button" @click="displayYear -= 12"
+                class="w-6 h-6 flex items-center justify-center rounded"
+                style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                onmouseout="this.style.background='transparent'">
+          <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+        </button>
+        <span class="text-[12px] font-semibold" style="color:#1C1E21"
+              x-text="`${yearRange[0]}–${yearRange[11]}`"></span>
+        <button type="button" @click="displayYear += 12"
+                class="w-6 h-6 flex items-center justify-center rounded"
+                style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                onmouseout="this.style.background='transparent'">
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+      <div class="grid grid-cols-3 gap-1">
+        <template x-for="y in yearRange" :key="y">
+          <button type="button"
+                  @click="selectYear(y)"
+                  class="py-1.5 rounded text-[11px] font-medium transition-colors"
+                  :style="y === displayYear
+                    ? 'background:#1877F2; color:white; border:none; cursor:pointer'
+                    : 'background:transparent; color:#65676B; border:none; cursor:pointer'"
+                  onmouseover="if(this.style.background!=='rgb(24, 119, 242)') this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="if(this.style.background!=='rgb(24, 119, 242)') this.style.background='transparent'"
+                  x-text="y"></button>
+        </template>
+      </div>
+    </div>
+
+    {# ── DAYS GRID ── #}
+    <div x-show="viewMode === 'days'">
+      {# Weekday headers #}
+      <div class="grid grid-cols-7 mb-1">
+        <template x-for="d in ['Su','Mo','Tu','We','Th','Fr','Sa']" :key="d">
+          <div class="text-center text-[10px] font-semibold py-1" style="color:#B0B3B8" x-text="d"></div>
+        </template>
+      </div>
+      {# Day cells #}
+      <div class="grid grid-cols-7 gap-px">
+        {# Empty leading cells #}
+        <template x-for="_ in Array(firstWeekday)" :key="'e_'+_">
+          <div></div>
+        </template>
+        {# Day buttons #}
+        <template x-for="day in daysInMonth" :key="day">
+          <button type="button"
+                  @click="selectDay(day)"
+                  class="w-full aspect-square flex items-center justify-center rounded text-[11px] font-medium transition-colors"
+                  :style="isSelected(day)
+                    ? 'background:#1877F2; color:#fff; border:none; cursor:pointer'
+                    : isToday(day)
+                      ? 'background:rgba(24,119,242,0.10); color:#1877F2; border:none; cursor:pointer; font-weight:700'
+                      : 'background:transparent; color:#65676B; border:none; cursor:pointer'"
+                  onmouseover="if(!this.style.background.includes('119')) this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="if(!this.style.background.includes('119, 242)') && !this.style.background.includes('0.10')) this.style.background='transparent'"
+                  x-text="day"></button>
+        </template>
+      </div>
+    </div>
+
+    {# ── TIME PICKER (if showTime) ── #}
+    <template x-if="showTime && viewMode === 'days'">
+      <div class="mt-3 pt-3 flex items-center justify-center gap-2"
+           style="border-top: 1px solid rgba(228,230,235,0.5)">
+        {# Hours #}
+        <div class="flex flex-col items-center gap-0.5">
+          <button type="button" @click="hour = hour >= 12 ? 1 : hour + 1"
+                  class="w-6 h-5 flex items-center justify-center rounded"
+                  style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                  onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="this.style.background='transparent'">
+            <i data-lucide="chevron-up" class="w-3 h-3"></i>
+          </button>
+          <span class="text-[14px] font-bold w-7 text-center tabular-nums" style="color:#1C1E21"
+                x-text="String(hour).padStart(2,'0')"></span>
+          <button type="button" @click="hour = hour <= 1 ? 12 : hour - 1"
+                  class="w-6 h-5 flex items-center justify-center rounded"
+                  style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                  onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="this.style.background='transparent'">
+            <i data-lucide="chevron-down" class="w-3 h-3"></i>
+          </button>
+        </div>
+        <span class="text-[16px] font-bold" style="color:#1C1E21">:</span>
+        {# Minutes #}
+        <div class="flex flex-col items-center gap-0.5">
+          <button type="button" @click="minute = minute >= 59 ? 0 : minute + 1"
+                  class="w-6 h-5 flex items-center justify-center rounded"
+                  style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                  onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="this.style.background='transparent'">
+            <i data-lucide="chevron-up" class="w-3 h-3"></i>
+          </button>
+          <span class="text-[14px] font-bold w-7 text-center tabular-nums" style="color:#1C1E21"
+                x-text="String(minute).padStart(2,'0')"></span>
+          <button type="button" @click="minute = minute <= 0 ? 59 : minute - 1"
+                  class="w-6 h-5 flex items-center justify-center rounded"
+                  style="border:none; background:transparent; cursor:pointer; color:#65676B"
+                  onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                  onmouseout="this.style.background='transparent'">
+            <i data-lucide="chevron-down" class="w-3 h-3"></i>
+          </button>
+        </div>
+        {# AM/PM #}
+        <div class="flex flex-col gap-0.5 ml-1">
+          <button type="button"
+                  @click="ampm = 'AM'"
+                  class="px-2 py-1 rounded text-[11px] font-semibold transition-colors"
+                  :style="ampm === 'AM'
+                    ? 'background:#1877F2; color:white; border:none; cursor:pointer'
+                    : 'background:rgba(228,230,235,0.4); color:#65676B; border:none; cursor:pointer'">
+            AM
+          </button>
+          <button type="button"
+                  @click="ampm = 'PM'"
+                  class="px-2 py-1 rounded text-[11px] font-semibold transition-colors"
+                  :style="ampm === 'PM'
+                    ? 'background:#1877F2; color:white; border:none; cursor:pointer'
+                    : 'background:rgba(228,230,235,0.4); color:#65676B; border:none; cursor:pointer'">
+            PM
+          </button>
+        </div>
+      </div>
+    </template>
+
+    {# ── Action Buttons ── #}
+    <div x-show="showTime && viewMode === 'days'" class="flex gap-2 mt-3">
+      <button type="button" @click="open = false; selectedDay = null; selectedMonth = null; selectedYear = null"
+              class="flex-1 ft-btn ft-btn-secondary ft-btn-sm">Clear</button>
+      <button type="button" @click="confirm()"
+              class="flex-1 ft-btn ft-btn-primary ft-btn-sm">Apply</button>
+    </div>
+    <div x-show="!showTime && viewMode === 'days'" class="flex justify-center mt-2">
+      <button type="button" @click="selectDay(today.getDate()); displayMonth = today.getMonth(); displayYear = today.getFullYear()"
+              class="text-[11px] font-medium px-2 py-1 rounded"
+              style="color:#1877F2; border:none; background:transparent; cursor:pointer"
+              onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+              onmouseout="this.style.background='transparent'">
+        Today
+      </button>
+    </div>
+  </div>
+</div>

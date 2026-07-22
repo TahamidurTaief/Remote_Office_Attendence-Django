@@ -11,7 +11,7 @@
 <div x-data="{
        collapsed: localStorage.getItem('ft_sidebar') === 'collapsed',
        mobileOpen: false,
-       openSubmenus: JSON.parse(localStorage.getItem('ft_sidebar_submenus') || '{}'),
+       currentOpenSubmenu: localStorage.getItem('ft_sidebar_active_submenu') || null,
        search: '',
 
        toggle() {
@@ -22,16 +22,36 @@
            main.classList.toggle('sidebar-collapsed', this.collapsed);
          }
        },
+       getActiveId() {
+         const p = '{{ active_href }}';
+         if (p === '/admin-panel/dashboard/' || p === '/staff/home/' || p.includes('/notifications/')) return 'dashboards';
+         if (p.includes('/employees/') || p.includes('/branches/') || p.includes('/roles/')) return 'employees';
+         if (p.includes('/attendance/')) return 'attendance';
+         if (p.includes('/leave/')) return 'leave';
+         if (p.includes('/schedule/')) return 'schedule';
+         if (p.includes('/expense/')) return 'payroll';
+         if (p.includes('/projects/') && !p.includes('/tasks/')) return 'projects';
+         if (p.includes('/tasks/') || p.includes('/my-tasks/')) return 'tasks';
+         if (p.includes('/reports/')) return 'reports';
+         if (p.includes('/settings')) return 'system';
+         if (p.includes('/backups/') || p.includes('/expired-data/')) return 'data_mgmt';
+         return null;
+       },
        toggleSubmenu(id) {
-         const wasOpen = !!this.openSubmenus[id];
-         this.openSubmenus = {};
-         if (!wasOpen) {
-           this.openSubmenus[id] = true;
+         const isOpen = this.isSubmenuOpen(id);
+         if (isOpen) {
+           this.currentOpenSubmenu = 'none';
+         } else {
+           this.currentOpenSubmenu = id;
          }
-         localStorage.setItem('ft_sidebar_submenus', JSON.stringify(this.openSubmenus));
+         localStorage.setItem('ft_sidebar_active_submenu', this.currentOpenSubmenu);
        },
        isSubmenuOpen(id) {
-         return !!this.openSubmenus[id];
+         if (this.search) return true;
+         if (this.currentOpenSubmenu !== null && this.currentOpenSubmenu !== undefined) {
+           return this.currentOpenSubmenu === id;
+         }
+         return this.getActiveId() === id;
        },
        matchSearch(label) {
          if (!this.search) return true;
@@ -81,7 +101,7 @@
                alt="FieldTrack"
                class="h-6 w-auto object-contain"
                onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
-          <span class="text-[13px] font-bold hidden" style="color:var(--text)">FieldTrack</span>
+          <span class="text-[12px] font-bold hidden" style="color:var(--text)">FieldTrack</span>
         </div>
       </div>
 
@@ -105,20 +125,20 @@
     </button>
 
     {# ── Search (only when expanded) ──────────────────────────────── #}
-    <div x-show="!collapsed" class="px-3 py-2 shrink-0" x-cloak>
-      <div class="relative flex items-center rounded-input border px-2.5 py-1.5 transition-all duration-150"
-           style="background:var(--surface-2); border-color:var(--border)">
-        <i data-lucide="search" class="w-3.5 h-3.5 shrink-0" style="color:var(--text-disabled)"></i>
+    <div x-show="!collapsed" class="px-2 py-1.5 shrink-0" x-cloak>
+      <div class="relative flex items-center" style="">
+        <i data-lucide="search" class="absolute left-2.5 w-3.5 h-3.5" style="color:#B0B3B8; z-index:1; pointer-events:none"></i>
         <input type="text"
                x-model="search"
                placeholder="Search menu…"
-               class="bg-transparent text-[11px] focus:outline-none w-full ml-1.5 border-0 p-0 shadow-none ring-0"
-               style="color:var(--text)">
+               class="ft-search-input w-full text-[11px]"
+               style="padding-left: 28px">
         <button type="button"
                 x-show="search"
                 @click="search = ''"
-                class="ft-btn ft-btn-ghost p-0 w-5 h-5 flex items-center justify-center">
-          <i data-lucide="x" class="w-3 h-3"></i>
+                class="absolute right-2 w-4 h-4 flex items-center justify-center rounded-full"
+                style="background:rgba(0,0,0,0.08); border:none; cursor:pointer; color:#8A8D91">
+          <i data-lucide="x" class="w-2.5 h-2.5"></i>
         </button>
       </div>
     </div>
@@ -137,9 +157,9 @@
       <div x-show="matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity')">
         <button type="button"
                 @click="toggleSubmenu('dashboards')"
-                class="ft-nav-item w-full flex items-center justify-between {% if path == '/admin-panel/dashboard/' or path == '/staff/home/' %}active{% endif %}"
+                class="ft-nav-item w-full flex items-center justify-between"
                 :title="collapsed ? 'Dashboard' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="layout-dashboard" class="ft-icon"></i>
             <span class="ft-nav-label" x-show="!collapsed" x-cloak>Dashboard</span>
@@ -151,7 +171,7 @@
              x-cloak></i>
         </button>
 
-        {# Submenu: Collapsed by default #}
+        {# Submenu #}
         <div x-show="(isSubmenuOpen('dashboards') || search) && !collapsed"
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
@@ -177,7 +197,7 @@
         </div>
       </div>
 
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
 
       {# ════════════════════ SECTION: PEOPLE ════════════════════ #}
       <div x-show="!collapsed" x-cloak>
@@ -188,9 +208,9 @@
       <div>
         <button type="button"
                 @click="toggleSubmenu('employees')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/employees/' in path %}active{% endif %}"
+                class="ft-nav-item w-full flex items-center justify-between"
                 :title="collapsed ? 'Employees' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="users" class="ft-icon"></i>
             <span class="ft-nav-label" x-show="!collapsed" x-cloak>Employees</span>
@@ -229,12 +249,6 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Designations</span>
           </a>
-          <a href="{% url 'employees:employee_list' %}"
-             class="ft-nav-item"
-             x-show="matchSearch('Employment Status')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Employment Status</span>
-          </a>
         </div>
       </div>
 
@@ -242,9 +256,9 @@
       <div>
         <button type="button"
                 @click="toggleSubmenu('attendance')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/attendance/' in path or '/admin-panel/attendance/' in path %}active{% endif %}"
+                class="ft-nav-item w-full flex items-center justify-between"
                 :title="collapsed ? 'Attendance' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="clock" class="ft-icon"></i>
             <span class="ft-nav-label" x-show="!collapsed" x-cloak>Attendance</span>
@@ -259,7 +273,7 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <a href="{% url 'attendance:status' %}" class="ft-nav-item" x-show="matchSearch('Live Attendance')">
+          <a href="{% url 'attendance:status' %}" class="ft-nav-item {% if '/attendance/status' in path %}active{% endif %}" x-show="matchSearch('Live Attendance')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Live Attendance</span>
           </a>
@@ -267,23 +281,11 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Attendance Logs</span>
           </a>
-          <a href="{% url 'admin_panel:manual_entry' %}" class="ft-nav-item" x-show="matchSearch('Manual Attendance')">
+          <a href="{% url 'admin_panel:manual_entry' %}" class="ft-nav-item {% if '/manual' in path %}active{% endif %}" x-show="matchSearch('Manual Attendance')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Manual Attendance</span>
           </a>
-          <a href="{% url 'staff:check_in' %}" class="ft-nav-item" x-show="matchSearch('Attendance Requests')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Attendance Requests</span>
-          </a>
-          <a href="{% url 'staff:field_visit' %}" class="ft-nav-item" x-show="matchSearch('Attendance Corrections')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Attendance Corrections</span>
-          </a>
-          <a href="{% url 'schedule:month_view' %}" class="ft-nav-item" x-show="matchSearch('Shift Assignment')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Shift Assignment</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_attendance' %}" class="ft-nav-item" x-show="matchSearch('Attendance Reports')">
+          <a href="{% url 'admin_panel:reports_attendance' %}" class="ft-nav-item {% if '/reports/attendance' in path %}active{% endif %}" x-show="matchSearch('Attendance Reports')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Attendance Reports</span>
           </a>
@@ -294,9 +296,9 @@
       <div>
         <button type="button"
                 @click="toggleSubmenu('leave')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/leave/' in path %}active{% endif %}"
+                class="ft-nav-item w-full flex items-center justify-between"
                 :title="collapsed ? 'Leave Management' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="clipboard-check" class="ft-icon"></i>
             <span class="ft-nav-label" x-show="!collapsed" x-cloak>Leave Management</span>
@@ -316,25 +318,17 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <a href="{% url 'leave:admin_dashboard' %}" class="ft-nav-item" x-show="matchSearch('Leave Requests')">
+          <a href="{% url 'leave:admin_dashboard' %}" class="ft-nav-item {% if '/leave/admin/' in path and '/types/' not in path and '/balances/' not in path %}active{% endif %}" x-show="matchSearch('Leave Requests')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Leave Requests</span>
           </a>
-          <a href="{% url 'leave:admin_leave_types' %}" class="ft-nav-item" x-show="matchSearch('Leave Types')">
+          <a href="{% url 'leave:admin_leave_types' %}" class="ft-nav-item {% if '/leave/types/' in path %}active{% endif %}" x-show="matchSearch('Leave Types')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Leave Types</span>
           </a>
-          <a href="{% url 'leave:admin_balances' %}" class="ft-nav-item" x-show="matchSearch('Leave Balance')">
+          <a href="{% url 'leave:admin_balances' %}" class="ft-nav-item {% if '/leave/balances/' in path %}active{% endif %}" x-show="matchSearch('Leave Balance')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Leave Balance</span>
-          </a>
-          <a href="{% url 'schedule:month_view' %}" class="ft-nav-item" x-show="matchSearch('Leave Calendar')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Leave Calendar</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_absent' %}" class="ft-nav-item" x-show="matchSearch('Leave Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Leave Reports</span>
           </a>
         </div>
       </div>
@@ -343,9 +337,9 @@
       <div>
         <button type="button"
                 @click="toggleSubmenu('schedule')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/schedule/' in path %}active{% endif %}"
+                class="ft-nav-item w-full flex items-center justify-between"
                 :title="collapsed ? 'Schedule' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="calendar" class="ft-icon"></i>
             <span class="ft-nav-label" x-show="!collapsed" x-cloak>Schedule</span>
@@ -360,70 +354,14 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <a href="{% url 'schedule:month_view' %}" class="ft-nav-item" x-show="matchSearch('Shift Schedule')">
+          <a href="{% url 'schedule:month_view' %}" class="ft-nav-item {% if '/schedule/' in path %}active{% endif %}" x-show="matchSearch('Shift Schedule')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Shift Schedule</span>
           </a>
-          <a href="{% url 'schedule:month_view' %}" class="ft-nav-item" x-show="matchSearch('Duty Roster')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Duty Roster</span>
-          </a>
-          <a href="{% url 'schedule:month_view' %}" class="ft-nav-item" x-show="matchSearch('Weekly Schedule')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Weekly Schedule</span>
-          </a>
-          <a href="{% url 'schedule:month_view' %}" class="ft-nav-item" x-show="matchSearch('Calendar')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Calendar</span>
-          </a>
         </div>
       </div>
 
-      {# Menu: Payroll #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('payroll')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/expense/' in path %}active{% endif %}"
-                :title="collapsed ? 'Payroll' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="dollar-sign" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Payroll</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('payroll') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('payroll') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Salary')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Salary</span>
-          </a>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Allowances')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Allowances</span>
-          </a>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Deductions')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Deductions</span>
-          </a>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Payslips')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Payslips</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item" x-show="matchSearch('Payroll Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Payroll Reports</span>
-          </a>
-        </div>
-      </div>
-
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
 
       {# ════════════════════ SECTION: WORK ════════════════════ #}
       <div x-show="!collapsed" x-cloak>
@@ -434,9 +372,9 @@
       <div>
         <button type="button"
                 @click="toggleSubmenu('projects')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/projects/' in path and '/tasks/' not in path %}active{% endif %}"
+                class="ft-nav-item w-full flex items-center justify-between"
                 :title="collapsed ? 'Projects' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="briefcase" class="ft-icon"></i>
             <span class="ft-nav-label" x-show="!collapsed" x-cloak>Projects</span>
@@ -451,21 +389,17 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <a href="{% url 'projects:project_list' %}" class="ft-nav-item" x-show="matchSearch('All Projects')">
+          <a href="{% url 'projects:project_list' %}" class="ft-nav-item {% if path == '/projects/' and 'status=' not in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('All Projects')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">All Projects</span>
           </a>
-          <a href="{% url 'projects:project_list' %}?status=active" class="ft-nav-item" x-show="matchSearch('Active Projects')">
+          <a href="{% url 'projects:project_list' %}?status=active" class="ft-nav-item {% if 'status=active' in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Active Projects')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Active Projects</span>
           </a>
-          <a href="{% url 'projects:project_list' %}?status=completed" class="ft-nav-item" x-show="matchSearch('Completed Projects')">
+          <a href="{% url 'projects:project_list' %}?status=completed" class="ft-nav-item {% if 'status=completed' in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Completed Projects')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Completed Projects</span>
-          </a>
-          <a href="{% url 'projects:project_list' %}?status=archived" class="ft-nav-item" x-show="matchSearch('Project Archive')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Project Archive</span>
           </a>
         </div>
       </div>
@@ -474,9 +408,9 @@
       <div>
         <button type="button"
                 @click="toggleSubmenu('tasks')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/projects/tasks/' in path or '/staff/my-tasks/' in path %}active{% endif %}"
+                class="ft-nav-item w-full flex items-center justify-between"
                 :title="collapsed ? 'Tasks' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="check-square" class="ft-icon"></i>
             <span class="ft-nav-label" x-show="!collapsed" x-cloak>Tasks</span>
@@ -491,21 +425,17 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <a href="{% url 'staff:my_tasks' %}" class="ft-nav-item" x-show="matchSearch('My Tasks')">
+          <a href="{% url 'staff:my_tasks' %}" class="ft-nav-item {% if '/staff/my-tasks/' in path %}active{% endif %}" x-show="matchSearch('My Tasks')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">My Tasks</span>
           </a>
-          <a href="{% url 'projects:global_task_list' %}" class="ft-nav-item" x-show="matchSearch('Team Tasks')">
+          <a href="{% url 'projects:global_task_list' %}" class="ft-nav-item {% if '/projects/tasks/' in path and 'view=kanban' not in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Team Tasks')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Team Tasks</span>
           </a>
-          <a href="{% url 'projects:global_task_list' %}" class="ft-nav-item" x-show="matchSearch('Task Board')">
+          <a href="{% url 'projects:global_task_list' %}?view=kanban" class="ft-nav-item {% if '/projects/tasks/' in path and 'view=kanban' in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Task Board')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Task Board</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item" x-show="matchSearch('Task Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Task Reports</span>
           </a>
         </div>
       </div>
@@ -515,7 +445,7 @@
          class="ft-nav-item {% if '/types/' in path %}active{% endif %}"
          x-show="matchSearch('Project Types')"
          :title="collapsed ? 'Project Types' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
         <i data-lucide="tag" class="ft-icon"></i>
         <span class="ft-nav-label" x-show="!collapsed" x-cloak>Project Types</span>
       </a>
@@ -525,12 +455,12 @@
          class="ft-nav-item {% if '/templates/' in path %}active{% endif %}"
          x-show="matchSearch('Task Templates')"
          :title="collapsed ? 'Task Templates' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
         <i data-lucide="clipboard-list" class="ft-icon"></i>
         <span class="ft-nav-label" x-show="!collapsed" x-cloak>Task Templates</span>
       </a>
 
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
 
       {# ════════════════════ SECTION: FINANCE ════════════════════ #}
       <div x-show="!collapsed" x-cloak>
@@ -539,10 +469,10 @@
 
       {# Menu direct link: Expenses #}
       <a href="{% url 'expense:admin_expense_list' %}"
-         class="ft-nav-item {% if '/expense/admin/' in path %}active{% endif %}"
+         class="ft-nav-item {% if '/expense/' in path %}active{% endif %}"
          x-show="matchSearch('Expenses')"
          :title="collapsed ? 'Expenses' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
         <i data-lucide="receipt" class="ft-icon"></i>
         <span class="ft-nav-label" x-show="!collapsed" x-cloak>Expenses</span>
         {% if pending_expense_count %}
@@ -550,61 +480,7 @@
         {% endif %}
       </a>
 
-      {# Menu: Accounting #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('accounting')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Accounting' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="book-open" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Accounting</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('accounting') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('accounting') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Income')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Income</span>
-          </a>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Expense')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Expense</span>
-          </a>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Journal')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Journal</span>
-          </a>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Ledger')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Ledger</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item" x-show="matchSearch('Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Reports</span>
-          </a>
-        </div>
-      </div>
-
-      {# Menu direct link: Payroll Reports #}
-      <a href="{% url 'admin_panel:reports_main' %}"
-         class="ft-nav-item"
-         x-show="matchSearch('Payroll Reports')"
-         :title="collapsed ? 'Payroll Reports' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="file-text" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Payroll Reports</span>
-      </a>
-
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
 
       {# ════════════════════ SECTION: ORGANIZATION ════════════════════ #}
       <div x-show="!collapsed" x-cloak>
@@ -615,205 +491,37 @@
          class="ft-nav-item {% if '/branches/' in path and '/holidays/' not in path %}active{% endif %}"
          x-show="matchSearch('Branches')"
          :title="collapsed ? 'Branches' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
         <i data-lucide="building-2" class="ft-icon"></i>
         <span class="ft-nav-label" x-show="!collapsed" x-cloak>Branches</span>
-      </a>
-
-      <a href="{% url 'branches:branch_list' %}"
-         class="ft-nav-item"
-         x-show="matchSearch('Departments')"
-         :title="collapsed ? 'Departments' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="network" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Departments</span>
       </a>
 
       <a href="{% url 'branches:holiday_list' %}"
          class="ft-nav-item {% if '/branches/holidays/' in path %}active{% endif %}"
          x-show="matchSearch('Holidays')"
          :title="collapsed ? 'Holidays' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
         <i data-lucide="sun" class="ft-icon"></i>
         <span class="ft-nav-label" x-show="!collapsed" x-cloak>Holidays</span>
       </a>
 
-      <a href="{% url 'notifications:list' %}"
-         class="ft-nav-item"
-         x-show="matchSearch('Announcements')"
-         :title="collapsed ? 'Announcements' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="megaphone" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Announcements</span>
-      </a>
-
-      <a href="{% url 'notifications:list' %}"
-         class="ft-nav-item"
-         x-show="matchSearch('Notices')"
-         :title="collapsed ? 'Notices' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="bell-ring" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Notices</span>
-      </a>
-
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
-
-      {# ════════════════════ SECTION: REPORTS ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i><span>REPORTS</span></div>
-      </div>
-
-      {# Menu: Reports dropdown #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('reports')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/admin-panel/reports/' in path %}active{% endif %}"
-                :title="collapsed ? 'Reports' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="bar-chart-2" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Reports</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('reports') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('reports') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <a href="{% url 'admin_panel:reports_attendance' %}" class="ft-nav-item" x-show="matchSearch('Attendance Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Attendance Reports</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_absent' %}" class="ft-nav-item" x-show="matchSearch('Leave Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Leave Reports</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item" x-show="matchSearch('Employee Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Employee Reports</span>
-          </a>
-          <a href="{% url 'expense:admin_expense_list' %}" class="ft-nav-item" x-show="matchSearch('Expense Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Expense Reports</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item" x-show="matchSearch('Project Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Project Reports</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item" x-show="matchSearch('Performance Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Performance Reports</span>
-          </a>
-          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item" x-show="matchSearch('Custom Reports')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Custom Reports</span>
-          </a>
-        </div>
-      </div>
-
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
-
-      {# ════════════════════ SECTION: COMMUNICATION ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="message-square" class="w-3.5 h-3.5"></i><span>COMMUNICATION</span></div>
-      </div>
-
-      <a href="{% url 'notifications:list' %}"
-         class="ft-nav-item {% if '/notifications/' in path %}active{% endif %}"
-         x-show="matchSearch('Notifications')"
-         :title="collapsed ? 'Notifications' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="bell" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Notifications</span>
-        {% if unread_notifications %}
-          <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ unread_notifications }}</span>
-        {% endif %}
-      </a>
-
-      <a href="{% url 'notifications:list' %}"
-         class="ft-nav-item"
-         x-show="matchSearch('Activity Log')"
-         :title="collapsed ? 'Activity Log' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="activity" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Activity Log</span>
-      </a>
-
-      <a href="{% url 'leave:admin_dashboard' %}"
-         class="ft-nav-item"
-         x-show="matchSearch('Approval Center')"
-         :title="collapsed ? 'Approval Center' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="check-circle-2" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Approval Center</span>
-      </a>
-
-      <a href="{% url 'notifications:list' %}"
-         class="ft-nav-item"
-         x-show="matchSearch('Messages')"
-         :title="collapsed ? 'Messages' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-        <i data-lucide="message-square" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Messages</span>
-      </a>
-
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
 
       {# ════════════════════ SECTION: ADMINISTRATION ════════════════════ #}
       <div x-show="!collapsed" x-cloak>
         <div class="ft-group-header"><i data-lucide="sliders" class="w-3.5 h-3.5"></i><span>ADMINISTRATION</span></div>
       </div>
 
-      {# Menu: User Management #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('user_mgmt')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/admin-panel/roles/' in path or '/admin-panel/users/' in path %}active{% endif %}"
-                :title="collapsed ? 'User Management' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="user-cog" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>User Management</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('user_mgmt') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('user_mgmt') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <a href="{% url 'employees:employee_list' %}" class="ft-nav-item" x-show="matchSearch('Users')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Users</span>
-          </a>
-          <a href="{% url 'admin_panel:role_list' %}" class="ft-nav-item" x-show="matchSearch('Roles & Permissions')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Roles &amp; Permissions</span>
-          </a>
-          <a href="{% url 'admin_panel:role_list' %}" class="ft-nav-item" x-show="matchSearch('Access Control')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Access Control</span>
-          </a>
-        </div>
-      </div>
-
       {# Menu: System #}
       <div>
         <button type="button"
                 @click="toggleSubmenu('system')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/admin-panel/settings' in path %}active{% endif %}"
-                :title="collapsed ? 'System' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
+                class="ft-nav-item w-full flex items-center justify-between"
+                :title="collapsed ? 'System Settings' : ''"
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <div class="flex items-center gap-2 min-w-0">
             <i data-lucide="settings" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>System</span>
+            <span class="ft-nav-label" x-show="!collapsed" x-cloak>System Settings</span>
           </div>
           <i data-lucide="chevron-down"
              x-show="!collapsed"
@@ -825,149 +533,23 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('Settings')">
+          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item {% if '/settings' in path %}active{% endif %}" x-show="matchSearch('Settings')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Settings</span>
           </a>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('Workflow')">
+          <a href="{% url 'backups:backup_list' %}" class="ft-nav-item {% if '/backups/' in path %}active{% endif %}" x-show="matchSearch('Backup')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Workflow</span>
-          </a>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('Approval Rules')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Approval Rules</span>
-          </a>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('Email Templates')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Email Templates</span>
-          </a>
-          <a href="{% url 'notifications:list' %}" class="ft-nav-item" x-show="matchSearch('Audit Logs')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Audit Logs</span>
-          </a>
-        </div>
-      </div>
-
-      {# Menu: Data Management #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('data_mgmt')"
-                class="ft-nav-item w-full flex items-center justify-between {% if '/backups/' in path or '/expired-data/' in path %}active{% endif %}"
-                :title="collapsed ? 'Data Management' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="database" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Data Management</span>
-          </div>
-          <div class="flex items-center gap-1">
-            {% if expired_data_count %}
-              <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ expired_data_count }}</span>
-            {% endif %}
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('data_mgmt') ? 'rotate-180' : ''"
-               x-cloak></i>
-          </div>
-        </button>
-        <div x-show="(isSubmenuOpen('data_mgmt') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <a href="{% url 'backups:backup_list' %}" class="ft-nav-item" x-show="matchSearch('Backup')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Backup</span>
-          </a>
-          <a href="{% url 'backups:backup_list' %}" class="ft-nav-item" x-show="matchSearch('Import')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Import</span>
-          </a>
-          <a href="{% url 'backups:backup_list' %}" class="ft-nav-item" x-show="matchSearch('Export')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Export</span>
-          </a>
-          <a href="{% url 'admin_panel:expired_data' %}" class="ft-nav-item" x-show="matchSearch('Archive')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Archive</span>
-          </a>
-          <a href="{% url 'admin_panel:expired_data' %}" class="ft-nav-item" x-show="matchSearch('Expired Data')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Expired Data</span>
-          </a>
-        </div>
-      </div>
-
-      {# Menu: Developer #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('developer')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Developer' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-10' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="code" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Developer</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('developer') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('developer') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('API Keys')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">API Keys</span>
-          </a>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('Integrations')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Integrations</span>
-          </a>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('Webhooks')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Webhooks</span>
-          </a>
-          <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" x-show="matchSearch('System Health')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">System Health</span>
+            <span class="ft-nav-label">Backups</span>
           </a>
         </div>
       </div>
 
       {% endwith %}
-    {# Bottom Quick Icons (Meta Style) #}
-    <div class="px-2 py-1.5 flex flex-col gap-1 border-t shrink-0" style="border-color:var(--border)">
-      {# Create (+) #}
-      <button type="button" @click="$dispatch('open-command-palette')" class="ft-nav-item w-full flex items-center justify-center p-2 transition-all" style="background:var(--primary); color:white; border-radius:6px" title="Create"
-              :class="collapsed ? 'w-9 h-9 mx-auto' : 'px-3 py-2 gap-2 justify-start'">
-        <i data-lucide="plus" class="w-4 h-4 text-white"></i>
-        <span x-show="!collapsed" class="font-bold text-xs">Create</span>
-      </button>
 
-      {# Search #}
-      <button type="button" @click="$dispatch('open-command-palette')" class="ft-nav-item" :class="collapsed ? 'justify-center mx-auto w-9 h-9' : 'gap-2'" title="Search">
-        <i data-lucide="search" class="ft-icon"></i>
-        <span x-show="!collapsed" class="ft-nav-label">Search</span>
-      </button>
-
-      {# Settings #}
-      <a href="{% url 'admin_panel:schedule_settings' %}" class="ft-nav-item" :class="collapsed ? 'justify-center mx-auto w-9 h-9' : 'gap-2'" title="Settings">
-        <i data-lucide="settings" class="ft-icon"></i>
-        <span x-show="!collapsed" class="ft-nav-label">Settings</span>
-      </a>
-
-      {# Help #}
-      <a href="#" class="ft-nav-item" :class="collapsed ? 'justify-center mx-auto w-9 h-9' : 'gap-2'" title="Help">
-        <i data-lucide="help-circle" class="ft-icon"></i>
-        <span x-show="!collapsed" class="ft-nav-label">Help</span>
-      </a>
-    </div>
+    </nav>
 
     {# ── User footer ──────────────────────────────────────────────── #}
-    <div class="border-t p-3 shrink-0 flex items-center gap-2.5"
+    <div class="border-t p-2.5 shrink-0 flex items-center gap-2"
          :class="collapsed ? 'justify-center' : ''"
          style="border-color:var(--border)">
       <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-[11px] font-semibold shrink-0">

@@ -1,16 +1,6 @@
 /**
  * FieldTrack Design System — Tailwind Config
- *
- * Primary: #1877F2 Meta blue scale (Meta Business Suite reference — DO NOT revert)
- * Accent:  #10B981 emerald (success / positive / CTA-secondary only)
- * Semantic: red-500 (danger), amber-500 (warning) — NOT brand accents
- * Dark mode: class-based (toggled via <html class="dark"> from Alpine + localStorage)
- * Grid: 8px base (spacing scale already covers multiples of 2/4/8)
- *
- * Primary scale anchored on Meta's base blue #1877F2 (--fds-unified-blue-50)
- * Tints  50→400  : lighter, toward white  (--fds-unified-blue-100 → 60)
- * Base   500      : #1877F2 exactly
- * Shades 600→900  : darker, toward navy  (--fds-unified-blue-40 → 10)
+ * Flatter radii & locked tokens
  */
 
 module.exports = {
@@ -25,60 +15,107 @@ module.exports = {
         extend: {
             fontFamily: {
                 sans: [
-                    'Segoe UI Historic',
+                    'Inter',
                     'Segoe UI',
-                    'Helvetica',
-                    'Arial',
                     'sans-serif',
                 ],
             },
+            fontSize: {
+                'large-title': ['28px', { lineHeight: '1.2', fontWeight: '700' }],
+                'page-title': ['24px', { lineHeight: '1.25', fontWeight: '700' }],
+                'section-title': ['20px', { lineHeight: '1.3', fontWeight: '700' }],
+                'card-title': ['18px', { lineHeight: '1.35', fontWeight: '600' }],
+                'body': ['13px', { lineHeight: '1.5', fontWeight: '400' }],
+                'small': ['12px', { lineHeight: '1.4', fontWeight: '400' }],
+                'caption': ['11px', { lineHeight: '1.4', fontWeight: '400' }],
+                'tiny': ['10px', { lineHeight: '1.3', fontWeight: '400' }],
+            },
             colors: {
-                // ── Primary brand (Meta Blue #1877F2) ─────────────────
                 primary: {
-                    50:  '#F4FAFF',   // --fds-unified-blue-100
-                    100: '#E7F3FF',   // --fds-unified-blue-95 / deemphasized bg
-                    200: '#CDE5FF',   // --fds-unified-blue-90
-                    300: '#A8D1FF',   // --fds-unified-blue-80
-                    400: '#5FAAFF',   // --fds-unified-blue-65
-                    500: '#1877F2',   // BASE — Meta primary blue
-                    600: '#166FE5',   // hover/active (Meta spec)
-                    700: '#1455B0',   // --fds-unified-blue-35
-                    800: '#083E89',   // --fds-unified-blue-25
-                    900: '#00193D',   // --fds-unified-blue-10
+                    DEFAULT: '#1877F2',
+                    hover: '#166FE5',
+                    50:  '#F4FAFF',
+                    100: '#E7F3FF',
+                    200: '#CDE5FF',
+                    300: '#A8D1FF',
+                    400: '#5FAAFF',
+                    500: '#1877F2',
+                    600: '#166FE5',
+                    700: '#1455B0',
+                    800: '#083E89',
+                    900: '#00193D',
                 },
-                // ── Accent (emerald) — success/positive/CTA-secondary ─
+                'primary-hover': '#166FE5',
+                bg: '#F0F2F5',
+                surface: '#FFFFFF',
+                'sidebar-dark': '#243746',
+                text: {
+                    DEFAULT: '#1C1E21',
+                    secondary: '#65676B',
+                    muted: '#8A8D91',
+                },
+                border: {
+                    DEFAULT: '#E4E6EB',
+                    card: '#E4E6EB',
+                    input: '#DADDE1',
+                },
+                success: '#31A24C',
+                warning: '#F7B928',
+                danger: '#E41E3F',
                 accent: {
-                    50:  '#ECFDF5',
-                    100: '#D1FAE5',
-                    200: '#A7F3D0',
-                    300: '#6EE7B7',
-                    400: '#34D399',
-                    500: '#10B981',
-                    600: '#059669',
-                    700: '#047857',
-                    800: '#065F46',
-                    900: '#064E3B',
+                    50:  '#E7F6EA',
+                    100: '#D1F0D9',
+                    200: '#A3E1B3',
+                    300: '#75CE8D',
+                    400: '#47BC67',
+                    500: '#31A24C',
+                    600: '#2B8E42',
+                    700: '#216D33',
+                    800: '#174B23',
+                    900: '#0B2712',
                 },
             },
-            // ── Border radius tokens (Meta geodesic values) ───────────
-            borderRadius: {
-                'card':   '8px',    // --geodesic-appearance-radius-container
-                'btn':    '6px',    // --geodesic-appearance-radius-control
-                'input':  '6px',    // --geodesic-appearance-radius-content
-                'modal':  '8px',    // --geodesic-appearance-radius-layer
-                'drawer': '8px',    // --geodesic-appearance-radius-layer
-                'chip':   '6px',    // badge/chip radius
-                'avatar': '999px',  // unchanged
+            spacing: {
+                '1': '4px',
+                '2': '8px',
+                '3': '12px',
+                '4': '16px',
+                '5': '20px',
+                '6': '24px',
+                '8': '32px',
+                '10': '40px',
+                '12': '48px',
+                '16': '64px',
+                'sidebar-w': '280px',
+                'sidebar-w-collapsed': '56px',
+                'topbar-h': '56px',
             },
-            // ── Shadow tokens (Meta flat — overlays only) ─────────────
+            borderRadius: {
+                'btn':    '4px',
+                'input':  '4px',
+                'card':   '6px',
+                'modal':  '8px',
+                'dialog': '8px',
+                'drawer': '8px',
+                'chip':   '4px',
+                'avatar': '999px',
+            },
             boxShadow: {
-                'soft':     '0 1px 2px rgba(0,0,0,0.10)',
-                'dropdown': '0 2px 8px rgba(0,0,0,0.10), 0 1px 1px rgba(0,0,0,0.10)',
-                'elevated': '0 2px 12px 2px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.10)',
+                'sm':       '0 1px 2px rgba(0,0,0,.05)',
+                'md':       '0 2px 8px rgba(0,0,0,.12)',
+                'lg':       '0 8px 24px rgba(0,0,0,.15)',
+                'soft':     '0 1px 2px rgba(0,0,0,.05)',
+                'dropdown': '0 2px 8px rgba(0,0,0,.12)',
+                'elevated': '0 8px 24px rgba(0,0,0,.15)',
                 'none-dark': '0 0 0 1px rgba(255,255,255,0.06)',
             },
-            // ── Background images ─────────────────────────────────────
-            backgroundImage: {},
+            transitionDuration: {
+                DEFAULT: '180ms',
+                '180': '180ms',
+            },
+            transitionTimingFunction: {
+                DEFAULT: 'ease',
+            },
         },
     },
     plugins: [

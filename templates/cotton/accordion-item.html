@@ -1,0 +1,67 @@
+{% comment %} c-accordion-item component
+   Individual collapsible section for c-accordion.
+   Props:
+   - title: section heading (required)
+   - open: true = starts expanded (default: false)
+   - icon: lucide icon name before title (optional)
+   - extra_class: additional classes
+   Slot: default — collapsible body content
+
+   Usage (inside <c-accordion>):
+     <c-accordion-item title="Billing" icon="credit-card">
+       Your billing details...
+     </c-accordion-item>
+{% endcomment %}
+
+<div class="ft-accordion-item {{ extra_class }}"
+     x-data="{ uid: $id('acc'), open: {% if open == 'true' %}true{% else %}false{% endif %} }"
+     x-init="
+       const root = $el.closest('[x-data]');
+       if (root && root._x_dataStack) {
+         const parent = root._x_dataStack[0];
+         if (parent && !parent.multi && open) parent.active = uid;
+       }
+     ">
+
+  <button type="button"
+          class="ft-accordion-trigger"
+          @click="
+            const parent = $el.closest('[x-data]')._x_dataStack ? $el.closest('[x-data]')._x_dataStack[0] : null;
+            if (parent && !parent.multi) {
+              open = !open;
+              parent.active = open ? uid : null;
+            } else {
+              open = !open;
+            }
+          "
+          :aria-expanded="open"
+          :aria-controls="'acc-body-' + uid">
+
+    <span class="flex items-center gap-2">
+      {% if icon %}
+      <i data-lucide="{{ icon }}" class="w-4 h-4 flex-shrink-0" style="color:var(--text-muted);stroke-width:1.5"></i>
+      {% endif %}
+      <span class="font-medium text-[14px]" style="color:var(--text)">{{ title }}</span>
+    </span>
+
+    <i data-lucide="chevron-down"
+       class="w-4 h-4 flex-shrink-0 transition-transform duration-180"
+       style="color:var(--text-muted);stroke-width:1.5"
+       :style="open ? 'transform:rotate(180deg)' : ''"></i>
+  </button>
+
+  <div :id="'acc-body-' + uid"
+       x-show="open"
+       x-transition:enter="transition ease-out duration-180"
+       x-transition:enter-start="opacity-0 -translate-y-1"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       x-cloak>
+    <div class="ft-accordion-body">
+      {{ slot }}
+    </div>
+  </div>
+
+</div>

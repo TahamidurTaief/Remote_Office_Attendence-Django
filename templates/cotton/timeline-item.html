@@ -1,0 +1,41 @@
+{% comment %} c-timeline-item component
+   Individual item for c-timeline.
+   Props:
+   - title: event title (required)
+   - meta: timestamp or secondary text (optional)
+   - dot: primary | success | danger | warning (default: neutral border color)
+   - icon: lucide icon name — if set, renders an icon inside the dot circle instead
+   - extra_class: additional classes on item wrapper
+   Slot: default — body description text
+
+   Usage (inside <c-timeline>):
+     <c-timeline-item title="Approved" meta="Today 9:00 AM" dot="success">
+       Leave request approved.
+     </c-timeline-item>
+{% endcomment %}
+
+<div class="ft-timeline-item {{ extra_class }}" role="listitem">
+
+  {# Dot + connector line column #}
+  <div class="ft-timeline-aside">
+    <div class="ft-timeline-dot {{ dot|default:'' }}">
+      {% if icon %}
+      <i data-lucide="{{ icon }}" class="w-3 h-3" style="stroke-width:2;color:#FFFFFF"></i>
+      {% endif %}
+    </div>
+    {# Line rendered by CSS ::after on parent, but provide explicit line for multi-item flow #}
+    <div class="ft-timeline-line"></div>
+  </div>
+
+  {# Content column #}
+  <div class="ft-timeline-content">
+    <div class="ft-timeline-title">{{ title }}</div>
+    {% if meta %}
+    <div class="ft-timeline-meta">{{ meta }}</div>
+    {% endif %}
+    {% if slot %}
+    <div class="ft-timeline-body">{{ slot }}</div>
+    {% endif %}
+  </div>
+
+</div>

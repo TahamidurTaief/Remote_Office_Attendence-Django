@@ -1,7 +1,5 @@
 {% comment %} c-command-palette — Global Ctrl/Cmd+K fuzzy search modal
-   No props. Listens to 'open-command-palette' custom event.
-   Nav items are hardcoded (no backend needed for navigation).
-   Future: could add htmx-driven results for records.
+   Ultra-minimal: no border, soft blue shadow, blurred backdrop.
 {% endcomment %}
 
 <div x-data="{
@@ -82,32 +80,39 @@
 
     {# Command box #}
     <div class="ft-command-box" @click.stop
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95"
          @keydown.escape.prevent="closePalette()"
          @keydown.arrow-down.prevent="moveDown()"
          @keydown.arrow-up.prevent="moveUp()"
          @keydown.enter.prevent="navigate()">
 
-      {# Search input #}
-      <div class="flex items-center gap-3 px-4 py-3 border-b" style="border-color:var(--border)">
-        <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color:var(--text-muted)"></i>
+      {# Search row — ultra minimal pill #}
+      <div class="flex items-center gap-2.5 px-4 py-3.5"
+           style="border-bottom: 1px solid rgba(228,230,235,0.5)">
+        <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: #B0B3B8"></i>
         <input id="ft-cmd-input"
                type="text"
-               x-model.debounce.100="query"
+               x-model.debounce.80="query"
                @input="selectedIndex = 0"
                placeholder="Search pages, actions…"
-               class="flex-1 bg-transparent outline-none text-[13px] border-0 p-0 ring-0 shadow-none"
-               style="color:var(--text)">
+               class="flex-1 bg-transparent outline-none text-[13px] border-0 p-0 ring-0 shadow-none font-normal"
+               style="color: #1C1E21">
         <button type="button" @click="closePalette()"
-                class="ft-btn ft-btn-ghost ft-btn-sm px-2 py-1 text-[10px] rounded"
-                style="color:var(--text-muted)">
+                class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                style="background: rgba(228,230,235,0.5); color: #8A8D91; border: none; cursor:pointer">
           ESC
         </button>
       </div>
 
       {# Results list #}
-      <div class="py-1 max-h-80 overflow-y-auto scrollbar-hide">
+      <div class="py-1.5 max-h-72 overflow-y-auto scrollbar-hide">
         <template x-if="filtered.length === 0">
-          <div class="px-4 py-8 text-center text-[12px]" style="color:var(--text-muted)">
+          <div class="px-4 py-10 text-center text-[12px]" style="color: #8A8D91">
             No results for "<span x-text="query"></span>"
           </div>
         </template>
@@ -116,37 +121,48 @@
           <a :href="item.href"
              @click="closePalette()"
              @mouseover="selectedIndex = idx"
-             class="flex items-center gap-3 px-4 py-2.5 transition-colors cursor-pointer"
-             :style="selectedIndex === idx ? 'background:var(--primary-light); color:var(--primary)' : 'color:var(--text-secondary)'"
+             class="flex items-center gap-3 px-3 py-2 mx-1.5 rounded-md transition-all cursor-pointer"
+             :style="selectedIndex === idx
+               ? 'background: rgba(24,119,242,0.07); color: #1877F2'
+               : 'color: #65676B'"
+             style="text-decoration: none"
              x-data>
-            <div class="w-7 h-7 rounded-btn flex items-center justify-center flex-shrink-0 transition-colors"
-                 :style="selectedIndex === idx ? 'background:var(--primary); color:white' : 'background:var(--surface-2); color:var(--text-muted)'">
+            <div class="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors"
+                 :style="selectedIndex === idx
+                   ? 'background:#1877F2; color:white'
+                   : 'background:rgba(24,119,242,0.08); color:#1877F2'">
               <i :data-lucide="item.icon" class="w-3.5 h-3.5"></i>
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-[12px] font-medium truncate" x-text="item.label"></p>
             </div>
-            <span class="text-[10px] px-1.5 py-0.5 rounded"
-                  style="background:var(--surface-2); color:var(--text-muted)"
+            <span class="text-[10px] px-1.5 py-0.5 rounded-sm font-medium"
+                  style="background: rgba(228,230,235,0.4); color: #8A8D91"
                   x-text="item.group"></span>
             <template x-if="selectedIndex === idx">
-              <i data-lucide="corner-down-left" class="w-3.5 h-3.5 flex-shrink-0"></i>
+              <i data-lucide="corner-down-left" class="w-3 h-3 flex-shrink-0" style="color:#1877F2; opacity:0.6"></i>
             </template>
           </a>
         </template>
       </div>
 
-      {# Footer hint #}
-      <div class="px-4 py-2.5 border-t flex items-center gap-4 text-[10px]"
-           style="border-color:var(--border); color:var(--text-muted); background:var(--surface-2)">
+      {# Footer hint — borderless, minimal #}
+      <div class="px-4 py-2 flex items-center gap-3 text-[10px]"
+           style="border-top: 1px solid rgba(228,230,235,0.4); color: #B0B3B8">
         <span class="flex items-center gap-1">
-          <kbd class="px-1 py-0.5 rounded border" style="border-color:var(--border)">↑↓</kbd> Navigate
+          <kbd class="px-1 py-0.5 rounded text-[9px]"
+               style="background:rgba(228,230,235,0.5); color:#8A8D91">↑↓</kbd>
+          Navigate
         </span>
         <span class="flex items-center gap-1">
-          <kbd class="px-1 py-0.5 rounded border" style="border-color:var(--border)">↵</kbd> Open
+          <kbd class="px-1 py-0.5 rounded text-[9px]"
+               style="background:rgba(228,230,235,0.5); color:#8A8D91">↵</kbd>
+          Open
         </span>
         <span class="flex items-center gap-1">
-          <kbd class="px-1 py-0.5 rounded border" style="border-color:var(--border)">ESC</kbd> Close
+          <kbd class="px-1 py-0.5 rounded text-[9px]"
+               style="background:rgba(228,230,235,0.5); color:#8A8D91">ESC</kbd>
+          Close
         </span>
       </div>
     </div>

@@ -1,0 +1,194 @@
+<c-app-shell page_title="Live Attendance Status | FieldTrack" active_href="{{ request.path }}">
+<div class="p-6 max-w-7xl mx-auto space-y-6">
+
+  {# ── Header Zone ───────────────────────────────────────────────────────── #}
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <h1 class="text-[18px] font-bold text-gray-900">Live Attendance Status</h1>
+      <p class="text-[12px] text-gray-500 mt-0.5">Real-time attendance tracking, location pings, and session logs</p>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      {% if active_session %}
+        <c-button href="/staff/home/" variant="danger" icon="square" label="Check Out Now" size="md" />
+        <c-button href="{% url 'attendance:field_visit_submit' %}" variant="secondary" icon="map-pin" label="Log Field Visit" size="md" />
+      {% else %}
+        <c-button href="{% url 'attendance:check_in' %}" variant="primary" icon="play" label="Check In Now" size="md" />
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Live Session Status Banner (Cotton Card + Alpine Timer) ───────────── #}
+  <div x-data="{
+         checkInTime: '{{ active_session.check_in_time|date:"c"|default:"" }}',
+         elapsedSeconds: 0,
+         timer: null,
+         init() {
+           if (this.checkInTime) {
+             const startTime = new Date(this.checkInTime).getTime();
+             this.updateTimer(startTime);
+             this.timer = setInterval(() => this.updateTimer(startTime), 1000);
+           }
+         },
+         updateTimer(startTime) {
+           const now = new Date().getTime();
+           this.elapsedSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
+         },
+         formatElapsed() {
+           const h = String(Math.floor(this.elapsedSeconds / 3600)).padStart(2, '0');
+           const m = String(Math.floor((this.elapsedSeconds % 3600) / 60)).padStart(2, '0');
+           const s = String(this.elapsedSeconds % 60).padStart(2, '0');
+           return `${h}:${m}:${s}`;
+         }
+       }"
+       class="ft-card p-6 border rounded-card relative overflow-hidden bg-white">
+    
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full flex items-center justify-center shrink-0 {% if active_session %}bg-emerald-50 text-emerald-600{% else %}bg-amber-50 text-amber-600{% endif %}">
+          {% if active_session %}
+            <i data-lucide="clock" class="w-6 h-6 animate-pulse"></i>
+          {% else %}
+            <i data-lucide="user-x" class="w-6 h-6"></i>
+          {% endif %}
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-[16px] font-bold text-gray-900">
+              {% if active_session %}Currently Checked In{% else %}Checked Out{% endif %}
+            </h2>
+            {% if active_session %}
+              <span class="ft-badge ft-badge-success">Active Session</span>
+            {% else %}
+              <span class="ft-badge ft-badge-neutral">Offline</span>
+            {% endif %}
+          </div>
+          <p class="text-[12px] text-gray-500 mt-1">
+            {% if active_session %}
+              Session started at {{ active_session.check_in_time|date:"h:i A" }} ({{ active_session.get_type_display }})
+            {% else %}
+              No active attendance session running right now.
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
+      {% if active_session %}
+      {# Active Live Timer Display #}
+      <div class="flex items-center gap-4 bg-primary-50 px-5 py-3 rounded-card border border-primary-100">
+        <div>
+          <span class="text-[10px] uppercase font-bold text-primary-600 tracking-wider block">Live Worked Time</span>
+          <span class="ft-mono text-[22px] font-bold text-primary-700 leading-none" x-text="formatElapsed()">00:00:00</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Grid: Today's Sessions & Location Sync Info ────────────────────────── #}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    {# Left 2 Cols: Today's Sessions Table #}
+    <div class="lg:col-span-2 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-[14px] font-bold text-gray-900 flex items-center gap-2">
+          <i data-lucide="list" class="w-4 h-4 text-primary"></i>
+          Today's Attendance Sessions
+        </h3>
+        <span class="text-[12px] text-gray-500">{{ sessions_today|length }} session(s) today</span>
+      </div>
+
+      <div class="ft-card overflow-hidden">
+        <table class="ft-table">
+          <thead>
+            <tr>
+              <th>Check In</th>
+              <th>Check Out</th>
+              <th>Total Hours</th>
+              <th>Status</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in sessions_today %}
+            <tr>
+              <td class="font-medium text-gray-900">
+                {{ session.check_in_time|date:"h:i A" }}
+              </td>
+              <td>
+                {% if session.check_out_time %}
+                  {{ session.check_out_time|date:"h:i A" }}
+                {% else %}
+                  <span class="ft-badge ft-badge-success">In Progress</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if session.total_hours %}
+                  <span class="font-semibold text-gray-900">{{ session.total_hours }} hrs</span>
+                {% else %}
+                  <span class="text-gray-400">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if session.status == 'on_time' %}
+                  <span class="ft-badge ft-badge-success">On Time</span>
+                {% elif session.status == 'late' %}
+                  <span class="ft-badge ft-badge-danger">Late</span>
+                {% else %}
+                  <span class="ft-badge ft-badge-neutral">{{ session.get_status_display }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="ft-badge ft-badge-info">{{ session.get_type_display }}</span>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="py-8 text-center text-gray-400 text-[12px]">
+                No attendance sessions recorded for today.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Right Col: Geofence & Location Sync Card #}
+    <div class="space-y-4">
+      <h3 class="text-[14px] font-bold text-gray-900 flex items-center gap-2">
+        <i data-lucide="navigation" class="w-4 h-4 text-primary"></i>
+        Geofence & Tracking
+      </h3>
+
+      <div class="ft-card p-5 space-y-4 bg-white">
+        <div class="flex items-center justify-between border-b pb-3">
+          <span class="text-[12px] text-gray-500 font-medium">Assigned Branch</span>
+          <span class="text-[12px] font-bold text-gray-900">{{ branch.name|default:"Head Office" }}</span>
+        </div>
+
+        <div class="flex items-center justify-between border-b pb-3">
+          <span class="text-[12px] text-gray-500 font-medium">Geofence Radius</span>
+          <span class="text-[12px] font-bold text-gray-900">{{ branch.geofence_radius|default:200 }} meters</span>
+        </div>
+
+        <div class="flex items-center justify-between border-b pb-3">
+          <span class="text-[12px] text-gray-500 font-medium">Background Sync</span>
+          <span class="text-[12px] font-bold text-primary">
+            {% if tracking_interval %}
+              Every {{ tracking_interval }} min
+            {% else %}
+              Disabled
+            {% endif %}
+          </span>
+        </div>
+
+        <div class="pt-1">
+          <c-button href="{% url 'attendance:check_in' %}" variant="secondary" icon="refresh-cw" label="Update Live Position" size="sm" extra_class="w-full justify-center" />
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</c-app-shell>

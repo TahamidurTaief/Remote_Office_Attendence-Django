@@ -99,3 +99,72 @@ uv run python scripts/verify_ui.py
      - Background Watch Process: `uv run python manage.py tailwind watch`
      - Concurrent Watch + Dev Server: `uv run python manage.py tailwind runserver`
 
+---
+
+## 5. Final Design-Token Lock Specification (Dated: 2026-07-22)
+
+> [!IMPORTANT]
+> **FINAL DESIGN-TOKEN LOCK**: This exact specification is locked as of 2026-07-22 and supersedes all earlier partial token values. No future session should re-litigate individual token values without explicit rationale.
+
+### Color Tokens
+- `--primary`: `#1877F2` (hover: `#166FE5`)
+- `--bg`: `#F0F2F5`
+- `--surface`: `#FFFFFF`
+- `--sidebar-dark`: `#243746` (alt: `#2F3B45`)
+- `--text`: `#1C1E21`
+- `--text-secondary`: `#65676B`
+- `--text-muted`: `#8A8D91`
+- `--border`: `#E4E6EB` (inputs: `#DADDE1`)
+- `--success`: `#31A24C`
+- `--warning`: `#F7B928`
+- `--danger`: `#E41E3F`
+
+### Radius Scale
+- Button: `6px`
+- Input: `6px`
+- Card: `8px`
+- Dialog / Modal / Drawer: `12px`
+- Avatar: `999px` (full circle)
+
+### Shadow Scale
+- Small: `0 1px 2px rgba(0,0,0,.08)`
+- Medium: `0 2px 8px rgba(0,0,0,.12)`
+- Large: `0 8px 24px rgba(0,0,0,.15)`
+
+### Component Layout Standards
+- **Sidebar**: 280px expanded, 56px collapsed. Items 40px height, 8px radius. Active item background `#243746` with white icon and text.
+- **Top Navbar**: 56px height, 20px icons, 16px icon gap.
+- **Buttons**: 36-40px height, 6px radius, transition 180ms ease. Primary: `#1877F2` (hover `#166FE5`), Secondary: white bg + `#DADDE1` border. Icon button: 36x36px.
+- **Inputs**: 36px height, 6px radius, `#DADDE1` border, 2px blue focus ring (`rgba(24,119,242,.25)`).
+- **Cards**: White bg, 8px radius, `#E4E6EB` border, `0 1px 2px rgba(0,0,0,.08)` shadow.
+- **Tables**: Row height 52px, header white background / 14px / weight 600, row hover `#F7F8FA`.
+- **Notification Panel**: 320px width, 12px radius, item height 72px, avatar 44px, unread blue dot `#1877F2`.
+- **Hard Constraints**: NO gradients in UI chrome, NO glassmorphism, 180ms ease hover transitions.
+
+---
+
+## 6. Layout & Control Refinements (2026-07-22)
+
+1. **Top Navbar Uniformity**: Removed page-specific CTA action buttons from the top navbar. All topbar elements (logo, search, clock, mute, notifications, theme toggle, profile menu) are now 100% fixed and standard across every page. Page-specific action buttons now render cleanly at the top of the main content area.
+2. **Sidebar Text & Padding**: Reduced sidebar font size to `12px` and item height to `32px` with compact `4px 8px` padding.
+3. **Single Active Submenu Selection**: Removed duplicate `.active` background cards on parent dropdown header buttons. Now, ONLY the single active child link (`<a>` tag) displays the dark `.active` background card (`#243746`), while its parent dropdown group auto-expands on load.
+4. **Button Non-Wrapping Guarantee**: Enforced `white-space: nowrap !important` and `flex-shrink: 0` across all `.ft-btn` components and icons, guaranteeing buttons never break across multiple lines.
+5. **Uniform Controls & Flatter Radii**: Standardized height (34px), padding (6px 12px), text size (12px), and border-radius (4px for buttons/inputs, 6px for cards, 8px for modals/drawers) across all controls app-wide.
+
+---
+
+## 7. Cotton Component UI & Submenu Active Bar Updates (2026-07-22)
+
+1. **Cotton Component Buttons**: Converted hardcoded rounded-xl buttons across `leave_types.html`, `reports/main.html`, and other pages into standard Cotton `<c-button>` components adhering strictly to design token standards (`--radius-btn: 4px`).
+2. **Live Attendance Page (`/attendance/status/`)**: Enhanced `attendance_status` view to render a dynamic HTML page (`templates/attendance/status.html`) for browser GET requests, featuring an Alpine.js live worked-time counter, session history table (`ft-table`), and geofence tracking information, while preserving full JSON API compatibility for background pings.
+3. **Submenu Active Highlight Fix**: Updated sidebar active-state template conditions for Task menu (`Team Tasks` vs `Task Board`), Projects menu (`All Projects`, `Active Projects`, `Completed Projects`), and Leave menu submenus (`Leave Requests`, `Leave Types`, `Leave Balance`) so active bars transition cleanly between items without getting stuck.
+
+---
+
+## 8. Cotton Employee Picker Component (2026-07-22)
+
+1. **Cotton `<c-employee-picker>` Component**: Replaced raw, clunky HTML `<select multiple>` list selectors with an ultra-minimal Cotton component ([employee-picker.html](file:///c:/Users/ISSL/Desktop/Remote_Office_Attendence-Django/templates/cotton/employee-picker.html)).
+2. **Zero-Padding Text Button & Chips**: Features a 0-padding text button (`+ Add Employee`) that opens an ultra-minimal selection modal with real-time employee search filtering, and displays assigned employees as removable chips while keeping hidden `<select>` values synced for 100% Django form POST compatibility.
+
+
+

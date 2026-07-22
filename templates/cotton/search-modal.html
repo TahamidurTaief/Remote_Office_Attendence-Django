@@ -1,0 +1,116 @@
+{% comment %} c-search-modal — Custom search modal with results
+   Props:
+   - id: unique id (required)
+   - placeholder: search placeholder text
+   Slots:
+   - results: rendered result items (template-driven by parent)
+   Usage:
+     <c-search-modal id="my-search" placeholder="Search employees…">
+       <div slot="results">…</div>
+     </c-search-modal>
+     Open via: $dispatch('open-search-modal', {id: 'my-search'})
+{% endcomment %}
+
+<div x-data="{
+       open: false,
+       query: '',
+       loading: false,
+       init() {
+         window.addEventListener('open-search-modal', e => {
+           if (!e.detail || e.detail.id === '{{ id }}') {
+             this.open = true;
+             this.$nextTick(() => {
+               const inp = this.$el.querySelector('.ft-search-modal-input');
+               if (inp) inp.focus();
+             });
+           }
+         });
+         window.addEventListener('close-modal', e => {
+           if (!e.detail || !e.detail.id || e.detail.id === '{{ id }}') {
+             this.open = false;
+             this.query = '';
+           }
+         });
+       },
+       close() {
+         this.open = false;
+         this.query = '';
+         if(window.SoundFX) SoundFX.playModalClose();
+       }
+     }"
+     id="search-modal-{{ id }}">
+
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       @click="close()"
+       @keydown.escape.window="close()"
+       class="fixed inset-0 z-[200] flex items-start justify-center"
+       style="padding-top: 72px; background: rgba(15,20,35,0.3); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);"
+       x-cloak>
+
+    <div class="w-full bg-white overflow-hidden"
+         style="max-width: 540px; border-radius: 10px; box-shadow: 0 16px 56px rgba(24,119,242,0.13), 0 2px 16px rgba(0,0,0,0.05); border: none;"
+         @click.stop
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+
+      {# Search bar #}
+      <div class="flex items-center gap-2.5 px-4 py-3.5"
+           style="border-bottom: 1px solid rgba(228,230,235,0.5)">
+        <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: #B0B3B8"></i>
+        <input type="text"
+               x-model.debounce.200="query"
+               class="ft-search-modal-input flex-1 bg-transparent outline-none border-0 p-0 ring-0 shadow-none text-[13px]"
+               style="color: #1C1E21; font-family: inherit"
+               placeholder="{{ placeholder|default:'Search…' }}"
+               autocomplete="off">
+        <button type="button"
+                @click="close()"
+                class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                style="background: rgba(228,230,235,0.5); color: #8A8D91; border: none; cursor: pointer">
+          ESC
+        </button>
+      </div>
+
+      {# Results slot — rendered by parent via htmx or Alpine #}
+      <div class="max-h-72 overflow-y-auto scrollbar-hide py-1.5"
+           x-show="query.length > 0 || true">
+        {{ slot }}
+        {% if not slot %}
+        <div class="px-4 py-8 text-center text-[12px]" style="color: #B0B3B8">
+          Start typing to search…
+        </div>
+        {% endif %}
+      </div>
+
+      {# Hint footer #}
+      <div class="px-4 py-2 flex items-center gap-3 text-[10px]"
+           style="border-top: 1px solid rgba(228,230,235,0.4); color: #B0B3B8">
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.5 rounded text-[9px]"
+               style="background:rgba(228,230,235,0.5); color:#8A8D91">↑↓</kbd>
+          Navigate
+        </span>
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.5 rounded text-[9px]"
+               style="background:rgba(228,230,235,0.5); color:#8A8D91">↵</kbd>
+          Select
+        </span>
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.5 rounded text-[9px]"
+               style="background:rgba(228,230,235,0.5); color:#8A8D91">ESC</kbd>
+          Close
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
