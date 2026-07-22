@@ -123,7 +123,7 @@
         </div>
         <div class="flex gap-2">
             <!-- Create Individual Task Button -->
-            <a href="{% url 'projects:global_task_add' %}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary-gradient text-white text-[12px] font-bold rounded-lg shadow-sm hover:opacity-90 transition-opacity whitespace-nowrap">
+            <a href="{% url 'projects:global_task_add' %}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-white text-[12px] font-bold rounded-lg shadow-sm hover:opacity-90 transition-opacity whitespace-nowrap">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i> Create Individual Task
             </a>
         </div>
@@ -305,7 +305,7 @@
                                 <span class="font-bold text-gray-700">{{ item.progress_percent }}%</span>
                             </div>
                             <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                <div class="bg-primary-gradient h-1.5 rounded-full" style="width: {{ item.progress_percent }}%"></div>
+                                <div class="bg-primary h-1.5 rounded-full" style="width: {{ item.progress_percent }}%"></div>
                             </div>
                         </div>
 

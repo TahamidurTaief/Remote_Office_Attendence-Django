@@ -89,8 +89,13 @@ uv run python scripts/verify_ui.py
 3. To add page-specific scripts, use `<c-slot name="scripts"><script>...</script></c-slot>`.
 4. Run `uv run python scripts/verify_ui.py` before committing. **All checks must pass clean (`SUCCESS`).**
 5. Do NOT use `<cotton-slot>` or `<cotton-slot name="..." />` in any component layout templates. Use `{{ slot }}` and `{{ name }}` context variables instead.
-6. **Tailwind CLI Commands (Zero Node dependency)**:
-   - Compile CSS for production: `uv run python manage.py tailwind build`
-   - Watch and compile CSS automatically in development: `uv run python manage.py tailwind watch`
-   - Run Django and watch CSS concurrently: `uv run python manage.py tailwind runserver`
+6. **Tailwind CLI Commands & Dev Workflow (Zero Node/npm dependency)**:
+   - **Production CSS Compilation**: `uv run python manage.py tailwind build` (one-shot, blocking production compilation).
+   - **Deterministic Dev Startup (Recommended)**: To completely prevent the intermittent CSS loading race condition (where Django serves a truncated stylesheet while the background watch process is compiling), always execute a one-shot build *before* launching the watcher/dev server:
+     ```bash
+     uv run python manage.py tailwind build && uv run python manage.py tailwind runserver
+     ```
+   - **Watch / Rebuild Modes**:
+     - Background Watch Process: `uv run python manage.py tailwind watch`
+     - Concurrent Watch + Dev Server: `uv run python manage.py tailwind runserver`
 

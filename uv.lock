@@ -280,16 +280,16 @@ wheels = [
 
 [[package]]
 name = "django-tailwind-cli"
-version = "4.6.2"
+version = "2.21.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "django-typer" },
-    { name = "semver" },
+    { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dd/4e/67143e297e6196f3a7661ab912f888493fb9b40c2f50dd04964a7f22f055/django_tailwind_cli-4.6.2.tar.gz", hash = "sha256:479b82096ed2656c8990f59ae2ee2d1ea2abace7d82ba6013a0861502a906004", size = 122664, upload-time = "2026-05-14T09:12:48.168Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4b/54/f242a4052aa620920e53fa5351af0b095d98e75d4f921a676fd6a43f35bb/django_tailwind_cli-2.21.1.tar.gz", hash = "sha256:181f69dc172f50914823632dfec6d1d4d52150fcde4358b7439da37da025110b", size = 66542, upload-time = "2024-12-07T18:48:25.656Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/8b/ed7e4d5757341e7a7daba9d8daa7152c80613208693d1ebb180d579e1428/django_tailwind_cli-4.6.2-py3-none-any.whl", hash = "sha256:5fed9b26c56533fa7c41a92f369ebd41da50b2f520414d5f77b0f2bf9a3caebc", size = 38388, upload-time = "2026-05-14T09:12:46.968Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/50/3cfd29be03ea1abdc64121aff1e30182b6e9b06524e29661c112652b129a/django_tailwind_cli-2.21.1-py3-none-any.whl", hash = "sha256:5e6df422341844ce3dd76bab3e63bbd74f760e71c3df1005792be23066e78257", size = 12927, upload-time = "2024-12-07T18:48:23.558Z" },
 ]
 
 [[package]]
@@ -343,7 +343,7 @@ requires-dist = [
     { name = "django-cotton", specifier = ">=2.7.2" },
     { name = "django-environ", specifier = ">=0.11.2" },
     { name = "django-imagekit", specifier = ">=5.0.0" },
-    { name = "django-tailwind-cli", specifier = ">=4.6.2" },
+    { name = "django-tailwind-cli", specifier = "==2.21.1" },
     { name = "google-api-python-client", specifier = ">=2.0.0" },
     { name = "google-auth-httplib2", specifier = ">=0.1.0" },
     { name = "google-auth-oauthlib", specifier = ">=0.5.0" },
@@ -739,15 +739,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
-]
-
-[[package]]
-name = "semver"
-version = "3.0.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/72/d1/d3159231aec234a59dd7d601e9dd9fe96f3afff15efd33c1070019b26132/semver-3.0.4.tar.gz", hash = "sha256:afc7d8c584a5ed0a11033af086e8af226a9c0b206f313e0301f8dd7b6b589602", size = 269730, upload-time = "2025-01-24T13:19:27.617Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/24/4d91e05817e92e3a61c8a21e08fd0f390f5301f1c448b137c57c4bc6e543/semver-3.0.4-py3-none-any.whl", hash = "sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746", size = 17912, upload-time = "2025-01-24T13:19:24.949Z" },
 ]
 
 [[package]]

@@ -11,7 +11,7 @@
 
     <!-- Profile Header Card -->
     <div class="bg-white rounded-2xl border border-gray-150 shadow-sm p-6 mb-8 relative overflow-hidden">
-        <div class="absolute top-0 left-0 w-full h-2 bg-primary-gradient"></div>
+        <div class="absolute top-0 left-0 w-full h-2 bg-primary"></div>
         <div class="flex flex-col sm:flex-row items-center gap-6">
             {% if employee.profile_photo %}
             <img src="{{ employee.profile_photo.url }}" class="w-20 h-20 rounded-full object-cover border-2 border-primary-100/50 shadow-sm">
@@ -87,7 +87,7 @@
                             </span>
                         </div>
                         <div class="w-full bg-gray-200 h-2 rounded-full mt-3 overflow-hidden">
-                            <div class="bg-primary-gradient h-full rounded-full" 
+                            <div class="bg-primary h-full rounded-full" 
                                  style="width: {% widthratio balance.used_days|default:balance.used balance.total_days|default:balance.total 100 %}%">
                             </div>
                         </div>

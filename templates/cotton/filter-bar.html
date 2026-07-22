@@ -21,13 +21,8 @@
     {% if actions %}
       {{ actions }}
     {% else %}
-      <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm gap-1.5">
-        <i data-lucide="filter" class="w-3.5 h-3.5"></i>
-        Filter
-      </button>
-      <a href="{{ action|default:'.' }}" class="ft-btn ft-btn-secondary ft-btn-sm">
-        Reset
-      </a>
+      <c-button type="submit" variant="primary" size="sm" icon="filter" label="Filter" />
+      <c-button href="{{ action|default:'.' }}" variant="secondary" size="sm" label="Reset" />
     {% endif %}
   </div>
 </form>

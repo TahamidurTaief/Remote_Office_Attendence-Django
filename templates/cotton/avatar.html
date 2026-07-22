@@ -6,7 +6,7 @@ Props:
 - size: sm | md (default) | lg | xs
 - variant: circle (default) | square (rounded-btn)
 - status: online | offline | busy | away (optional dot indicator)
-- color: bg color class when showing initials (default: primary-gradient)
+- color: bg color class when showing initials (default: primary)
 - extra_class: additional classes
 {% endcomment %}
 
@@ -26,7 +26,7 @@ Props:
   {% else %}
   <span class="w-full h-full flex items-center justify-center font-semibold text-white
                  {% if variant == 'square' %}rounded-btn{% else %}rounded-full{% endif %}
-                 bg-primary-gradient">
+                 bg-primary">
     {{ initials|upper|truncatechars:2 }}
   </span>
   {% endif %}

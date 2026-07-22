@@ -1,6 +1,6 @@
 <c-app-shell page_title="Home | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
 <div id="install-banner" class="hidden mb-4 mx-0">
-  <div class="bg-primary-gradient rounded-card p-4 flex items-center justify-between gap-3">
+  <div class="bg-primary rounded-card p-4 flex items-center justify-between gap-3">
     <div class="flex items-center gap-3">
       <img src="/static/icons/icon-72.png" class="w-10 h-10 rounded-xl">
       <div>
@@ -174,7 +174,7 @@ window.addEventListener('appinstalled', () => {
                 <h2 class="text-lg font-bold" style="color:var(--text)">Field Visits Today</h2>
                 <p class="text-xs mt-1" style="color:var(--text-secondary)">Track client work and site visits.</p>
             </div>
-            <a href="{% url 'staff:field_visit' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
+            <a href="{% url 'staff:field_visit' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Add Visit
             </a>

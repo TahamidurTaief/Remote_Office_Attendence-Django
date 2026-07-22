@@ -181,6 +181,8 @@ LOGOUT_REDIRECT_URL = '/login/'
 SESSION_COOKIE_AGE = 86400  # 1 day
 
 # Tailwind CLI Configuration
+_cli_bin = 'tailwindcss-3.4.13.exe' if os.name == 'nt' else 'tailwindcss-3.4.13'
+TAILWIND_CLI_PATH = BASE_DIR / '.django_tailwind_cli' / _cli_bin
 TAILWIND_CLI_SRC_CSS = 'static/css/source.css'
 TAILWIND_CLI_DIST_CSS = 'css/dist/styles.css'
 

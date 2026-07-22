@@ -16,7 +16,7 @@
                 <i data-lucide="file-text" class="w-3.5 h-3.5 mr-1.5 text-red-500"></i>
                 Export Work Plan Sheet (PDF)
             </a>
-            <a href="{% url 'projects:project_edit' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+            <a href="{% url 'projects:project_edit' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
                 <i data-lucide="edit" class="w-3.5 h-3.5 mr-1.5"></i>
                 Edit Project
             </a>
@@ -54,7 +54,7 @@
                     <span class="font-bold text-gray-900 text-[12px]">{{ project.progress_percent }}%</span>
                 </div>
                 <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div class="bg-primary-gradient h-2 rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                    <div class="bg-primary h-2 rounded-full" style="width: {{ project.progress_percent }}%"></div>
                 </div>
             </div>
         </div>
@@ -232,7 +232,7 @@
                         <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
                         {% endfor %}
                     </select>
-                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90 whitespace-nowrap">
+                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90 whitespace-nowrap">
                         <i data-lucide="copy" class="w-3.5 h-3.5 mr-1"></i>
                         Apply Template
                     </button>
@@ -242,7 +242,7 @@
                     <i data-lucide="download" class="w-3.5 h-3.5 mr-1 text-primary-500"></i>
                     Export CSV
                 </a>
-                <a href="{% url 'projects:project_task_add' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+                <a href="{% url 'projects:project_task_add' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
                     <i data-lucide="plus" class="w-3.5 h-3.5 mr-1"></i>
                     Add Task
                 </a>
@@ -371,7 +371,7 @@
                     <option value="Delayed">Delayed</option>
                     <option value="Completed">Completed</option>
                 </select>
-                <button type="submit" :disabled="!bulkStatus" class="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium text-white bg-primary-gradient hover:opacity-90 disabled:opacity-40">
+                <button type="submit" :disabled="!bulkStatus" class="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium text-white bg-primary hover:opacity-90 disabled:opacity-40">
                     Apply Status
                 </button>
                 <button type="button" @click="selectedTasks = []" class="text-[11px] text-gray-400 hover:text-gray-650 ml-2">Clear Selection</button>
@@ -656,7 +656,7 @@
                         <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Delay Reason (Optional)</label>
                         {{ log_form.delay_reason }}
                     </div>
-                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
                         <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
                         Submit Daily Log
                     </button>
@@ -766,7 +766,7 @@
                             {{ manpower_form.present_count }}
                         </div>
                     </div>
-                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
                         <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
                         Submit Requirement
                     </button>
@@ -829,7 +829,7 @@
                                     <form action="{% url 'projects:material_increment' log.pk %}" method="POST" class="flex items-center gap-1">
                                         {% csrf_token %}
                                         <input type="number" name="increment_qty" step="0.01" min="0.01" required placeholder="Qty" class="w-16 px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                                        <button type="submit" class="p-1 bg-primary-gradient text-white rounded-lg hover:opacity-90 inline-flex items-center justify-center">
+                                        <button type="submit" class="p-1 bg-primary text-white rounded-lg hover:opacity-90 inline-flex items-center justify-center">
                                             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                                         </button>
                                     </form>
@@ -882,7 +882,7 @@
                         <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Remarks (Optional)</label>
                         {{ material_form.remarks }}
                     </div>
-                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
                         <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
                         Submit Material
                     </button>
@@ -917,7 +917,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="role" value="project_manager">
                             <input type="text" name="name" required placeholder="Manager Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary-gradient text-white rounded-lg text-[11px] font-medium hover:opacity-90">
+                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
                                 Confirm Sign-off
                             </button>
                         </form>
@@ -942,7 +942,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="role" value="site_engineer">
                             <input type="text" name="name" required placeholder="Engineer Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary-gradient text-white rounded-lg text-[11px] font-medium hover:opacity-90">
+                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
                                 Confirm Sign-off
                             </button>
                         </form>
@@ -965,7 +965,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="role" value="consultant">
                             <input type="text" name="name" required placeholder="Consultant Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary-gradient text-white rounded-lg text-[11px] font-medium hover:opacity-90">
+                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
                                 Confirm Sign-off
                             </button>
                         </form>
@@ -1000,7 +1000,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="role" value="client_representative">
                             <input type="text" name="name" required placeholder="Representative Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary-gradient text-white rounded-lg text-[11px] font-medium hover:opacity-90">
+                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
                                 Confirm Sign-off
                             </button>
                         </form>

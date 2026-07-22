@@ -101,7 +101,7 @@
               @click="open = !open"
               class="flex items-center gap-1.5 px-2 py-1 rounded-btn hover:bg-opacity-10 transition-colors"
               style="background:transparent">
-        <div class="w-7 h-7 rounded-full bg-primary-gradient flex items-center justify-center text-white text-[11px] font-semibold">
+        <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-[11px] font-semibold">
           {{ request.user.email|default:"User"|make_list|first|upper }}
         </div>
         <span class="hidden md:block text-[12px] font-medium max-w-[120px] truncate" style="color:var(--text-secondary)">

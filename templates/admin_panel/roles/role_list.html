@@ -7,7 +7,7 @@
             </h2>
         </div>
         <div class="mt-4 flex md:mt-0 md:ml-4">
-            <a href="{% url 'admin_panel:role_create' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary-gradient hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
+            <a href="{% url 'admin_panel:role_create' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Add Role
             </a>
@@ -62,7 +62,7 @@
                                             <input type="text" name="name" x-ref="nameInput" placeholder="Enter new role name" class="w-full px-3 py-2 border rounded-lg text-sm mb-4">
                                             <div class="flex justify-end gap-2">
                                                 <button type="button" @click="open = false" class="px-3 py-1.5 border rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-medium">Cancel</button>
-                                                <button type="submit" class="px-3 py-1.5 bg-primary-gradient text-white font-medium rounded-lg text-xs hover:opacity-90">Clone</button>
+                                                <button type="submit" class="px-3 py-1.5 bg-primary text-white font-medium rounded-lg text-xs hover:opacity-90">Clone</button>
                                             </div>
                                         </div>
                                     </div>

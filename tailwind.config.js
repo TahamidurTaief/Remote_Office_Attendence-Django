@@ -78,11 +78,7 @@ module.exports = {
                 'none-dark': '0 0 0 1px rgba(255,255,255,0.06)',
             },
             // ── Background images ─────────────────────────────────────
-            backgroundImage: {
-                'primary-gradient': 'linear-gradient(135deg, #1877F2 0%, #4599FF 100%)',
-                // Soft page-bg wash only — NEVER on cards or buttons
-                'soft-gradient': 'linear-gradient(135deg, rgba(24,119,242,0.03) 0%, rgba(231,243,255,0.06) 50%, rgba(24,119,242,0.02) 100%)',
-            },
+            backgroundImage: {},
         },
     },
     plugins: [

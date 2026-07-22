@@ -43,7 +43,7 @@
                 <a href="{% url 'projects:template_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 hover:bg-gray-50">
                     Cancel
                 </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-soft text-[12px] font-medium rounded-lg text-white bg-primary-gradient hover:opacity-90">
+                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-soft text-[12px] font-medium rounded-lg text-white bg-primary hover:opacity-90">
                     <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
                     {% if object %}Save Template{% else %}Create Template{% endif %}
                 </button>
@@ -117,7 +117,7 @@
                     {{ item_form.default_duration_days }}
                 </div>
                 <div class="sm:col-span-12 flex justify-end">
-                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-soft text-[12px] font-medium text-white bg-primary-gradient hover:opacity-90">
+                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-soft text-[12px] font-medium text-white bg-primary hover:opacity-90">
                         <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
                         Add Step
                     </button>

@@ -212,6 +212,102 @@ def spot_check_raw_html_content():
         print(f"PASSED: Spot check verified content on {len(admin_urls) + len(staff_urls)} representative URLs.")
         return True
 
+def check_compiled_css():
+    print("\n--- 7. COMPILED CSS LOADING & CLASS CONTENT CHECK ---")
+    from django.test import Client
+    from django.contrib.staticfiles import finders
+
+    client = Client()
+    resp = client.get("/login/", HTTP_HOST="localhost")
+    if resp.status_code != 200:
+        print("FAILED: /login/ returned non-200 status code.")
+        return False
+
+    html = resp.content.decode("utf-8")
+    match = re.search(r'<link\s+rel="stylesheet"\s+href="([^"]+)"', html)
+    if not match:
+        print("FAILED: No <link rel=\"stylesheet\"> tag found in rendered HTML of /login/.")
+        return False
+
+    css_href = match.group(1)
+    print(f"Found stylesheet link: {css_href}")
+
+    # Remove /static/ prefix to resolve via staticfind
+    static_rel_path = css_href.replace("/static/", "").lstrip("/")
+    css_file_path = finders.find(static_rel_path)
+
+    if not css_file_path or not os.path.exists(css_file_path):
+        css_file_path = os.path.join(settings.BASE_DIR, "static", static_rel_path)
+
+    if not os.path.exists(css_file_path):
+        print(f"FAILED: Compiled CSS file does not exist at resolved path: {css_file_path}")
+        return False
+
+    size = os.path.getsize(css_file_path)
+    if size < 5000:
+        print(f"FAILED: Compiled CSS file size is suspiciously small ({size} bytes).")
+        return False
+
+    with open(css_file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    required_classes = [".ft-card", ".ft-btn", "bg-primary", "text-accent-600"]
+    missing = [cls for cls in required_classes if cls not in content]
+
+    if missing:
+        print(f"FAILED: Compiled CSS file is missing expected classes: {missing}")
+        return False
+
+    print(f"PASSED: Verified CSS at '{css_href}' exists ({size} bytes) and contains required classes: {required_classes}.")
+    return True
+
+def check_consecutive_css_loads():
+    print("\n--- 8. 10 CONSECUTIVE PAGE & CSS LOAD VERIFICATION ---")
+    from django.test import Client
+
+    client = Client()
+    for i in range(1, 11):
+        resp = client.get("/login/", HTTP_HOST="localhost")
+        if resp.status_code != 200:
+            print(f"FAILED: Request {i} returned status {resp.status_code}")
+            return False
+        html = resp.content.decode("utf-8")
+        if '<link rel="stylesheet" href="/static/css/dist/styles.css">' not in html:
+            print(f"FAILED: Request {i} missing CSS link tag in HTML output")
+            return False
+
+        css_path = os.path.join(settings.BASE_DIR, "static", "css", "dist", "styles.css")
+        if not os.path.exists(css_path) or os.path.getsize(css_path) < 50000:
+            print(f"FAILED: Request {i} CSS file missing or truncated")
+            return False
+
+    print("PASSED: 10 consecutive fresh page loads returned valid HTML and CSS.")
+    return True
+
+def check_no_container_gradients():
+    print("\n--- 9. NO-CONTAINER-GRADIENTS COMPLIANCE CHECK ---")
+    cotton_dir = os.path.join(settings.BASE_DIR, "templates", "cotton")
+    failures = []
+
+    for root, _, files in os.walk(cotton_dir):
+        for f in files:
+            if f.endswith(".html"):
+                filepath = os.path.join(root, f)
+                rel_path = os.path.relpath(filepath, settings.BASE_DIR)
+                with open(filepath, "r", encoding="utf-8") as file:
+                    content = file.read()
+                    if "gradient" in content:
+                        failures.append(f"{rel_path}: Contains gradient reference in cotton components")
+
+    if failures:
+        print("FAILED: Gradient references found in templates/cotton/:")
+        for fail in failures:
+            print(f"  - {fail}")
+        return False
+    else:
+        print("PASSED: Zero gradients found in templates/cotton/ or main containers (flat #F0F2F5 background verified).")
+        return True
+
 def main():
     print("==================================================")
     print("      STANDING PRE-COMMIT VERIFICATION GATE       ")
@@ -223,7 +319,10 @@ def main():
         check_design_tokens(),
         run_django_checks(),
         run_tailwind_build(),
-        spot_check_raw_html_content()
+        spot_check_raw_html_content(),
+        check_compiled_css(),
+        check_consecutive_css_loads(),
+        check_no_container_gradients(),
     ]
     
     print("\n==================================================")

@@ -1,8 +1,4 @@
-<c-app-shell page_title="Leave Requests | FieldTrack Admin" active_href="{{ request.path }}" pending_leave_count="{{ pending_count }}">
-    <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" pending_leave_count="{{ pending_count }}" />
-    </c-slot>
-
+<c-app-shell page_title="Leave Requests | FieldTrack Admin" active_href="{{ request.path }}">
     <c-slot name="topbar">
         <c-topbar title="Leave Requests">
             <c-slot name="actions">
@@ -27,10 +23,10 @@
         <c-card padding="none">
             <c-slot name="header">
                 <div class="flex gap-1.5 flex-wrap">
-                    <a href="?status=all" class="ft-btn ft-btn-sm {% if current_status == 'all' or not current_status %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">All</a>
-                    <a href="?status=pending" class="ft-btn ft-btn-sm {% if current_status == 'pending' %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">Pending</a>
-                    <a href="?status=approved" class="ft-btn ft-btn-sm {% if current_status == 'approved' %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">Approved</a>
-                    <a href="?status=rejected" class="ft-btn ft-btn-sm {% if current_status == 'rejected' %}ft-btn-primary{% else %}ft-btn-secondary{% endif %}">Rejected</a>
+                    <c-button href="?status=all" variant="{% if current_status == 'all' or not current_status %}primary{% else %}secondary{% endif %}" size="sm" label="All" />
+                    <c-button href="?status=pending" variant="{% if current_status == 'pending' %}primary{% else %}secondary{% endif %}" size="sm" label="Pending" />
+                    <c-button href="?status=approved" variant="{% if current_status == 'approved' %}primary{% else %}secondary{% endif %}" size="sm" label="Approved" />
+                    <c-button href="?status=rejected" variant="{% if current_status == 'rejected' %}primary{% else %}secondary{% endif %}" size="sm" label="Rejected" />
                 </div>
             </c-slot>
 

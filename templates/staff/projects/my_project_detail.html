@@ -106,7 +106,7 @@
             <h2 class="text-sm font-bold text-gray-900 mt-0.5">{{ project.name }}</h2>
         </div>
         <div class="flex gap-2">
-            <button type="button" @click="openAddTaskModal('', '')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-gradient text-white font-bold rounded-lg text-xs hover:opacity-90 transition-opacity">
+            <button type="button" @click="openAddTaskModal('', '')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white font-bold rounded-lg text-xs hover:opacity-90 transition-opacity">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                 Add Task
             </button>
@@ -158,7 +158,7 @@
                                 <span class="font-semibold text-gray-700">{{ project.progress_percent }}%</span>
                             </div>
                             <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                <div class="bg-primary-gradient h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                                <div class="bg-primary h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
                             </div>
                         </div>
                     </dd>
@@ -634,7 +634,7 @@
                     <button type="button" @click="addTaskOpen = false" class="px-3 py-1.5 rounded border border-gray-250 bg-white text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                         Cancel
                     </button>
-                    <button type="submit" class="px-3 py-1.5 rounded bg-primary-gradient hover:opacity-90 text-white text-xs font-semibold transition-colors">
+                    <button type="submit" class="px-3 py-1.5 rounded bg-primary hover:opacity-90 text-white text-xs font-semibold transition-colors">
                         Assign Task
                     </button>
                 </div>

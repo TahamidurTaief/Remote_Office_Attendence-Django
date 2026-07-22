@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fieldtrack-v1';
+const CACHE_NAME = 'fieldtrack-v3';
 const OFFLINE_URL = '/staff/home/';
 
 self.addEventListener('install', (event) => {
@@ -26,9 +26,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network first for API calls
+  // Network first for API calls and any stylesheet
   if (event.request.url.includes('/attendance/') ||
-      event.request.url.includes('/api/')) {
+      event.request.url.includes('/api/') ||
+      event.request.url.includes('.css') ||
+      event.request.url.includes('styles.css')) {
     return;
   }
   
