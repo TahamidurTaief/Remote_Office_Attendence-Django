@@ -44,6 +44,7 @@
      x-init="
        const main = document.getElementById('ft-main-content');
        if (main) main.classList.toggle('sidebar-collapsed', collapsed);
+       if (window.lucide) window.lucide.createIcons();
      ">
 
   {# Mobile backdrop #}
