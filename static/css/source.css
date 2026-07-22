@@ -105,14 +105,14 @@ html:not(.dark) {
     --space-7: 32px;
     --space-8: 40px;
 
-    /* Font size scale */
-    --text-xs: 11px;
-    --text-sm: 12px;
-    --text-md: 14px;
-    --text-lg: 16px;
-    --text-xl: 18px;
-    --text-2xl: 20px;
-    --text-3xl: 24px;
+    /* Font size scale — reduced by 2px app-wide */
+    --text-xs: 10px;
+    --text-sm: 11px;
+    --text-md: 12px;
+    --text-lg: 14px;
+    --text-xl: 16px;
+    --text-2xl: 18px;
+    --text-3xl: 22px;
 
     /* Z-index scale */
     --z-sidebar: 40;

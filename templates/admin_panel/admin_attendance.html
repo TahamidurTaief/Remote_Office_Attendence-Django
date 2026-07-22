@@ -1,84 +1,70 @@
 <c-app-shell page_title="Attendance Records | FieldTrack Admin" active_href="{{ request.path }}">
-<div class="p-4 max-w-7xl mx-auto">
-    
-    <div class="flex justify-between items-end mb-4">
+<div class="p-6 max-w-7xl mx-auto space-y-5">
+
+    {# ── Header Zone ───────────────────────────────────────────────────────── #}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-[14px] font-semibold text-gray-900">Attendance Records</h1>
-            <p class="text-[12px] text-gray-500 mt-0.5">Manage, filter, and export employee attendance.</p>
+            <h1 class="text-[16px] font-bold text-gray-900">Attendance Records</h1>
+            <p class="text-[11px] text-gray-500 mt-0.5">Manage, filter, and export employee attendance logs.</p>
         </div>
-        <div class="flex space-x-3">
-            <a href="{% url 'admin_panel:manual_entry' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                Manual Entry
-            </a>
-            
-            <!-- Export dropdown -->
+        <div class="flex items-center gap-2.5 flex-wrap">
+            <c-button href="{% url 'admin_panel:manual_entry' %}" variant="secondary" icon="plus" label="Manual Entry" size="sm" />
+
+            <!-- Export Dropdown -->
             <div class="relative" x-data="{ open: false }">
-              <!-- Trigger button -->
-              <button @click="open = !open"
-                      @click.outside="open = false"
-                      class="flex items-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                <i data-lucide="download" class="w-4 h-4"></i>
-                Export
-                <i data-lucide="chevron-down" 
-                   class="w-3.5 h-3.5 transition-transform"
-                   :class="open ? 'rotate-180' : ''"></i>
-              </button>
-              
-              <!-- Dropdown menu -->
-              <div x-show="open"
-                   x-cloak
-                   x-transition:enter="transition ease-out duration-100"
-                   x-transition:enter-start="opacity-0 scale-95"
-                   x-transition:enter-end="opacity-100 scale-100"
-                   x-transition:leave="transition ease-in duration-75"
-                   x-transition:leave-start="opacity-100 scale-100"
-                   x-transition:leave-end="opacity-0 scale-95"
-                   class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-sm border border-gray-100 z-50 overflow-hidden">
-                
-                <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&{{ query_string }}"
-                   class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50">
-                  <div class="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center">
-                    <i data-lucide="table" class="w-3.5 h-3.5 text-green-600"></i>
-                  </div>
-                  <span>Excel (XLSX)</span>
-                </a>
-                
-                <a href="{% url 'admin_panel:export_attendance' %}?format=csv&{{ query_string }}"
-                   class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-50">
-                  <div class="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-600"></i>
-                  </div>
-                  <span>CSV</span>
-                </a>
-                
-                <a href="{% url 'admin_panel:export_attendance' %}?format=pdf&{{ query_string }}"
-                   class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                  <div class="w-6 h-6 bg-red-100 rounded-lg flex items-center justify-center">
-                    <i data-lucide="file" class="w-3.5 h-3.5 text-red-600"></i>
-                  </div>
-                  <span>PDF</span>
-                </a>
-                
-              </div>
+                <button type="button"
+                        @click="open = !open"
+                        @click.outside="open = false"
+                        class="ft-btn ft-btn-primary ft-btn-sm">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    Export
+                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                </button>
+
+                <div x-show="open"
+                     x-cloak
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-75"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     class="absolute right-0 mt-1.5 w-40 bg-white rounded-md shadow-lg border border-gray-150 z-50 overflow-hidden py-1">
+                    
+                    <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&{{ query_string }}"
+                       class="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-primary-50 hover:text-primary transition-colors">
+                        <i data-lucide="table" class="w-3.5 h-3.5 text-emerald-600"></i>
+                        <span>Excel (XLSX)</span>
+                    </a>
+                    
+                    <a href="{% url 'admin_panel:export_attendance' %}?format=csv&{{ query_string }}"
+                       class="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-primary-50 hover:text-primary transition-colors">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-600"></i>
+                        <span>CSV</span>
+                    </a>
+                    
+                    <a href="{% url 'admin_panel:export_attendance' %}?format=pdf&{{ query_string }}"
+                       class="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-primary-50 hover:text-primary transition-colors">
+                        <i data-lucide="file" class="w-3.5 h-3.5 text-rose-600"></i>
+                        <span>PDF</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm mb-6">
-        <form method="GET" class="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
+    {# ── Filters Card (Ultra-minimal, Cotton Form Controls) ─────────────────── #}
+    <div class="ft-card p-4 bg-white">
+        <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-3 items-end">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">From Date</label>
-                <input type="date" name="date_from" value="{{ request.GET.date_from }}" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                <c-datetime-picker name="date_from" value="{{ request.GET.date_from }}" label="From Date" placeholder="Select date…" />
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">To Date</label>
-                <input type="date" name="date_to" value="{{ request.GET.date_to }}" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                <c-datetime-picker name="date_to" value="{{ request.GET.date_to }}" label="To Date" placeholder="Select date…" />
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">Employee</label>
-                <select name="employee" class="w-full px-3 py-1.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                <label class="ft-label">Employee</label>
+                <select name="employee" class="ft-select w-full text-[11px]">
                     <option value="">All Employees</option>
                     {% for emp in employees %}
                     <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
@@ -86,8 +72,8 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">Branch</label>
-                <select name="branch" class="w-full px-3 py-1.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                <label class="ft-label">Branch</label>
+                <select name="branch" class="ft-select w-full text-[11px]">
                     <option value="">All Branches</option>
                     {% for b in branches %}
                     <option value="{{ b.id }}" {% if request.GET.branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
@@ -95,16 +81,16 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
-                <select name="type" class="w-full px-3 py-1.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                <label class="ft-label">Type</label>
+                <select name="type" class="ft-select w-full text-[11px]">
                     <option value="">All Types</option>
                     <option value="office" {% if request.GET.type == 'office' %}selected{% endif %}>Office</option>
                     <option value="field" {% if request.GET.type == 'field' %}selected{% endif %}>Field</option>
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
-                <select name="status" class="w-full px-3 py-1.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                <label class="ft-label">Status</label>
+                <select name="status" class="ft-select w-full text-[11px]">
                     <option value="">All Statuses</option>
                     <option value="on_time" {% if request.GET.status == 'on_time' %}selected{% endif %}>On Time</option>
                     <option value="late" {% if request.GET.status == 'late' %}selected{% endif %}>Late</option>
@@ -113,257 +99,192 @@
                 </select>
             </div>
             <div>
-                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                    <i data-lucide="filter" class="w-4 h-4"></i>
-                    Filter Results
-                </button>
+                <c-button type="submit" variant="primary" icon="filter" label="Filter Results" size="md" extra_class="w-full justify-center" />
             </div>
         </form>
     </div>
 
-    <!-- Summary Stats -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
-            <p class="text-xs text-gray-500 uppercase font-bold">Total Records</p>
-            <p class="text-2xl font-black text-gray-900">{{ total_records }}</p>
+    {# ── Summary Stats Grid (Clean, Compact, Minimal Shadow) ───────────────── #}
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="ft-card p-3 bg-white text-center">
+            <span class="text-[10px] uppercase font-semibold text-gray-400 tracking-wider block">Total Records</span>
+            <span class="text-[18px] font-bold text-gray-900 block mt-0.5">{{ total_records }}</span>
         </div>
-        <div class="bg-green-50 rounded-2xl p-4 border border-green-100 shadow-sm text-center">
-            <p class="text-xs text-green-600 uppercase font-bold">Present</p>
-            <p class="text-2xl font-black text-green-900">{{ total_present }}</p>
+        <div class="ft-card p-3 bg-white text-center">
+            <span class="text-[10px] uppercase font-semibold text-emerald-600 tracking-wider block">Present</span>
+            <span class="text-[18px] font-bold text-emerald-700 block mt-0.5">{{ total_present }}</span>
         </div>
-        <div class="bg-red-50 rounded-2xl p-4 border border-red-100 shadow-sm text-center">
-            <p class="text-xs text-red-600 uppercase font-bold">Absent</p>
-            <p class="text-2xl font-black text-red-900">{{ total_absent }}</p>
+        <div class="ft-card p-3 bg-white text-center">
+            <span class="text-[10px] uppercase font-semibold text-rose-600 tracking-wider block">Absent</span>
+            <span class="text-[18px] font-bold text-rose-700 block mt-0.5">{{ total_absent }}</span>
         </div>
-        <div class="bg-primary-50 rounded-2xl p-4 border border-primary-200/50 shadow-sm text-center">
-            <p class="text-xs text-primary-500 uppercase font-bold">On Leave</p>
-            <p class="text-2xl font-black text-primary-800">{{ total_on_leave }}</p>
+        <div class="ft-card p-3 bg-white text-center">
+            <span class="text-[10px] uppercase font-semibold text-primary tracking-wider block">On Leave</span>
+            <span class="text-[18px] font-bold text-primary block mt-0.5">{{ total_on_leave }}</span>
         </div>
-        <div class="bg-amber-50 rounded-2xl p-4 border border-amber-100 shadow-sm text-center">
-            <p class="text-xs text-amber-600 uppercase font-bold">Late</p>
-            <p class="text-2xl font-black text-amber-900">{{ total_late }}</p>
+        <div class="ft-card p-3 bg-white text-center">
+            <span class="text-[10px] uppercase font-semibold text-amber-600 tracking-wider block">Late</span>
+            <span class="text-[18px] font-bold text-amber-700 block mt-0.5">{{ total_late }}</span>
         </div>
-        <div class="bg-blue-50 rounded-2xl p-4 border border-blue-100 shadow-sm text-center">
-            <p class="text-xs text-blue-600 uppercase font-bold">Field</p>
-            <p class="text-2xl font-black text-blue-900">{{ total_field }}</p>
+        <div class="ft-card p-3 bg-white text-center">
+            <span class="text-[10px] uppercase font-semibold text-indigo-600 tracking-wider block">Field</span>
+            <span class="text-[18px] font-bold text-indigo-700 block mt-0.5">{{ total_field }}</span>
         </div>
     </div>
 
-
-
-    <!-- Table -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-2xl overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Employee</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Time (In/Out)</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Hours</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Photo</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Event Type</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type / Status</th>
-                        <th class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {% for att in attendances %}
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <div class="text-sm font-bold text-gray-900">{{ att.employee.full_name }}</div>
-                            <div class="text-xs text-gray-500">{{ att.employee.branch.name|default:"Unassigned" }}</div>
-                            {% if att.leave_balances %}
-                            <div class="text-[10px] text-gray-500 mt-1.5 flex flex-wrap gap-1 max-w-xs">
-                                {% for bal in att.leave_balances %}
-                                <span class="inline-block bg-gray-100 border border-gray-150 text-gray-700 px-1.5 py-0.5 rounded text-[10px]">
-                                    {{ bal.type.name }}: {{ bal.remaining }}d
-                                </span>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-900">{{ att.date|date:"Y-m-d" }}</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <div class="text-sm font-bold text-gray-900">{{ att.check_in_time|time:"h:i A"|default:"-" }}</div>
-                            <div class="text-xs text-gray-500">{{ att.check_out_time|time:"h:i A"|default:"-" }}</div>
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-primary-500 font-bold">
-                            {{ att.total_hours|default:"0.00" }}h
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                          {% if att.photo %}
-                            <img src="{{ att.photo.url }}"
-                                 class="w-10 h-10 rounded-lg object-cover cursor-zoom-in hover:scale-110 hover:shadow-sm transition-all duration-150 border border-gray-150"
-                                 onclick="openPhotoModal('{{ att.photo.url }}', '{{ att.employee.full_name }}')">
-                          {% else %}
-                            <span class="text-gray-300 text-xs">—</span>
-                          {% endif %}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            {% if att.attendance_type == 'check_in' %}
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                <i data-lucide="log-in" class="w-3 h-3"></i>
-                                Check In
-                            </span>
-                            {% elif att.attendance_type == 'check_out' %}
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                                <i data-lucide="log-out" class="w-3 h-3"></i>
-                                Check Out
-                            </span>
-                            {% elif att.attendance_type == 'field_visit' %}
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                                <i data-lucide="navigation" class="w-3 h-3"></i>
-                                Field Visit
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap">
-                            <div class="flex flex-col items-start space-y-1">
-                                {% if att.status != 'absent' %}
-                                    {% if att.type == 'field' %}
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                                        <i data-lucide="map" class="w-3 h-3"></i>
-                                        Field
-                                    </span>
-                                    {% else %}
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                        <i data-lucide="building-2" class="w-3 h-3"></i>
-                                        Office
-                                    </span>
-                                    {% endif %}
-                                {% endif %}
-                                
-                                {% if att.status == 'on_time' %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                    <i data-lucide="check-circle" class="w-3 h-3"></i>
-                                    On Time
-                                </span>
-                                {% elif att.status == 'late' %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                                    <i data-lucide="alert-circle" class="w-3 h-3"></i>
-                                    Late
-                                </span>
-                                {% elif att.status == 'on_leave' %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                    <i data-lucide="info" class="w-3 h-3"></i>
-                                    On Leave
-                                </span>
-                                {% else %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                    <i data-lucide="x-circle" class="w-3 h-3"></i>
-                                    Absent
-                                </span>
-                                {% endif %}
-                                {% if att.is_early_checkout %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                                    <i data-lucide="clock" class="w-3 h-3"></i>
-                                    Early Checkout
-                                </span>
-                                {% endif %}
-                            </div>
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium">
-                            {% if att.id %}
-                            <a href="{% url 'admin_panel:attendance_detail' att.id %}" class="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-xl transition-colors">
-                                <i data-lucide="eye" class="w-3 h-3"></i>
-                                Detail
-                            </a>
+    {# ── Attendance Table (Cotton Table Layout) ─────────────────────────────── #}
+    <div class="ft-card overflow-hidden bg-white">
+        <table class="ft-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Date</th>
+                    <th>Time (In/Out)</th>
+                    <th>Hours</th>
+                    <th>Photo</th>
+                    <th>Event Type</th>
+                    <th>Type / Status</th>
+                    <th class="text-right">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for att in attendances %}
+                <tr>
+                    <!-- Employee -->
+                    <td>
+                        <div class="flex items-center gap-2.5">
+                            {% if att.employee.profile_photo %}
+                            <img src="{{ att.employee.profile_photo.url }}" class="w-7 h-7 rounded-full object-cover shrink-0">
                             {% else %}
-                            <span class="text-gray-300 text-xs">—</span>
+                            <div class="w-7 h-7 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-[10px] shrink-0">
+                                {{ att.employee.full_name|first|upper }}
+                            </div>
                             {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="px-6 py-16 text-center">
-                            <i data-lucide="clock" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
-                            <p class="text-gray-500 font-medium">No records match the given criteria.</p>
-                            <p class="text-gray-400 text-sm mt-1">Try adjusting the filters above.</p>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
+                            <div class="min-w-0">
+                                <p class="text-[12px] font-bold text-gray-900 truncate">{{ att.employee.full_name }}</p>
+                                <p class="text-[10px] text-gray-500 truncate">{{ att.employee.branch.name|default:"Unassigned" }}</p>
+                            </div>
+                        </div>
+                    </td>
+
+                    <!-- Date -->
+                    <td class="font-medium text-gray-700 text-[11px]">
+                        {{ att.date|date:"Y-m-d" }}
+                    </td>
+
+                    <!-- Time (In / Out) -->
+                    <td>
+                        <div class="text-[11px] font-bold text-gray-900">{{ att.check_in_time|time:"h:i A"|default:"-" }}</div>
+                        <div class="text-[10px] text-gray-500">{{ att.check_out_time|time:"h:i A"|default:"-" }}</div>
+                    </td>
+
+                    <!-- Hours -->
+                    <td class="font-bold text-primary text-[12px]">
+                        {{ att.total_hours|default:"0.00" }}h
+                    </td>
+
+                    <!-- Photo -->
+                    <td>
+                        {% if att.photo %}
+                        <img src="{{ att.photo.url }}"
+                             class="w-8 h-8 rounded object-cover cursor-pointer hover:scale-105 transition-transform border border-gray-200"
+                             @click="$dispatch('open-modal', {id: 'photo-modal-{{ att.id }}'})">
+                        {% else %}
+                        <span class="text-gray-300 text-[11px]">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Event Type -->
+                    <td>
+                        {% if att.attendance_type == 'check_in' %}
+                        <span class="ft-badge ft-badge-info">Check In</span>
+                        {% elif att.attendance_type == 'check_out' %}
+                        <span class="ft-badge ft-badge-neutral">Check Out</span>
+                        {% elif att.attendance_type == 'field_visit' %}
+                        <span class="ft-badge ft-badge-accent">Field Visit</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Type / Status -->
+                    <td>
+                        <div class="flex flex-col gap-1 items-start">
+                            {% if att.status != 'absent' %}
+                                {% if att.type == 'field' %}
+                                <span class="ft-badge ft-badge-accent">Field</span>
+                                {% else %}
+                                <span class="ft-badge ft-badge-info">Office</span>
+                                {% endif %}
+                            {% endif %}
+
+                            {% if att.status == 'on_time' %}
+                            <span class="ft-badge ft-badge-success">On Time</span>
+                            {% elif att.status == 'late' %}
+                            <span class="ft-badge ft-badge-danger">Late</span>
+                            {% elif att.status == 'on_leave' %}
+                            <span class="ft-badge ft-badge-info">On Leave</span>
+                            {% else %}
+                            <span class="ft-badge ft-badge-danger">Absent</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Action Button -->
+                    <td class="text-right">
+                        {% if att.id %}
+                        <c-button href="{% url 'admin_panel:attendance_detail' att.id %}" variant="secondary" icon="eye" label="Detail" size="sm" />
+                        {% else %}
+                        <span class="text-gray-300 text-[11px]">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="py-12 text-center text-gray-400">
+                        <div class="flex flex-col items-center justify-center gap-1.5">
+                            <i data-lucide="clock" class="w-7 h-7 text-gray-300"></i>
+                            <p class="text-[12px] font-semibold text-gray-600">No records match the given criteria.</p>
+                            <p class="text-[11px] text-gray-400">Try adjusting the filter options above.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
         <!-- Pagination -->
         {% if is_paginated %}
-        <div class="bg-white px-4 py-3 border-t border-gray-150 sm:px-6 flex items-center justify-between">
-            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                    <p class="text-sm text-gray-700">
-                        Showing page <span class="font-bold">{{ page_obj.number }}</span> of <span class="font-bold">{{ page_obj.paginator.num_pages }}</span>
-                    </p>
-                </div>
-                <div>
-                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                        {% if page_obj.has_previous %}
-                        <a href="?page={{ page_obj.previous_page_number }}&{{ query_string }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">Previous</a>
-                        {% endif %}
-                        {% if page_obj.has_next %}
-                        <a href="?page={{ page_obj.next_page_number }}&{{ query_string }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">Next</a>
-                        {% endif %}
-                    </nav>
-                </div>
+        <div class="px-4 py-3 border-t border-gray-150 flex items-center justify-between bg-white">
+            <p class="text-[11px] text-gray-500">
+                Page <span class="font-bold text-gray-900">{{ page_obj.number }}</span> of <span class="font-bold text-gray-900">{{ page_obj.paginator.num_pages }}</span>
+            </p>
+            <div class="flex items-center gap-1">
+                {% if page_obj.has_previous %}
+                <c-button href="?page={{ page_obj.previous_page_number }}&{{ query_string }}" variant="secondary" label="Previous" size="sm" />
+                {% endif %}
+                {% if page_obj.has_next %}
+                <c-button href="?page={{ page_obj.next_page_number }}&{{ query_string }}" variant="secondary" label="Next" size="sm" />
+                {% endif %}
             </div>
         </div>
         {% endif %}
     </div>
 
-    <!-- Photo Modal -->
-    <div id="photoModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-all duration-300 opacity-0" onclick="closePhotoModal(event)">
-        <div class="relative max-w-3xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl scale-95 transition-all duration-300 flex flex-col" onclick="event.stopPropagation()">
-            <!-- Header -->
-            <div class="px-6 py-2.5 border-b border-gray-150 flex justify-between items-center bg-gray-50">
-                <h3 id="modalTitle" class="font-bold text-gray-900 text-lg">Attendance Photo</h3>
-                <button onclick="hidePhotoModal()" class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors p-1.5 rounded-lg hover:bg-gray-150">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            <!-- Body -->
-            <div class="p-6 flex justify-center items-center bg-slate-900 max-h-[70vh]">
-                <img id="modalImg" src="" alt="Zoomed Attendance Photo" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm border border-slate-700">
-            </div>
-        </div>
+</div>
+
+{# ── Photo Zoom Modals (Cotton Component Modals) ─────────────────────────── #}
+{% for att in attendances %}
+{% if att.photo %}
+<c-modal id="photo-modal-{{ att.id }}" title="{{ att.employee.full_name }} — Attendance Photo" size="md">
+    <div class="flex items-center justify-center p-2 bg-gray-900 rounded-md">
+        <img src="{{ att.photo.url }}" class="max-h-[60vh] max-w-full object-contain rounded">
     </div>
-
-    <!-- Photo Modal Script -->
-    <script>
-        function openPhotoModal(imgUrl, empName) {
-            const modal = document.getElementById('photoModal');
-            const modalImg = document.getElementById('modalImg');
-            const modalTitle = document.getElementById('modalTitle');
-            
-            modalImg.src = imgUrl;
-            modalTitle.textContent = empName + " - Attendance Photo";
-            
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            // Trigger smooth transition
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                const inner = modal.querySelector('.relative');
-                if (inner) {
-                    inner.classList.remove('scale-95');
-                    inner.classList.add('scale-100');
-                }
-            }, 20);
-        }
-
-        function hidePhotoModal() {
-            const modal = document.getElementById('photoModal');
-            modal.classList.add('opacity-0');
-            const inner = modal.querySelector('.relative');
-            if (inner) {
-                inner.classList.remove('scale-100');
-                inner.classList.add('scale-95');
-            }
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-                document.getElementById('modalImg').src = '';
-            }, 300);
-        }
+    <c-slot name="footer">
+        <button type="button" @click="$dispatch('close-modal', {id: 'photo-modal-{{ att.id }}'})" class="ft-btn ft-btn-secondary ft-btn-sm">
+            Close
+        </button>
+    </c-slot>
+</c-modal>
+{% endif %}
+{% endfor %}
 
 </c-app-shell>
