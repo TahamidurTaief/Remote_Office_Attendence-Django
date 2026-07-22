@@ -571,14 +571,15 @@ html.dark {
     .ft-input {
         width: 100%;
         height: 36px;
-        padding: 7px 11px;
-        border: 1px solid rgb(203, 210, 217);
+        padding: 8px 12px;
+        border: none;
         border-radius: 4px;
+        font-family: inherit;
         font-size: 12px;
         color: rgb(28, 43, 51);
         background-color: rgb(255, 255, 255);
         outline: none;
-        transition: border-color 100ms ease, box-shadow 100ms ease, background-color 100ms ease;
+        transition: box-shadow 100ms ease, background-color 100ms ease;
     }
 
     /* Meta --placeholder-text: #65676B */
@@ -589,13 +590,11 @@ html.dark {
     /* #65676B */
     .ft-input:hover {
         background-color: rgb(255, 255, 255);
-        border-color: rgb(203, 210, 217);
     }
 
     .ft-input:focus {
-        border-color: var(--primary);
         background-color: rgb(255, 255, 255);
-        box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.15);
+        box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.25);
     }
 
     .ft-input:disabled {
@@ -611,14 +610,21 @@ html.dark {
         background-size: 1.2em 1.2em;
         padding-right: 2rem;
         height: 36px;
-        padding-top: 7px;
-        padding-bottom: 7px;
-        padding-left: 11px;
-        padding-right: 11px;
-        border: 1px solid rgb(203, 210, 217);
+        padding-top: 8px;
+        padding-bottom: 8px;
+        padding-left: 12px;
+        border: none;
         border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
         color: rgb(28, 43, 51);
         background-color: rgb(255, 255, 255);
+        outline: none;
+        transition: box-shadow 100ms ease, background-color 100ms ease;
+    }
+    .ft-select:focus {
+        background-color: rgb(255, 255, 255);
+        box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.25);
     }
 
     .ft-label {
