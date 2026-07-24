@@ -1,6 +1,11 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
+from .rbac_models import (
+    DataScope, Module, Action, Permission, PermissionDependency,
+    Role, RolePermission, UserRoleAssignment, UserPermissionOverride,
+    ApprovalPolicy, ApprovalChainStep
+)
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email=None, phone=None, password=None, **extra_fields):

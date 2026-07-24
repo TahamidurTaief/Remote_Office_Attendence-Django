@@ -307,6 +307,3 @@ class SecurityPolicyTests(TestCase):
             'target_url': '/admin-panel/roles/'
         })
         self.assertEqual(resp.status_code, 302)
-
-
-
