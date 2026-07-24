@@ -632,3 +632,27 @@ class EmployeeActivityLog(models.Model):
     def __str__(self):
         return f"{self.employee.get_full_name()} - {self.action_description} by {self.actor} ({self.timestamp})"
 
+
+class EmployeeAuditLog(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='audit_logs')
+    old_value = models.JSONField(default=dict, blank=True)
+    new_value = models.JSONField(default=dict, blank=True)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Audit log for {self.employee.get_full_name()} on {self.timestamp}"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("EmployeeAuditLog records are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("EmployeeAuditLog records are immutable and cannot be deleted.")
+

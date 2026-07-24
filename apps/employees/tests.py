@@ -1078,6 +1078,73 @@ class ActivityLogTests(TestCase):
         self.assertEqual(log.field_changed, 'status')
 
 
+class AuditLogTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='audit_admin@test.com', password='password123', role='admin')
+        self.staff_user = User.objects.create_user(email='audit_staff@test.com', password='password123', role='staff')
+        
+        from apps.employees.models import Employee, EmployeeStatus
+        self.employee = Employee.objects.create(
+            employee_number='EMP-AUD-001',
+            first_name='Audit',
+            last_name='User',
+            status=EmployeeStatus.ACTIVE,
+            user=self.staff_user
+        )
+
+    def test_audit_log_immutability(self):
+        from apps.employees.models import EmployeeAuditLog
+        from django.core.exceptions import ValidationError
+        
+        log = EmployeeAuditLog.objects.create(
+            employee=self.employee,
+            old_value={"first_name": "OldName"},
+            new_value={"first_name": "NewName"},
+            changed_by=self.admin
+        )
+        log.old_value = {"first_name": "Hack"}
+        with self.assertRaises(ValidationError):
+            log.save()
+            
+        with self.assertRaises(ValidationError):
+            log.delete()
+
+    def test_audit_log_admin_permissions(self):
+        from apps.employees.admin import EmployeeAuditLogAdmin
+        from apps.employees.models import EmployeeAuditLog
+        from django.contrib.admin.sites import AdminSite
+        
+        site = AdminSite()
+        admin_obj = EmployeeAuditLogAdmin(EmployeeAuditLog, site)
+        
+        self.assertFalse(admin_obj.has_add_permission(None))
+        self.assertFalse(admin_obj.has_change_permission(None))
+        self.assertFalse(admin_obj.has_delete_permission(None))
+
+    def test_audit_log_written_on_edit(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:master_edit', kwargs={'pk': self.employee.pk})
+        
+        response = self.client.post(url, {
+            'first_name': 'NewAuditName',
+            'last_name': 'User',
+            'employee_number': 'EMP-AUD-001',
+            'gender': 'male',
+            'joined_date': '2026-07-01',
+            'employment_type': 'full_time',
+            'status': 'active',
+            'change_reason': 'Audit update test'
+        })
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.first_name, 'NewAuditName')
+
+        from apps.employees.models import EmployeeAuditLog
+        audit = EmployeeAuditLog.objects.filter(employee=self.employee).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.old_value.get('first_name'), 'Audit')
+        self.assertEqual(audit.new_value.get('first_name'), 'NewAuditName')
+
+
 
 
 

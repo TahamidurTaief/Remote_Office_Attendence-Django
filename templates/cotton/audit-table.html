@@ -1,0 +1,54 @@
+{% comment %} c-audit-table component
+   Props:
+   - logs: QuerySet of EmployeeAuditLog
+{% endcomment %}
+{% load leave_extras %}
+
+<c-table>
+    <c-slot name="header">
+        <th>Timestamp</th>
+        <th>Field</th>
+        <th>Old Value</th>
+        <th>New Value</th>
+        <th>Changed By</th>
+        <th>IP & User Agent</th>
+    </c-slot>
+    
+    {% for log in logs %}
+        {% for key, val in log.new_value.items %}
+        <tr class="hover:bg-slate-50/50 transition-colors">
+            <td class="whitespace-nowrap font-medium text-slate-700 text-xs">
+                {% if forloop.first %}
+                {{ log.timestamp|date:"M d, Y H:i:s" }}
+                {% endif %}
+            </td>
+            <td class="text-xs font-mono font-semibold text-slate-800">
+                {{ key }}
+            </td>
+            <td class="text-xs text-rose-600 font-mono bg-rose-50/30 px-2 py-0.5 rounded border border-rose-100 max-w-[200px] truncate" title="{{ log.old_value|dictget:key|default:'(empty)' }}">
+                {{ log.old_value|dictget:key|default:"(empty)" }}
+            </td>
+            <td class="text-xs text-emerald-600 font-mono bg-emerald-50/30 px-2 py-0.5 rounded border border-emerald-100 max-w-[200px] truncate" title="{{ val|default:'(empty)' }}">
+                {{ val|default:"(empty)" }}
+            </td>
+            <td class="whitespace-nowrap text-xs text-slate-600">
+                {% if forloop.first %}
+                {{ log.changed_by.get_full_name|default:log.changed_by.email }}
+                {% endif %}
+            </td>
+            <td class="text-xs text-slate-400 max-w-[200px] truncate" title="{{ log.user_agent }}">
+                {% if forloop.first %}
+                <span class="font-mono">{{ log.ip_address|default:"—" }}</span>
+                <span class="block text-[10px] text-slate-350 truncate">{{ log.user_agent }}</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    {% empty %}
+    <tr>
+        <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
+            <c-empty-state icon="database" title="No Audit Records" description="No technical audits logged for this employee profile yet." ></c-empty-state>
+        </td>
+    </tr>
+    {% endfor %}
+</c-table>

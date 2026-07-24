@@ -1,0 +1,9 @@
+<div id="audit-log-container">
+    <c-audit-table :logs="audit_logs" ></c-audit-table>
+
+    {% if is_paginated %}
+    <div class="mt-4">
+        <c-pagination :page_obj="page_obj" hx-get="{% url 'employees:master_audit' employee.pk %}" hx-target="#audit-log-container" hx-swap="outerHTML" ></c-pagination>
+    </div>
+    {% endif %}
+</div>

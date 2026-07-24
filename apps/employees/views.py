@@ -6,7 +6,7 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib import messages
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from apps.notifications.models import log_audit
-from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument
+from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument, Employee, EmployeeAuditLog, EmployeeActivityLog
 from .forms import EmployeeCreateForm, EmployeeEditForm, EmployeeDocumentForm
 from apps.branches.models import Branch
 from apps.attendance.models import Attendance
@@ -519,8 +519,13 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
         employee = self.object
         reason_text = (self.request.POST.get('change_reason') or 'Admin update').strip()
 
+        old_values = {}
+        new_values = {}
+
         # Track status change history
         if old_status != employee.status:
+            old_values['status'] = old_status
+            new_values['status'] = employee.status
             EmploymentHistory.objects.create(
                 employee=employee,
                 field_changed='status',
@@ -569,6 +574,9 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                     old_str = old_val.get_full_name() if (field == 'reporting_manager' and old_val) else (old_val.name if (field in ('branch', 'department', 'designation') and old_val) else (old_val.email or old_val.phone if (field == 'user' and old_val) else str(old_val or "")))
                     new_str = new_val.get_full_name() if (field == 'reporting_manager' and new_val) else (new_val.name if (field in ('branch', 'department', 'designation') and new_val) else (new_val.email or new_val.phone if (field == 'user' and new_val) else str(new_val or "")))
 
+                old_values[field] = old_str
+                new_values[field] = new_str
+
                 EmploymentHistory.objects.create(
                     employee=employee,
                     field_changed=field,
@@ -591,6 +599,17 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                     action_description=f"Updated {field_label} from '{old_str}' to '{new_str}'",
                     field_changed=field
                 )
+
+        if old_values:
+            from apps.employees.models import EmployeeAuditLog
+            EmployeeAuditLog.objects.create(
+                employee=employee,
+                old_value=old_values,
+                new_value=new_values,
+                changed_by=self.request.user,
+                ip_address=get_client_ip(self.request),
+                user_agent=self.request.META.get('HTTP_USER_AGENT', '')
+            )
 
         if self.request.headers.get('HX-Request'):
             messages.success(self.request, f"Employee {employee.get_full_name()} updated.")
@@ -1473,4 +1492,21 @@ class EmployeeSuspendModalView(AdminRequiredMixin, View):
     def get(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
         return render(request, 'employees/partials/suspend_modal.html', {'employee': employee})
+
+
+class EmployeeAuditLogView(AdminRequiredMixin, ListView):
+    model = EmployeeAuditLog
+    template_name = 'employees/partials/audit_log_table.html'
+    context_object_name = 'audit_logs'
+    paginate_by = 10
+
+    def get_queryset(self):
+        self.employee = get_object_or_404(Employee, pk=self.kwargs['pk'])
+        from apps.employees.models import EmployeeAuditLog
+        return EmployeeAuditLog.objects.filter(employee=self.employee).select_related('changed_by')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['employee'] = self.employee
+        return context
 
