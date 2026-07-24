@@ -10,7 +10,7 @@ class DynamicRBACViewsTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.password = 'Password123!'
-        self.admin = User.objects.create_superuser(email='admin_rbac@example.com', password=self.password)
+        self.admin = User.objects.create_superuser(email='admin_rbac@example.com', password=self.password, role='admin')
         self.target_user = User.objects.create_user(email='target_user@example.com', password=self.password)
 
         self.client.login(email='admin_rbac@example.com', password=self.password)
