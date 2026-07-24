@@ -1,4 +1,5 @@
 import datetime
+import json
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -962,6 +963,80 @@ class AttendancePhase2Tests(TestCase):
         self.assertEqual(response.status_code, 200)
         att.refresh_from_db()
         self.assertEqual(att.ot_status, 'approved')
+
+    def test_bulk_sync_view(self):
+        import uuid
+        from apps.attendance.models import Attendance, AttendanceLocation, AttendanceActivityLog
+        self.client.login(username='+8801700000002', password='password123')
+        
+        check_in_uuid = str(uuid.uuid4())
+        check_out_uuid = str(uuid.uuid4())
+        client_time = (timezone.now() - datetime.timedelta(minutes=30)).isoformat()
+        
+        sync_payload = {
+            'actions': [
+                {
+                    'action': 'check_in',
+                    'latitude': 23.7925,
+                    'longitude': 90.4078,
+                    'accuracy': 15.0,
+                    'address': 'HQ Office Entrance',
+                    'note': 'Arrived via bus',
+                    'sync_uuid': check_in_uuid,
+                    'client_event_time': client_time
+                },
+                {
+                    'action': 'check_out',
+                    'latitude': 23.7926,
+                    'longitude': 90.4079,
+                    'accuracy': 10.0,
+                    'address': 'HQ Office Exit',
+                    'sync_uuid': check_out_uuid,
+                    'client_event_time': timezone.now().isoformat()
+                }
+            ]
+        }
+        
+        response = self.client.post(
+            reverse('attendance:bulk_sync'),
+            data=json.dumps(sync_payload),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['synced'], 2)
+        
+        # Verify attendance record created
+        att = Attendance.objects.get(sync_uuid=check_in_uuid)
+        self.assertEqual(att.employee, self.employee)
+        self.assertIsNotNone(att.check_out_time)
+        
+        # Verify activity logs
+        self.assertTrue(AttendanceActivityLog.objects.filter(employee=self.employee, action='check_in').exists())
+        self.assertTrue(AttendanceActivityLog.objects.filter(employee=self.employee, action='check_out').exists())
+
+    def test_employee_timeline_view(self):
+        from apps.attendance.models import AttendanceLocation
+        # Create attendance and location
+        att = Attendance.objects.create(
+            employee=self.employee,
+            date=timezone.localdate(),
+            check_in_time=timezone.now(),
+            attendance_type='check_in'
+        )
+        loc = AttendanceLocation.objects.create(
+            attendance=att,
+            event='check_in',
+            latitude=23.7925,
+            longitude=90.4078,
+            address='HQ Test Office',
+            accuracy=12.0,
+            timestamp=timezone.now()
+        )
+        
+        self.client.login(username='+8801700000002', password='password123')
+        response = self.client.get(reverse('attendance:employee_timeline'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'HQ Test Office')
 
 
 
