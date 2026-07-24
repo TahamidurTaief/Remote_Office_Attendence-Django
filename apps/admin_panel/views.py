@@ -3036,10 +3036,9 @@ class GlobalSearchView(RoleRequiredMixin, View):
 
             from apps.attendance.models import Attendance
             attendance_results = Attendance.objects.select_related('employee', 'employee__branch').filter(
-                Q(employee__first_name__icontains=query) |
-                Q(employee__last_name__icontains=query) |
+                Q(employee__full_name__icontains=query) |
                 Q(note__icontains=query) |
-                Q(address__icontains=query)
+                Q(site_address__icontains=query)
             ).order_by('-date', '-check_in_time')[:5]
 
         if request.headers.get('HX-Request'):
