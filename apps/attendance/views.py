@@ -250,6 +250,13 @@ def check_in(request):
         notif_type = 'late' if status == 'late' else 'check_in'
         notify_admins(employee, notif_type, location=address)
 
+        from apps.attendance.models import AttendanceActivityLog
+        AttendanceActivityLog.objects.create(
+            employee=employee,
+            action='check_in',
+            description=f"Checked In at {event_time.strftime('%I:%M %p')}"
+        )
+
         return JsonResponse({
             'success': True,
             'session_id': attendance.id,
@@ -400,6 +407,13 @@ def check_out(request):
         )
 
         notify_admins(employee, 'check_out', location=address)
+
+        from apps.attendance.models import AttendanceActivityLog
+        AttendanceActivityLog.objects.create(
+            employee=employee,
+            action='check_out',
+            description=f"Checked Out at {event_time.strftime('%I:%M %p')}"
+        )
 
         return JsonResponse({
             'success': True,
@@ -1069,6 +1083,13 @@ def submit_forgot_checkout(request):
         check_out_time=check_out_time
     )
 
+    from apps.attendance.models import AttendanceActivityLog
+    AttendanceActivityLog.objects.create(
+        employee=employee,
+        action='forgot_checkout_request',
+        description=f"Submitted Forgot Check-out Request for {attendance.date.strftime('%d/%m/%Y')}"
+    )
+
     return JsonResponse({'success': True, 'message': 'Forgot checkout request submitted.'})
 
 
@@ -1227,6 +1248,13 @@ def submit_attendance_correction(request):
         check_out_time=proposed_check_out,
         note=note,
         attachment=attachment
+    )
+
+    from apps.attendance.models import AttendanceActivityLog
+    AttendanceActivityLog.objects.create(
+        employee=employee,
+        action='correction_request',
+        description=f"Submitted Correction Request for {attendance.date.strftime('%d/%m/%Y')}"
     )
 
     return JsonResponse({'success': True, 'message': 'Correction request submitted.'})
@@ -1410,3 +1438,204 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
         context['overtimes'] = ot_qs
         
         return context
+
+
+@login_required
+@require_POST
+def bulk_sync(request):
+    try:
+        data = json.loads(request.body)
+        actions = data.get('actions', [])
+        synced_count = 0
+        
+        for act in actions:
+            action_type = act.get('action')
+            lat = act.get('latitude')
+            lng = act.get('longitude')
+            accuracy = act.get('accuracy', 0.0)
+            note = act.get('note', '')
+            address = act.get('address', '')
+            sync_uuid = act.get('sync_uuid')
+            client_event_time_str = act.get('client_event_time')
+            
+            if sync_uuid:
+                if action_type == 'check_in':
+                    if Attendance.objects.filter(sync_uuid=sync_uuid).exists():
+                        continue
+                elif action_type == 'check_out':
+                    from apps.attendance.models import AttendanceLocation
+                    if AttendanceLocation.objects.filter(sync_uuid=sync_uuid, event='check_out').exists():
+                        continue
+                        
+            client_time = parse_and_validate_client_time(client_event_time_str) or timezone.now()
+            today = timezone.localdate(client_time)
+            employee = get_employee(request.user)
+            if not employee:
+                continue
+            
+            if action_type == 'check_in':
+                active_session = Attendance.objects.filter(
+                    employee=employee,
+                    date=today,
+                    attendance_type='check_in',
+                    check_out_time__isnull=True,
+                    is_expired=False
+                ).first()
+                if active_session:
+                    continue
+                    
+                policy = get_attendance_policy(employee)
+                if policy.geofencing_policy != 'disabled':
+                    branch = employee.branch
+                    if branch and branch.latitude and branch.longitude:
+                        within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
+                        if not within_geofence:
+                            if policy.geofencing_policy == 'block':
+                                continue
+                            elif policy.geofencing_policy == 'warning':
+                                note = f"{note} [GEOFENCE WARNING: Checked in {int(distance)}m outside geofence]".strip()
+                                
+                first_checkin_today = Attendance.objects.filter(
+                    employee=employee,
+                    date=today,
+                    attendance_type='check_in',
+                    is_expired=False
+                ).order_by('check_in_time').first()
+                
+                if first_checkin_today is None:
+                    from .schedule_utils import get_branch_schedule, calculate_attendance_status
+                    schedule = get_branch_schedule(employee)
+                    status = calculate_attendance_status(client_time, schedule)
+                else:
+                    status = 'on_time'
+                    
+                attendance = Attendance.objects.create(
+                    employee=employee,
+                    date=today,
+                    check_in_time=client_time,
+                    type='office' if policy.geofencing_policy != 'disabled' else 'field',
+                    attendance_type='check_in',
+                    status=status,
+                    note=note,
+                    sync_uuid=sync_uuid or uuid.uuid4(),
+                    client_event_time=client_time,
+                    synced_at=timezone.now()
+                )
+                
+                from apps.attendance.models import AttendanceLocation, AttendanceActivityLog
+                AttendanceLocation.objects.create(
+                    attendance=attendance,
+                    event='check_in',
+                    latitude=float(lat),
+                    longitude=float(lng),
+                    address=address or 'Offline Check-in location',
+                    accuracy=float(accuracy),
+                    timestamp=client_time,
+                    sync_uuid=uuid.uuid4(),
+                    client_event_time=client_time,
+                    synced_at=timezone.now()
+                )
+                
+                AttendanceActivityLog.objects.create(
+                    employee=employee,
+                    action='check_in',
+                    description=f"Checked In (Offline Synced) at {client_time.strftime('%I:%M %p')}"
+                )
+                synced_count += 1
+                
+            elif action_type == 'check_out':
+                attendance = Attendance.objects.filter(
+                    employee=employee,
+                    date=today,
+                    attendance_type='check_in',
+                    check_out_time__isnull=True,
+                    is_expired=False
+                ).first()
+                if not attendance:
+                    continue
+                    
+                attendance.check_out_time = client_time
+                duration = client_time - attendance.check_in_time
+                attendance.total_hours = round(duration.total_seconds() / 3600.0, 2)
+                
+                from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
+                schedule = get_branch_schedule(employee)
+                overtime_minutes = calculate_overtime(client_time, schedule, employee, attendance.date)
+                attendance.is_early_checkout = calculate_early_checkout(client_time, schedule, attendance.date)
+                
+                if overtime_minutes > 0:
+                    attendance.overtime_minutes = overtime_minutes
+                    attendance.ot_status = 'pending'
+                else:
+                    attendance.overtime_minutes = 0
+                    attendance.ot_status = 'none'
+                    
+                attendance.client_event_time = client_time
+                attendance.synced_at = timezone.now()
+                attendance.save()
+                
+                from apps.attendance.models import AttendanceLocation, AttendanceActivityLog
+                AttendanceLocation.objects.create(
+                    attendance=attendance,
+                    event='check_out',
+                    latitude=float(lat),
+                    longitude=float(lng),
+                    address=address or 'Offline Check-out location',
+                    accuracy=float(accuracy),
+                    timestamp=client_time,
+                    sync_uuid=sync_uuid or uuid.uuid4(),
+                    client_event_time=client_time,
+                    synced_at=timezone.now()
+                )
+                
+                AttendanceActivityLog.objects.create(
+                    employee=employee,
+                    action='check_out',
+                    description=f"Checked Out (Offline Synced) at {client_time.strftime('%I:%M %p')}"
+                )
+                synced_count += 1
+                
+        return JsonResponse({'success': True, 'synced': synced_count})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def employee_timeline(request):
+    is_staff = request.user.role == 'staff'
+    is_manager = request.user.role in ('manager', 'admin') or request.user.is_superuser
+    
+    if not (is_staff or is_manager):
+        return redirect('accounts:login')
+        
+    selected_employee = None
+    if is_manager:
+        emp_id = request.GET.get('employee_id')
+        if emp_id:
+            from apps.employees.models import EmployeeProfile
+            selected_employee = get_object_or_404(EmployeeProfile, pk=emp_id)
+            
+    if not selected_employee:
+        selected_employee = get_employee(request.user)
+        
+    date_str = request.GET.get('date')
+    if date_str:
+        try:
+            target_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            target_date = timezone.localdate()
+    else:
+        target_date = timezone.localdate()
+        
+    from apps.attendance.models import AttendanceLocation
+    locations = AttendanceLocation.objects.filter(
+        attendance__employee=selected_employee,
+        attendance__date=target_date
+    ).order_by('timestamp')
+    
+    context = {
+        'selected_employee': selected_employee,
+        'target_date': target_date,
+        'locations': locations,
+    }
+    return render(request, 'staff/timeline.html', context)

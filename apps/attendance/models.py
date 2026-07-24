@@ -327,4 +327,21 @@ class AttendanceAuditLog(models.Model):
         return f"AuditLog - {self.attendance.employee.full_name} - {self.action} on {self.timestamp}"
 
 
+class AttendanceActivityLog(models.Model):
+    employee = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name='attendance_activities'
+    )
+    action = models.CharField(max_length=100) # e.g., 'check_in', 'check_out', 'forgot_checkout_request', 'correction_request'
+    description = models.TextField() # e.g., 'Checked In at 09:02 AM'
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.description} ({self.timestamp})"
+
+
 

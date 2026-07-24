@@ -238,6 +238,9 @@ def attendance_history(request):
                 combined_records.append(placeholder)
         curr -= datetime.timedelta(days=1)
 
+    from apps.attendance.models import AttendanceActivityLog
+    activity_logs = AttendanceActivityLog.objects.filter(employee=employee)[:15]
+
     context = {
         'employee':         employee,
         'attendances':      combined_records,
@@ -247,6 +250,7 @@ def attendance_history(request):
         'current_month_val': target_date.strftime('%Y-%m'),
         'prev_month_val':   prev_month.strftime('%Y-%m'),
         'next_month_val':   next_month.strftime('%Y-%m'),
+        'activity_logs':    activity_logs,
     }
 
     if request.headers.get('HX-Request'):

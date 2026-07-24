@@ -21,4 +21,6 @@ urlpatterns = [
     path('correction/submit/', views.submit_attendance_correction, name='submit_attendance_correction'),
     path('correction/<int:pk>/process/', views.process_attendance_correction, name='process_attendance_correction'),
     path('overtime/<int:pk>/process/', views.process_overtime, name='process_overtime'),
+    path('bulk-sync/', views.bulk_sync, name='bulk_sync'),
+    path('timeline/', views.employee_timeline, name='employee_timeline'),
 ]
