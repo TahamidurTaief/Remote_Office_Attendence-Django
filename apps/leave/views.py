@@ -42,27 +42,20 @@ class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
         context['current_status'] = self.request.GET.get('status', 'all')
         return context
 
-class BaseProcessLeaveRequestView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
-
+class BaseProcessLeaveRequestView(View):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return self.handle_no_permission()
-
-        if request.user.role not in self.allowed_roles:
-            if request.user.role == 'admin':
-                return redirect('/admin-panel/dashboard/')
-            elif request.user.role in ['staff', 'manager']:
-                return redirect('/staff/home/')
             return redirect('/login/')
 
-        # Scoping check for manager
-        if request.user.role == 'manager':
-            has_perm = request.user.has_perm('leave.change_leaverequest') or request.user.has_perm('leave.approve_leaverequest')
-            if not has_perm:
-                from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("You do not have permission to process leave requests.")
+        from apps.accounts.engine import PermissionEngine
+        res = PermissionEngine.evaluate(request.user, 'leave.approve')
+        if not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') not in ('admin', 'manager'):
+            if PermissionEngine.evaluate(request.user, 'accounts.view').allowed or getattr(request.user, 'role', '') == 'admin':
+                return redirect('/admin-panel/dashboard/')
+            return redirect('/staff/home/')
 
+        # Scoping check for manager/team scope
+        if res.allowed and res.scope != 'GLOBAL' and not request.user.is_superuser:
             leave_request = get_object_or_404(LeaveRequest, pk=kwargs.get('pk'))
             profile = getattr(request.user, 'employee_profile', None)
             scoped = False
