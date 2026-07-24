@@ -115,14 +115,31 @@ def attendance_card(request):
         'late':    attendances_this_month.filter(status='late').count(),
     }
 
+    # Upcoming Holiday
+    from apps.branches.models import Holiday
+    next_holiday = Holiday.objects.filter(date__gte=today).order_by('date').first()
+
+    # Pending Requests
+    from apps.attendance.models import AttendanceCorrectionRequest, ForgotCheckoutRequest
+    pending_correction_count = AttendanceCorrectionRequest.objects.filter(attendance__employee=employee, status='pending').count()
+    pending_forgot_count = ForgotCheckoutRequest.objects.filter(attendance__employee=employee, status__in=['pending_manager', 'pending_hr']).count()
+
+    # Shift Info
+    from apps.attendance.schedule_utils import get_branch_schedule
+    schedule = get_branch_schedule(employee)
+    shift_info = f"{schedule.office_start_time.strftime('%I:%M %p')} - {schedule.office_end_time.strftime('%I:%M %p')}" if schedule else "Standard Shift"
+
     context = {
-        'employee':           employee,
-        'active_session':     active_session,
-        'all_sessions_today': all_sessions_today,
-        'stats':              stats,
-        'now':                timezone.localtime(),
-        # Pass tracking interval (minutes) for the JS auto-sync timer
-        'tracking_interval':  employee.tracking_interval if employee else 0,
+        'employee':                 employee,
+        'active_session':           active_session,
+        'all_sessions_today':       all_sessions_today,
+        'stats':                    stats,
+        'now':                      timezone.localtime(),
+        'tracking_interval':        employee.tracking_interval if employee else 0,
+        'next_holiday':             next_holiday,
+        'pending_correction_count': pending_correction_count,
+        'pending_forgot_count':     pending_forgot_count,
+        'shift_info':               shift_info,
     }
     return render(request, 'staff/partials/attendance_card.html', context)
 
