@@ -1145,6 +1145,72 @@ class AuditLogTests(TestCase):
         self.assertEqual(audit.new_value.get('first_name'), 'NewAuditName')
 
 
+class DeviceLifecycleTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='dev_admin@test.com', password='password123', role='admin')
+        
+        from apps.employees.models import Employee, EmployeeStatus, Asset, AssetType, AssetCondition, AssetAssignment
+        
+        self.emp1 = Employee.objects.create(
+            employee_number='EMP-DEV-001',
+            first_name='Device',
+            last_name='One',
+            status=EmployeeStatus.ACTIVE
+        )
+        self.emp2 = Employee.objects.create(
+            employee_number='EMP-DEV-002',
+            first_name='Device',
+            last_name='Two',
+            status=EmployeeStatus.ACTIVE
+        )
+        self.asset = Asset.objects.create(
+            asset_type=AssetType.LAPTOP,
+            asset_tag='AST-DEV-999',
+            name='Test Laptop',
+            condition=AssetCondition.NEW,
+            is_active=True
+        )
+        self.assignment = AssetAssignment.objects.create(
+            asset=self.asset,
+            employee=self.emp1,
+            assigned_date='2026-07-01',
+            condition_at_assignment=AssetCondition.NEW,
+            assigned_by=self.admin
+        )
+
+    def test_asset_reassignment(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:asset_reassign', kwargs={'pk': self.assignment.pk})
+        
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Reassign Asset')
+
+        response = self.client.post(url, {
+            'returned_date': '2026-07-15',
+            'condition_at_return': 'good',
+            'return_notes': 'Returned for upgrade',
+            'new_employee': self.emp2.pk,
+            'assigned_date': '2026-07-16',
+            'condition_at_assignment': 'good',
+            'new_notes': 'Reassigned to new hire'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        self.assignment.refresh_from_db()
+        self.assertEqual(str(self.assignment.returned_date), '2026-07-15')
+        self.assertEqual(self.assignment.condition_at_return, 'good')
+        self.assertEqual(self.assignment.notes, 'Returned for upgrade')
+        
+        self.assertIsNotNone(self.assignment.reassigned_to)
+        new_assign = self.assignment.reassigned_to
+        self.assertEqual(new_assign.employee, self.emp2)
+        self.assertEqual(new_assign.asset, self.asset)
+        self.assertEqual(str(new_assign.assigned_date), '2026-07-16')
+        self.assertEqual(new_assign.condition_at_assignment, 'good')
+        self.assertEqual(new_assign.notes, 'Reassigned to new hire')
+
+
 
 
 

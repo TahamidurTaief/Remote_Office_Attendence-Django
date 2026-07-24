@@ -241,6 +241,7 @@ class AssetAssignment(models.Model):
     condition_at_return = models.CharField(max_length=30, choices=AssetCondition.choices, null=True, blank=True)
     notes = models.TextField(blank=True)
     assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    reassigned_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reassigned_from')
 
     class Meta:
         ordering = ['-assigned_date']

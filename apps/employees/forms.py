@@ -280,8 +280,11 @@ class EmployeeMasterForm(forms.ModelForm):
         model = Employee
         fields = [
             'employee_number', 'first_name', 'last_name', 'dob', 'gender', 'national_id',
-            'phone', 'personal_email', 'address', 'emergency_contact_name', 'emergency_contact_phone',
-            'branch', 'department', 'designation', 'reporting_manager', 'joined_date', 'user'
+            'phone', 'personal_email', 'address',
+            'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'emergency_contact_address',
+            'branch', 'department', 'designation', 'reporting_manager', 'joined_date', 'employment_type', 'shift', 'weekly_holiday_policy',
+            'basic_salary', 'salary_structure', 'bank_name', 'bank_account', 'payment_method', 'tax_profile', 'pf_enabled', 'overtime_policy',
+            'user', 'data_scope', 'mfa_required'
         ]
         widgets = {
             'dob': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
@@ -296,11 +299,26 @@ class EmployeeMasterForm(forms.ModelForm):
             'address': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
             'emergency_contact_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'emergency_contact_phone': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'emergency_contact_relation': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'emergency_contact_address': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
             'branch': forms.Select(attrs={'class': SELECT_INPUT}),
             'department': forms.Select(attrs={'class': SELECT_INPUT}),
             'designation': forms.Select(attrs={'class': SELECT_INPUT}),
             'reporting_manager': forms.Select(attrs={'class': SELECT_INPUT}),
+            'employment_type': forms.Select(attrs={'class': SELECT_INPUT}),
+            'shift': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'weekly_holiday_policy': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'basic_salary': forms.NumberInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. 50000.00'}),
+            'salary_structure': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'bank_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'bank_account': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'payment_method': forms.Select(attrs={'class': SELECT_INPUT}),
+            'tax_profile': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'pf_enabled': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+            'overtime_policy': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'user': forms.Select(attrs={'class': SELECT_INPUT}),
+            'data_scope': forms.Select(attrs={'class': SELECT_INPUT}),
+            'mfa_required': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -462,6 +480,55 @@ class AssetReturnForm(forms.ModelForm):
             'condition_at_return': forms.Select(attrs={'class': SELECT_INPUT}),
             'notes': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
         }
+
+
+class AssetReassignForm(forms.Form):
+    returned_date = forms.DateField(
+        initial=timezone.localdate if 'timezone' in globals() else date.today,
+        widget=forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+        label="Return Date"
+    )
+    condition_at_return = forms.ChoiceField(
+        choices=AssetCondition.choices,
+        widget=forms.Select(attrs={'class': SELECT_INPUT}),
+        label="Condition on Return"
+    )
+    return_notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+        label="Return Notes"
+    )
+    
+    new_employee = forms.ModelChoiceField(
+        queryset=Employee.objects.filter(status='active'),
+        widget=forms.Select(attrs={'class': SELECT_INPUT}),
+        label="Reassign To Employee"
+    )
+    assigned_date = forms.DateField(
+        initial=timezone.localdate if 'timezone' in globals() else date.today,
+        widget=forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+        label="New Assignment Date"
+    )
+    condition_at_assignment = forms.ChoiceField(
+        choices=AssetCondition.choices,
+        initial=AssetCondition.GOOD,
+        widget=forms.Select(attrs={'class': SELECT_INPUT}),
+        label="New Assignment Condition"
+    )
+    new_notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+        label="New Assignment Notes"
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.current_assignment = kwargs.pop('current_assignment', None)
+        super().__init__(*args, **kwargs)
+        from django.utils import timezone
+        self.fields['returned_date'].initial = timezone.localdate()
+        self.fields['assigned_date'].initial = timezone.localdate()
+        if self.current_assignment:
+            self.fields['new_employee'].queryset = Employee.objects.filter(status='active').exclude(pk=self.current_assignment.employee_id)
 
 
 # ── Wizard Step Forms ────────────────────────────────────────────────────────

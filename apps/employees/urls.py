@@ -32,6 +32,7 @@ urlpatterns = [
     path('assets/create/', views.AssetCreateView.as_view(), name='asset_create'),
     path('master/<int:pk>/assets/assign/', views.AssetAssignView.as_view(), name='asset_assign'),
     path('assets/assignment/<int:pk>/return/', views.AssetReturnView.as_view(), name='asset_return'),
+    path('assets/assignment/<int:pk>/reassign/', views.AssetReassignView.as_view(), name='asset_reassign'),
 
     # Lifecycle State Machine Routes (Phase 2 Step N)
     path('master/<int:pk>/lifecycle/action/', views.LifecycleActionView.as_view(), name='lifecycle_action'),

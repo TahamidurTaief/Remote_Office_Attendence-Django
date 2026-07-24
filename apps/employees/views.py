@@ -6,8 +6,8 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib import messages
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from apps.notifications.models import log_audit
-from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument, Employee, EmployeeAuditLog, EmployeeActivityLog
-from .forms import EmployeeCreateForm, EmployeeEditForm, EmployeeDocumentForm
+from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument, Employee, EmployeeAuditLog, EmployeeActivityLog, AssetAssignment
+from .forms import EmployeeCreateForm, EmployeeEditForm, EmployeeDocumentForm, AssetAssignmentForm, AssetReturnForm, AssetReassignForm
 from apps.branches.models import Branch
 from apps.attendance.models import Attendance
 from django.db.models import Q
@@ -441,7 +441,8 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
             'direct_reports',
             'employment_history__approved_by',
             'documents__uploaded_by',
-            'asset_assignments__asset'
+            'asset_assignments__asset',
+            'asset_assignments__reassigned_to__employee'
         )
 
     def get_context_data(self, **kwargs):
@@ -451,6 +452,7 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
         context['active_documents'] = self.object.documents.filter(is_active=True)
         context['asset_assignments'] = self.object.asset_assignments.select_related('asset').all()
         context['active_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
+        context['historical_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=False).select_related('asset', 'reassigned_to__employee')
         
         # Payroll gating check
         from apps.accounts.engine import PermissionEngine
@@ -800,6 +802,55 @@ class AssetReturnView(RoleRequiredMixin, View):
             return redirect('employees:master_detail', pk=updated.employee_id)
 
         return render(request, 'employees/partials/asset_return_modal.html', {'assignment': assignment, 'form': form})
+
+
+class AssetReassignView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def get(self, request, pk):
+        assignment = get_object_or_404(AssetAssignment, pk=pk)
+        form = AssetReassignForm(current_assignment=assignment)
+        return render(request, 'employees/partials/asset_reassign_modal.html', {'assignment': assignment, 'form': form})
+
+    def post(self, request, pk):
+        assignment = get_object_or_404(AssetAssignment, pk=pk)
+        form = AssetReassignForm(request.POST, current_assignment=assignment)
+        if form.is_valid():
+            from django.db import transaction
+            
+            with transaction.atomic():
+                assignment.returned_date = form.cleaned_data['returned_date']
+                assignment.condition_at_return = form.cleaned_data['condition_at_return']
+                assignment.notes = form.cleaned_data['return_notes']
+                assignment.save()
+                
+                new_assignment = AssetAssignment.objects.create(
+                    asset=assignment.asset,
+                    employee=form.cleaned_data['new_employee'],
+                    assigned_date=form.cleaned_data['assigned_date'],
+                    condition_at_assignment=form.cleaned_data['condition_at_assignment'],
+                    notes=form.cleaned_data['new_notes'],
+                    assigned_by=request.user
+                )
+                
+                assignment.reassigned_to = new_assignment
+                assignment.save()
+
+            log_audit(
+                actor=request.user,
+                action='asset_reassigned',
+                target=assignment,
+                summary=f"Reassigned asset {assignment.asset.asset_tag} from {assignment.employee.get_full_name()} to {new_assignment.employee.get_full_name()}"
+            )
+            messages.success(request, f"Asset {assignment.asset.asset_tag} reassigned to {new_assignment.employee.get_full_name()}.")
+
+            if request.headers.get('HX-Request'):
+                res = render(request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:master_detail', kwargs={'pk': assignment.employee_id})})
+                res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': assignment.employee_id})
+                return res
+            return redirect('employees:master_detail', pk=assignment.employee_id)
+
+        return render(request, 'employees/partials/asset_reassign_modal.html', {'assignment': assignment, 'form': form})
 
 
 # ==========================================
