@@ -14,12 +14,17 @@ ALLOWED_HOSTS = ['demotrackme.signtechlimited.com', 'trackme.signtechlimited.com
 
 CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://demotrackme.signtechlimited.com"]
 
+# Security hardening defaults
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
 # Production security hardening (skipped in local DEBUG mode so `runserver`
 # over plain http still works during development).
 if not DEBUG:
-    # Trust the reverse proxy's X-Forwarded-Proto header (Coolify/nginx/Docker
-    # setups terminate SSL in front of Django) so Django knows the original
-    # request was HTTPS and doesn't create a redirect loop.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
@@ -27,7 +32,6 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    X_FRAME_OPTIONS = 'DENY'
 
 # Application definition
 INSTALLED_APPS = [

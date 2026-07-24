@@ -1,0 +1,50 @@
+<c-app-shell page_title="Sensitive Action Audit Log | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
+  <c-slot name="sidebar">
+    <c-sidebar active_href="{{ request.path }}" />
+  </c-slot>
+
+  <c-slot name="topbar">
+    <c-topbar title="Sensitive Action Audit Log" />
+  </c-slot>
+
+  <c-command-palette />
+
+  <div class="p-4 space-y-4 max-w-7xl mx-auto">
+    <c-card title="System Security & Sensitive Action Audit Log" subtitle="Comprehensive immutable audit record of sensitive administrative and security events.">
+
+      {# ── Filter & Search Bar ───────────────────────────────────────────── #}
+      <div class="flex items-center justify-between mb-4 gap-3 flex-wrap border-b pb-4" style="border-color:var(--border)">
+        <div class="flex items-center gap-2 flex-1 min-w-[240px]">
+          <c-input type="text"
+                   name="q"
+                   id="search-input"
+                   placeholder="Search actor, action, or summary..."
+                   value="{{ search_query }}"
+                   icon="search"
+                   hx-get="{% url 'admin_panel:admin_audit_logs' %}"
+                   hx-target="#audit-log-table-container"
+                   hx-swap="outerHTML"
+                   hx-trigger="keyup changed delay:300ms, search"
+                   extra_class="w-full max-w-md" />
+        </div>
+
+        <div class="flex items-center gap-2">
+          <select name="action"
+                  hx-get="{% url 'admin_panel:admin_audit_logs' %}"
+                  hx-target="#audit-log-table-container"
+                  hx-swap="outerHTML"
+                  hx-trigger="change"
+                  class="ft-input text-xs py-1.5 px-3 rounded-lg border">
+            <option value="">All Action Types</option>
+            {% for act in action_types %}
+              <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      {% include "admin_panel/audit/audit_log_list_partial.html" %}
+
+    </c-card>
+  </div>
+</c-app-shell>

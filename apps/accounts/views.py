@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from django.db.models import Q
 from django.contrib.sessions.models import Session
 from apps.accounts.models import UserSession, TrustedDevice, CustomUser, PasswordResetOTP, UserLoginActivity
+from apps.notifications.models import log_audit, AuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,7 @@ class CustomLoginView(View):
 
                 login(request, user)
                 cache.delete(cache_key)
+                log_audit(user, 'user_login', summary=f"User logged in from {ip}", ip=ip)
 
                 UserSession.objects.create(
                     user=user,
@@ -235,6 +237,7 @@ class CustomLogoutView(View):
 
     def _logout_user(self, request):
         if request.user.is_authenticated:
+            log_audit(request.user, 'user_logout', summary="User logged out", ip=get_client_ip(request))
             session_key = request.session.session_key
             if session_key:
                 UserSession.objects.filter(user=request.user, session_key=session_key).update(
@@ -275,6 +278,7 @@ class ChangePasswordView(LoginRequiredMixin, View):
         user.save()
 
         update_session_auth_hash(request, user)
+        log_audit(user, 'password_change', summary="User updated account password", ip=get_client_ip(request))
 
         now = timezone.now()
         current_session_key = request.session.session_key
@@ -389,6 +393,7 @@ class ForgotPasswordResetView(View):
         user = otp_obj.user
         user.set_password(new_password)
         user.save()
+        log_audit(user, 'password_reset', summary="Password reset via OTP", ip=get_client_ip(request))
 
         now = timezone.now()
         active_sessions = UserSession.objects.filter(user=user, is_active=True)
@@ -426,6 +431,8 @@ class AdminForceLogoutUserView(LoginRequiredMixin, View):
             if sess.session_key:
                 Session.objects.filter(session_key=sess.session_key).delete()
 
+        log_audit(request.user, 'admin_force_logout', target=target_user, summary=f"Admin force logged out user {target_user.email or target_user.phone}", ip=get_client_ip(request))
+
         if request.headers.get('HX-Request') == 'true':
             return render(request, 'cotton/badge.html', {'slot': 'Logged Out', 'variant': 'secondary'})
 
@@ -449,6 +456,8 @@ class AdminUnlockUserView(LoginRequiredMixin, View):
         target_user.failed_login_count = 0
         target_user.locked_until = None
         target_user.save(update_fields=['failed_login_count', 'locked_until'])
+
+        log_audit(request.user, 'admin_unlock_user', target=target_user, summary=f"Admin unlocked user {target_user.email or target_user.phone}", ip=get_client_ip(request))
 
         if request.headers.get('HX-Request') == 'true':
             return render(request, 'cotton/badge.html', {'slot': 'Unlocked', 'variant': 'success'})

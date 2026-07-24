@@ -1,0 +1,62 @@
+<div id="audit-log-table-container">
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-xs border-collapse">
+      <thead>
+        <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
+          <th class="py-3 px-4 font-semibold">Actor / User</th>
+          <th class="py-3 px-3 font-semibold">Action</th>
+          <th class="py-3 px-3 font-semibold">Target</th>
+          <th class="py-3 px-4 font-semibold">Summary</th>
+          <th class="py-3 px-3 font-semibold">IP Address</th>
+          <th class="py-3 px-3 font-semibold">Timestamp</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y" style="border-color:var(--border)">
+        {% for log in logs %}
+          <tr class="hover:bg-slate-500/5">
+            <td class="py-3 px-4 font-medium" style="color:var(--text)">
+              {% if log.actor %}
+                {{ log.actor.email|default:log.actor.phone }}
+                <span class="block text-[10px] text-slate-400">ID: #{{ log.actor.id }}</span>
+              {% else %}
+                <span class="text-slate-400">System / Anonymous</span>
+              {% endif %}
+            </td>
+
+            <td class="py-3 px-3">
+              <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary border border-primary/20">
+                {{ log.action }}
+              </span>
+            </td>
+
+            <td class="py-3 px-3 text-[11px]" style="color:var(--text-muted)">
+              {% if log.target_type %}
+                <span class="font-mono text-[10px]">{{ log.target_type }} #{{ log.target_id }}</span>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="py-3 px-4 text-xs" style="color:var(--text)">
+              {{ log.summary|default:"-" }}
+            </td>
+
+            <td class="py-3 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
+              {{ log.ip_address|default:"-" }}
+            </td>
+
+            <td class="py-3 px-3 text-[11px]" style="color:var(--text-muted)">
+              {{ log.timestamp|date:"d/m/Y g:i:s A" }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="py-8 text-center text-xs" style="color:var(--text-muted)">
+              No sensitive action audit logs found matching criteria.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

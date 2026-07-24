@@ -69,3 +69,53 @@ class ActivityLog(models.Model):
         actor_name = self.actor.email or self.actor.phone if self.actor else "System"
         return f"{actor_name} {self.verb} on {self.target} at {self.created_at}"
 
+
+from django.utils import timezone
+
+class AuditLog(models.Model):
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='audit_logs'
+    )
+    action = models.CharField(max_length=100, db_index=True)
+    target_type = models.CharField(max_length=100, blank=True)
+    target_id = models.CharField(max_length=100, blank=True)
+    summary = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = 'audit_log'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['actor', 'action', 'timestamp']),
+            models.Index(fields=['action', 'timestamp']),
+        ]
+
+    def __str__(self):
+        actor_str = self.actor.email if (self.actor and self.actor.email) else 'System'
+        return f"[{self.action}] by {actor_str} at {self.timestamp}"
+
+
+def log_audit(actor, action, target=None, summary='', ip=None, metadata=None):
+    target_type = ''
+    target_id = ''
+    if target:
+        target_type = target.__class__.__name__
+        target_id = str(getattr(target, 'pk', getattr(target, 'id', '')))
+
+    return AuditLog.objects.create(
+        actor=actor if (actor and getattr(actor, 'is_authenticated', False)) else None,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        summary=summary,
+        ip_address=ip,
+        metadata=metadata or {},
+        timestamp=timezone.now()
+    )
+
+

@@ -44,5 +44,6 @@ urlpatterns = [
     path('roles/<int:pk>/members/', roles_views.RoleMembersView.as_view(), name='role_members'),
     path('roles/<int:group_id>/permission/<int:perm_id>/toggle/', roles_views.PermissionToggleView.as_view(), name='role_permission_toggle'),
     path('permissions/matrix/', roles_views.PermissionMatrixView.as_view(), name='permission_matrix'),
+    path('audit-logs/', roles_views.AdminAuditLogView.as_view(), name='admin_audit_logs'),
     path('users/<int:pk>/permissions/', roles_views.UserPermissionsView.as_view(), name='user_permissions'),
 ]

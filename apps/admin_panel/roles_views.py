@@ -333,3 +333,42 @@ class PermissionToggleView(AdminRequiredMixin, View):
             'perm_id': perm.id,
             'is_checked': is_checked
         })
+
+
+from django.db.models import Q
+from apps.notifications.models import AuditLog
+
+class AdminAuditLogView(AdminRequiredMixin, View):
+    """
+    GET /admin-panel/audit-logs/
+    Admin Audit Log Viewer displaying sensitive system action logs with HTMX live filtering.
+    """
+    def get(self, request):
+        action_filter = request.GET.get('action', '').strip()
+        search_query = request.GET.get('q', '').strip()
+
+        logs = AuditLog.objects.select_related('actor').order_by('-timestamp')
+
+        if action_filter:
+            logs = logs.filter(action=action_filter)
+        if search_query:
+            logs = logs.filter(
+                Q(actor__email__icontains=search_query) |
+                Q(actor__phone__icontains=search_query) |
+                Q(summary__icontains=search_query) |
+                Q(action__icontains=search_query)
+            )
+
+        action_types = AuditLog.objects.values_list('action', flat=True).distinct()
+
+        context = {
+            'logs': logs[:150],
+            'action_filter': action_filter,
+            'search_query': search_query,
+            'action_types': action_types
+        }
+
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'admin_panel/audit/audit_log_list_partial.html', context)
+        return render(request, 'admin_panel/audit/audit_log_list.html', context)
+
