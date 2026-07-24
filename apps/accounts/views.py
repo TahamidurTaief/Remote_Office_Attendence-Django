@@ -163,10 +163,11 @@ class CustomLoginView(View):
                 'captcha_num2': n2
             })
 
-        # 4. Check Disabled/Suspended Status
+        # 4. Check Disabled/Suspended Status & Employee Master Lifecycle Status
         emp_prof = getattr(user, 'employee_profile', None)
-        if not user.is_active or (emp_prof and not emp_prof.is_active):
-            log_audit(user, 'account_disabled_block', summary="Login blocked: Account deactivated/suspended", ip=ip)
+        emp_master = getattr(user, 'employee_master', None)
+        if not user.is_active or (emp_prof and not emp_prof.is_active) or (emp_master and not emp_master.is_login_allowed()):
+            log_audit(user, 'account_disabled_block', summary="Login blocked: Account deactivated, suspended, or invalid employee status", ip=ip)
             messages.error(request, 'Your account has been deactivated or suspended. Please contact administrator.')
             pad_response()
             return render(request, 'accounts/login.html', {'email_entered': email})
@@ -801,6 +802,7 @@ class MFASetupView(LoginRequiredMixin, View):
         if sec_prof.verify_totp(totp_code):
             sec_prof.mfa_enabled = True
             sec_prof.mfa_enabled_at = timezone.now()
+            sec_prof.save()
             raw_backup_codes = sec_prof.generate_backup_codes()
             log_audit(request.user, 'mfa_enabled', summary="User enabled TOTP Multi-Factor Authentication", ip=get_client_ip(request))
             return render(request, 'accounts/mfa_backup_codes.html', {

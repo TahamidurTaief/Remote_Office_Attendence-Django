@@ -14,4 +14,12 @@ urlpatterns = [
     path('<int:employee_pk>/documents/add/', views.EmployeeDocumentCreateView.as_view(), name='document_add'),
     path('documents/<int:pk>/edit/', views.EmployeeDocumentEditView.as_view(), name='document_edit'),
     path('documents/<int:pk>/delete/', views.EmployeeDocumentDeleteView.as_view(), name='document_delete'),
+
+    # Phase 2 Employee Master (SSOT) Routes
+    path('master/', views.EmployeeMasterListView.as_view(), name='master_list'),
+    path('master/create/', views.EmployeeMasterCreateView.as_view(), name='master_create'),
+    path('master/<int:pk>/', views.EmployeeMasterDetailView.as_view(), name='master_detail'),
+    path('master/<int:pk>/edit/', views.EmployeeMasterEditView.as_view(), name='master_edit'),
+    path('master/<int:pk>/archive/', views.EmployeeMasterArchiveView.as_view(), name='master_archive'),
 ]
+

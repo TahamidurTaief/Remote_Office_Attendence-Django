@@ -352,3 +352,246 @@ class EmployeeDocumentDeleteView(AdminRequiredMixin, View):
         doc.delete()
         messages.success(request, 'Document deleted successfully.')
         return redirect('employees:employee_detail', pk=employee_pk)
+
+
+# ==========================================
+# PHASE 2: EMPLOYEE MASTER (SSOT) VIEWS
+# ==========================================
+
+from apps.employees.models import Employee, Department, Designation, EmployeeStatus, EmploymentHistory
+from apps.employees.forms import EmployeeMasterForm, DepartmentForm, DesignationForm
+from apps.notifications.models import log_audit
+
+
+class EmployeeMasterListView(AdminRequiredMixin, ListView):
+    model = Employee
+    template_name = 'employees/master_list.html'
+    context_object_name = 'employees'
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = Employee.objects.select_related(
+            'branch', 'department', 'designation', 'reporting_manager', 'user'
+        ).prefetch_related('direct_reports', 'employment_history')
+
+        search = self.request.GET.get('search', '').strip()
+        status_filter = self.request.GET.get('status', '').strip()
+        dept_filter = self.request.GET.get('department', '').strip()
+        branch_filter = self.request.GET.get('branch', '').strip()
+        desig_filter = self.request.GET.get('designation', '').strip()
+
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(employee_number__icontains=search) |
+                Q(personal_email__icontains=search) |
+                Q(phone__icontains=search)
+            )
+
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if dept_filter:
+            queryset = queryset.filter(department_id=dept_filter)
+        if branch_filter:
+            queryset = queryset.filter(branch_id=branch_filter)
+        if desig_filter:
+            queryset = queryset.filter(designation_id=desig_filter)
+
+        return queryset.order_by('-created_at')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search'] = self.request.GET.get('search', '')
+        context['status_filter'] = self.request.GET.get('status', '')
+        context['dept_filter'] = self.request.GET.get('department', '')
+        context['branch_filter'] = self.request.GET.get('branch', '')
+        context['desig_filter'] = self.request.GET.get('designation', '')
+
+        context['departments'] = Department.objects.filter(is_active=True)
+        context['designations'] = Designation.objects.filter(is_active=True)
+        from apps.branches.utils import get_cached_branches
+        context['branches'] = get_cached_branches()
+        context['statuses'] = EmployeeStatus.choices
+        return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.headers.get('HX-Request') and not self.request.headers.get('HX-Target') == 'modal-container':
+            return render(self.request, 'employees/partials/master_table.html', context)
+        return super().render_to_response(context, **response_kwargs)
+
+
+class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
+    model = Employee
+    template_name = 'employees/master_detail.html'
+    context_object_name = 'employee'
+
+    def get_queryset(self):
+        return Employee.objects.select_related(
+            'branch', 'department', 'designation', 'reporting_manager', 'user'
+        ).prefetch_related('direct_reports', 'employment_history__approved_by')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['active_tab'] = self.request.GET.get('tab', 'identity')
+        return context
+
+
+class EmployeeMasterCreateView(AdminRequiredMixin, CreateView):
+    model = Employee
+    form_class = EmployeeMasterForm
+    template_name = 'employees/master_form_modal.html'
+    success_url = reverse_lazy('employees:master_list')
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        employee = self.object
+
+        # Audit log creation
+        log_audit(
+            actor=self.request.user,
+            action='employee_created',
+            target=employee,
+            summary=f"Created Employee Master {employee.employee_number} ({employee.get_full_name()})"
+        )
+
+        # Initial EmploymentHistory entry
+        EmploymentHistory.objects.create(
+            employee=employee,
+            field_changed='status',
+            old_value='',
+            new_value=employee.get_status_display(),
+            reason='Initial Master record creation',
+            approved_by=self.request.user,
+            effective_date=employee.joined_date or timezone.now().date()
+        )
+
+        if self.request.headers.get('HX-Request'):
+            messages.success(self.request, f"Employee {employee.get_full_name()} created successfully.")
+            response = render(self.request, 'employees/partials/form_success_htmx.html', {
+                'message': f"Employee {employee.get_full_name()} created.",
+                'redirect_url': reverse_lazy('employees:master_list')
+            })
+            response['HX-Redirect'] = reverse_lazy('employees:master_list')
+            return response
+
+        messages.success(self.request, f"Employee {employee.get_full_name()} created successfully.")
+        return response
+
+
+class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
+    model = Employee
+    form_class = EmployeeMasterForm
+    template_name = 'employees/master_form_modal.html'
+
+    def get_queryset(self):
+        return Employee.objects.select_related('branch', 'department', 'designation', 'reporting_manager', 'user')
+
+    def form_valid(self, form):
+        old_instance = Employee.objects.get(pk=self.object.pk)
+        old_status = old_instance.status
+        old_dept = old_instance.department
+        old_desig = old_instance.designation
+        old_branch = old_instance.branch
+        old_mgr = old_instance.reporting_manager
+
+        response = super().form_valid(form)
+        employee = self.object
+        reason_text = self.request.POST.get('change_reason', 'Admin update')
+
+        # Track status change history
+        if old_status != employee.status:
+            EmploymentHistory.objects.create(
+                employee=employee,
+                field_changed='status',
+                old_value=dict(EmployeeStatus.choices).get(old_status, old_status),
+                new_value=employee.get_status_display(),
+                reason=reason_text,
+                approved_by=self.request.user,
+                effective_date=timezone.now().date()
+            )
+            log_audit(
+                actor=self.request.user,
+                action='employee_status_changed',
+                target=employee,
+                summary=f"Changed status from {old_status} to {employee.status}"
+            )
+
+        # Track org change history
+        org_changed = False
+        if old_dept != employee.department or old_desig != employee.designation or old_branch != employee.branch or old_mgr != employee.reporting_manager:
+            org_changed = True
+            changes_desc = []
+            if old_dept != employee.department:
+                changes_desc.append(f"Dept: {old_dept} -> {employee.department}")
+            if old_desig != employee.designation:
+                changes_desc.append(f"Designation: {old_desig} -> {employee.designation}")
+            if old_branch != employee.branch:
+                changes_desc.append(f"Branch: {old_branch} -> {employee.branch}")
+            if old_mgr != employee.reporting_manager:
+                changes_desc.append(f"Manager: {old_mgr} -> {employee.reporting_manager}")
+
+            EmploymentHistory.objects.create(
+                employee=employee,
+                field_changed='organization',
+                old_value=f"Dept: {old_dept}, Desig: {old_desig}, Branch: {old_branch}, Mgr: {old_mgr}",
+                new_value=f"Dept: {employee.department}, Desig: {employee.designation}, Branch: {employee.branch}, Mgr: {employee.reporting_manager}",
+                reason=reason_text,
+                approved_by=self.request.user,
+                effective_date=timezone.now().date()
+            )
+            log_audit(
+                actor=self.request.user,
+                action='employee_org_changed',
+                target=employee,
+                summary=f"Updated org details: {'; '.join(changes_desc)}"
+            )
+
+        if self.request.headers.get('HX-Request'):
+            messages.success(self.request, f"Employee {employee.get_full_name()} updated.")
+            response = render(self.request, 'employees/partials/form_success_htmx.html', {
+                'message': f"Employee {employee.get_full_name()} updated.",
+                'redirect_url': reverse_lazy('employees:master_detail', kwargs={'pk': employee.pk})
+            })
+            response['HX-Redirect'] = reverse_lazy('employees:master_detail', kwargs={'pk': employee.pk})
+            return response
+
+        messages.success(self.request, f"Employee {employee.get_full_name()} updated.")
+        return response
+
+    def get_success_url(self):
+        return reverse_lazy('employees:master_detail', kwargs={'pk': self.object.pk})
+
+
+class EmployeeMasterArchiveView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        old_status = employee.status
+        employee.delete()  # soft delete -> sets status to archived
+        
+        EmploymentHistory.objects.create(
+            employee=employee,
+            field_changed='status',
+            old_value=old_status,
+            new_value=EmployeeStatus.ARCHIVED,
+            reason='Archived via Admin Action',
+            approved_by=request.user,
+            effective_date=timezone.now().date()
+        )
+        log_audit(
+            actor=request.user,
+            action='employee_status_changed',
+            target=employee,
+            summary=f"Archived employee {employee.employee_number}"
+        )
+
+        messages.success(request, f"Employee {employee.get_full_name()} has been archived.")
+        if request.headers.get('HX-Request'):
+            response = render(request, 'employees/partials/form_success_htmx.html', {
+                'redirect_url': reverse_lazy('employees:master_list')
+            })
+            response['HX-Redirect'] = reverse_lazy('employees:master_list')
+            return response
+
+        return redirect('employees:master_list')
+

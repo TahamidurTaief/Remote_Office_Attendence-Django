@@ -261,3 +261,84 @@ class EmployeeDocumentForm(forms.ModelForm):
             'expiry_date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'file': forms.ClearableFileInput(attrs={'class': FILE_INPUT}),
         }
+
+
+from apps.employees.models import Employee, Department, Designation, EmployeeStatus, EmploymentHistory
+
+class EmployeeMasterForm(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = [
+            'employee_number', 'first_name', 'last_name', 'dob', 'gender', 'national_id',
+            'phone', 'personal_email', 'address', 'emergency_contact_name', 'emergency_contact_phone',
+            'branch', 'department', 'designation', 'reporting_manager', 'status', 'joined_date', 'user'
+        ]
+        widgets = {
+            'dob': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'joined_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
+            'employee_number': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. EMP-2026-001'}),
+            'first_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'last_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'gender': forms.Select(attrs={'class': SELECT_INPUT}),
+            'national_id': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'phone': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'personal_email': forms.EmailInput(attrs={'class': TEXT_INPUT}),
+            'address': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+            'emergency_contact_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'emergency_contact_phone': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'branch': forms.Select(attrs={'class': SELECT_INPUT}),
+            'department': forms.Select(attrs={'class': SELECT_INPUT}),
+            'designation': forms.Select(attrs={'class': SELECT_INPUT}),
+            'reporting_manager': forms.Select(attrs={'class': SELECT_INPUT}),
+            'status': forms.Select(attrs={'class': SELECT_INPUT}),
+            'user': forms.Select(attrs={'class': SELECT_INPUT}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['reporting_manager'].queryset = Employee.objects.exclude(pk=self.instance.pk)
+        else:
+            self.fields['reporting_manager'].queryset = Employee.objects.all()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        manager = cleaned_data.get('reporting_manager')
+        if self.instance and self.instance.pk and manager:
+            if manager.pk == self.instance.pk:
+                self.add_error('reporting_manager', "An employee cannot report to themselves.")
+            else:
+                curr = manager
+                visited = {self.instance.pk}
+                while curr:
+                    if curr.pk in visited:
+                        self.add_error('reporting_manager', f"Circular reporting structure detected involving {curr.get_full_name()}.")
+                        break
+                    visited.add(curr.pk)
+                    curr = curr.reporting_manager
+        return cleaned_data
+
+
+class DepartmentForm(forms.ModelForm):
+    class Meta:
+        model = Department
+        fields = ['name', 'code', 'description', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'code': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'description': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+            'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+        }
+
+
+class DesignationForm(forms.ModelForm):
+    class Meta:
+        model = Designation
+        fields = ['name', 'code', 'description', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'code': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'description': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+            'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+        }
+

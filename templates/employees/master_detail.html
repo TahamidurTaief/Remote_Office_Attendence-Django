@@ -1,0 +1,199 @@
+<c-app-shell page_title="{{ employee.get_full_name }} | Employee Master" active_href="{% url 'employees:master_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'employees:master_list' %}" />
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="{{ employee.get_full_name }}">
+            <c-slot name="actions">
+                <div class="flex items-center space-x-2">
+                    <button hx-get="{% url 'employees:master_edit' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium text-sm rounded-xl transition-colors">
+                        Edit Master Profile
+                    </button>
+                    {% if employee.status != 'archived' %}
+                    <form method="post" action="{% url 'employees:master_archive' employee.pk %}" onsubmit="return confirm('Are you sure you want to archive this employee?');" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium text-sm rounded-xl transition-colors">
+                            Archive Employee
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <div class="p-4 max-w-6xl mx-auto space-y-6">
+        <!-- Profile Header Card -->
+        <c-card padding="md">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                    <c-avatar name="{{ employee.get_full_name }}" size="xl" />
+                    <div>
+                        <div class="flex items-center space-x-3">
+                            <h1 class="text-2xl font-bold text-gray-900">{{ employee.get_full_name }}</h1>
+                            {% if employee.status == 'active' or employee.status == 'confirmed' %}
+                                <c-badge variant="success" label="{{ employee.get_status_display }}" />
+                            {% elif employee.status == 'probation' or employee.status == 'pending_approval' %}
+                                <c-badge variant="warning" label="{{ employee.get_status_display }}" />
+                            {% elif employee.status == 'archived' or employee.status == 'terminated' or employee.status == 'resigned' %}
+                                <c-badge variant="danger" label="{{ employee.get_status_display }}" />
+                            {% else %}
+                                <c-badge variant="neutral" label="{{ employee.get_status_display }}" />
+                            {% endif %}
+                        </div>
+                        <div class="text-sm text-gray-500 font-mono mt-0.5">
+                            ID: {{ employee.employee_number }} • National ID Ref: {{ employee.national_id|default:"Not Linked" }}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">
+                            {{ employee.designation.name|default:"No Designation" }} in {{ employee.department.name|default:"No Department" }} ({{ employee.branch.name|default:"No Branch" }})
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col items-end text-xs text-gray-500 border-l pl-4 border-gray-100">
+                    <div><span class="font-medium text-gray-700">Joined:</span> {{ employee.joined_date|date:"M d, Y"|default:"—" }}</div>
+                    <div><span class="font-medium text-gray-700">User Login:</span> {% if employee.user %}<span class="text-emerald-600 font-medium">Linked ({{ employee.user.email|default:employee.user.phone }})</span>{% else %}<span class="text-gray-400">None</span>{% endif %}</div>
+                    <div><span class="font-medium text-gray-700">Login Allowed:</span> {% if employee.is_login_allowed %}<span class="text-emerald-600 font-semibold">YES</span>{% else %}<span class="text-rose-600 font-semibold">NO</span>{% endif %}</div>
+                </div>
+            </div>
+        </c-card>
+
+        <!-- Profile Section Tabs -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+            <div class="border-b border-gray-200 mb-6" x-data="{ tab: '{{ active_tab }}' }">
+                <nav class="flex space-x-6">
+                    <button @click="tab = 'identity'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'identity', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'identity' }" class="pb-3 border-b-2 text-sm transition-colors">
+                        Identity & Demographics
+                    </button>
+                    <button @click="tab = 'contact'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'contact', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'contact' }" class="pb-3 border-b-2 text-sm transition-colors">
+                        Contact & Emergency
+                    </button>
+                    <button @click="tab = 'organization'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'organization', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'organization' }" class="pb-3 border-b-2 text-sm transition-colors">
+                        Organization & Reporting
+                    </button>
+                    <button @click="tab = 'history'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'history', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'history' }" class="pb-3 border-b-2 text-sm transition-colors">
+                        Employment History
+                    </button>
+                </nav>
+
+                <!-- Identity Tab -->
+                <div x-show="tab === 'identity'" class="py-4 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">First Name</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.first_name }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Last Name</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.last_name }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Date of Birth</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.dob|date:"M d, Y"|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Gender</span>
+                            <div class="text-sm font-semibold text-gray-900 capitalize mt-0.5">{{ employee.gender|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">National ID Reference</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.national_id|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Created Date</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.created_at|date:"M d, Y H:i" }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contact Tab -->
+                <div x-show="tab === 'contact'" class="py-4 space-y-4" style="display: none;">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Phone Number</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.phone|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Personal Email</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.personal_email|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl sm:col-span-2">
+                            <span class="text-xs text-gray-500 font-medium">Address</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.address|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Emergency Contact Name</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.emergency_contact_name|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Emergency Contact Phone</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.emergency_contact_phone|default:"—" }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Organization Tab -->
+                <div x-show="tab === 'organization'" class="py-4 space-y-4" style="display: none;">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Branch</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.branch.name|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Department</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.department.name|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Designation</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">{{ employee.designation.name|default:"—" }}</div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl">
+                            <span class="text-xs text-gray-500 font-medium">Reporting Manager</span>
+                            <div class="text-sm font-semibold text-indigo-600 mt-0.5">
+                                {% if employee.reporting_manager %}
+                                <a href="{% url 'employees:master_detail' employee.reporting_manager.pk %}" class="hover:underline">
+                                    {{ employee.reporting_manager.get_full_name }} ({{ employee.reporting_manager.employee_number }})
+                                </a>
+                                {% else %}
+                                <span class="text-gray-400">None</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-xl sm:col-span-2">
+                            <span class="text-xs text-gray-500 font-medium">Direct Reports</span>
+                            <div class="text-sm font-semibold text-gray-900 mt-0.5">
+                                {% for dr in employee.direct_reports.all %}
+                                    <a href="{% url 'employees:master_detail' dr.pk %}" class="inline-block bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs mr-1 mb-1 hover:bg-indigo-100">
+                                        {{ dr.get_full_name }}
+                                    </a>
+                                {% empty %}
+                                    <span class="text-xs text-gray-400">No direct reports</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employment History Tab -->
+                <div x-show="tab === 'history'" class="py-4 space-y-4" style="display: none;">
+                    <c-timeline>
+                        {% for hist in employee.employment_history.all %}
+                        <c-timeline-item title="{{ hist.field_changed|title }} Change" time="{{ hist.effective_date|date:'M d, Y' }}">
+                            <div class="text-xs text-gray-600 mt-1">
+                                <div><span class="font-medium text-gray-700">From:</span> {{ hist.old_value|default:"(empty)" }} → <span class="font-medium text-gray-700">To:</span> {{ hist.new_value }}</div>
+                                {% if hist.reason %}<div class="text-gray-500 italic mt-0.5">Reason: {{ hist.reason }}</div>{% endif %}
+                                {% if hist.approved_by %}<div class="text-gray-400 text-2xs mt-0.5">Approved by {{ hist.approved_by.email|default:hist.approved_by.phone }}</div>{% endif %}
+                            </div>
+                        </c-timeline-item>
+                        {% empty %}
+                        <div class="text-sm text-gray-500 py-4 italic">No employment history recorded yet.</div>
+                        {% endfor %}
+                    </c-timeline>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-container"></div>
+</c-app-shell>

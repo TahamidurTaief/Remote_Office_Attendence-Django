@@ -118,3 +118,190 @@ class EmployeeDocument(models.Model):
 
     def __str__(self):
         return f"{self.employee.full_name} - {self.document_type} (Expires: {self.expiry_date})"
+
+
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+
+
+class Department(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=20, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class Designation(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=20, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class EmployeeStatus(models.TextChoices):
+    DRAFT = 'draft', 'Draft'
+    PENDING_APPROVAL = 'pending_approval', 'Pending Approval'
+    ACTIVE = 'active', 'Active'
+    PROBATION = 'probation', 'Probation'
+    CONFIRMED = 'confirmed', 'Confirmed'
+    TRANSFERRED = 'transferred', 'Transferred'
+    PROMOTED = 'promoted', 'Promoted'
+    DEMOTED = 'demoted', 'Demoted'
+    NOTICE_PERIOD = 'notice_period', 'Notice Period'
+    RESIGNED = 'resigned', 'Resigned'
+    TERMINATED = 'terminated', 'Terminated'
+    RETIRED = 'retired', 'Retired'
+    ARCHIVED = 'archived', 'Archived'
+
+
+ALLOWED_LOGIN_STATUSES = [
+    EmployeeStatus.ACTIVE,
+    EmployeeStatus.PROBATION,
+    EmployeeStatus.CONFIRMED,
+    EmployeeStatus.TRANSFERRED,
+    EmployeeStatus.PROMOTED,
+    EmployeeStatus.DEMOTED,
+    EmployeeStatus.NOTICE_PERIOD,
+]
+
+
+
+class Employee(models.Model):
+    GENDER_CHOICES = (
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+    )
+
+    employee_number = models.CharField(max_length=50, unique=True, db_index=True)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    dob = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True)
+    national_id = models.CharField(max_length=100, blank=True, help_text="National ID reference link")
+
+    phone = models.CharField(max_length=30, blank=True)
+    personal_email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
+    emergency_contact_name = models.CharField(max_length=255, blank=True)
+    emergency_contact_phone = models.CharField(max_length=50, blank=True)
+
+    branch = models.ForeignKey(
+        Branch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='master_employees', db_index=True
+    )
+    department = models.ForeignKey(
+        Department, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='employees', db_index=True
+    )
+    designation = models.ForeignKey(
+        Designation, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='employees', db_index=True
+    )
+    reporting_manager = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='direct_reports', db_index=True
+    )
+
+    status = models.CharField(
+        max_length=30, choices=EmployeeStatus.choices,
+        default=EmployeeStatus.DRAFT, db_index=True
+    )
+    joined_date = models.DateField(null=True, blank=True)
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='employee_master'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['employee_number']
+        indexes = [
+            models.Index(fields=['employee_number']),
+            models.Index(fields=['status']),
+            models.Index(fields=['department']),
+            models.Index(fields=['designation']),
+            models.Index(fields=['reporting_manager']),
+            models.Index(fields=['branch']),
+        ]
+
+    def get_full_name(self):
+        full = f"{self.first_name} {self.last_name}".strip()
+        return full or self.employee_number
+
+    def __str__(self):
+        return f"{self.employee_number} - {self.get_full_name()}"
+
+    def is_login_allowed(self):
+        return self.status in ALLOWED_LOGIN_STATUSES
+
+    def check_circular_reporting(self):
+        if not self.reporting_manager:
+            return
+        if self.pk and self.reporting_manager_id == self.pk:
+            raise ValidationError({'reporting_manager': "An employee cannot report to themselves."})
+        curr = self.reporting_manager
+        visited = {self.pk} if self.pk else set()
+        while curr:
+            if curr.pk in visited:
+                raise ValidationError({'reporting_manager': f"Circular reporting structure detected involving {curr.get_full_name()}."})
+            if self.pk:
+                visited.add(curr.pk)
+            curr = curr.reporting_manager
+
+    def clean(self):
+        super().clean()
+        self.check_circular_reporting()
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        self.status = EmployeeStatus.ARCHIVED
+        self.save(update_fields=['status', 'updated_at'])
+
+
+class EmploymentHistory(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='employment_history')
+    field_changed = models.CharField(max_length=100)
+    old_value = models.TextField(blank=True)
+    new_value = models.TextField(blank=True)
+    reason = models.TextField(blank=True)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    effective_date = models.DateField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.employee.get_full_name()} - {self.field_changed} ({self.effective_date})"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("EmploymentHistory records are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("EmploymentHistory records are immutable and cannot be deleted.")
+

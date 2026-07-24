@@ -282,13 +282,15 @@ class EmployeeDocumentTests(TestCase):
         url_add = reverse('employees:document_add', kwargs={'employee_pk': self.employee.pk})
         
         # Staff cannot add document
-        self.client.login(username='staff@test.com', password='staffpassword123')
+        self.client.force_login(self.staff_user)
+        UserSession.objects.create(user=self.staff_user, session_key=self.client.session.session_key, is_active=True)
         response = self.client.get(url_add)
         self.assertEqual(response.status_code, 302)
         self.client.logout()
 
         # Admin can add document
-        self.client.login(username='admin@test.com', password='adminpassword123')
+        self.client.force_login(self.admin)
+        UserSession.objects.create(user=self.admin, session_key=self.client.session.session_key, is_active=True)
         response = self.client.get(url_add)
         self.assertEqual(response.status_code, 200)
 
@@ -325,6 +327,239 @@ class EmployeeDocumentTests(TestCase):
         emails_to_admin = [m for m in mail.outbox if self.admin.email in m.to]
         self.assertEqual(len(emails_to_admin), 1)
         self.assertIn("URGENT: Document Expiring in 7 Days", emails_to_admin[0].subject)
+
+
+from django.core.exceptions import ValidationError
+from django.contrib.messages import get_messages
+from apps.accounts.models import UserSession
+from apps.employees.models import Employee, Department, Designation, EmployeeStatus, EmploymentHistory
+
+class EmployeeMasterTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            email='adminmaster@test.com',
+            password='AdminPassword123!'
+        )
+        self.branch = Branch.objects.create(
+            name='Dhaka HQ',
+            latitude=23.8103,
+            longitude=90.4125
+        )
+        self.dept = Department.objects.create(name='Engineering', code='ENG')
+        self.desig = Designation.objects.create(name='Senior Software Engineer', code='SSE')
+
+    def test_employee_master_creation(self):
+        emp = Employee.objects.create(
+            employee_number='EMP-MASTER-001',
+            first_name='John',
+            last_name='Smith',
+            dob='1990-05-15',
+            gender='male',
+            branch=self.branch,
+            department=self.dept,
+            designation=self.desig,
+            status=EmployeeStatus.ACTIVE
+        )
+        self.assertEqual(emp.get_full_name(), 'John Smith')
+        self.assertTrue(emp.is_login_allowed())
+        self.assertEqual(str(emp), 'EMP-MASTER-001 - John Smith')
+
+        # Test unique employee_number constraint
+        with self.assertRaises(Exception):
+            Employee.objects.create(
+                employee_number='EMP-MASTER-001',
+                first_name='Duplicate',
+                last_name='User'
+            )
+
+    def test_circular_reporting_manager_rejection(self):
+        emp_a = Employee.objects.create(
+            employee_number='EMP-A',
+            first_name='Alice',
+            last_name='One',
+            status=EmployeeStatus.ACTIVE
+        )
+        emp_b = Employee.objects.create(
+            employee_number='EMP-B',
+            first_name='Bob',
+            last_name='Two',
+            reporting_manager=emp_a,
+            status=EmployeeStatus.ACTIVE
+        )
+
+        # 1. Self reporting
+        emp_a.reporting_manager = emp_a
+        with self.assertRaises(ValidationError):
+            emp_a.save()
+
+        # Reset emp_a
+        emp_a.reporting_manager = None
+        emp_a.save()
+
+        # 2. Direct circular (A reports to B, B reports to A)
+        emp_a.reporting_manager = emp_b
+        with self.assertRaises(ValidationError):
+            emp_a.save()
+
+        # 3. Multi-level circular (A -> B -> C -> A)
+        emp_a.reporting_manager = None
+        emp_a.save()
+        emp_c = Employee.objects.create(
+            employee_number='EMP-C',
+            first_name='Charlie',
+            last_name='Three',
+            reporting_manager=emp_b,
+            status=EmployeeStatus.ACTIVE
+        )
+        # Now C reports to B, B reports to A. Making A report to C creates A -> C -> B -> A loop
+        emp_a.reporting_manager = emp_c
+        with self.assertRaises(ValidationError):
+            emp_a.save()
+
+    def test_soft_delete_employee(self):
+        emp = Employee.objects.create(
+            employee_number='EMP-SOFTDELETE',
+            first_name='Soft',
+            last_name='Delete',
+            status=EmployeeStatus.ACTIVE
+        )
+        emp_id = emp.pk
+        emp.delete()
+
+        # Reload from DB
+        reloaded = Employee.objects.get(pk=emp_id)
+        self.assertEqual(reloaded.status, EmployeeStatus.ARCHIVED)
+        self.assertFalse(reloaded.is_login_allowed())
+
+    def test_employment_history_immutability(self):
+        emp = Employee.objects.create(
+            employee_number='EMP-HIST',
+            first_name='Hist',
+            last_name='Test',
+            status=EmployeeStatus.ACTIVE
+        )
+        history = EmploymentHistory.objects.create(
+            employee=emp,
+            field_changed='status',
+            old_value='draft',
+            new_value='active',
+            reason='Initial creation'
+        )
+
+        # Updating existing history must raise ValidationError
+        history.reason = 'Modified reason'
+        with self.assertRaises(ValidationError):
+            history.save()
+
+        # Deleting history must raise ValidationError
+        with self.assertRaises(ValidationError):
+            history.delete()
+
+    def test_customuser_linkage_and_login_status(self):
+        user = User.objects.create_user(
+            email='emplogin@test.com',
+            password='UserPassword123!'
+        )
+        emp = Employee.objects.create(
+            employee_number='EMP-LOGIN-001',
+            first_name='Login',
+            last_name='User',
+            user=user,
+            status=EmployeeStatus.DRAFT
+        )
+
+        # 1. Draft status -> login blocked
+        self.assertFalse(emp.is_login_allowed())
+        response = self.client.post(reverse('accounts:login'), {
+            'email': 'emplogin@test.com',
+            'password': 'UserPassword123!'
+        })
+        self.assertEqual(response.status_code, 200)
+        msgs1 = [m.message for m in get_messages(response.wsgi_request)]
+        self.assertTrue(any('deactivated or suspended' in m for m in msgs1))
+
+        # 2. Active status -> login succeeds
+        emp.status = EmployeeStatus.ACTIVE
+        emp.save()
+        self.assertTrue(emp.is_login_allowed())
+        response = self.client.post(reverse('accounts:login'), {
+            'email': 'emplogin@test.com',
+            'password': 'UserPassword123!'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Logout
+        self.client.logout()
+
+        # 3. Archived status -> login blocked
+        emp.delete()  # soft delete -> archived
+        self.assertEqual(emp.status, EmployeeStatus.ARCHIVED)
+        response = self.client.post(reverse('accounts:login'), {
+            'email': 'emplogin@test.com',
+            'password': 'UserPassword123!'
+        })
+        self.assertEqual(response.status_code, 200)
+        msgs3 = [m.message for m in get_messages(response.wsgi_request)]
+        self.assertTrue(any('deactivated or suspended' in m for m in msgs3))
+
+    def test_master_crud_htmx_views(self):
+        self.client.force_login(self.admin)
+        UserSession.objects.create(user=self.admin, session_key=self.client.session.session_key, is_active=True)
+
+        # 1. List view GET
+        url_list = reverse('employees:master_list')
+        res = self.client.get(url_list)
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'Employee Master Directory')
+
+        # 2. Create view POST via HTMX
+        url_create = reverse('employees:master_create')
+        post_data = {
+            'employee_number': 'EMP-HTMX-001',
+            'first_name': 'HTMX',
+            'last_name': 'User',
+            'status': 'active',
+            'branch': self.branch.id,
+            'department': self.dept.id,
+            'designation': self.desig.id
+        }
+        res_create = self.client.post(url_create, data=post_data, HTTP_HX_REQUEST='true')
+        self.assertEqual(res_create.status_code, 200)
+        emp = Employee.objects.get(employee_number='EMP-HTMX-001')
+        self.assertEqual(emp.get_full_name(), 'HTMX User')
+
+        # 3. Detail view GET
+        url_detail = reverse('employees:master_detail', kwargs={'pk': emp.pk})
+        res_detail = self.client.get(url_detail)
+        self.assertEqual(res_detail.status_code, 200)
+        self.assertContains(res_detail, 'EMP-HTMX-001')
+
+        # 4. Edit view POST via HTMX
+        url_edit = reverse('employees:master_edit', kwargs={'pk': emp.pk})
+        edit_data = {
+            'employee_number': 'EMP-HTMX-001',
+            'first_name': 'HTMX',
+            'last_name': 'User-Updated',
+            'status': 'confirmed',
+            'branch': self.branch.id,
+            'department': self.dept.id,
+            'designation': self.desig.id,
+            'change_reason': 'Passed Probation'
+        }
+        res_edit = self.client.post(url_edit, data=edit_data, HTTP_HX_REQUEST='true')
+        self.assertEqual(res_edit.status_code, 200)
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, 'confirmed')
+        self.assertTrue(EmploymentHistory.objects.filter(employee=emp, reason='Passed Probation').exists())
+
+        # 5. Archive view POST
+        url_archive = reverse('employees:master_archive', kwargs={'pk': emp.pk})
+        res_archive = self.client.post(url_archive, HTTP_HX_REQUEST='true')
+        self.assertEqual(res_archive.status_code, 200)
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, 'archived')
+
+
 
 
 
