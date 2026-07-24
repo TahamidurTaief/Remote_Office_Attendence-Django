@@ -270,7 +270,7 @@ class SecurityPolicyTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.password = 'password123'
-        self.admin = User.objects.create_user(
+        self.admin = User.objects.create_superuser(
             email='admin_pol@example.com',
             password=self.password,
             role='admin'
