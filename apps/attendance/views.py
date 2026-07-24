@@ -989,3 +989,385 @@ def save_mandatory_location(request):
     request.session['location_approved'] = True
 
     return JsonResponse({'success': True})
+
+
+# ─────────────────────────────────────────────────────────────────
+# PHASE 2: FORGOT CHECKOUT & CORRECTION & OT APPROVALS
+# ─────────────────────────────────────────────────────────────────
+from django.db import transaction
+from django.http import HttpResponse
+
+def check_approval_permissions(user, target_employee):
+    """
+    Checks if the user has approval permissions for the target employee's requests.
+    Returns: (is_manager, is_hr)
+    """
+    if not user.is_authenticated:
+        return False, False
+        
+    is_hr = False
+    from apps.accounts.engine import PermissionEngine
+    res = PermissionEngine.evaluate(user, 'attendance.approve')
+    if res.allowed or user.is_superuser or getattr(user, 'role', '') == 'admin':
+        is_hr = True
+        
+    is_manager = False
+    emp_master = getattr(target_employee, 'master_employee', None)
+    if emp_master and emp_master.reporting_manager and emp_master.reporting_manager.user == user:
+        is_manager = True
+        
+    return is_manager, is_hr
+
+
+def render_htmx_status_badge(status_val, label):
+    variant = 'neutral'
+    if status_val in ['approved', 'none', 'approved']:
+        variant = 'success'
+    elif status_val in ['rejected', 'terminated']:
+        variant = 'danger'
+    elif status_val in ['pending', 'pending_manager', 'pending_hr']:
+        variant = 'warning'
+    return HttpResponse(f'<span class="ft-badge ft-badge-{variant}">{label}</span>')
+
+
+@login_required
+@require_POST
+def submit_forgot_checkout(request):
+    employee = get_employee(request.user)
+    if not employee:
+        return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+
+    attendance_id = request.POST.get('attendance_id')
+    reason = request.POST.get('reason')
+    check_out_time_str = request.POST.get('check_out_time')
+    
+    if not attendance_id or not reason or not check_out_time_str:
+        return JsonResponse({'success': False, 'error': 'Missing required fields.'}, status=400)
+        
+    attendance = get_object_or_404(Attendance, pk=attendance_id, employee=employee)
+    if attendance.check_out_time:
+        return JsonResponse({'success': False, 'error': 'Session already checked out.'}, status=400)
+        
+    try:
+        check_out_time = timezone.datetime.fromisoformat(check_out_time_str)
+        if timezone.is_naive(check_out_time):
+            check_out_time = timezone.make_aware(check_out_time, timezone.get_current_timezone())
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Invalid datetime format.'}, status=400)
+
+    if check_out_time <= attendance.check_in_time:
+        return JsonResponse({'success': False, 'error': 'Check-out time must be after check-in time.'}, status=400)
+
+    from apps.attendance.models import ForgotCheckoutRequest
+    if ForgotCheckoutRequest.objects.filter(attendance=attendance, status__in=['pending_manager', 'pending_hr']).exists():
+        return JsonResponse({'success': False, 'error': 'A pending request already exists for this session.'}, status=400)
+
+    ForgotCheckoutRequest.objects.create(
+        attendance=attendance,
+        reason=reason,
+        check_out_time=check_out_time
+    )
+
+    return JsonResponse({'success': True, 'message': 'Forgot checkout request submitted.'})
+
+
+@login_required
+@require_POST
+def process_forgot_checkout(request, pk):
+    from apps.attendance.models import ForgotCheckoutRequest
+    req = get_object_or_404(ForgotCheckoutRequest, pk=pk)
+    action = request.POST.get('action')
+    rejection_reason = request.POST.get('rejection_reason', '')
+    
+    is_manager, is_hr = check_approval_permissions(request.user, req.attendance.employee)
+    
+    if not (is_manager or is_hr):
+        return HttpResponseForbidden("You do not have permission to approve/reject this request.")
+
+    if req.status not in ['pending_manager', 'pending_hr']:
+        return JsonResponse({'success': False, 'error': 'This request has already been processed.'}, status=400)
+
+    if action == 'reject':
+        req.status = 'rejected'
+        if req.status == 'pending_manager':
+            req.reviewed_by_manager = request.user
+        else:
+            req.reviewed_by_hr = request.user
+        req.rejection_reason = rejection_reason
+        req.save()
+        
+        if request.headers.get('hx-request'):
+            return render_htmx_status_badge('rejected', 'Rejected')
+        return JsonResponse({'success': True, 'message': 'Request rejected.'})
+        
+    elif action == 'approve':
+        if req.status == 'pending_manager':
+            if not is_manager and not is_hr:
+                return HttpResponseForbidden("Only reporting manager can perform manager approval.")
+            req.status = 'pending_hr'
+            req.reviewed_by_manager = request.user
+            req.save()
+            
+            if request.headers.get('hx-request'):
+                return render_htmx_status_badge('pending_hr', 'Pending HR Approval')
+            return JsonResponse({'success': True, 'message': 'Manager approval registered. Routed to HR.'})
+            
+        elif req.status == 'pending_hr':
+            if not is_hr:
+                return HttpResponseForbidden("Only HR/Admin can perform HR approval.")
+            
+            with transaction.atomic():
+                req.status = 'approved'
+                req.reviewed_by_hr = request.user
+                req.save()
+                
+                attendance = req.attendance
+                old_ci = attendance.check_in_time
+                old_co = attendance.check_out_time
+                old_status = attendance.status
+                
+                attendance.check_out_time = req.check_out_time
+                duration = req.check_out_time - attendance.check_in_time
+                attendance.total_hours = round(duration.total_seconds() / 3600.0, 2)
+                
+                from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
+                schedule = get_branch_schedule(attendance.employee)
+                overtime_minutes = calculate_overtime(req.check_out_time, schedule, attendance.employee, attendance.date)
+                attendance.is_early_checkout = calculate_early_checkout(req.check_out_time, schedule, attendance.date)
+                
+                if overtime_minutes > 0:
+                    attendance.overtime_minutes = overtime_minutes
+                    attendance.ot_status = 'pending'
+                else:
+                    attendance.overtime_minutes = 0
+                    attendance.ot_status = 'none'
+                    
+                attendance.save()
+                
+                from apps.attendance.models import AttendanceLocation, AttendanceAuditLog
+                AttendanceLocation.objects.create(
+                    attendance=attendance,
+                    event='check_out',
+                    latitude=0.0,
+                    longitude=0.0,
+                    address='Checked out via approved forgot-checkout request',
+                    accuracy=0.0,
+                    timestamp=req.check_out_time,
+                    sync_uuid=uuid.uuid4(),
+                    client_event_time=req.check_out_time,
+                    synced_at=timezone.now()
+                )
+                
+                AttendanceAuditLog.objects.create(
+                    attendance=attendance,
+                    action='forgot_checkout',
+                    old_check_in_time=old_ci,
+                    old_check_out_time=old_co,
+                    old_status=old_status,
+                    new_check_in_time=attendance.check_in_time,
+                    new_check_out_time=attendance.check_out_time,
+                    new_status=attendance.status,
+                    reason=req.reason,
+                    changed_by=request.user
+                )
+                
+            if request.headers.get('hx-request'):
+                return render_htmx_status_badge('approved', 'Approved')
+            return JsonResponse({'success': True, 'message': 'Request approved and session updated.'})
+
+    return JsonResponse({'success': False, 'error': 'Invalid action.'}, status=400)
+
+
+@login_required
+@require_POST
+def submit_attendance_correction(request):
+    employee = get_employee(request.user)
+    if not employee:
+        return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+
+    attendance_id = request.POST.get('attendance_id')
+    reason = request.POST.get('reason')
+    check_in_time_str = request.POST.get('check_in_time')
+    check_out_time_str = request.POST.get('check_out_time')
+    note = request.POST.get('note', '')
+    attachment = request.FILES.get('attachment')
+    
+    if not attendance_id or not reason:
+        return JsonResponse({'success': False, 'error': 'Missing required fields.'}, status=400)
+        
+    attendance = get_object_or_404(Attendance, pk=attendance_id, employee=employee)
+    
+    proposed_check_in = None
+    proposed_check_out = None
+    
+    try:
+        if check_in_time_str:
+            proposed_check_in = timezone.datetime.fromisoformat(check_in_time_str)
+            if timezone.is_naive(proposed_check_in):
+                proposed_check_in = timezone.make_aware(proposed_check_in, timezone.get_current_timezone())
+        if check_out_time_str:
+            proposed_check_out = timezone.datetime.fromisoformat(check_out_time_str)
+            if timezone.is_naive(proposed_check_out):
+                proposed_check_out = timezone.make_aware(proposed_check_out, timezone.get_current_timezone())
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Invalid datetime format.'}, status=400)
+
+    if proposed_check_in and proposed_check_out and proposed_check_out <= proposed_check_in:
+        return JsonResponse({'success': False, 'error': 'Check-out time must be after check-in time.'}, status=400)
+
+    from apps.attendance.models import AttendanceCorrectionRequest
+    if AttendanceCorrectionRequest.objects.filter(attendance=attendance, status='pending').exists():
+        return JsonResponse({'success': False, 'error': 'A pending correction request already exists for this session.'}, status=400)
+
+    AttendanceCorrectionRequest.objects.create(
+        attendance=attendance,
+        reason=reason,
+        check_in_time=proposed_check_in,
+        check_out_time=proposed_check_out,
+        note=note,
+        attachment=attachment
+    )
+
+    return JsonResponse({'success': True, 'message': 'Correction request submitted.'})
+
+
+@login_required
+@require_POST
+def process_attendance_correction(request, pk):
+    from apps.attendance.models import AttendanceCorrectionRequest
+    req = get_object_or_404(AttendanceCorrectionRequest, pk=pk)
+    action = request.POST.get('action')
+    rejection_reason = request.POST.get('rejection_reason', '')
+    
+    is_manager, is_hr = check_approval_permissions(request.user, req.attendance.employee)
+    if not is_manager and not is_hr:
+        return HttpResponseForbidden("You do not have permission to process this request.")
+
+    if req.status != 'pending':
+        return JsonResponse({'success': False, 'error': 'This request has already been processed.'}, status=400)
+
+    if action == 'reject':
+        req.status = 'rejected'
+        req.reviewed_by = request.user
+        req.rejection_reason = rejection_reason
+        req.save()
+        
+        if request.headers.get('hx-request'):
+            return render_htmx_status_badge('rejected', 'Rejected')
+        return JsonResponse({'success': True, 'message': 'Request rejected.'})
+        
+    elif action == 'approve':
+        with transaction.atomic():
+            req.status = 'approved'
+            req.reviewed_by = request.user
+            req.reviewed_at = timezone.now()
+            req.save()
+            
+            attendance = req.attendance
+            old_ci = attendance.check_in_time
+            old_co = attendance.check_out_time
+            old_status = attendance.status
+            
+            if req.check_in_time:
+                attendance.check_in_time = req.check_in_time
+            if req.check_out_time:
+                attendance.check_out_time = req.check_out_time
+            if req.note:
+                attendance.note = req.note
+                
+            if attendance.check_in_time and attendance.check_out_time:
+                duration = attendance.check_out_time - attendance.check_in_time
+                attendance.total_hours = round(duration.total_seconds() / 3600.0, 2)
+                
+                from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
+                schedule = get_branch_schedule(attendance.employee)
+                overtime_minutes = calculate_overtime(attendance.check_out_time, schedule, attendance.employee, attendance.date)
+                attendance.is_early_checkout = calculate_early_checkout(attendance.check_out_time, schedule, attendance.date)
+                
+                if overtime_minutes > 0:
+                    attendance.overtime_minutes = overtime_minutes
+                    attendance.ot_status = 'pending'
+                else:
+                    attendance.overtime_minutes = 0
+                    attendance.ot_status = 'none'
+            
+            attendance.save()
+            
+            from apps.attendance.models import AttendanceAuditLog
+            AttendanceAuditLog.objects.create(
+                attendance=attendance,
+                action='correction',
+                old_check_in_time=old_ci,
+                old_check_out_time=old_co,
+                old_status=old_status,
+                new_check_in_time=attendance.check_in_time,
+                new_check_out_time=attendance.check_out_time,
+                new_status=attendance.status,
+                reason=req.reason,
+                changed_by=request.user
+            )
+            
+        if request.headers.get('hx-request'):
+            return render_htmx_status_badge('approved', 'Approved')
+        return JsonResponse({'success': True, 'message': 'Request approved and session updated.'})
+
+    return JsonResponse({'success': False, 'error': 'Invalid action.'}, status=400)
+
+
+@login_required
+@require_POST
+def process_overtime(request, pk):
+    attendance = get_object_or_404(Attendance, pk=pk)
+    action = request.POST.get('action')
+    
+    is_manager, is_hr = check_approval_permissions(request.user, attendance.employee)
+    if not is_manager and not is_hr:
+        return HttpResponseForbidden("You do not have permission to approve/reject overtime.")
+
+    if attendance.ot_status != 'pending':
+        return JsonResponse({'success': False, 'error': 'Overtime is not in pending status.'}, status=400)
+
+    with transaction.atomic():
+        if action == 'approve':
+            attendance.ot_status = 'approved'
+            attendance.save()
+            
+            from apps.attendance.models import AttendanceAuditLog
+            AttendanceAuditLog.objects.create(
+                attendance=attendance,
+                action='ot_approve',
+                old_check_in_time=attendance.check_in_time,
+                old_check_out_time=attendance.check_out_time,
+                old_status=attendance.status,
+                new_check_in_time=attendance.check_in_time,
+                new_check_out_time=attendance.check_out_time,
+                new_status=attendance.status,
+                reason='Overtime approved by manager',
+                changed_by=request.user
+            )
+            if request.headers.get('hx-request'):
+                return render_htmx_status_badge('approved', 'Approved')
+            return JsonResponse({'success': True, 'message': 'Overtime approved.'})
+            
+        elif action == 'reject':
+            attendance.ot_status = 'rejected'
+            attendance.save()
+            
+            from apps.attendance.models import AttendanceAuditLog
+            AttendanceAuditLog.objects.create(
+                attendance=attendance,
+                action='ot_reject',
+                old_check_in_time=attendance.check_in_time,
+                old_check_out_time=attendance.check_out_time,
+                old_status=attendance.status,
+                new_check_in_time=attendance.check_in_time,
+                new_check_out_time=attendance.check_out_time,
+                new_status=attendance.status,
+                reason='Overtime rejected by manager',
+                changed_by=request.user
+            )
+            if request.headers.get('hx-request'):
+                return render_htmx_status_badge('rejected', 'Rejected')
+            return JsonResponse({'success': True, 'message': 'Overtime rejected.'})
+
+    return JsonResponse({'success': False, 'error': 'Invalid action.'}, status=400)

@@ -13,4 +13,11 @@ urlpatterns = [
     path('tracking-config/', views.get_tracking_config, name='tracking_config'),
     path('save-location/', views.save_location, name='save_location'),
     path('save-location-mandatory/', views.save_mandatory_location, name='save_mandatory_location'),
+    
+    # Phase 2 Endpoints
+    path('forgot-checkout/submit/', views.submit_forgot_checkout, name='submit_forgot_checkout'),
+    path('forgot-checkout/<int:pk>/process/', views.process_forgot_checkout, name='process_forgot_checkout'),
+    path('correction/submit/', views.submit_attendance_correction, name='submit_attendance_correction'),
+    path('correction/<int:pk>/process/', views.process_attendance_correction, name='process_attendance_correction'),
+    path('overtime/<int:pk>/process/', views.process_overtime, name='process_overtime'),
 ]
