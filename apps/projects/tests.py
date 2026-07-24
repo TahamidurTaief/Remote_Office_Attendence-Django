@@ -278,7 +278,7 @@ class ProjectTests(TestCase):
         )
         log_newer = DailyProgressLog.objects.create(
             project=project,
-            date=date(2026, 7, 20),
+            date=date.today() + timedelta(days=5),
             planned_work='New plan',
             completed_work='New complete',
             manpower_count=3,
