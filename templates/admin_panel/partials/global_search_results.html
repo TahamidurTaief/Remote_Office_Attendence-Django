@@ -56,4 +56,24 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    {% if attendance_results %}
+    <div class="pt-2 mt-2 border-t border-gray-100">
+        <h5 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-1">Attendance Sessions</h5>
+        {% for att in attendance_results %}
+        <a href="{% url 'admin_panel:attendance_detail' att.pk %}" class="flex items-center justify-between p-2.5 hover:bg-gray-50 rounded-xl transition-colors text-decoration-none">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <i data-lucide="clock" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-gray-900">{{ att.employee.full_name }} • {{ att.date|date:"d M Y" }}</div>
+                    <div class="text-[11px] text-gray-400">{{ att.check_in_time|time:"h:i A" }} {% if att.check_out_time %}– {{ att.check_out_time|time:"h:i A" }}{% endif %} {% if att.address %}• {{ att.address }}{% endif %}</div>
+                </div>
+            </div>
+            <c-badge variant="info" label="{{ att.status }}" ></c-badge>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>

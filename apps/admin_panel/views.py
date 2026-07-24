@@ -3012,6 +3012,7 @@ class GlobalSearchView(RoleRequiredMixin, View):
         query = (request.GET.get('query') or request.GET.get('q') or '').strip()
         employee_results = []
         asset_results = []
+        attendance_results = []
 
         if query:
             employee_results = Employee.objects.select_related(
@@ -3033,11 +3034,20 @@ class GlobalSearchView(RoleRequiredMixin, View):
                 Q(serial_number__icontains=query)
             )[:5]
 
+            from apps.attendance.models import Attendance
+            attendance_results = Attendance.objects.select_related('employee', 'employee__branch').filter(
+                Q(employee__first_name__icontains=query) |
+                Q(employee__last_name__icontains=query) |
+                Q(note__icontains=query) |
+                Q(address__icontains=query)
+            ).order_by('-date', '-check_in_time')[:5]
+
         if request.headers.get('HX-Request'):
             return render(request, 'admin_panel/partials/global_search_results.html', {
                 'query': query,
                 'results': employee_results,
                 'asset_results': asset_results,
+                'attendance_results': attendance_results,
             })
 
         return JsonResponse({
@@ -3061,6 +3071,15 @@ class GlobalSearchView(RoleRequiredMixin, View):
                     'name': ast.name,
                     'type': ast.get_asset_type_display(),
                 } for ast in asset_results
+            ],
+            'attendance_results': [
+                {
+                    'id': att.pk,
+                    'employee': att.employee.full_name,
+                    'date': str(att.date),
+                    'status': att.status,
+                    'url': f"/admin-panel/attendance/{att.pk}/"
+                } for att in attendance_results
             ]
         })
 
