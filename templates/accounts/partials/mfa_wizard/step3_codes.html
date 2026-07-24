@@ -1,0 +1,88 @@
+{% comment %} Step 3: Backup Codes — must acknowledge before completing {% endcomment %}
+<div id="mfa-wizard-body">
+  <c-mfa-wizard-step step="3" title="Save Your Backup Codes">
+
+    <div class="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2 mb-4">
+      <i data-lucide="alert-triangle" class="w-4 h-4 flex-shrink-0"></i>
+      <span><strong>These codes will NOT be shown again.</strong> Save them in a secure password manager.</span>
+    </div>
+
+    {% if error %}
+    <div class="mb-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-center gap-2">
+      <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+      <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    {# Codes grid #}
+    <div class="rounded-xl border p-4 font-mono space-y-2 my-3 select-all"
+         style="background:var(--surface-2); border-color:var(--border)">
+      <div class="grid grid-cols-2 gap-2 text-sm font-bold tracking-wider" id="backup-codes-grid">
+        {% for code in backup_codes %}
+          <div class="py-1.5 px-3 rounded-lg border text-primary text-center"
+               style="background:var(--surface-3, var(--surface)); border-color:var(--border)">
+            {{ code }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Action buttons #}
+    <div class="flex items-center gap-2 flex-wrap" x-data="{ copied: false }">
+      <button type="button"
+              @click="
+                const codes = [...document.querySelectorAll('#backup-codes-grid div')].map(d=>d.textContent.trim()).join('\n');
+                navigator.clipboard.writeText(codes);
+                copied=true; setTimeout(()=>copied=false,2000);
+              "
+              :class="copied ? 'text-emerald-500' : ''"
+              class="ft-btn ft-btn-secondary ft-btn-sm text-xs">
+        <i x-show="!copied" data-lucide="copy" class="w-3.5 h-3.5"></i>
+        <span x-show="!copied">Copy All</span>
+        <span x-show="copied" x-cloak>✓ Copied!</span>
+      </button>
+
+      <button type="button"
+              onclick="window.print()"
+              class="ft-btn ft-btn-ghost ft-btn-sm text-xs">
+        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print / PDF
+      </button>
+
+      <a href="data:text/plain;charset=utf-8,{% for code in backup_codes %}{{ code }}%0A{% endfor %}"
+         download="fieldtrack-backup-codes.txt"
+         class="ft-btn ft-btn-ghost ft-btn-sm text-xs">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+      </a>
+    </div>
+
+    {# Acknowledge form #}
+    <form
+      hx-post="{% url 'accounts:mfa_wizard_complete' %}"
+      hx-target="#mfa-wizard-body"
+      hx-swap="outerHTML"
+      class="mt-5 space-y-4"
+      x-data="{ acked: false }">
+      {% csrf_token %}
+      <input type="hidden" name="acknowledged" :value="acked ? 'true' : 'false'">
+
+      <label class="flex items-start gap-3 cursor-pointer group">
+        <input type="checkbox"
+               x-model="acked"
+               class="mt-0.5 rounded border-slate-600 text-primary focus:ring-primary">
+        <span class="text-xs font-semibold" style="color:var(--text)">
+          I have saved these backup codes in a secure location and understand they will not be shown again.
+        </span>
+      </label>
+
+      <c-button
+        type="submit"
+        variant="primary"
+        label="Enable MFA & Finish"
+        extra_class="w-full justify-center"
+        icon="shield-check"
+        x-bind:disabled="!acked"
+        :class="!acked && 'opacity-50 pointer-events-none'" />
+    </form>
+
+  </c-mfa-wizard-step>
+</div>

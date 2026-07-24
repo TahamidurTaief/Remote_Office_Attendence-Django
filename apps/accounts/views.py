@@ -1046,3 +1046,300 @@ class SecurityReauthView(LoginRequiredMixin, View):
 
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Security Settings Page + MFA Wizard  (Phase 1 – Step 9 UX refactor)
+# ─────────────────────────────────────────────────────────────────────────────
+import re
+
+def _get_security_policy(user):
+    """Return the SecurityPolicy for this user's role, or None."""
+    return SecurityPolicy.objects.filter(role=user.role).first()
+
+
+def _gate_passed(request):
+    """True if the user already verified their password in this session."""
+    return request.session.get('mfa_wizard_gate_passed', False)
+
+
+def _require_gate(request):
+    """Redirect to the security page (wizard will re-open at gate step) if gate not passed."""
+    return redirect('accounts:security_settings')
+
+
+class SecuritySettingsView(LoginRequiredMixin, View):
+    """
+    GET /account/security/
+    Self-service security hub: MFA status, trusted devices, backup-code count.
+    """
+    def get(self, request):
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+        policy = _get_security_policy(request.user)
+        mfa_required = policy.mfa_required if policy else False
+
+        trusted_devices = TrustedDevice.objects.filter(
+            user=request.user,
+            expire_at__gt=timezone.now()
+        ).order_by('-created_at')
+
+        backup_code_count = len(sec_prof.backup_codes) if sec_prof.backup_codes else 0
+
+        # Clear stale gate flag on plain page load (not htmx)
+        if not request.headers.get('HX-Request'):
+            request.session.pop('mfa_wizard_gate_passed', None)
+            request.session.pop('mfa_wizard_secret', None)
+            request.session.pop('mfa_wizard_raw_codes', None)
+
+        return render(request, 'accounts/security_settings.html', {
+            'sec_prof': sec_prof,
+            'mfa_required': mfa_required,
+            'policy': policy,
+            'trusted_devices': trusted_devices,
+            'backup_code_count': backup_code_count,
+        })
+
+
+# ── Wizard Step 0: Password Gate ─────────────────────────────────────────────
+
+class MFAWizardGateView(LoginRequiredMixin, View):
+    """
+    POST /account/security/mfa/wizard/gate/
+    Verify password (+ PIN if set). Sets session flag on success.
+    """
+    def post(self, request):
+        password = request.POST.get('password', '').strip()
+        pin = request.POST.get('pin', '').strip()
+
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+
+        # Always verify password
+        if not request.user.check_password(password):
+            return render(request, 'accounts/partials/mfa_wizard/step0_gate.html', {
+                'error': 'Incorrect password. Please try again.',
+                'has_pin': bool(sec_prof.pin_hash),
+            })
+
+        # If PIN is set, also require it
+        if sec_prof.pin_hash:
+            if not pin or not sec_prof.check_pin(pin):
+                return render(request, 'accounts/partials/mfa_wizard/step0_gate.html', {
+                    'error': 'Incorrect PIN. Please try again.',
+                    'has_pin': True,
+                })
+
+        # Gate passed — generate a fresh secret for setup
+        request.session['mfa_wizard_gate_passed'] = True
+        secret = sec_prof.generate_new_secret()
+        sec_prof.save(update_fields=['mfa_secret'])
+        request.session['mfa_wizard_secret'] = secret
+
+        log_audit(request.user, 'mfa_wizard_gate_passed', summary='Password gate verified for MFA wizard', ip=get_client_ip(request))
+
+        # Return Step 1 QR partial
+        totp_uri = sec_prof.get_totp_uri()
+        qr_b64 = generate_qr_code_base64(totp_uri)
+        return render(request, 'accounts/partials/mfa_wizard/step1_qr.html', {
+            'secret_key': secret,
+            'qr_code_base64': qr_b64,
+        })
+
+
+# ── Wizard Step 1: QR Code (GET reload) ──────────────────────────────────────
+
+class MFAWizardQRView(LoginRequiredMixin, View):
+    """
+    GET /account/security/mfa/wizard/qr/
+    Returns Step 1 partial (gate must already be passed).
+    """
+    def get(self, request):
+        if not _gate_passed(request):
+            return render(request, 'accounts/partials/mfa_wizard/step0_gate.html', {
+                'error': 'Session expired. Please re-verify your password.',
+                'has_pin': bool(getattr(getattr(request.user, 'security_profile', None), 'pin_hash', None)),
+            })
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+        totp_uri = sec_prof.get_totp_uri()
+        qr_b64 = generate_qr_code_base64(totp_uri)
+        return render(request, 'accounts/partials/mfa_wizard/step1_qr.html', {
+            'secret_key': sec_prof.mfa_secret,
+            'qr_code_base64': qr_b64,
+        })
+
+
+# ── Wizard Step 2: Verify TOTP ────────────────────────────────────────────────
+
+class MFAWizardVerifyView(LoginRequiredMixin, View):
+    """
+    POST /account/security/mfa/wizard/verify/
+    Verify the 6-digit TOTP code against the pending secret.
+    """
+    def post(self, request):
+        if not _gate_passed(request):
+            return _require_gate(request)
+
+        code = request.POST.get('totp_code', '').strip()
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+
+        if not sec_prof.verify_totp(code):
+            totp_uri = sec_prof.get_totp_uri()
+            qr_b64 = generate_qr_code_base64(totp_uri)
+            return render(request, 'accounts/partials/mfa_wizard/step2_verify.html', {
+                'error': 'Invalid code. Check your authenticator app and try again.',
+                'secret_key': sec_prof.mfa_secret,
+                'qr_code_base64': qr_b64,
+            })
+
+        # Code valid — generate backup codes and store raw in session (shown once)
+        raw_codes = sec_prof.generate_backup_codes()
+        request.session['mfa_wizard_raw_codes'] = raw_codes
+
+        return render(request, 'accounts/partials/mfa_wizard/step3_codes.html', {
+            'backup_codes': raw_codes,
+        })
+
+
+# ── Wizard Step 3: Backup Codes Acknowledgment ───────────────────────────────
+
+class MFAWizardCompleteView(LoginRequiredMixin, View):
+    """
+    POST /account/security/mfa/wizard/complete/
+    Checkbox ack → commit mfa_enabled=True, audit, clear session.
+    """
+    def post(self, request):
+        if not _gate_passed(request):
+            return _require_gate(request)
+
+        if request.POST.get('acknowledged') != 'true':
+            raw_codes = request.session.get('mfa_wizard_raw_codes', [])
+            return render(request, 'accounts/partials/mfa_wizard/step3_codes.html', {
+                'backup_codes': raw_codes,
+                'error': 'Please confirm you have saved your backup codes.',
+            })
+
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+        sec_prof.mfa_enabled = True
+        sec_prof.mfa_enabled_at = timezone.now()
+        sec_prof.save(update_fields=['mfa_enabled', 'mfa_enabled_at'])
+
+        # Clear wizard session state
+        for k in ('mfa_wizard_gate_passed', 'mfa_wizard_secret', 'mfa_wizard_raw_codes'):
+            request.session.pop(k, None)
+
+        log_audit(request.user, 'mfa_enabled', summary='User enabled TOTP Multi-Factor Authentication via wizard', ip=get_client_ip(request))
+
+        response = render(request, 'accounts/partials/mfa_wizard/complete.html')
+        response['HX-Redirect'] = '/account/security/'
+        return response
+
+
+# ── Disable MFA Flow ──────────────────────────────────────────────────────────
+
+class MFADisableWizardView(LoginRequiredMixin, View):
+    """
+    POST /account/security/mfa/disable/
+    Requires password + current TOTP or backup code.
+    Blocked if role has mfa_required=True.
+    """
+    def post(self, request):
+        policy = _get_security_policy(request.user)
+        if policy and policy.mfa_required:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'MFA is required by your role security policy and cannot be disabled.'
+            }, status=403)
+
+        password = request.POST.get('password', '').strip()
+        mfa_code = request.POST.get('mfa_code', '').strip()
+
+        if not password or not mfa_code:
+            return render(request, 'accounts/partials/mfa_wizard/disable_form.html', {
+                'error': 'Both password and current MFA code are required.',
+            })
+
+        if not request.user.check_password(password):
+            return render(request, 'accounts/partials/mfa_wizard/disable_form.html', {
+                'error': 'Incorrect password.',
+            })
+
+        sec_prof = getattr(request.user, 'security_profile', None)
+        if not sec_prof:
+            return render(request, 'accounts/partials/mfa_wizard/disable_form.html', {
+                'error': 'No security profile found.',
+            })
+
+        code_valid = sec_prof.verify_totp(mfa_code) or sec_prof.verify_backup_code(mfa_code)
+        if not code_valid:
+            return render(request, 'accounts/partials/mfa_wizard/disable_form.html', {
+                'error': 'Invalid MFA code. Enter your current 6-digit TOTP or a backup code.',
+            })
+
+        sec_prof.mfa_enabled = False
+        sec_prof.mfa_secret = ''
+        sec_prof.backup_codes = []
+        sec_prof.save(update_fields=['mfa_enabled', 'mfa_secret', 'backup_codes'])
+
+        log_audit(request.user, 'mfa_disabled', summary='User disabled TOTP Multi-Factor Authentication', ip=get_client_ip(request))
+
+        response = render(request, 'accounts/partials/mfa_wizard/disable_form.html', {'success': True})
+        response['HX-Redirect'] = '/account/security/'
+        return response
+
+
+# ── Trusted Device Management ─────────────────────────────────────────────────
+
+class TrustedDeviceRemoveView(LoginRequiredMixin, View):
+    """
+    POST /account/security/trusted-device/<int:pk>/remove/
+    htmx: removes one device, returns updated list partial.
+    """
+    def post(self, request, pk):
+        device = TrustedDevice.objects.filter(pk=pk, user=request.user).first()
+        if device:
+            device_name = device.device_name or device.device_hash[:8]
+            device.delete()
+            log_audit(request.user, 'trusted_device_removed', summary=f'Trusted device removed: {device_name}', ip=get_client_ip(request))
+
+        trusted_devices = TrustedDevice.objects.filter(
+            user=request.user,
+            expire_at__gt=timezone.now()
+        ).order_by('-created_at')
+        return render(request, 'accounts/partials/trusted_device_list.html', {
+            'trusted_devices': trusted_devices,
+        })
+
+
+# ── Backup Codes Regenerate ───────────────────────────────────────────────────
+
+class BackupCodesRegenerateView(LoginRequiredMixin, View):
+    """
+    POST /account/security/backup-codes/regenerate/
+    Re-generates backup codes. Requires password + TOTP/backup code.
+    Returns new codes in a modal partial.
+    """
+    def post(self, request):
+        password = request.POST.get('password', '').strip()
+        mfa_code = request.POST.get('mfa_code', '').strip()
+
+        if not request.user.check_password(password):
+            return render(request, 'accounts/partials/mfa_wizard/regen_codes.html', {
+                'error': 'Incorrect password.',
+            })
+
+        sec_prof = getattr(request.user, 'security_profile', None)
+        if not sec_prof or not sec_prof.mfa_enabled:
+            return render(request, 'accounts/partials/mfa_wizard/regen_codes.html', {
+                'error': 'MFA is not enabled on this account.',
+            })
+
+        code_valid = sec_prof.verify_totp(mfa_code) or sec_prof.verify_backup_code(mfa_code)
+        if not code_valid:
+            return render(request, 'accounts/partials/mfa_wizard/regen_codes.html', {
+                'error': 'Invalid MFA code.',
+            })
+
+        raw_codes = sec_prof.generate_backup_codes()
+        log_audit(request.user, 'backup_codes_regenerated', summary='User regenerated backup/recovery codes', ip=get_client_ip(request))
+
+        return render(request, 'accounts/partials/mfa_wizard/regen_codes.html', {
+            'backup_codes': raw_codes,
+            'success': True,
+        })

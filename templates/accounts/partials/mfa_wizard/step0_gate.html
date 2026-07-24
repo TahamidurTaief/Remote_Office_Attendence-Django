@@ -1,0 +1,51 @@
+{% comment %} Step 0: Identity Gate — verify password (+ PIN if set) {% endcomment %}
+<div id="mfa-wizard-body">
+  <c-mfa-wizard-step step="0" title="Verify Your Identity">
+
+    <p class="text-xs mb-4" style="color:var(--text-secondary)">
+      Before configuring MFA, confirm your identity by entering your current password{% if has_pin %} and workspace PIN{% endif %}.
+    </p>
+
+    {% if error %}
+    <div class="mb-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-center gap-2">
+      <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+      <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <form
+      hx-post="{% url 'accounts:mfa_wizard_gate' %}"
+      hx-target="#mfa-wizard-body"
+      hx-swap="outerHTML"
+      class="space-y-3"
+      x-data>
+      {% csrf_token %}
+
+      <c-password-input
+        name="password"
+        label="Current Password"
+        placeholder="Enter your password"
+        required="true" />
+
+      {% if has_pin %}
+      <c-input
+        type="text"
+        name="pin"
+        label="Workspace PIN"
+        placeholder="4-digit PIN"
+        maxlength="4"
+        inputmode="numeric"
+        required="true"
+        extra_class="font-mono text-center tracking-widest text-lg font-bold" />
+      {% endif %}
+
+      <c-button
+        type="submit"
+        variant="primary"
+        label="Verify & Continue"
+        extra_class="w-full justify-center mt-2"
+        icon="arrow-right" />
+    </form>
+
+  </c-mfa-wizard-step>
+</div>

@@ -1,0 +1,35 @@
+{% comment %} c-trusted-device-row component
+  Props:
+  - device: TrustedDevice instance
+  - remove_url: URL for the remove POST action
+{% endcomment %}
+
+<div class="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-slate-500/5 transition-colors group"
+     id="trusted-device-{{ device.pk }}">
+
+  <div class="flex items-center gap-3 min-w-0">
+    <div class="w-9 h-9 rounded-lg bg-slate-500/10 flex items-center justify-center flex-shrink-0">
+      <i data-lucide="monitor" class="w-4 h-4" style="color:var(--text-muted)"></i>
+    </div>
+    <div class="min-w-0">
+      <div class="text-[13px] font-medium truncate max-w-xs" style="color:var(--text)">
+        {{ device.device_name|truncatechars:60|default:"Unknown Device" }}
+      </div>
+      <div class="text-[11px] flex items-center gap-2 mt-0.5" style="color:var(--text-muted)">
+        <span>Added {{ device.created_at|date:"d/m/Y" }}</span>
+        <span class="opacity-40">·</span>
+        <span>Expires {{ device.expire_at|date:"d/m/Y" }}</span>
+      </div>
+    </div>
+  </div>
+
+  <button
+    hx-post="{{ remove_url }}"
+    hx-target="#trusted-device-list"
+    hx-swap="outerHTML"
+    hx-confirm="Remove this trusted device? You'll need MFA next time you log in from it."
+    class="ft-btn ft-btn-ghost ft-btn-sm text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+    title="Remove device">
+    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+  </button>
+</div>

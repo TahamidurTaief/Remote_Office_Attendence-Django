@@ -1,0 +1,159 @@
+<c-app-shell page_title="Security Settings | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
+  <c-slot name="topbar">
+    <c-topbar title="Security Settings" />
+  </c-slot>
+
+  <c-command-palette />
+
+  <div class="p-4 space-y-4 max-w-3xl mx-auto">
+
+    {# ── MFA Status Card ───────────────────────────────────────────────────── #}
+    <c-card>
+      <c-slot name="header">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-4 h-4 text-primary"></i>
+          </div>
+          <div>
+            <h3 class="text-[13px] font-semibold" style="color:var(--text)">Two-Factor Authentication</h3>
+            <p class="text-[11px]" style="color:var(--text-muted)">TOTP via Google Authenticator, Authy, or 1Password</p>
+          </div>
+        </div>
+      </c-slot>
+      <c-slot name="actions">
+        {% if sec_prof.mfa_enabled %}
+          <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500">
+            <i data-lucide="check-circle-2" class="w-3 h-3"></i> Enabled
+          </span>
+        {% else %}
+          <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-500/10 text-slate-400">
+            <i data-lucide="shield-off" class="w-3 h-3"></i> Disabled
+          </span>
+        {% endif %}
+      </c-slot>
+
+      {% if sec_prof.mfa_enabled %}
+        {# ── MFA Enabled state ──────────────────────────────────────────────── #}
+        <div class="space-y-4">
+          <div class="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-xs" style="color:var(--text-secondary)">
+            MFA enabled on <strong>{{ sec_prof.mfa_enabled_at|date:"d/m/Y g:i A"|default:"recently" }}</strong>.
+            Your account requires a 6-digit code at each login.
+          </div>
+
+          {# Disable button — hidden if mfa_required by policy #}
+          {% if mfa_required %}
+            <div class="flex items-center gap-2 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-[11px] text-amber-600 dark:text-amber-400">
+              <i data-lucide="lock" class="w-3.5 h-3.5 flex-shrink-0"></i>
+              <span>MFA is required by your role's security policy and cannot be disabled.</span>
+            </div>
+          {% else %}
+            {# Disable modal trigger #}
+            <button type="button"
+                    @click="$dispatch('open-modal', {id: 'disable-mfa-modal'})"
+                    class="ft-btn ft-btn-danger ft-btn-sm text-xs">
+              <i data-lucide="shield-off" class="w-3.5 h-3.5"></i> Disable MFA
+            </button>
+          {% endif %}
+        </div>
+
+      {% else %}
+        {# ── MFA Disabled state — Enable wizard ─────────────────────────────── #}
+        <div class="space-y-4">
+          <p class="text-xs" style="color:var(--text-secondary)">
+            Add an extra layer of security to your account. You'll need your authenticator app each time you sign in.
+          </p>
+
+          {# Wizard container — htmx loads steps here #}
+          <div id="mfa-wizard-body">
+            {% include "accounts/partials/mfa_wizard/step0_gate.html" %}
+          </div>
+        </div>
+      {% endif %}
+    </c-card>
+
+    {# ── Backup Codes Card (only if MFA enabled) ───────────────────────────── #}
+    {% if sec_prof.mfa_enabled %}
+    <c-card>
+      <c-slot name="header">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+            <i data-lucide="key-round" class="w-4 h-4 text-amber-500"></i>
+          </div>
+          <div>
+            <h3 class="text-[13px] font-semibold" style="color:var(--text)">Backup Recovery Codes</h3>
+            <p class="text-[11px]" style="color:var(--text-muted)">Use if you lose access to your authenticator app</p>
+          </div>
+        </div>
+      </c-slot>
+      <c-slot name="actions">
+        <span class="text-[11px] font-semibold px-2 py-1 rounded-full {% if backup_code_count > 2 %}bg-emerald-500/10 text-emerald-500{% else %}bg-rose-500/10 text-rose-500{% endif %}">
+          {{ backup_code_count }}/8 remaining
+        </span>
+      </c-slot>
+
+      <div class="space-y-3">
+        {% if backup_code_count == 0 %}
+          <div class="p-3 rounded-xl border border-rose-500/20 bg-rose-500/5 text-xs text-rose-500 flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 flex-shrink-0"></i>
+            No backup codes remaining. Generate new ones now.
+          </div>
+        {% elif backup_code_count <= 2 %}
+          <div class="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
+            <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0"></i>
+            Only {{ backup_code_count }} code{{ backup_code_count|pluralize }} left. Consider regenerating.
+          </div>
+        {% else %}
+          <p class="text-xs" style="color:var(--text-secondary)">
+            Each backup code can be used once if you lose access to your authenticator app.
+          </p>
+        {% endif %}
+
+        <button type="button"
+                @click="$dispatch('open-modal', {id: 'regen-codes-modal'})"
+                class="ft-btn ft-btn-secondary ft-btn-sm text-xs">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Regenerate Backup Codes
+        </button>
+      </div>
+    </c-card>
+    {% endif %}
+
+    {# ── Trusted Devices Card ──────────────────────────────────────────────── #}
+    <c-card>
+      <c-slot name="header">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+            <i data-lucide="monitor-check" class="w-4 h-4 text-blue-400"></i>
+          </div>
+          <div>
+            <h3 class="text-[13px] font-semibold" style="color:var(--text)">Trusted Devices</h3>
+            <p class="text-[11px]" style="color:var(--text-muted)">Devices that skip MFA challenge for 30 days</p>
+          </div>
+        </div>
+      </c-slot>
+
+      <div id="trusted-device-list">
+        {% include "accounts/partials/trusted_device_list.html" %}
+      </div>
+    </c-card>
+
+  </div>{# /max-w-3xl #}
+
+  {# ── Disable MFA Modal ─────────────────────────────────────────────────── #}
+  {% if sec_prof.mfa_enabled and not mfa_required %}
+  <c-modal id="disable-mfa-modal" title="Disable Two-Factor Authentication" size="md" static="true">
+    <div id="disable-mfa-modal-body">
+      {% include "accounts/partials/mfa_wizard/disable_form.html" %}
+    </div>
+  </c-modal>
+  {% endif %}
+
+  {# ── Regen Codes Modal ─────────────────────────────────────────────────── #}
+  {% if sec_prof.mfa_enabled %}
+  <c-modal id="regen-codes-modal" title="Regenerate Backup Codes" size="md" static="true">
+    <div id="regen-codes-modal-body">
+      {% include "accounts/partials/mfa_wizard/regen_codes.html" %}
+    </div>
+  </c-modal>
+  {% endif %}
+
+</c-app-shell>

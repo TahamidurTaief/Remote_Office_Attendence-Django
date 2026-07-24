@@ -1,0 +1,11 @@
+{% comment %} Wizard complete state — HX-Redirect fires immediately {% endcomment %}
+<div id="mfa-wizard-body" class="flex flex-col items-center justify-center py-8 gap-4 text-center">
+  <div class="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
+    <i data-lucide="shield-check" class="w-8 h-8 text-emerald-500"></i>
+  </div>
+  <div>
+    <h3 class="text-base font-bold text-emerald-500">MFA Enabled!</h3>
+    <p class="text-xs mt-1" style="color:var(--text-secondary)">Redirecting to security settings…</p>
+  </div>
+  <div class="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"></div>
+</div>

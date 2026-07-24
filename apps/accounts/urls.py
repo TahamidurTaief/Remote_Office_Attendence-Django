@@ -40,4 +40,14 @@ urlpatterns = [
     path('api/sync/', views.SyncApiView.as_view(), name='api_sync'),
     path('api/session/validate/', views.SessionValidateView.as_view(), name='api_session_validate'),
     path('account/sessions/', views.UserSessionsView.as_view(), name='user_sessions'),
+
+    # Security Settings Page + MFA Wizard (Phase 1 – Step 9 UX refactor)
+    path('account/security/', views.SecuritySettingsView.as_view(), name='security_settings'),
+    path('account/security/mfa/wizard/gate/', views.MFAWizardGateView.as_view(), name='mfa_wizard_gate'),
+    path('account/security/mfa/wizard/qr/', views.MFAWizardQRView.as_view(), name='mfa_wizard_qr'),
+    path('account/security/mfa/wizard/verify/', views.MFAWizardVerifyView.as_view(), name='mfa_wizard_verify'),
+    path('account/security/mfa/wizard/complete/', views.MFAWizardCompleteView.as_view(), name='mfa_wizard_complete'),
+    path('account/security/mfa/disable/', views.MFADisableWizardView.as_view(), name='mfa_disable_wizard'),
+    path('account/security/trusted-device/<int:pk>/remove/', views.TrustedDeviceRemoveView.as_view(), name='trusted_device_remove'),
+    path('account/security/backup-codes/regenerate/', views.BackupCodesRegenerateView.as_view(), name='backup_codes_regenerate'),
 ]

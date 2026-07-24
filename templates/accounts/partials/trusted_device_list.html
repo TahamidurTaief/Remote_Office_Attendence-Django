@@ -1,0 +1,44 @@
+{% comment %} Trusted device list partial — rendered on page load and after each device removal {% endcomment %}
+<div id="trusted-device-list">
+  {% if trusted_devices %}
+    <div class="space-y-0.5">
+      {% for device in trusted_devices %}
+        <div class="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-slate-500/5 transition-colors group"
+             id="trusted-device-{{ device.pk }}">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-lg bg-slate-500/10 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="monitor" class="w-4 h-4" style="color:var(--text-muted)"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="text-[13px] font-medium truncate max-w-xs" style="color:var(--text)">
+                {{ device.device_name|truncatechars:60|default:"Unknown Device" }}
+              </div>
+              <div class="text-[11px] flex items-center gap-2 mt-0.5" style="color:var(--text-muted)">
+                <span>Added {{ device.created_at|date:"d/m/Y" }}</span>
+                <span class="opacity-40">·</span>
+                <span>Expires {{ device.expire_at|date:"d/m/Y" }}</span>
+              </div>
+            </div>
+          </div>
+          <button
+            hx-post="{% url 'accounts:trusted_device_remove' device.pk %}"
+            hx-target="#trusted-device-list"
+            hx-swap="outerHTML"
+            hx-confirm="Remove this trusted device? You'll need MFA next time you log in from it."
+            class="ft-btn ft-btn-ghost ft-btn-sm text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            title="Remove device">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="py-8 text-center">
+      <div class="w-10 h-10 rounded-full bg-slate-500/10 flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="monitor-off" class="w-5 h-5" style="color:var(--text-muted)"></i>
+      </div>
+      <p class="text-xs font-medium" style="color:var(--text-muted)">No trusted devices</p>
+      <p class="text-[11px] mt-1" style="color:var(--text-muted)">Devices trusted during MFA login will appear here.</p>
+    </div>
+  {% endif %}
+</div>

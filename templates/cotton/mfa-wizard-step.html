@@ -1,0 +1,34 @@
+{% comment %} c-mfa-wizard-step component
+  Wraps a single wizard step with stepper header.
+  Props:
+  - step: current step number (0=gate, 1=qr, 2=verify, 3=codes)
+  - title: step heading
+  Slots:
+  - default: step content
+{% endcomment %}
+
+<div class="space-y-5">
+  {# Stepper header — steps 1–4 map to gate/qr/verify/codes #}
+  <c-stepper
+    current="{{ step|add:1 }}"
+    step_count="4"
+    step1="Verify Identity"
+    step2="Scan QR Code"
+    step3="Confirm Code"
+    step4="Save Backup Codes"
+    extra_class="mb-2"
+  />
+
+  {% if title %}
+  <div class="flex items-center gap-2 pt-1">
+    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+      <i data-lucide="shield" class="w-4 h-4 text-primary"></i>
+    </div>
+    <div>
+      <h3 class="text-[13px] font-semibold" style="color:var(--text)">{{ title }}</h3>
+    </div>
+  </div>
+  {% endif %}
+
+  <div>{{ slot }}</div>
+</div>

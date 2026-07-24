@@ -61,3 +61,53 @@ class SessionDeviceMiddleware:
             request.headers.get('HX-Request') == 'true' or
             request.headers.get('Accept') == 'application/json'
         )
+
+
+# Paths exempt from MFA forced-setup redirect
+_MFA_EXEMPT_PREFIXES = (
+    '/account/security/',
+    '/logout/',
+    '/static/',
+    '/media/',
+    '/api/',
+    '/login/',
+    '/__reload__/',
+)
+
+
+class MFARequiredMiddleware:
+    """
+    If a user's role has SecurityPolicy.mfa_required=True and they haven't
+    configured MFA yet, redirect them to /account/security/ (wizard).
+    This replaces the old forced-setup redirect from Step 10.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            path = request.path
+            # Skip exempt paths
+            if not any(path.startswith(p) for p in _MFA_EXEMPT_PREFIXES):
+                self._check_mfa_required(request)
+                # If check triggered a redirect it returns it below
+                forced = getattr(request, '_mfa_force_redirect', None)
+                if forced:
+                    return forced
+
+        response = self.get_response(request)
+        return response
+
+    def _check_mfa_required(self, request):
+        from apps.accounts.models import SecurityPolicy, UserSecurityProfile
+        policy = SecurityPolicy.objects.filter(role=request.user.role).first()
+        if policy and policy.mfa_required:
+            sec_prof = getattr(request.user, 'security_profile', None)
+            if sec_prof is None:
+                try:
+                    sec_prof = UserSecurityProfile.objects.get(user=request.user)
+                except UserSecurityProfile.DoesNotExist:
+                    sec_prof = None
+            if not sec_prof or not sec_prof.mfa_enabled:
+                request._mfa_force_redirect = redirect('/account/security/')
