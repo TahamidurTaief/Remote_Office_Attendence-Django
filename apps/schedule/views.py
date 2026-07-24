@@ -53,7 +53,9 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         # Get employee profile for scoping
         profile = getattr(request.user, 'employee_profile', None)
-        is_staff_user = (request.user.role == 'staff')
+        from apps.accounts.engine import PermissionEngine
+        res = PermissionEngine.evaluate(request.user, 'schedule.manage')
+        is_staff_user = not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') == 'staff'
 
         # Fetch manual events
         events_qs = ScheduleEvent.objects.filter(date__range=(start_date, end_date))
@@ -241,7 +243,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         month_name = pycal.month_name[month]
 
-        is_admin_or_manager = request.user.role in ['admin', 'manager']
+        is_admin_or_manager = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'schedule.manage').allowed or getattr(request.user, 'role', '') in ('admin', 'manager')
 
         context = {
             'weeks_data': weeks_data,
