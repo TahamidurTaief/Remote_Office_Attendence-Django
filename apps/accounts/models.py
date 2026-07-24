@@ -229,6 +229,65 @@ class WorkspaceLockEvent(models.Model):
         return f"WorkspaceLock({self.user}) - {self.lock_reason} at {self.locked_at}"
 
 
+import pyotp
+import hashlib
+import secrets
+
+class UserSecurityProfile(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='security_profile')
+    mfa_enabled = models.BooleanField(default=False)
+    mfa_secret = models.CharField(max_length=255, blank=True)
+    mfa_enabled_at = models.DateTimeField(null=True, blank=True)
+    backup_codes = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_security_profile'
+
+    def generate_new_secret(self):
+        self.mfa_secret = pyotp.random_base32()
+        return self.mfa_secret
+
+    def get_totp_uri(self):
+        issuer_name = "FieldTrack"
+        user_identifier = self.user.email or self.user.phone or f"user_{self.user.id}"
+        return pyotp.totp.TOTP(self.mfa_secret).provisioning_uri(name=user_identifier, issuer_name=issuer_name)
+
+    def verify_totp(self, code):
+        if not self.mfa_secret or not code:
+            return False
+        totp = pyotp.TOTP(self.mfa_secret)
+        return totp.verify(str(code).strip(), valid_window=1)
+
+    def generate_backup_codes(self):
+        raw_codes = []
+        hashed_codes = []
+        for _ in range(8):
+            raw = secrets.token_hex(4).upper()
+            raw_codes.append(raw)
+            hashed_codes.append(hashlib.sha256(raw.encode('utf-8')).hexdigest())
+
+        self.backup_codes = hashed_codes
+        self.save(update_fields=['backup_codes'])
+        return raw_codes
+
+    def verify_backup_code(self, raw_code):
+        if not self.backup_codes or not raw_code:
+            return False
+        raw_clean = str(raw_code).strip().upper()
+        h = hashlib.sha256(raw_clean.encode('utf-8')).hexdigest()
+        if h in self.backup_codes:
+            self.backup_codes.remove(h)
+            self.save(update_fields=['backup_codes'])
+            return True
+        return False
+
+    def __str__(self):
+        return f"SecurityProfile({self.user}) - MFA: {'Enabled' if self.mfa_enabled else 'Disabled'}"
+
+
+
 
 
 

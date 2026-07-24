@@ -171,6 +171,19 @@ class CustomLoginView(View):
             pad_response()
             return render(request, 'accounts/login.html', {'email_entered': email})
 
+        # 4.5 Check MFA Requirement (Skip if device is already trusted)
+        sec_prof = getattr(user, 'security_profile', None)
+        if sec_prof and sec_prof.mfa_enabled:
+            device_hash = hashlib.sha256(f"{user.id}-{device_id}".encode('utf-8')).hexdigest()
+            is_device_trusted = TrustedDevice.objects.filter(user=user, device_hash=device_hash, expire_at__gt=timezone.now()).exists()
+
+            if not is_device_trusted:
+                request.session['pending_mfa_user_id'] = user.id
+                pad_response()
+                if request.headers.get('HX-Request') == 'true':
+                    return render(request, 'accounts/partials/login_mfa_step.html')
+                return render(request, 'accounts/login.html', {'show_mfa_step': True})
+
         # 5. Successful Authentication -> Full Reset & Session Start
         record_successful_login(user=user, email=email, ip=ip, device_id=device_id)
 
@@ -681,4 +694,201 @@ class SecurityHeartbeatView(View):
             return JsonResponse({'valid': False, 'reason': 'session_invalidated'}, status=401)
 
         return JsonResponse({'valid': True, 'timestamp': timezone.now().isoformat()})
+
+
+import io
+import base64
+import qrcode
+from apps.accounts.models import UserSecurityProfile
+
+def generate_qr_code_base64(totp_uri):
+    img = qrcode.make(totp_uri)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+
+class MFASetupView(LoginRequiredMixin, View):
+    """
+    GET/POST /account/mfa/setup/
+    TOTP MFA setup wizard with QR code and code verification.
+    """
+    def get(self, request):
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+        if sec_prof.mfa_enabled:
+            return render(request, 'accounts/mfa_setup.html')
+
+        secret_key = sec_prof.generate_new_secret()
+        sec_prof.save()
+
+        totp_uri = sec_prof.get_totp_uri()
+        qr_code_base64 = generate_qr_code_base64(totp_uri)
+
+        return render(request, 'accounts/mfa_setup.html', {
+            'secret_key': secret_key,
+            'qr_code_base64': qr_code_base64
+        })
+
+    def post(self, request):
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+        totp_code = request.POST.get('totp_code', '').strip()
+
+        if sec_prof.verify_totp(totp_code):
+            sec_prof.mfa_enabled = True
+            sec_prof.mfa_enabled_at = timezone.now()
+            raw_backup_codes = sec_prof.generate_backup_codes()
+            log_audit(request.user, 'mfa_enabled', summary="User enabled TOTP Multi-Factor Authentication", ip=get_client_ip(request))
+            return render(request, 'accounts/mfa_backup_codes.html', {
+                'backup_codes': raw_backup_codes
+            })
+
+        messages.error(request, "Invalid 6-digit verification code. Please check your authenticator app.")
+        totp_uri = sec_prof.get_totp_uri()
+        qr_code_base64 = generate_qr_code_base64(totp_uri)
+        return render(request, 'accounts/mfa_setup.html', {
+            'secret_key': sec_prof.mfa_secret,
+            'qr_code_base64': qr_code_base64
+        })
+
+
+class MFADisableView(LoginRequiredMixin, View):
+    """
+    POST /account/mfa/disable/
+    Disables MFA for current user.
+    """
+    def post(self, request):
+        sec_prof = getattr(request.user, 'security_profile', None)
+        if sec_prof:
+            sec_prof.mfa_enabled = False
+            sec_prof.mfa_secret = ''
+            sec_prof.backup_codes = []
+            sec_prof.save()
+            log_audit(request.user, 'mfa_disabled', summary="User disabled TOTP Multi-Factor Authentication", ip=get_client_ip(request))
+            messages.success(request, "Two-Factor Authentication disabled successfully.")
+        return redirect('accounts:mfa_setup')
+
+
+class LoginMFAVerifyView(View):
+    """
+    POST /login/mfa/verify/
+    Verifies TOTP or backup code during login flow.
+    """
+    def post(self, request):
+        user_id = request.session.get('pending_mfa_user_id')
+        if not user_id:
+            if request.headers.get('HX-Request') == 'true':
+                response = render(request, 'accounts/partials/login_mfa_step.html', {'mfa_error': 'Session expired. Please log in again.'})
+                response['HX-Redirect'] = '/login/'
+                return response
+            return redirect('accounts:login')
+
+        user = CustomUser.objects.filter(pk=user_id).first()
+        if not user:
+            return redirect('accounts:login')
+
+        code = request.POST.get('mfa_code', '').strip()
+        remember_device = request.POST.get('remember_device') == 'true'
+        sec_prof = getattr(user, 'security_profile', None)
+
+        is_valid = False
+        used_backup = False
+
+        if sec_prof and sec_prof.mfa_enabled:
+            if sec_prof.verify_totp(code):
+                is_valid = True
+            elif sec_prof.verify_backup_code(code):
+                is_valid = True
+                used_backup = True
+
+        ip = get_client_ip(request)
+        ua = request.META.get('HTTP_USER_AGENT', '')
+        device_id = get_device_id(request)
+
+        if is_valid:
+            del request.session['pending_mfa_user_id']
+
+            if used_backup:
+                log_audit(user, 'backup_code_used', summary="MFA verified via one-time backup code", ip=ip)
+            else:
+                log_audit(user, 'mfa_verify_success', summary="MFA TOTP code verified successfully", ip=ip)
+
+            # Record login activity & clear old sessions
+            now = timezone.now()
+            UserLoginActivity.objects.create(
+                user=user,
+                identifier_entered=user.email,
+                ip_address=ip,
+                user_agent=ua,
+                status='success'
+            )
+
+            old_sessions = UserSession.objects.filter(user=user, is_active=True)
+            for old_sess in old_sessions:
+                old_sess.is_active = False
+                old_sess.logout_time = now
+                old_sess.save(update_fields=['is_active', 'logout_time'])
+
+            login(request, user)
+            request.session.cycle_key()
+
+            # Record TrustedDevice if requested
+            if remember_device:
+                device_hash = hashlib.sha256(f"{user.id}-{device_id}".encode('utf-8')).hexdigest()
+                TrustedDevice.objects.update_or_create(
+                    user=user,
+                    device_hash=device_hash,
+                    defaults={
+                        'device_name': ua[:250],
+                        'expire_at': now + timedelta(days=30)
+                    }
+                )
+
+            UserSession.objects.create(
+                user=user,
+                device_id=device_id,
+                session_key=request.session.session_key,
+                browser=ua,
+                ip=ip,
+                login_time=now,
+                last_activity=now,
+                is_active=True
+            )
+
+            target_url = '/admin-panel/dashboard/' if user.role == 'admin' else '/staff/home/'
+            if request.headers.get('HX-Request') == 'true':
+                response = render(request, 'accounts/partials/login_mfa_step.html')
+                response['HX-Redirect'] = target_url
+                return response
+            return redirect(target_url)
+
+        log_audit(user, 'mfa_verify_fail', summary="Failed MFA verification attempt", ip=ip)
+        return render(request, 'accounts/partials/login_mfa_step.html', {
+            'mfa_error': 'Invalid verification code. Please check your authenticator app or backup codes.'
+        })
+
+
+class AdminDisableUserMFAView(LoginRequiredMixin, View):
+    """
+    POST /admin-panel/users/<int:pk>/mfa/disable/
+    Admin action to disable a user's MFA if they lost their device & backup codes.
+    """
+    def post(self, request, pk):
+        if request.user.role != 'admin':
+            return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
+        target_user = CustomUser.objects.filter(pk=pk).first()
+        if not target_user:
+            return JsonResponse({'status': 'error', 'message': 'User not found'}, status=404)
+
+        sec_prof = getattr(target_user, 'security_profile', None)
+        if sec_prof:
+            sec_prof.mfa_enabled = False
+            sec_prof.mfa_secret = ''
+            sec_prof.backup_codes = []
+            sec_prof.save()
+            log_audit(request.user, 'mfa_disabled_by_admin', target=target_user, summary=f"Admin disabled MFA for user {target_user.email}", ip=get_client_ip(request))
+            messages.success(request, f"MFA disabled for user {target_user.email}.")
+
+        return redirect('accounts:admin_login_activity')
+
 

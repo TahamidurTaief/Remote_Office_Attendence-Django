@@ -26,6 +26,12 @@ urlpatterns = [
     path('security/workspace-lock/unlock/', views.WorkspaceUnlockView.as_view(), name='workspace_unlock'),
     path('security/heartbeat/', views.SecurityHeartbeatView.as_view(), name='security_heartbeat'),
 
+    # MFA Security Endpoints
+    path('account/mfa/setup/', views.MFASetupView.as_view(), name='mfa_setup'),
+    path('account/mfa/disable/', views.MFADisableView.as_view(), name='mfa_disable'),
+    path('login/mfa/verify/', views.LoginMFAVerifyView.as_view(), name='mfa_login_verify'),
+    path('admin-panel/users/<int:pk>/mfa/disable/', views.AdminDisableUserMFAView.as_view(), name='admin_disable_user_mfa'),
+
     # API and Session endpoints
     path('api/sync/', views.SyncApiView.as_view(), name='api_sync'),
     path('api/session/validate/', views.SessionValidateView.as_view(), name='api_session_validate'),

@@ -1,0 +1,50 @@
+{% comment %}
+  Partial template rendered during login when user has MFA enabled.
+{% endcomment %}
+<div id="login-form-container" class="space-y-5">
+  <div class="text-center space-y-1">
+    <div class="w-12 h-12 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-primary mb-2">
+      <i data-lucide="shield-check" class="w-6 h-6"></i>
+    </div>
+    <h2 class="text-lg font-bold" style="color:var(--text)">Two-Factor Verification</h2>
+    <p class="text-xs" style="color:var(--text-secondary)">
+      Enter 6-digit TOTP code from Google Authenticator or an 8-character backup code.
+    </p>
+  </div>
+
+  <form hx-post="{% url 'accounts:mfa_login_verify' %}"
+        hx-target="#login-form-container"
+        hx-swap="outerHTML"
+        class="space-y-4">
+    {% csrf_token %}
+
+    {% if mfa_error %}
+      <div class="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-center gap-2">
+        <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+        <span>{{ mfa_error }}</span>
+      </div>
+    {% endif %}
+
+    <div class="space-y-1">
+      <label class="block text-xs font-semibold" style="color:var(--text)">Verification Code</label>
+      <input type="text"
+             name="mfa_code"
+             placeholder="123456 or Backup Code"
+             required
+             autofocus
+             class="w-full px-3.5 py-2.5 text-center text-lg font-mono font-bold tracking-widest rounded-lg bg-slate-900/50 border border-slate-700 focus:border-primary focus:ring-1 focus:ring-primary text-white">
+    </div>
+
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="remember_device" name="remember_device" value="true" class="rounded border-slate-700 text-primary focus:ring-primary">
+      <label for="remember_device" class="text-xs cursor-pointer select-none" style="color:var(--text-secondary)">
+        Trust this device for 30 days (skip MFA next time)
+      </label>
+    </div>
+
+    <button type="submit"
+            class="w-full py-2.5 px-4 text-xs font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white shadow-lg transition-all flex items-center justify-center gap-2">
+      <span>Verify & Sign In</span>
+    </button>
+  </form>
+</div>

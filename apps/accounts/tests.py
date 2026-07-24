@@ -177,7 +177,7 @@ class WorkspaceLockTests(TestCase):
         )
 
     def test_workspace_lock_and_unlock_flow(self):
-        self.client.login(username='lock_test@example.com', password=self.password)
+        self.client.post(reverse('accounts:login'), {'email': 'lock_test@example.com', 'password': self.password})
 
         # Lock workspace
         resp = self.client.post(reverse('accounts:workspace_lock'), {'reason': 'idle'})
@@ -194,7 +194,7 @@ class WorkspaceLockTests(TestCase):
         self.assertTrue(resp_ok.json().get('valid'))
 
     def test_security_heartbeat_session_invalidation(self):
-        self.client.login(username='lock_test@example.com', password=self.password)
+        self.client.post(reverse('accounts:login'), {'email': 'lock_test@example.com', 'password': self.password})
 
         # Active heartbeat
         resp = self.client.get(reverse('accounts:security_heartbeat'))
@@ -206,4 +206,60 @@ class WorkspaceLockTests(TestCase):
         # Heartbeat returns 401
         resp_inv = self.client.get(reverse('accounts:security_heartbeat'))
         self.assertEqual(resp_inv.status_code, 401)
+
+
+import pyotp
+from apps.accounts.models import UserSecurityProfile
+
+class MFATests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.password = 'password123'
+        self.user = User.objects.create_user(
+            email='mfa_test@example.com',
+            password=self.password,
+            role='staff'
+        )
+
+    def test_mfa_setup_and_verify_flow(self):
+        self.client.post(reverse('accounts:login'), {'email': 'mfa_test@example.com', 'password': self.password})
+
+        # GET setup page -> QR code generated
+        resp = self.client.get(reverse('accounts:mfa_setup'))
+        self.assertEqual(resp.status_code, 200)
+
+        sec_prof = UserSecurityProfile.objects.get(user=self.user)
+        self.assertFalse(sec_prof.mfa_enabled)
+        self.assertTrue(len(sec_prof.mfa_secret) > 0)
+
+        # POST setup with valid TOTP code
+        totp = pyotp.TOTP(sec_prof.mfa_secret)
+        code = totp.now()
+
+        resp_setup = self.client.post(reverse('accounts:mfa_setup'), {'totp_code': code})
+        self.assertEqual(resp_setup.status_code, 200)
+
+        sec_prof.refresh_from_db()
+        self.assertTrue(sec_prof.mfa_enabled)
+        self.assertEqual(len(sec_prof.backup_codes), 8)
+
+    def test_mfa_login_interception_and_backup_code(self):
+        sec_prof = UserSecurityProfile.objects.create(user=self.user, mfa_enabled=True)
+        sec_prof.generate_new_secret()
+        raw_backup_codes = sec_prof.generate_backup_codes()
+        sec_prof.save()
+
+        # Login with password -> intercepted by MFA step
+        resp = self.client.post(reverse('accounts:login'), {'email': 'mfa_test@example.com', 'password': self.password})
+        self.assertEqual(resp.status_code, 200)
+
+        # Verify with valid backup code
+        backup_code = raw_backup_codes[0]
+        resp_mfa = self.client.post(reverse('accounts:mfa_login_verify'), {'mfa_code': backup_code})
+        self.assertEqual(resp_mfa.status_code, 302)
+
+        # Verify backup code was used and invalidated
+        sec_prof.refresh_from_db()
+        self.assertEqual(len(sec_prof.backup_codes), 7)
+
 
