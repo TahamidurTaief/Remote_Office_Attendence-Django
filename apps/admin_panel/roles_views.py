@@ -372,6 +372,24 @@ class AdminAuditLogView(AdminRequiredMixin, View):
             return render(request, 'admin_panel/audit/audit_log_list_partial.html', context)
         return render(request, 'admin_panel/audit/audit_log_list.html', context)
 
+    def post(self, request):
+        ids = request.POST.getlist('ids') or request.POST.get('ids', '').split(',')
+        ids = [i for i in ids if str(i).isdigit()]
+        if ids:
+            from apps.notifications.models import log_audit
+            deleted_count, _ = AuditLog.objects.filter(id__in=ids).delete()
+            log_audit(request.user, 'bulk_audit_log_delete', summary=f"Bulk deleted {deleted_count} AuditLog entries", ip=request.META.get('REMOTE_ADDR'))
+            from django.contrib import messages
+            messages.success(request, f"Successfully deleted {deleted_count} audit log entries.")
+
+        logs = AuditLog.objects.select_related('actor').order_by('-timestamp')[:150]
+        action_types = AuditLog.objects.values_list('action', flat=True).distinct()
+        context = {'logs': logs, 'action_types': action_types}
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'admin_panel/audit/audit_log_list_partial.html', context)
+        from django.shortcuts import redirect
+        return redirect('admin_panel:admin_audit_logs')
+
 
 from datetime import timedelta
 from django.utils import timezone

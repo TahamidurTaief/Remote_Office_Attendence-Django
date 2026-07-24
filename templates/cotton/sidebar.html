@@ -537,6 +537,22 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Settings</span>
           </a>
+          <a href="{% url 'accounts:admin_security_policies' %}" class="ft-nav-item {% if '/security/policies/' in path %}active{% endif %}" x-show="matchSearch('Security Policies')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Security Policies</span>
+          </a>
+          <a href="{% url 'accounts:admin_login_activity' %}" class="ft-nav-item {% if '/login-activity/' in path %}active{% endif %}" x-show="matchSearch('Login Activity')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Login Activity</span>
+          </a>
+          <a href="{% url 'admin_panel:admin_audit_logs' %}" class="ft-nav-item {% if '/audit-logs/' in path %}active{% endif %}" x-show="matchSearch('Audit Logs')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Audit Logs</span>
+          </a>
+          <a href="{% url 'accounts:user_sessions' %}" class="ft-nav-item {% if '/account/sessions/' in path %}active{% endif %}" x-show="matchSearch('User Sessions')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">User Sessions</span>
+          </a>
           <a href="{% url 'backups:backup_list' %}" class="ft-nav-item {% if '/backups/' in path %}active{% endif %}" x-show="matchSearch('Backup')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Backups</span>

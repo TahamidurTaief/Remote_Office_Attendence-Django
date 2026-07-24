@@ -224,14 +224,17 @@ class CustomLoginView(View):
         elif not is_device_trusted:
             log_audit(user, 'new_device_login', summary=f"Unrecognized new device login from IP {ip}", ip=ip)
             if user.email:
-                from django.core.mail import send_mail
-                send_mail(
-                    subject="Security Alert: New Device Login Detected",
-                    message=f"Hi {user.email},\n\nA new device login was detected for your FieldTrack account.\nIP Address: {ip}\nBrowser: {ua[:100]}\nTime: {now.strftime('%d/%m/%Y %g:%i %A')}\n\nIf this was not you, please change your password immediately.",
-                    from_email="noreply@fieldtrack.com",
-                    recipient_list=[user.email],
-                    fail_silently=True
-                )
+                try:
+                    from django.core.mail import send_mail
+                    send_mail(
+                        subject="Security Alert: New Device Login Detected",
+                        message=f"Hi {user.email},\n\nA new device login was detected for your FieldTrack account.\nIP Address: {ip}\nBrowser: {ua[:100]}\nTime: {now.strftime('%d/%m/%Y %I:%M %p')}\n\nIf this was not you, please change your password immediately.",
+                        from_email="noreply@fieldtrack.com",
+                        recipient_list=[user.email],
+                        fail_silently=True
+                    )
+                except Exception as mail_err:
+                    logger.warning(f"Failed sending new device alert email to {user.email}: {mail_err}")
 
         UserSession.objects.create(
             user=user,
@@ -558,6 +561,22 @@ class AdminLoginActivityView(LoginRequiredMixin, View):
             'status_filter': status_filter
         })
 
+    def post(self, request):
+        if request.user.role != 'admin':
+            return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
+        ids = request.POST.getlist('ids') or request.POST.get('ids', '').split(',')
+        ids = [i for i in ids if str(i).isdigit()]
+        if ids:
+            deleted_count, _ = UserLoginActivity.objects.filter(id__in=ids).delete()
+            log_audit(request.user, 'bulk_login_activity_delete', summary=f"Bulk deleted {deleted_count} UserLoginActivity entries", ip=get_client_ip(request))
+            messages.success(request, f"Successfully deleted {deleted_count} login activity records.")
+
+        activities = UserLoginActivity.objects.select_related('user').order_by('-timestamp')[:100]
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'admin_panel/login_activity.html', {'activities': activities})
+        return redirect('accounts:admin_login_activity')
+
 
 class SyncApiView(View):
     def post(self, request):
@@ -619,6 +638,34 @@ class SessionValidateView(View):
 
 class UserSessionsView(LoginRequiredMixin, View):
     def get(self, request):
+        sessions = UserSession.objects.filter(user=request.user).order_by('-login_time')[:10]
+        current_session_key = request.session.session_key
+        return render(request, 'cotton/session-list.html', {
+            'sessions': sessions,
+            'current_session_key': current_session_key
+        })
+
+    def post(self, request):
+        ids = request.POST.getlist('ids') or request.POST.get('ids', '').split(',')
+        ids = [i for i in ids if str(i).isdigit()]
+        if ids:
+            sessions = UserSession.objects.filter(user=request.user, id__in=ids)
+            now = timezone.now()
+            count = 0
+            for s in sessions:
+                if s.is_active:
+                    s.is_active = False
+                    s.logout_time = now
+                    s.save(update_fields=['is_active', 'logout_time'])
+                    if s.session_key:
+                        Session.objects.filter(session_key=s.session_key).delete()
+                else:
+                    s.delete()
+                count += 1
+
+            log_audit(request.user, 'bulk_session_delete', summary=f"Bulk processed {count} session records", ip=get_client_ip(request))
+            messages.success(request, f"Successfully processed {count} session records.")
+
         sessions = UserSession.objects.filter(user=request.user).order_by('-login_time')[:10]
         current_session_key = request.session.session_key
         return render(request, 'cotton/session-list.html', {
