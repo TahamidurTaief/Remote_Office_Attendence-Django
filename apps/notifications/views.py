@@ -11,7 +11,8 @@ def _admin_required(view_func):
     @wraps(view_func)
     @login_required
     def _wrapped(request, *args, **kwargs):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed or getattr(request.user, 'role', '') == 'admin'):
             from django.http import HttpResponseForbidden
             return HttpResponseForbidden('Admins only.')
         return view_func(request, *args, **kwargs)
@@ -20,12 +21,14 @@ def _admin_required(view_func):
 
 @login_required
 def notification_list(request):
+    from apps.accounts.engine import PermissionEngine
     filter_type = request.GET.get('type', 'all')
     notifs = Notification.objects.filter(
         recipient=request.user
     ).select_related('employee')
 
-    if request.user.role != 'admin':
+    is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed or getattr(request.user, 'role', '') == 'admin'
+    if not is_admin:
         allowed_types = ['task_assigned', 'task_completed', 'task_delayed']
         notifs = notifs.filter(notif_type__in=allowed_types)
         unread_count = Notification.objects.filter(
@@ -83,7 +86,7 @@ def notification_list(request):
             'filter_tabs': filter_tabs,
         })
 
-    base_template = 'base/admin_base.html' if request.user.role == 'admin' else 'base/staff_base.html'
+    base_template = 'base/admin_base.html' if is_admin else 'base/staff_base.html'
     return render(request, 'notifications/list.html', {
         'notifs': page_obj,
         'page_obj': page_obj,
@@ -97,10 +100,12 @@ def notification_list(request):
 
 @login_required
 def notification_count(request):
+    from apps.accounts.engine import PermissionEngine
     count_query = Notification.objects.filter(
         recipient=request.user, is_read=False
     )
-    if request.user.role != 'admin':
+    is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed or getattr(request.user, 'role', '') == 'admin'
+    if not is_admin:
         count_query = count_query.filter(
             notif_type__in=['task_assigned', 'task_completed', 'task_delayed']
         )

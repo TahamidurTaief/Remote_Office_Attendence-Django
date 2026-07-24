@@ -52,6 +52,8 @@ def user_can_access_my_projects(user) -> bool:
         return True
     if PermissionEngine.evaluate(user, 'projects.view').allowed:
         return True
+    if getattr(user, 'role', '') in ('manager', 'admin'):
+        return True
     
     employee_profile = getattr(user, 'employee_profile', None)
     if employee_profile and employee_profile.is_active and employee_profile.is_project_manager:
