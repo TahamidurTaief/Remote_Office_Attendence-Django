@@ -70,18 +70,18 @@
                     {% endif %}
                 </td>
                 <td class="px-4 py-3 text-right">
-                    <div class="flex items-center justify-end space-x-2">
+                    <div class="flex items-center justify-end space-x-1.5">
                         {% if emp.get_completion_percentage < 100 %}
-                        <a href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" class="px-2.5 py-1 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg shadow-sm transition-colors text-decoration-none">
+                        <c-button href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" variant="accent" size="sm">
                             Resume Wizard
-                        </a>
+                        </c-button>
                         {% endif %}
-                        <a href="{% url 'employees:employee_detail' emp.pk %}" class="px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-lg text-decoration-none transition-colors">
+                        <c-button href="{% url 'employees:employee_detail' emp.pk %}" variant="secondary" size="sm">
                             View
-                        </a>
-                        <button hx-get="{% url 'employees:employee_edit' emp.pk %}" hx-target="#modal-container" class="px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 border border-indigo-200/50 dark:border-indigo-800/50 rounded-lg transition-colors">
+                        </c-button>
+                        <c-button variant="ghost" size="sm" hx-get="{% url 'employees:employee_edit' emp.pk %}" hx-target="#modal-container">
                             Edit
-                        </button>
+                        </c-button>
                     </div>
                 </td>
             </tr>
