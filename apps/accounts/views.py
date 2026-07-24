@@ -644,10 +644,13 @@ class UserSessionsView(LoginRequiredMixin, View):
     def get(self, request):
         sessions = UserSession.objects.filter(user=request.user).order_by('-login_time')[:10]
         current_session_key = request.session.session_key
-        return render(request, 'cotton/session-list.html', {
+        ctx = {
             'sessions': sessions,
             'current_session_key': current_session_key
-        })
+        }
+        if request.headers.get('HX-Request'):
+            return render(request, 'cotton/session-list.html', ctx)
+        return render(request, 'accounts/user_sessions.html', ctx)
 
     def post(self, request):
         ids = request.POST.getlist('ids') or request.POST.get('ids', '').split(',')

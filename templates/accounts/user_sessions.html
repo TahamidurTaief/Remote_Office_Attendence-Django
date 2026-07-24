@@ -1,0 +1,15 @@
+<c-app-shell page_title="Active Device Sessions | FieldTrack" active_href="{% url 'accounts:security_settings' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'accounts:security_settings' %}" ></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Active Device Sessions" ></c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 lg:p-6 w-full max-w-4xl mx-auto space-y-4">
+        {% include "cotton/session-list.html" %}
+    </div>
+</c-app-shell>

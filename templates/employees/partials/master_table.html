@@ -1,41 +1,41 @@
 <div id="employee-table-container">
     <c-table>
         <c-slot name="header">
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Employee</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Branch & Org</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Manager</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Completion</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">User Link</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Employee</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Branch & Org</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Manager</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Completion</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User Link</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
         </c-slot>
         
         {% for emp in employees %}
-            <tr class="hover:bg-gray-50/80 transition-colors">
+            <tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors">
                 <td class="px-4 py-3">
                     <div class="flex items-center space-x-3">
                         <c-avatar name="{{ emp.get_full_name }}" size="md" ></c-avatar>
                         <div>
-                            <a href="{% url 'employees:employee_detail' emp.pk %}" class="font-medium text-gray-900 hover:text-indigo-600">
+                            <a href="{% url 'employees:employee_detail' emp.pk %}" class="font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                                 {{ emp.get_full_name }}
                             </a>
-                            <div class="text-xs text-gray-500 font-mono">{{ emp.employee_number }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 font-mono">{{ emp.employee_number }}</div>
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-600">
-                    <div class="font-medium text-gray-800">{{ emp.branch.name|default:"—" }}</div>
-                    <div class="text-xs text-gray-500">
+                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                    <div class="font-medium text-gray-800 dark:text-gray-200">{{ emp.branch.name|default:"—" }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
                         {{ emp.department.name|default:"No Dept" }} • {{ emp.designation.name|default:"No Designation" }}
                     </div>
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-600">
+                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
                     {% if emp.reporting_manager %}
-                        <a href="{% url 'employees:employee_detail' emp.reporting_manager.pk %}" class="text-indigo-600 hover:underline">
+                        <a href="{% url 'employees:employee_detail' emp.reporting_manager.pk %}" class="text-indigo-600 dark:text-indigo-400 hover:underline">
                             {{ emp.reporting_manager.get_full_name }}
                         </a>
                     {% else %}
-                        <span class="text-gray-400">—</span>
+                        <span class="text-gray-400 dark:text-gray-500">—</span>
                     {% endif %}
                 </td>
                 <td class="px-4 py-3">
@@ -52,34 +52,34 @@
                 <td class="px-4 py-3">
                     {% with pct=emp.get_completion_percentage %}
                     <div class="flex items-center gap-2">
-                        <div class="w-16 bg-gray-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-indigo-600 h-full" style="width: {{ pct }}%"></div>
+                        <div class="w-16 bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-indigo-600 dark:bg-indigo-400 h-full" style="width: {{ pct }}%"></div>
                         </div>
                         <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 font-mono">{{ pct }}%</span>
                     </div>
                     {% endwith %}
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-600">
+                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
                     {% if emp.user %}
-                        <div class="flex items-center space-x-1 text-emerald-600 font-medium text-xs">
+                        <div class="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 font-medium text-xs">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             <span>{{ emp.user.email|default:emp.user.phone }}</span>
                         </div>
                     {% else %}
-                        <span class="text-xs text-gray-400 font-italic">No User Account</span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500 font-italic">No User Account</span>
                     {% endif %}
                 </td>
                 <td class="px-4 py-3 text-right">
                     <div class="flex items-center justify-end space-x-2">
                         {% if emp.get_completion_percentage < 100 %}
-                        <a href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" class="px-2.5 py-1 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg shadow-sm transition-colors">
+                        <a href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" class="px-2.5 py-1 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg shadow-sm transition-colors text-decoration-none">
                             Resume Wizard
                         </a>
                         {% endif %}
-                        <a href="{% url 'employees:employee_detail' emp.pk %}" class="px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg border border-gray-200 shadow-xs">
+                        <a href="{% url 'employees:employee_detail' emp.pk %}" class="px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-lg text-decoration-none transition-colors">
                             View
                         </a>
-                        <button hx-get="{% url 'employees:employee_edit' emp.pk %}" hx-target="#modal-container" class="px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                        <button hx-get="{% url 'employees:employee_edit' emp.pk %}" hx-target="#modal-container" class="px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 border border-indigo-200/50 dark:border-indigo-800/50 rounded-lg transition-colors">
                             Edit
                         </button>
                     </div>
@@ -87,7 +87,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     <c-empty-state icon="user-group" title="No Employee Master Records Found" description="Try adjusting your filter parameters or create a new employee." ></c-empty-state>
                 </td>
             </tr>

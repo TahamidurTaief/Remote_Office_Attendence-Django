@@ -1243,6 +1243,7 @@ class EmployeeWizardView(AdminRequiredMixin, View):
             'step_count': 8,
             'employee': employee,
             'completion_pct': employee.get_completion_percentage() if employee else 0,
+            'step_template': f'employees/wizard/step_{step}.html',
         }
 
         form_cls = self.get_form_class(step)

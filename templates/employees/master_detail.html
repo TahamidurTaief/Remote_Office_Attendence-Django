@@ -8,18 +8,17 @@
             <c-slot name="actions">
                 <div class="flex items-center space-x-2">
                     {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
-                    <button hx-get="{% url 'employees:employee_suspend_toggle_modal' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 {% if employee.is_suspended %}bg-emerald-50 text-emerald-700 hover:bg-emerald-100{% else %}bg-rose-50 text-rose-700 hover:bg-rose-100{% endif %} font-medium text-sm rounded-xl transition-colors">
+                    <button hx-get="{% url 'employees:employee_suspend_toggle_modal' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 {% if employee.is_suspended %}bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60{% else %}bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60{% endif %} font-medium text-sm rounded-xl transition-colors">
                         {% if employee.is_suspended %}Un-suspend Profile{% else %}Suspend Profile{% endif %}
                     </button>
                     {% endif %}
-                    <button hx-get="{% url 'employees:employee_edit' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium text-sm rounded-xl transition-colors">
+                    <button hx-get="{% url 'employees:employee_edit' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-medium text-sm rounded-xl transition-colors">
                         Edit Profile
                     </button>
                     {% include "employees/partials/lifecycle_action_buttons.html" %}
                     {% if employee.status != 'archived' %}
                     <a href="{% url 'employees:lifecycle_requests' %}"
-                       class="px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors hover:bg-slate-500/10"
-                       style="color:var(--text-muted)">
+                       class="px-2 py-1 text-xs font-semibold rounded-xl transition-colors hover:bg-slate-500/10 text-gray-600 dark:text-gray-400">
                         Pending requests
                     </a>
                     {% endif %}
@@ -30,7 +29,7 @@
  
     <c-command-palette></c-command-palette>
  
-    <div class="p-4 max-w-7xl mx-auto">
+    <div class="p-4 lg:p-6 w-full space-y-6">
         <!-- Suspended Status Alert -->
         {% if employee.is_suspended %}
         <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-700 dark:text-red-300 mb-6">
@@ -50,45 +49,45 @@
  
             <!-- Right Column: Detail Tabs -->
             <div class="lg:col-span-2 space-y-6" x-data="{ tab: '{{ active_tab }}' }">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <div class="border-b border-gray-200 mb-6">
-                        <nav class="flex flex-wrap gap-x-6 gap-y-2">
-                            <button @click="tab = 'identity'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'identity', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'identity' }" class="pb-3 border-b-2 text-sm transition-colors">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
+                        <nav class="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-3">
+                            <button @click="tab = 'identity'" :class="tab === 'identity' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
                                 Identity & Demographics
                             </button>
-                            <button @click="tab = 'contact'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'contact', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'contact' }" class="pb-3 border-b-2 text-sm transition-colors">
+                            <button @click="tab = 'contact'" :class="tab === 'contact' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
                                 Contact & Emergency
                             </button>
-                            <button @click="tab = 'organization'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'organization', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'organization' }" class="pb-3 border-b-2 text-sm transition-colors">
+                            <button @click="tab = 'organization'" :class="tab === 'organization' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
                                 Organization & Reporting
                             </button>
                             {% if can_view_payroll %}
-                            <button @click="tab = 'payroll'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'payroll', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'payroll' }" class="pb-3 border-b-2 text-sm transition-colors">
+                            <button @click="tab = 'payroll'" :class="tab === 'payroll' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
                                 Payroll & Compliance
                             </button>
                             {% endif %}
-                            <button @click="tab = 'history'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'history', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'history' }" class="pb-3 border-b-2 text-sm transition-colors">
+                            <button @click="tab = 'history'" :class="tab === 'history' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
                                 Employment History
                             </button>
-                            <button @click="tab = 'documents'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'documents', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'documents' }" class="pb-3 border-b-2 text-sm transition-colors flex items-center gap-1">
+                            <button @click="tab = 'documents'" :class="tab === 'documents' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap flex items-center gap-1.5">
                                 Documents
                                 {% if active_documents.count > 0 %}
-                                <span class="px-1.5 py-0.5 text-[10px] bg-indigo-50 text-indigo-700 rounded-full font-mono font-bold">{{ active_documents.count }}</span>
+                                <span class="px-1.5 py-0.5 text-[10px] bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-full font-mono font-bold">{{ active_documents.count }}</span>
                                 {% endif %}
                             </button>
-                            <button @click="tab = 'assets'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'assets', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'assets' }" class="pb-3 border-b-2 text-sm transition-colors flex items-center gap-1">
+                            <button @click="tab = 'assets'" :class="tab === 'assets' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap flex items-center gap-1.5">
                                 Assets
                                 {% if active_asset_assignments.count > 0 %}
-                                <span class="px-1.5 py-0.5 text-[10px] bg-emerald-50 text-emerald-700 rounded-full font-mono font-bold">{{ active_asset_assignments.count }}</span>
+                                <span class="px-1.5 py-0.5 text-[10px] bg-emerald-100 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 rounded-full font-mono font-bold">{{ active_asset_assignments.count }}</span>
                                 {% endif %}
                             </button>
                             {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
-                            <button @click="tab = 'activity'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'activity', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'activity' }" class="pb-3 border-b-2 text-sm transition-colors">
+                            <button @click="tab = 'activity'" :class="tab === 'activity' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
                                 Activity Feed
                             </button>
                             {% endif %}
                             {% if request.user.is_superuser or request.user.role == 'admin' %}
-                            <button @click="tab = 'audit'" :class="{ 'border-indigo-600 text-indigo-600 font-semibold': tab === 'audit', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'audit' }" class="pb-3 border-b-2 text-sm transition-colors" hx-get="{% url 'employees:master_audit' employee.pk %}" hx-target="#audit-tab-content" hx-trigger="click once">
+                            <button @click="tab = 'audit'" :class="tab === 'audit' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap" hx-get="{% url 'employees:master_audit' employee.pk %}" hx-target="#audit-tab-content" hx-trigger="click once">
                                 Audit Log
                             </button>
                             {% endif %}
@@ -98,29 +97,29 @@
                     <!-- Identity Tab -->
                     <div x-show="tab === 'identity'" class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">First Name</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.first_name }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">First Name</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.first_name }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Last Name</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.last_name }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Last Name</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.last_name }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Date of Birth</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.dob|date:"M d, Y"|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Date of Birth</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.dob|date:"M d, Y"|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Gender</span>
-                                <div class="text-sm font-semibold text-slate-800 capitalize mt-0.5">{{ employee.gender|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Gender</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 capitalize mt-0.5">{{ employee.gender|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">National ID Reference</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.national_id|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">National ID Reference</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.national_id|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Created Date</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.created_at|date:"M d, Y H:i" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Created Date</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.created_at|date:"M d, Y H:i" }}</div>
                             </div>
                         </div>
                     </div>
@@ -128,33 +127,33 @@
                     <!-- Contact Tab -->
                     <div x-show="tab === 'contact'" class="space-y-4" style="display: none;">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Phone Number</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.phone|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Phone Number</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.phone|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Personal Email</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.personal_email|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Personal Email</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.personal_email|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl sm:col-span-2">
-                                <span class="text-xs text-slate-400 font-medium">Address</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.address|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl sm:col-span-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Address</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.address|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Emergency Contact Name</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.emergency_contact_name|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Name</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_name|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Emergency Contact Relation</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.emergency_contact_relation|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Relation</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_relation|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Emergency Contact Phone</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.emergency_contact_phone|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Phone</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_phone|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl sm:col-span-3">
-                                <span class="text-xs text-slate-400 font-medium">Emergency Contact Address</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.emergency_contact_address|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl sm:col-span-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Address</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_address|default:"—" }}</div>
                             </div>
                         </div>
                     </div>
@@ -162,51 +161,51 @@
                     <!-- Organization Tab -->
                     <div x-show="tab === 'organization'" class="space-y-4" style="display: none;">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Branch</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.branch.name|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Branch</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.branch.name|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Department</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.department.name|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Department</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.department.name|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Designation</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.designation.name|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Designation</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.designation.name|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Employment Type</span>
-                                <div class="text-sm font-semibold text-slate-800 capitalize mt-0.5">{{ employee.get_employment_type_display|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Employment Type</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 capitalize mt-0.5">{{ employee.get_employment_type_display|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Work Shift</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.shift|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Work Shift</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.shift|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Weekly Holiday Policy</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.weekly_holiday_policy|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Weekly Holiday Policy</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.weekly_holiday_policy|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Reporting Manager</span>
-                                <div class="text-sm font-semibold text-indigo-650 mt-0.5">
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Reporting Manager</span>
+                                <div class="text-sm font-semibold mt-0.5">
                                     {% if employee.reporting_manager %}
-                                    <a href="{% url 'employees:employee_detail' employee.reporting_manager.pk %}" class="hover:underline font-bold">
+                                    <a href="{% url 'employees:employee_detail' employee.reporting_manager.pk %}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
                                         {{ employee.reporting_manager.get_full_name }} ({{ employee.reporting_manager.employee_number }})
                                     </a>
                                     {% else %}
-                                    <span class="text-slate-400">None</span>
+                                    <span class="text-gray-400">None</span>
                                     {% endif %}
                                 </div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl sm:col-span-2">
-                                <span class="text-xs text-slate-400 font-medium">Direct Reports</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl sm:col-span-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Direct Reports</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
                                     {% for dr in employee.direct_reports.all %}
-                                        <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-block bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 font-semibold text-decoration-none">
+                                        <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-block bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-semibold text-decoration-none border border-indigo-200/50 dark:border-indigo-700/50">
                                             {{ dr.get_full_name }}
                                         </a>
                                     {% empty %}
-                                        <span class="text-xs text-slate-400">No direct reports</span>
+                                        <span class="text-xs text-gray-400">No direct reports</span>
                                     {% endfor %}
                                 </div>
                             </div>
@@ -217,49 +216,49 @@
                     {% if can_view_payroll %}
                     <div x-show="tab === 'payroll'" class="space-y-4" style="display: none;">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Basic Salary</span>
-                                <div class="text-sm font-bold text-slate-800 mt-0.5 font-mono">
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Basic Salary</span>
+                                <div class="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5 font-mono">
                                     {% if employee.basic_salary is not None %}
                                         ${{ employee.basic_salary }}
                                     {% else %}
-                                        <span class="text-slate-400 italic">Not Set</span>
+                                        <span class="text-gray-400 italic">Not Set</span>
                                     {% endif %}
                                 </div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Salary Structure</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.salary_structure|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Salary Structure</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.salary_structure|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Bank Name</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.bank_name|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Bank Name</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.bank_name|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Bank Account</span>
-                                <div class="text-sm font-bold text-slate-800 mt-0.5 font-mono">{{ employee.bank_account|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Bank Account</span>
+                                <div class="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5 font-mono">{{ employee.bank_account|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Payment Method</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5 capitalize">{{ employee.get_payment_method_display|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Payment Method</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5 capitalize">{{ employee.get_payment_method_display|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Tax Profile</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.tax_profile|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Tax Profile</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.tax_profile|default:"—" }}</div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Provident Fund (PF)</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Provident Fund (PF)</span>
+                                <div class="text-sm font-semibold mt-0.5">
                                     {% if employee.pf_enabled %}
-                                        <span class="text-emerald-600 font-bold">Enabled</span>
+                                        <span class="text-emerald-600 dark:text-emerald-400 font-bold">Enabled</span>
                                     {% else %}
-                                        <span class="text-slate-400">Disabled</span>
+                                        <span class="text-gray-400">Disabled</span>
                                     {% endif %}
                                 </div>
                             </div>
-                            <div class="p-3 bg-gray-50 rounded-xl">
-                                <span class="text-xs text-slate-400 font-medium">Overtime Policy</span>
-                                <div class="text-sm font-semibold text-slate-800 mt-0.5">{{ employee.overtime_policy|default:"—" }}</div>
+                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
+                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Overtime Policy</span>
+                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.overtime_policy|default:"—" }}</div>
                             </div>
                         </div>
                     </div>
@@ -270,14 +269,14 @@
                         <c-timeline>
                             {% for hist in employee.employment_history.all %}
                             <c-timeline-item title="{{ hist.field_changed|title }} Update" time="{{ hist.effective_date|date:'M d, Y' }}">
-                                <div class="text-xs text-slate-650 mt-1">
-                                    <div><span class="font-medium text-slate-700">From:</span> {{ hist.old_value|default:"(empty)" }} → <span class="font-medium text-slate-700">To:</span> {{ hist.new_value }}</div>
-                                    {% if hist.reason %}<div class="text-slate-500 italic mt-1 font-medium">Reason: {{ hist.reason }}</div>{% endif %}
-                                    {% if hist.approved_by %}<div class="text-slate-400 text-[10px] mt-0.5">Approved by: {{ hist.approved_by.email|default:hist.approved_by.phone }}</div>{% endif %}
+                                <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                    <div><span class="font-medium text-gray-800 dark:text-gray-200">From:</span> {{ hist.old_value|default:"(empty)" }} → <span class="font-medium text-gray-800 dark:text-gray-200">To:</span> {{ hist.new_value }}</div>
+                                    {% if hist.reason %}<div class="text-gray-500 dark:text-gray-400 italic mt-1 font-medium">Reason: {{ hist.reason }}</div>{% endif %}
+                                    {% if hist.approved_by %}<div class="text-gray-400 text-[10px] mt-0.5">Approved by: {{ hist.approved_by.email|default:hist.approved_by.phone }}</div>{% endif %}
                                 </div>
                             </c-timeline-item>
                             {% empty %}
-                            <div class="text-sm text-slate-400 py-6 italic text-center">No employment history events recorded.</div>
+                            <div class="text-sm text-gray-400 py-6 italic text-center">No employment history events recorded.</div>
                             {% endfor %}
                         </c-timeline>
                     </div>
@@ -306,10 +305,10 @@
                             <div class="flex justify-center py-8">
                                 <div class="animate-pulse flex space-x-4 w-full">
                                     <div class="flex-1 space-y-4 py-1">
-                                        <div class="h-4 bg-slate-200 rounded w-3/4"></div>
+                                        <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
                                         <div class="space-y-2">
-                                            <div class="h-4 bg-slate-200 rounded"></div>
-                                            <div class="h-4 bg-slate-200 rounded w-5/6"></div>
+                                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
                                         </div>
                                     </div>
                                 </div>

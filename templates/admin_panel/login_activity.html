@@ -12,16 +12,16 @@
   <div class="p-4 space-y-4 max-w-7xl mx-auto">
     <c-card title="Login Security & Audit Trail" subtitle="Recent authentication attempts, status, and IP logs.">
       <div class="flex items-center gap-2 mb-4">
-        <a href="?status=" class="px-3 py-1 text-xs rounded-lg border font-medium {% if not status_filter %}bg-primary text-white border-primary{% else %}bg-surface border-border text-secondary{% endif %}">
+        <a href="?status=" class="px-3 py-1.5 text-xs rounded-xl border font-semibold transition-all {% if not status_filter %}bg-indigo-600 text-white border-indigo-600{% else %}bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60{% endif %}">
           All
         </a>
-        <a href="?status=success" class="px-3 py-1 text-xs rounded-lg border font-medium {% if status_filter == 'success' %}bg-emerald-600 text-white border-emerald-600{% else %}bg-surface border-border text-secondary{% endif %}">
+        <a href="?status=success" class="px-3 py-1.5 text-xs rounded-xl border font-semibold transition-all {% if status_filter == 'success' %}bg-emerald-600 text-white border-emerald-600{% else %}bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60{% endif %}">
           Success
         </a>
-        <a href="?status=failed" class="px-3 py-1 text-xs rounded-lg border font-medium {% if status_filter == 'failed' %}bg-amber-600 text-white border-amber-600{% else %}bg-surface border-border text-secondary{% endif %}">
+        <a href="?status=failed" class="px-3 py-1.5 text-xs rounded-xl border font-semibold transition-all {% if status_filter == 'failed' %}bg-amber-600 text-white border-amber-600{% else %}bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60{% endif %}">
           Failed
         </a>
-        <a href="?status=locked" class="px-3 py-1 text-xs rounded-lg border font-medium {% if status_filter == 'locked' %}bg-red-600 text-white border-red-600{% else %}bg-surface border-border text-secondary{% endif %}">
+        <a href="?status=locked" class="px-3 py-1.5 text-xs rounded-xl border font-semibold transition-all {% if status_filter == 'locked' %}bg-rose-600 text-white border-rose-600{% else %}bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60{% endif %}">
           Locked
         </a>
       </div>
