@@ -1,0 +1,15 @@
+<div class="text-center py-4 space-y-4">
+  <div class="inline-flex p-3 rounded-full bg-emerald-500/10 text-emerald-500 mb-1">
+    <i data-lucide="check-circle-2" class="w-8 h-8"></i>
+  </div>
+  <h1 class="text-[18px] font-semibold text-emerald-600 dark:text-emerald-400">Password Reset Complete!</h1>
+  <p class="text-[12px]" style="color:var(--text-secondary)">
+    Your password has been successfully updated. All active device sessions have been logged out for security.
+  </p>
+
+  <div class="pt-4">
+    <a href="{% url 'accounts:login' %}" class="ft-btn ft-btn-primary ft-btn-md w-full justify-center">
+      Sign In With New Password
+    </a>
+  </div>
+</div>

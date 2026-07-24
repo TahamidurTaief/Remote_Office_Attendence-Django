@@ -9,6 +9,12 @@ urlpatterns = [
     path('logout/', views.CustomLogoutView.as_view(), name='logout'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change_password'),
 
+    # Forgot Password multi-step endpoints
+    path('forgot-password/', views.ForgotPasswordView.as_view(), name='forgot_password'),
+    path('forgot-password/request/', views.ForgotPasswordRequestView.as_view(), name='forgot_password_request'),
+    path('forgot-password/verify/', views.ForgotPasswordVerifyView.as_view(), name='forgot_password_verify'),
+    path('forgot-password/reset/', views.ForgotPasswordResetView.as_view(), name='forgot_password_reset'),
+
     # API and Session endpoints
     path('api/sync/', views.SyncApiView.as_view(), name='api_sync'),
     path('api/session/validate/', views.SessionValidateView.as_view(), name='api_session_validate'),

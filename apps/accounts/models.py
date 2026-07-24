@@ -139,3 +139,23 @@ class TrustedDevice(models.Model):
         return f"{self.user} - {self.device_name or self.device_hash[:8]}"
 
 
+class PasswordResetOTP(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='reset_otps')
+    otp_code = models.CharField(max_length=6)
+    reset_token = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'password_reset_otp'
+        ordering = ['-created_at']
+
+    def is_valid(self):
+        return not self.is_used and timezone.now() <= self.expires_at
+
+    def __str__(self):
+        return f"OTP for {self.user} - {'Used' if self.is_used else 'Valid'}"
+
+
+

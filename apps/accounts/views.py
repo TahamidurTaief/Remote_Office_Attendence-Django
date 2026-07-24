@@ -1,17 +1,22 @@
 import hashlib
 import json
+import random
+import secrets
+import logging
 from datetime import timedelta
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib import messages
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.forms import PasswordChangeForm
 from django.core.cache import cache
 from django.utils import timezone
 from django.http import JsonResponse
+from django.db.models import Q
 from django.contrib.sessions.models import Session
-from apps.accounts.models import UserSession, TrustedDevice, CustomUser
+from apps.accounts.models import UserSession, TrustedDevice, CustomUser, PasswordResetOTP
+
+logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
@@ -75,7 +80,6 @@ class CustomLoginView(View):
                     old_sess.logout_time = now
                     old_sess.save(update_fields=['is_active', 'logout_time'])
 
-                    # Flush Django Session store entry for old session
                     if old_sess.session_key:
                         Session.objects.filter(session_key=old_sess.session_key).delete()
 
@@ -84,7 +88,7 @@ class CustomLoginView(View):
                 cache.delete(cache_key)
 
                 # 3. Create new active UserSession record
-                new_session = UserSession.objects.create(
+                UserSession.objects.create(
                     user=user,
                     device_id=device_id,
                     session_key=request.session.session_key,
@@ -149,17 +153,181 @@ class ChangePasswordView(LoginRequiredMixin, View):
         return render(request, 'accounts/change_password.html')
 
     def post(self, request):
-        form = PasswordChangeForm(request.user, request.POST)
-        if form.is_valid():
-            user = form.save()
-            update_session_auth_hash(request, user)
-            messages.success(request, 'Your password was successfully updated!')
-            return redirect('/change-password/')
-        else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, error)
+        old_password = request.POST.get('old_password')
+        new_password1 = request.POST.get('new_password1')
+        new_password2 = request.POST.get('new_password2')
+
+        errors = []
+
+        if not request.user.check_password(old_password):
+            errors.append("Current password is incorrect.")
+
+        if not new_password1:
+            errors.append("New password cannot be empty.")
+
+        if new_password1 != new_password2:
+            errors.append("New password and confirm password do not match.")
+
+        if errors:
+            for err in errors:
+                messages.error(request, err)
+            if request.headers.get('HX-Request') == 'true':
+                return render(request, 'accounts/change_password.html')
             return render(request, 'accounts/change_password.html')
+
+        # Any password allowed (no complexity rule)
+        user = request.user
+        user.set_password(new_password1)
+        user.save()
+
+        # Update auth hash to keep current session active
+        update_session_auth_hash(request, user)
+
+        # Logout ALL OTHER devices (keep current session active)
+        now = timezone.now()
+        current_session_key = request.session.session_key
+        other_sessions = UserSession.objects.filter(user=user, is_active=True).exclude(session_key=current_session_key)
+
+        for sess in other_sessions:
+            sess.is_active = False
+            sess.logout_time = now
+            sess.save(update_fields=['is_active', 'logout_time'])
+
+            if sess.session_key:
+                Session.objects.filter(session_key=sess.session_key).delete()
+
+        messages.success(request, 'Your password was successfully updated! Other device sessions have been logged out.')
+
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'accounts/change_password.html')
+        return render(request, 'accounts/change_password.html')
+
+
+class ForgotPasswordView(View):
+    """
+    Forgot Password multi-step HTMX view container.
+    """
+    def get(self, request):
+        return render(request, 'accounts/forgot_password.html')
+
+
+class ForgotPasswordRequestView(View):
+    """
+    Step 1: User enters email or phone. Server generates 6-digit OTP code.
+    """
+    def post(self, request):
+        identifier = (request.POST.get('identifier') or '').strip()
+
+        if not identifier:
+            return render(request, 'accounts/partials/forgot_step1.html', {
+                'error': 'Please enter your email address or phone number.'
+            })
+
+        user = CustomUser.objects.filter(
+            Q(email__iexact=identifier) | Q(phone__iexact=identifier)
+        ).first()
+
+        if not user:
+            # Generic message to avoid email enumeration
+            return render(request, 'accounts/partials/forgot_step2.html', {
+                'identifier': identifier,
+                'reset_token': 'dummy_token',
+                'debug_otp': '123456'
+            })
+
+        # Generate 6-digit OTP
+        otp_code = f"{random.randint(100000, 999999)}"
+        reset_token = secrets.token_urlsafe(32)
+        expires_at = timezone.now() + timedelta(minutes=10)
+
+        PasswordResetOTP.objects.create(
+            user=user,
+            otp_code=otp_code,
+            reset_token=reset_token,
+            expires_at=expires_at
+        )
+
+        logger.info(f"[ForgotPassword] Generated OTP {otp_code} for user {user.email or user.phone}")
+
+        return render(request, 'accounts/partials/forgot_step2.html', {
+            'identifier': identifier,
+            'reset_token': reset_token,
+            'debug_otp': otp_code
+        })
+
+
+class ForgotPasswordVerifyView(View):
+    """
+    Step 2: Verify OTP code.
+    """
+    def post(self, request):
+        reset_token = request.POST.get('reset_token')
+        otp_code = (request.POST.get('otp_code') or '').strip()
+
+        otp_obj = PasswordResetOTP.objects.filter(
+            reset_token=reset_token,
+            otp_code=otp_code
+        ).first()
+
+        if not otp_obj or not otp_obj.is_valid():
+            return render(request, 'accounts/partials/forgot_step2.html', {
+                'reset_token': reset_token,
+                'error': 'Invalid or expired OTP code. Please try again.'
+            })
+
+        otp_obj.is_used = True
+        otp_obj.save(update_fields=['is_used'])
+
+        return render(request, 'accounts/partials/forgot_step3.html', {
+            'reset_token': reset_token
+        })
+
+
+class ForgotPasswordResetView(View):
+    """
+    Step 3: Reset Password & Logout All Devices.
+    """
+    def post(self, request):
+        reset_token = request.POST.get('reset_token')
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+
+        if not new_password or not confirm_password:
+            return render(request, 'accounts/partials/forgot_step3.html', {
+                'reset_token': reset_token,
+                'error': 'Password fields cannot be empty.'
+            })
+
+        if new_password != confirm_password:
+            return render(request, 'accounts/partials/forgot_step3.html', {
+                'reset_token': reset_token,
+                'error': 'Passwords do not match.'
+            })
+
+        otp_obj = PasswordResetOTP.objects.filter(reset_token=reset_token).first()
+        if not otp_obj:
+            return render(request, 'accounts/partials/forgot_step3.html', {
+                'reset_token': reset_token,
+                'error': 'Invalid reset session. Please request a new OTP.'
+            })
+
+        # Set user new password (any password allowed)
+        user = otp_obj.user
+        user.set_password(new_password)
+        user.save()
+
+        # Logout ALL active device sessions for this user
+        now = timezone.now()
+        active_sessions = UserSession.objects.filter(user=user, is_active=True)
+        for sess in active_sessions:
+            sess.is_active = False
+            sess.logout_time = now
+            sess.save(update_fields=['is_active', 'logout_time'])
+
+            if sess.session_key:
+                Session.objects.filter(session_key=sess.session_key).delete()
+
+        return render(request, 'accounts/partials/forgot_step4.html')
 
 
 class SyncApiView(View):
@@ -177,7 +345,6 @@ class SyncApiView(View):
             results = []
 
             for item in items:
-                # Stub sync processing logic per item
                 results.append({
                     'uuid': item.get('uuid'),
                     'module': item.get('module'),
