@@ -1,83 +1,44 @@
-from django.contrib.auth.models import Group, Permission
 from django.contrib.auth import get_user_model
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView, View
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
-from apps.accounts.mixins import AdminRequiredMixin
-from apps.accounts.permissions import get_effective_permissions
+from django.template.defaulttags import register
+
+from apps.accounts.mixins import AdminRequiredMixin, RBACPermissionRequiredMixin
+from apps.accounts.models import (
+    Role, Module, Action, Permission, RolePermission,
+    UserRoleAssignment, UserPermissionOverride, DataScope
+)
 
 User = get_user_model()
 
-# Group permissions by app label covering all 10 modules
-APP_LABEL_MAPPING = {
-    'attendance': 'Attendance',
-    'projects': 'Projects',
-    'employees': 'Employees',
-    'leave': 'Leave',
-    'branches': 'Branches',
-    'notifications': 'Notifications',
-    'expense': 'Expense',
-    'backups': 'Backups',
-    'schedule': 'Schedule',
-    'accounts': 'Accounts & Security',
-}
+
+@register.filter
+def get_item(dictionary, key):
+    if isinstance(dictionary, dict):
+        return dictionary.get(key)
+    return None
 
 
-def ensure_custom_permissions():
-    """
-    Ensures custom export and approval permissions exist for core modules.
-    """
-    from django.contrib.contenttypes.models import ContentType
-
-    custom_perms = [
-        ('attendance', 'attendance', 'export_attendance', 'Can export attendance records'),
-        ('attendance', 'attendance', 'approve_attendance', 'Can approve attendance entries'),
-        ('projects', 'project', 'export_projects', 'Can export project reports'),
-        ('employees', 'employeeprofile', 'export_employees', 'Can export employee records'),
-        ('leave', 'leaverequest', 'export_leave', 'Can export leave reports'),
-        ('expense', 'expense', 'export_expense', 'Can export expense reports'),
-    ]
-
-    for app_label, model, codename, name in custom_perms:
-        ct = ContentType.objects.filter(app_label=app_label, model=model).first()
-        if ct:
-            Permission.objects.get_or_create(
-                codename=codename,
-                content_type=ct,
-                defaults={'name': name}
-            )
-
-
-def get_grouped_permissions():
-    """
-    Fetch and group permissions relevant to the application's core apps.
-    """
-    ensure_custom_permissions()
-    valid_apps = list(APP_LABEL_MAPPING.keys())
-    perms = Permission.objects.filter(content_type__app_label__in=valid_apps).select_related('content_type').order_by('content_type__app_label', 'name')
-
-    grouped = {}
-    for app_label, friendly_name in APP_LABEL_MAPPING.items():
-        grouped[friendly_name] = [p for p in perms if p.content_type.app_label == app_label]
-
-    return grouped
-
-
-class RoleListView(AdminRequiredMixin, ListView):
-    model = Group
+class DynamicRoleListView(AdminRequiredMixin, ListView):
+    model = Role
     template_name = 'admin_panel/roles/role_list.html'
     context_object_name = 'roles'
 
     def get_queryset(self):
-        return Group.objects.all().order_by('name')
+        return Role.objects.prefetch_related(
+            'user_assignments',
+            'role_permissions',
+            'role_permissions__permission'
+        ).order_by('-is_system_protected', 'name')
 
 
-class RoleCreateView(AdminRequiredMixin, CreateView):
-    model = Group
+class DynamicRoleCreateView(AdminRequiredMixin, CreateView):
+    model = Role
     template_name = 'admin_panel/roles/role_form.html'
-    fields = ['name']
+    fields = ['name', 'code', 'description', 'is_active']
     success_url = reverse_lazy('admin_panel:role_list')
 
     def form_valid(self, form):
@@ -86,263 +47,157 @@ class RoleCreateView(AdminRequiredMixin, CreateView):
         return response
 
 
-class RoleUpdateView(AdminRequiredMixin, UpdateView):
-    model = Group
+class DynamicRoleUpdateView(AdminRequiredMixin, UpdateView):
+    model = Role
     template_name = 'admin_panel/roles/role_form.html'
-    fields = ['name']
+    fields = ['name', 'code', 'description', 'is_active']
     success_url = reverse_lazy('admin_panel:role_list')
 
     def form_valid(self, form):
+        if self.object.is_system_protected and form.cleaned_data.get('code') != self.object.code:
+            messages.error(self.request, "System Owner protected role code cannot be changed.")
+            return self.form_invalid(form)
+
         response = super().form_valid(form)
-        messages.success(self.request, f"Role renamed to '{self.object.name}' successfully.")
+        messages.success(self.request, f"Role '{self.object.name}' updated successfully.")
         return response
 
 
-class RoleDeleteView(AdminRequiredMixin, DeleteView):
-    model = Group
+class DynamicRoleDeleteView(AdminRequiredMixin, DeleteView):
+    model = Role
     success_url = reverse_lazy('admin_panel:role_list')
 
     def post(self, request, *args, **kwargs):
         role = self.get_object()
+        if role.is_system_protected:
+            messages.error(request, "Protected System Owner role cannot be deleted.")
+            return redirect(self.success_url)
+
         role_name = role.name
         role.delete()
         messages.success(request, f"Role '{role_name}' deleted successfully.")
         return redirect(self.success_url)
 
 
-class RoleCloneView(AdminRequiredMixin, View):
-    def post(self, request, pk):
-        source_role = get_object_or_404(Group, pk=pk)
-        new_name = request.POST.get('name', '').strip()
-        if not new_name:
-            messages.error(request, "Role name cannot be empty.")
-            return redirect('admin_panel:role_list')
-
-        if Group.objects.filter(name=new_name).exists():
-            messages.error(request, f"Role '{new_name}' already exists.")
-            return redirect('admin_panel:role_list')
-
-        new_role = Group.objects.create(name=new_name)
-        new_role.permissions.set(source_role.permissions.all())
-        messages.success(request, f"Role '{source_role.name}' cloned into '{new_name}' successfully.")
-        return redirect('admin_panel:role_list')
-
-
-class RoleMembersView(AdminRequiredMixin, DetailView):
-    model = Group
-    template_name = 'admin_panel/roles/role_members.html'
+class DynamicRoleMatrixView(AdminRequiredMixin, DetailView):
+    model = Role
+    template_name = 'admin_panel/roles/role_matrix.html'
     context_object_name = 'role'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        group = self.object
-        context['members'] = User.objects.filter(groups=group).order_by('email', 'phone')
+        role = self.object
 
-        from apps.employees.models import EmployeeProfile
-        context['non_members'] = EmployeeProfile.objects.filter(user__isnull=False).exclude(user__groups=group).order_by('full_name')
+        modules = Module.objects.filter(is_active=True).prefetch_related(
+            'permissions', 'permissions__action'
+        ).order_by('sort_order', 'name')
+
+        modules_with_perms = []
+        for mod in modules:
+            modules_with_perms.append({
+                'module': mod,
+                'permissions': mod.permissions.select_related('action').order_by('action__name')
+            })
+
+        role_perms = RolePermission.objects.filter(role=role).select_related('permission')
+        role_perm_ids = set(role_perms.values_list('permission_id', flat=True))
+        perm_scope_map = {rp.permission_id: rp.data_scope for rp in role_perms}
+
+        context['modules_with_perms'] = modules_with_perms
+        context['role_perm_ids'] = role_perm_ids
+        context['perm_scope_map'] = perm_scope_map
+        context['total_permissions_count'] = Permission.objects.count()
+        context['data_scope_choices'] = DataScope.choices
         return context
 
-    def post(self, request, *args, **kwargs):
-        group = self.get_object()
-        action = request.POST.get('action')
 
-        if action == 'add':
-            user_ids = request.POST.getlist('user_ids')
-            if user_ids:
-                group.user_set.add(*user_ids)
-                messages.success(request, f"Added {len(user_ids)} members to role '{group.name}'.")
-            else:
-                messages.warning(request, "No members selected to add.")
-        elif action == 'remove':
-            user_id = request.POST.get('user_id')
-            if user_id:
-                user = get_object_or_404(User, pk=user_id)
-                user.groups.remove(group)
-                messages.success(request, f"Removed member from role '{group.name}'.")
-
-        return redirect('admin_panel:role_members', pk=group.pk)
-
-
-class RolePermissionsView(AdminRequiredMixin, View):
-    def get(self, request, pk):
-        role = get_object_or_404(Group, pk=pk)
-        context = {
-            'role': role,
-            'grouped_permissions': get_grouped_permissions(),
-            'role_permissions': set(role.permissions.values_list('id', flat=True)),
-        }
-        return render(request, 'admin_panel/roles/role_permissions.html', context)
-
-    def post(self, request, pk):
-        role = get_object_or_404(Group, pk=pk)
-        permission_ids = request.POST.getlist('permissions')
-        role.permissions.set(permission_ids)
-        messages.success(request, f"Permissions for role '{role.name}' updated successfully.")
-        return redirect('admin_panel:role_list')
-
-
-class UserPermissionsView(AdminRequiredMixin, View):
-    def get(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
-        effective_perms = get_effective_permissions(user)
-        direct_perms = set(user.user_permissions.values_list('codename', flat=True))
-
-        role_perms_map = {}
-        for group in user.groups.all().prefetch_related('permissions'):
-            for perm in group.permissions.all():
-                role_perms_map.setdefault(perm.codename, []).append(group.name)
-
-        valid_apps = list(APP_LABEL_MAPPING.keys())
-        all_perms = Permission.objects.filter(content_type__app_label__in=valid_apps).select_related('content_type')
-
-        effective_list = []
-        if user.is_superuser:
-            for perm in all_perms:
-                effective_list.append({
-                    'name': perm.name,
-                    'codename': perm.codename,
-                    'app': APP_LABEL_MAPPING.get(perm.content_type.app_label, perm.content_type.app_label),
-                    'source': 'Superuser Bypass (All permissions)'
-                })
-        else:
-            for perm in all_perms:
-                if perm.codename in effective_perms:
-                    sources = []
-                    if perm.codename in direct_perms:
-                        sources.append('Directly Assigned')
-                    if perm.codename in role_perms_map:
-                        for gname in role_perms_map[perm.codename]:
-                            sources.append(f"Role: {gname}")
-                    effective_list.append({
-                        'name': perm.name,
-                        'codename': perm.codename,
-                        'app': APP_LABEL_MAPPING.get(perm.content_type.app_label, perm.content_type.app_label),
-                        'source': ' & '.join(sources)
-                    })
-
-        context = {
-            'target_user': user,
-            'roles': Group.objects.all().order_by('name'),
-            'user_roles': set(user.groups.values_list('id', flat=True)),
-            'grouped_permissions': get_grouped_permissions(),
-            'user_direct_permissions': set(user.user_permissions.values_list('id', flat=True)),
-            'effective_permissions': effective_list,
-        }
-        return render(request, 'admin_panel/roles/user_permissions.html', context)
-
-    def post(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
-        role_ids = request.POST.getlist('roles')
-        direct_perm_ids = request.POST.getlist('permissions')
-
-        is_active = request.POST.get('is_active') == 'on'
-        user.is_active = is_active
-        user.save()
-
-        user.groups.set(role_ids)
-        user.user_permissions.set(direct_perm_ids)
-
-        messages.success(request, f"Roles and permissions for user '{user.email or user.phone}' updated successfully.")
-        return redirect('admin_panel:role_list')
-
-
-class PermissionMatrixView(AdminRequiredMixin, View):
-    """
-    GET /admin-panel/permissions/matrix/
-    Permission Matrix Editor displaying Module vs Action per role.
-    """
-    def get(self, request):
-        ensure_custom_permissions()
-        roles = Group.objects.all().order_by('name')
-        selected_role_id = request.GET.get('role_id')
-        selected_role = roles.filter(pk=selected_role_id).first() if selected_role_id else roles.first()
-
-        role_perm_ids = set(selected_role.permissions.values_list('id', flat=True)) if selected_role else set()
-
-        valid_apps = list(APP_LABEL_MAPPING.keys())
-        all_perms = Permission.objects.filter(content_type__app_label__in=valid_apps).select_related('content_type')
-
-        # Matrix: Module -> Action (view, create, edit, delete, approve, export) -> Permission
-        matrix = {}
-        for app_label, module_title in APP_LABEL_MAPPING.items():
-            matrix[app_label] = {
-                'title': module_title,
-                'view': None,
-                'create': None,
-                'edit': None,
-                'delete': None,
-                'approve': None,
-                'export': None,
-                'others': []
-            }
-
-        for perm in all_perms:
-            app_label = perm.content_type.app_label
-            if app_label not in matrix:
-                continue
-
-            code = perm.codename
-            perm_data = {
-                'id': perm.id,
-                'codename': code,
-                'name': perm.name,
-                'is_checked': perm.id in role_perm_ids
-            }
-
-            if code.startswith('view_'):
-                if not matrix[app_label]['view']: matrix[app_label]['view'] = perm_data
-            elif code.startswith('add_'):
-                if not matrix[app_label]['create']: matrix[app_label]['create'] = perm_data
-            elif code.startswith('change_'):
-                if not matrix[app_label]['edit']: matrix[app_label]['edit'] = perm_data
-            elif code.startswith('delete_'):
-                if not matrix[app_label]['delete']: matrix[app_label]['delete'] = perm_data
-            elif code.startswith('approve_'):
-                if not matrix[app_label]['approve']: matrix[app_label]['approve'] = perm_data
-            elif code.startswith('export_'):
-                if not matrix[app_label]['export']: matrix[app_label]['export'] = perm_data
-            else:
-                matrix[app_label]['others'].append(perm_data)
-
-        context = {
-            'roles': roles,
-            'selected_role': selected_role,
-            'matrix': matrix,
-        }
-        return render(request, 'admin_panel/roles/permission_matrix.html', context)
-
-
-class PermissionToggleView(AdminRequiredMixin, View):
-    """
-    POST /admin-panel/roles/<int:group_id>/permission/<int:perm_id>/toggle/
-    HTMX live toggle action for role permission matrix.
-    """
-    def post(self, request, group_id, perm_id):
-        role = get_object_or_404(Group, pk=group_id)
+class RolePermissionToggleView(AdminRequiredMixin, View):
+    def post(self, request, role_id, perm_id):
+        role = get_object_or_404(Role, pk=role_id)
         perm = get_object_or_404(Permission, pk=perm_id)
 
-        if role.permissions.filter(id=perm.id).exists():
-            role.permissions.remove(perm)
-            is_checked = False
+        existing = RolePermission.objects.filter(role=role, permission=perm).first()
+        if existing:
+            existing.delete()
+            granted = False
         else:
-            role.permissions.add(perm)
-            is_checked = True
+            RolePermission.objects.create(role=role, permission=perm, data_scope=DataScope.GLOBAL)
+            granted = True
 
-        return render(request, 'cotton/permission-toggle.html', {
-            'group_id': role.id,
-            'perm_id': perm.id,
-            'is_checked': is_checked
-        })
+        return JsonResponse({'status': 'ok', 'granted': granted, 'role_id': role_id, 'perm_id': perm_id})
+
+
+class RolePermissionScopeView(AdminRequiredMixin, View):
+    def post(self, request, role_id, perm_id):
+        role = get_object_or_404(Role, pk=role_id)
+        perm = get_object_or_404(Permission, pk=perm_id)
+        new_scope = request.POST.get('data_scope', DataScope.GLOBAL)
+
+        rp, created = RolePermission.objects.get_or_create(role=role, permission=perm)
+        rp.data_scope = new_scope
+        rp.save()
+
+        return JsonResponse({'status': 'ok', 'scope': new_scope})
+
+
+class UserPermissionsView(AdminRequiredMixin, DetailView):
+    model = User
+    template_name = 'admin_panel/roles/user_permissions.html'
+    context_object_name = 'target_user'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        target = self.object
+
+        context['all_roles'] = Role.objects.filter(is_active=True).order_by('name')
+        context['assigned_role_ids'] = set(
+            UserRoleAssignment.objects.filter(user=target).values_list('role_id', flat=True)
+        )
+        context['overrides'] = UserPermissionOverride.objects.filter(user=target).select_related('permission', 'permission__module', 'permission__action')
+        context['all_permissions'] = Permission.objects.select_related('module', 'action').order_by('module__name', 'name')
+        context['data_scope_choices'] = DataScope.choices
+        return context
+
+    def post(self, request, pk):
+        target = get_object_or_404(User, pk=pk)
+        role_ids = request.POST.getlist('role_ids')
+
+        # Update user roles
+        UserRoleAssignment.objects.filter(user=target).delete()
+        for r_id in role_ids:
+            try:
+                r_obj = Role.objects.get(pk=r_id)
+                UserRoleAssignment.objects.create(user=target, role=r_obj, assigned_by=request.user)
+            except Role.DoesNotExist:
+                pass
+
+        messages.success(request, f"Updated role assignments for {target.email}.")
+        return redirect('admin_panel:user_permissions', pk=target.pk)
+
+
+class UserPermissionOverrideSaveView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        target = get_object_or_404(User, pk=pk)
+        perm_id = request.POST.get('permission_id')
+        is_granted = request.POST.get('is_granted') == 'true'
+        data_scope = request.POST.get('data_scope') or None
+
+        perm = get_object_or_404(Permission, pk=perm_id)
+
+        override, _ = UserPermissionOverride.objects.get_or_create(user=target, permission=perm)
+        override.is_granted = is_granted
+        override.data_scope = data_scope
+        override.save()
+
+        messages.success(request, f"Permission override for '{perm.codename}' saved.")
+        return redirect('admin_panel:user_permissions', pk=target.pk)
 
 
 from django.db.models import Q
 from apps.notifications.models import AuditLog
 
+
 class AdminAuditLogView(AdminRequiredMixin, View):
-    """
-    GET /admin-panel/audit-logs/
-    Admin Audit Log Viewer displaying sensitive system action logs with HTMX live filtering.
-    """
     def get(self, request):
         action_filter = request.GET.get('action', '').strip()
         search_query = request.GET.get('q', '').strip()
@@ -379,7 +234,6 @@ class AdminAuditLogView(AdminRequiredMixin, View):
             from apps.notifications.models import log_audit
             deleted_count, _ = AuditLog.objects.filter(id__in=ids).delete()
             log_audit(request.user, 'bulk_audit_log_delete', summary=f"Bulk deleted {deleted_count} AuditLog entries", ip=request.META.get('REMOTE_ADDR'))
-            from django.contrib import messages
             messages.success(request, f"Successfully deleted {deleted_count} audit log entries.")
 
         logs = AuditLog.objects.select_related('actor').order_by('-timestamp')[:150]
@@ -387,7 +241,6 @@ class AdminAuditLogView(AdminRequiredMixin, View):
         context = {'logs': logs, 'action_types': action_types}
         if request.headers.get('HX-Request') == 'true':
             return render(request, 'admin_panel/audit/audit_log_list_partial.html', context)
-        from django.shortcuts import redirect
         return redirect('admin_panel:admin_audit_logs')
 
 
@@ -395,12 +248,8 @@ from datetime import timedelta
 from django.utils import timezone
 from apps.accounts.models import UserSession, UserLoginActivity, LoginProtection
 
+
 class AdminSecurityDashboardView(AdminRequiredMixin, View):
-    """
-    GET /admin-panel/security-dashboard/
-    Admin Security Dashboard showing active sessions, progressive locked accounts,
-    failed login stats, new device alerts, and live security timeline.
-    """
     def get(self, request):
         now = timezone.now()
         since_24h = now - timedelta(hours=24)
@@ -427,5 +276,3 @@ class AdminSecurityDashboardView(AdminRequiredMixin, View):
         if request.headers.get('HX-Request') == 'true':
             return render(request, 'admin_panel/security_dashboard_partial.html', context)
         return render(request, 'admin_panel/security_dashboard.html', context)
-
-
