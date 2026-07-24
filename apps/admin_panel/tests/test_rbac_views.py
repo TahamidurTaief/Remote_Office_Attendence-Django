@@ -12,7 +12,6 @@ class DynamicRBACViewsTests(TestCase):
         self.password = 'Password123!'
         self.admin = User.objects.create_superuser(email='admin_rbac@example.com', password=self.password, role='admin')
         self.target_user = User.objects.create_user(email='target_user@example.com', password=self.password)
-
         self.client.login(email='admin_rbac@example.com', password=self.password)
 
         self.mod = Module.objects.create(name='Projects', code='projects')
@@ -31,6 +30,8 @@ class DynamicRBACViewsTests(TestCase):
             code='custom_role',
             is_active=True
         )
+
+        UserRoleAssignment.objects.create(user=self.admin, role=self.sys_role)
 
     def test_role_list_view_renders(self):
         resp = self.client.get(reverse('admin_panel:role_list'))

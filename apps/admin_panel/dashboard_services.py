@@ -189,6 +189,7 @@ def get_hr_dashboard_data(user):
     data['total_employees'] = Employee.objects.count()
     data['active_employees_count'] = Employee.objects.filter(status=EmployeeStatus.ACTIVE).count()
     data['probation_employees_count'] = Employee.objects.filter(status=EmployeeStatus.PROBATION).count()
+    data['draft_employees_count'] = Employee.objects.filter(status=EmployeeStatus.DRAFT).count()
 
     # Department breakdown
     data['dept_breakdown'] = Employee.objects.values(
