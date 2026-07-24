@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.conf import settings
 from apps.employees.models import EmployeeProfile
 from imagekit.models import ProcessedImageField
 from imagekit.processors import ResizeToFit, Transpose
@@ -20,6 +21,7 @@ class Attendance(models.Model):
         ('on_time', 'On Time'),
         ('late', 'Late'),
         ('absent', 'Absent'),
+        ('holiday_attendance', 'Holiday Attendance'),
     )
     ATTENDANCE_TYPE_CHOICES = (
         ('check_in', 'Check In/Out Session'),
@@ -58,6 +60,16 @@ class Attendance(models.Model):
     )
     overtime_minutes = models.IntegerField(default=0)
     is_early_checkout = models.BooleanField(default=False)
+    ot_status = models.CharField(
+        max_length=20,
+        choices=(
+            ('none', 'No Overtime'),
+            ('pending', 'Pending Approval'),
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected'),
+        ),
+        default='none'
+    )
     
     is_expired = models.BooleanField(
         default=False,
@@ -84,6 +96,22 @@ class Attendance(models.Model):
     def is_active_session(self):
         """True if employee is currently checked-in (no check_out yet)."""
         return self.attendance_type == 'check_in' and self.check_in_time and not self.check_out_time
+
+    @property
+    def total_daily_hours(self):
+        """Sum of total_hours for all sessions of this employee on the same date."""
+        sessions = Attendance.objects.filter(
+            employee=self.employee,
+            date=self.date,
+            attendance_type='check_in',
+            is_expired=False
+        )
+        import decimal
+        total = decimal.Decimal('0.00')
+        for s in sessions:
+            if s.total_hours:
+                total += s.total_hours
+        return total
 
 
 class AttendanceLocation(models.Model):
@@ -157,6 +185,146 @@ class SyncLog(models.Model):
 
     def __str__(self):
         return f"SyncLog - {self.employee.full_name} - {self.sync_batch_id}"
+
+
+class AttendancePolicy(models.Model):
+    branch = models.OneToOneField(
+        'branches.Branch',
+        on_delete=models.CASCADE,
+        related_name='attendance_policy',
+        null=True,
+        blank=True,
+        help_text="If null, this is the global default policy"
+    )
+    photo_required = models.BooleanField(default=True)
+    geofencing_policy = models.CharField(
+        max_length=20,
+        choices=(
+            ('disabled', 'Disabled'),
+            ('warning', 'Warning Only'),
+            ('block', 'Block Check-in'),
+        ),
+        default='warning'
+    )
+
+    class Meta:
+        verbose_name_plural = "Attendance Policies"
+
+    def __str__(self):
+        return f"Policy - {self.branch.name if self.branch else 'Global Default'}"
+
+
+class ForgotCheckoutRequest(models.Model):
+    STATUS_CHOICES = (
+        ('pending_manager', 'Pending Manager Approval'),
+        ('pending_hr', 'Pending HR Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    )
+
+    attendance = models.ForeignKey(
+        Attendance,
+        on_delete=models.CASCADE,
+        related_name='forgot_checkout_requests'
+    )
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending_manager'
+    )
+    check_out_time = models.DateTimeField()
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by_manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manager_forgot_checkouts'
+    )
+    reviewed_by_hr = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='hr_forgot_checkouts'
+    )
+    rejection_reason = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"Forgot Checkout Request - {self.attendance.employee.full_name} - {self.status}"
+
+
+class AttendanceCorrectionRequest(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    )
+
+    attendance = models.ForeignKey(
+        Attendance,
+        on_delete=models.CASCADE,
+        related_name='correction_requests'
+    )
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    check_in_time = models.DateTimeField(null=True, blank=True)
+    check_out_time = models.DateTimeField(null=True, blank=True)
+    note = models.TextField(blank=True)
+    attachment = models.FileField(upload_to='attendance_corrections/', null=True, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_corrections'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"Correction Request - {self.attendance.employee.full_name} - {self.status}"
+
+
+class AttendanceAuditLog(models.Model):
+    attendance = models.ForeignKey(
+        Attendance,
+        on_delete=models.CASCADE,
+        related_name='audit_logs'
+    )
+    action = models.CharField(max_length=50)  # e.g., 'create', 'update', 'correction', 'forgot_checkout'
+    old_check_in_time = models.DateTimeField(null=True, blank=True)
+    old_check_out_time = models.DateTimeField(null=True, blank=True)
+    old_status = models.CharField(max_length=20, null=True, blank=True)
+    new_check_in_time = models.DateTimeField(null=True, blank=True)
+    new_check_out_time = models.DateTimeField(null=True, blank=True)
+    new_status = models.CharField(max_length=20, null=True, blank=True)
+    reason = models.TextField(blank=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"AuditLog - {self.attendance.employee.full_name} - {self.action} on {self.timestamp}"
 
 
 
