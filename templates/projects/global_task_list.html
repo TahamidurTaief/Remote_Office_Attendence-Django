@@ -466,7 +466,7 @@
                         </div>
 
                         <!-- Approve Button for Managers/Admins -->
-                        {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'manager' %}
+                        {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'manager' or 'projects.edit' in request.user.resolved_permissions %}
                         <div class="border-t border-slate-100 pt-3" x-show="detailedTask.status !== 'Completed'">
                             <button type="button" @click="approveTask(detailedTask.id)" class="w-full inline-flex justify-center items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors">
                                 <i data-lucide="check-circle" class="w-4 h-4"></i> Approve Task (Mark Completed)

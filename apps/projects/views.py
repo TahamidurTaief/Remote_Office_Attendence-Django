@@ -1564,7 +1564,8 @@ def staff_task_complete(request, pk):
     employee = getattr(request.user, 'employee_profile', None)
     if not task.responsible_person:
         is_authorized = False
-        if request.user.is_superuser or request.user.role in ['admin', 'manager']:
+        from apps.accounts.engine import PermissionEngine
+        if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed or getattr(request.user, 'role', '') in ('admin', 'manager'):
             is_authorized = True
         if employee and task.project and task.project.project_managers.filter(id=employee.id).exists():
             is_authorized = True
@@ -1655,7 +1656,8 @@ def staff_task_complete(request, pk):
 
 
 def check_task_view_permission(user, task):
-    if user.is_superuser or user.role in ['admin', 'manager']:
+    from apps.accounts.engine import PermissionEngine
+    if user.is_superuser or PermissionEngine.evaluate(user, 'projects.view').allowed or getattr(user, 'role', '') in ('admin', 'manager'):
         return True
     employee = getattr(user, 'employee_profile', None)
     if not employee:
@@ -1806,7 +1808,8 @@ def task_add_reply_api(request, pk):
 @login_required
 @require_POST
 def task_approve_api(request, pk):
-    if not (request.user.is_superuser or request.user.role in ['admin', 'manager']):
+    from apps.accounts.engine import PermissionEngine
+    if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed or getattr(request.user, 'role', '') in ('admin', 'manager')):
         return JsonResponse({'error': 'Permission denied'}, status=403)
         
     task = get_object_or_404(ProjectTask, pk=pk)
