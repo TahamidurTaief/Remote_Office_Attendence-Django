@@ -103,8 +103,7 @@ def get_employee_dashboard_data(user):
     # Personal Employment History Timeline
     if emp_master:
         data['personal_timeline'] = EmploymentHistory.objects.select_related(
-            'employee', 'created_by', 'from_department', 'to_department',
-            'from_designation', 'to_designation', 'from_branch', 'to_branch'
+            'employee', 'approved_by'
         ).filter(employee=emp_master).order_by('-effective_date', '-created_at')[:5]
     else:
         data['personal_timeline'] = []
