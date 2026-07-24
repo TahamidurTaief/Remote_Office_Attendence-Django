@@ -37,7 +37,9 @@ class ExpenseDetailView(StaffOrManagerMixin, DetailView):
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
         employee = getattr(self.request.user, 'employee_profile', None)
-        if self.request.user.role != 'admin' and obj.employee != employee:
+        from apps.accounts.engine import PermissionEngine
+        can_manage = self.request.user.is_superuser or PermissionEngine.evaluate(self.request.user, 'expense.approve').allowed or getattr(self.request.user, 'role', '') == 'admin'
+        if not can_manage and obj.employee != employee:
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to view this expense.")
         return obj
@@ -131,13 +133,13 @@ class AdminExpenseListView(AdminRequiredMixin, ListView):
             qs = qs.filter(status=status)
         return qs
 
-class BaseProcessExpenseView(RoleRequiredMixin):
-    allowed_roles = ['admin', 'manager']
-
+class BaseProcessExpenseView(View):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return self.handle_no_permission()
-        if request.user.role not in self.allowed_roles:
+            return redirect('/login/')
+        from apps.accounts.engine import PermissionEngine
+        res = PermissionEngine.evaluate(request.user, 'expense.approve')
+        if not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') not in ('admin', 'manager'):
             return redirect('/')
         return super().dispatch(request, *args, **kwargs)
 
