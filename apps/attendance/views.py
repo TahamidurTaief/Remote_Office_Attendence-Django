@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404
 from apps.attendance.models import Attendance, AttendanceLocation
 from apps.attendance.sync_utils import parse_and_validate_client_time
 from apps.employees.models import EmployeeLocationSync
@@ -1371,3 +1372,41 @@ def process_overtime(request, pk):
             return JsonResponse({'success': True, 'message': 'Overtime rejected.'})
 
     return JsonResponse({'success': False, 'error': 'Invalid action.'}, status=400)
+
+
+from django.views.generic import ListView
+from apps.accounts.mixins import RoleRequiredMixin
+
+class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
+    allowed_roles = ['admin', 'manager']
+    template_name = 'admin_panel/attendance/requests_list.html'
+    context_object_name = 'forgot_checkouts'
+    
+    def get_queryset(self):
+        user = self.request.user
+        from apps.attendance.models import ForgotCheckoutRequest
+        qs = ForgotCheckoutRequest.objects.filter(status__in=['pending_manager', 'pending_hr']).select_related('attendance__employee')
+        
+        # Scoping check: managers only see their team
+        if getattr(user, 'role', '') == 'manager' and not user.is_superuser:
+            qs = qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
+        return qs
+        
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        from apps.attendance.models import AttendanceCorrectionRequest, Attendance
+        
+        # Corrections
+        corr_qs = AttendanceCorrectionRequest.objects.filter(status='pending').select_related('attendance__employee')
+        if getattr(user, 'role', '') == 'manager' and not user.is_superuser:
+            corr_qs = corr_qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
+        context['corrections'] = corr_qs
+        
+        # Overtime
+        ot_qs = Attendance.objects.filter(ot_status='pending').select_related('employee')
+        if getattr(user, 'role', '') == 'manager' and not user.is_superuser:
+            ot_qs = ot_qs.filter(employee__master_employee__reporting_manager__user=user)
+        context['overtimes'] = ot_qs
+        
+        return context

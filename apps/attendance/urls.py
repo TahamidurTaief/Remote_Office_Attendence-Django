@@ -15,6 +15,7 @@ urlpatterns = [
     path('save-location-mandatory/', views.save_mandatory_location, name='save_mandatory_location'),
     
     # Phase 2 Endpoints
+    path('admin/requests/', views.AdminAttendanceRequestsView.as_view(), name='admin_requests'),
     path('forgot-checkout/submit/', views.submit_forgot_checkout, name='submit_forgot_checkout'),
     path('forgot-checkout/<int:pk>/process/', views.process_forgot_checkout, name='process_forgot_checkout'),
     path('correction/submit/', views.submit_attendance_correction, name='submit_attendance_correction'),
