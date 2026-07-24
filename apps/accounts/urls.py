@@ -15,6 +15,11 @@ urlpatterns = [
     path('forgot-password/verify/', views.ForgotPasswordVerifyView.as_view(), name='forgot_password_verify'),
     path('forgot-password/reset/', views.ForgotPasswordResetView.as_view(), name='forgot_password_reset'),
 
+    # Admin User Lock & Force Logout Actions
+    path('admin-panel/users/<int:pk>/force-logout/', views.AdminForceLogoutUserView.as_view(), name='admin_force_logout'),
+    path('admin-panel/users/<int:pk>/unlock/', views.AdminUnlockUserView.as_view(), name='admin_unlock_user'),
+    path('admin-panel/login-activity/', views.AdminLoginActivityView.as_view(), name='admin_login_activity'),
+
     # API and Session endpoints
     path('api/sync/', views.SyncApiView.as_view(), name='api_sync'),
     path('api/session/validate/', views.SessionValidateView.as_view(), name='api_session_validate'),

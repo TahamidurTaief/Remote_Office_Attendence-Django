@@ -32,8 +32,18 @@
       <form class="space-y-4" action="{% url 'accounts:login' %}" method="POST" id="loginForm">
         {% csrf_token %}
         <input type="hidden" name="device_id" id="device_id_input">
-        <c-input type="text" id="email" name="email" label="Phone number or Email address" required="true" />
+        <c-input type="text" id="email" name="email" label="Phone number or Email address" required="true" value="{{ email_entered|default:'' }}" />
         <c-input type="password" id="password" name="password" label="Password" required="true" />
+
+        {% if show_captcha %}
+        <div class="p-3 rounded-lg border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 space-y-2 text-xs">
+          <div class="flex items-center gap-2 font-medium">
+            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-500"></i>
+            <span>Security Verification Required</span>
+          </div>
+          <c-input type="number" id="captcha_ans" name="captcha_ans" label="Security Question: What is {{ captcha_num1 }} + {{ captcha_num2 }}?" placeholder="Enter answer" required="true" />
+        </div>
+        {% endif %}
 
         <div class="flex items-center justify-between text-xs py-1">
           <label class="flex items-center gap-2 cursor-pointer" style="color:var(--text-secondary)">

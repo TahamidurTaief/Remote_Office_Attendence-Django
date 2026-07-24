@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.db.models import Q
 from django.contrib.sessions.models import Session
-from apps.accounts.models import UserSession, TrustedDevice, CustomUser, PasswordResetOTP
+from apps.accounts.models import UserSession, TrustedDevice, CustomUser, PasswordResetOTP, UserLoginActivity
 
 logger = logging.getLogger(__name__)
 
@@ -47,33 +47,88 @@ class CustomLoginView(View):
         elif device_notice == 'idle_timeout':
             notice_message = 'Your session expired due to 30 minutes of inactivity.'
 
+        ip = get_client_ip(request)
+        attempts = cache.get(f"login_attempts_{ip}", 0)
+        show_captcha = attempts >= 3
+
+        n1, n2 = random.randint(1, 9), random.randint(1, 9)
+        request.session['captcha_ans'] = str(n1 + n2)
+
         context = {
             'device_notice': device_notice,
-            'notice_message': notice_message
+            'notice_message': notice_message,
+            'show_captcha': show_captcha,
+            'captcha_num1': n1,
+            'captcha_num2': n2,
         }
         return render(request, 'accounts/login.html', context)
 
     def post(self, request):
-        email = request.POST.get('email')
+        email = (request.POST.get('email') or '').strip()
         password = request.POST.get('password')
-        remember_device = request.POST.get('remember_device') == 'true' or request.POST.get('remember_device') == 'on'
+        remember_device = request.POST.get('remember_device') in ['true', 'on']
+        captcha_ans_entered = (request.POST.get('captcha_ans') or '').strip()
 
         ip = get_client_ip(request)
+        ua = request.META.get('HTTP_USER_AGENT', '')
         cache_key = f"login_attempts_{ip}"
         attempts = cache.get(cache_key, 0)
 
-        if attempts >= 5:
-            messages.error(request, 'Too many login attempts. Please try again in 5 minutes.')
-            return render(request, 'accounts/login.html')
+        user_obj = CustomUser.objects.filter(Q(email__iexact=email) | Q(phone__iexact=email)).first()
 
-        user = authenticate(request, email=email, password=password)
+        # 1. Check account lock & 30-min auto-unlock
+        if user_obj and user_obj.locked_until:
+            if timezone.now() > user_obj.locked_until:
+                user_obj.locked_until = None
+                user_obj.failed_login_count = 0
+                user_obj.save(update_fields=['locked_until', 'failed_login_count'])
+            else:
+                UserLoginActivity.objects.create(
+                    user=user_obj,
+                    identifier_entered=email,
+                    ip_address=ip,
+                    user_agent=ua,
+                    status='locked'
+                )
+                time_left = max(1, int((user_obj.locked_until - timezone.now()).total_seconds() // 60))
+                messages.error(request, f"Account is locked due to 5 failed attempts. Locked for {time_left} more minutes.")
+                return render(request, 'accounts/login.html', {'email_entered': email, 'show_captcha': True})
+
+        # 2. Check 3-fail Captcha verification
+        requires_captcha = (user_obj and user_obj.failed_login_count >= 3) or (attempts >= 3)
+        if requires_captcha:
+            expected_ans = request.session.get('captcha_ans')
+            if not captcha_ans_entered or captcha_ans_entered != str(expected_ans):
+                messages.error(request, 'Incorrect Security Verification answer.')
+                n1, n2 = random.randint(1, 9), random.randint(1, 9)
+                request.session['captcha_ans'] = str(n1 + n2)
+                return render(request, 'accounts/login.html', {
+                    'email_entered': email,
+                    'show_captcha': True,
+                    'captcha_num1': n1,
+                    'captcha_num2': n2
+                })
+
+        # 3. Authenticate User
+        user = authenticate(request, username=email, password=password)
 
         if user is not None:
             if user.is_active:
                 now = timezone.now()
                 device_id = get_device_id(request)
 
-                # 1. Single Device Login Enforcement: Invalidate prior active sessions
+                user.failed_login_count = 0
+                user.locked_until = None
+                user.save(update_fields=['failed_login_count', 'locked_until'])
+
+                UserLoginActivity.objects.create(
+                    user=user,
+                    identifier_entered=email,
+                    ip_address=ip,
+                    user_agent=ua,
+                    status='success'
+                )
+
                 old_sessions = UserSession.objects.filter(user=user, is_active=True)
                 for old_sess in old_sessions:
                     old_sess.is_active = False
@@ -83,23 +138,20 @@ class CustomLoginView(View):
                     if old_sess.session_key:
                         Session.objects.filter(session_key=old_sess.session_key).delete()
 
-                # 2. Perform standard Django login
                 login(request, user)
                 cache.delete(cache_key)
 
-                # 3. Create new active UserSession record
                 UserSession.objects.create(
                     user=user,
                     device_id=device_id,
                     session_key=request.session.session_key,
-                    browser=request.META.get('HTTP_USER_AGENT', ''),
+                    browser=ua,
                     ip=ip,
                     login_time=now,
                     last_activity=now,
                     is_active=True
                 )
 
-                # 4. Process Remember Device / TrustedDevice
                 if remember_device:
                     device_hash = hashlib.sha256(f"{user.id}-{device_id}".encode('utf-8')).hexdigest()
                     expire_at = now + timedelta(days=30)
@@ -107,7 +159,7 @@ class CustomLoginView(View):
                         user=user,
                         device_hash=device_hash,
                         defaults={
-                            'device_name': request.META.get('HTTP_USER_AGENT', '')[:250],
+                            'device_name': ua[:250],
                             'expire_at': expire_at
                         }
                     )
@@ -117,9 +169,49 @@ class CustomLoginView(View):
                 messages.error(request, 'Your account is disabled.')
         else:
             cache.set(cache_key, attempts + 1, timeout=300)
-            messages.error(request, 'Invalid email or password.')
+            if user_obj:
+                user_obj.failed_login_count += 1
+                if user_obj.failed_login_count >= 5:
+                    user_obj.locked_until = timezone.now() + timedelta(minutes=30)
+                    user_obj.save(update_fields=['failed_login_count', 'locked_until'])
+                    UserLoginActivity.objects.create(
+                        user=user_obj,
+                        identifier_entered=email,
+                        ip_address=ip,
+                        user_agent=ua,
+                        status='locked'
+                    )
+                    messages.error(request, 'Account locked for 30 minutes due to 5 failed login attempts.')
+                else:
+                    user_obj.save(update_fields=['failed_login_count'])
+                    UserLoginActivity.objects.create(
+                        user=user_obj,
+                        identifier_entered=email,
+                        ip_address=ip,
+                        user_agent=ua,
+                        status='failed'
+                    )
+                    messages.error(request, f'Invalid email or password. Attempt {user_obj.failed_login_count} of 5.')
+            else:
+                UserLoginActivity.objects.create(
+                    user=None,
+                    identifier_entered=email,
+                    ip_address=ip,
+                    user_agent=ua,
+                    status='failed'
+                )
+                messages.error(request, 'Invalid email or password.')
 
-        return render(request, 'accounts/login.html')
+        n1, n2 = random.randint(1, 9), random.randint(1, 9)
+        request.session['captcha_ans'] = str(n1 + n2)
+
+        show_captcha_now = (user_obj and user_obj.failed_login_count >= 3) or (attempts >= 2)
+        return render(request, 'accounts/login.html', {
+            'email_entered': email,
+            'show_captcha': show_captcha_now,
+            'captcha_num1': n1,
+            'captcha_num2': n2
+        })
 
     def redirect_based_on_role(self, user):
         if user.role == 'admin':
@@ -171,19 +263,14 @@ class ChangePasswordView(LoginRequiredMixin, View):
         if errors:
             for err in errors:
                 messages.error(request, err)
-            if request.headers.get('HX-Request') == 'true':
-                return render(request, 'accounts/change_password.html')
             return render(request, 'accounts/change_password.html')
 
-        # Any password allowed (no complexity rule)
         user = request.user
         user.set_password(new_password1)
         user.save()
 
-        # Update auth hash to keep current session active
         update_session_auth_hash(request, user)
 
-        # Logout ALL OTHER devices (keep current session active)
         now = timezone.now()
         current_session_key = request.session.session_key
         other_sessions = UserSession.objects.filter(user=user, is_active=True).exclude(session_key=current_session_key)
@@ -197,24 +284,15 @@ class ChangePasswordView(LoginRequiredMixin, View):
                 Session.objects.filter(session_key=sess.session_key).delete()
 
         messages.success(request, 'Your password was successfully updated! Other device sessions have been logged out.')
-
-        if request.headers.get('HX-Request') == 'true':
-            return render(request, 'accounts/change_password.html')
         return render(request, 'accounts/change_password.html')
 
 
 class ForgotPasswordView(View):
-    """
-    Forgot Password multi-step HTMX view container.
-    """
     def get(self, request):
         return render(request, 'accounts/forgot_password.html')
 
 
 class ForgotPasswordRequestView(View):
-    """
-    Step 1: User enters email or phone. Server generates 6-digit OTP code.
-    """
     def post(self, request):
         identifier = (request.POST.get('identifier') or '').strip()
 
@@ -228,14 +306,12 @@ class ForgotPasswordRequestView(View):
         ).first()
 
         if not user:
-            # Generic message to avoid email enumeration
             return render(request, 'accounts/partials/forgot_step2.html', {
                 'identifier': identifier,
                 'reset_token': 'dummy_token',
                 'debug_otp': '123456'
             })
 
-        # Generate 6-digit OTP
         otp_code = f"{random.randint(100000, 999999)}"
         reset_token = secrets.token_urlsafe(32)
         expires_at = timezone.now() + timedelta(minutes=10)
@@ -257,9 +333,6 @@ class ForgotPasswordRequestView(View):
 
 
 class ForgotPasswordVerifyView(View):
-    """
-    Step 2: Verify OTP code.
-    """
     def post(self, request):
         reset_token = request.POST.get('reset_token')
         otp_code = (request.POST.get('otp_code') or '').strip()
@@ -284,9 +357,6 @@ class ForgotPasswordVerifyView(View):
 
 
 class ForgotPasswordResetView(View):
-    """
-    Step 3: Reset Password & Logout All Devices.
-    """
     def post(self, request):
         reset_token = request.POST.get('reset_token')
         new_password = request.POST.get('new_password')
@@ -311,12 +381,10 @@ class ForgotPasswordResetView(View):
                 'error': 'Invalid reset session. Please request a new OTP.'
             })
 
-        # Set user new password (any password allowed)
         user = otp_obj.user
         user.set_password(new_password)
         user.save()
 
-        # Logout ALL active device sessions for this user
         now = timezone.now()
         active_sessions = UserSession.objects.filter(user=user, is_active=True)
         for sess in active_sessions:
@@ -330,11 +398,82 @@ class ForgotPasswordResetView(View):
         return render(request, 'accounts/partials/forgot_step4.html')
 
 
+class AdminForceLogoutUserView(LoginRequiredMixin, View):
+    """
+    POST /admin-panel/users/<int:pk>/force-logout/
+    Admin force-logout action. Kills all active sessions for targeted user.
+    """
+    def post(self, request, pk):
+        if request.user.role != 'admin':
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+
+        target_user = CustomUser.objects.filter(pk=pk).first()
+        if not target_user:
+            return JsonResponse({'error': 'User not found'}, status=404)
+
+        now = timezone.now()
+        active_sessions = UserSession.objects.filter(user=target_user, is_active=True)
+        for sess in active_sessions:
+            sess.is_active = False
+            sess.logout_time = now
+            sess.save(update_fields=['is_active', 'logout_time'])
+
+            if sess.session_key:
+                Session.objects.filter(session_key=sess.session_key).delete()
+
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'cotton/badge.html', {'slot': 'Logged Out', 'variant': 'secondary'})
+
+        messages.success(request, f"User logged out from all devices.")
+        return redirect('/admin-panel/roles/')
+
+
+class AdminUnlockUserView(LoginRequiredMixin, View):
+    """
+    POST /admin-panel/users/<int:pk>/unlock/
+    Admin manual unlock action. Resets failed attempts and clear locked_until.
+    """
+    def post(self, request, pk):
+        if request.user.role != 'admin':
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+
+        target_user = CustomUser.objects.filter(pk=pk).first()
+        if not target_user:
+            return JsonResponse({'error': 'User not found'}, status=404)
+
+        target_user.failed_login_count = 0
+        target_user.locked_until = None
+        target_user.save(update_fields=['failed_login_count', 'locked_until'])
+
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'cotton/badge.html', {'slot': 'Unlocked', 'variant': 'success'})
+
+        messages.success(request, f"User unlocked successfully.")
+        return redirect('/admin-panel/roles/')
+
+
+class AdminLoginActivityView(LoginRequiredMixin, View):
+    """
+    GET /admin-panel/login-activity/
+    Renders login activity logs for admin.
+    """
+    def get(self, request):
+        if request.user.role != 'admin':
+            return redirect('/')
+
+        status_filter = request.GET.get('status')
+        activities = UserLoginActivity.objects.select_related('user').order_by('-timestamp')
+
+        if status_filter:
+            activities = activities.filter(status=status_filter)
+
+        return render(request, 'admin_panel/login_activity.html', {
+            'activities': activities[:100],
+            'status_filter': status_filter
+        })
+
+
 class SyncApiView(View):
-    """
-    POST /api/sync/
-    Bulk sync endpoint stub for offline sync_queue items.
-    """
     def post(self, request):
         if not request.user.is_authenticated:
             return JsonResponse({'valid': False, 'reason': 'unauthenticated'}, status=401)
@@ -359,11 +498,6 @@ class SyncApiView(View):
 
 
 class SessionValidateView(View):
-    """
-    POST /api/session/validate/
-    Endpoint used by SyncEngine on reconnect to re-validate offline cached session token.
-    Force logout ONLY after server explicitly confirms session invalidation (HTTP 401).
-    """
     def post(self, request):
         if not request.user.is_authenticated:
             return JsonResponse({
@@ -398,9 +532,6 @@ class SessionValidateView(View):
 
 
 class UserSessionsView(LoginRequiredMixin, View):
-    """
-    Renders active sessions for current user (used by <c-session-list>).
-    """
     def get(self, request):
         sessions = UserSession.objects.filter(user=request.user).order_by('-login_time')[:10]
         current_session_key = request.session.session_key

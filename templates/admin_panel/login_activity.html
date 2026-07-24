@@ -1,0 +1,109 @@
+<c-app-shell page_title="Login Activity Log | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
+  <c-slot name="sidebar">
+    <c-sidebar active_href="{{ request.path }}" />
+  </c-slot>
+
+  <c-slot name="topbar">
+    <c-topbar title="Login Activity Log" />
+  </c-slot>
+
+  <c-command-palette />
+
+  <div class="p-4 space-y-4 max-w-7xl mx-auto">
+    <c-card title="Login Security & Audit Trail" subtitle="Recent authentication attempts, status, and IP logs.">
+      <div class="flex items-center gap-2 mb-4">
+        <a href="?status=" class="px-3 py-1 text-xs rounded-lg border font-medium {% if not status_filter %}bg-primary text-white border-primary{% else %}bg-surface border-border text-secondary{% endif %}">
+          All
+        </a>
+        <a href="?status=success" class="px-3 py-1 text-xs rounded-lg border font-medium {% if status_filter == 'success' %}bg-emerald-600 text-white border-emerald-600{% else %}bg-surface border-border text-secondary{% endif %}">
+          Success
+        </a>
+        <a href="?status=failed" class="px-3 py-1 text-xs rounded-lg border font-medium {% if status_filter == 'failed' %}bg-amber-600 text-white border-amber-600{% else %}bg-surface border-border text-secondary{% endif %}">
+          Failed
+        </a>
+        <a href="?status=locked" class="px-3 py-1 text-xs rounded-lg border font-medium {% if status_filter == 'locked' %}bg-red-600 text-white border-red-600{% else %}bg-surface border-border text-secondary{% endif %}">
+          Locked
+        </a>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
+              <th class="py-2.5 px-3 font-semibold">User / Identifier</th>
+              <th class="py-2.5 px-3 font-semibold">Status</th>
+              <th class="py-2.5 px-3 font-semibold">IP Address</th>
+              <th class="py-2.5 px-3 font-semibold">User Agent / Device</th>
+              <th class="py-2.5 px-3 font-semibold">Timestamp</th>
+              <th class="py-2.5 px-3 font-semibold text-right">Admin Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" style="border-color:var(--border)">
+            {% for act in activities %}
+              <tr class="hover:bg-slate-500/5">
+                <td class="py-3 px-3 font-medium" style="color:var(--text)">
+                  {% if act.user %}
+                    {{ act.user.email|default:act.user.phone }}
+                    <span class="block text-[10px] text-slate-400">Role: {{ act.user.role }}</span>
+                  {% else %}
+                    {{ act.identifier_entered|default:"Unknown" }}
+                  {% endif %}
+                </td>
+                <td class="py-3 px-3">
+                  {% if act.status == 'success' %}
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                      Success
+                    </span>
+                  {% elif act.status == 'failed' %}
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                      Failed
+                    </span>
+                  {% else %}
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-red-500/20 text-red-600 dark:text-red-400">
+                      Account Locked
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
+                  {{ act.ip_address|default:"-" }}
+                </td>
+                <td class="py-3 px-3 text-[11px] max-w-xs truncate" style="color:var(--text-muted)" title="{{ act.user_agent }}">
+                  {{ act.user_agent|default:"-" }}
+                </td>
+                <td class="py-3 px-3 text-[11px]" style="color:var(--text-muted)">
+                  {{ act.timestamp|date:"d/m/Y g:i:s A" }}
+                </td>
+                <td class="py-3 px-3 text-right space-x-1">
+                  {% if act.user %}
+                    <div class="inline-flex items-center gap-1" id="action-zone-{{ act.user.id }}">
+                      <button hx-post="{% url 'accounts:admin_force_logout' pk=act.user.id %}"
+                              hx-target="#action-zone-{{ act.user.id }}"
+                              hx-swap="innerHTML"
+                              class="ft-btn ft-btn-secondary ft-btn-sm text-[10px] py-1 px-2">
+                        Force Logout
+                      </button>
+                      {% if act.user.locked_until %}
+                        <button hx-post="{% url 'accounts:admin_unlock_user' pk=act.user.id %}"
+                                hx-target="#action-zone-{{ act.user.id }}"
+                                hx-swap="innerHTML"
+                                class="ft-btn ft-btn-accent ft-btn-sm text-[10px] py-1 px-2">
+                          Unlock
+                        </button>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="py-8 text-center text-xs" style="color:var(--text-muted)">
+                  No login activities found.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </c-card>
+  </div>
+</c-app-shell>
