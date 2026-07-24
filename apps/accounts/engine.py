@@ -137,8 +137,9 @@ class PermissionEngine:
         elif emp_profile:
             emp_status = 'active' if emp_profile.is_active else 'suspended'
 
-        if emp_status in ('suspended', 'inactive'):
-            return PermissionResolutionResult(allowed=False, reason="Employee account is suspended/inactive.")
+        ALLOWED_ACTIVE_STATES = ('active', 'probation', 'confirmed', 'transferred', 'promoted', 'demoted', 'notice_period')
+        if emp_status and emp_status not in ALLOWED_ACTIVE_STATES and emp_status != 'archived':
+            return PermissionResolutionResult(allowed=False, reason=f"Employee status '{emp_status}' is blocked from system access.")
 
         read_only = (emp_status == 'archived')
         if read_only and action_type in ('create', 'edit', 'delete', 'archive'):
