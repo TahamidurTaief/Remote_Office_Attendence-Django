@@ -240,6 +240,28 @@
 
     registerModuleHandler: function (moduleName, handlerFn) {
       moduleHandlers[moduleName] = handlerFn;
+    },
+
+    cacheRbacSnapshot: function (permissionsMap) {
+      try {
+        localStorage.setItem('ft_rbac_snapshot', JSON.stringify({
+          permissions: permissionsMap || {},
+          timestamp: new Date().toISOString()
+        }));
+      } catch (e) {
+        console.warn('[SyncEngine] Failed to save RBAC snapshot:', e);
+      }
+    },
+
+    hasOfflinePermission: function (codename) {
+      try {
+        const snapshot = JSON.parse(localStorage.getItem('ft_rbac_snapshot') || '{}');
+        if (!snapshot.permissions) return false;
+        const perm = snapshot.permissions[codename];
+        return perm && (perm.granted === true || perm === true);
+      } catch (e) {
+        return false;
+      }
     }
   };
 

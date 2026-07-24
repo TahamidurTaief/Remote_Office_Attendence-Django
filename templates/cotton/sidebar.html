@@ -537,6 +537,10 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Settings</span>
           </a>
+          <a href="{% url 'admin_panel:role_list' %}" class="ft-nav-item {% if '/admin-panel/roles/' in path %}active{% endif %}" x-show="matchSearch('System Roles & Access')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">System Roles & Access</span>
+          </a>
           <a href="{% url 'accounts:admin_security_policies' %}" class="ft-nav-item {% if '/security/policies/' in path %}active{% endif %}" x-show="matchSearch('Security Policies')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Security Policies</span>
