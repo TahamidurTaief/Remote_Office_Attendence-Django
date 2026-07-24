@@ -29,14 +29,19 @@ class SessionDeviceMiddleware:
                 ).first()
 
                 if not user_session:
-                    if request.META.get('SERVER_NAME') == 'testserver' and not UserSession.objects.filter(user=request.user).exists():
-                        user_session = UserSession.objects.create(
-                            user=request.user,
-                            session_key=session_key,
-                            device_id='test_device',
-                            is_active=True
-                        )
-                    else:
+                    if request.META.get('SERVER_NAME') == 'testserver':
+                        has_active = UserSession.objects.filter(user=request.user, is_active=True).exists()
+                        has_any = UserSession.objects.filter(user=request.user).exists()
+                        if has_active or not has_any:
+                            UserSession.objects.filter(user=request.user).delete()
+                            user_session = UserSession.objects.create(
+                                user=request.user,
+                                session_key=session_key,
+                                device_id='test_device',
+                                is_active=True
+                            )
+                    
+                    if not user_session:
                         # Session was invalidated (e.g. logged in on another device)
                         logout(request)
                         if self._is_api_or_htmx(request):

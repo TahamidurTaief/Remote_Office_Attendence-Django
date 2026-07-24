@@ -109,8 +109,24 @@ def get_employee_dashboard_data(user):
         data['personal_timeline'] = EmploymentHistory.objects.select_related(
             'employee', 'approved_by'
         ).filter(employee=emp_master).order_by('-effective_date', '-created_at')[:5]
+        
+        # Profile completion & expiring documents alerts for self
+        data['my_completion_percentage'] = emp_master.get_completion_percentage()
+        data['my_next_wizard_step'] = emp_master.get_next_wizard_step()
+        
+        soon_threshold = today + timedelta(days=30)
+        data['my_expiring_documents'] = EmployeeDocument.objects.filter(
+            employee_master=emp_master,
+            expiry_date__isnull=False,
+            expiry_date__gte=today,
+            expiry_date__lte=soon_threshold,
+            is_active=True
+        ).order_by('expiry_date')
     else:
         data['personal_timeline'] = []
+        data['my_completion_percentage'] = 100
+        data['my_next_wizard_step'] = 8
+        data['my_expiring_documents'] = []
 
     return data
 
@@ -190,6 +206,16 @@ def get_hr_dashboard_data(user):
     data['active_employees_count'] = Employee.objects.filter(status=EmployeeStatus.ACTIVE).count()
     data['probation_employees_count'] = Employee.objects.filter(status=EmployeeStatus.PROBATION).count()
     data['draft_employees_count'] = Employee.objects.filter(status=EmployeeStatus.DRAFT).count()
+    data['pending_approval_employees_count'] = Employee.objects.filter(status=EmployeeStatus.PENDING_APPROVAL).count()
+    data['resigned_employees_count'] = Employee.objects.filter(status=EmployeeStatus.RESIGNED).count()
+    data['terminated_employees_count'] = Employee.objects.filter(status=EmployeeStatus.TERMINATED).count()
+    data['archived_employees_count'] = Employee.objects.filter(status=EmployeeStatus.ARCHIVED).count()
+
+    # Incomplete profiles
+    all_employees = Employee.objects.select_related('department', 'designation', 'branch').all()
+    incomplete_employees = [e for e in all_employees if e.get_completion_percentage() < 100]
+    data['incomplete_profiles_count'] = len(incomplete_employees)
+    data['incomplete_profiles'] = incomplete_employees[:5]
 
     # Department breakdown
     data['dept_breakdown'] = Employee.objects.values(

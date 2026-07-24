@@ -1266,6 +1266,115 @@ class DocumentLifecycleTests(TestCase):
         self.assertFalse(self.document.is_archived)
 
 
+class ReportingManagerChainTests(TestCase):
+    def setUp(self):
+        self.manager_user = User.objects.create_user(email='chain_manager@test.com', password='password123', role='manager')
+        self.staff_user = User.objects.create_user(email='chain_staff@test.com', password='password123', role='staff')
+        
+        from apps.employees.models import Employee, EmployeeStatus, EmployeeProfile
+        
+        self.manager_master = Employee.objects.create(
+            employee_number='EMP-MGR-001',
+            first_name='Chain',
+            last_name='Manager',
+            status=EmployeeStatus.ACTIVE,
+            user=self.manager_user
+        )
+        self.manager_profile = EmployeeProfile.objects.create(
+            user=self.manager_user,
+            full_name='Chain Manager',
+            employee_id='EMP-MGR-001',
+            master_employee=self.manager_master,
+            joined_date='2026-07-01',
+            phone='01711111111'
+        )
+
+        self.staff_master = Employee.objects.create(
+            employee_number='EMP-STF-001',
+            first_name='Chain',
+            last_name='Staff',
+            status=EmployeeStatus.ACTIVE,
+            user=self.staff_user,
+            reporting_manager=self.manager_master
+        )
+        self.staff_profile = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            full_name='Chain Staff',
+            employee_id='EMP-STF-001',
+            master_employee=self.staff_master,
+            joined_date='2026-07-01',
+            phone='01722222222'
+        )
+
+        from apps.accounts.rbac_models import Permission as RBACPermission, Role as RBACRole, UserRoleAssignment, RolePermission, Module, Action
+        
+        self.role_obj = RBACRole.objects.create(name='manager_role', code='manager_role')
+        
+        self.mod_leave = Module.objects.create(name='Leave', code='leave')
+        self.act_approve = Action.objects.create(name='Approve', code='approve')
+        
+        self.perm_leave = RBACPermission.objects.create(
+            module=self.mod_leave,
+            action=self.act_approve,
+            codename='leave.approve',
+            name='Approve Leave'
+        )
+        
+        self.mod_expense = Module.objects.create(name='Expense', code='expense')
+        self.perm_expense = RBACPermission.objects.create(
+            module=self.mod_expense,
+            action=self.act_approve,
+            codename='expense.approve',
+            name='Approve Expense'
+        )
+        
+        RolePermission.objects.create(role=self.role_obj, permission=self.perm_leave, data_scope='team')
+        RolePermission.objects.create(role=self.role_obj, permission=self.perm_expense, data_scope='team')
+        
+        UserRoleAssignment.objects.create(user=self.manager_user, role=self.role_obj)
+
+        from apps.leave.models import LeaveType, LeaveRequest
+        self.leave_type = LeaveType.objects.create(name='Casual Leave', default_days_per_year=10, is_default=True)
+        from datetime import date
+        self.leave_request = LeaveRequest.objects.create(
+            employee=self.staff_profile,
+            leave_type=self.leave_type,
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 5),
+            status='pending',
+            reason='Family trip'
+        )
+
+        from apps.expense.models import Expense
+        self.expense = Expense.objects.create(
+            employee=self.staff_profile,
+            amount=500.00,
+            category='travel',
+            description='Client site travel',
+            status='pending'
+        )
+
+    def test_leave_approval_via_reporting_manager(self):
+        self.client.force_login(self.manager_user)
+        url = reverse('leave:approve_request', kwargs={'pk': self.leave_request.pk})
+        
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+        self.leave_request.refresh_from_db()
+        self.assertEqual(self.leave_request.status, 'approved')
+
+    def test_expense_approval_via_reporting_manager(self):
+        self.client.force_login(self.manager_user)
+        url = reverse('expense:approve_expense', kwargs={'pk': self.expense.pk})
+        
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+        self.expense.refresh_from_db()
+        self.assertEqual(self.expense.status, 'approved')
+
+
 
 
 

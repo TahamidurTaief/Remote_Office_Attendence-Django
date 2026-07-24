@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "created_at": "2026-07-24T18:32:29.929775+00:00",
+    "backup_type": "manual",
+    "version": "1.0",
+    "project": "FieldTrack"
+  },
+  "employees": [],
+  "attendance": [],
+  "expired_attendance": [],
+  "branches": [],
+  "leaves": [],
+  "projects": [],
+  "tasks": [],
+  "progress_logs": [],
+  "manpower_deployments": [],
+  "project_materials": [],
+  "expenses": []
+}

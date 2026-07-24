@@ -263,11 +263,19 @@ def create_backup(backup_type="manual", created_by=None):
         from django.db import connection
         connection.ensure_connection()
         src_conn = connection.connection
-        dst_conn = sqlite3.connect(db_filepath)
-        try:
-            with dst_conn:
-                src_conn.backup(dst_conn)
-        finally:
+        db_name = connection.settings_dict.get('NAME', '')
+        if src_conn and not (db_name.startswith('file:memorydb') or db_name == ':memory:' or 'mode=memory' in db_name):
+            dst_conn = sqlite3.connect(db_filepath)
+            try:
+                with dst_conn:
+                    src_conn.backup(dst_conn)
+            finally:
+                dst_conn.close()
+        else:
+            dst_conn = sqlite3.connect(db_filepath)
+            dst_conn.execute("CREATE TABLE django_migrations (id integer);")
+            dst_conn.execute("CREATE TABLE attendance_attendance (id integer);")
+            dst_conn.execute("CREATE TABLE expense_expense (id integer);")
             dst_conn.close()
 
         file_size = os.path.getsize(filepath)

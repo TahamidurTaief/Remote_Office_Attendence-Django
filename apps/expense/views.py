@@ -141,6 +141,40 @@ class BaseProcessExpenseView(View):
         res = PermissionEngine.evaluate(request.user, 'expense.approve')
         if not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') not in ('admin', 'manager'):
             return redirect('/')
+
+        # Scoping check for manager/team scope
+        if res.allowed and res.data_scope != 'global' and not request.user.is_superuser:
+            from django.shortcuts import get_object_or_404
+            from apps.expense.models import Expense
+            from apps.employees.models import EmployeeProfile
+            
+            expense = get_object_or_404(Expense, pk=kwargs.get('pk'))
+            profile = getattr(request.user, 'employee_profile', None)
+            
+            is_reporting_manager = False
+            emp_master = getattr(expense.employee, 'master_employee', None)
+            if emp_master and emp_master.reporting_manager:
+                if emp_master.reporting_manager.user == request.user:
+                    is_reporting_manager = True
+            
+            scoped = is_reporting_manager
+            if not scoped and profile:
+                if profile.branch and expense.employee.branch == profile.branch:
+                    scoped = True
+                elif not profile.branch:
+                    from django.db.models import Q
+                    from apps.projects.models import Project
+                    managed_projects = Project.objects.filter(project_manager=profile)
+                    project_employees = EmployeeProfile.objects.filter(
+                        Q(site_engineer_projects__in=managed_projects) |
+                        Q(assigned_tasks__project__in=managed_projects)
+                    ).distinct()
+                    if expense.employee in project_employees:
+                        scoped = True
+            if not scoped:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You do not have permission to process expense requests outside your scope.")
+
         return super().dispatch(request, *args, **kwargs)
 
 class ApproveExpenseView(BaseProcessExpenseView, View):

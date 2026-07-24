@@ -55,11 +55,18 @@ class BaseProcessLeaveRequestView(View):
             return redirect('/staff/home/')
 
         # Scoping check for manager/team scope
-        if res.allowed and res.scope != 'GLOBAL' and not request.user.is_superuser:
+        if res.allowed and res.data_scope != 'global' and not request.user.is_superuser:
             leave_request = get_object_or_404(LeaveRequest, pk=kwargs.get('pk'))
             profile = getattr(request.user, 'employee_profile', None)
-            scoped = False
-            if profile:
+            
+            is_reporting_manager = False
+            emp_master = getattr(leave_request.employee, 'master_employee', None)
+            if emp_master and emp_master.reporting_manager:
+                if emp_master.reporting_manager.user == request.user:
+                    is_reporting_manager = True
+            
+            scoped = is_reporting_manager
+            if not scoped and profile:
                 if profile.branch and leave_request.employee.branch == profile.branch:
                     scoped = True
                 elif not profile.branch:

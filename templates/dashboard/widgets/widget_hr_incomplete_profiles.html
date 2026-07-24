@@ -1,0 +1,49 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-amber-500/10 text-amber-600">
+        <i data-lucide="alert-circle" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white font-sans">Incomplete Profiles</h3>
+        <p class="text-xs text-slate-500">Employees with pending wizard steps</p>
+      </div>
+    </div>
+    <span class="px-2 py-0.5 text-xs bg-amber-50 text-amber-700 rounded-full font-bold font-mono">
+      {{ incomplete_profiles_count }}
+    </span>
+  </div>
+
+  {% if incomplete_profiles %}
+    <div class="divide-y divide-slate-100 dark:divide-slate-850">
+      {% for emp in incomplete_profiles %}
+        <div class="py-2.5 flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <h4 class="text-sm font-semibold text-slate-800 dark:text-white truncate">
+              {{ emp.get_full_name }}
+            </h4>
+            <p class="text-xs text-slate-500">ID: {{ emp.employee_number }} • Status: {{ emp.get_status_display }}</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            {% with pct=emp.get_completion_percentage %}
+            <div class="flex items-center gap-1.5">
+              <div class="w-12 bg-slate-150 dark:bg-slate-750 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-amber-500 h-full rounded-full" style="width: {{ pct }}%"></div>
+              </div>
+              <span class="text-xs font-semibold text-slate-600 font-mono">{{ pct }}%</span>
+            </div>
+            {% endwith %}
+            <a href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" 
+               class="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded-lg shadow-2xs transition-colors text-decoration-none">
+              Resume
+            </a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center py-6 text-slate-400 text-sm">
+      All employee profiles are 100% complete!
+    </div>
+  {% endif %}
+</c-card>
