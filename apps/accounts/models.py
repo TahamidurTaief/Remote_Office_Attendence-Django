@@ -158,4 +158,60 @@ class PasswordResetOTP(models.Model):
         return f"OTP for {self.user} - {'Used' if self.is_used else 'Valid'}"
 
 
+class LoginProtection(models.Model):
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='login_protections'
+    )
+    email = models.CharField(max_length=255, db_index=True, blank=True)
+    ip = models.GenericIPAddressField(db_index=True, null=True, blank=True)
+    device_fingerprint = models.CharField(max_length=255, db_index=True, blank=True)
+
+    failed_attempts = models.PositiveIntegerField(default=0)
+    current_lock_level = models.PositiveIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True, db_index=True)
+    observation_ends_at = models.DateTimeField(null=True, blank=True)
+    captcha_required = models.BooleanField(default=False)
+
+    last_attempt = models.DateTimeField(auto_now=True)
+    last_success = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'login_protection'
+        indexes = [
+            models.Index(fields=['user', 'ip', 'device_fingerprint']),
+            models.Index(fields=['email', 'ip', 'device_fingerprint']),
+            models.Index(fields=['ip', 'device_fingerprint']),
+            models.Index(fields=['locked_until']),
+        ]
+
+    def is_locked(self):
+        if self.locked_until:
+            return timezone.now() < self.locked_until
+        return False
+
+    def remaining_lock_seconds(self):
+        if self.locked_until and timezone.now() < self.locked_until:
+            return int((self.locked_until - timezone.now()).total_seconds())
+        return 0
+
+    def reset_lock(self):
+        self.failed_attempts = 0
+        self.current_lock_level = 0
+        self.locked_until = None
+        self.observation_ends_at = None
+        self.captcha_required = False
+        self.save()
+
+    def __str__(self):
+        ident = self.user.email if self.user else (self.email or self.ip)
+        return f"LoginProtection({ident}) - Fails: {self.failed_attempts}, Level: {self.current_lock_level}"
+
+
+
 

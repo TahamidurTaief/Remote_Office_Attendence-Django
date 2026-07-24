@@ -55,37 +55,49 @@
     </c-card>
 
     {# ── Locked Accounts Card ─────────────────────────────────────────── #}
-    <c-card title="Currently Locked Accounts" subtitle="Accounts temporarily locked after 5 failed login attempts.">
+    <c-card title="Currently Locked Accounts" subtitle="Accounts temporarily locked by progressive 3-layer security engine.">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs border-collapse">
           <thead>
             <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
-              <th class="py-2.5 px-3 font-semibold">User</th>
+              <th class="py-2.5 px-3 font-semibold">User / Identifier</th>
+              <th class="py-2.5 px-3 font-semibold">Lock Level</th>
+              <th class="py-2.5 px-3 font-semibold">Attempts</th>
               <th class="py-2.5 px-3 font-semibold">Locked Until</th>
               <th class="py-2.5 px-3 font-semibold text-right">Action</th>
             </tr>
           </thead>
           <tbody class="divide-y" style="border-color:var(--border)">
-            {% for u in locked_users %}
+            {% for prot in locked_entries %}
               <tr class="hover:bg-slate-500/5">
                 <td class="py-2.5 px-3 font-medium text-rose-500">
-                  {{ u.email|default:u.phone }}
+                  {{ prot.user.email|default:prot.email|default:prot.ip }}
+                </td>
+                <td class="py-2.5 px-3 font-mono font-semibold text-xs text-amber-500">
+                  Level {{ prot.current_lock_level }}
+                </td>
+                <td class="py-2.5 px-3 font-semibold text-xs" style="color:var(--text)">
+                  {{ prot.failed_attempts }} fails
                 </td>
                 <td class="py-2.5 px-3 text-[11px]" style="color:var(--text-muted)">
-                  {{ u.locked_until|date:"g:i A" }}
+                  {{ prot.locked_until|date:"g:i:s A" }}
                 </td>
                 <td class="py-2.5 px-3 text-right">
-                  <button type="button"
-                          hx-post="{% url 'accounts:admin_unlock' pk=u.id %}"
-                          hx-swap="outerHTML"
-                          class="px-2 py-1 text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded hover:bg-emerald-500/20">
-                    Unlock Early
-                  </button>
+                  {% if prot.user %}
+                    <button type="button"
+                            hx-post="{% url 'accounts:admin_unlock_user' pk=prot.user.id %}"
+                            hx-swap="outerHTML"
+                            class="px-2 py-1 text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded hover:bg-emerald-500/20">
+                      Unlock Early
+                    </button>
+                  {% else %}
+                    <span class="text-[10px] text-slate-400">IP Lock</span>
+                  {% endif %}
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="3" class="py-6 text-center text-xs text-slate-400">No accounts currently locked.</td>
+                <td colspan="5" class="py-6 text-center text-xs text-slate-400">No accounts currently locked.</td>
               </tr>
             {% endfor %}
           </tbody>

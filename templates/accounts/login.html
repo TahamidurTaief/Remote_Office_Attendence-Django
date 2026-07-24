@@ -15,6 +15,7 @@
   <meta name="theme-color" content="#1877F2">
   {% tailwind_css %}
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="{% static 'js/offline/db.js' %}"></script>
 </head>
@@ -28,6 +29,12 @@
       </div>
 
       <c-device-notice-banner notice_type="{{ device_notice }}" message="{{ notice_message }}" />
+
+      {% if is_locked %}
+        <div class="mb-4">
+          {% include "accounts/partials/lock_status_countdown.html" %}
+        </div>
+      {% endif %}
 
       <form class="space-y-4" action="{% url 'accounts:login' %}" method="POST" id="loginForm">
         {% csrf_token %}

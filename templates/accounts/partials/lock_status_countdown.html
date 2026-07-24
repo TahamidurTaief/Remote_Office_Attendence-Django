@@ -1,0 +1,18 @@
+<div id="lock-countdown-box"
+     hx-get="{% url 'accounts:lock_status' %}?email={{ email|urlencode }}"
+     hx-trigger="every 1s"
+     hx-target="#lock-countdown-box"
+     hx-swap="outerHTML"
+     class="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 space-y-2 text-center">
+  <div class="flex items-center justify-center gap-2 font-bold text-sm">
+    <i data-lucide="lock" class="w-4 h-4 animate-bounce"></i>
+    <span>Account Temporarily Locked (Level {{ lock_level }})</span>
+  </div>
+  <p class="text-xs text-rose-500/80">
+    Too many failed login attempts. Unlocks automatically in:
+  </p>
+  <div class="font-mono text-2xl font-black tracking-widest text-rose-600 dark:text-rose-300 my-1">
+    {{ minutes|stringformat:"02d" }}:{{ seconds|stringformat:"02d" }}
+  </div>
+  <p class="text-[11px] text-slate-400 italic">Server-synchronized security countdown</p>
+</div>

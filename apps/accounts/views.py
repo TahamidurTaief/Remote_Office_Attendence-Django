@@ -1,4 +1,5 @@
 import hashlib
+import time
 import json
 import random
 import secrets
@@ -14,8 +15,14 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.db.models import Q
 from django.contrib.sessions.models import Session
-from apps.accounts.models import UserSession, TrustedDevice, CustomUser, PasswordResetOTP, UserLoginActivity
+from apps.accounts.models import UserSession, TrustedDevice, CustomUser, PasswordResetOTP, UserLoginActivity, LoginProtection
 from apps.notifications.models import log_audit, AuditLog
+from apps.accounts.login_protection import (
+    check_3layer_lock,
+    record_failed_attempt,
+    record_successful_login,
+    get_or_create_protection
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,17 +47,16 @@ class CustomLoginView(View):
     def get(self, request):
         if request.user.is_authenticated:
             return self.redirect_based_on_role(request.user)
-
-        device_notice = request.GET.get('device_notice')
-        notice_message = None
-        if device_notice == 'logged_in_elsewhere':
-            notice_message = 'Your session was ended because your account logged in from another device.'
-        elif device_notice == 'idle_timeout':
-            notice_message = 'Your session expired due to 30 minutes of inactivity.'
+        device_notice = False
+        notice_message = ""
+        remember_token = request.COOKIES.get('remember_device_token')
+        if remember_token:
+            device_notice = True
+            notice_message = "Your device is recognized."
 
         ip = get_client_ip(request)
-        attempts = cache.get(f"login_attempts_{ip}", 0)
-        show_captcha = attempts >= 3
+        device_id = get_device_id(request)
+        is_locked, remaining_secs, prot = check_3layer_lock(ip=ip, device_id=device_id)
 
         n1, n2 = random.randint(1, 9), random.randint(1, 9)
         request.session['captcha_ans'] = str(n1 + n2)
@@ -58,202 +64,104 @@ class CustomLoginView(View):
         context = {
             'device_notice': device_notice,
             'notice_message': notice_message,
-            'show_captcha': show_captcha,
+            'show_captcha': (prot and prot.captcha_required) if prot else False,
+            'is_locked': is_locked,
+            'remaining_secs': remaining_secs,
+            'lock_level': prot.current_lock_level if prot else 0,
             'captcha_num1': n1,
             'captcha_num2': n2,
         }
         return render(request, 'accounts/login.html', context)
 
     def post(self, request):
+        start_time = time.time()
         email = (request.POST.get('email') or '').strip()
-        password = request.POST.get('password')
+        password = request.POST.get('password') or ''
         remember_device = request.POST.get('remember_device') in ['true', 'on']
         captcha_ans_entered = (request.POST.get('captcha_ans') or '').strip()
 
         ip = get_client_ip(request)
         ua = request.META.get('HTTP_USER_AGENT', '')
-        cache_key = f"login_attempts_{ip}"
-        attempts = cache.get(cache_key, 0)
+        device_id = get_device_id(request)
 
         user_obj = CustomUser.objects.filter(Q(email__iexact=email) | Q(phone__iexact=email)).first()
 
-        # 1. IP Rate Limiting (5 fails = 5min IP block)
-        if attempts >= 5:
-            messages.error(request, 'Too many login attempts. Please try again in 5 minutes.')
-            return render(request, 'accounts/login.html', {'email_entered': email, 'show_captcha': True})
+        def pad_response():
+            elapsed = time.time() - start_time
+            if elapsed < 0.35:
+                time.sleep(0.35 - elapsed)
 
-        # 2. Check account lock & 30-min auto-unlock
-        if user_obj and user_obj.locked_until:
-            if timezone.now() > user_obj.locked_until:
-                user_obj.locked_until = None
-                user_obj.failed_login_count = 0
-                user_obj.save(update_fields=['locked_until', 'failed_login_count'])
-            else:
-                UserLoginActivity.objects.create(
-                    user=user_obj,
-                    identifier_entered=email,
-                    ip_address=ip,
-                    user_agent=ua,
-                    status='locked'
-                )
-                time_left = max(1, int((user_obj.locked_until - timezone.now()).total_seconds() // 60))
-                messages.error(request, f"Account is locked due to 5 failed attempts. Please try again in {time_left} minutes.")
-                return render(request, 'accounts/login.html', {'email_entered': email, 'show_captcha': True})
-
-        # 3. Check 3-fail Captcha verification
-        requires_captcha = (user_obj and user_obj.failed_login_count >= 3) or (attempts >= 3)
-        expected_ans = request.session.get('captcha_ans')
-        if requires_captcha and expected_ans and captcha_ans_entered != str(expected_ans):
-            cache.set(cache_key, attempts + 1, timeout=300)
-            messages.error(request, 'Incorrect Security Verification answer.')
-            n1, n2 = random.randint(1, 9), random.randint(1, 9)
-            request.session['captcha_ans'] = str(n1 + n2)
-            return render(request, 'accounts/login.html', {
-                'email_entered': email,
-                'show_captcha': True,
-                'captcha_num1': n1,
-                'captcha_num2': n2
-            })
-
-        # 4. Authenticate User
-        user = authenticate(request, username=email, password=password)
-
-        if user is not None:
-            # Check employee profile active status
-            emp_prof = getattr(user, 'employee_profile', None)
-            if not user.is_active or (emp_prof and not emp_prof.is_active):
-                log_audit(user, 'account_disabled_block', summary="Login blocked: Account deactivated/suspended", ip=ip)
-                messages.error(request, 'Your account has been deactivated or suspended. Please contact administrator.')
-                return render(request, 'accounts/login.html', {'email_entered': email})
-
-            now = timezone.now()
-            device_id = get_device_id(request)
-
-            user.failed_login_count = 0
-            user.locked_until = None
-            user.save(update_fields=['failed_login_count', 'locked_until'])
-
+        # 1. 3-Layer Lock Check (User, Email, IP, Device)
+        is_locked, remaining_secs, prot = check_3layer_lock(user=user_obj, email=email, ip=ip, device_id=device_id)
+        if is_locked:
             UserLoginActivity.objects.create(
-                user=user,
+                user=user_obj,
                 identifier_entered=email,
                 ip_address=ip,
                 user_agent=ua,
-                status='success'
+                status='locked'
+            )
+            mins = remaining_secs // 60
+            secs = remaining_secs % 60
+            messages.error(request, f"Account temporarily locked (Level {prot.current_lock_level}). Please wait {mins}m {secs}s.")
+            pad_response()
+            return render(request, 'accounts/login.html', {
+                'email_entered': email,
+                'is_locked': True,
+                'remaining_secs': remaining_secs,
+                'lock_level': prot.current_lock_level if prot else 1,
+                'show_captcha': True
+            })
+
+        # 2. Captcha Validation Check (Attempt >= 3)
+        prot_rec = get_or_create_protection(user=user_obj, email=email, ip=ip, device_id=device_id)
+        expected_ans = request.session.get('captcha_ans')
+
+        if prot_rec.captcha_required and expected_ans:
+            if captcha_ans_entered != str(expected_ans):
+                new_prot = record_failed_attempt(user=user_obj, email=email, ip=ip, device_id=device_id)
+                messages.error(request, 'Incorrect Security Verification answer.')
+                n1, n2 = random.randint(1, 9), random.randint(1, 9)
+                request.session['captcha_ans'] = str(n1 + n2)
+                pad_response()
+                return render(request, 'accounts/login.html', {
+                    'email_entered': email,
+                    'show_captcha': True,
+                    'captcha_num1': n1,
+                    'captcha_num2': n2
+                })
+
+        # 3. Authenticate User (Applies to existing AND unknown usernames equally)
+        user = authenticate(request, username=email, password=password)
+
+        if user is None:
+            new_prot = record_failed_attempt(user=user_obj, email=email, ip=ip, device_id=device_id)
+            UserLoginActivity.objects.create(
+                user=user_obj,
+                identifier_entered=email,
+                ip_address=ip,
+                user_agent=ua,
+                status='failed'
             )
 
-            # Single Device Login Enforcement: Invalidate prior active sessions
-            old_sessions = UserSession.objects.filter(user=user, is_active=True)
-            for old_sess in old_sessions:
-                old_sess.is_active = False
-                old_sess.logout_time = now
-                old_sess.save(update_fields=['is_active', 'logout_time'])
+            n1, n2 = random.randint(1, 9), random.randint(1, 9)
+            request.session['captcha_ans'] = str(n1 + n2)
 
-                if old_sess.session_key:
-                    Session.objects.filter(session_key=old_sess.session_key).delete()
-
-            # Perform standard Django login
-            login(request, user)
-
-            # 1. Regenerate session key to prevent session fixation attacks
-            request.session.cycle_key()
-
-            cache.delete(cache_key)
-            log_audit(user, 'user_login', summary=f"User logged in from {ip}", ip=ip)
-
-            # 2. Check New Device Login Alert
-            device_hash = hashlib.sha256(f"{user.id}-{device_id}".encode('utf-8')).hexdigest()
-            user_has_trusted = TrustedDevice.objects.filter(user=user).exists()
-            is_device_trusted = TrustedDevice.objects.filter(user=user, device_hash=device_hash).exists()
-
-            if not user_has_trusted:
-                # First-ever login: automatically trust device
-                TrustedDevice.objects.create(
-                    user=user,
-                    device_hash=device_hash,
-                    device_name=ua[:250],
-                    expire_at=now + timedelta(days=30)
-                )
-            elif not is_device_trusted:
-                # Unrecognized new device login
-                log_audit(user, 'new_device_login', summary=f"Unrecognized new device login from IP {ip}", ip=ip)
-                if user.email:
-                    from django.core.mail import send_mail
-                    send_mail(
-                        subject="Security Alert: New Device Login Detected",
-                        message=f"Hi {user.email},\n\nA new device login was detected for your FieldTrack account.\nIP Address: {ip}\nBrowser: {ua[:100]}\nTime: {now.strftime('%d/%m/%Y %g:%i %A')}\n\nIf this was not you, please change your password immediately.",
-                        from_email="noreply@fieldtrack.com",
-                        recipient_list=[user.email],
-                        fail_silently=True
-                    )
-
-            UserSession.objects.create(
-                user=user,
-                device_id=device_id,
-                session_key=request.session.session_key,
-                browser=ua,
-                ip=ip,
-                login_time=now,
-                last_activity=now,
-                is_active=True
-            )
-
-            if remember_device:
-                expire_at = now + timedelta(days=30)
-                TrustedDevice.objects.update_or_create(
-                    user=user,
-                    device_hash=device_hash,
-                    defaults={
-                        'device_name': ua[:250],
-                        'expire_at': expire_at
-                    }
-                )
-
-            return self.redirect_based_on_role(user)
-        else:
-            cache.set(cache_key, attempts + 1, timeout=300)
-            if user_obj:
-                user_obj.failed_login_count += 1
-                if user_obj.failed_login_count >= 5:
-                    user_obj.locked_until = timezone.now() + timedelta(minutes=30)
-                    user_obj.save(update_fields=['failed_login_count', 'locked_until'])
-                    UserLoginActivity.objects.create(
-                        user=user_obj,
-                        identifier_entered=email,
-                        ip_address=ip,
-                        user_agent=ua,
-                        status='locked'
-                    )
-                    messages.error(request, 'Account locked for 30 minutes due to 5 failed login attempts.')
-                else:
-                    user_obj.save(update_fields=['failed_login_count'])
-                    UserLoginActivity.objects.create(
-                        user=user_obj,
-                        identifier_entered=email,
-                        ip_address=ip,
-                        user_agent=ua,
-                        status='failed'
-                    )
-                    messages.error(request, f'Invalid email or password. Attempt {user_obj.failed_login_count} of 5.')
+            if new_prot.failed_attempts >= 5:
+                rem = new_prot.remaining_lock_seconds()
+                messages.error(request, f"Too many failed login attempts. Account locked for {rem // 60 or 1} minute(s).")
+            elif new_prot.failed_attempts >= 3:
+                messages.error(request, "Invalid credentials. Two attempts remaining before temporary lock.")
             else:
-                UserLoginActivity.objects.create(
-                    user=None,
-                    identifier_entered=email,
-                    ip_address=ip,
-                    user_agent=ua,
-                    status='failed'
-                )
-                messages.error(request, 'Invalid email or password.')
+                messages.error(request, "Invalid email or password.")
 
-        n1, n2 = random.randint(1, 9), random.randint(1, 9)
-        request.session['captcha_ans'] = str(n1 + n2)
-
-        show_captcha_now = (user_obj and user_obj.failed_login_count >= 3) or (attempts >= 2)
-        return render(request, 'accounts/login.html', {
-            'email_entered': email,
-            'show_captcha': show_captcha_now,
-            'captcha_num1': n1,
-            'captcha_num2': n2
-        })
+            pad_response()
+            return render(request, 'accounts/login.html', {
+                'email_entered': email,
+                'show_captcha': new_prot.captcha_required,
+                'captcha_num1': n1,
+                'captcha_num2': n2
+            })
 
     def redirect_based_on_role(self, user):
         if user.role == 'admin':
@@ -492,6 +400,11 @@ class AdminUnlockUserView(LoginRequiredMixin, View):
         target_user.locked_until = None
         target_user.save(update_fields=['failed_login_count', 'locked_until'])
 
+        if target_user.email:
+            prots = LoginProtection.objects.filter(Q(user=target_user) | Q(email__iexact=target_user.email))
+            for p in prots:
+                p.reset_lock()
+
         log_audit(request.user, 'admin_unlock_user', target=target_user, summary=f"Admin unlocked user {target_user.email or target_user.phone}", ip=get_client_ip(request))
 
         if request.headers.get('HX-Request') == 'true':
@@ -499,6 +412,35 @@ class AdminUnlockUserView(LoginRequiredMixin, View):
 
         messages.success(request, f"User unlocked successfully.")
         return redirect('/admin-panel/roles/')
+
+
+class LoginLockStatusView(View):
+    """
+    GET /login/lock-status/
+    HTMX live server-time polling endpoint for locked login screen countdown.
+    """
+    def get(self, request):
+        email = (request.GET.get('email') or '').strip()
+        ip = get_client_ip(request)
+        device_id = get_device_id(request)
+
+        is_locked, remaining_secs, prot = check_3layer_lock(email=email, ip=ip, device_id=device_id)
+
+        if not is_locked:
+            return render(request, 'accounts/partials/lock_status_unlocked.html')
+
+        mins = remaining_secs // 60
+        secs = remaining_secs % 60
+
+        context = {
+            'is_locked': True,
+            'remaining_secs': remaining_secs,
+            'minutes': mins,
+            'seconds': secs,
+            'email': email,
+            'lock_level': prot.current_lock_level if prot else 1
+        }
+        return render(request, 'accounts/partials/lock_status_countdown.html', context)
 
 
 class AdminLoginActivityView(LoginRequiredMixin, View):
