@@ -103,6 +103,7 @@ class CustomLoginView(View):
         requires_captcha = (user_obj and user_obj.failed_login_count >= 3) or (attempts >= 3)
         expected_ans = request.session.get('captcha_ans')
         if requires_captcha and expected_ans and captcha_ans_entered != str(expected_ans):
+            cache.set(cache_key, attempts + 1, timeout=300)
             messages.error(request, 'Incorrect Security Verification answer.')
             n1, n2 = random.randint(1, 9), random.randint(1, 9)
             request.session['captcha_ans'] = str(n1 + n2)
