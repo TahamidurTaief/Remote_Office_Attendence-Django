@@ -45,7 +45,7 @@ class RBACEngineTests(TestCase):
 
         res = PermissionEngine.evaluate(self.user, 'attendance.view')
         self.assertFalse(res.allowed)
-        self.assertIn("suspended", res.reason)
+        self.assertIn("blocked", res.reason)
 
     def test_layer1_archived_employee_read_only(self):
         Employee.objects.filter(pk=self.emp.pk).update(status=EmployeeStatus.ARCHIVED)
