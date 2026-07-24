@@ -815,6 +815,119 @@ class LifecycleStateMachineTests(TestCase):
         self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
 
 
+class EmployeeWizardTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            email='wizardadmin@test.com',
+            password='password123',
+            role='admin'
+        )
+        self.staff = User.objects.create_user(
+            email='wizardstaff@test.com',
+            password='password123',
+            role='staff'
+        )
+        self.client.force_login(self.admin)
+        from apps.accounts.rbac_models import Role
+        self.role = Role.objects.create(name='Staff Role', code='staff_role', is_active=True)
+
+    def test_wizard_step_1_saves_draft_employee(self):
+        url = reverse('employees:employee_wizard')
+        data = {
+            'employee_number': 'EMP-WIZ-001',
+            'first_name': 'Wizard',
+            'last_name': 'Test',
+            'personal_email': 'wizard@test.com',
+            'phone': '+8801700000001',
+            'next_step': '2'
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        from apps.employees.models import Employee, EmployeeStatus
+        emp = Employee.objects.get(employee_number='EMP-WIZ-001')
+        self.assertEqual(emp.status, EmployeeStatus.DRAFT)
+        self.assertEqual(emp.get_completion_percentage(), 20)
+
+    def test_wizard_step_4_creates_user_and_user_role_assignment(self):
+        from apps.employees.models import Employee, EmployeeStatus
+        emp = Employee.objects.create(
+            employee_number='EMP-WIZ-004',
+            first_name='Sec',
+            last_name='User',
+            status=EmployeeStatus.DRAFT
+        )
+        url = reverse('employees:employee_wizard_step', kwargs={'pk': emp.pk, 'step': 4})
+        data = {
+            'login_email': 'secuser@test.com',
+            'password1': 'secpassword123',
+            'password2': 'secpassword123',
+            'roles': [self.role.pk],
+            'data_scope': 'branch',
+            'next_step': '5'
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        emp.refresh_from_db()
+        self.assertIsNotNone(emp.user)
+        self.assertEqual(emp.user.email, 'secuser@test.com')
+        from apps.accounts.rbac_models import UserRoleAssignment
+        self.assertTrue(UserRoleAssignment.objects.filter(user=emp.user, role=self.role).exists())
+
+    def test_wizard_step_8_approves_draft_to_active(self):
+        from apps.employees.models import Employee, EmployeeStatus
+        emp = Employee.objects.create(
+            employee_number='EMP-WIZ-008',
+            first_name='Approved',
+            last_name='Emp',
+            status=EmployeeStatus.DRAFT
+        )
+        url = reverse('employees:employee_wizard_step', kwargs={'pk': emp.pk, 'step': 8})
+        response = self.client.post(url, {'action': 'approve'})
+        self.assertEqual(response.status_code, 302)
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, EmployeeStatus.ACTIVE)
+
+    def test_sensitive_document_rbac_download_gate(self):
+        from apps.employees.models import Employee, EmployeeDocument, DocumentType
+        emp = Employee.objects.create(
+            employee_number='EMP-DOC-001',
+            first_name='Doc',
+            last_name='Owner'
+        )
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        doc_file = SimpleUploadedFile("nid.pdf", b"file_content", content_type="application/pdf")
+        doc = EmployeeDocument.objects.create(
+            employee_master=emp,
+            document_type=DocumentType.NID,
+            title='National ID',
+            file=doc_file
+        )
+        self.assertTrue(doc.is_sensitive())
+
+        # Test non-superuser staff user without permission
+        self.client.force_login(self.staff)
+        download_url = reverse('employees:document_download', kwargs={'pk': doc.pk})
+        response = self.client.get(download_url)
+        self.assertEqual(response.status_code, 403)
+
+        # Test admin superuser
+        self.client.force_login(self.admin)
+        response = self.client.get(download_url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_asset_double_assignment_blocked(self):
+        from apps.employees.models import Employee, Asset, AssetAssignment, AssetType
+        from django.core.exceptions import ValidationError
+        emp1 = Employee.objects.create(employee_number='EMP-AST-1', first_name='A', last_name='1')
+        emp2 = Employee.objects.create(employee_number='EMP-AST-2', first_name='B', last_name='2')
+        asset = Asset.objects.create(asset_type=AssetType.LAPTOP, asset_tag='TAG-001', name='MacBook Pro')
+
+        AssetAssignment.objects.create(asset=asset, employee=emp1)
+        with self.assertRaises(ValidationError):
+            AssetAssignment.objects.create(asset=asset, employee=emp2)
+
+
+
 
 
 

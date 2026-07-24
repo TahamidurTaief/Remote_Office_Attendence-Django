@@ -1,0 +1,66 @@
+<form 
+  hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=6 %}"
+  hx-target="#wizard-step-container"
+  hx-swap="innerHTML"
+  class="space-y-6"
+>
+  {% csrf_token %}
+  <input type="hidden" name="next_step" value="7">
+
+  <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900">Step 6: Emergency Contact Information</h2>
+      <p class="text-xs text-gray-500">Contact details for emergency notifications and next of kin.</p>
+    </div>
+    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+      Optional Completion Tier
+    </span>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-200">
+      {% for err in form.non_field_errors %}<p>{{ err }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Contact Name</label>
+      {{ form.emergency_contact_name }}
+      {% if form.emergency_contact_name.errors %}<p class="text-xs text-red-500 mt-1">{{ form.emergency_contact_name.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Relation</label>
+      {{ form.emergency_contact_relation }}
+      {% if form.emergency_contact_relation.errors %}<p class="text-xs text-red-500 mt-1">{{ form.emergency_contact_relation.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Phone Number</label>
+      {{ form.emergency_contact_phone }}
+      {% if form.emergency_contact_phone.errors %}<p class="text-xs text-red-500 mt-1">{{ form.emergency_contact_phone.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Address</label>
+      {{ form.emergency_contact_address }}
+      {% if form.emergency_contact_address.errors %}<p class="text-xs text-red-500 mt-1">{{ form.emergency_contact_address.errors.0 }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+    <a 
+      hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=5 %}"
+      hx-target="#wizard-step-container"
+      hx-swap="innerHTML"
+      class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-all cursor-pointer"
+    >
+      Back to Step 5
+    </a>
+    <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all flex items-center space-x-2">
+      <span>Save & Continue to Step 7</span>
+      <i data-lucide="arrow-right" class="w-4 h-4"></i>
+    </button>
+  </div>
+</form>

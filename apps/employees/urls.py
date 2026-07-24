@@ -34,5 +34,10 @@ urlpatterns = [
     path('master/<int:pk>/lifecycle/action/', views.LifecycleActionView.as_view(), name='lifecycle_action'),
     path('lifecycle-requests/', views.LifecyclePendingListView.as_view(), name='lifecycle_requests'),
     path('lifecycle-requests/<int:req_pk>/review/', views.LifecycleReviewView.as_view(), name='lifecycle_review'),
+
+    # Multi-Step Wizard & Timeline Routes
+    path('wizard/', views.EmployeeWizardView.as_view(), name='employee_wizard'),
+    path('wizard/<int:pk>/step/<int:step>/', views.EmployeeWizardView.as_view(), name='employee_wizard_step'),
+    path('master/<int:pk>/timeline/', views.EmployeeTimelineView.as_view(), name='employee_timeline'),
 ]
 

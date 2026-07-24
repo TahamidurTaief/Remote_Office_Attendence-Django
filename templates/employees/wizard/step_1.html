@@ -1,0 +1,77 @@
+<form 
+  hx-post="{% if employee %}{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}{% else %}{% url 'employees:employee_wizard' %}{% endif %}"
+  hx-target="#wizard-step-container"
+  hx-swap="innerHTML"
+  class="space-y-6"
+  enctype="multipart/form-data"
+>
+  {% csrf_token %}
+  <input type="hidden" name="next_step" value="2">
+
+  <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900">Step 1: Basic Information</h2>
+      <p class="text-xs text-gray-500">Core identification fields. Saves employee record as Draft.</p>
+    </div>
+    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+      Minimum Required Tier
+    </span>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-200">
+      {% for err in form.non_field_errors %}<p>{{ err }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Employee ID <span class="text-red-500">*</span></label>
+      {{ form.employee_number }}
+      {% if form.employee_number.errors %}<p class="text-xs text-red-500 mt-1">{{ form.employee_number.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Gender</label>
+      {{ form.gender }}
+      {% if form.gender.errors %}<p class="text-xs text-red-500 mt-1">{{ form.gender.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">First Name <span class="text-red-500">*</span></label>
+      {{ form.first_name }}
+      {% if form.first_name.errors %}<p class="text-xs text-red-500 mt-1">{{ form.first_name.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Last Name <span class="text-red-500">*</span></label>
+      {{ form.last_name }}
+      {% if form.last_name.errors %}<p class="text-xs text-red-500 mt-1">{{ form.last_name.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Personal Email</label>
+      {{ form.personal_email }}
+      {% if form.personal_email.errors %}<p class="text-xs text-red-500 mt-1">{{ form.personal_email.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Phone Number</label>
+      {{ form.phone }}
+      {% if form.phone.errors %}<p class="text-xs text-red-500 mt-1">{{ form.phone.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1">Date of Birth</label>
+      {{ form.dob }}
+      {% if form.dob.errors %}<p class="text-xs text-red-500 mt-1">{{ form.dob.errors.0 }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
+    <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all flex items-center space-x-2">
+      <span>Save & Continue to Step 2</span>
+      <i data-lucide="arrow-right" class="w-4 h-4"></i>
+    </button>
+  </div>
+</form>

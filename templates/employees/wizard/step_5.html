@@ -1,0 +1,112 @@
+<div class="space-y-6">
+  <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+    <div>
+      <h2 class="text-lg font-bold text-gray-900">Step 5: Employee Documents</h2>
+      <p class="text-xs text-gray-500">Versioned uploads for NID, Passport, CV, Contracts with expiry monitoring and sensitive RBAC gate.</p>
+    </div>
+    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700">
+      Optional Completion Tier
+    </span>
+  </div>
+
+  {# Upload Document Form #}
+  <form 
+    hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=5 %}"
+    hx-target="#wizard-step-container"
+    hx-swap="innerHTML"
+    enctype="multipart/form-data"
+    class="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4"
+  >
+    {% csrf_token %}
+    <input type="hidden" name="action_type" value="upload">
+    <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Upload New Document Version</h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1">Document Type</label>
+        {{ doc_form.document_type }}
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1">Title / Description</label>
+        {{ doc_form.title }}
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1">Expiry Date</label>
+        {{ doc_form.expiry_date }}
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1">File</label>
+        {{ doc_form.file }}
+      </div>
+    </div>
+
+    <div class="text-right">
+      <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all">
+        Upload Document
+      </button>
+    </div>
+  </form>
+
+  {# List of Uploaded Documents #}
+  <div class="space-y-3">
+    <h3 class="text-sm font-semibold text-gray-800">Uploaded Documents ({{ documents|length }})</h3>
+    {% if documents %}
+      <div class="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
+        {% for doc in documents %}
+          <div class="p-3 bg-white flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+            <div class="flex items-center space-x-3">
+              <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                <i data-lucide="file-text" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm font-medium text-gray-900">{{ doc.get_document_type_display }}</span>
+                  <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">v{{ doc.version }}</span>
+                  {% if doc.is_sensitive %}
+                    <span class="text-xs px-2 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200 font-medium">
+                      Sensitive RBAC Gated
+                    </span>
+                  {% endif %}
+                </div>
+                <p class="text-xs text-gray-400 mt-0.5">
+                  {% if doc.title %}{{ doc.title }} • {% endif %}
+                  Uploaded {{ doc.uploaded_at|date:"M d, Y" }}
+                  {% if doc.expiry_date %}
+                    • Expires: <span class="{% if doc.is_expired %}text-red-600 font-bold{% elif doc.is_expiring_soon %}text-amber-600 font-semibold{% else %}text-gray-500{% endif %}">{{ doc.expiry_date }}</span>
+                  {% endif %}
+                </p>
+              </div>
+            </div>
+            
+            <a href="{% url 'employees:document_download' pk=doc.pk %}" target="_blank" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg transition-colors flex items-center space-x-1">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Download</span>
+            </a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-xs text-gray-400 italic">No documents uploaded yet. You can upload now or complete later.</p>
+    {% endif %}
+  </div>
+
+  <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+    <a 
+      hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=4 %}"
+      hx-target="#wizard-step-container"
+      hx-swap="innerHTML"
+      class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-all cursor-pointer"
+    >
+      Back to Step 4
+    </a>
+
+    <form hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=5 %}" hx-target="#wizard-step-container" hx-swap="innerHTML">
+      {% csrf_token %}
+      <input type="hidden" name="action_type" value="next">
+      <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all flex items-center space-x-2">
+        <span>Continue to Step 6</span>
+        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      </button>
+    </form>
+  </div>
+</div>

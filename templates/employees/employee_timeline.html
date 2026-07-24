@@ -1,0 +1,46 @@
+{% extends 'cotton/app-shell.html' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
+
+  <div class="flex items-center justify-between bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+    <div class="space-y-1">
+      <div class="flex items-center space-x-3">
+        <h1 class="text-2xl font-bold text-gray-900">
+          Employee Timeline & EmploymentHistory
+        </h1>
+        <c-status-pill status="{{ employee.status }}"></c-status-pill>
+      </div>
+      <p class="text-sm text-gray-500">
+        Read-only chronological log of all field changes and status lifecycle transitions for {{ employee.get_full_name }}.
+      </p>
+    </div>
+    <a href="{% url 'employees:master_detail' pk=employee.pk %}" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold">
+      Back to Profile
+    </a>
+  </div>
+
+  <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+    <c-timeline>
+      {% for evt in timeline_events %}
+        <c-timeline-item 
+          title="{{ evt.title }}"
+          time="{{ evt.timestamp|date:'M d, Y H:i' }}"
+          badge="{{ evt.event_type }}"
+        >
+          <p class="text-sm text-gray-700 mt-1">{{ evt.description }}</p>
+          {% if evt.actor %}
+            <p class="text-xs text-gray-400 mt-1">Logged by: {{ evt.actor.get_full_name|default:evt.actor.email }}</p>
+          {% endif %}
+        </c-timeline-item>
+      {% empty %}
+        <c-empty-state 
+          title="No Timeline Events" 
+          description="No status transitions or employment history changes recorded yet."
+        ></c-empty-state>
+      {% endfor %}
+    </c-timeline>
+  </div>
+
+</div>
+{% endblock %}

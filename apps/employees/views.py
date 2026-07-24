@@ -654,39 +654,7 @@ class EmployeeDocumentUploadView(RoleRequiredMixin, View):
         })
 
 
-class EmployeeDocumentDownloadView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager', 'staff']
-
-    def get(self, request, pk):
-        doc = get_object_or_404(EmployeeDocument.objects.select_related('employee_master', 'employee_master__reporting_manager'), pk=pk)
-
-        # Sensitive RBAC check
-        if doc.is_sensitive():
-            user = request.user
-            user_role = getattr(user, 'role', '')
-            is_hr_admin = user_role in ['admin', 'hr'] or user.is_superuser
-            is_self = doc.employee_master and doc.employee_master.user_id == user.id
-            is_manager = doc.employee_master and doc.employee_master.reporting_manager and doc.employee_master.reporting_manager.user_id == user.id
-
-            if not (is_hr_admin or is_self or is_manager):
-                log_audit(actor=user, action='document_access_denied', target=doc, summary=f"Unauthorized download attempt for document {doc.pk}")
-                return HttpResponseForbidden("Access denied: You do not have permission to view sensitive documents of this employee.")
-
-        DocumentDownloadLog.objects.create(
-            document=doc,
-            downloaded_by=request.user,
-            ip_address=get_client_ip(request)
-        )
-        log_audit(actor=request.user, action='document_downloaded', target=doc, summary=f"Downloaded document {doc.title or doc.get_document_type_display()} for {doc.employee_master}")
-
-        if not doc.file or not doc.file.storage.exists(doc.file.name):
-            messages.error(request, "Document file not found.")
-            return redirect('employees:master_detail', pk=doc.employee_master_id or 1)
-
-        response = HttpResponse(doc.file.read(), content_type='application/octet-stream')
-        filename = doc.file.name.split('/')[-1]
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
+# Legacy EmployeeDocumentDownloadView removed — see unified PermissionEngine version below (line ~1307).
 
 
 class AssetListView(RoleRequiredMixin, ListView):
@@ -1071,11 +1039,327 @@ class LifecycleReviewView(AdminRequiredMixin, View):
             _notify_requester(ltr)
             messages.success(request, f"Rejected: {ltr.employee.get_full_name()} transition to {ltr.to_status}")
 
-        else:
-            if request.headers.get('HX-Request'):
-                return HttpResponse("<p class='text-rose-500 text-sm'>Invalid action.</p>", status=400)
-            return redirect('employees:lifecycle_requests')
-
         if request.headers.get('HX-Request'):
             return render(request, 'employees/partials/lifecycle_request_row.html', {'req': ltr})
         return redirect('employees:lifecycle_requests')
+
+
+# ── Employee Multi-Step Wizard View ─────────────────────────────────────────
+from django.http import FileResponse, JsonResponse
+from apps.accounts.engine import PermissionEngine
+from apps.employees.models import Employee, EmployeeDocument, DocumentDownloadLog, Asset, AssetAssignment, EmployeeStatus, EmploymentHistory
+from apps.employees.forms import (
+    WizardStep1Form, WizardStep2Form, WizardStep3Form, WizardStep4Form,
+    WizardStep6Form, EmployeeDocumentForm, AssetAssignmentForm
+)
+
+class EmployeeWizardView(AdminRequiredMixin, View):
+    """
+    Multi-Step Wizard for Employee Creation and Edition (Steps 1 to 8).
+    Supports progressive saving, HTMX step navigation, and full lifecycle activation.
+    """
+    def get_form_class(self, step):
+        mapping = {
+            1: WizardStep1Form,
+            2: WizardStep2Form,
+            3: WizardStep3Form,
+            4: WizardStep4Form,
+            6: WizardStep6Form,
+        }
+        return mapping.get(step)
+
+    def get_context_data(self, request, pk=None, step=1, form=None):
+        step = int(step)
+        employee = get_object_or_404(Employee, pk=pk) if pk else None
+
+        ctx = {
+            'step': step,
+            'step_count': 8,
+            'employee': employee,
+            'completion_pct': employee.get_completion_percentage() if employee else 0,
+        }
+
+        form_cls = self.get_form_class(step)
+        if form is None and form_cls:
+            if step == 4:
+                ctx['form'] = form_cls(employee=employee)
+            elif employee:
+                ctx['form'] = form_cls(instance=employee)
+            else:
+                ctx['form'] = form_cls()
+        elif form:
+            ctx['form'] = form
+
+        if step == 5 and employee:
+            ctx['doc_form'] = EmployeeDocumentForm()
+            ctx['documents'] = employee.documents.filter(is_active=True).select_related('uploaded_by')
+        elif step == 7 and employee:
+            ctx['asset_form'] = AssetAssignmentForm()
+            ctx['assigned_assets'] = employee.asset_assignments.select_related('asset', 'assigned_by').order_by('-assigned_date')
+        elif step == 8 and employee:
+            ctx['user_account'] = employee.user
+            if employee.user:
+                ctx['user_roles'] = UserRoleAssignment.objects.filter(user=employee.user).select_related('role')
+            else:
+                ctx['user_roles'] = []
+            ctx['documents'] = employee.documents.filter(is_active=True)
+            ctx['assets'] = employee.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
+
+        return ctx
+
+    def get(self, request, pk=None, step=1):
+        step = int(step)
+        ctx = self.get_context_data(request, pk, step)
+        if request.headers.get('HX-Request'):
+            return render(request, f'employees/wizard/step_{step}.html', ctx)
+        return render(request, 'employees/employee_wizard.html', ctx)
+
+    def post(self, request, pk=None, step=1):
+        step = int(step)
+        employee = get_object_or_404(Employee, pk=pk) if pk else None
+
+        if step == 1:
+            form = WizardStep1Form(request.POST, request.FILES, instance=employee)
+            if form.is_valid():
+                emp = form.save(commit=False)
+                if not emp.pk:
+                    emp.status = EmployeeStatus.DRAFT
+                emp.save()
+                messages.success(request, f"Step 1 saved. Employee ID {emp.employee_number} created in Draft status.")
+                next_step = int(request.POST.get('next_step', 2))
+                if request.headers.get('HX-Request'):
+                    ctx = self.get_context_data(request, pk=emp.pk, step=next_step)
+                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response['HX-Push-Url'] = f"/employees/wizard/{emp.pk}/step/{next_step}/"
+                    return response
+                return redirect('employees:employee_wizard_step', pk=emp.pk, step=next_step)
+            else:
+                ctx = self.get_context_data(request, pk=pk, step=1, form=form)
+                return render(request, f'employees/wizard/step_1.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+
+        elif step == 2:
+            form = WizardStep2Form(request.POST, instance=employee)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Step 2 (Organization Info) saved successfully.")
+                next_step = int(request.POST.get('next_step', 3))
+                if request.headers.get('HX-Request'):
+                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    return response
+                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+            else:
+                ctx = self.get_context_data(request, pk=employee.pk, step=2, form=form)
+                return render(request, f'employees/wizard/step_2.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+
+        elif step == 3:
+            form = WizardStep3Form(request.POST, instance=employee)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Step 3 (Payroll Info) saved successfully.")
+                next_step = int(request.POST.get('next_step', 4))
+                if request.headers.get('HX-Request'):
+                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    return response
+                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+            else:
+                ctx = self.get_context_data(request, pk=employee.pk, step=3, form=form)
+                return render(request, f'employees/wizard/step_3.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+
+        elif step == 4:
+            form = WizardStep4Form(request.POST, employee=employee)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Step 4 (Security Account & Role Assignment) saved successfully.")
+                next_step = int(request.POST.get('next_step', 5))
+                if request.headers.get('HX-Request'):
+                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    return response
+                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+            else:
+                ctx = self.get_context_data(request, pk=employee.pk, step=4, form=form)
+                return render(request, f'employees/wizard/step_4.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+
+        elif step == 5:
+            # Document Upload
+            doc_form = EmployeeDocumentForm(request.POST, request.FILES)
+            if doc_form.is_valid():
+                doc = doc_form.save(commit=False)
+                doc.employee_master = employee
+                doc.uploaded_by = request.user
+                doc.save()
+                messages.success(request, f"Document '{doc.get_document_type_display()}' uploaded successfully.")
+            else:
+                messages.error(request, "Failed to upload document. Please check the form fields.")
+            
+            action_type = request.POST.get('action_type', 'upload')
+            if action_type == 'next':
+                next_step = 6
+            else:
+                next_step = 5
+
+            ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+            if request.headers.get('HX-Request'):
+                response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                return response
+            return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+
+        elif step == 6:
+            form = WizardStep6Form(request.POST, instance=employee)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Step 6 (Emergency Contact) saved successfully.")
+                next_step = int(request.POST.get('next_step', 7))
+                if request.headers.get('HX-Request'):
+                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    return response
+                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+            else:
+                ctx = self.get_context_data(request, pk=employee.pk, step=6, form=form)
+                return render(request, f'employees/wizard/step_6.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+
+        elif step == 7:
+            # Asset Assignment
+            asset_form = AssetAssignmentForm(request.POST)
+            if asset_form.is_valid():
+                assign = asset_form.save(commit=False)
+                assign.employee = employee
+                assign.assigned_by = request.user
+                assign.save()
+                messages.success(request, f"Asset '{assign.asset.name}' assigned successfully.")
+            else:
+                messages.error(request, "Could not assign asset. Check if asset is already assigned.")
+
+            action_type = request.POST.get('action_type', 'assign')
+            next_step = 8 if action_type == 'next' else 7
+
+            ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+            if request.headers.get('HX-Request'):
+                response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                return response
+            return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+
+        elif step == 8:
+            # Final Approval step
+            action = request.POST.get('action', 'approve')
+            if action == 'approve':
+                old_status = employee.status
+                employee.status = EmployeeStatus.ACTIVE
+                employee.save()
+                log_audit(
+                    actor=request.user,
+                    action='employee_wizard_approval',
+                    target=employee,
+                    summary=f"Approved employee wizard: {employee.get_full_name()} status changed from {old_status} to Active."
+                )
+                messages.success(request, f"Employee {employee.get_full_name()} successfully activated!")
+                return redirect('employees:employee_detail', pk=employee.pk if hasattr(employee, 'legacy_profile') else employee.pk)
+            else:
+                messages.info(request, f"Employee wizard saved in {employee.status} state.")
+                return redirect('employees:employee_list')
+
+        return redirect('employees:employee_list')
+
+
+from django.contrib.auth.mixins import LoginRequiredMixin
+
+class EmployeeDocumentDownloadView(LoginRequiredMixin, View):
+    """
+    Unified, PermissionEngine-gated document download view.
+    - Sensitive documents: checks ownership first, then falls through PermissionEngine.evaluate().
+    - Logs every download via DocumentDownloadLog + audit trail.
+    - Returns 404 with message if file is physically missing.
+    """
+    def get(self, request, pk):
+        doc = get_object_or_404(
+            EmployeeDocument.objects.select_related('employee_master', 'employee'),
+            pk=pk
+        )
+
+        if doc.is_sensitive():
+            is_owner = (
+                (doc.employee_master and doc.employee_master.user == request.user) or
+                (doc.employee and doc.employee.user == request.user)
+            )
+            if not is_owner and not request.user.is_superuser:
+                res = PermissionEngine.evaluate(request.user, 'employees.download_sensitive_document')
+                if not res.allowed:
+                    log_audit(
+                        actor=request.user,
+                        action='document_access_denied',
+                        target=doc,
+                        summary=f"Unauthorized download attempt for sensitive document pk={doc.pk}"
+                    )
+                    return HttpResponseForbidden(
+                        "Permission Denied: You do not have permission to download sensitive documents."
+                    )
+
+        # Verify file physically exists before streaming
+        if not doc.file or not doc.file.storage.exists(doc.file.name):
+            messages.error(request, "Document file not found on storage.")
+            fallback_pk = doc.employee_master_id or (doc.employee_id if hasattr(doc, 'employee_id') else 1)
+            return redirect('employees:master_detail', pk=fallback_pk)
+
+        DocumentDownloadLog.objects.create(
+            document=doc,
+            downloaded_by=request.user,
+            ip_address=get_client_ip(request)
+        )
+        log_audit(
+            actor=request.user,
+            action='document_downloaded',
+            target=doc,
+            summary=f"Downloaded document '{doc.title or doc.get_document_type_display()}' (pk={doc.pk})"
+        )
+        return FileResponse(
+            doc.file.open('rb'),
+            as_attachment=True,
+            filename=f"{doc.title or doc.get_document_type_display()}_{doc.pk}"
+        )
+
+
+class EmployeeTimelineView(AdminRequiredMixin, DetailView):
+    """
+    Read-only timeline view combining status transitions and EmploymentHistory logs.
+    """
+    model = Employee
+    template_name = 'employees/employee_timeline.html'
+    context_object_name = 'employee'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        employee = self.object
+        history_events = list(employee.employment_history.select_related('approved_by').all())
+        lifecycle_events = list(employee.lifecycle_requests.select_related('requested_by', 'reviewed_by').all())
+        
+        combined = []
+        for h in history_events:
+            combined.append({
+                'timestamp': h.created_at,
+                'event_type': 'Field Change',
+                'title': f"Field '{h.field_changed}' updated",
+                'description': f"Old: {h.old_value} → New: {h.new_value} (Reason: {h.reason})",
+                'actor': h.approved_by,
+            })
+        for l in lifecycle_events:
+            combined.append({
+                'timestamp': l.requested_at,
+                'event_type': 'Lifecycle Transition',
+                'title': f"Status Request: {l.from_status} → {l.to_status} [{l.review_status}]",
+                'description': f"Reason: {l.reason} | Note: {l.review_note}",
+                'actor': l.reviewed_by or l.requested_by,
+            })
+
+        combined.sort(key=lambda x: x['timestamp'], reverse=True)
+        context['timeline_events'] = combined
+        return context
+

@@ -464,3 +464,237 @@ class AssetReturnForm(forms.ModelForm):
         }
 
 
+# ── Wizard Step Forms ────────────────────────────────────────────────────────
+from apps.accounts.rbac_models import Role, UserRoleAssignment
+
+class WizardStep1Form(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = ['employee_number', 'first_name', 'last_name', 'personal_email', 'phone', 'dob', 'gender']
+        widgets = {
+            'employee_number': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. EMP-2026-001'}),
+            'first_name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'First Name'}),
+            'last_name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Last Name'}),
+            'personal_email': forms.EmailInput(attrs={'class': TEXT_INPUT, 'placeholder': 'name@example.com'}),
+            'phone': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': '+880...'}),
+            'dob': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'gender': forms.Select(attrs={'class': SELECT_INPUT}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.initial.get('employee_number'):
+            self.initial['employee_number'] = generate_employee_id()
+        self.fields['employee_number'].required = True
+        self.fields['first_name'].required = True
+        self.fields['last_name'].required = True
+
+    def clean_employee_number(self):
+        emp_num = self.cleaned_data.get('employee_number', '').strip()
+        qs = Employee.objects.filter(employee_number=emp_num)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("An employee with this Employee ID already exists.")
+        return emp_num
+
+    def clean_personal_email(self):
+        email = self.cleaned_data.get('personal_email', '').strip()
+        if email:
+            qs = Employee.objects.filter(personal_email__iexact=email)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError("An employee with this email address already exists.")
+        return email
+
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone', '').strip()
+        if phone:
+            qs = Employee.objects.filter(phone=phone)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError("An employee with this phone number already exists.")
+        return phone
+
+
+class WizardStep2Form(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = [
+            'branch', 'department', 'designation', 'reporting_manager',
+            'employment_type', 'joined_date', 'shift', 'weekly_holiday_policy'
+        ]
+        widgets = {
+            'branch': forms.Select(attrs={'class': SELECT_INPUT}),
+            'department': forms.Select(attrs={'class': SELECT_INPUT}),
+            'designation': forms.Select(attrs={'class': SELECT_INPUT}),
+            'reporting_manager': forms.Select(attrs={'class': SELECT_INPUT}),
+            'employment_type': forms.Select(attrs={'class': SELECT_INPUT}),
+            'joined_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'shift': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Day Shift (9 AM - 6 PM)'}),
+            'weekly_holiday_policy': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Friday, Saturday'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['reporting_manager'].queryset = Employee.objects.exclude(pk=self.instance.pk)
+        if not self.initial.get('joined_date'):
+            self.initial['joined_date'] = date.today()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        manager = cleaned_data.get('reporting_manager')
+        if self.instance and self.instance.pk and manager:
+            if manager.pk == self.instance.pk:
+                self.add_error('reporting_manager', "An employee cannot report to themselves.")
+            else:
+                curr = manager
+                visited = {self.instance.pk}
+                while curr:
+                    if curr.pk in visited:
+                        self.add_error('reporting_manager', f"Circular reporting structure detected involving {curr.get_full_name()}.")
+                        break
+                    visited.add(curr.pk)
+                    curr = curr.reporting_manager
+        return cleaned_data
+
+
+class WizardStep3Form(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = [
+            'basic_salary', 'salary_structure', 'bank_name', 'bank_account',
+            'payment_method', 'tax_profile', 'pf_enabled', 'overtime_policy'
+        ]
+        widgets = {
+            'basic_salary': forms.NumberInput(attrs={'class': TEXT_INPUT, 'step': '0.01', 'placeholder': '0.00'}),
+            'salary_structure': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Executive Grade B'}),
+            'bank_name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. City Bank Ltd'}),
+            'bank_account': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Account Number'}),
+            'payment_method': forms.Select(attrs={'class': SELECT_INPUT}),
+            'tax_profile': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'TIN / Tax Region'}),
+            'pf_enabled': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+            'overtime_policy': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Standard 1.5x'}),
+        }
+
+
+class WizardStep4Form(forms.Form):
+    login_email = forms.EmailField(
+        label="Login Email",
+        widget=forms.EmailInput(attrs={'class': TEXT_INPUT, 'placeholder': 'user@company.com'}),
+        required=True
+    )
+    password1 = forms.CharField(
+        label="Password",
+        widget=forms.PasswordInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Set password'}),
+        required=False
+    )
+    password2 = forms.CharField(
+        label="Confirm Password",
+        widget=forms.PasswordInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Repeat password'}),
+        required=False
+    )
+    roles = forms.ModelMultipleChoiceField(
+        queryset=Role.objects.filter(is_active=True),
+        widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT, 'size': 4}),
+        required=True,
+        label="Assigned Roles (UserRoleAssignment)"
+    )
+    data_scope = forms.ChoiceField(
+        choices=Employee.DATA_SCOPE_CHOICES,
+        widget=forms.Select(attrs={'class': SELECT_INPUT}),
+        initial='branch',
+        label="Data Scope"
+    )
+    mfa_required = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+        label="Require Multi-Factor Authentication (MFA)"
+    )
+
+    def __init__(self, *args, employee=None, **kwargs):
+        self.employee = employee
+        super().__init__(*args, **kwargs)
+        if employee and employee.user:
+            self.fields['login_email'].initial = employee.user.email
+            self.fields['data_scope'].initial = employee.data_scope
+            self.fields['mfa_required'].initial = employee.mfa_required
+            assigned_role_ids = UserRoleAssignment.objects.filter(user=employee.user).values_list('role_id', flat=True)
+            self.fields['roles'].initial = assigned_role_ids
+
+    def clean_login_email(self):
+        email = self.cleaned_data.get('login_email', '').strip()
+        qs = User.objects.filter(email__iexact=email)
+        if self.employee and self.employee.user:
+            qs = qs.exclude(pk=self.employee.user.pk)
+        if qs.exists():
+            raise forms.ValidationError("A user account with this login email already exists.")
+        return email
+
+    def clean(self):
+        cleaned_data = super().clean()
+        p1 = cleaned_data.get('password1')
+        p2 = cleaned_data.get('password2')
+        # If new account (no employee.user), password is required
+        if not (self.employee and self.employee.user) and not p1:
+            self.add_error('password1', "Password is required when creating a new user account.")
+        if p1 or p2:
+            if p1 != p2:
+                self.add_error('password2', "Passwords do not match.")
+            elif len(p1) < 8:
+                self.add_error('password1', "Password must be at least 8 characters long.")
+        return cleaned_data
+
+    def save(self):
+        cleaned_data = self.cleaned_data
+        email = cleaned_data['login_email']
+        p1 = cleaned_data.get('password1')
+        roles = cleaned_data['roles']
+        data_scope = cleaned_data['data_scope']
+        mfa_required = cleaned_data['mfa_required']
+
+        user = self.employee.user if self.employee else None
+        if not user:
+            # Check if user with email exists
+            user = User.objects.filter(email__iexact=email).first()
+
+        if not user:
+            user = User.objects.create_user(
+                email=email,
+                phone=self.employee.phone or None,
+                password=p1
+            )
+        elif p1:
+            user.set_password(p1)
+            user.save()
+
+        # Update Employee fields
+        self.employee.user = user
+        self.employee.data_scope = data_scope
+        self.employee.mfa_required = mfa_required
+        self.employee.save()
+
+        # Sync UserRoleAssignment — zero direct CustomUser.role write
+        UserRoleAssignment.objects.filter(user=user).delete()
+        for r in roles:
+            UserRoleAssignment.objects.create(user=user, role=r, assigned_by=None)
+
+        return user
+
+
+class WizardStep6Form(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = ['emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone', 'emergency_contact_address']
+        widgets = {
+            'emergency_contact_name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Contact Name'}),
+            'emergency_contact_relation': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Relation (e.g. Spouse, Parent)'}),
+            'emergency_contact_phone': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Phone Number'}),
+            'emergency_contact_address': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Address'}),
+        }
+
+
+

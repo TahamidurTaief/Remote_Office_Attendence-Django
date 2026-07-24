@@ -7,7 +7,7 @@ to avoid circular imports.
 # ── Allowed transitions ──────────────────────────────────────────────────────
 # Keys are FROM-status values; sets are valid TO-status values.
 TRANSITION_MAP: dict[str, set[str]] = {
-    'draft':            {'pending_approval'},
+    'draft':            {'pending_approval', 'active'},
     'pending_approval': {'active', 'draft'},
     'active':           {'probation', 'transferred', 'promoted', 'demoted', 'notice_period', 'terminated'},
     'probation':        {'confirmed', 'terminated'},
@@ -28,6 +28,7 @@ TRANSITION_MAP: dict[str, set[str]] = {
 # LifecycleTransitionRequest (pending admin approval before status changes).
 LOW_RISK_TRANSITIONS: set[tuple[str, str]] = {
     ('draft',         'pending_approval'),
+    ('draft',         'active'),
     ('probation',     'confirmed'),
     ('notice_period', 'resigned'),
     ('resigned',      'archived'),

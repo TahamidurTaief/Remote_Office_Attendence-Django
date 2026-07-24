@@ -333,6 +333,26 @@ class Employee(models.Model):
         ('other', 'Other'),
     )
 
+    EMPLOYMENT_TYPE_CHOICES = (
+        ('full_time', 'Full Time'),
+        ('part_time', 'Part Time'),
+        ('contract', 'Contract'),
+        ('intern', 'Intern'),
+        ('probationary', 'Probationary'),
+    )
+
+    PAYMENT_METHOD_CHOICES = (
+        ('bank', 'Bank Transfer'),
+        ('cash', 'Cash'),
+        ('mobile', 'Mobile Banking'),
+    )
+
+    DATA_SCOPE_CHOICES = (
+        ('branch', 'Branch Level'),
+        ('department', 'Department Level'),
+        ('global', 'Global / Organization Wide'),
+    )
+
     employee_number = models.CharField(max_length=50, unique=True, db_index=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -344,7 +364,9 @@ class Employee(models.Model):
     personal_email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
     emergency_contact_name = models.CharField(max_length=255, blank=True)
+    emergency_contact_relation = models.CharField(max_length=50, blank=True)
     emergency_contact_phone = models.CharField(max_length=50, blank=True)
+    emergency_contact_address = models.TextField(blank=True)
 
     branch = models.ForeignKey(
         Branch, on_delete=models.SET_NULL, null=True, blank=True,
@@ -362,20 +384,58 @@ class Employee(models.Model):
         'self', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='direct_reports', db_index=True
     )
+    employment_type = models.CharField(max_length=30, choices=EMPLOYMENT_TYPE_CHOICES, default='full_time', blank=True)
+    joined_date = models.DateField(null=True, blank=True)
+    shift = models.CharField(max_length=50, blank=True, default='Day Shift')
+    weekly_holiday_policy = models.CharField(max_length=100, blank=True, default='Friday, Saturday')
+
+    # Payroll fields
+    basic_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    salary_structure = models.CharField(max_length=100, blank=True, default='Standard Salary Structure')
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_account = models.CharField(max_length=50, blank=True)
+    payment_method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES, default='bank', blank=True)
+    tax_profile = models.CharField(max_length=100, blank=True)
+    pf_enabled = models.BooleanField(default=False)
+    overtime_policy = models.CharField(max_length=50, blank=True, default='Standard Overtime (1.5x)')
+
+    # Security & User Account
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='employee_master'
+    )
+    data_scope = models.CharField(max_length=30, choices=DATA_SCOPE_CHOICES, default='branch', blank=True)
+    mfa_required = models.BooleanField(default=False)
 
     status = models.CharField(
         max_length=30, choices=EmployeeStatus.choices,
         default=EmployeeStatus.DRAFT, db_index=True
     )
-    joined_date = models.DateField(null=True, blank=True)
-
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='employee_master'
-    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def get_completion_percentage(self) -> int:
+        score = 0
+        # Step 1: Basic info
+        if self.employee_number and self.first_name and self.last_name:
+            score += 20
+        # Step 2: Org info
+        if self.department_id and self.designation_id and self.joined_date:
+            score += 20
+        # Step 3: Payroll
+        if self.basic_salary is not None:
+            score += 20
+        # Step 4: Security user link
+        if self.user_id:
+            score += 20
+        # Step 5-7: Documents/Emergency/Assets
+        has_docs = self.documents.filter(is_active=True).exists()
+        has_emergency = bool(self.emergency_contact_name and self.emergency_contact_phone)
+        has_assets = self.asset_assignments.filter(returned_date__isnull=True).exists()
+        if has_docs or has_emergency or has_assets:
+            score += 20
+        return score
 
     class Meta:
         ordering = ['employee_number']
