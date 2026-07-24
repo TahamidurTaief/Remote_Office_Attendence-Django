@@ -689,4 +689,279 @@ class SQLiteSyncBoundariesAndAdditionalIdempotencyTests(TestCase):
         self.assertEqual(AttendanceLocation.objects.filter(sync_uuid=sync_uuid_str, event='auto_track').count(), 1)
 
 
+class AttendancePhase2Tests(TestCase):
+    def setUp(self):
+        # Setup Branch
+        self.branch = Branch.objects.create(
+            name='HQ',
+            address='Dhaka',
+            latitude=23.7925,
+            longitude=90.4078,
+            radius_meters=100,
+            wifi_ip='192.168.1.1',
+            is_active=True
+        )
+        
+        # Setup Manager
+        self.manager_user = User.objects.create_user(
+            phone='+8801700000001',
+            password='password123',
+            role='manager'
+        )
+        self.manager_profile = EmployeeProfile.objects.create(
+            user=self.manager_user,
+            employee_id='MGR-001',
+            full_name='Manager One',
+            phone='+8801700000001',
+            joined_date=datetime.date(2026, 1, 1),
+            is_active=True
+        )
+        from apps.employees.models import Employee
+        self.manager_master = Employee.objects.create(
+            employee_number='EMP-MGR-001',
+            first_name='Manager',
+            last_name='One',
+            phone='+8801700000001',
+            user=self.manager_user,
+            joined_date=datetime.date(2026, 1, 1),
+            status='active'
+        )
+        self.manager_profile.master_employee = self.manager_master
+        self.manager_profile.save()
+
+        # Setup Employee
+        self.employee_user = User.objects.create_user(
+            phone='+8801700000002',
+            password='password123',
+            role='staff'
+        )
+        self.employee = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id='EMP-002',
+            full_name='Staff Two',
+            phone='+8801700000002',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        self.employee_master = Employee.objects.create(
+            employee_number='EMP-STF-002',
+            first_name='Staff',
+            last_name='Two',
+            phone='+8801700000002',
+            user=self.employee_user,
+            reporting_manager=self.manager_master,
+            joined_date=datetime.date(2026, 1, 1),
+            shift='Day Shift',
+            weekly_holiday_policy='Friday, Saturday',
+            status='active'
+        )
+        self.employee.master_employee = self.employee_master
+        self.employee.save()
+
+        # Setup HR/Admin
+        self.hr_user = User.objects.create_user(
+            phone='+8801700000003',
+            password='password123',
+            role='admin'
+        )
+        
+        self.photo_file = SimpleUploadedFile("test_photo.jpg", b"file_content", content_type="image/jpeg")
+
+    def test_photo_and_geofencing_policies(self):
+        from apps.attendance.models import AttendancePolicy
+        
+        # Scenario A: Policy requires photo, but none sent. Check-in should fail.
+        policy = AttendancePolicy.objects.create(branch=self.branch, photo_required=True, geofencing_policy='block')
+        
+        self.client.login(username='+8801700000002', password='password123')
+        
+        # Check-in without photo
+        response = self.client.post(reverse('attendance:check_in'), data={
+            'latitude': 23.7925,
+            'longitude': 90.4078,
+            'accuracy': 10
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Photo is required', response.json()['error'])
+        
+        # Scenario B: Policy photo_required=False. Check-in without photo should succeed.
+        policy.photo_required = False
+        policy.save()
+        
+        response = self.client.post(reverse('attendance:check_in'), data={
+            'latitude': 23.7925,
+            'longitude': 90.4078,
+            'accuracy': 10
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        
+        # Check-out
+        policy.photo_required = True
+        policy.save()
+        
+        response = self.client.post(reverse('attendance:check_out'), data={
+            'latitude': 23.7925,
+            'longitude': 90.4078,
+            'accuracy': 10
+        })
+        self.assertEqual(response.status_code, 400)
+        
+        # Scenario D: Geofencing block. Trying to check in 10km away should fail.
+        policy.photo_required = False
+        policy.geofencing_policy = 'block'
+        policy.save()
+        
+        Attendance.objects.all().delete()
+        
+        response = self.client.post(reverse('attendance:check_in'), data={
+            'latitude': 24.7925,
+            'longitude': 91.4078,
+            'accuracy': 10
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Geofence validation failed', response.json()['error'])
+        
+        # Scenario E: Geofencing warning. Should succeed, but append warning to note.
+        policy.geofencing_policy = 'warning'
+        policy.save()
+        
+        response = self.client.post(reverse('attendance:check_in'), data={
+            'latitude': 24.7925,
+            'longitude': 91.4078,
+            'accuracy': 10,
+            'note': 'Working remotely'
+        })
+        self.assertEqual(response.status_code, 200)
+        attendance = Attendance.objects.latest('id')
+        self.assertIn('GEOFENCE WARNING', attendance.note)
+
+    def test_forgot_checkout_workflow(self):
+        from apps.attendance.models import ForgotCheckoutRequest, AttendanceAuditLog
+        
+        # Create unclosed session
+        att = Attendance.objects.create(
+            employee=self.employee,
+            date=timezone.localdate() - datetime.timedelta(days=1),
+            check_in_time=timezone.now() - datetime.timedelta(hours=24),
+            attendance_type='check_in',
+            status='on_time'
+        )
+        
+        self.client.login(username='+8801700000002', password='password123')
+        
+        # Submit forgot checkout request
+        proposed_co = (timezone.now() - datetime.timedelta(hours=16)).isoformat()
+        response = self.client.post(reverse('attendance:submit_forgot_checkout'), data={
+            'attendance_id': att.id,
+            'reason': 'Forgot to punch out yesterday',
+            'check_out_time': proposed_co
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ForgotCheckoutRequest.objects.filter(attendance=att).exists())
+        
+        req = ForgotCheckoutRequest.objects.get(attendance=att)
+        self.assertEqual(req.status, 'pending_manager')
+        
+        # Manager approves
+        self.client.login(username='+8801700000001', password='password123')
+        response = self.client.post(reverse('attendance:process_forgot_checkout', args=[req.pk]), data={
+            'action': 'approve'
+        })
+        self.assertEqual(response.status_code, 200)
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'pending_hr')
+        self.assertEqual(req.reviewed_by_manager, self.manager_user)
+        
+        # HR approves
+        self.client.login(username='+8801700000003', password='password123')
+        response = self.client.post(reverse('attendance:process_forgot_checkout', args=[req.pk]), data={
+            'action': 'approve'
+        })
+        self.assertEqual(response.status_code, 200)
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'approved')
+        self.assertEqual(req.reviewed_by_hr, self.hr_user)
+        
+        att.refresh_from_db()
+        self.assertIsNotNone(att.check_out_time)
+        self.assertTrue(AttendanceAuditLog.objects.filter(attendance=att, action='forgot_checkout').exists())
+
+    def test_attendance_correction_workflow(self):
+        from apps.attendance.models import AttendanceCorrectionRequest, AttendanceAuditLog
+        
+        # Create completed session
+        att = Attendance.objects.create(
+            employee=self.employee,
+            date=timezone.localdate(),
+            check_in_time=timezone.now() - datetime.timedelta(hours=9),
+            check_out_time=timezone.now() - datetime.timedelta(hours=1),
+            total_hours=8.0,
+            attendance_type='check_in',
+            status='on_time'
+        )
+        
+        self.client.login(username='+8801700000002', password='password123')
+        
+        # Submit correction request
+        proposed_ci = (timezone.now() - datetime.timedelta(hours=8)).isoformat()
+        proposed_co = (timezone.now() - datetime.timedelta(hours=1)).isoformat()
+        response = self.client.post(reverse('attendance:submit_attendance_correction'), data={
+            'attendance_id': att.id,
+            'reason': 'Adjusted time',
+            'check_in_time': proposed_ci,
+            'check_out_time': proposed_co
+        })
+        self.assertEqual(response.status_code, 200)
+        
+        req = AttendanceCorrectionRequest.objects.get(attendance=att)
+        self.assertEqual(req.status, 'pending')
+        
+        # Manager approves
+        self.client.login(username='+8801700000001', password='password123')
+        response = self.client.post(reverse('attendance:process_attendance_correction', args=[req.pk]), data={
+            'action': 'approve'
+        })
+        self.assertEqual(response.status_code, 200)
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'approved')
+        self.assertTrue(AttendanceAuditLog.objects.filter(attendance=att, action='correction').exists())
+
+    def test_overtime_approval_workflow(self):
+        # Create completed session with pending overtime
+        att = Attendance.objects.create(
+            employee=self.employee,
+            date=timezone.localdate(),
+            check_in_time=timezone.now() - datetime.timedelta(hours=12),
+            check_out_time=timezone.now(),
+            total_hours=12.0,
+            overtime_minutes=120,
+            ot_status='pending',
+            attendance_type='check_in',
+            status='on_time'
+        )
+        
+        # Manager rejects OT
+        self.client.login(username='+8801700000001', password='password123')
+        response = self.client.post(reverse('attendance:process_overtime', args=[att.pk]), data={
+            'action': 'reject'
+        })
+        self.assertEqual(response.status_code, 200)
+        att.refresh_from_db()
+        self.assertEqual(att.ot_status, 'rejected')
+        
+        # Reset OT to pending for approve test
+        att.ot_status = 'pending'
+        att.save()
+        
+        # Manager approves OT
+        response = self.client.post(reverse('attendance:process_overtime', args=[att.pk]), data={
+            'action': 'approve'
+        })
+        self.assertEqual(response.status_code, 200)
+        att.refresh_from_db()
+        self.assertEqual(att.ot_status, 'approved')
+
+
 
