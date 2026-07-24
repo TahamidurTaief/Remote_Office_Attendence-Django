@@ -22,6 +22,16 @@ def get_effective_permissions(user) -> set[str]:
     return perms
 
 
+def clear_user_perm_cache(user):
+    """
+    Clears request-scoped permission cache on user object.
+    """
+    if hasattr(user, '_effective_perms'):
+        delattr(user, '_effective_perms')
+    if hasattr(user, '_has_perm_cache'):
+        delattr(user, '_has_perm_cache')
+
+
 def has_perm_cached(user, perm_codename: str) -> bool:
     """
     Check if user has permission codename.

@@ -1,0 +1,31 @@
+<c-app-shell page_title="Security Dashboard | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
+  <c-slot name="sidebar">
+    <c-sidebar active_href="{{ request.path }}" />
+  </c-slot>
+
+  <c-slot name="topbar">
+    <c-topbar title="Enterprise Security Control Dashboard" />
+  </c-slot>
+
+  <c-command-palette />
+
+  <div class="p-4 space-y-4 max-w-7xl mx-auto">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight" style="color:var(--text)">Security & Session Governance</h1>
+        <p class="text-xs mt-1" style="color:var(--text-secondary)">Real-time session control, locked user monitoring, and security activity timeline.</p>
+      </div>
+
+      <button type="button"
+              hx-get="{% url 'admin_panel:security_dashboard' %}"
+              hx-target="#security-dashboard-container"
+              hx-swap="outerHTML"
+              class="ft-btn ft-btn-secondary ft-btn-sm text-xs flex items-center gap-1.5">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Live Data
+      </button>
+    </div>
+
+    {% include "admin_panel/security_dashboard_partial.html" %}
+
+  </div>
+</c-app-shell>

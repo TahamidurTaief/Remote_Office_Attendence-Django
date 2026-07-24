@@ -119,61 +119,96 @@ class CustomLoginView(View):
         user = authenticate(request, username=email, password=password)
 
         if user is not None:
-            if user.is_active:
-                now = timezone.now()
-                device_id = get_device_id(request)
+            # Check employee profile active status
+            emp_prof = getattr(user, 'employee_profile', None)
+            if not user.is_active or (emp_prof and not emp_prof.is_active):
+                log_audit(user, 'account_disabled_block', summary="Login blocked: Account deactivated/suspended", ip=ip)
+                messages.error(request, 'Your account has been deactivated or suspended. Please contact administrator.')
+                return render(request, 'accounts/login.html', {'email_entered': email})
 
-                user.failed_login_count = 0
-                user.locked_until = None
-                user.save(update_fields=['failed_login_count', 'locked_until'])
+            now = timezone.now()
+            device_id = get_device_id(request)
 
-                UserLoginActivity.objects.create(
+            user.failed_login_count = 0
+            user.locked_until = None
+            user.save(update_fields=['failed_login_count', 'locked_until'])
+
+            UserLoginActivity.objects.create(
+                user=user,
+                identifier_entered=email,
+                ip_address=ip,
+                user_agent=ua,
+                status='success'
+            )
+
+            # Single Device Login Enforcement: Invalidate prior active sessions
+            old_sessions = UserSession.objects.filter(user=user, is_active=True)
+            for old_sess in old_sessions:
+                old_sess.is_active = False
+                old_sess.logout_time = now
+                old_sess.save(update_fields=['is_active', 'logout_time'])
+
+                if old_sess.session_key:
+                    Session.objects.filter(session_key=old_sess.session_key).delete()
+
+            # Perform standard Django login
+            login(request, user)
+
+            # 1. Regenerate session key to prevent session fixation attacks
+            request.session.cycle_key()
+
+            cache.delete(cache_key)
+            log_audit(user, 'user_login', summary=f"User logged in from {ip}", ip=ip)
+
+            # 2. Check New Device Login Alert
+            device_hash = hashlib.sha256(f"{user.id}-{device_id}".encode('utf-8')).hexdigest()
+            user_has_trusted = TrustedDevice.objects.filter(user=user).exists()
+            is_device_trusted = TrustedDevice.objects.filter(user=user, device_hash=device_hash).exists()
+
+            if not user_has_trusted:
+                # First-ever login: automatically trust device
+                TrustedDevice.objects.create(
                     user=user,
-                    identifier_entered=email,
-                    ip_address=ip,
-                    user_agent=ua,
-                    status='success'
+                    device_hash=device_hash,
+                    device_name=ua[:250],
+                    expire_at=now + timedelta(days=30)
                 )
-
-                old_sessions = UserSession.objects.filter(user=user, is_active=True)
-                for old_sess in old_sessions:
-                    old_sess.is_active = False
-                    old_sess.logout_time = now
-                    old_sess.save(update_fields=['is_active', 'logout_time'])
-
-                    if old_sess.session_key:
-                        Session.objects.filter(session_key=old_sess.session_key).delete()
-
-                login(request, user)
-                cache.delete(cache_key)
-                log_audit(user, 'user_login', summary=f"User logged in from {ip}", ip=ip)
-
-                UserSession.objects.create(
-                    user=user,
-                    device_id=device_id,
-                    session_key=request.session.session_key,
-                    browser=ua,
-                    ip=ip,
-                    login_time=now,
-                    last_activity=now,
-                    is_active=True
-                )
-
-                if remember_device:
-                    device_hash = hashlib.sha256(f"{user.id}-{device_id}".encode('utf-8')).hexdigest()
-                    expire_at = now + timedelta(days=30)
-                    TrustedDevice.objects.update_or_create(
-                        user=user,
-                        device_hash=device_hash,
-                        defaults={
-                            'device_name': ua[:250],
-                            'expire_at': expire_at
-                        }
+            elif not is_device_trusted:
+                # Unrecognized new device login
+                log_audit(user, 'new_device_login', summary=f"Unrecognized new device login from IP {ip}", ip=ip)
+                if user.email:
+                    from django.core.mail import send_mail
+                    send_mail(
+                        subject="Security Alert: New Device Login Detected",
+                        message=f"Hi {user.email},\n\nA new device login was detected for your FieldTrack account.\nIP Address: {ip}\nBrowser: {ua[:100]}\nTime: {now.strftime('%d/%m/%Y %g:%i %A')}\n\nIf this was not you, please change your password immediately.",
+                        from_email="noreply@fieldtrack.com",
+                        recipient_list=[user.email],
+                        fail_silently=True
                     )
 
-                return self.redirect_based_on_role(user)
-            else:
-                messages.error(request, 'Your account is disabled.')
+            UserSession.objects.create(
+                user=user,
+                device_id=device_id,
+                session_key=request.session.session_key,
+                browser=ua,
+                ip=ip,
+                login_time=now,
+                last_activity=now,
+                is_active=True
+            )
+
+            if remember_device:
+                expire_at = now + timedelta(days=30)
+                TrustedDevice.objects.update_or_create(
+                    user=user,
+                    device_hash=device_hash,
+                    defaults={
+                        'device_name': ua[:250],
+                        'expire_at': expire_at
+                    }
+                )
+
+            return self.redirect_based_on_role(user)
         else:
             cache.set(cache_key, attempts + 1, timeout=300)
             if user_obj:

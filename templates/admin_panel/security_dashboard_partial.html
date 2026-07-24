@@ -1,0 +1,142 @@
+<div id="security-dashboard-container" class="space-y-6">
+
+  {# ── Security KPI Stat Widgets ────────────────────────────────────── #}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <c-kpi-widget title="Active Sessions" value="{{ active_sessions_count }}" icon="shield-check" color="emerald" hint="Currently logged in devices" />
+    <c-kpi-widget title="Locked Accounts" value="{{ locked_accounts_count }}" icon="lock" color="rose" hint="Auto-locked 30m security protection" />
+    <c-kpi-widget title="Failed Logins (24h)" value="{{ failed_logins_24h }}" icon="alert-triangle" color="amber" hint="Total failed authentication attempts" />
+    <c-kpi-widget title="New Device Logins (24h)" value="{{ new_devices_24h }}" icon="smartphone" color="sky" hint="Unrecognized device login alerts" />
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    {# ── Active Sessions Table ────────────────────────────────────────── #}
+    <c-card title="Live Active Sessions" subtitle="Manage and force logout active user sessions across all devices.">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
+              <th class="py-2.5 px-3 font-semibold">User</th>
+              <th class="py-2.5 px-3 font-semibold">Browser / IP</th>
+              <th class="py-2.5 px-3 font-semibold">Login Time</th>
+              <th class="py-2.5 px-3 font-semibold text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" style="border-color:var(--border)">
+            {% for sess in active_sessions %}
+              <tr class="hover:bg-slate-500/5">
+                <td class="py-2.5 px-3 font-medium" style="color:var(--text)">
+                  {{ sess.user.email|default:sess.user.phone }}
+                </td>
+                <td class="py-2.5 px-3 text-[11px]" style="color:var(--text-muted)">
+                  <span class="block text-xs" style="color:var(--text)">{{ sess.ip }}</span>
+                  <span class="block text-[10px] truncate max-w-[150px]">{{ sess.browser }}</span>
+                </td>
+                <td class="py-2.5 px-3 text-[11px]" style="color:var(--text-muted)">
+                  {{ sess.login_time|date:"g:i:s A" }}
+                </td>
+                <td class="py-2.5 px-3 text-right">
+                  <button type="button"
+                          hx-post="{% url 'accounts:admin_force_logout' pk=sess.user.id %}"
+                          hx-swap="outerHTML"
+                          class="px-2 py-1 text-[10px] font-semibold text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded hover:bg-rose-500/20">
+                    Kill Session
+                  </button>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="py-6 text-center text-xs text-slate-400">No active sessions currently.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </c-card>
+
+    {# ── Locked Accounts Card ─────────────────────────────────────────── #}
+    <c-card title="Currently Locked Accounts" subtitle="Accounts temporarily locked after 5 failed login attempts.">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
+              <th class="py-2.5 px-3 font-semibold">User</th>
+              <th class="py-2.5 px-3 font-semibold">Locked Until</th>
+              <th class="py-2.5 px-3 font-semibold text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" style="border-color:var(--border)">
+            {% for u in locked_users %}
+              <tr class="hover:bg-slate-500/5">
+                <td class="py-2.5 px-3 font-medium text-rose-500">
+                  {{ u.email|default:u.phone }}
+                </td>
+                <td class="py-2.5 px-3 text-[11px]" style="color:var(--text-muted)">
+                  {{ u.locked_until|date:"g:i A" }}
+                </td>
+                <td class="py-2.5 px-3 text-right">
+                  <button type="button"
+                          hx-post="{% url 'accounts:admin_unlock' pk=u.id %}"
+                          hx-swap="outerHTML"
+                          class="px-2 py-1 text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded hover:bg-emerald-500/20">
+                    Unlock Early
+                  </button>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="3" class="py-6 text-center text-xs text-slate-400">No accounts currently locked.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </c-card>
+
+  </div>
+
+  {# ── Security Activity Timeline ───────────────────────────────────── #}
+  <c-card title="Security Activity Timeline" subtitle="Recent security events including logins, device alerts, and admin actions.">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
+            <th class="py-2.5 px-3 font-semibold">Actor / User</th>
+            <th class="py-2.5 px-3 font-semibold">Action</th>
+            <th class="py-2.5 px-3 font-semibold">Summary</th>
+            <th class="py-2.5 px-3 font-semibold">IP Address</th>
+            <th class="py-2.5 px-3 font-semibold">Timestamp</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y" style="border-color:var(--border)">
+          {% for log in recent_security_logs %}
+            <tr class="hover:bg-slate-500/5">
+              <td class="py-2 px-3 font-medium" style="color:var(--text)">
+                {{ log.actor.email|default:log.actor.phone|default:"System" }}
+              </td>
+              <td class="py-2 px-3">
+                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-500/10 text-primary border border-slate-500/20">
+                  {{ log.action }}
+                </span>
+              </td>
+              <td class="py-2 px-3 text-xs" style="color:var(--text-muted)">
+                {{ log.summary }}
+              </td>
+              <td class="py-2 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
+                {{ log.ip_address|default:"-" }}
+              </td>
+              <td class="py-2 px-3 text-[11px]" style="color:var(--text-muted)">
+                {{ log.timestamp|date:"d/m/Y g:i:s A" }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="py-6 text-center text-xs text-slate-400">No recent security events logged.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </c-card>
+
+</div>

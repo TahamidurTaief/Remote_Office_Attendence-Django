@@ -372,3 +372,42 @@ class AdminAuditLogView(AdminRequiredMixin, View):
             return render(request, 'admin_panel/audit/audit_log_list_partial.html', context)
         return render(request, 'admin_panel/audit/audit_log_list.html', context)
 
+
+from datetime import timedelta
+from django.utils import timezone
+from apps.accounts.models import UserSession, UserLoginActivity
+
+class AdminSecurityDashboardView(AdminRequiredMixin, View):
+    """
+    GET /admin-panel/security-dashboard/
+    Admin Security Dashboard showing active sessions, locked accounts,
+    failed login stats, new device alerts, and live security timeline.
+    """
+    def get(self, request):
+        now = timezone.now()
+        since_24h = now - timedelta(hours=24)
+
+        active_sessions_count = UserSession.objects.filter(is_active=True).count()
+        locked_accounts_count = User.objects.filter(locked_until__gt=now).count()
+        failed_logins_24h = UserLoginActivity.objects.filter(status='failed', timestamp__gte=since_24h).count()
+        new_devices_24h = AuditLog.objects.filter(action='new_device_login', timestamp__gte=since_24h).count()
+
+        active_sessions = UserSession.objects.filter(is_active=True).select_related('user').order_by('-login_time')[:15]
+        locked_users = User.objects.filter(locked_until__gt=now).order_by('-locked_until')
+        recent_security_logs = AuditLog.objects.select_related('actor').order_by('-timestamp')[:25]
+
+        context = {
+            'active_sessions_count': active_sessions_count,
+            'locked_accounts_count': locked_accounts_count,
+            'failed_logins_24h': failed_logins_24h,
+            'new_devices_24h': new_devices_24h,
+            'active_sessions': active_sessions,
+            'locked_users': locked_users,
+            'recent_security_logs': recent_security_logs,
+        }
+
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'admin_panel/security_dashboard_partial.html', context)
+        return render(request, 'admin_panel/security_dashboard.html', context)
+
+
