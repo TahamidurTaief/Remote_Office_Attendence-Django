@@ -41,6 +41,17 @@
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="{% static 'js/offline/db.js' %}"></script>
+  <script src="{% static 'js/offline/sync_engine.js' %}"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+          console.warn('SW registration failed:', err);
+        });
+      });
+    }
+  </script>
   {% if debug %}<script src="{% url '__reload__:events' %}" type="text/javascript" defer></script>{% endif %}
 
   {# ── Sound FX ──────────────────────────────────────────────────────── #}
@@ -176,7 +187,22 @@
   {% endif %}
 
   {# ── Main area ──────────────────────────────────────────────────────── #}
-  <div id="ft-main-content" class="ft-main flex flex-col min-h-screen transition-all duration-220">
+  <div id="ft-main-content" class="ft-main flex flex-col min-h-screen transition-all duration-220 relative">
+
+    {# ── Soft Ambient Mesh Blur Background (Light Yellow, Light Sky Blue, Light Purple, Light Indigo) ── #}
+    <div class="ft-ambient-bg pointer-events-none fixed inset-0 overflow-hidden z-0" aria-hidden="true">
+      {# 1. Top-left: Light Indigo #}
+      <div class="absolute -top-28 left-[8%] w-[520px] h-[520px] rounded-full blur-[110px] opacity-45 dark:opacity-20 ft-ambient-indigo"></div>
+      
+      {# 2. Top-right: Light Yellow #}
+      <div class="absolute -top-20 right-[12%] w-[480px] h-[480px] rounded-full blur-[100px] opacity-40 dark:opacity-15 ft-ambient-yellow"></div>
+      
+      {# 3. Mid-right: Light Sky Blue #}
+      <div class="absolute top-[32%] -right-16 w-[580px] h-[580px] rounded-full blur-[115px] opacity-40 dark:opacity-15 ft-ambient-sky"></div>
+      
+      {# 4. Bottom-left: Light Purple #}
+      <div class="absolute bottom-5 left-[12%] w-[500px] h-[500px] rounded-full blur-[110px] opacity-40 dark:opacity-15 ft-ambient-purple"></div>
+    </div>
 
     {# ── Topbar (fixed & uniform across every page) ───────────────────── #}
     {% if topbar %}{{ topbar }}{% else %}
@@ -184,7 +210,7 @@
     {% endif %}
 
     {# ── Page content ────────────────────────────────────────────────── #}
-    <main class="flex-1 flex flex-col p-4 overflow-y-auto">
+    <main class="flex-1 flex flex-col p-4 overflow-y-auto relative z-10">
       {% if topbar_actions %}
       <div class="flex items-center justify-between gap-3 mb-4 pb-2 border-b" style="border-color:var(--border)">
         <h2 class="text-[16px] font-bold" style="color:var(--text)">{{ page_title }}</h2>
@@ -196,13 +222,6 @@
       <div class="flex-1">
         {{ slot }}
       </div>
-      <footer class="mt-6 pt-3 border-t text-center text-[11px]"
-              style="border-color:var(--border); color:var(--text-muted)">
-        Developed by
-        <a href="https://tahamidurtaief.com" target="_blank"
-           style="color:var(--primary)"
-           class="font-semibold hover:underline">Tahamidur Taief</a>
-      </footer>
     </main>
   </div>
 
