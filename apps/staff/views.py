@@ -7,8 +7,15 @@ from apps.attendance.models import Attendance
 from apps.employees.models import EmployeeProfile
 
 
+from apps.accounts.engine import PermissionEngine
+
+
 def check_staff_role(user):
-    return user.is_authenticated and user.role in ['staff', 'manager']
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return PermissionEngine.evaluate(user, 'attendance.view').allowed or hasattr(user, 'employee_profile')
 
 
 @login_required
