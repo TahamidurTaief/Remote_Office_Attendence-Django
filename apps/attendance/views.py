@@ -19,7 +19,12 @@ def get_employee(user):
 
 
 def check_role(user):
-    return user.is_authenticated and (user.role in ['staff', 'manager', 'admin'] or user.is_superuser or user.is_staff)
+    if not user or not user.is_authenticated:
+        return False
+    from apps.accounts.engine import PermissionEngine
+    if PermissionEngine.evaluate(user, 'attendance.view').allowed and hasattr(user, 'employee_profile'):
+        return True
+    return getattr(user, 'role', '') in ('staff', 'manager')
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -509,7 +514,8 @@ def live_locations(request):
     Returns the latest location ping for every employee who is currently checked in.
     Used by the admin live-map.
     """
-    if not (request.user.is_authenticated and request.user.role == 'admin'):
+    from apps.accounts.engine import PermissionEngine
+    if not (request.user.is_authenticated and (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'attendance.view').allowed or getattr(request.user, 'role', '') == 'admin')):
         return JsonResponse({'success': False, 'error': 'Unauthorized.'}, status=403)
 
     today = timezone.localdate()
