@@ -656,21 +656,39 @@ class WorkspaceLockView(LoginRequiredMixin, View):
 class WorkspaceUnlockView(LoginRequiredMixin, View):
     """
     POST /security/workspace-lock/unlock/
-    Authenticates user password to unlock workspace overlay.
+    Authenticates user password, PIN, or MFA code to unlock workspace overlay based on role SecurityPolicy.
     """
     def post(self, request):
-        password = request.POST.get('password') or ''
-        if not request.user.check_password(password):
+        credential = request.POST.get('password') or request.POST.get('credential') or ''
+        sec_prof = getattr(request.user, 'security_profile', None)
+        policy = SecurityPolicy.objects.filter(role=request.user.role).first()
+        unlock_method = policy.unlock_method if policy else 'password'
+
+        is_valid = False
+        method_used = 'password'
+
+        if unlock_method == 'pin' and sec_prof and sec_prof.pin_hash:
+            is_valid = sec_prof.check_pin(credential)
+            method_used = 'pin'
+
+        if not is_valid and unlock_method == 'mfa' and sec_prof:
+            is_valid = sec_prof.verify_totp(credential) or sec_prof.verify_backup_code(credential)
+            method_used = 'mfa'
+
+        if not is_valid:
+            is_valid = request.user.check_password(credential)
+
+        if not is_valid:
             log_audit(request.user, 'workspace_unlock_failed', summary="Failed workspace unlock attempt", ip=get_client_ip(request))
-            return JsonResponse({'valid': False, 'message': 'Incorrect password. Please try again.'}, status=400)
+            return JsonResponse({'valid': False, 'message': 'Incorrect password or credential. Please try again.'}, status=400)
 
         evt = WorkspaceLockEvent.objects.filter(user=request.user, unlocked_at__isnull=True).order_by('-locked_at').first()
         if evt:
             evt.unlocked_at = timezone.now()
-            evt.unlock_method = 'password'
+            evt.unlock_method = method_used
             evt.save(update_fields=['unlocked_at', 'unlock_method'])
 
-        log_audit(request.user, 'workspace_unlocked', summary="Workspace unlocked successfully", ip=get_client_ip(request))
+        log_audit(request.user, 'workspace_unlocked', summary=f"Workspace unlocked successfully via {method_used}", ip=get_client_ip(request))
         return JsonResponse({'valid': True, 'message': 'Unlocked'})
 
 
@@ -892,5 +910,90 @@ class AdminDisableUserMFAView(LoginRequiredMixin, View):
             messages.success(request, f"MFA disabled for user {target_user.email}.")
 
         return redirect('accounts:admin_login_activity')
+
+
+from apps.accounts.models import SecurityPolicy
+
+class AdminSecurityPolicyListView(LoginRequiredMixin, View):
+    """
+    GET/POST /admin-panel/security/policies/
+    Manages per-role SecurityPolicy configurations.
+    """
+    def get(self, request):
+        if request.user.role != 'admin':
+            return redirect('/')
+
+        roles = ['admin', 'manager', 'staff']
+        for r in roles:
+            SecurityPolicy.objects.get_or_create(role=r)
+
+        policies = SecurityPolicy.objects.filter(role__in=roles).order_by('role')
+        return render(request, 'admin_panel/security_policies.html', {'policies': policies})
+
+    def post(self, request):
+        if request.user.role != 'admin':
+            return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
+        role = request.POST.get('role')
+        policy = SecurityPolicy.objects.filter(role=role).first()
+        if not policy:
+            return JsonResponse({'status': 'error', 'message': 'Policy not found'}, status=404)
+
+        policy.mfa_required = request.POST.get('mfa_required') == 'true'
+        policy.unlock_method = request.POST.get('unlock_method', 'password')
+        try:
+            policy.reauth_interval_hours = int(request.POST.get('reauth_interval_hours', 4))
+        except (ValueError, TypeError):
+            policy.reauth_interval_hours = 4
+
+        try:
+            policy.trusted_device_days = int(request.POST.get('trusted_device_days', 30))
+        except (ValueError, TypeError):
+            policy.trusted_device_days = 30
+
+        policy.save()
+        log_audit(request.user, 'security_policy_changed', target=policy, summary=f"Updated SecurityPolicy for role '{role}'", ip=get_client_ip(request))
+        messages.success(request, f"Security Policy for '{role}' updated successfully.")
+
+        if request.headers.get('HX-Request') == 'true':
+            return JsonResponse({'status': 'success'})
+        return redirect('accounts:admin_security_policies')
+
+
+class SecurityReauthView(LoginRequiredMixin, View):
+    """
+    POST /security/reauth/
+    Verifies user credential (password or TOTP) for sensitive operation re-authentication.
+    """
+    def post(self, request):
+        credential = request.POST.get('reauth_credential', '').strip()
+        target_url = request.POST.get('target_url') or request.session.get('pending_reauth_target') or '/'
+        sec_prof = getattr(request.user, 'security_profile', None)
+
+        is_valid = request.user.check_password(credential)
+        if not is_valid and sec_prof:
+            is_valid = sec_prof.verify_totp(credential) or sec_prof.verify_backup_code(credential)
+
+        if is_valid:
+            session_key = request.session.session_key
+            user_sess = UserSession.objects.filter(user=request.user, session_key=session_key, is_active=True).first()
+            if user_sess:
+                user_sess.last_reauth_at = timezone.now()
+                user_sess.save(update_fields=['last_reauth_at'])
+
+            log_audit(request.user, 'sensitive_action_reauth_success', summary=f"Re-authenticated for sensitive action at {target_url}", ip=get_client_ip(request))
+
+            if request.headers.get('HX-Request') == 'true':
+                response = render(request, 'accounts/partials/reauth_modal.html')
+                response['HX-Redirect'] = target_url
+                return response
+            return redirect(target_url)
+
+        log_audit(request.user, 'sensitive_action_reauth_fail', summary="Failed sensitive action re-authentication", ip=get_client_ip(request))
+        return render(request, 'accounts/partials/reauth_modal.html', {
+            'reauth_error': 'Authentication failed. Please check your password or 6-digit code.',
+            'target_url': target_url
+        })
+
 
 

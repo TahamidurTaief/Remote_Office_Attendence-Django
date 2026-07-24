@@ -106,6 +106,7 @@ class UserSession(models.Model):
     login_time = models.DateTimeField(default=timezone.now)
     logout_time = models.DateTimeField(null=True, blank=True)
     last_activity = models.DateTimeField(default=timezone.now)
+    last_reauth_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -239,11 +240,21 @@ class UserSecurityProfile(models.Model):
     mfa_secret = models.CharField(max_length=255, blank=True)
     mfa_enabled_at = models.DateTimeField(null=True, blank=True)
     backup_codes = models.JSONField(default=list, blank=True)
+    pin_hash = models.CharField(max_length=128, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'user_security_profile'
+
+    def set_pin(self, pin):
+        self.pin_hash = hashlib.sha256(str(pin).strip().encode('utf-8')).hexdigest()
+        self.save(update_fields=['pin_hash'])
+
+    def check_pin(self, pin):
+        if not self.pin_hash or not pin:
+            return False
+        return self.pin_hash == hashlib.sha256(str(pin).strip().encode('utf-8')).hexdigest()
 
     def generate_new_secret(self):
         self.mfa_secret = pyotp.random_base32()
@@ -258,7 +269,7 @@ class UserSecurityProfile(models.Model):
         if not self.mfa_secret or not code:
             return False
         totp = pyotp.TOTP(self.mfa_secret)
-        return totp.verify(str(code).strip(), valid_window=1)
+        return totp.verify(str(code).strip(), valid_window=2)
 
     def generate_backup_codes(self):
         raw_codes = []
@@ -285,6 +296,28 @@ class UserSecurityProfile(models.Model):
 
     def __str__(self):
         return f"SecurityProfile({self.user}) - MFA: {'Enabled' if self.mfa_enabled else 'Disabled'}"
+
+
+class SecurityPolicy(models.Model):
+    UNLOCK_CHOICES = (
+        ('password', 'Password'),
+        ('pin', 'PIN'),
+        ('mfa', 'MFA TOTP'),
+    )
+
+    role = models.CharField(max_length=50, unique=True)
+    mfa_required = models.BooleanField(default=False)
+    unlock_method = models.CharField(max_length=20, choices=UNLOCK_CHOICES, default='password')
+    reauth_interval_hours = models.PositiveIntegerField(null=True, blank=True, default=4)
+    trusted_device_days = models.PositiveIntegerField(default=30)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'security_policy'
+
+    def __str__(self):
+        return f"SecurityPolicy({self.role}) - MFA Req: {self.mfa_required}, Unlock: {self.unlock_method}"
+
 
 
 

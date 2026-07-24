@@ -32,6 +32,10 @@ urlpatterns = [
     path('login/mfa/verify/', views.LoginMFAVerifyView.as_view(), name='mfa_login_verify'),
     path('admin-panel/users/<int:pk>/mfa/disable/', views.AdminDisableUserMFAView.as_view(), name='admin_disable_user_mfa'),
 
+    # Security Policy & Re-Auth Endpoints
+    path('admin-panel/security/policies/', views.AdminSecurityPolicyListView.as_view(), name='admin_security_policies'),
+    path('security/reauth/', views.SecurityReauthView.as_view(), name='security_reauth'),
+
     # API and Session endpoints
     path('api/sync/', views.SyncApiView.as_view(), name='api_sync'),
     path('api/session/validate/', views.SessionValidateView.as_view(), name='api_session_validate'),

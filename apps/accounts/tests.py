@@ -198,14 +198,14 @@ class WorkspaceLockTests(TestCase):
         self.client.post(reverse('accounts:login'), {'email': 'lock_test@example.com', 'password': self.password})
 
         # Active heartbeat
-        resp = self.client.get(reverse('accounts:security_heartbeat'))
+        resp = self.client.get(reverse('accounts:security_heartbeat'), HTTP_ACCEPT='application/json')
         self.assertEqual(resp.status_code, 200)
 
         # Invalidate session (e.g. force logout)
         UserSession.objects.filter(user=self.user).update(is_active=False)
 
         # Heartbeat returns 401
-        resp_inv = self.client.get(reverse('accounts:security_heartbeat'))
+        resp_inv = self.client.get(reverse('accounts:security_heartbeat'), HTTP_ACCEPT='application/json')
         self.assertEqual(resp_inv.status_code, 401)
 
 
@@ -262,5 +262,51 @@ class MFATests(TestCase):
         # Verify backup code was used and invalidated
         sec_prof.refresh_from_db()
         self.assertEqual(len(sec_prof.backup_codes), 7)
+
+
+from apps.accounts.models import SecurityPolicy
+
+class SecurityPolicyTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.password = 'password123'
+        self.admin = User.objects.create_user(
+            email='admin_pol@example.com',
+            password=self.password,
+            role='admin'
+        )
+
+    def test_admin_policy_view_and_save(self):
+        self.client.post(reverse('accounts:login'), {'email': 'admin_pol@example.com', 'password': self.password})
+
+        resp = self.client.get(reverse('accounts:admin_security_policies'))
+        self.assertEqual(resp.status_code, 200)
+
+        # Update staff policy
+        resp_post = self.client.post(reverse('accounts:admin_security_policies'), {
+            'role': 'staff',
+            'mfa_required': 'true',
+            'unlock_method': 'pin',
+            'reauth_interval_hours': '2',
+            'trusted_device_days': '15'
+        })
+        self.assertEqual(resp_post.status_code, 302)
+
+        pol = SecurityPolicy.objects.get(role='staff')
+        self.assertTrue(pol.mfa_required)
+        self.assertEqual(pol.unlock_method, 'pin')
+        self.assertEqual(pol.reauth_interval_hours, 2)
+        self.assertEqual(pol.trusted_device_days, 15)
+
+    def test_security_reauth_view(self):
+        self.client.post(reverse('accounts:login'), {'email': 'admin_pol@example.com', 'password': self.password})
+
+        # Reauth with correct password
+        resp = self.client.post(reverse('accounts:security_reauth'), {
+            'reauth_credential': self.password,
+            'target_url': '/admin-panel/roles/'
+        })
+        self.assertEqual(resp.status_code, 302)
+
 
 
