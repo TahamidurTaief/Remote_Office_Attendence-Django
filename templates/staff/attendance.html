@@ -20,5 +20,148 @@
 <div id="attendance-list-wrapper">
     {% include 'staff/partials/attendance_list.html' %}
 </div>
+
+<!-- Modals -->
+<c-modal id="forgot-checkout-modal" title="Forgot Check-out Request">
+    <form onsubmit="submitForgotCheckoutForm(event)" class="space-y-4">
+        <input type="hidden" name="attendance_id" id="forgot-checkout-att-id">
+        <div>
+            <label class="block text-xs font-semibold mb-1" style="color:var(--text)">Check-out Time</label>
+            <input type="datetime-local" name="check_out_time" required
+                   class="w-full px-3 py-2 border rounded-xl text-sm" style="background:var(--surface); border-color:var(--border); color:var(--text)">
+        </div>
+        <div>
+            <label class="block text-xs font-semibold mb-1" style="color:var(--text)">Reason</label>
+            <textarea name="reason" rows="3" required
+                      class="w-full px-3 py-2 border rounded-xl text-sm" style="background:var(--surface); border-color:var(--border); color:var(--text)"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+            <button type="button" @click="open = false" class="px-4 py-2 border rounded-xl text-xs font-semibold" style="border-color:var(--border); color:var(--text-secondary)">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold">Submit</button>
+        </div>
+    </form>
+</c-modal>
+
+<c-modal id="correction-modal" title="Attendance Correction Request">
+    <form onsubmit="submitCorrectionForm(event)" enctype="multipart/form-data" class="space-y-4">
+        <input type="hidden" name="attendance_id" id="correction-att-id">
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold mb-1" style="color:var(--text)">Correct Check-in</label>
+                <input type="datetime-local" name="check_in_time" id="correction-check-in"
+                       class="w-full px-3 py-2 border rounded-xl text-sm" style="background:var(--surface); border-color:var(--border); color:var(--text)">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold mb-1" style="color:var(--text)">Correct Check-out</label>
+                <input type="datetime-local" name="check_out_time" id="correction-check-out"
+                       class="w-full px-3 py-2 border rounded-xl text-sm" style="background:var(--surface); border-color:var(--border); color:var(--text)">
+            </div>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold mb-1" style="color:var(--text)">Reason</label>
+            <textarea name="reason" rows="3" required
+                      class="w-full px-3 py-2 border rounded-xl text-sm" style="background:var(--surface); border-color:var(--border); color:var(--text)"></textarea>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold mb-1" style="color:var(--text)">Note / Explanation</label>
+            <textarea name="note" rows="2"
+                      class="w-full px-3 py-2 border rounded-xl text-sm" style="background:var(--surface); border-color:var(--border); color:var(--text)"></textarea>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold mb-1" style="color:var(--text)">Attachment</label>
+            <input type="file" name="attachment" accept="image/*,application/pdf"
+                   class="block w-full text-xs" style="color:var(--text-secondary)">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+            <button type="button" @click="open = false" class="px-4 py-2 border rounded-xl text-xs font-semibold" style="border-color:var(--border); color:var(--text-secondary)">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold">Submit</button>
+        </div>
+    </form>
+</c-modal>
+
+<script>
+function openForgotCheckoutModal(attId) {
+    document.getElementById('forgot-checkout-att-id').value = attId;
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'forgot-checkout-modal' } }));
+}
+
+function openCorrectionModal(attId, checkInVal, checkOutVal) {
+    document.getElementById('correction-att-id').value = attId;
+    if (checkInVal) {
+        // format ISO local time without seconds/timezone: YYYY-MM-DDTHH:MM
+        try {
+            const dateObj = new Date(checkInVal);
+            const iso = dateObj.getFullYear() + '-' +
+                        String(dateObj.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(dateObj.getDate()).padStart(2, '0') + 'T' +
+                        String(dateObj.getHours()).padStart(2, '0') + ':' +
+                        String(dateObj.getMinutes()).padStart(2, '0');
+            document.getElementById('correction-check-in').value = iso;
+        } catch(e) {
+            document.getElementById('correction-check-in').value = "";
+        }
+    } else {
+        document.getElementById('correction-check-in').value = "";
+    }
+    if (checkOutVal) {
+        try {
+            const dateObj = new Date(checkOutVal);
+            const iso = dateObj.getFullYear() + '-' +
+                        String(dateObj.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(dateObj.getDate()).padStart(2, '0') + 'T' +
+                        String(dateObj.getHours()).padStart(2, '0') + ':' +
+                        String(dateObj.getMinutes()).padStart(2, '0');
+            document.getElementById('correction-check-out').value = iso;
+        } catch(e) {
+            document.getElementById('correction-check-out').value = "";
+        }
+    } else {
+        document.getElementById('correction-check-out').value = "";
+    }
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'correction-modal' } }));
+}
+
+async function submitForgotCheckoutForm(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    const response = await fetch("{% url 'attendance:submit_forgot_checkout' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    });
+    const result = await response.json();
+    if (result.success) {
+        alert(result.message);
+        window.dispatchEvent(new CustomEvent('close-modal', { detail: { id: 'forgot-checkout-modal' } }));
+        location.reload();
+    } else {
+        alert("Error: " + result.error);
+    }
+}
+
+async function submitCorrectionForm(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    const response = await fetch("{% url 'attendance:submit_attendance_correction' %}", {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    });
+    const result = await response.json();
+    if (result.success) {
+        alert(result.message);
+        window.dispatchEvent(new CustomEvent('close-modal', { detail: { id: 'correction-modal' } }));
+        location.reload();
+    } else {
+        alert("Error: " + result.error);
+    }
+}
+</script>
 </c-app-shell>
 

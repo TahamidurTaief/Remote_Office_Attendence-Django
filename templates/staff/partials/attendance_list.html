@@ -68,6 +68,21 @@
                     {% endif %}
                 </div>
             </div>
+            {% if not record.is_placeholder and not record.leave_info and record.attendance_type == 'check_in' %}
+            <div class="flex justify-end gap-1.5 mt-2 border-t border-gray-50 pt-2">
+                {% if not record.check_out_time %}
+                <button type="button" onclick="openForgotCheckoutModal('{{ record.id }}')"
+                        class="px-2.5 py-1 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors">
+                    Forgot Checkout
+                </button>
+                {% else %}
+                <button type="button" onclick="openCorrectionModal('{{ record.id }}', '{{ record.check_in_time|date:'c' }}', '{{ record.check_out_time|date:'c' }}')"
+                        class="px-2.5 py-1 text-[10px] font-bold text-primary hover:text-primary-700 bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors">
+                    Correction
+                </button>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
         {% empty %}
         <div class="bg-gray-50 rounded-xl p-8 text-center border border-gray-150 shadow-inner">
@@ -76,7 +91,7 @@
         {% endfor %}
     </div>
 
-    <!-- Desktop Table View -->
+     <!-- Desktop Table View -->
     <div class="hidden md:block px-4 pb-6">
         <div class="bg-white rounded-xl shadow-sm border border-gray-150 overflow-hidden">
             <table class="min-w-full divide-y divide-gray-200">
@@ -88,6 +103,7 @@
                         <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Hours</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
@@ -125,6 +141,23 @@
                                     <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Apply for Leave
                                 </a>
                                 {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-right">
+                            {% if not record.is_placeholder and not record.leave_info and record.attendance_type == 'check_in' %}
+                                {% if not record.check_out_time %}
+                                <button type="button" onclick="openForgotCheckoutModal('{{ record.id }}')"
+                                        class="px-2.5 py-1 text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors">
+                                    Forgot Checkout
+                                </button>
+                                {% else %}
+                                <button type="button" onclick="openCorrectionModal('{{ record.id }}', '{{ record.check_in_time|date:'c' }}', '{{ record.check_out_time|date:'c' }}')"
+                                        class="px-2.5 py-1 text-xs font-bold text-primary hover:text-primary-700 bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors">
+                                    Correct
+                                </button>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-xs text-gray-400">--</span>
                             {% endif %}
                         </td>
                     </tr>
