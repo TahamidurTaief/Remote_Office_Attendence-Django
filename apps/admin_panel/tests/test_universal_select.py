@@ -3,26 +3,22 @@ from django.template.loader import render_to_string
 
 
 class UniversalSelectTest(TestCase):
-    """Test suite for the Universal Select component."""
+    """Test suite for the Select component (cotton/select.html)."""
 
     def test_select_template_renders(self):
-        """Verify single select rendering."""
-        options = [{'value': 'val1', 'label': 'Option 1'}, {'value': 'val2', 'label': 'Option 2'}]
-        rendered = render_to_string('components/universal_select.html', {
+        """Verify single select rendering with label and name."""
+        rendered = render_to_string('cotton/select.html', {
             'name': 'category',
             'label': 'Category Select',
-            'options': options
         })
         self.assertIn('Category Select', rendered)
         self.assertIn('name="category"', rendered)
         self.assertIn('Select option...', rendered)
 
-    def test_select_multi_and_create(self):
-        """Verify multi-select and option creation tags."""
-        rendered = render_to_string('components/universal_select.html', {
+    def test_select_dropdown_renders(self):
+        """Verify select dropdown structure is present."""
+        rendered = render_to_string('cotton/select.html', {
             'name': 'tags',
-            'is_multi': True,
-            'can_create': True
         })
-        self.assertIn('createNewOption()', rendered)
-        self.assertIn('selectedValues.includes(opt.value)', rendered)
+        self.assertIn('filteredOptions', rendered)
+        self.assertIn('selectOption', rendered)

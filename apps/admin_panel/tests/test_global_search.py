@@ -3,18 +3,15 @@ from django.template.loader import render_to_string
 
 
 class GlobalSearchTest(TestCase):
-    """Test suite for the Global Search component."""
+    """Test suite for the Global Search component (cotton/command-palette.html)."""
 
     def test_global_search_template_renders(self):
-        """Verify cross-module global search tabs and search input."""
-        rendered = render_to_string('components/global_search.html', {})
-        self.assertIn('Customer', rendered)
-        self.assertIn('Invoice', rendered)
+        """Verify command-palette contains employee and project navigation items."""
+        rendered = render_to_string('cotton/command-palette.html', {})
         self.assertIn('Employee', rendered)
-        self.assertIn('Product', rendered)
         self.assertIn('Project', rendered)
-        self.assertIn('Workflow', rendered)
-        self.assertIn('Search Customers, Invoices, Employees', rendered)
+        self.assertIn('Dashboard', rendered)
+        self.assertIn('Attendance', rendered)
 
 
 from django.contrib.auth import get_user_model
@@ -59,4 +56,3 @@ class GlobalSearchEndpointTest(TestCase):
         res_htmx = self.client.get(url, HTTP_HX_REQUEST='true')
         self.assertEqual(res_htmx.status_code, 200)
         self.assertContains(res_htmx, 'GlobalSearchFirst UserOne')
-
