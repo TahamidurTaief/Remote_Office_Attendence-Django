@@ -1,0 +1,39 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-600">
+        <i data-lucide="check-square" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Assigned Tasks</h3>
+        <p class="text-xs text-slate-500">Your pending tasks</p>
+      </div>
+    </div>
+    <button hx-get="{% url 'dashboard' %}?widget=employee_tasks"
+            hx-target="#widget-employee-tasks"
+            hx-swap="outerHTML"
+            class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
+      <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  {% if assigned_tasks %}
+    <div class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for task in assigned_tasks %}
+        <div class="py-2.5 flex items-center justify-between">
+          <div>
+            <h4 class="text-sm font-medium text-slate-800 dark:text-white">{{ task.activity }}</h4>
+            <p class="text-xs text-slate-500">{{ task.project.name }}</p>
+          </div>
+          <c-badge variant="{% if task.status == 'in_progress' %}primary{% else %}neutral{% endif %}">
+            {{ task.get_status_display }}
+          </c-badge>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center py-6 text-slate-400 text-sm">
+      No pending tasks assigned to you.
+    </div>
+  {% endif %}
+</c-card>

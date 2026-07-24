@@ -1,0 +1,47 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-amber-500/10 text-amber-600">
+        <i data-lucide="receipt" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Expense Claims</h3>
+        <p class="text-xs text-slate-500">Your recent claims</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1">
+      <a href="{% url 'expense:staff_expense_create' %}" class="ft-btn ft-btn-ghost ft-btn-xs text-primary font-semibold">
+        + Claim
+      </a>
+      <button hx-get="{% url 'dashboard' %}?widget=employee_expenses"
+              hx-target="#widget-employee-expenses"
+              hx-swap="outerHTML"
+              class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
+        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+
+  {% if my_expenses %}
+    <div class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for exp in my_expenses %}
+        <div class="py-2.5 flex items-center justify-between">
+          <div>
+            <h4 class="text-sm font-medium text-slate-800 dark:text-white">{{ exp.title|default:exp.category }}</h4>
+            <p class="text-xs text-slate-500">{{ exp.requested_at|date:"M d, Y" }}</p>
+          </div>
+          <div class="text-right">
+            <span class="text-sm font-semibold text-slate-800 dark:text-white block">৳{{ exp.amount }}</span>
+            <c-badge variant="{% if exp.status == 'approved' %}success{% elif exp.status == 'rejected' %}danger{% else %}warning{% endif %}">
+              {{ exp.get_status_display }}
+            </c-badge>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center py-6 text-slate-400 text-sm">
+      No expense claims submitted.
+    </div>
+  {% endif %}
+</c-card>

@@ -2994,3 +2994,68 @@ class GlobalSearchView(RoleRequiredMixin, View):
             ]
         })
 
+
+from django.contrib.auth.mixins import LoginRequiredMixin
+from apps.admin_panel.dashboard_services import (
+    determine_user_role_variant,
+    get_employee_dashboard_data,
+    get_manager_dashboard_data,
+    get_hr_dashboard_data,
+    get_admin_dashboard_data,
+)
+
+class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
+    def get_template_names(self):
+        role_override = self.request.GET.get('role_view')
+        if role_override and self.request.user.is_superuser:
+            variant = role_override
+        else:
+            variant = determine_user_role_variant(self.request.user)
+
+        if variant == 'admin':
+            return ['dashboard/admin_dashboard.html']
+        elif variant == 'hr':
+            return ['dashboard/hr_dashboard.html']
+        elif variant == 'manager':
+            return ['dashboard/manager_dashboard.html']
+        else:
+            return ['dashboard/employee_dashboard.html']
+
+    def get(self, request, *args, **kwargs):
+        widget = request.GET.get('widget')
+        role_override = request.GET.get('role_view')
+        if role_override and request.user.is_superuser:
+            variant = role_override
+        else:
+            variant = determine_user_role_variant(request.user)
+
+        if widget and request.headers.get('HX-Request'):
+            template_path = f"dashboard/widgets/widget_{widget}.html"
+            context = self.get_context_data(**kwargs)
+            return render(request, template_path, context)
+
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        role_override = self.request.GET.get('role_view')
+        if role_override and self.request.user.is_superuser:
+            variant = role_override
+        else:
+            variant = determine_user_role_variant(self.request.user)
+
+        context['role_variant'] = variant
+        context['user_employee'] = getattr(self.request.user, 'employee_master', None)
+
+        if variant == 'admin':
+            context.update(get_admin_dashboard_data(self.request.user))
+        elif variant == 'hr':
+            context.update(get_hr_dashboard_data(self.request.user))
+        elif variant == 'manager':
+            context.update(get_manager_dashboard_data(self.request.user))
+        else:
+            context.update(get_employee_dashboard_data(self.request.user))
+
+        return context
+
+

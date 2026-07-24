@@ -1,0 +1,42 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-blue-500/10 text-blue-600">
+        <i data-lucide="users" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Team Today's Attendance</h3>
+        <p class="text-xs text-slate-500">Direct Reports (Total: {{ team_count }})</p>
+      </div>
+    </div>
+    <button hx-get="{% url 'dashboard' %}?widget=manager_attendance"
+            hx-target="#widget-manager-attendance"
+            hx-swap="outerHTML"
+            class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
+      <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  {% if team_attendance_today %}
+    <div class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for att in team_attendance_today %}
+        <div class="py-2.5 flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <c-avatar name="{{ att.employee.full_name }}" size="sm"></c-avatar>
+            <div>
+              <h4 class="text-sm font-medium text-slate-800 dark:text-white">{{ att.employee.full_name }}</h4>
+              <p class="text-xs text-slate-500">In: {{ att.check_in|time:"H:i A"|default:"--" }}</p>
+            </div>
+          </div>
+          <c-badge variant="{% if att.status == 'present' %}success{% else %}warning{% endif %}">
+            {{ att.get_status_display }}
+          </c-badge>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center py-6 text-slate-400 text-sm">
+      No team attendance records logged yet today.
+    </div>
+  {% endif %}
+</c-card>

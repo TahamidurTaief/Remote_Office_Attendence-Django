@@ -1,0 +1,39 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-teal-500/10 text-teal-600">
+        <i data-lucide="building-2" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Department Headcount</h3>
+        <p class="text-xs text-slate-500">Employee distribution</p>
+      </div>
+    </div>
+    <button hx-get="{% url 'dashboard' %}?widget=hr_headcount"
+            hx-target="#widget-hr-headcount"
+            hx-swap="outerHTML"
+            class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
+      <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  {% if dept_breakdown %}
+    <div class="space-y-2.5">
+      {% for dept in dept_breakdown %}
+        <div>
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="font-medium text-slate-700 dark:text-slate-300">{{ dept.department__name|default:"Unassigned" }}</span>
+            <span class="text-slate-500 font-semibold">{{ dept.count }}</span>
+          </div>
+          <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+            <div class="bg-teal-500 h-2 rounded-full" style="width: {% widthratio dept.count total_employees 100 %}%"></div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center py-6 text-slate-400 text-sm">
+      No department distribution data available.
+    </div>
+  {% endif %}
+</c-card>

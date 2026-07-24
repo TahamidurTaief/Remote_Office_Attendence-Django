@@ -1,0 +1,55 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-primary/10 text-primary">
+        <i data-lucide="clock" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Today's Attendance</h3>
+        <p class="text-xs text-slate-500">Live check-in status</p>
+      </div>
+    </div>
+    <button hx-get="{% url 'dashboard' %}?widget=employee_attendance"
+            hx-target="#widget-employee-attendance"
+            hx-swap="outerHTML"
+            class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
+      <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  {% if today_attendance %}
+    <div class="space-y-3">
+      <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+        <div>
+          <span class="text-xs text-slate-500 block">Check In Time</span>
+          <span class="font-medium text-sm text-slate-800 dark:text-white">
+            {{ today_attendance.check_in|time:"H:i A"|default:"--" }}
+          </span>
+        </div>
+        <div>
+          <span class="text-xs text-slate-500 block">Check Out Time</span>
+          <span class="font-medium text-sm text-slate-800 dark:text-white">
+            {{ today_attendance.check_out|time:"H:i A"|default:"Not checked out" }}
+          </span>
+        </div>
+        <div>
+          <c-badge variant="{% if today_attendance.status == 'present' %}success{% else %}warning{% endif %}">
+            {{ today_attendance.get_status_display }}
+          </c-badge>
+        </div>
+      </div>
+      {% if today_attendance.status == 'late' %}
+        <div class="p-2 rounded-md bg-amber-500/10 text-amber-600 text-xs font-medium flex items-center gap-1.5">
+          <i data-lucide="alert-triangle" class="w-4 h-4"></i> Late Arrival Flagged
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="text-center py-4">
+      <p class="text-sm text-slate-500 mb-3">You have not checked in yet today.</p>
+      <a href="{% url 'attendance:check_in' %}" class="ft-btn ft-btn-primary ft-btn-sm inline-flex items-center gap-1.5">
+        <i data-lucide="log-in" class="w-4 h-4"></i> Check In Now
+      </a>
+    </div>
+  {% endif %}
+</c-card>

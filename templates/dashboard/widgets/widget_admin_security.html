@@ -1,0 +1,36 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-sky-500/10 text-sky-600">
+        <i data-lucide="shield-check" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">System Security & Access</h3>
+        <p class="text-xs text-slate-500">Live active sessions & trusted devices</p>
+      </div>
+    </div>
+    <a href="{% url 'admin_panel:security_dashboard' %}" class="ft-btn ft-btn-ghost ft-btn-xs text-primary font-semibold">
+      Security Center →
+    </a>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3 mb-3">
+    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-center">
+      <span class="text-xs text-slate-500 block">Active Sessions</span>
+      <span class="text-xl font-bold text-slate-800 dark:text-white">{{ active_sessions_count }}</span>
+    </div>
+    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-center">
+      <span class="text-xs text-slate-500 block">Trusted Devices</span>
+      <span class="text-xl font-bold text-slate-800 dark:text-white">{{ trusted_devices_count }}</span>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+    <a href="{% url 'admin_panel:admin_audit_logs' %}" class="text-slate-600 hover:text-primary transition-colors font-medium">
+      <i data-lucide="file-text" class="w-3.5 h-3.5 inline mr-1"></i> Audit Logs
+    </a>
+    <a href="{% url 'admin_panel:permission_matrix' %}" class="text-slate-600 hover:text-primary transition-colors font-medium">
+      <i data-lucide="grid" class="w-3.5 h-3.5 inline mr-1"></i> RBAC Matrix
+    </a>
+  </div>
+</c-card>

@@ -19,20 +19,8 @@
 
   <div class="p-4 max-w-7xl mx-auto space-y-4">
 
-    {# Status filter tabs #}
-    <div class="flex items-center gap-1 p-1 rounded-xl w-fit" style="background:var(--surface-2)">
-      {% for tab_val, tab_label in pending,Pending|approved,Approved|rejected,Rejected|""|All %}
-      {% endfor %}
-      {% for tab in "pending,Pending|approved,Approved|rejected,Rejected" %}
-      {% endfor %}
-      {% for item in "pending,approved,rejected" %}
-      {% endfor %}
-    </div>
-
     {# Simple tab links #}
     <div class="flex items-center gap-2 border-b pb-3" style="border-color:var(--border)">
-      {% for tab_status, tab_label in "pending:Pending,approved:Approved,rejected:Rejected" %}
-      {% endfor %}
       <a href="?status=pending"
          hx-get="?status=pending"
          hx-target="#requests-body"

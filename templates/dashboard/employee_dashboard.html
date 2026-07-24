@@ -1,0 +1,59 @@
+<c-app-shell page_title="Employee Dashboard | FieldTrack" active_href="{% url 'dashboard' %}">
+  <c-slot name="topbar">
+    <c-topbar title="Employee Portal">
+      <c-slot name="actions">
+        <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+          Role: Employee
+        </span>
+      </c-slot>
+    </c-topbar>
+  </c-slot>
+
+  <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <!-- Welcome Header -->
+    <div class="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/10 flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white">
+          Welcome back, {{ request.user.get_full_name|default:request.user.email }}!
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">Here is your daily operational summary and assigned tasks.</p>
+      </div>
+      <div class="hidden sm:block">
+        <span class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+          {{ user_employee.employee_number|default:"ID: --" }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Quick KPI Row -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <c-kpi-widget title="Today Status" value="{% if today_attendance %}{{ today_attendance.get_status_display }}{% else %}Not Checked In{% endif %}" label="Live Status" icon="clock" color="{% if today_attendance.status == 'present' %}success{% else %}amber{% endif %}">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Pending Tasks" value="{{ assigned_tasks|length }}" label="Action Required" icon="check-square" color="indigo">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Notifications" value="{{ my_notifications|length }}" label="Unread" icon="bell" color="rose">
+      </c-kpi-widget>
+    </div>
+
+    <!-- Widgets Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div id="widget-employee-attendance">
+        {% include "dashboard/widgets/widget_employee_attendance.html" %}
+      </div>
+
+      <div id="widget-employee-tasks">
+        {% include "dashboard/widgets/widget_employee_tasks.html" %}
+      </div>
+
+      <div id="widget-employee-leaves">
+        {% include "dashboard/widgets/widget_employee_leaves.html" %}
+      </div>
+
+      <div id="widget-employee-expenses">
+        {% include "dashboard/widgets/widget_employee_expenses.html" %}
+      </div>
+    </div>
+  </div>
+</c-app-shell>

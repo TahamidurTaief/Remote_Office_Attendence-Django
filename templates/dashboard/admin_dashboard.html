@@ -1,0 +1,65 @@
+<c-app-shell page_title="Admin Executive Dashboard | FieldTrack" active_href="{% url 'dashboard' %}">
+  <c-slot name="topbar">
+    <c-topbar title="Executive Control Panel">
+      <c-slot name="actions">
+        <div class="flex items-center gap-2">
+          <!-- Role View Switcher for Superusers/Admins -->
+          <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-semibold">
+            <span class="text-slate-400 px-1">View As:</span>
+            <a href="{% url 'dashboard' %}?role_view=admin" class="px-2 py-0.5 rounded {% if role_variant == 'admin' %}bg-white dark:bg-slate-700 text-primary shadow-xs{% else %}text-slate-600 dark:text-slate-300{% endif %}">Admin</a>
+            <a href="{% url 'dashboard' %}?role_view=hr" class="px-2 py-0.5 rounded {% if role_variant == 'hr' %}bg-white dark:bg-slate-700 text-primary shadow-xs{% else %}text-slate-600 dark:text-slate-300{% endif %}">HR</a>
+            <a href="{% url 'dashboard' %}?role_view=manager" class="px-2 py-0.5 rounded {% if role_variant == 'manager' %}bg-white dark:bg-slate-700 text-primary shadow-xs{% else %}text-slate-600 dark:text-slate-300{% endif %}">Manager</a>
+            <a href="{% url 'dashboard' %}?role_view=employee" class="px-2 py-0.5 rounded {% if role_variant == 'employee' %}bg-white dark:bg-slate-700 text-primary shadow-xs{% else %}text-slate-600 dark:text-slate-300{% endif %}">Employee</a>
+          </div>
+        </div>
+      </c-slot>
+    </c-topbar>
+  </c-slot>
+
+  <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <!-- Header -->
+    <div class="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/10 flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white">
+          System Overview & HR Analytics
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">Full executive oversight across workforce, operations, and system security.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="{% url 'admin_panel:security_dashboard' %}" class="ft-btn ft-btn-primary ft-btn-sm">
+          Security Center
+        </a>
+      </div>
+    </div>
+
+    <!-- Admin Executive KPI Row -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <c-kpi-widget title="Total Headcount" value="{{ total_employees }}" label="Active: {{ active_employees_count }}" icon="users" color="teal">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Today Present" value="{{ today_attendance_count }}" label="Late: {{ today_late_count }}" icon="user-check" color="success">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Active Sessions" value="{{ active_sessions_count }}" label="Single Device Monitored" icon="monitor" color="sky">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Pending Lifecycle" value="{{ pending_lifecycle_requests_count }}" label="Approval Queue" icon="git-pull-request" color="pink">
+      </c-kpi-widget>
+    </div>
+
+    <!-- Widgets Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div id="widget-admin-security">
+        {% include "dashboard/widgets/widget_admin_security.html" %}
+      </div>
+
+      <div id="widget-hr-headcount">
+        {% include "dashboard/widgets/widget_hr_headcount.html" %}
+      </div>
+
+      <div id="widget-hr-lifecycle" class="lg:col-span-2">
+        {% include "dashboard/widgets/widget_hr_lifecycle.html" %}
+      </div>
+    </div>
+  </div>
+</c-app-shell>

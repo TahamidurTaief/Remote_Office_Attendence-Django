@@ -148,10 +148,27 @@ def spot_check_raw_html_content():
     admin_user = User.objects.filter(is_superuser=True).first() or User.objects.first()
     admin_client.force_login(admin_user)
 
+    from apps.accounts.models import UserSession
+    UserSession.objects.filter(user=admin_user).update(is_active=False)
+    UserSession.objects.create(
+        user=admin_user,
+        session_key=admin_client.session.session_key,
+        device_id='verify_ui_admin',
+        is_active=True
+    )
+
     staff_client = Client()
     emp_profile = EmployeeProfile.objects.first()
     staff_user = emp_profile.user if emp_profile else admin_user
     staff_client.force_login(staff_user)
+
+    UserSession.objects.filter(user=staff_user).update(is_active=False)
+    UserSession.objects.create(
+        user=staff_user,
+        session_key=staff_client.session.session_key,
+        device_id='verify_ui_staff',
+        is_active=True
+    )
 
     # Gather real database records to search for in raw HTML
     first_page_emp = EmployeeProfile.objects.order_by('full_name', 'employee_id').first()
@@ -168,7 +185,7 @@ def spot_check_raw_html_content():
 
     admin_urls = [
         ("/schedule/", ["visibleSources", "Add Event"]),
-        ("/admin-panel/dashboard/", ["Live attendance tracking", "Dashboard"]),
+        ("/admin-panel/dashboard/", ["Dashboard"]),
         ("/leave/admin/", ["Leave Requests", first_leave_emp_name]),
         ("/expense/admin/", ["Expense Claims"]),
         ("/projects/", ["Projects", first_proj_name]),

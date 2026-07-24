@@ -1,0 +1,58 @@
+<c-app-shell page_title="HR Dashboard | FieldTrack" active_href="{% url 'dashboard' %}">
+  <c-slot name="topbar">
+    <c-topbar title="HR Analytics & Control">
+      <c-slot name="actions">
+        <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-600">
+          Role: HR
+        </span>
+      </c-slot>
+    </c-topbar>
+  </c-slot>
+
+  <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <!-- Header -->
+    <div class="p-4 rounded-xl bg-gradient-to-r from-teal-500/10 via-teal-500/5 to-transparent border border-teal-500/10 flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white">
+          Organization Workforce Overview
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">Headcount metrics, lifecycle queues, and compliance alerts.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="{% url 'employees:master_list' %}" class="ft-btn ft-btn-primary ft-btn-sm">
+          Employee Master SSOT
+        </a>
+      </div>
+    </div>
+
+    <!-- HR KPI Row -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <c-kpi-widget title="Total Headcount" value="{{ total_employees }}" label="Active: {{ active_employees_count }}" icon="users" color="teal">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Today Present" value="{{ today_attendance_count }}" label="Late: {{ today_late_count }}" icon="user-check" color="success">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Probation Staff" value="{{ probation_employees_count }}" label="Ending Soon" icon="clock" color="amber">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Doc Expiry Alerts" value="{{ expiring_documents|length }}" label="Next 30 Days" icon="file-warning" color="rose">
+      </c-kpi-widget>
+    </div>
+
+    <!-- Widgets Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div id="widget-hr-headcount">
+        {% include "dashboard/widgets/widget_hr_headcount.html" %}
+      </div>
+
+      <div id="widget-hr-lifecycle">
+        {% include "dashboard/widgets/widget_hr_lifecycle.html" %}
+      </div>
+
+      <div id="widget-hr-doc-expiry" class="lg:col-span-2">
+        {% include "dashboard/widgets/widget_hr_doc_expiry.html" %}
+      </div>
+    </div>
+  </div>
+</c-app-shell>

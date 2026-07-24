@@ -1,0 +1,44 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+        <i data-lucide="calendar" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Leave Requests</h3>
+        <p class="text-xs text-slate-500">Your recent leave applications</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1">
+      <a href="{% url 'leave:staff_request_create' %}" class="ft-btn ft-btn-ghost ft-btn-xs text-primary font-semibold">
+        + Apply
+      </a>
+      <button hx-get="{% url 'dashboard' %}?widget=employee_leaves"
+              hx-target="#widget-employee-leaves"
+              hx-swap="outerHTML"
+              class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
+        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+
+  {% if my_leave_requests %}
+    <div class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for req in my_leave_requests %}
+        <div class="py-2.5 flex items-center justify-between">
+          <div>
+            <h4 class="text-sm font-medium text-slate-800 dark:text-white">{{ req.leave_type.name }}</h4>
+            <p class="text-xs text-slate-500">{{ req.start_date|date:"M d" }} - {{ req.end_date|date:"M d, Y" }}</p>
+          </div>
+          <c-badge variant="{% if req.status == 'approved' %}success{% elif req.status == 'rejected' %}danger{% else %}warning{% endif %}">
+            {{ req.get_status_display }}
+          </c-badge>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center py-6 text-slate-400 text-sm">
+      No leave requests submitted recently.
+    </div>
+  {% endif %}
+</c-card>

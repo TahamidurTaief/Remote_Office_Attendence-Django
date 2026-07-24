@@ -6,6 +6,7 @@ from django.contrib.staticfiles.storage import staticfiles_storage
 from django.http import JsonResponse, HttpResponse
 import os
 import environ
+from apps.admin_panel import views as admin_panel_views
 
 env = environ.Env()
 
@@ -106,6 +107,7 @@ urlpatterns = [
     path('attendance/', include('apps.attendance.urls')),
     path('staff/', include('apps.staff.urls')),
     path('admin-panel/', include('apps.admin_panel.urls')),
+    path('dashboard/', admin_panel_views.RoleBasedDashboardView.as_view(), name='dashboard'),
     path('notifications/', include('apps.notifications.urls')),
     path('backups/', include('apps.backups.urls')),
     path('leave/', include('apps.leave.urls')),

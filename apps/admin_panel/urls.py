@@ -5,7 +5,7 @@ from . import roles_views
 app_name = 'admin_panel'
 
 urlpatterns = [
-    path('dashboard/', views.AdminDashboardView.as_view(), name='dashboard'),
+    path('dashboard/', views.RoleBasedDashboardView.as_view(), name='dashboard'),
     path('dashboard/partial/', views.DashboardPartialView.as_view(), name='dashboard_partial'),
     path('dashboard/employee-kpis/', views.EmployeeKPIWidgetView.as_view(), name='employee_kpis'),
     path('global-search/', views.GlobalSearchView.as_view(), name='global_search'),

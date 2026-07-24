@@ -1,0 +1,34 @@
+<c-card>
+  <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-2">
+      <div class="p-2 rounded-lg bg-pink-500/10 text-pink-600">
+        <i data-lucide="git-pull-request" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Lifecycle Transition Requests</h3>
+        <p class="text-xs text-slate-500">Pending approval queue</p>
+      </div>
+    </div>
+    <a href="{% url 'employees:lifecycle_requests' %}" class="ft-btn ft-btn-ghost ft-btn-xs text-primary font-semibold">
+      View All ({{ pending_lifecycle_requests_count }})
+    </a>
+  </div>
+
+  {% if pending_lifecycle_requests_count > 0 %}
+    <div class="p-3 rounded-lg bg-pink-50 dark:bg-pink-950/30 border border-pink-100 dark:border-pink-900/50 flex items-center justify-between">
+      <div>
+        <span class="text-sm font-semibold text-pink-700 dark:text-pink-300 block">
+          {{ pending_lifecycle_requests_count }} Lifecycle Request{{ pending_lifecycle_requests_count|pluralize }} Pending
+        </span>
+        <span class="text-xs text-pink-600/80 dark:text-pink-400">Requires HR/Admin approval before taking effect</span>
+      </div>
+      <a href="{% url 'employees:lifecycle_requests' %}" class="ft-btn ft-btn-primary ft-btn-xs">
+        Process Requests
+      </a>
+    </div>
+  {% else %}
+    <div class="text-center py-4 text-slate-400 text-sm">
+      No pending lifecycle transition requests in queue.
+    </div>
+  {% endif %}
+</c-card>
