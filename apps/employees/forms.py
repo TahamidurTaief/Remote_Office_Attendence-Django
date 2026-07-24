@@ -181,8 +181,11 @@ class EmployeeEditForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.user:
-            self.fields['role'].initial = self.instance.user.role
-            self.fields['groups'].initial = self.instance.user.groups.all()
+            assignment = self.instance.user.role_assignments.select_related('role').first()
+            if assignment:
+                self.fields['role'].initial = assignment.role.code
+            else:
+                self.fields['role'].initial = self.instance.user.role
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.update({'class': CHECKBOX_INPUT})
@@ -234,13 +237,20 @@ class EmployeeEditForm(forms.ModelForm):
         phone = self.cleaned_data.get('phone')
         role = self.cleaned_data.get('role')
         
-        # Sync phone and role to CustomUser
+        # Sync phone and role to CustomUser and UserRoleAssignment
         user = profile.user
         if phone:
             phone = phone.strip()
         user.phone = phone
         if role:
             user.role = role
+            from apps.accounts.rbac_models import Role, UserRoleAssignment
+            role_obj = Role.objects.filter(code=role).first()
+            if role_obj:
+                UserRoleAssignment.objects.update_or_create(
+                    user=user,
+                    defaults={'role': role_obj}
+                )
         user.save()
         user.groups.set(self.cleaned_data.get('groups', []))
         
