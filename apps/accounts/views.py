@@ -828,6 +828,8 @@ class LoginMFAVerifyView(View):
                 old_sess.logout_time = now
                 old_sess.save(update_fields=['is_active', 'logout_time'])
 
+            if not hasattr(user, 'backend') or not user.backend:
+                user.backend = 'apps.accounts.backends.EmailOrPhoneModelBackend'
             login(request, user)
             request.session.cycle_key()
 

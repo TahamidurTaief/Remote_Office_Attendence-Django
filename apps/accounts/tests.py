@@ -6,7 +6,8 @@ from apps.accounts.models import LoginProtection, CustomUser
 from apps.accounts.login_protection import (
     check_3layer_lock,
     record_failed_attempt,
-    record_successful_login
+    record_successful_login,
+    get_or_create_protection
 )
 
 User = get_user_model()
