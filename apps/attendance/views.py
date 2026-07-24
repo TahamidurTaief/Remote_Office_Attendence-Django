@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render, redirect
 from apps.attendance.models import Attendance, AttendanceLocation
 from apps.attendance.sync_utils import parse_and_validate_client_time
 from apps.employees.models import EmployeeLocationSync
