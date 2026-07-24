@@ -559,6 +559,33 @@ class EmployeeMasterTests(TestCase):
         emp.refresh_from_db()
         self.assertEqual(emp.status, 'archived')
 
+    def test_legacy_profile_reconciliation_sync(self):
+        user = User.objects.create_user(email='reconcile@test.com', phone='+8801711111111', password='Password123!')
+        legacy_prof = EmployeeProfile.objects.create(
+            user=user,
+            employee_id='EMP-LEGACY-01',
+            full_name='Old Name',
+            phone='+8801711111111',
+            joined_date=date.today(),
+            branch=self.branch
+        )
+
+        master = Employee.objects.create(
+            employee_number='EMP-MASTER-RECON',
+            first_name='Reconciled',
+            last_name='User',
+            phone='+8801711112222',
+            branch=self.branch,
+            user=user,
+            status=EmployeeStatus.ACTIVE
+        )
+
+        legacy_prof.refresh_from_db()
+        self.assertEqual(legacy_prof.master_employee, master)
+        self.assertEqual(legacy_prof.full_name, 'Reconciled User')
+        self.assertEqual(legacy_prof.phone, '+8801711112222')
+
+
 
 
 

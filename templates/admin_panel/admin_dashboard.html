@@ -49,6 +49,11 @@
             </c-filter-bar>
         </c-card>
 
+        <!-- Employee Master Live KPI Section -->
+        <div hx-get="{% url 'admin_panel:employee_kpis' %}" hx-trigger="load, every 60s" class="mb-4">
+            {% include "admin_panel/partials/employee_kpis.html" %}
+        </div>
+
         <div id="live-section" hx-get="{% url 'admin_panel:dashboard_partial' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" hx-trigger="load, every 60s">
             <!-- Skeleton loader -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">

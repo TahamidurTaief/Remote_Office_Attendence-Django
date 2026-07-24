@@ -1,0 +1,151 @@
+{% comment %} c-time-picker — Fully functional, ultra-minimal time picker
+   Props:
+   - name: hidden input name (required)
+   - value: initial time string (HH:MM or HH:MM AM/PM)
+   - label: label text
+   - required: 'true' | ''
+   - id: unique id for the input (optional)
+{% endcomment %}
+
+<div x-data="{
+  open: false,
+  hour: 12,
+  minute: 0,
+  ampm: 'AM',
+
+  get formattedValue() {
+    let h = this.hour;
+    if (this.ampm === 'PM' && h < 12) h += 12;
+    if (this.ampm === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2,'0')}:${String(this.minute).padStart(2,'0')}`;
+  },
+
+  get displayLabel() {
+    return `${String(this.hour).padStart(2,'0')}:${String(this.minute).padStart(2,'0')} ${this.ampm}`;
+  },
+
+  init() {
+    const initVal = '{{ value|default:'' }}';
+    if (initVal) {
+      const parts = initVal.split(':');
+      if (parts.length >= 2) {
+        let h = parseInt(parts[0], 10);
+        let m = parseInt(parts[1], 10);
+        if (!isNaN(h) && !isNaN(m)) {
+          this.minute = m;
+          this.ampm = h >= 12 ? 'PM' : 'AM';
+          this.hour = h % 12 || 12;
+        }
+      }
+    }
+  },
+
+  confirm() {
+    this.open = false;
+    this.$nextTick(() => { 
+      const el = this.$refs.hidden; 
+      if(el) {
+        el.dispatchEvent(new Event('change',{bubbles:true})); 
+        el.dispatchEvent(new Event('input',{bubbles:true})); 
+      }
+    });
+  }
+}" @click.outside="open = false" class="relative w-full flex flex-col gap-0.5">
+
+  {% if label %}
+    <label class="ft-label">{{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}</label>
+  {% endif %}
+
+  {# Hidden input carrying the value #}
+  <input type="hidden" x-ref="hidden" name="{{ name }}" :value="formattedValue"
+         id="{{ id|default:name }}" {% if required %}required{% endif %}>
+
+  {# Trigger #}
+  <button type="button"
+          @click="open = !open"
+          class="ft-input w-full text-left flex items-center justify-between cursor-pointer rounded-[4px] h-[34px] px-[10px] text-[12px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10"
+          style="background: var(--surface); border: 1px solid var(--border); color: var(--text);">
+    <div class="flex items-center gap-2">
+      <svg class="w-3.5 h-3.5" style="color: var(--text-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span x-text="displayLabel" class="text-[12px] font-normal" style="color: var(--text)"></span>
+    </div>
+    <svg class="w-3 h-3 transition-transform duration-150" style="color: var(--text-muted)" :class="open ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+    </svg>
+  </button>
+
+  {# Dropdown panel #}
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-100"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       x-transition:leave="transition ease-in duration-75"
+       x-transition:leave-start="opacity-100 scale-100"
+       x-transition:leave-end="opacity-0 scale-95"
+       @click.stop
+       class="absolute top-full left-0 mt-1 z-[100] rounded-[4px] p-3 flex flex-col items-center gap-3 focus:outline-none w-44"
+       style="background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-md); display: none;"
+  >
+    <div class="flex items-center justify-center gap-2">
+      {# Hours #}
+      <div class="flex flex-col items-center gap-0.5">
+        <button type="button" @click="hour = hour >= 12 ? 1 : hour + 1"
+                class="w-6 h-5 flex items-center justify-center rounded hover:bg-opacity-20 border-none bg-transparent cursor-pointer"
+                style="color: var(--text-secondary)">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
+        </button>
+        <span class="text-[14px] font-bold w-7 text-center tabular-nums" style="color: var(--text)" x-text="String(hour).padStart(2,'0')"></span>
+        <button type="button" @click="hour = hour <= 1 ? 12 : hour - 1"
+                class="w-6 h-5 flex items-center justify-center rounded hover:bg-opacity-20 border-none bg-transparent cursor-pointer"
+                style="color: var(--text-secondary)">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+      </div>
+      <span class="text-[14px] font-bold" style="color: var(--text)">:</span>
+      {# Minutes #}
+      <div class="flex flex-col items-center gap-0.5">
+        <button type="button" @click="minute = minute >= 59 ? 0 : minute + 1"
+                class="w-6 h-5 flex items-center justify-center rounded hover:bg-opacity-20 border-none bg-transparent cursor-pointer"
+                style="color: var(--text-secondary)">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
+        </button>
+        <span class="text-[14px] font-bold w-7 text-center tabular-nums" style="color: var(--text)" x-text="String(minute).padStart(2,'0')"></span>
+        <button type="button" @click="minute = minute <= 0 ? 59 : minute - 1"
+                class="w-6 h-5 flex items-center justify-center rounded hover:bg-opacity-20 border-none bg-transparent cursor-pointer"
+                style="color: var(--text-secondary)">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+      </div>
+      {# AM/PM #}
+      <div class="flex flex-col gap-1 ml-1.5">
+        <button type="button"
+                @click="ampm = 'AM'"
+                class="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                :style="ampm === 'AM'
+                  ? 'background: var(--primary); color: white; border: none;'
+                  : 'background: var(--surface-2); color: var(--text-secondary); border: none;'">
+          AM
+        </button>
+        <button type="button"
+                @click="ampm = 'PM'"
+                class="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                :style="ampm === 'PM'
+                  ? 'background: var(--primary); color: white; border: none;'
+                  : 'background: var(--surface-2); color: var(--text-secondary); border: none;'">
+          PM
+        </button>
+      </div>
+    </div>
+    
+    <div class="flex w-full gap-1.5">
+      <button type="button" @click="open = false"
+              class="flex-1 px-2.5 py-1 text-[11px] font-medium rounded cursor-pointer border-none"
+              style="background: var(--surface-2); color: var(--text-secondary)">Cancel</button>
+      <button type="button" @click="confirm()"
+              class="flex-1 px-2.5 py-1 text-[11px] font-medium text-white rounded cursor-pointer border-none"
+              style="background: var(--primary)">Apply</button>
+    </div>
+  </div>
+</div>

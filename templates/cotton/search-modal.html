@@ -68,10 +68,14 @@
            style="border-color: var(--border)">
         <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: var(--text-muted)"></i>
         <input type="text"
+               name="q"
                x-model.debounce.200="query"
+               hx-get="{% url 'admin_panel:global_search' %}"
+               hx-target="#search-results-container-{{ id }}"
+               hx-trigger="keyup changed delay:250ms"
                class="ft-search-modal-input flex-1 bg-transparent outline-none border-0 p-0 ring-0 shadow-none text-[13px]"
                style="color: var(--text); font-family: inherit"
-               placeholder="{{ placeholder|default:'Search…' }}"
+               placeholder="{{ placeholder|default:'Search employees, department, branch, number…' }}"
                autocomplete="off">
         <button type="button"
                 @click="close()"
@@ -81,13 +85,11 @@
         </button>
       </div>
 
-      {# Results slot — rendered by parent via htmx or Alpine #}
-      <div class="max-h-72 overflow-y-auto scrollbar-hide py-1.5"
-           x-show="query.length > 0 || true">
-        {{ slot }}
-        {% if not slot %}
+      {# Results container — rendered via htmx #}
+      <div id="search-results-container-{{ id }}" class="max-h-72 overflow-y-auto scrollbar-hide py-1.5 p-3">
+        {% if slot %}{{ slot }}{% else %}
         <div class="px-4 py-8 text-center text-[12px]" style="color: var(--text-muted)">
-          Start typing to search…
+          Start typing to search employee master records…
         </div>
         {% endif %}
       </div>

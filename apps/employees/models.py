@@ -18,6 +18,7 @@ class EmployeeProfile(models.Model):
     )
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='employee_profile')
+    master_employee = models.OneToOneField('Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='legacy_profile')
     branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='employees')
     employee_id = models.CharField(max_length=50, unique=True)
     full_name = models.CharField(max_length=255)

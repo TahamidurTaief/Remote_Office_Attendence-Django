@@ -1,0 +1,31 @@
+<div class="space-y-1">
+    {% for emp in results %}
+    <a href="{% url 'employees:master_detail' emp.pk %}" class="flex items-center justify-between p-3 hover:bg-indigo-50/60 rounded-xl transition-colors text-decoration-none">
+        <div class="flex items-center space-x-3">
+            <c-avatar name="{{ emp.get_full_name }}" size="sm" />
+            <div>
+                <div class="text-sm font-semibold text-gray-900">{{ emp.get_full_name }}</div>
+                <div class="text-xs text-gray-500">
+                    <span class="font-mono text-indigo-600">{{ emp.employee_number }}</span>
+                    {% if emp.department %} • {{ emp.department.name }}{% endif %}
+                    {% if emp.designation %} • {{ emp.designation.name }}{% endif %}
+                    {% if emp.branch %} ({{ emp.branch.name }}){% endif %}
+                </div>
+            </div>
+        </div>
+        <div>
+            {% if emp.status == 'active' or emp.status == 'confirmed' %}
+                <c-badge variant="success" label="{{ emp.get_status_display }}" />
+            {% elif emp.status == 'probation' or emp.status == 'pending_approval' %}
+                <c-badge variant="warning" label="{{ emp.get_status_display }}" />
+            {% else %}
+                <c-badge variant="neutral" label="{{ emp.get_status_display }}" />
+            {% endif %}
+        </div>
+    </a>
+    {% empty %}
+    <div class="p-6 text-center text-xs text-gray-400">
+        No employees found matching "<span class="font-medium text-gray-700">{{ query }}</span>"
+    </div>
+    {% endfor %}
+</div>

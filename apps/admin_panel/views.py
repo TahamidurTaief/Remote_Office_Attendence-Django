@@ -209,6 +209,25 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
         else:
             branches_context = []
 
+        # Phase 2 Employee Master SSOT stats
+        from apps.employees.models import Employee, Department, EmployeeStatus
+        from django.db.models import Count
+
+        total_master_emp = Employee.objects.count()
+        active_master_emp = Employee.objects.filter(status=EmployeeStatus.ACTIVE).count()
+        probation_master_emp = Employee.objects.filter(status=EmployeeStatus.PROBATION).count()
+        notice_master_emp = Employee.objects.filter(status=EmployeeStatus.NOTICE_PERIOD).count()
+
+        dept_summary = Department.objects.annotate(emp_count=Count('employees')).filter(is_active=True)
+        recent_master_joiners = Employee.objects.select_related('department', 'branch', 'designation').order_by('-created_at')[:5]
+
+        master_stats = {
+            'total': total_master_emp,
+            'active': active_master_emp,
+            'probation': probation_master_emp,
+            'notice': notice_master_emp,
+        }
+
         context.update({
             'can_view_all': can_view_all,
             'branches': branches_context,
@@ -229,6 +248,9 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
             'branch_summaries': branch_summaries,
             'report_missing_branch': report_missing_branch,
             'has_approve_permission': has_approve_permission,
+            'master_stats': master_stats,
+            'dept_summary': dept_summary,
+            'recent_master_joiners': recent_master_joiners,
         })
         return context
 
@@ -2885,3 +2907,73 @@ class AdminAddLeaveView(AdminRequiredMixin, CreateView):
             f"Leave record for {form.instance.employee.full_name} added successfully."
         )
         return response
+
+
+class EmployeeKPIWidgetView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def get(self, request):
+        from apps.employees.models import Employee, Department, EmployeeStatus
+        from django.db.models import Count
+
+        master_stats = {
+            'total': Employee.objects.count(),
+            'active': Employee.objects.filter(status=EmployeeStatus.ACTIVE).count(),
+            'probation': Employee.objects.filter(status=EmployeeStatus.PROBATION).count(),
+            'notice': Employee.objects.filter(status=EmployeeStatus.NOTICE_PERIOD).count(),
+        }
+        dept_summary = Department.objects.annotate(emp_count=Count('employees')).filter(is_active=True)
+        recent_joiners = Employee.objects.select_related('department', 'branch', 'designation').order_by('-created_at')[:5]
+
+        return render(request, 'admin_panel/partials/employee_kpis.html', {
+            'master_stats': master_stats,
+            'dept_summary': dept_summary,
+            'recent_joiners': recent_joiners,
+        })
+
+
+class GlobalSearchView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager', 'staff']
+
+    def get(self, request):
+        from apps.employees.models import Employee
+        from django.db.models import Q
+
+        query = (request.GET.get('query') or request.GET.get('q') or '').strip()
+        results = []
+        if query:
+            results = Employee.objects.select_related(
+                'branch', 'department', 'designation', 'reporting_manager', 'user'
+            ).filter(
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(employee_number__icontains=query) |
+                Q(personal_email__icontains=query) |
+                Q(phone__icontains=query) |
+                Q(department__name__icontains=query) |
+                Q(designation__name__icontains=query) |
+                Q(branch__name__icontains=query)
+            )[:15]
+
+        if request.headers.get('HX-Request'):
+            return render(request, 'admin_panel/partials/global_search_results.html', {
+                'query': query,
+                'results': results
+            })
+
+        return JsonResponse({
+            'query': query,
+            'results': [
+                {
+                    'id': emp.pk,
+                    'employee_number': emp.employee_number,
+                    'name': emp.get_full_name(),
+                    'department': emp.department.name if emp.department else '',
+                    'designation': emp.designation.name if emp.designation else '',
+                    'branch': emp.branch.name if emp.branch else '',
+                    'status': emp.get_status_display(),
+                    'url': f"/employees/master/{emp.pk}/"
+                } for emp in results
+            ]
+        })
+
