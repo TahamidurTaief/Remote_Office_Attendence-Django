@@ -1,24 +1,24 @@
 <c-app-shell page_title="Branches | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Branches">
             <c-slot name="actions">
-                <c-button href="{% url 'branches:branch_add' %}" variant="accent" icon="plus" label="Add Branch" />
+                <c-button href="{% url 'branches:branch_add' %}" variant="accent" icon="plus" label="Add Branch" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <!-- Filters -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'branches:branch_list' %}">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 items-end">
-                    <c-input name="search" label="Search Branches" value="{{ search }}" placeholder="Branch Name..." />
+                    <c-input name="search" label="Search Branches" value="{{ search }}" placeholder="Branch Name..." ></c-input>
                     
                     <c-select name="status" label="Status" value="{{ status }}">
                         <option value="">All Statuses</option>
@@ -56,9 +56,9 @@
                             </td>
                             <td>
                                 {% if branch.is_active %}
-                                    <c-badge variant="success" dot="true" label="Active" />
+                                    <c-badge variant="success" dot="true" label="Active" ></c-badge>
                                 {% else %}
-                                    <c-badge variant="neutral" dot="true" label="Inactive" />
+                                    <c-badge variant="neutral" dot="true" label="Inactive" ></c-badge>
                                 {% endif %}
                             </td>
                             <td class="text-right">
@@ -80,7 +80,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="5" class="py-12">
-                                <c-empty-state icon="building-2" title="No Branches Found" description="Add your first branch to get started." />
+                                <c-empty-state icon="building-2" title="No Branches Found" description="Add your first branch to get started." ></c-empty-state>
                             </td>
                         </tr>
                         {% endfor %}

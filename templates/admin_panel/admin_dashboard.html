@@ -1,13 +1,13 @@
 <c-app-shell page_title="Dashboard | FieldTrack Admin" active_href="{{ request.path }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" />
+        <c-sidebar active_href="{{ request.path }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Dashboard" />
+        <c-topbar title="Dashboard" ></c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <div class="flex justify-between items-center">
@@ -21,7 +21,7 @@
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'admin_panel:dashboard' %}">
                 <div class="grid grid-cols-1 {% if can_view_all or branches %}md:grid-cols-3{% else %}md:grid-cols-2{% endif %} gap-3 flex-1 items-end">
-                    <c-input type="date" name="date" label="Date" value="{{ selected_date }}" />
+                    <c-input type="date" name="date" label="Date" value="{{ selected_date }}" ></c-input>
                     
                     <c-select name="employee" label="Employee" value="{{ selected_employee }}">
                         <option value="">All Employees</option>
@@ -43,8 +43,8 @@
                 </div>
 
                 <c-slot name="actions">
-                    <c-button type="submit" variant="primary" icon="filter" label="Filter" />
-                    <c-button href="{% url 'admin_panel:dashboard' %}" variant="secondary" label="Reset" />
+                    <c-button type="submit" variant="primary" icon="filter" label="Filter" ></c-button>
+                    <c-button href="{% url 'admin_panel:dashboard' %}" variant="secondary" label="Reset" ></c-button>
                 </c-slot>
             </c-filter-bar>
         </c-card>
@@ -57,18 +57,18 @@
         <div id="live-section" hx-get="{% url 'admin_panel:dashboard_partial' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" hx-trigger="load, every 60s">
             <!-- Skeleton loader -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                <c-skeleton type="kpi" />
-                <c-skeleton type="kpi" />
-                <c-skeleton type="kpi" />
-                <c-skeleton type="kpi" />
-                <c-skeleton type="kpi" />
+                <c-skeleton type="kpi" ></c-skeleton>
+                <c-skeleton type="kpi" ></c-skeleton>
+                <c-skeleton type="kpi" ></c-skeleton>
+                <c-skeleton type="kpi" ></c-skeleton>
+                <c-skeleton type="kpi" ></c-skeleton>
             </div>
             <div class="grid grid-cols-12 gap-6">
                 <div class="col-span-12 lg:col-span-7 xl:col-span-8">
-                    <c-skeleton type="table" />
+                    <c-skeleton type="table" ></c-skeleton>
                 </div>
                 <div class="col-span-12 lg:col-span-5 xl:col-span-4">
-                    <c-skeleton type="card" />
+                    <c-skeleton type="card" ></c-skeleton>
                 </div>
             </div>
         </div>

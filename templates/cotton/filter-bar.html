@@ -21,8 +21,8 @@
     {% if actions %}
       {{ actions }}
     {% else %}
-      <c-button type="submit" variant="primary" size="sm" icon="filter" label="Filter" />
-      <c-button href="{{ action|default:'.' }}" variant="secondary" size="sm" label="Reset" />
+      <c-button type="submit" variant="primary" size="sm" icon="filter" label="Filter" ></c-button>
+      <c-button href="{{ action|default:'.' }}" variant="secondary" size="sm" label="Reset" ></c-button>
     {% endif %}
   </div>
 </form>

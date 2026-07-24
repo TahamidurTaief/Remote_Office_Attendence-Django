@@ -9,7 +9,7 @@
             </h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Provide a name for the project type.</p>
         </div>
-        <c-button href="{% url 'projects:project_type_list' %}" variant="secondary" icon="arrow-left" label="Back to List" />
+        <c-button href="{% url 'projects:project_type_list' %}" variant="secondary" icon="arrow-left" label="Back to List" ></c-button>
     </div>
 
     <c-card padding="md">
@@ -30,9 +30,9 @@
             </div>
 
             <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
-                <c-button href="{% url 'projects:project_type_list' %}" variant="secondary" label="Cancel" />
+                <c-button href="{% url 'projects:project_type_list' %}" variant="secondary" label="Cancel" ></c-button>
                 <c-button type="submit" variant="primary" icon="check"
-                          label="{% if object %}Save Changes{% else %}Create Project Type{% endif %}" />
+                          label="{% if object %}Save Changes{% else %}Create Project Type{% endif %}" ></c-button>
             </div>
         </form>
     </c-card>

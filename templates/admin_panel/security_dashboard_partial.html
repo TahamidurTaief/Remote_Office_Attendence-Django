@@ -2,10 +2,10 @@
 
   {# ── Security KPI Stat Widgets ────────────────────────────────────── #}
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    <c-kpi-widget title="Active Sessions" value="{{ active_sessions_count }}" icon="shield-check" color="emerald" hint="Currently logged in devices" />
-    <c-kpi-widget title="Locked Accounts" value="{{ locked_accounts_count }}" icon="lock" color="rose" hint="Auto-locked 30m security protection" />
-    <c-kpi-widget title="Failed Logins (24h)" value="{{ failed_logins_24h }}" icon="alert-triangle" color="amber" hint="Total failed authentication attempts" />
-    <c-kpi-widget title="New Device Logins (24h)" value="{{ new_devices_24h }}" icon="smartphone" color="sky" hint="Unrecognized device login alerts" />
+    <c-kpi-widget title="Active Sessions" value="{{ active_sessions_count }}" icon="shield-check" color="emerald" hint="Currently logged in devices" ></c-kpi-widget>
+    <c-kpi-widget title="Locked Accounts" value="{{ locked_accounts_count }}" icon="lock" color="rose" hint="Auto-locked 30m security protection" ></c-kpi-widget>
+    <c-kpi-widget title="Failed Logins (24h)" value="{{ failed_logins_24h }}" icon="alert-triangle" color="amber" hint="Total failed authentication attempts" ></c-kpi-widget>
+    <c-kpi-widget title="New Device Logins (24h)" value="{{ new_devices_24h }}" icon="smartphone" color="sky" hint="Unrecognized device login alerts" ></c-kpi-widget>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">

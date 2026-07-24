@@ -27,9 +27,9 @@
   {% csrf_token %}
   <input type="hidden" name="reset_token" value="{{ reset_token }}">
 
-  <c-input type="text" id="otp_code" name="otp_code" label="6-Digit OTP Code" placeholder="123456" required="true" icon="lock" />
+  <c-input type="text" id="otp_code" name="otp_code" label="6-Digit OTP Code" placeholder="123456" required="true" icon="lock" ></c-input>
 
   <div class="pt-2">
-    <c-button type="submit" variant="primary" label="Verify & Continue" extra_class="w-full justify-center" />
+    <c-button type="submit" variant="primary" label="Verify & Continue" extra_class="w-full justify-center" ></c-button>
   </div>
 </form>

@@ -205,15 +205,15 @@
                             <div class="flex flex-col">
                                 <span class="self-start">
                                     {% if task.status == 'Completed' %}
-                                    <c-badge label="Completed" variant="soft" status_color="emerald" />
+                                    <c-badge label="Completed" variant="soft" status_color="emerald" ></c-badge>
                                     {% elif task.status == 'Under Review' %}
-                                    <c-badge label="Under Review" variant="soft" status_color="amber" />
+                                    <c-badge label="Under Review" variant="soft" status_color="amber" ></c-badge>
                                     {% elif task.status == 'In Progress' %}
-                                    <c-badge label="In Progress" variant="soft" status_color="blue" />
+                                    <c-badge label="In Progress" variant="soft" status_color="blue" ></c-badge>
                                     {% elif task.status == 'Delayed' %}
-                                    <c-badge label="Delayed" variant="soft" status_color="rose" />
+                                    <c-badge label="Delayed" variant="soft" status_color="rose" ></c-badge>
                                     {% else %}
-                                    <c-badge label="Not Started" variant="soft" status_color="slate" />
+                                    <c-badge label="Not Started" variant="soft" status_color="slate" ></c-badge>
                                     {% endif %}
                                 </span>
                                 <span class="text-[10px] font-semibold mt-1" style="color:var(--text-muted)">
@@ -342,7 +342,7 @@
                             </div>
 
                             <div>
-                                <c-textarea id="completion_note" name="completion_note" label="Completion Note / Remarks" x-model="completionNote" rows="2" />
+                                <c-textarea id="completion_note" name="completion_note" label="Completion Note / Remarks" x-model="completionNote" rows="2" ></c-textarea>
                             </div>
                             
                             <div x-data="{ 
@@ -377,7 +377,7 @@
                             </div>
 
                             <div class="pt-2 flex justify-end">
-                                <c-button type="button" variant="primary" label="Submit Progress Update" @click="submitCompletion()" />
+                                <c-button type="button" variant="primary" label="Submit Progress Update" @click="submitCompletion()" ></c-button>
                             </div>
                         </div>
                     </div>
@@ -463,7 +463,7 @@
                                 <div class="flex-1">
                                     <textarea x-model="newReplyMessage" rows="1" @keydown.enter.prevent="if($event.ctrlKey || $event.metaKey) { newReplyMessage += '\n' } else { submitReply() }" class="w-full text-xs p-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500" style="background:var(--surface); border-color:var(--border); color:var(--text)" placeholder="Write a reply... (Press Enter to send, Ctrl+Enter for new line)"></textarea>
                                 </div>
-                                <c-button type="submit" variant="primary" label="Send" size="sm" />
+                                <c-button type="submit" variant="primary" label="Send" size="sm" ></c-button>
                             </form>
                         </div>
                     </div>

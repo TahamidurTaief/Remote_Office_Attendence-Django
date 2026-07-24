@@ -25,7 +25,7 @@
         name="password"
         label="Current Password"
         placeholder="Enter your password"
-        required="true" />
+        required="true" ></c-password-input>
 
       {% if has_pin %}
       <c-input
@@ -36,7 +36,7 @@
         maxlength="4"
         inputmode="numeric"
         required="true"
-        extra_class="font-mono text-center tracking-widest text-lg font-bold" />
+        extra_class="font-mono text-center tracking-widest text-lg font-bold" ></c-input>
       {% endif %}
 
       <c-button
@@ -44,7 +44,7 @@
         variant="primary"
         label="Verify & Continue"
         extra_class="w-full justify-center mt-2"
-        icon="arrow-right" />
+        icon="arrow-right" ></c-button>
     </form>
 
   </c-mfa-wizard-step>

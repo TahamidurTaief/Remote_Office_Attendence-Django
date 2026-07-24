@@ -8,7 +8,7 @@
             <h1 class="text-[14px] font-semibold" style="color:var(--text)">Leave Types</h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Configure leave types and their default days allowed per year.</p>
         </div>
-        <c-button href="{% url 'leave:admin_leave_type_add' %}" variant="primary" icon="plus" label="Add Leave Type" />
+        <c-button href="{% url 'leave:admin_leave_type_add' %}" variant="primary" icon="plus" label="Add Leave Type" ></c-button>
     </div>
 
     <!-- Table -->
@@ -30,17 +30,17 @@
                     <span class="capitalize text-[12px]" style="color:var(--text-secondary)">{{ lt.get_category_display }}</span>
                 </td>
                 <td>
-                    <c-badge variant="primary" label="{{ lt.default_days_per_year }} Days" />
+                    <c-badge variant="primary" label="{{ lt.default_days_per_year }} Days" ></c-badge>
                 </td>
                 <td class="text-right">
-                    <c-button href="{% url 'leave:admin_leave_type_edit' lt.pk %}" variant="ghost" size="sm" icon="edit-3" label="Edit" />
+                    <c-button href="{% url 'leave:admin_leave_type_edit' lt.pk %}" variant="ghost" size="sm" icon="edit-3" label="Edit" ></c-button>
                 </td>
             </tr>
             {% empty %}
             <tr>
                 <td colspan="4" class="py-12">
                     <c-empty-state icon="calendar-x" title="No Leave Types Defined"
-                                   description="Configure leave types (e.g. Casual, Sick) to begin tracking leaves." />
+                                   description="Configure leave types (e.g. Casual, Sick) to begin tracking leaves." ></c-empty-state>
                 </td>
             </tr>
             {% endfor %}

@@ -9,7 +9,7 @@
             </h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Configure leave parameters for employee tracking.</p>
         </div>
-        <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" icon="arrow-left" label="Back" />
+        <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" icon="arrow-left" label="Back" ></c-button>
     </div>
 
     <c-card padding="md">
@@ -62,8 +62,8 @@
 
             <!-- Actions -->
             <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
-                <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" label="Cancel" />
-                <c-button type="submit" variant="primary" icon="save" label="Save Leave Type" />
+                <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" label="Cancel" ></c-button>
+                <c-button type="submit" variant="primary" icon="save" label="Save Leave Type" ></c-button>
             </div>
         </form>
     </c-card>

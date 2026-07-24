@@ -1,9 +1,9 @@
 <div id="employee-kpi-container" class="space-y-4">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <c-kpi-widget title="Total Master Employees" value="{{ master_stats.total|default:0 }}" subtitle="All master records" icon="user-group" variant="primary" />
-        <c-kpi-widget title="Active Employees" value="{{ master_stats.active|default:0 }}" subtitle="Login & active status" icon="user-check" variant="success" />
-        <c-kpi-widget title="Probation Employees" value="{{ master_stats.probation|default:0 }}" subtitle="Under evaluation" icon="clock" variant="warning" />
-        <c-kpi-widget title="Notice Period" value="{{ master_stats.notice|default:0 }}" subtitle="Transitioning" icon="alert-triangle" variant="danger" />
+        <c-kpi-widget title="Total Master Employees" value="{{ master_stats.total|default:0 }}" subtitle="All master records" icon="user-group" variant="primary" ></c-kpi-widget>
+        <c-kpi-widget title="Active Employees" value="{{ master_stats.active|default:0 }}" subtitle="Login & active status" icon="user-check" variant="success" ></c-kpi-widget>
+        <c-kpi-widget title="Probation Employees" value="{{ master_stats.probation|default:0 }}" subtitle="Under evaluation" icon="clock" variant="warning" ></c-kpi-widget>
+        <c-kpi-widget title="Notice Period" value="{{ master_stats.notice|default:0 }}" subtitle="Transitioning" icon="alert-triangle" variant="danger" ></c-kpi-widget>
     </div>
 
     {% if dept_summary %}

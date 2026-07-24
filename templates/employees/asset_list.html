@@ -1,10 +1,10 @@
 <c-app-shell page_title="Asset Registry | FieldTrack ERP">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Hardware & Asset Registry" />
+        <c-topbar title="Hardware & Asset Registry" ></c-topbar>
     </c-slot>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
@@ -38,13 +38,13 @@
                         <tr class="hover:bg-gray-50">
                             <td class="p-3 font-mono font-bold text-indigo-600">{{ asset.asset_tag }}</td>
                             <td class="p-3 font-medium text-gray-900">{{ asset.name }}</td>
-                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_asset_type_display }}" /></td>
-                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_condition_display }}" /></td>
+                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_asset_type_display }}" ></c-badge></td>
+                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_condition_display }}" ></c-badge></td>
                             <td class="p-3">
                                 {% with assign=asset.current_assignment %}
                                 {% if assign %}
                                 <a href="{% url 'employees:master_detail' assign.employee.pk %}" class="text-indigo-600 font-semibold hover:underline flex items-center gap-1.5">
-                                    <c-avatar name="{{ assign.employee.get_full_name }}" size="xs" />
+                                    <c-avatar name="{{ assign.employee.get_full_name }}" size="xs" ></c-avatar>
                                     {{ assign.employee.get_full_name }}
                                 </a>
                                 {% else %}

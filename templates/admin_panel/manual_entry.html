@@ -8,7 +8,7 @@
             <h1 class="text-[14px] font-semibold" style="color:var(--text)">Manual Attendance Entry</h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Override or add missing attendance records.</p>
         </div>
-        <c-button href="{% url 'admin_panel:attendance_list' %}" variant="secondary" icon="arrow-left" label="Back" />
+        <c-button href="{% url 'admin_panel:attendance_list' %}" variant="secondary" icon="arrow-left" label="Back" ></c-button>
     </div>
 
     <!-- Form card -->
@@ -33,14 +33,14 @@
 
             <!-- Date -->
             <c-datetime-picker name="date" label="Date" value="{{ form.date.value|default:'' }}"
-                               error="{{ form.date.errors.0 }}" required="true" />
+                               error="{{ form.date.errors.0 }}" required="true" ></c-datetime-picker>
 
             <!-- Check In / Check Out Times -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <c-datetime-picker name="check_in_time" label="Check In Time" value="{{ form.check_in_time.value|default:'' }}"
-                                   time="true" error="{{ form.check_in_time.errors.0 }}" />
+                                   time="true" error="{{ form.check_in_time.errors.0 }}" ></c-datetime-picker>
                 <c-datetime-picker name="check_out_time" label="Check Out Time" value="{{ form.check_out_time.value|default:'' }}"
-                                   time="true" error="{{ form.check_out_time.errors.0 }}" />
+                                   time="true" error="{{ form.check_out_time.errors.0 }}" ></c-datetime-picker>
             </div>
 
             <!-- Type / Status -->
@@ -57,11 +57,11 @@
             <c-textarea name="admin_override_reason"
                         label="{{ form.admin_override_reason.label }}"
                         value="{{ form.admin_override_reason.value|default:'' }}"
-                        error="{{ form.admin_override_reason.errors.0 }}" />
+                        error="{{ form.admin_override_reason.errors.0 }}" ></c-textarea>
 
             <!-- Submit -->
             <div class="pt-3 flex justify-end border-t" style="border-color:var(--border)">
-                <c-button type="submit" variant="primary" icon="save" label="Save Record" />
+                <c-button type="submit" variant="primary" icon="save" label="Save Record" ></c-button>
             </div>
         </form>
     </c-card>

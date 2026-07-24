@@ -9,7 +9,7 @@
             </h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Configure branch location and access settings.</p>
         </div>
-        <c-button href="{% url 'branches:branch_list' %}" variant="secondary" icon="arrow-left" label="Back" />
+        <c-button href="{% url 'branches:branch_list' %}" variant="secondary" icon="arrow-left" label="Back" ></c-button>
     </div>
 
     <c-card padding="md">
@@ -78,8 +78,8 @@
 
             <!-- Actions -->
             <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
-                <c-button href="{% url 'branches:branch_list' %}" variant="secondary" label="Cancel" />
-                <c-button type="submit" variant="primary" icon="save" label="Save Branch" />
+                <c-button href="{% url 'branches:branch_list' %}" variant="secondary" label="Cancel" ></c-button>
+                <c-button type="submit" variant="primary" icon="save" label="Save Branch" ></c-button>
             </div>
         </form>
     </c-card>

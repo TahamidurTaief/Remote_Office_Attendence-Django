@@ -8,7 +8,7 @@
             <p class="text-[11px] mt-0.5" style="color:var(--text-muted)">Manage, filter, and export employee attendance logs.</p>
         </div>
         <div class="flex items-center gap-2.5 flex-wrap">
-            <c-button href="{% url 'admin_panel:manual_entry' %}" variant="secondary" icon="plus" label="Manual Entry" size="sm" />
+            <c-button href="{% url 'admin_panel:manual_entry' %}" variant="secondary" icon="plus" label="Manual Entry" size="sm" ></c-button>
 
             <!-- Export Dropdown -->
             <div class="relative" x-data="{ open: false }">
@@ -61,10 +61,10 @@
     <c-card padding="sm">
         <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-3 items-end">
             <div>
-                <c-datetime-picker name="date_from" value="{{ request.GET.date_from }}" label="From Date" placeholder="Select date…" />
+                <c-datetime-picker name="date_from" value="{{ request.GET.date_from }}" label="From Date" placeholder="Select date…" ></c-datetime-picker>
             </div>
             <div>
-                <c-datetime-picker name="date_to" value="{{ request.GET.date_to }}" label="To Date" placeholder="Select date…" />
+                <c-datetime-picker name="date_to" value="{{ request.GET.date_to }}" label="To Date" placeholder="Select date…" ></c-datetime-picker>
             </div>
             <div>
                 <c-select name="employee" label="Employee" value="{{ request.GET.employee }}">
@@ -99,7 +99,7 @@
                 </c-select>
             </div>
             <div>
-                <c-button type="submit" variant="primary" icon="filter" label="Filter Results" size="md" extra_class="w-full justify-center" />
+                <c-button type="submit" variant="primary" icon="filter" label="Filter Results" size="md" extra_class="w-full justify-center" ></c-button>
             </div>
         </form>
     </c-card>
@@ -231,7 +231,7 @@
                     <!-- Action Button -->
                     <td class="text-right">
                         {% if att.id %}
-                        <c-button href="{% url 'admin_panel:attendance_detail' att.id %}" variant="secondary" icon="eye" label="Detail" size="sm" />
+                        <c-button href="{% url 'admin_panel:attendance_detail' att.id %}" variant="secondary" icon="eye" label="Detail" size="sm" ></c-button>
                         {% else %}
                         <span class="text-gray-300 text-[11px]">—</span>
                         {% endif %}
@@ -259,10 +259,10 @@
             </p>
             <div class="flex items-center gap-1">
                 {% if page_obj.has_previous %}
-                <c-button href="?page={{ page_obj.previous_page_number }}&{{ query_string }}" variant="secondary" label="Previous" size="sm" />
+                <c-button href="?page={{ page_obj.previous_page_number }}&{{ query_string }}" variant="secondary" label="Previous" size="sm" ></c-button>
                 {% endif %}
                 {% if page_obj.has_next %}
-                <c-button href="?page={{ page_obj.next_page_number }}&{{ query_string }}" variant="secondary" label="Next" size="sm" />
+                <c-button href="?page={{ page_obj.next_page_number }}&{{ query_string }}" variant="secondary" label="Next" size="sm" ></c-button>
                 {% endif %}
             </div>
         </div>

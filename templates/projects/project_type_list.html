@@ -1,24 +1,24 @@
 <c-app-shell page_title="Project Types | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Project Types">
             <c-slot name="actions">
-                <c-button href="{% url 'projects:project_type_create' %}" variant="accent" icon="plus" label="Create Project Type" />
+                <c-button href="{% url 'projects:project_type_create' %}" variant="accent" icon="plus" label="Create Project Type" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <!-- Filters -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'projects:project_type_list' %}">
                 <div class="flex-1">
-                    <c-input name="search" label="Search Project Types" value="{{ search }}" placeholder="Search by name…" />
+                    <c-input name="search" label="Search Project Types" value="{{ search }}" placeholder="Search by name…" ></c-input>
                 </div>
             </c-filter-bar>
         </c-card>
@@ -43,7 +43,7 @@
                                 </a>
                             </td>
                             <td>
-                                <c-badge variant="primary" label="{{ type.projects.count }} projects" />
+                                <c-badge variant="primary" label="{{ type.projects.count }} projects" ></c-badge>
                             </td>
                             <td class="text-right">
                                 <div class="flex items-center justify-end gap-1">
@@ -62,7 +62,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="3" class="py-12">
-                                <c-empty-state icon="tag" title="No Project Types Found" description="Create a new project type to start organizing your work." />
+                                <c-empty-state icon="tag" title="No Project Types Found" description="Create a new project type to start organizing your work." ></c-empty-state>
                             </td>
                         </tr>
                         {% endfor %}
@@ -77,10 +77,10 @@
                 </span>
                 <div class="flex gap-2">
                     {% if page_obj.has_previous %}
-                    <c-button href="?page={{ page_obj.previous_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Previous" />
+                    <c-button href="?page={{ page_obj.previous_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Previous" ></c-button>
                     {% endif %}
                     {% if page_obj.has_next %}
-                    <c-button href="?page={{ page_obj.next_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Next" />
+                    <c-button href="?page={{ page_obj.next_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Next" ></c-button>
                     {% endif %}
                 </div>
             </div>

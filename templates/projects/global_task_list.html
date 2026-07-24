@@ -1,17 +1,17 @@
 <c-app-shell page_title="Task Management | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Task Management">
             <c-slot name="actions">
-                <c-button href="{% url 'projects:global_task_add' %}" variant="accent" icon="plus" label="Create Individual Task" />
+                <c-button href="{% url 'projects:global_task_add' %}" variant="accent" icon="plus" label="Create Individual Task" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
 

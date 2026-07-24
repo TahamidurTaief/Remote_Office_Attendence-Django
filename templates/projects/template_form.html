@@ -9,7 +9,7 @@
             </h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Define the steps and roles for this installation template.</p>
         </div>
-        <c-button href="{% url 'projects:template_list' %}" variant="secondary" icon="arrow-left" label="Back to List" />
+        <c-button href="{% url 'projects:template_list' %}" variant="secondary" icon="arrow-left" label="Back to List" ></c-button>
     </div>
 
     <!-- Template Name/Desc Form -->
@@ -38,9 +38,9 @@
             </div>
 
             <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
-                <c-button href="{% url 'projects:template_list' %}" variant="secondary" label="Cancel" />
+                <c-button href="{% url 'projects:template_list' %}" variant="secondary" label="Cancel" ></c-button>
                 <c-button type="submit" variant="primary" icon="check"
-                          label="{% if object %}Save Template{% else %}Create Template{% endif %}" />
+                          label="{% if object %}Save Template{% else %}Create Template{% endif %}" ></c-button>
             </div>
         </form>
     </c-card>
@@ -115,7 +115,7 @@
                     {{ item_form.default_duration_days }}
                 </div>
                 <div class="sm:col-span-12 flex justify-end">
-                    <c-button type="submit" variant="primary" icon="plus" label="Add Step" size="sm" />
+                    <c-button type="submit" variant="primary" icon="plus" label="Add Step" size="sm" ></c-button>
                 </div>
             </form>
         </div>

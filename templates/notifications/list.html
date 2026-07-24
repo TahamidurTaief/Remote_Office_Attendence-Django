@@ -1,6 +1,6 @@
 <c-app-shell page_title="Notifications | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
@@ -9,14 +9,14 @@
             <c-slot name="actions">
                 <form method="post" action="{% url 'notifications:mark_all_read' %}" class="inline">
                     {% csrf_token %}
-                    <c-button type="submit" variant="secondary" icon="check-circle" label="Mark all read" />
+                    <c-button type="submit" variant="secondary" icon="check-circle" label="Mark all read" ></c-button>
                 </form>
             </c-slot>
             {% endif %}
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-4xl mx-auto space-y-4">
         <!-- Filter Tabs -->
@@ -47,7 +47,7 @@
                 {% endif %}
             {% endif %}
             <a href="{{ item_redirect_url }}" class="p-3 flex items-start gap-3 hover:bg-opacity-50 transition-colors block text-decoration-none" style="background: {% if not notif.is_read %}var(--surface){% else %}var(--surface-2){% endif %}">
-                <c-avatar src="{% if notif.employee and notif.employee.profile_photo %}{{ notif.employee.profile_photo.url }}{% endif %}" initials="{% if notif.employee %}{{ notif.employee.full_name|make_list|first|upper }}{% else %}N{% endif %}" size="sm" />
+                <c-avatar src="{% if notif.employee and notif.employee.profile_photo %}{{ notif.employee.profile_photo.url }}{% endif %}" initials="{% if notif.employee %}{{ notif.employee.full_name|make_list|first|upper }}{% else %}N{% endif %}" size="sm" ></c-avatar>
                 <div class="flex-1 min-w-0">
                     <p class="text-xs {% if not notif.is_read %}font-semibold{% else %}font-medium{% endif %} truncate" style="color:var(--text)">
                         {{ notif.title }}
@@ -57,13 +57,13 @@
                     {% endif %}
                     <p class="text-[10px] mt-1" style="color:var(--text-muted)">{{ notif.created_at|timesince }} ago</p>
                 </div>
-                <c-badge variant="neutral" label="{{ notif.notif_type }}" />
+                <c-badge variant="neutral" label="{{ notif.notif_type }}" ></c-badge>
             </a>
             {% endfor %}
         </c-notification-panel>
         {% else %}
         <c-card>
-            <c-empty-state icon="bell-off" title="No Notifications" description="You have no notifications in this filter view." />
+            <c-empty-state icon="bell-off" title="No Notifications" description="You have no notifications in this filter view." ></c-empty-state>
         </c-card>
         {% endif %}
     </div>

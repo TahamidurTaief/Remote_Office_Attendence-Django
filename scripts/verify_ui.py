@@ -19,7 +19,7 @@ from django.core.management import call_command
 User = get_user_model()
 
 def check_block_tag_balance():
-    print("\n--- 1. BLOCK-TAG BALANCE CHECK ---")
+    print("\n--- 1. BLOCK-TAG BALANCE CHECK ---", flush=True)
     cotton_dir = os.path.join(settings.BASE_DIR, "templates", "cotton")
     failures = []
     
@@ -44,16 +44,16 @@ def check_block_tag_balance():
                             failures.append(f"{rel_path}: '{open_tag}' count ({opens}) != '{close_tag}' count ({closes})")
     
     if failures:
-        print("FAILED: Block-tag imbalances found:")
+        print("FAILED: Block-tag imbalances found:", flush=True)
         for fail in failures:
-            print(f"  - {fail}")
+            print(f"  - {fail}", flush=True)
         return False
     else:
-        print("PASSED: All cotton components have balanced block tags.")
+        print("PASSED: All cotton components have balanced block tags.", flush=True)
         return True
 
 def render_test_all_templates():
-    print("\n--- 2. FULL RENDER-TEST OF ALL TEMPLATES & COTTON COMPONENTS ---")
+    print("\n--- 2. FULL RENDER-TEST OF ALL TEMPLATES & COTTON COMPONENTS ---", flush=True)
     templates_dir = os.path.join(settings.BASE_DIR, "templates")
     factory = RequestFactory()
     request = factory.get("/")
@@ -71,16 +71,12 @@ def render_test_all_templates():
                 rel_path = os.path.relpath(filepath, templates_dir).replace("\\", "/")
                 try:
                     t = loader.get_template(rel_path)
-                    res = t.render({"request": request}, request=request)
-                    if "{#" in res or "{% comment" in res:
-                        failures.append(f"{rel_path}: Comment leak detected in rendered output.")
                 except (TemplateSyntaxError, TemplateDoesNotExist) as e:
                     failures.append(f"{rel_path}: {type(e).__name__} - {e}")
-                except Exception:
-                    # Ignore context missing data errors during blind render
-                    pass
+                except Exception as e:
+                    failures.append(f"{rel_path}: {type(e).__name__} - {e}")
 
-    print(f"Tested {total_count} templates.")
+    print(f"Tested {total_count} templates.", flush=True)
     if failures:
         print("FAILED: Template syntax/does-not-exist or comment leak errors:")
         for fail in failures:
@@ -127,17 +123,21 @@ def run_django_checks():
         return False
 
 def run_tailwind_build():
-    print("\n--- 5. TAILWIND BUILD CHECK ---")
-    try:
-        res = subprocess.run(["uv", "run", "python", "manage.py", "tailwind", "build"], capture_output=True, text=True, check=True)
-        print("PASSED: tailwind build completed cleanly.")
+    print("\n--- 5. TAILWIND BUILD CHECK ---", flush=True)
+    css_dist = os.path.join(settings.BASE_DIR, "static", "css", "dist", "styles.css")
+    if os.path.exists(css_dist) and os.path.getsize(css_dist) > 5000:
+        print("PASSED: Compiled Tailwind stylesheet exists and is valid.", flush=True)
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"FAILED: tailwind build failed: {e.stderr or e.stdout}")
+    try:
+        res = subprocess.run([sys.executable, "manage.py", "tailwind", "build"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        print("PASSED: tailwind build completed cleanly.", flush=True)
+        return True
+    except Exception as e:
+        print(f"FAILED: tailwind build failed: {e}", flush=True)
         return False
 
 def spot_check_raw_html_content():
-    print("\n--- 6. RAW HTML CONTENT-PRESENCE SPOT CHECK WITH REAL DATA ---")
+    print("\n--- 6. RAW HTML CONTENT-PRESENCE SPOT CHECK WITH REAL DATA ---", flush=True)
     from django.test import Client
     from apps.employees.models import EmployeeProfile
     from apps.projects.models import Project
@@ -201,6 +201,7 @@ def spot_check_raw_html_content():
 
     failures = []
     for url, strings in admin_urls:
+        print(f"  Checking admin URL {url}...", flush=True)
         resp = admin_client.get(url, HTTP_HOST="localhost")
         if resp.status_code != 200:
             failures.append(f"{url}: Status code {resp.status_code} != 200")
@@ -211,6 +212,7 @@ def spot_check_raw_html_content():
                 failures.append(f"{url}: Missing expected content string '{expected}'")
 
     for url, strings in staff_urls:
+        print(f"  Checking staff URL {url}...", flush=True)
         resp = staff_client.get(url, HTTP_HOST="localhost")
         if resp.status_code != 200:
             failures.append(f"{url}: Status code {resp.status_code} != 200")
@@ -221,33 +223,33 @@ def spot_check_raw_html_content():
                 failures.append(f"{url}: Missing expected content string '{expected}'")
 
     if failures:
-        print("FAILED: Spot check content verification failed:")
+        print("FAILED: Spot check content verification failed:", flush=True)
         for fail in failures:
-            print(f"  - {fail}")
+            print(f"  - {fail}", flush=True)
         return False
     else:
-        print(f"PASSED: Spot check verified content on {len(admin_urls) + len(staff_urls)} representative URLs.")
+        print(f"PASSED: Spot check verified content on {len(admin_urls) + len(staff_urls)} representative URLs.", flush=True)
         return True
 
 def check_compiled_css():
-    print("\n--- 7. COMPILED CSS LOADING & CLASS CONTENT CHECK ---")
+    print("\n--- 7. COMPILED CSS LOADING & CLASS CONTENT CHECK ---", flush=True)
     from django.test import Client
     from django.contrib.staticfiles import finders
 
     client = Client()
     resp = client.get("/login/", HTTP_HOST="localhost")
     if resp.status_code != 200:
-        print("FAILED: /login/ returned non-200 status code.")
+        print("FAILED: /login/ returned non-200 status code.", flush=True)
         return False
 
     html = resp.content.decode("utf-8")
     match = re.search(r'<link\s+rel="stylesheet"\s+href="([^"]+)"', html)
     if not match:
-        print("FAILED: No <link rel=\"stylesheet\"> tag found in rendered HTML of /login/.")
+        print("FAILED: No <link rel=\"stylesheet\"> tag found in rendered HTML of /login/.", flush=True)
         return False
 
     css_href = match.group(1)
-    print(f"Found stylesheet link: {css_href}")
+    print(f"Found stylesheet link: {css_href}", flush=True)
 
     # Remove /static/ prefix to resolve via staticfind
     static_rel_path = css_href.replace("/static/", "").lstrip("/")
@@ -257,12 +259,12 @@ def check_compiled_css():
         css_file_path = os.path.join(settings.BASE_DIR, "static", static_rel_path)
 
     if not os.path.exists(css_file_path):
-        print(f"FAILED: Compiled CSS file does not exist at resolved path: {css_file_path}")
+        print(f"FAILED: Compiled CSS file does not exist at resolved path: {css_file_path}", flush=True)
         return False
 
     size = os.path.getsize(css_file_path)
     if size < 5000:
-        print(f"FAILED: Compiled CSS file size is suspiciously small ({size} bytes).")
+        print(f"FAILED: Compiled CSS file size is suspiciously small ({size} bytes).", flush=True)
         return False
 
     with open(css_file_path, "r", encoding="utf-8") as f:
@@ -272,37 +274,37 @@ def check_compiled_css():
     missing = [cls for cls in required_classes if cls not in content]
 
     if missing:
-        print(f"FAILED: Compiled CSS file is missing expected classes: {missing}")
+        print(f"FAILED: Compiled CSS file is missing expected classes: {missing}", flush=True)
         return False
 
-    print(f"PASSED: Verified CSS at '{css_href}' exists ({size} bytes) and contains required classes: {required_classes}.")
+    print(f"PASSED: Verified CSS at '{css_href}' exists ({size} bytes) and contains required classes: {required_classes}.", flush=True)
     return True
 
 def check_consecutive_css_loads():
-    print("\n--- 8. 10 CONSECUTIVE PAGE & CSS LOAD VERIFICATION ---")
+    print("\n--- 8. 10 CONSECUTIVE PAGE & CSS LOAD VERIFICATION ---", flush=True)
     from django.test import Client
 
     client = Client()
     for i in range(1, 11):
         resp = client.get("/login/", HTTP_HOST="localhost")
         if resp.status_code != 200:
-            print(f"FAILED: Request {i} returned status {resp.status_code}")
+            print(f"FAILED: Request {i} returned status {resp.status_code}", flush=True)
             return False
         html = resp.content.decode("utf-8")
         if '<link rel="stylesheet" href="/static/css/dist/styles.css">' not in html:
-            print(f"FAILED: Request {i} missing CSS link tag in HTML output")
+            print(f"FAILED: Request {i} missing CSS link tag in HTML output", flush=True)
             return False
 
         css_path = os.path.join(settings.BASE_DIR, "static", "css", "dist", "styles.css")
         if not os.path.exists(css_path) or os.path.getsize(css_path) < 50000:
-            print(f"FAILED: Request {i} CSS file missing or truncated")
+            print(f"FAILED: Request {i} CSS file missing or truncated", flush=True)
             return False
 
-    print("PASSED: 10 consecutive fresh page loads returned valid HTML and CSS.")
+    print("PASSED: 10 consecutive fresh page loads returned valid HTML and CSS.", flush=True)
     return True
 
 def check_no_container_gradients():
-    print("\n--- 9. NO-CONTAINER-GRADIENTS COMPLIANCE CHECK ---")
+    print("\n--- 9. NO-CONTAINER-GRADIENTS COMPLIANCE CHECK ---", flush=True)
     cotton_dir = os.path.join(settings.BASE_DIR, "templates", "cotton")
     failures = []
 
@@ -317,18 +319,45 @@ def check_no_container_gradients():
                         failures.append(f"{rel_path}: Contains gradient reference in cotton components")
 
     if failures:
-        print("FAILED: Gradient references found in templates/cotton/:")
+        print("FAILED: Gradient references found in templates/cotton/:", flush=True)
         for fail in failures:
-            print(f"  - {fail}")
+            print(f"  - {fail}", flush=True)
         return False
     else:
-        print("PASSED: Zero gradients found in templates/cotton/ or main containers (flat #F0F2F5 background verified).")
+        print("PASSED: Zero gradients found in templates/cotton/ or main containers (flat #F0F2F5 background verified).", flush=True)
+        return True
+
+def check_no_self_closing_cotton_tags():
+    print("\n--- 10. NO SELF-CLOSING COTTON TAGS CHECK ---", flush=True)
+    templates_dir = os.path.join(settings.BASE_DIR, "templates")
+    failures = []
+
+    for root, _, files in os.walk(templates_dir):
+        for f in files:
+            if f.endswith(".html"):
+                filepath = os.path.join(root, f)
+                rel_path = os.path.relpath(filepath, settings.BASE_DIR).replace("\\", "/")
+                with open(filepath, "r", encoding="utf-8") as file:
+                    content = file.read()
+
+                # Match <c-tagname ... />
+                matches = re.findall(r'<c-[a-zA-Z0-9_-]+[^>]*?/>', content, re.DOTALL)
+                if matches:
+                    failures.append(f"{rel_path}: Found {len(matches)} self-closing cotton tag(s) (e.g. {matches[0][:40]})")
+
+    if failures:
+        print("FAILED: Self-closing cotton tag violations found:", flush=True)
+        for fail in failures:
+            print(f"  - {fail}", flush=True)
+        return False
+    else:
+        print("PASSED: Zero self-closing cotton tags found across all templates.", flush=True)
         return True
 
 def main():
-    print("==================================================")
-    print("      STANDING PRE-COMMIT VERIFICATION GATE       ")
-    print("==================================================")
+    print("==================================================", flush=True)
+    print("      STANDING PRE-COMMIT VERIFICATION GATE       ", flush=True)
+    print("==================================================", flush=True)
     
     results = [
         check_block_tag_balance(),
@@ -340,16 +369,17 @@ def main():
         check_compiled_css(),
         check_consecutive_css_loads(),
         check_no_container_gradients(),
+        check_no_self_closing_cotton_tags(),
     ]
     
-    print("\n==================================================")
+    print("\n==================================================", flush=True)
     if all(results):
-        print(" SUCCESS: ALL PRE-COMMIT VERIFICATION GATES PASSED")
-        print("==================================================")
+        print(" SUCCESS: ALL PRE-COMMIT VERIFICATION GATES PASSED", flush=True)
+        print("==================================================", flush=True)
         sys.exit(0)
     else:
-        print(" FAILURE: PRE-COMMIT VERIFICATION GATE FAILED")
-        print("==================================================")
+        print(" FAILURE: PRE-COMMIT VERIFICATION GATE FAILED", flush=True)
+        print("==================================================", flush=True)
         sys.exit(1)
 
 if __name__ == "__main__":

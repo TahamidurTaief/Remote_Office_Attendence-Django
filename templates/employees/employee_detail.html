@@ -1,22 +1,22 @@
 <c-app-shell page_title="Employee: {{ employee.full_name }} | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Employee Profile">
             <c-slot name="actions">
-                <c-button href="{% url 'admin_panel:reports_employee' employee.pk %}" variant="primary" icon="bar-chart-2" label="Report" />
+                <c-button href="{% url 'admin_panel:reports_employee' employee.pk %}" variant="primary" icon="bar-chart-2" label="Report" ></c-button>
                 {% if employee.user %}
-                <c-button href="{% url 'admin_panel:user_permissions' employee.user.pk %}" variant="secondary" icon="shield" label="Permissions" />
+                <c-button href="{% url 'admin_panel:user_permissions' employee.user.pk %}" variant="secondary" icon="shield" label="Permissions" ></c-button>
                 {% endif %}
-                <c-button href="{% url 'employees:employee_edit' employee.pk %}" variant="secondary" icon="pencil" label="Edit" />
-                <c-button href="{% url 'employees:employee_list' %}" variant="ghost" icon="arrow-left" label="Back" />
+                <c-button href="{% url 'employees:employee_edit' employee.pk %}" variant="secondary" icon="pencil" label="Edit" ></c-button>
+                <c-button href="{% url 'employees:employee_list' %}" variant="ghost" icon="arrow-left" label="Back" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -24,7 +24,7 @@
             <div class="space-y-4 lg:col-span-1">
                 <c-card padding="none">
                     <div class="p-4 text-center border-b" style="border-color:var(--border)">
-                        <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}" initials="{{ employee.full_name|make_list|first|upper }}" size="lg" extra_class="mx-auto border-2 border-primary-500" />
+                        <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}" initials="{{ employee.full_name|make_list|first|upper }}" size="lg" extra_class="mx-auto border-2 border-primary-500" ></c-avatar>
                         <h3 class="mt-3 text-base font-semibold" style="color:var(--text)">{{ employee.full_name }}</h3>
                         <p class="text-xs" style="color:var(--text-muted)">{{ employee.designation }} • {{ employee.department }}</p>
                         <div class="mt-3">
@@ -74,7 +74,7 @@
                     <c-slot name="header">
                         <div class="flex justify-between items-center w-full">
                             <h3 class="text-xs font-semibold" style="color:var(--text)">Documents</h3>
-                            <c-button href="{% url 'employees:document_add' employee.pk %}" variant="accent" size="sm" icon="plus" label="Add" />
+                            <c-button href="{% url 'employees:document_add' employee.pk %}" variant="accent" size="sm" icon="plus" label="Add" ></c-button>
                         </div>
                     </c-slot>
                     <div class="p-3">
@@ -118,10 +118,10 @@
             <div class="space-y-4 lg:col-span-2">
                 <c-card title="This Month Statistics" padding="sm">
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <c-kpi-widget label="Present" value="{{ stats.present }}" color="accent" />
-                        <c-kpi-widget label="Absent" value="{{ stats.absent }}" color="danger" />
-                        <c-kpi-widget label="Late" value="{{ stats.late }}" color="warning" />
-                        <c-kpi-widget label="Leave" value="{{ stats.leave }}" color="primary" />
+                        <c-kpi-widget label="Present" value="{{ stats.present }}" color="accent" ></c-kpi-widget>
+                        <c-kpi-widget label="Absent" value="{{ stats.absent }}" color="danger" ></c-kpi-widget>
+                        <c-kpi-widget label="Late" value="{{ stats.late }}" color="warning" ></c-kpi-widget>
+                        <c-kpi-widget label="Leave" value="{{ stats.leave }}" color="primary" ></c-kpi-widget>
                     </div>
                 </c-card>
 
@@ -144,18 +144,18 @@
                                     <td>{{ att.check_out_time|time:"h:i A"|default:"-" }}</td>
                                     <td>
                                         {% if att.status == 'PRESENT' %}
-                                            <c-status-pill status="present" />
+                                            <c-status-pill status="present" ></c-status-pill>
                                         {% elif att.status == 'LATE' %}
-                                            <c-status-pill status="late" />
+                                            <c-status-pill status="late" ></c-status-pill>
                                         {% else %}
-                                            <c-status-pill status="{{ att.status|lower }}" />
+                                            <c-status-pill status="{{ att.status|lower }}" ></c-status-pill>
                                         {% endif %}
                                     </td>
                                 </tr>
                                 {% empty %}
                                 <tr>
                                     <td colspan="4" class="py-8">
-                                        <c-empty-state icon="clock" title="No Attendance History" description="No attendance entries recorded for this employee." />
+                                        <c-empty-state icon="clock" title="No Attendance History" description="No attendance entries recorded for this employee." ></c-empty-state>
                                     </td>
                                 </tr>
                                 {% endfor %}

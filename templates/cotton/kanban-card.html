@@ -19,7 +19,7 @@
   <div class="flex items-start justify-between gap-2">
     <p class="text-[12px] font-semibold leading-snug" style="color:var(--text)">{{ title }}</p>
     {% if badge %}
-      <c-badge variant="{{ badge_variant|default:'neutral' }}" label="{{ badge }}" />
+      <c-badge variant="{{ badge_variant|default:'neutral' }}" label="{{ badge }}" ></c-badge>
     {% endif %}
   </div>
 
@@ -34,7 +34,7 @@
   {# Footer: assignee #}
   {% if assignee_initials or assignee_src %}
   <div class="flex items-center justify-end mt-1">
-    <c-avatar initials="{{ assignee_initials }}" src="{{ assignee_src }}" size="xs" />
+    <c-avatar initials="{{ assignee_initials }}" src="{{ assignee_src }}" size="xs" ></c-avatar>
   </div>
   {% endif %}
 </a>

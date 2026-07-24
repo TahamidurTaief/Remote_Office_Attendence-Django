@@ -1,9 +1,9 @@
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-    <c-kpi-widget label="Present" value="{{ present_today }}" icon="user-check" color="accent" />
-    <c-kpi-widget label="Absent" value="{{ absent_today }}" icon="user-x" color="danger" />
-    <c-kpi-widget label="On Leave" value="{{ on_leave_today }}" icon="calendar" color="warning" />
-    <c-kpi-widget label="Late" value="{{ late_today }}" icon="clock" color="warning" />
-    <c-kpi-widget label="Field" value="{{ on_field }}" icon="map-pin" color="primary" />
+    <c-kpi-widget label="Present" value="{{ present_today }}" icon="user-check" color="accent" ></c-kpi-widget>
+    <c-kpi-widget label="Absent" value="{{ absent_today }}" icon="user-x" color="danger" ></c-kpi-widget>
+    <c-kpi-widget label="On Leave" value="{{ on_leave_today }}" icon="calendar" color="warning" ></c-kpi-widget>
+    <c-kpi-widget label="Late" value="{{ late_today }}" icon="clock" color="warning" ></c-kpi-widget>
+    <c-kpi-widget label="Field" value="{{ on_field }}" icon="map-pin" color="primary" ></c-kpi-widget>
 </div>
 
 <!-- Main Split -->
@@ -14,7 +14,7 @@
             <c-slot name="header">
                 <div class="flex justify-between items-center w-full">
                     <h2 class="text-[13px] font-semibold" style="color:var(--text)">Today's Attendance</h2>
-                    <c-badge variant="primary" label="{{ todays_attendances.count }} Records" />
+                    <c-badge variant="primary" label="{{ todays_attendances.count }} Records" ></c-badge>
                 </div>
             </c-slot>
 
@@ -33,7 +33,7 @@
                         <tr>
                             <td>
                                 <div class="flex items-center gap-3">
-                                    <c-avatar src="{% if att.employee.profile_photo %}{{ att.employee.profile_photo.url }}{% endif %}" initials="{{ att.employee.full_name|make_list|first|upper }}" size="sm" />
+                                    <c-avatar src="{% if att.employee.profile_photo %}{{ att.employee.profile_photo.url }}{% endif %}" initials="{{ att.employee.full_name|make_list|first|upper }}" size="sm" ></c-avatar>
                                     <div>
                                         <a href="{% url 'employees:employee_detail' att.employee.pk %}" class="font-semibold hover:underline" style="color:var(--text)">{{ att.employee.full_name }}</a>
                                         <div class="text-[11px]" style="color:var(--text-muted)">{{ att.employee.branch.name|default:"No Branch" }}</div>
@@ -59,18 +59,18 @@
                             </td>
                             <td>
                                 {% if att.status == 'PRESENT' %}
-                                    <c-status-pill status="present" />
+                                    <c-status-pill status="present" ></c-status-pill>
                                 {% elif att.status == 'LATE' %}
-                                    <c-status-pill status="late" />
+                                    <c-status-pill status="late" ></c-status-pill>
                                 {% else %}
-                                    <c-status-pill status="{{ att.status|lower }}" />
+                                    <c-status-pill status="{{ att.status|lower }}" ></c-status-pill>
                                 {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
                             <td colspan="4" class="text-center py-8">
-                                <c-empty-state icon="clock" title="No Attendance Records" description="No attendance recorded for this date yet." />
+                                <c-empty-state icon="clock" title="No Attendance Records" description="No attendance recorded for this date yet." ></c-empty-state>
                             </td>
                         </tr>
                         {% endfor %}
@@ -86,15 +86,15 @@
             <div class="space-y-3">
                 <div class="flex items-center justify-between p-2 rounded-btn" style="background:var(--surface-2)">
                     <span class="text-xs" style="color:var(--text-secondary)">Pending Leaves</span>
-                    <c-badge variant="warning" label="{{ pending_leave_count|default:0 }}" />
+                    <c-badge variant="warning" label="{{ pending_leave_count|default:0 }}" ></c-badge>
                 </div>
                 <div class="flex items-center justify-between p-2 rounded-btn" style="background:var(--surface-2)">
                     <span class="text-xs" style="color:var(--text-secondary)">Unread Notifications</span>
-                    <c-badge variant="info" label="{{ unread_notifications|default:0 }}" />
+                    <c-badge variant="info" label="{{ unread_notifications|default:0 }}" ></c-badge>
                 </div>
                 <div class="flex items-center justify-between p-2 rounded-btn" style="background:var(--surface-2)">
                     <span class="text-xs" style="color:var(--text-secondary)">Pending Expenses</span>
-                    <c-badge variant="primary" label="{{ pending_expense_count|default:0 }}" />
+                    <c-badge variant="primary" label="{{ pending_expense_count|default:0 }}" ></c-badge>
                 </div>
             </div>
         </c-card>

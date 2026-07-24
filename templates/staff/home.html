@@ -143,11 +143,11 @@ window.addEventListener('appinstalled', () => {
                 </div>
                 <div class="flex-shrink-0 flex items-center gap-2">
                     {% if task.status == 'In Progress' %}
-                    <c-badge label="In Progress" variant="soft" status_color="blue" />
+                    <c-badge label="In Progress" variant="soft" status_color="blue" ></c-badge>
                     {% elif task.status == 'Delayed' %}
-                    <c-badge label="Delayed" variant="soft" status_color="rose" />
+                    <c-badge label="Delayed" variant="soft" status_color="rose" ></c-badge>
                     {% else %}
-                    <c-badge label="Not Started" variant="soft" status_color="slate" />
+                    <c-badge label="Not Started" variant="soft" status_color="slate" ></c-badge>
                     {% endif %}
                     {% if task.project %}
                     <a href="{% url 'staff:my_project_detail' task.project.pk %}" class="p-1 transition-colors" style="color:var(--text-muted)" title="View project">

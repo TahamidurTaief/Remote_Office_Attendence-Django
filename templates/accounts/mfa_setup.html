@@ -1,9 +1,9 @@
 <c-app-shell page_title="Two-Factor Authentication Setup | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
   <c-slot name="topbar">
-    <c-topbar title="Two-Factor Authentication (MFA)" />
+    <c-topbar title="Two-Factor Authentication (MFA)" ></c-topbar>
   </c-slot>
 
-  <c-command-palette />
+  <c-command-palette></c-command-palette>
 
   <div class="p-4 space-y-4 max-w-2xl mx-auto">
     <c-card title="Configure Google Authenticator / TOTP MFA" subtitle="Enhance your account security by requiring a 6-digit verification code at login.">
@@ -66,9 +66,9 @@
                        label="6-Digit Verification Code"
                        placeholder="123456"
                        required="true"
-                       extra_class="font-mono text-center tracking-widest text-lg font-bold" />
+                       extra_class="font-mono text-center tracking-widest text-lg font-bold" ></c-input>
 
-              <c-button type="submit" variant="primary" label="Verify & Enable MFA" extra_class="w-full justify-center" />
+              <c-button type="submit" variant="primary" label="Verify & Enable MFA" extra_class="w-full justify-center" ></c-button>
             </form>
           </div>
         </div>

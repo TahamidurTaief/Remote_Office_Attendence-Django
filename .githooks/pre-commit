@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pre-commit hook for FieldTrack ERP
+echo "Running pre-commit verification gates..."
+if [ -f ".venv/Scripts/python.exe" ]; then
+    .venv/Scripts/python.exe scripts/verify_ui.py
+else
+    python scripts/verify_ui.py
+fi
+if [ $? -ne 0 ]; then
+    echo "ERROR: scripts/verify_ui.py FAILED. Commit aborted."
+    exit 1
+fi

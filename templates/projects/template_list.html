@@ -1,24 +1,24 @@
 <c-app-shell page_title="Task Templates | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Task Templates">
             <c-slot name="actions">
-                <c-button href="{% url 'projects:template_add' %}" variant="accent" icon="plus" label="Create Template" />
+                <c-button href="{% url 'projects:template_add' %}" variant="accent" icon="plus" label="Create Template" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <!-- Filters -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'projects:template_list' %}">
                 <div class="flex-1">
-                    <c-input name="search" label="Search Templates" value="{{ search }}" placeholder="Search by name…" />
+                    <c-input name="search" label="Search Templates" value="{{ search }}" placeholder="Search by name…" ></c-input>
                 </div>
             </c-filter-bar>
         </c-card>
@@ -48,7 +48,7 @@
                                 <span class="text-xs truncate max-w-md block" style="color:var(--text-muted)">{{ template.description|default:"-" }}</span>
                             </td>
                             <td>
-                                <c-badge variant="primary" label="{{ template.items_count }} steps" />
+                                <c-badge variant="primary" label="{{ template.items_count }} steps" ></c-badge>
                             </td>
                             <td>
                                 <span class="text-xs" style="color:var(--text-muted)">{{ template.created_at|date:"d/m/Y" }}</span>
@@ -70,7 +70,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="5" class="py-12">
-                                <c-empty-state icon="clipboard-list" title="No Templates Found" description="Create a new template to start bulk-creating checklists." />
+                                <c-empty-state icon="clipboard-list" title="No Templates Found" description="Create a new template to start bulk-creating checklists." ></c-empty-state>
                             </td>
                         </tr>
                         {% endfor %}
@@ -85,10 +85,10 @@
                 </span>
                 <div class="flex gap-2">
                     {% if page_obj.has_previous %}
-                    <c-button href="?page={{ page_obj.previous_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Previous" />
+                    <c-button href="?page={{ page_obj.previous_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Previous" ></c-button>
                     {% endif %}
                     {% if page_obj.has_next %}
-                    <c-button href="?page={{ page_obj.next_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Next" />
+                    <c-button href="?page={{ page_obj.next_page_number }}&search={{ search }}" variant="secondary" size="sm" label="Next" ></c-button>
                     {% endif %}
                 </div>
             </div>

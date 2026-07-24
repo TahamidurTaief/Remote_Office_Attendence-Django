@@ -21,57 +21,57 @@
 
     {# ── Submit for Approval (draft → pending_approval, LOW_RISK) ── #}
     {% if s == 'draft' %}
-      <c-lifecycle-action-btn label="Submit for Approval" to_status="pending_approval" employee_pk="{{ pk }}" variant="primary" icon="send" />
+      <c-lifecycle-action-btn label="Submit for Approval" to_status="pending_approval" employee_pk="{{ pk }}" variant="primary" icon="send" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Approve / Activate (pending_approval → active, HIGH_RISK) ── #}
     {% if s == 'pending_approval' %}
-      <c-lifecycle-action-btn label="Activate Employee" to_status="active" employee_pk="{{ pk }}" variant="primary" icon="user-check" />
-      <c-lifecycle-action-btn label="Reject / Return to Draft" to_status="draft" employee_pk="{{ pk }}" variant="ghost" icon="undo-2" />
+      <c-lifecycle-action-btn label="Activate Employee" to_status="active" employee_pk="{{ pk }}" variant="primary" icon="user-check" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Reject / Return to Draft" to_status="draft" employee_pk="{{ pk }}" variant="ghost" icon="undo-2" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Active transitions ── #}
     {% if s == 'active' %}
-      <c-lifecycle-action-btn label="Put on Probation" to_status="probation" employee_pk="{{ pk }}" variant="warning" icon="clock" />
-      <c-lifecycle-action-btn label="Promote" to_status="promoted" employee_pk="{{ pk }}" variant="success" icon="trending-up" />
-      <c-lifecycle-action-btn label="Transfer" to_status="transferred" employee_pk="{{ pk }}" variant="secondary" icon="arrow-right-left" />
-      <c-lifecycle-action-btn label="Demote" to_status="demoted" employee_pk="{{ pk }}" variant="warning" icon="trending-down" />
-      <c-lifecycle-action-btn label="Put on Notice" to_status="notice_period" employee_pk="{{ pk }}" variant="warning" icon="bell-ring" />
-      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" />
+      <c-lifecycle-action-btn label="Put on Probation" to_status="probation" employee_pk="{{ pk }}" variant="warning" icon="clock" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Promote" to_status="promoted" employee_pk="{{ pk }}" variant="success" icon="trending-up" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Transfer" to_status="transferred" employee_pk="{{ pk }}" variant="secondary" icon="arrow-right-left" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Demote" to_status="demoted" employee_pk="{{ pk }}" variant="warning" icon="trending-down" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Put on Notice" to_status="notice_period" employee_pk="{{ pk }}" variant="warning" icon="bell-ring" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Probation ── #}
     {% if s == 'probation' %}
-      <c-lifecycle-action-btn label="Confirm (Pass Probation)" to_status="confirmed" employee_pk="{{ pk }}" variant="success" icon="check-circle-2" />
-      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" />
+      <c-lifecycle-action-btn label="Confirm (Pass Probation)" to_status="confirmed" employee_pk="{{ pk }}" variant="success" icon="check-circle-2" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Confirmed ── #}
     {% if s == 'confirmed' %}
-      <c-lifecycle-action-btn label="Promote" to_status="promoted" employee_pk="{{ pk }}" variant="success" icon="trending-up" />
-      <c-lifecycle-action-btn label="Transfer" to_status="transferred" employee_pk="{{ pk }}" variant="secondary" icon="arrow-right-left" />
-      <c-lifecycle-action-btn label="Demote" to_status="demoted" employee_pk="{{ pk }}" variant="warning" icon="trending-down" />
-      <c-lifecycle-action-btn label="Put on Notice" to_status="notice_period" employee_pk="{{ pk }}" variant="warning" icon="bell-ring" />
-      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" />
-      <c-lifecycle-action-btn label="Retire" to_status="retired" employee_pk="{{ pk }}" variant="secondary" icon="sunset" />
+      <c-lifecycle-action-btn label="Promote" to_status="promoted" employee_pk="{{ pk }}" variant="success" icon="trending-up" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Transfer" to_status="transferred" employee_pk="{{ pk }}" variant="secondary" icon="arrow-right-left" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Demote" to_status="demoted" employee_pk="{{ pk }}" variant="warning" icon="trending-down" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Put on Notice" to_status="notice_period" employee_pk="{{ pk }}" variant="warning" icon="bell-ring" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Retire" to_status="retired" employee_pk="{{ pk }}" variant="secondary" icon="sunset" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Transferred / Promoted / Demoted → resolve back ── #}
     {% if s == 'transferred' or s == 'promoted' or s == 'demoted' %}
-      <c-lifecycle-action-btn label="Return to Active" to_status="active" employee_pk="{{ pk }}" variant="success" icon="user-check" />
-      <c-lifecycle-action-btn label="Put on Notice" to_status="notice_period" employee_pk="{{ pk }}" variant="warning" icon="bell-ring" />
-      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" />
+      <c-lifecycle-action-btn label="Return to Active" to_status="active" employee_pk="{{ pk }}" variant="success" icon="user-check" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Put on Notice" to_status="notice_period" employee_pk="{{ pk }}" variant="warning" icon="bell-ring" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Notice Period ── #}
     {% if s == 'notice_period' %}
-      <c-lifecycle-action-btn label="Resign" to_status="resigned" employee_pk="{{ pk }}" variant="secondary" icon="log-out" />
-      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" />
+      <c-lifecycle-action-btn label="Resign" to_status="resigned" employee_pk="{{ pk }}" variant="secondary" icon="log-out" ></c-lifecycle-action-btn>
+      <c-lifecycle-action-btn label="Terminate" to_status="terminated" employee_pk="{{ pk }}" variant="danger" icon="x-circle" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Terminal pre-archive ── #}
     {% if s == 'resigned' or s == 'terminated' or s == 'retired' %}
-      <c-lifecycle-action-btn label="Archive" to_status="archived" employee_pk="{{ pk }}" variant="ghost" icon="archive" />
+      <c-lifecycle-action-btn label="Archive" to_status="archived" employee_pk="{{ pk }}" variant="ghost" icon="archive" ></c-lifecycle-action-btn>
     {% endif %}
 
     {# ── Pending requests badge ── #}

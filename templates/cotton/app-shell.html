@@ -183,7 +183,7 @@
 
   {# ── Sidebar ────────────────────────────────────────────────────────── #}
   {% if sidebar %}{{ sidebar }}{% else %}
-    <c-sidebar shell_type="{{ shell_type|default:'admin' }}" active_href="{{ active_href }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" pending_expense_count="{{ pending_expense_count }}" />
+    <c-sidebar shell_type="{{ shell_type|default:'admin' }}" active_href="{{ active_href }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" pending_expense_count="{{ pending_expense_count }}" ></c-sidebar>
   {% endif %}
 
   {# ── Main area ──────────────────────────────────────────────────────── #}
@@ -206,7 +206,7 @@
 
     {# ── Topbar (fixed & uniform across every page) ───────────────────── #}
     {% if topbar %}{{ topbar }}{% else %}
-      <c-topbar title="{{ page_title }}" />
+      <c-topbar title="{{ page_title }}" ></c-topbar>
     {% endif %}
 
     {# ── Page content ────────────────────────────────────────────────── #}
@@ -338,11 +338,11 @@
          hx-get="{% url 'notifications:list' %}?partial=true"
          hx-trigger="open-drawer-notifications from:body"
          class="flex-1 overflow-y-auto flex flex-col h-full">
-      <div class="p-8 text-center"><c-skeleton type="card" /></div>
+      <div class="p-8 text-center"><c-skeleton type="card" ></c-skeleton></div>
     </div>
   </c-right-drawer>
 
-  <c-workspace-lock-screen />
+  <c-workspace-lock-screen></c-workspace-lock-screen>
 
   {{ scripts }}
 </body>

@@ -1,25 +1,25 @@
 <c-app-shell page_title="Projects | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Project Management">
             <c-slot name="actions">
-                <c-button href="{% url 'projects:project_type_create' %}" variant="secondary" icon="plus" label="Add Project Type" />
-                <c-button href="{% url 'projects:project_add' %}" variant="accent" icon="plus" label="Add Project" />
+                <c-button href="{% url 'projects:project_type_create' %}" variant="secondary" icon="plus" label="Add Project Type" ></c-button>
+                <c-button href="{% url 'projects:project_add' %}" variant="accent" icon="plus" label="Add Project" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <!-- Filters -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'projects:project_list' %}">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-end">
-                    <c-input name="search" label="Search Projects" value="{{ search }}" placeholder="Name, client, location…" />
+                    <c-input name="search" label="Search Projects" value="{{ search }}" placeholder="Name, client, location…" ></c-input>
                     
                     <c-select name="status" label="Status" value="{{ status_val }}">
                         <option value="">All Statuses</option>
@@ -73,13 +73,13 @@
                             <td>
                                 <div class="mb-1">
                                     {% if project.status == 'Completed' %}
-                                        <c-status-pill status="approved" label="Completed" />
+                                        <c-status-pill status="approved" label="Completed" ></c-status-pill>
                                     {% elif project.status == 'In Progress' %}
-                                        <c-status-pill status="wfh" label="In Progress" />
+                                        <c-status-pill status="wfh" label="In Progress" ></c-status-pill>
                                     {% elif project.status == 'Delayed' %}
-                                        <c-status-pill status="rejected" label="Delayed" />
+                                        <c-status-pill status="rejected" label="Delayed" ></c-status-pill>
                                     {% else %}
-                                        <c-status-pill status="unknown" label="Not Started" />
+                                        <c-status-pill status="unknown" label="Not Started" ></c-status-pill>
                                     {% endif %}
                                 </div>
                                 <div class="w-28">
@@ -122,7 +122,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="6" class="py-12">
-                                <c-empty-state icon="briefcase" title="No Projects Found" description="Try adjusting search or status filters." />
+                                <c-empty-state icon="briefcase" title="No Projects Found" description="Try adjusting search or status filters." ></c-empty-state>
                             </td>
                         </tr>
                         {% endfor %}
@@ -137,10 +137,10 @@
                 </span>
                 <div class="flex gap-2">
                     {% if page_obj.has_previous %}
-                    <c-button href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status_val %}&status={{ status_val }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}" variant="secondary" size="sm" label="Previous" />
+                    <c-button href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status_val %}&status={{ status_val }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}" variant="secondary" size="sm" label="Previous" ></c-button>
                     {% endif %}
                     {% if page_obj.has_next %}
-                    <c-button href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status_val %}&status={{ status_val }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}" variant="secondary" size="sm" label="Next" />
+                    <c-button href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status_val %}&status={{ status_val }}{% endif %}{% if branch_id %}&branch={{ branch_id }}{% endif %}" variant="secondary" size="sm" label="Next" ></c-button>
                     {% endif %}
                 </div>
             </div>

@@ -20,7 +20,7 @@
   <div class="px-5 py-2.5 bg-[var(--surface-2)] flex items-center justify-between shrink-0">
     <span class="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Activity Feed</span>
     {% if unread_count %}
-      <c-badge variant="danger" label="{{ unread_count }} unread" />
+      <c-badge variant="danger" label="{{ unread_count }} unread" ></c-badge>
     {% endif %}
   </div>
 
@@ -52,7 +52,7 @@
         <div class="shrink-0 relative">
           <c-avatar src="{% if notif.employee and notif.employee.profile_photo %}{{ notif.employee.profile_photo.url }}{% endif %}"
                     initials="{% if notif.employee %}{{ notif.employee.full_name|make_list|first|upper }}{% else %}N{% endif %}"
-                    size="sm" />
+                    size="sm" ></c-avatar>
           {# Mini source badge at bottom right of avatar #}
           <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[7px] text-white border border-[var(--surface)]
             {% if notif.notif_type == 'check_in' or notif.notif_type == 'check_out' %}bg-accent-500

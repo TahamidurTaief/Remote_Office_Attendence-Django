@@ -29,13 +29,13 @@
                 <div class="space-y-2 min-w-[160px]">
                     <div>
                         {% if project.status == 'Completed' %}
-                        <c-badge label="Completed" variant="soft" status_color="emerald" />
+                        <c-badge label="Completed" variant="soft" status_color="emerald" ></c-badge>
                         {% elif project.status == 'In Progress' %}
-                        <c-badge label="In Progress" variant="soft" status_color="blue" />
+                        <c-badge label="In Progress" variant="soft" status_color="blue" ></c-badge>
                         {% elif project.status == 'Delayed' %}
-                        <c-badge label="Delayed" variant="soft" status_color="rose" />
+                        <c-badge label="Delayed" variant="soft" status_color="rose" ></c-badge>
                         {% else %}
-                        <c-badge label="Not Started" variant="soft" status_color="slate" />
+                        <c-badge label="Not Started" variant="soft" status_color="slate" ></c-badge>
                         {% endif %}
                     </div>
                     <div>

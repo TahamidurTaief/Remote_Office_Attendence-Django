@@ -10,7 +10,7 @@
    Usage:
      <c-pagination current_page="{{ page_obj.number }}"
                    total_pages="{{ page_obj.paginator.num_pages }}"
-                   base_url="/employees/?page=" />
+                   base_url="/employees/?page=" ></c-pagination>
 {% endcomment %}
 
 {% with cp=current_page|default:1 tp=total_pages|default:1 %}

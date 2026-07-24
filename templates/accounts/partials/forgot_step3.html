@@ -21,10 +21,10 @@
   {% csrf_token %}
   <input type="hidden" name="reset_token" value="{{ reset_token }}">
 
-  <c-password-input name="new_password" id="new_password" label="New Password" placeholder="Enter new password" required="true" show_generator="true" />
-  <c-password-input name="confirm_password" id="confirm_password" label="Confirm Password" placeholder="Re-enter new password" required="true" />
+  <c-password-input name="new_password" id="new_password" label="New Password" placeholder="Enter new password" required="true" show_generator="true" ></c-password-input>
+  <c-password-input name="confirm_password" id="confirm_password" label="Confirm Password" placeholder="Re-enter new password" required="true" ></c-password-input>
 
   <div class="pt-2">
-    <c-button type="submit" variant="primary" label="Reset Password & Logout All Devices" extra_class="w-full justify-center" />
+    <c-button type="submit" variant="primary" label="Reset Password & Logout All Devices" extra_class="w-full justify-center" ></c-button>
   </div>
 </form>

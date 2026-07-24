@@ -14,7 +14,7 @@
             <tr class="hover:bg-gray-50/80 transition-colors">
                 <td class="px-4 py-3">
                     <div class="flex items-center space-x-3">
-                        <c-avatar name="{{ emp.get_full_name }}" size="md" />
+                        <c-avatar name="{{ emp.get_full_name }}" size="md" ></c-avatar>
                         <div>
                             <a href="{% url 'employees:master_detail' emp.pk %}" class="font-medium text-gray-900 hover:text-indigo-600">
                                 {{ emp.get_full_name }}
@@ -40,13 +40,13 @@
                 </td>
                 <td class="px-4 py-3">
                     {% if emp.status == 'active' or emp.status == 'confirmed' %}
-                        <c-badge variant="success" label="{{ emp.get_status_display }}" />
+                        <c-badge variant="success" label="{{ emp.get_status_display }}" ></c-badge>
                     {% elif emp.status == 'probation' or emp.status == 'pending_approval' %}
-                        <c-badge variant="warning" label="{{ emp.get_status_display }}" />
+                        <c-badge variant="warning" label="{{ emp.get_status_display }}" ></c-badge>
                     {% elif emp.status == 'archived' or emp.status == 'terminated' or emp.status == 'resigned' %}
-                        <c-badge variant="danger" label="{{ emp.get_status_display }}" />
+                        <c-badge variant="danger" label="{{ emp.get_status_display }}" ></c-badge>
                     {% else %}
-                        <c-badge variant="neutral" label="{{ emp.get_status_display }}" />
+                        <c-badge variant="neutral" label="{{ emp.get_status_display }}" ></c-badge>
                     {% endif %}
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-600">
@@ -73,7 +73,7 @@
             {% empty %}
             <tr>
                 <td colspan="6" class="px-4 py-8 text-center text-gray-500">
-                    <c-empty-state icon="user-group" title="No Employee Master Records Found" description="Try adjusting your filter parameters or create a new employee." />
+                    <c-empty-state icon="user-group" title="No Employee Master Records Found" description="Try adjusting your filter parameters or create a new employee." ></c-empty-state>
                 </td>
             </tr>
             {% endfor %}
@@ -82,7 +82,7 @@
 
     {% if is_paginated %}
     <div class="mt-4">
-        <c-pagination :page_obj="page_obj" />
+        <c-pagination :page_obj="page_obj" ></c-pagination>
     </div>
     {% endif %}
 </div>

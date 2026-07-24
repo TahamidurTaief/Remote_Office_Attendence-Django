@@ -1,6 +1,6 @@
 <c-app-shell page_title="{{ employee.get_full_name }} | Employee Master" active_href="{% url 'employees:master_list' %}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{% url 'employees:master_list' %}" />
+        <c-sidebar active_href="{% url 'employees:master_list' %}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
@@ -28,18 +28,18 @@
         <c-card padding="md">
             <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div class="flex items-center space-x-4">
-                    <c-avatar name="{{ employee.get_full_name }}" size="xl" />
+                    <c-avatar name="{{ employee.get_full_name }}" size="xl" ></c-avatar>
                     <div>
                         <div class="flex items-center space-x-3">
                             <h1 class="text-2xl font-bold text-gray-900">{{ employee.get_full_name }}</h1>
                             {% if employee.status == 'active' or employee.status == 'confirmed' %}
-                                <c-badge variant="success" label="{{ employee.get_status_display }}" />
+                                <c-badge variant="success" label="{{ employee.get_status_display }}" ></c-badge>
                             {% elif employee.status == 'probation' or employee.status == 'pending_approval' %}
-                                <c-badge variant="warning" label="{{ employee.get_status_display }}" />
+                                <c-badge variant="warning" label="{{ employee.get_status_display }}" ></c-badge>
                             {% elif employee.status == 'archived' or employee.status == 'terminated' or employee.status == 'resigned' %}
-                                <c-badge variant="danger" label="{{ employee.get_status_display }}" />
+                                <c-badge variant="danger" label="{{ employee.get_status_display }}" ></c-badge>
                             {% else %}
-                                <c-badge variant="neutral" label="{{ employee.get_status_display }}" />
+                                <c-badge variant="neutral" label="{{ employee.get_status_display }}" ></c-badge>
                             {% endif %}
                         </div>
                         <div class="text-sm text-gray-500 font-mono mt-0.5">

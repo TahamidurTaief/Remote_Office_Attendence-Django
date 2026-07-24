@@ -7,7 +7,7 @@
    - is_checked: Boolean state (True if role has permission)
    - label: Optional label text
 {% endcomment %}
-<c-vars group_id="" perm_id="" is_checked="false" label="" />
+<c-vars group_id="" perm_id="" is_checked="false" label="" ></c-vars>
 
 <button type="button"
         hx-post="{% url 'admin_panel:role_permission_toggle' group_id=group_id perm_id=perm_id %}"

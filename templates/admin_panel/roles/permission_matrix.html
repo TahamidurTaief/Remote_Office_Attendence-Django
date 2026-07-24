@@ -1,13 +1,13 @@
 <c-app-shell page_title="Permission Matrix | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
   <c-slot name="sidebar">
-    <c-sidebar active_href="{{ request.path }}" />
+    <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
   </c-slot>
 
   <c-slot name="topbar">
-    <c-topbar title="Permission Matrix Editor" />
+    <c-topbar title="Permission Matrix Editor" ></c-topbar>
   </c-slot>
 
-  <c-command-palette />
+  <c-command-palette></c-command-palette>
 
   <div class="p-4 space-y-4 max-w-7xl mx-auto">
     <c-card title="Module Access Control Matrix" subtitle="View and toggle role permissions across all 10 system modules with real-time HTMX updates.">
@@ -57,7 +57,7 @@
 
                 <td class="py-3.5 px-3 text-center">
                   {% if mod.view %}
-                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.view.id }}" is_checked="{{ mod.view.is_checked }}" />
+                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.view.id }}" is_checked="{{ mod.view.is_checked }}" ></c-permission-toggle>
                   {% else %}
                     <span class="text-[10px] text-slate-400">-</span>
                   {% endif %}
@@ -65,7 +65,7 @@
 
                 <td class="py-3.5 px-3 text-center">
                   {% if mod.create %}
-                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.create.id }}" is_checked="{{ mod.create.is_checked }}" />
+                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.create.id }}" is_checked="{{ mod.create.is_checked }}" ></c-permission-toggle>
                   {% else %}
                     <span class="text-[10px] text-slate-400">-</span>
                   {% endif %}
@@ -73,7 +73,7 @@
 
                 <td class="py-3.5 px-3 text-center">
                   {% if mod.edit %}
-                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.edit.id }}" is_checked="{{ mod.edit.is_checked }}" />
+                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.edit.id }}" is_checked="{{ mod.edit.is_checked }}" ></c-permission-toggle>
                   {% else %}
                     <span class="text-[10px] text-slate-400">-</span>
                   {% endif %}
@@ -81,7 +81,7 @@
 
                 <td class="py-3.5 px-3 text-center">
                   {% if mod.delete %}
-                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.delete.id }}" is_checked="{{ mod.delete.is_checked }}" />
+                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.delete.id }}" is_checked="{{ mod.delete.is_checked }}" ></c-permission-toggle>
                   {% else %}
                     <span class="text-[10px] text-slate-400">-</span>
                   {% endif %}
@@ -89,7 +89,7 @@
 
                 <td class="py-3.5 px-3 text-center">
                   {% if mod.approve %}
-                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.approve.id }}" is_checked="{{ mod.approve.is_checked }}" />
+                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.approve.id }}" is_checked="{{ mod.approve.is_checked }}" ></c-permission-toggle>
                   {% else %}
                     <span class="text-[10px] text-slate-400">-</span>
                   {% endif %}
@@ -97,7 +97,7 @@
 
                 <td class="py-3.5 px-3 text-center">
                   {% if mod.export %}
-                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.export.id }}" is_checked="{{ mod.export.is_checked }}" />
+                    <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.export.id }}" is_checked="{{ mod.export.is_checked }}" ></c-permission-toggle>
                   {% else %}
                     <span class="text-[10px] text-slate-400">-</span>
                   {% endif %}

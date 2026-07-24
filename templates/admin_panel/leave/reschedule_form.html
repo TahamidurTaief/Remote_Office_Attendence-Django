@@ -10,7 +10,7 @@
                 Modify leave dates or type for <strong style="color:var(--text)">{{ object.employee.full_name }}</strong>.
             </p>
         </div>
-        <c-button href="{% url 'leave:admin_dashboard' %}" variant="secondary" icon="arrow-left" label="Back" />
+        <c-button href="{% url 'leave:admin_dashboard' %}" variant="secondary" icon="arrow-left" label="Back" ></c-button>
     </div>
 
     <c-card padding="md">
@@ -64,8 +64,8 @@
 
             <!-- Actions -->
             <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
-                <c-button href="{% url 'leave:admin_dashboard' %}" variant="secondary" label="Cancel" />
-                <c-button type="submit" variant="primary" icon="save" label="Save Changes" />
+                <c-button href="{% url 'leave:admin_dashboard' %}" variant="secondary" label="Cancel" ></c-button>
+                <c-button type="submit" variant="primary" icon="save" label="Save Changes" ></c-button>
             </div>
         </form>
     </c-card>

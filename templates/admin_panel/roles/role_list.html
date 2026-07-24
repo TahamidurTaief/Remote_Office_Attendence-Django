@@ -8,7 +8,7 @@
             <h1 class="text-[14px] font-semibold" style="color:var(--text)">Roles & Access Control</h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Create and manage permission groups for your team.</p>
         </div>
-        <c-button href="{% url 'admin_panel:role_create' %}" variant="accent" icon="plus" label="Add Role" />
+        <c-button href="{% url 'admin_panel:role_create' %}" variant="accent" icon="plus" label="Add Role" ></c-button>
     </div>
 
     <!-- Table -->
@@ -67,8 +67,8 @@
                                                class="ft-input w-full mt-1 mb-3"
                                                @vue:mounted="$nextTick(() => $el.focus())">
                                         <div class="flex justify-end gap-2">
-                                            <c-button type="button" variant="secondary" size="sm" label="Cancel" attrs="@click='open = false'" />
-                                            <c-button type="submit" variant="primary" size="sm" label="Clone" />
+                                            <c-button type="button" variant="secondary" size="sm" label="Cancel" attrs="@click='open = false'" ></c-button>
+                                            <c-button type="submit" variant="primary" size="sm" label="Clone" ></c-button>
                                         </div>
                                     </form>
                                 </div>
@@ -89,7 +89,7 @@
             <tr>
                 <td colspan="3" class="py-12">
                     <c-empty-state icon="shield-alert" title="No Roles Defined"
-                                   description="Create a new role to assign permissions." />
+                                   description="Create a new role to assign permissions." ></c-empty-state>
                 </td>
             </tr>
             {% endfor %}

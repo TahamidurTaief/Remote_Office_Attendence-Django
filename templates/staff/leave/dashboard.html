@@ -1,18 +1,18 @@
 {% load leave_extras %}
 <c-app-shell page_title="My Leaves | FieldTrack" active_href="{{ request.path }}" shell_type="staff">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="My Leave Balances">
             <c-slot name="actions">
-                <c-button href="{% url 'leave:staff_request_create' %}" variant="accent" icon="plus-circle" label="Request Leave" />
+                <c-button href="{% url 'leave:staff_request_create' %}" variant="accent" icon="plus-circle" label="Request Leave" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         {% if employee %}
@@ -24,7 +24,7 @@
                     <p class="text-xs mt-0.5" style="color:var(--text-muted)">Combined balance across active categories</p>
                 </div>
                 <div>
-                    <c-badge variant="{% if total_left < 0 %}danger{% else %}success{% endif %}" size="md" label="{{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}" />
+                    <c-badge variant="{% if total_left < 0 %}danger{% else %}success{% endif %}" size="md" label="{{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}" ></c-badge>
                 </div>
             </div>
         </c-card>
@@ -64,7 +64,7 @@
             {% empty %}
             <div class="col-span-full">
                 <c-card>
-                    <c-empty-state icon="calendar" title="No Leave Configurations" description="No leave balances configured for this year." />
+                    <c-empty-state icon="calendar" title="No Leave Configurations" description="No leave balances configured for this year." ></c-empty-state>
                 </c-card>
             </div>
             {% endfor %}
@@ -78,7 +78,7 @@
                     <div>
                         <div class="flex items-center gap-2">
                             <span class="font-semibold text-xs" style="color:var(--text)">{{ req.leave_type.name }}</span>
-                            <c-badge variant="neutral" label="{{ req.total_days }} day{% if req.total_days != 1 %}s{% endif %}" />
+                            <c-badge variant="neutral" label="{{ req.total_days }} day{% if req.total_days != 1 %}s{% endif %}" ></c-badge>
                         </div>
                         <p class="text-xs mt-0.5" style="color:var(--text-muted)">
                             {{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}
@@ -89,17 +89,17 @@
                     </div>
                     <div>
                         {% if req.status == 'APPROVED' %}
-                            <c-status-pill status="approved" />
+                            <c-status-pill status="approved" ></c-status-pill>
                         {% elif req.status == 'REJECTED' %}
-                            <c-status-pill status="rejected" />
+                            <c-status-pill status="rejected" ></c-status-pill>
                         {% else %}
-                            <c-status-pill status="pending" />
+                            <c-status-pill status="pending" ></c-status-pill>
                         {% endif %}
                     </div>
                 </div>
                 {% empty %}
                 <div class="p-8">
-                    <c-empty-state icon="clock" title="No Requests Yet" description="Your submitted leave requests will appear here." />
+                    <c-empty-state icon="clock" title="No Requests Yet" description="Your submitted leave requests will appear here." ></c-empty-state>
                 </div>
                 {% endfor %}
             </div>

@@ -1,13 +1,13 @@
 <c-app-shell page_title="{% if object %}Edit Employee{% else %}Add Employee{% endif %} | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="{% if object %}Edit Employee: {{ object.full_name }}{% else %}Add New Employee{% endif %}" />
+        <c-topbar title="{% if object %}Edit Employee: {{ object.full_name }}{% else %}Add New Employee{% endif %}" ></c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-4xl mx-auto space-y-4">
         <c-card>
@@ -231,8 +231,8 @@
                 </div>
 
                 <div class="pt-4 flex justify-end gap-2 border-t" style="border-color:var(--border)">
-                    <c-button href="{% url 'employees:employee_list' %}" variant="secondary" label="Cancel" />
-                    <c-button type="submit" variant="primary" label="Save Employee" />
+                    <c-button href="{% url 'employees:employee_list' %}" variant="secondary" label="Cancel" ></c-button>
+                    <c-button type="submit" variant="primary" label="Save Employee" ></c-button>
                 </div>
             </form>
         </c-card>

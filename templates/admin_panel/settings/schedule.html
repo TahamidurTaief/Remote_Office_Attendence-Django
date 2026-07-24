@@ -1,13 +1,13 @@
 <c-app-shell page_title="Office Schedule Settings | FieldTrack Admin" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Office Schedule Settings" />
+        <c-topbar title="Office Schedule Settings" ></c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <div class="space-y-4">
@@ -31,15 +31,15 @@
                     <input type="hidden" name="branch_id" value="{{ branch.id }}">
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <c-time-picker id="office_start_time_{{ branch.id }}" name="office_start_time" label="Office Start Time" value="{{ schedule.office_start_time|time:'H:i' }}" required="true" />
+                        <c-time-picker id="office_start_time_{{ branch.id }}" name="office_start_time" label="Office Start Time" value="{{ schedule.office_start_time|time:'H:i' }}" required="true" ></c-time-picker>
 
-                        <c-time-picker id="office_end_time_{{ branch.id }}" name="office_end_time" label="Office End Time" value="{{ schedule.office_end_time|time:'H:i' }}" required="true" />
+                        <c-time-picker id="office_end_time_{{ branch.id }}" name="office_end_time" label="Office End Time" value="{{ schedule.office_end_time|time:'H:i' }}" required="true" ></c-time-picker>
 
-                        <c-input type="number" id="late_after_{{ branch.id }}" name="late_after_minutes" label="Late After (minutes)" value="{{ schedule.late_after_minutes }}" required="true" help="Late if check-in > X mins after start." />
+                        <c-input type="number" id="late_after_{{ branch.id }}" name="late_after_minutes" label="Late After (minutes)" value="{{ schedule.late_after_minutes }}" required="true" help="Late if check-in > X mins after start." ></c-input>
 
-                        <c-input type="number" id="early_checkout_{{ branch.id }}" name="early_checkout_before_minutes" label="Early Checkout (minutes)" value="{{ schedule.early_checkout_before_minutes }}" required="true" help="Early checkout if > X mins before end." />
+                        <c-input type="number" id="early_checkout_{{ branch.id }}" name="early_checkout_before_minutes" label="Early Checkout (minutes)" value="{{ schedule.early_checkout_before_minutes }}" required="true" help="Early checkout if > X mins before end." ></c-input>
 
-                        <c-input type="number" id="overtime_after_{{ branch.id }}" name="overtime_after_minutes" label="Overtime Starts After (minutes)" value="{{ schedule.overtime_after_minutes }}" required="true" help="Mins after end time before OT starts." />
+                        <c-input type="number" id="overtime_after_{{ branch.id }}" name="overtime_after_minutes" label="Overtime Starts After (minutes)" value="{{ schedule.overtime_after_minutes }}" required="true" help="Mins after end time before OT starts." ></c-input>
 
                         <c-select id="tracking_{{ branch.id }}" name="tracking_interval_minutes" label="Auto Location Track Interval">
                             {% for value, label in tracking_choices %}
@@ -49,7 +49,7 @@
                     </div>
 
                     <div class="flex justify-end pt-3 border-t" style="border-color:var(--border)">
-                        <c-button type="submit" variant="primary" label="Save {{ branch.name }} Schedule" />
+                        <c-button type="submit" variant="primary" label="Save {{ branch.name }} Schedule" ></c-button>
                     </div>
                 </form>
             </div>

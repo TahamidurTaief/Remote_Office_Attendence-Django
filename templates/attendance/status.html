@@ -9,10 +9,10 @@
     </div>
     <div class="flex items-center gap-2 flex-wrap">
       {% if active_session %}
-        <c-button href="/staff/home/" variant="danger" icon="square" label="Check Out Now" size="md" />
-        <c-button href="{% url 'attendance:field_visit_submit' %}" variant="secondary" icon="map-pin" label="Log Field Visit" size="md" />
+        <c-button href="/staff/home/" variant="danger" icon="square" label="Check Out Now" size="md" ></c-button>
+        <c-button href="{% url 'attendance:field_visit_submit' %}" variant="secondary" icon="map-pin" label="Log Field Visit" size="md" ></c-button>
       {% else %}
-        <c-button href="{% url 'attendance:check_in' %}" variant="primary" icon="play" label="Check In Now" size="md" />
+        <c-button href="{% url 'attendance:check_in' %}" variant="primary" icon="play" label="Check In Now" size="md" ></c-button>
       {% endif %}
     </div>
   </div>
@@ -183,7 +183,7 @@
         </div>
 
         <div class="pt-1">
-          <c-button href="{% url 'attendance:check_in' %}" variant="secondary" icon="refresh-cw" label="Update Live Position" size="sm" extra_class="w-full justify-center" />
+          <c-button href="{% url 'attendance:check_in' %}" variant="secondary" icon="refresh-cw" label="Update Live Position" size="sm" extra_class="w-full justify-center" ></c-button>
         </div>
       </div>
     </div>

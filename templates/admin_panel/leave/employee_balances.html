@@ -18,7 +18,7 @@
                     {% endfor %}
                 </select>
             </form>
-            <c-button href="{% url 'leave:admin_dashboard' %}" variant="secondary" icon="arrow-left" label="Requests Dashboard" size="md" />
+            <c-button href="{% url 'leave:admin_dashboard' %}" variant="secondary" icon="arrow-left" label="Requests Dashboard" size="md" ></c-button>
         </div>
     </div>
 
@@ -91,7 +91,7 @@
                                 <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                 View Details
                             </button>
-                            <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="ghost" icon="external-link" label="History" size="sm" />
+                            <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="ghost" icon="external-link" label="History" size="sm" ></c-button>
                         </div>
                     </td>
                 </tr>
@@ -177,7 +177,7 @@
         <button type="button" @click="$dispatch('close-modal', {id: 'emp-modal-{{ emp.id }}'})" class="ft-btn ft-btn-secondary ft-btn-sm">
             Close
         </button>
-        <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="primary" icon="external-link" label="Full History & Adjust" size="sm" />
+        <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="primary" icon="external-link" label="Full History & Adjust" size="sm" ></c-button>
     </c-slot>
 </c-modal>
 {% endwith %}

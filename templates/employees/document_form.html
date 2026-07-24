@@ -1,13 +1,13 @@
 <c-app-shell page_title="{% if object %}Edit Document{% else %}Add Document{% endif %} | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="{% if object %}Edit Document: {{ object.document_type }}{% else %}Add Document for {{ employee.full_name }}{% endif %}" />
+        <c-topbar title="{% if object %}Edit Document: {{ object.document_type }}{% else %}Add Document for {{ employee.full_name }}{% endif %}" ></c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-3xl mx-auto space-y-4">
         <c-card>
@@ -43,11 +43,11 @@
 
                 <div class="pt-4 flex justify-end gap-2 border-t" style="border-color:var(--border)">
                     {% if employee %}
-                    <c-button href="{% url 'employees:employee_detail' employee.pk %}" variant="secondary" label="Cancel" />
+                    <c-button href="{% url 'employees:employee_detail' employee.pk %}" variant="secondary" label="Cancel" ></c-button>
                     {% else %}
-                    <c-button href="{% url 'employees:employee_detail' object.employee.pk %}" variant="secondary" label="Cancel" />
+                    <c-button href="{% url 'employees:employee_detail' object.employee.pk %}" variant="secondary" label="Cancel" ></c-button>
                     {% endif %}
-                    <c-button type="submit" variant="primary" label="Save Document" />
+                    <c-button type="submit" variant="primary" label="Save Document" ></c-button>
                 </div>
             </form>
         </c-card>

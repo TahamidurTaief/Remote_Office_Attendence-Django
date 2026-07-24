@@ -1,24 +1,24 @@
 <c-app-shell page_title="Holidays | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" />
+        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Holidays">
             <c-slot name="actions">
-                <c-button href="{% url 'branches:holiday_add' %}" variant="accent" icon="plus" label="Add Holiday" />
+                <c-button href="{% url 'branches:holiday_add' %}" variant="accent" icon="plus" label="Add Holiday" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
-    <c-command-palette />
+    <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <!-- Filters -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'branches:holiday_list' %}">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 items-end">
-                    <c-input name="search" label="Search Holidays" value="{{ search }}" placeholder="Holiday Name..." />
+                    <c-input name="search" label="Search Holidays" value="{{ search }}" placeholder="Holiday Name..." ></c-input>
                     
                     <c-select name="branch" label="Branch" value="{{ branch_filter }}">
                         <option value="">All (Global & Branch Specific)</option>
@@ -53,9 +53,9 @@
                             </td>
                             <td>
                                 {% if holiday.branch %}
-                                    <c-badge variant="info" label="{{ holiday.branch.name }}" />
+                                    <c-badge variant="info" label="{{ holiday.branch.name }}" ></c-badge>
                                 {% else %}
-                                    <c-badge variant="primary" label="Company-wide" />
+                                    <c-badge variant="primary" label="Company-wide" ></c-badge>
                                 {% endif %}
                             </td>
                             <td class="text-right">
@@ -75,7 +75,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="4" class="py-12">
-                                <c-empty-state icon="sun" title="No Holidays Found" description="Add your first holiday to get started." />
+                                <c-empty-state icon="sun" title="No Holidays Found" description="Add your first holiday to get started." ></c-empty-state>
                             </td>
                         </tr>
                         {% endfor %}
@@ -90,10 +90,10 @@
                 </span>
                 <div class="flex gap-2">
                     {% if page_obj.has_previous %}
-                    <c-button href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" variant="secondary" size="sm" label="Previous" />
+                    <c-button href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" variant="secondary" size="sm" label="Previous" ></c-button>
                     {% endif %}
                     {% if page_obj.has_next %}
-                    <c-button href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" variant="secondary" size="sm" label="Next" />
+                    <c-button href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if branch_filter %}&branch={{ branch_filter }}{% endif %}" variant="secondary" size="sm" label="Next" ></c-button>
                     {% endif %}
                 </div>
             </div>
