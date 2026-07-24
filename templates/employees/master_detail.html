@@ -10,13 +10,13 @@
                     <button hx-get="{% url 'employees:master_edit' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium text-sm rounded-xl transition-colors">
                         Edit Master Profile
                     </button>
+                    {% include "employees/partials/lifecycle_action_buttons.html" %}
                     {% if employee.status != 'archived' %}
-                    <form method="post" action="{% url 'employees:master_archive' employee.pk %}" onsubmit="return confirm('Are you sure you want to archive this employee?');" class="inline">
-                        {% csrf_token %}
-                        <button type="submit" class="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium text-sm rounded-xl transition-colors">
-                            Archive Employee
-                        </button>
-                    </form>
+                    <a href="{% url 'employees:lifecycle_requests' %}"
+                       class="px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors hover:bg-slate-500/10"
+                       style="color:var(--text-muted)">
+                        Pending requests
+                    </a>
                     {% endif %}
                 </div>
             </c-slot>

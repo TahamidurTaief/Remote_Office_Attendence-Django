@@ -15,6 +15,8 @@ class Notification(models.Model):
         ('task_delayed', 'Task Delayed'),
         ('role_changed', 'Role/Group Changed'),
         ('permission_changed', 'Permission Changed'),
+        ('lifecycle_request', 'Lifecycle Transition Request'),
+        ('lifecycle_reviewed', 'Lifecycle Request Reviewed'),
     ]
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,

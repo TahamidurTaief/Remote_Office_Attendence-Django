@@ -271,7 +271,7 @@ class EmployeeMasterForm(forms.ModelForm):
         fields = [
             'employee_number', 'first_name', 'last_name', 'dob', 'gender', 'national_id',
             'phone', 'personal_email', 'address', 'emergency_contact_name', 'emergency_contact_phone',
-            'branch', 'department', 'designation', 'reporting_manager', 'status', 'joined_date', 'user'
+            'branch', 'department', 'designation', 'reporting_manager', 'joined_date', 'user'
         ]
         widgets = {
             'dob': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
@@ -290,7 +290,6 @@ class EmployeeMasterForm(forms.ModelForm):
             'department': forms.Select(attrs={'class': SELECT_INPUT}),
             'designation': forms.Select(attrs={'class': SELECT_INPUT}),
             'reporting_manager': forms.Select(attrs={'class': SELECT_INPUT}),
-            'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'user': forms.Select(attrs={'class': SELECT_INPUT}),
         }
 
@@ -341,6 +340,61 @@ class DesignationForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
             'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
+
+
+# ── Lifecycle forms ───────────────────────────────────────────────────────────
+from apps.employees.models import LifecycleTransitionRequest
+
+
+class LifecycleActionForm(forms.Form):
+    """Generic form for initiating any lifecycle transition."""
+    to_status = forms.CharField(widget=forms.HiddenInput())
+    reason = forms.CharField(
+        label='Reason / Notes',
+        widget=forms.Textarea(attrs={
+            'class': TEXT_INPUT,
+            'rows': 3,
+            'placeholder': 'Provide a reason for this status change…',
+        }),
+        required=True,
+    )
+    effective_date = forms.DateField(
+        label='Effective Date',
+        widget=forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+        required=True,
+    )
+    # Optional: for Promote / Transfer
+    new_department = forms.ModelChoiceField(
+        queryset=Department.objects.filter(is_active=True),
+        required=False,
+        label='New Department',
+        widget=forms.Select(attrs={'class': SELECT_INPUT}),
+    )
+    new_designation = forms.ModelChoiceField(
+        queryset=Designation.objects.filter(is_active=True),
+        required=False,
+        label='New Designation',
+        widget=forms.Select(attrs={'class': SELECT_INPUT}),
+    )
+
+    def __init__(self, *args, to_status=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if to_status:
+            self.fields['to_status'].initial = to_status
+            # Show dept/desig only for relevant transitions
+            if to_status not in ('promoted', 'transferred', 'demoted'):
+                del self.fields['new_department']
+                del self.fields['new_designation']
+
+
+class ReviewTransitionForm(forms.Form):
+    """Form for admin to approve or reject a LifecycleTransitionRequest."""
+    review_note = forms.CharField(
+        label='Review Note (optional)',
+        widget=forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Optional note for the requester…'}),
+        required=False,
+    )
+    # 'action' comes from the submit button name, not this form field.
 
 
 from apps.employees.models import Asset, AssetAssignment, DocumentType, AssetType, AssetCondition

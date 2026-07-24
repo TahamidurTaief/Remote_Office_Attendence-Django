@@ -1,0 +1,75 @@
+{% comment %}
+  Partial: lifecycle action modal body.
+  Loaded via htmx GET into #modal-container.
+  Context: employee, to_status, to_status_display, form, is_high_risk
+{% endcomment %}
+
+<div class="space-y-4 p-4">
+  {# Header #}
+  <div class="flex items-center gap-2">
+    <div class="w-8 h-8 rounded-lg flex items-center justify-center
+      {% if is_high_risk %}bg-amber-500/10{% else %}bg-primary/10{% endif %}">
+      <i data-lucide="{% if is_high_risk %}clock{% else %}check-circle-2{% endif %}"
+         class="w-4 h-4 {% if is_high_risk %}text-amber-500{% else %}text-primary{% endif %}"></i>
+    </div>
+    <div>
+      <h3 class="text-[13px] font-semibold" style="color:var(--text)">
+        {{ to_status_display }} — {{ employee.get_full_name }}
+      </h3>
+      <p class="text-[11px]" style="color:var(--text-muted)">
+        Current status: <strong>{{ employee.get_status_display }}</strong>
+      </p>
+    </div>
+  </div>
+
+  {# Approval banner #}
+  {% if is_high_risk %}
+  <div class="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+    <i data-lucide="alert-triangle" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+    <span>
+      This is a <strong>high-risk transition</strong> and requires admin approval.
+      The employee's status will NOT change until an admin approves the request.
+    </span>
+  </div>
+  {% else %}
+  <div class="p-3 rounded-xl border border-primary/20 bg-primary/5 text-xs flex items-center gap-2" style="color:var(--text-secondary)">
+    <i data-lucide="zap" class="w-3.5 h-3.5 text-primary flex-shrink-0"></i>
+    <span>This transition applies <strong>immediately</strong> — no approval required.</span>
+  </div>
+  {% endif %}
+
+  {# Form #}
+  <form
+    hx-post="{% url 'employees:lifecycle_action' employee.pk %}"
+    hx-target="#modal-container"
+    hx-swap="innerHTML"
+    class="space-y-3">
+    {% csrf_token %}
+    <input type="hidden" name="to_status" value="{{ to_status }}">
+
+    {% for field in form.visible_fields %}
+    <div>
+      <label class="block text-xs font-semibold mb-1.5" style="color:var(--text)">
+        {{ field.label }}{% if field.field.required %} <span class="text-rose-500">*</span>{% endif %}
+      </label>
+      {{ field }}
+      {% if field.errors %}
+        {% for err in field.errors %}
+          <p class="text-xs text-rose-500 mt-1">{{ err }}</p>
+        {% endfor %}
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="flex items-center justify-end gap-2 pt-2">
+      <button type="button"
+              onclick="document.getElementById('modal-container').innerHTML = ''"
+              class="ft-btn ft-btn-ghost ft-btn-sm text-xs">Cancel</button>
+      <button type="submit"
+              class="ft-btn ft-btn-{% if is_high_risk %}warning{% else %}primary{% endif %} ft-btn-sm text-xs">
+        <i data-lucide="{% if is_high_risk %}send{% else %}check{% endif %}" class="w-3.5 h-3.5"></i>
+        {% if is_high_risk %}Submit for Review{% else %}Apply Now{% endif %}
+      </button>
+    </div>
+  </form>
+</div>

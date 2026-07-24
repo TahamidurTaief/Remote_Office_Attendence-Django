@@ -1,0 +1,13 @@
+{% comment %}
+  c-lifecycle-action-btn component
+  Props: label, to_status, employee_pk, variant (default/danger/warning/success), icon
+{% endcomment %}
+<button
+  hx-get="{% url 'employees:lifecycle_action' employee_pk %}?to_status={{ to_status }}"
+  hx-target="#modal-container"
+  hx-swap="innerHTML"
+  class="ft-btn ft-btn-{{ variant|default:'secondary' }} ft-btn-sm text-xs whitespace-nowrap"
+  title="{{ label }}">
+  {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>{% endif %}
+  {{ label }}
+</button>

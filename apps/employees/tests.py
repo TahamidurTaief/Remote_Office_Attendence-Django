@@ -479,8 +479,8 @@ class EmployeeMasterTests(TestCase):
         self.assertTrue(any('deactivated or suspended' in m for m in msgs1))
 
         # 2. Active status -> login succeeds
-        emp.status = EmployeeStatus.ACTIVE
-        emp.save()
+        Employee.objects.filter(pk=emp.pk).update(status=EmployeeStatus.ACTIVE)
+        emp.refresh_from_db()
         self.assertTrue(emp.is_login_allowed())
         response = self.client.post(reverse('accounts:login'), {
             'email': 'emplogin@test.com',
@@ -518,7 +518,6 @@ class EmployeeMasterTests(TestCase):
             'employee_number': 'EMP-HTMX-001',
             'first_name': 'HTMX',
             'last_name': 'User',
-            'status': 'active',
             'branch': self.branch.id,
             'department': self.dept.id,
             'designation': self.desig.id
@@ -540,17 +539,15 @@ class EmployeeMasterTests(TestCase):
             'employee_number': 'EMP-HTMX-001',
             'first_name': 'HTMX',
             'last_name': 'User-Updated',
-            'status': 'confirmed',
             'branch': self.branch.id,
             'department': self.dept.id,
             'designation': self.desig.id,
-            'change_reason': 'Passed Probation'
+            'change_reason': 'Profile Update'
         }
         res_edit = self.client.post(url_edit, data=edit_data, HTTP_HX_REQUEST='true')
         self.assertEqual(res_edit.status_code, 200)
         emp.refresh_from_db()
-        self.assertEqual(emp.status, 'confirmed')
-        self.assertTrue(EmploymentHistory.objects.filter(employee=emp, reason='Passed Probation').exists())
+        self.assertEqual(emp.last_name, 'User-Updated')
 
         # 5. Archive view POST
         url_archive = reverse('employees:master_archive', kwargs={'pk': emp.pk})
@@ -698,6 +695,124 @@ class Step3DocumentAndAssetTests(TestCase):
         assign2.save()
         self.assertTrue(asset.is_assigned())
         self.assertEqual(asset.current_assignment().employee, self.emp2)
+
+
+from django.core.exceptions import ValidationError
+from apps.employees.models import Employee, EmployeeStatus, EmploymentHistory, LifecycleTransitionRequest
+from apps.employees.forms import EmployeeMasterForm
+
+class LifecycleStateMachineTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='admin_life@example.com', password='pass123')
+        self.staff = User.objects.create_user(email='staff_life@example.com', password='pass123')
+        self.employee = Employee.objects.create(
+            employee_number='EMP-LIFE-001',
+            first_name='Life',
+            last_name='Cycle',
+            status=EmployeeStatus.DRAFT
+        )
+
+    def test_status_removed_from_master_form(self):
+        form = EmployeeMasterForm()
+        self.assertNotIn('status', form.fields)
+
+    def test_invalid_transition_rejected_by_clean(self):
+        self.employee.status = EmployeeStatus.CONFIRMED  # Draft -> Confirmed is invalid
+        with self.assertRaises(ValidationError) as ctx:
+            self.employee.clean()
+        self.assertIn('Invalid transition', str(ctx.exception))
+        self.assertIn('draft', str(ctx.exception))
+
+    def test_low_risk_transition_applies_immediately(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:lifecycle_action', kwargs={'pk': self.employee.pk})
+        response = self.client.post(url, {
+            'to_status': 'pending_approval',
+            'reason': 'Submitting draft for approval',
+            'effective_date': '2026-07-24'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'pending_approval')
+        self.assertTrue(EmploymentHistory.objects.filter(employee=self.employee, new_value='Pending Approval').exists())
+
+    def test_high_risk_transition_creates_pending_request_and_does_not_change_status(self):
+        # Move to ACTIVE first via low-risk / valid steps
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
+        self.employee.refresh_from_db()
+
+        self.client.force_login(self.admin)
+        url = reverse('employees:lifecycle_action', kwargs={'pk': self.employee.pk})
+        response = self.client.post(url, {
+            'to_status': 'promoted',
+            'reason': 'Great performance',
+            'effective_date': '2026-07-24'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Status must still be ACTIVE
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
+
+        # Pending request created
+        req = LifecycleTransitionRequest.objects.get(employee=self.employee, to_status='promoted')
+        self.assertEqual(req.review_status, 'pending')
+        self.assertEqual(req.requested_by, self.admin)
+
+    def test_approve_high_risk_transition(self):
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
+        self.employee.refresh_from_db()
+
+        req = LifecycleTransitionRequest.objects.create(
+            employee=self.employee,
+            from_status='active',
+            to_status='promoted',
+            reason='Promote test',
+            requested_by=self.staff
+        )
+
+        self.client.force_login(self.admin)
+        review_url = reverse('employees:lifecycle_review', kwargs={'req_pk': req.pk})
+        response = self.client.post(review_url, {
+            'action': 'approve',
+            'review_note': 'Approved!'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        req.refresh_from_db()
+        self.assertEqual(req.review_status, 'approved')
+        self.assertEqual(req.reviewed_by, self.admin)
+
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'promoted')
+        self.assertTrue(EmploymentHistory.objects.filter(employee=self.employee, new_value='Promoted').exists())
+
+    def test_reject_high_risk_transition(self):
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
+        self.employee.refresh_from_db()
+
+        req = LifecycleTransitionRequest.objects.create(
+            employee=self.employee,
+            from_status='active',
+            to_status='promoted',
+            reason='Promote test',
+            requested_by=self.staff
+        )
+
+        self.client.force_login(self.admin)
+        review_url = reverse('employees:lifecycle_review', kwargs={'req_pk': req.pk})
+        response = self.client.post(review_url, {
+            'action': 'reject',
+            'review_note': 'Not eligible'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        req.refresh_from_db()
+        self.assertEqual(req.review_status, 'rejected')
+        self.assertEqual(req.reviewed_by, self.admin)
+
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
 
 
 

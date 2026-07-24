@@ -398,6 +398,18 @@ class Employee(models.Model):
     def is_login_allowed(self):
         return self.status in ALLOWED_LOGIN_STATUSES
 
+    # ── Lifecycle helpers ────────────────────────────────────────────────────
+    def can_transition_to(self, target_status: str) -> bool:
+        """True if moving from current status to target_status is allowed."""
+        from apps.employees.lifecycle import is_valid_transition
+        return is_valid_transition(self.status, target_status)
+
+    def get_allowed_transitions(self) -> list:
+        """List of valid to-status strings from current status."""
+        from apps.employees.lifecycle import get_allowed_targets
+        return sorted(get_allowed_targets(self.status))
+
+    # ── Validation ───────────────────────────────────────────────────────────
     def check_circular_reporting(self):
         if not self.reporting_manager:
             return
@@ -407,7 +419,7 @@ class Employee(models.Model):
         visited = {self.pk} if self.pk else set()
         while curr:
             if curr.pk in visited:
-                raise ValidationError({'reporting_manager': f"Circular reporting structure detected involving {curr.get_full_name()}."})
+                raise ValidationError({'reporting_manager': f"Circular reporting structure detected involving {curr.get_full_name()}."})            
             if self.pk:
                 visited.add(curr.pk)
             curr = curr.reporting_manager
@@ -415,14 +427,32 @@ class Employee(models.Model):
     def clean(self):
         super().clean()
         self.check_circular_reporting()
+        # Enforce transition map when status changes on existing records.
+        # Skip on new records (pk is None) — initial status is always allowed.
+        if self.pk:
+            try:
+                db_status = Employee.objects.filter(pk=self.pk).values_list('status', flat=True).first()
+            except Exception:
+                db_status = None
+            if db_status and db_status != self.status:
+                from apps.employees.lifecycle import is_valid_transition, describe_allowed
+                if not is_valid_transition(db_status, self.status):
+                    allowed = describe_allowed(db_status)
+                    raise ValidationError({
+                        'status': (
+                            f"Invalid transition: '{db_status}' → '{self.status}'. "
+                            f"Allowed next states from '{db_status}': {allowed}."
+                        )
+                    })
 
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        self.status = EmployeeStatus.ARCHIVED
-        self.save(update_fields=['status', 'updated_at'])
+        if self.pk:
+            Employee.objects.filter(pk=self.pk).update(status=EmployeeStatus.ARCHIVED, updated_at=timezone.now())
+            self.status = EmployeeStatus.ARCHIVED
 
 
 class EmploymentHistory(models.Model):
@@ -448,4 +478,65 @@ class EmploymentHistory(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError("EmploymentHistory records are immutable and cannot be deleted.")
+
+
+class LifecycleTransitionRequest(models.Model):
+    """
+    Queued status-change request requiring admin approval (HIGH_RISK transitions).
+    Status is NOT changed on Employee until an admin approves.
+    """
+
+    class ReviewStatus(models.TextChoices):
+        PENDING  = 'pending',  'Pending'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+
+    employee        = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name='lifecycle_requests'
+    )
+    from_status     = models.CharField(max_length=30)
+    to_status       = models.CharField(max_length=30)
+    reason          = models.TextField()
+    # Optional org-change fields bundled with Promote / Transfer requests
+    new_department  = models.ForeignKey(
+        Department, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+'
+    )
+    new_designation = models.ForeignKey(
+        Designation, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+'
+    )
+    requested_by    = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='lifecycle_requests_made'
+    )
+    requested_at    = models.DateTimeField(auto_now_add=True)
+    review_status   = models.CharField(
+        max_length=20, choices=ReviewStatus.choices, default=ReviewStatus.PENDING,
+        db_index=True
+    )
+    reviewed_by     = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='lifecycle_requests_reviewed'
+    )
+    reviewed_at     = models.DateTimeField(null=True, blank=True)
+    review_note     = models.TextField(blank=True)
+    effective_date  = models.DateField(default=timezone.now)
+
+    class Meta:
+        db_table = 'lifecycle_transition_request'
+        ordering = ['-requested_at']
+        indexes = [
+            models.Index(fields=['review_status']),
+            models.Index(fields=['employee', 'review_status']),
+        ]
+
+    def __str__(self):
+        return (
+            f"[{self.review_status}] {self.employee.get_full_name()} "
+            f"{self.from_status} → {self.to_status}"
+        )
+
+    def is_pending(self):
+        return self.review_status == self.ReviewStatus.PENDING
 

@@ -1,0 +1,26 @@
+{% comment %} Partial: lifecycle requests table body — htmx swap target {% endcomment %}
+{% if requests %}
+<table class="w-full text-left" id="lifecycle-requests-table">
+  <thead>
+    <tr class="border-b text-[11px] font-semibold uppercase tracking-wider" style="border-color:var(--border); color:var(--text-muted)">
+      <th class="px-4 py-2">Employee</th>
+      <th class="px-4 py-2">Transition</th>
+      <th class="px-4 py-2">Reason</th>
+      <th class="px-4 py-2">Requested By</th>
+      <th class="px-4 py-2">Action</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y" style="border-color:var(--border)">
+    {% for req in requests %}
+      {% include "employees/partials/lifecycle_request_row.html" %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="py-12 text-center">
+  <div class="w-12 h-12 rounded-full bg-slate-500/10 flex items-center justify-center mx-auto mb-3">
+    <i data-lucide="inbox" class="w-6 h-6" style="color:var(--text-muted)"></i>
+  </div>
+  <p class="text-sm font-medium" style="color:var(--text-muted)">No {{ status_filter }} requests</p>
+</div>
+{% endif %}

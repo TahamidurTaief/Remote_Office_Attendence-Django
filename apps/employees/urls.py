@@ -29,5 +29,10 @@ urlpatterns = [
     path('assets/create/', views.AssetCreateView.as_view(), name='asset_create'),
     path('master/<int:pk>/assets/assign/', views.AssetAssignView.as_view(), name='asset_assign'),
     path('assets/assignment/<int:pk>/return/', views.AssetReturnView.as_view(), name='asset_return'),
+
+    # Lifecycle State Machine Routes (Phase 2 Step N)
+    path('master/<int:pk>/lifecycle/action/', views.LifecycleActionView.as_view(), name='lifecycle_action'),
+    path('lifecycle-requests/', views.LifecyclePendingListView.as_view(), name='lifecycle_requests'),
+    path('lifecycle-requests/<int:req_pk>/review/', views.LifecycleReviewView.as_view(), name='lifecycle_review'),
 ]
 

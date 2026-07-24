@@ -1,0 +1,79 @@
+<c-app-shell page_title="Lifecycle Requests | FieldTrack" active_href="{% url 'employees:lifecycle_requests' %}">
+  <c-slot name="topbar">
+    <c-topbar title="Lifecycle Transition Requests">
+      <c-slot name="actions">
+        <div class="flex items-center gap-2">
+          {% if pending_count > 0 %}
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            {{ pending_count }} pending
+          </span>
+          {% endif %}
+          <a href="{% url 'employees:master_list' %}" class="ft-btn ft-btn-ghost ft-btn-sm text-xs">
+            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Employees
+          </a>
+        </div>
+      </c-slot>
+    </c-topbar>
+  </c-slot>
+
+  <div class="p-4 max-w-7xl mx-auto space-y-4">
+
+    {# Status filter tabs #}
+    <div class="flex items-center gap-1 p-1 rounded-xl w-fit" style="background:var(--surface-2)">
+      {% for tab_val, tab_label in pending,Pending|approved,Approved|rejected,Rejected|""|All %}
+      {% endfor %}
+      {% for tab in "pending,Pending|approved,Approved|rejected,Rejected" %}
+      {% endfor %}
+      {% for item in "pending,approved,rejected" %}
+      {% endfor %}
+    </div>
+
+    {# Simple tab links #}
+    <div class="flex items-center gap-2 border-b pb-3" style="border-color:var(--border)">
+      {% for tab_status, tab_label in "pending:Pending,approved:Approved,rejected:Rejected" %}
+      {% endfor %}
+      <a href="?status=pending"
+         hx-get="?status=pending"
+         hx-target="#requests-body"
+         hx-swap="innerHTML"
+         hx-push-url="true"
+         class="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors
+           {% if status_filter == 'pending' %}bg-primary text-white{% else %}hover:bg-slate-500/10{% endif %}"
+         style="{% if status_filter != 'pending' %}color:var(--text-muted){% endif %}">
+        Pending
+        {% if pending_count > 0 and status_filter != 'pending' %}
+          <span class="ml-1 text-amber-500 font-bold">{{ pending_count }}</span>
+        {% endif %}
+      </a>
+      <a href="?status=approved"
+         hx-get="?status=approved"
+         hx-target="#requests-body"
+         hx-swap="innerHTML"
+         hx-push-url="true"
+         class="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors
+           {% if status_filter == 'approved' %}bg-primary text-white{% else %}hover:bg-slate-500/10{% endif %}"
+         style="{% if status_filter != 'approved' %}color:var(--text-muted){% endif %}">
+        Approved
+      </a>
+      <a href="?status=rejected"
+         hx-get="?status=rejected"
+         hx-target="#requests-body"
+         hx-swap="innerHTML"
+         hx-push-url="true"
+         class="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors
+           {% if status_filter == 'rejected' %}bg-primary text-white{% else %}hover:bg-slate-500/10{% endif %}"
+         style="{% if status_filter != 'rejected' %}color:var(--text-muted){% endif %}">
+        Rejected
+      </a>
+    </div>
+
+    <c-card padding="none">
+      <div id="requests-body" class="overflow-x-auto">
+        {% include "employees/partials/lifecycle_requests_table.html" %}
+      </div>
+    </c-card>
+
+  </div>
+
+</c-app-shell>

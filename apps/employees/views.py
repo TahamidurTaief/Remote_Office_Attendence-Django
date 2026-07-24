@@ -780,3 +780,302 @@ class AssetReturnView(RoleRequiredMixin, View):
         return render(request, 'employees/partials/asset_return_modal.html', {'assignment': assignment, 'form': form})
 
 
+# ==========================================
+# LIFECYCLE STATE MACHINE VIEWS
+# ==========================================
+
+from apps.employees.models import LifecycleTransitionRequest
+from apps.employees.forms import LifecycleActionForm, ReviewTransitionForm
+from apps.employees.lifecycle import is_low_risk, is_valid_transition, describe_allowed, TRANSITION_MAP
+from django.contrib.auth import get_user_model
+from django.utils import timezone as tz
+
+
+def _notify_admins(request_obj):
+    """Send in-app notification to all admin users about a pending lifecycle request."""
+    User = get_user_model()
+    admins = User.objects.filter(role='admin', is_active=True)
+    from apps.notifications.models import Notification
+    emp = request_obj.employee
+    for admin in admins:
+        Notification.objects.create(
+            recipient=admin,
+            title=f"Lifecycle request: {emp.get_full_name()}",
+            message=(
+                f"{request_obj.requested_by} requests to move {emp.get_full_name()} "
+                f"from '{request_obj.from_status}' to '{request_obj.to_status}'. "
+                f"Reason: {request_obj.reason[:200]}"
+            ),
+            notif_type='lifecycle_request',
+        )
+
+
+def _notify_requester(request_obj):
+    """Notify the original requester when their request is reviewed."""
+    if not request_obj.requested_by:
+        return
+    from apps.notifications.models import Notification
+    emp = request_obj.employee
+    verdict = request_obj.review_status  # 'approved' or 'rejected'
+    note = f" Note: {request_obj.review_note}" if request_obj.review_note else ''
+    Notification.objects.create(
+        recipient=request_obj.requested_by,
+        title=f"Lifecycle request {verdict}: {emp.get_full_name()}",
+        message=(
+            f"Your request to move {emp.get_full_name()} "
+            f"from '{request_obj.from_status}' to '{request_obj.to_status}' "
+            f"was {verdict} by {request_obj.reviewed_by}.{note}"
+        ),
+        notif_type='lifecycle_reviewed',
+    )
+
+
+def _apply_transition(employee, req_obj, actor):
+    """
+    Apply an approved / low-risk transition:
+    - Updates employee.status (bypassing clean() state-machine guard by writing directly)
+    - Optionally applies new_department / new_designation
+    - Creates EmploymentHistory entry
+    - Logs audit
+    """
+    old_status = employee.status
+    new_status = req_obj.to_status if req_obj else employee.status
+
+    # Apply org changes if bundled
+    changes_desc = []
+    if req_obj and req_obj.new_department:
+        old_dept = employee.department
+        employee.department = req_obj.new_department
+        changes_desc.append(f"Dept: {old_dept} → {req_obj.new_department}")
+    if req_obj and req_obj.new_designation:
+        old_desig = employee.designation
+        employee.designation = req_obj.new_designation
+        changes_desc.append(f"Designation: {old_desig} → {req_obj.new_designation}")
+
+    # Bypass clean() status-machine check by using update() — we've already
+    # validated the transition before calling _apply_transition.
+    effective = req_obj.effective_date if req_obj else tz.now().date()
+    reason = req_obj.reason if req_obj else 'Direct lifecycle action'
+
+    Employee.objects.filter(pk=employee.pk).update(
+        status=new_status,
+        department=employee.department,
+        designation=employee.designation,
+        updated_at=tz.now(),
+    )
+    employee.refresh_from_db()
+
+    EmploymentHistory.objects.create(
+        employee=employee,
+        field_changed='status',
+        old_value=dict(EmployeeStatus.choices).get(old_status, old_status),
+        new_value=dict(EmployeeStatus.choices).get(new_status, new_status),
+        reason=reason,
+        approved_by=actor,
+        effective_date=effective,
+    )
+    if changes_desc:
+        EmploymentHistory.objects.create(
+            employee=employee,
+            field_changed='organization',
+            old_value='',
+            new_value='; '.join(changes_desc),
+            reason=reason,
+            approved_by=actor,
+            effective_date=effective,
+        )
+    log_audit(
+        actor=actor,
+        action='lifecycle_transition_applied',
+        target=employee,
+        summary=f"Status: {old_status} → {new_status}"
+    )
+
+
+class LifecycleActionView(AdminRequiredMixin, View):
+    """
+    POST: Initiate a lifecycle transition from master_detail page.
+    LOW_RISK  → apply immediately.
+    HIGH_RISK → create LifecycleTransitionRequest (pending), notify admins.
+    """
+    def get(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        to_status = request.GET.get('to_status', '')
+        if not to_status or not is_valid_transition(employee.status, to_status):
+            return HttpResponse("Invalid transition.", status=400)
+        form = LifecycleActionForm(to_status=to_status, initial={
+            'to_status': to_status,
+            'effective_date': tz.now().date(),
+        })
+        return render(request, 'employees/partials/lifecycle_action_modal.html', {
+            'employee': employee,
+            'to_status': to_status,
+            'to_status_display': dict(EmployeeStatus.choices).get(to_status, to_status),
+            'form': form,
+            'is_high_risk': not is_low_risk(employee.status, to_status),
+        })
+
+    def post(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        to_status = request.POST.get('to_status', '')
+
+        if not to_status or not is_valid_transition(employee.status, to_status):
+            allowed = describe_allowed(employee.status)
+            if request.headers.get('HX-Request'):
+                return HttpResponse(
+                    f"<p class='text-rose-500 text-sm font-semibold'>Invalid transition from '{employee.status}' to '{to_status}'. Allowed: {allowed}</p>",
+                    status=422
+                )
+            messages.error(request, f"Invalid transition: {allowed}")
+            return redirect('employees:master_detail', pk=pk)
+
+        form = LifecycleActionForm(request.POST, to_status=to_status)
+        if not form.is_valid():
+            return render(request, 'employees/partials/lifecycle_action_modal.html', {
+                'employee': employee,
+                'to_status': to_status,
+                'to_status_display': dict(EmployeeStatus.choices).get(to_status, to_status),
+                'form': form,
+                'is_high_risk': not is_low_risk(employee.status, to_status),
+            })
+
+        cd = form.cleaned_data
+        from_status = employee.status
+
+        if is_low_risk(from_status, to_status):
+            # Build a fake req_obj-like namespace for _apply_transition
+            class _FakeReq:
+                pass
+            fake = _FakeReq()
+            fake.to_status = to_status
+            fake.reason = cd['reason']
+            fake.effective_date = cd['effective_date']
+            fake.new_department = cd.get('new_department')
+            fake.new_designation = cd.get('new_designation')
+            _apply_transition(employee, fake, request.user)
+            log_audit(
+                actor=request.user,
+                action='lifecycle_transition_applied',
+                target=employee,
+                summary=f"LOW_RISK: {from_status} → {to_status}"
+            )
+            messages.success(request, f"Status changed: {from_status} → {to_status}")
+        else:
+            # HIGH_RISK: queue for admin approval
+            req = LifecycleTransitionRequest.objects.create(
+                employee=employee,
+                from_status=from_status,
+                to_status=to_status,
+                reason=cd['reason'],
+                new_department=cd.get('new_department'),
+                new_designation=cd.get('new_designation'),
+                requested_by=request.user,
+                effective_date=cd['effective_date'],
+                review_status=LifecycleTransitionRequest.ReviewStatus.PENDING,
+            )
+            _notify_admins(req)
+            log_audit(
+                actor=request.user,
+                action='lifecycle_transition_requested',
+                target=employee,
+                summary=f"HIGH_RISK pending: {from_status} → {to_status}"
+            )
+            messages.success(request, f"Transition request submitted for admin approval: {from_status} → {to_status}")
+
+        if request.headers.get('HX-Request'):
+            res = render(request, 'employees/partials/form_success_htmx.html', {
+                'redirect_url': reverse('employees:master_detail', kwargs={'pk': pk})
+            })
+            res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': pk})
+            return res
+        return redirect('employees:master_detail', pk=pk)
+
+
+class LifecyclePendingListView(AdminRequiredMixin, ListView):
+    """Admin queue: all lifecycle transition requests (default: pending)."""
+    model = LifecycleTransitionRequest
+    template_name = 'employees/lifecycle_requests.html'
+    context_object_name = 'requests'
+    paginate_by = 30
+
+    def get_queryset(self):
+        qs = LifecycleTransitionRequest.objects.select_related(
+            'employee', 'requested_by', 'reviewed_by', 'new_department', 'new_designation'
+        )
+        status_filter = self.request.GET.get('status', 'pending')
+        if status_filter in ('pending', 'approved', 'rejected'):
+            qs = qs.filter(review_status=status_filter)
+        return qs.order_by('-requested_at')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['status_filter'] = self.request.GET.get('status', 'pending')
+        context['pending_count'] = LifecycleTransitionRequest.objects.filter(
+            review_status=LifecycleTransitionRequest.ReviewStatus.PENDING
+        ).count()
+        context['review_form'] = ReviewTransitionForm()
+        return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.headers.get('HX-Request'):
+            return render(self.request, 'employees/partials/lifecycle_requests_table.html', context)
+        return super().render_to_response(context, **response_kwargs)
+
+
+class LifecycleReviewView(AdminRequiredMixin, View):
+    """
+    POST: Admin approves or rejects a LifecycleTransitionRequest.
+    'action' POST param must be 'approve' or 'reject'.
+    Returns updated row partial (htmx swap outerHTML).
+    """
+    def post(self, request, req_pk):
+        ltr = get_object_or_404(LifecycleTransitionRequest, pk=req_pk)
+        if not ltr.is_pending():
+            if request.headers.get('HX-Request'):
+                return render(request, 'employees/partials/lifecycle_request_row.html', {'req': ltr})
+            return redirect('employees:lifecycle_requests')
+
+        action = request.POST.get('action', '')
+        form = ReviewTransitionForm(request.POST)
+        # review_note is optional, form is always valid
+        review_note = request.POST.get('review_note', '').strip()
+
+        if action == 'approve':
+            _apply_transition(ltr.employee, ltr, request.user)
+            ltr.review_status = LifecycleTransitionRequest.ReviewStatus.APPROVED
+            ltr.reviewed_by = request.user
+            ltr.reviewed_at = tz.now()
+            ltr.review_note = review_note
+            ltr.save(update_fields=['review_status', 'reviewed_by', 'reviewed_at', 'review_note'])
+            log_audit(
+                actor=request.user,
+                action='lifecycle_transition_approved',
+                target=ltr.employee,
+                summary=f"Approved: {ltr.from_status} → {ltr.to_status}"
+            )
+            _notify_requester(ltr)
+            messages.success(request, f"Approved: {ltr.employee.get_full_name()} {ltr.from_status} → {ltr.to_status}")
+
+        elif action == 'reject':
+            ltr.review_status = LifecycleTransitionRequest.ReviewStatus.REJECTED
+            ltr.reviewed_by = request.user
+            ltr.reviewed_at = tz.now()
+            ltr.review_note = review_note
+            ltr.save(update_fields=['review_status', 'reviewed_by', 'reviewed_at', 'review_note'])
+            log_audit(
+                actor=request.user,
+                action='lifecycle_transition_rejected',
+                target=ltr.employee,
+                summary=f"Rejected: {ltr.from_status} → {ltr.to_status}"
+            )
+            _notify_requester(ltr)
+            messages.success(request, f"Rejected: {ltr.employee.get_full_name()} transition to {ltr.to_status}")
+
+        else:
+            if request.headers.get('HX-Request'):
+                return HttpResponse("<p class='text-rose-500 text-sm'>Invalid action.</p>", status=400)
+            return redirect('employees:lifecycle_requests')
+
+        if request.headers.get('HX-Request'):
+            return render(request, 'employees/partials/lifecycle_request_row.html', {'req': ltr})
+        return redirect('employees:lifecycle_requests')
