@@ -27,6 +27,21 @@ def check_role(user):
     return getattr(user, 'role', '') in ('staff', 'manager')
 
 
+def get_attendance_policy(employee):
+    from apps.attendance.models import AttendancePolicy
+    branch = getattr(employee, 'branch', None)
+    if branch:
+        policy = AttendancePolicy.objects.filter(branch=branch).first()
+        if policy:
+            return policy
+    # fallback to global policy
+    global_policy = AttendancePolicy.objects.filter(branch__isnull=True).first()
+    if global_policy:
+        return global_policy
+    # default in-memory policy
+    return AttendancePolicy(photo_required=True, geofencing_policy='warning')
+
+
 # ─────────────────────────────────────────────────────────────────
 # CHECK IN  (allows multiple sessions per day)
 # ─────────────────────────────────────────────────────────────────
@@ -98,14 +113,24 @@ def check_in(request):
                 'error': 'You are already checked in. Please check out first.'
             }, status=400)
 
+        policy = get_attendance_policy(employee)
+        
+        from django.conf import settings
+        require_gps = getattr(settings, 'REQUIRE_GPS', True)
+
         lat      = data.get('latitude')
         lng      = data.get('longitude')
         accuracy = data.get('accuracy', 0)
         note     = data.get('note', '')
         address  = data.get('address', '')
 
-        if lat is None or lng is None or lat == '' or lng == '':
+        if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
             return JsonResponse({'success': False, 'error': 'Location is required for attendance.'}, status=400)
+
+        if lat is None or lat == '':
+            lat = 0.0
+        if lng is None or lng == '':
+            lng = 0.0
 
         try:
             lat = float(lat)
@@ -113,17 +138,18 @@ def check_in(request):
         except (TypeError, ValueError):
             return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
 
-        # Validate Photo
+        # Validate Photo (dependent on policy)
         photo = request.FILES.get('photo')
-        if not photo:
+        if policy.photo_required and not photo:
             return JsonResponse({'success': False, 'error': 'Photo is required for attendance.'}, status=400)
 
-        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-        if photo.content_type not in allowed_types:
-            return JsonResponse({'success': False, 'error': 'Invalid file type. Only images allowed.'}, status=400)
+        if photo:
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            if photo.content_type not in allowed_types:
+                return JsonResponse({'success': False, 'error': 'Invalid file type. Only images allowed.'}, status=400)
 
-        if photo.size > 10 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
+            if photo.size > 10 * 1024 * 1024:
+                return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
 
         # Determine office/field — trust the frontend value; only auto-detect
         # via geofence if the client did not send a recognised type.
@@ -136,6 +162,21 @@ def check_in(request):
                 within_geofence, _ = is_within_geofence(float(lat), float(lng), branch)
                 if within_geofence:
                     attendance_type = 'office'
+
+        # Geofence Validation: warn or block based on policy
+        if policy.geofencing_policy != 'disabled':
+            branch = employee.branch
+            if branch and branch.latitude and branch.longitude:
+                within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
+                if not within_geofence:
+                    if policy.geofencing_policy == 'block':
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Geofence validation failed. You are outside the office radius by {int(distance)} meters.'
+                        }, status=400)
+                    elif policy.geofencing_policy == 'warning':
+                        warning_msg = f" [GEOFENCE WARNING: Checked in {int(distance)}m outside geofence]"
+                        note = f"{note}{warning_msg}".strip()
 
         # Late check — only for the FIRST check-in of the day
         first_checkin_today = Attendance.objects.filter(
@@ -284,13 +325,23 @@ def check_out(request):
         if not attendance:
             return JsonResponse({'success': False, 'error': 'No active check-in session found.'}, status=400)
 
+        policy = get_attendance_policy(employee)
+        
+        from django.conf import settings
+        require_gps = getattr(settings, 'REQUIRE_GPS', True)
+
         lat      = data.get('latitude')
         lng      = data.get('longitude')
         accuracy = data.get('accuracy', 0)
         address  = data.get('address', '') or 'Location unavailable at check-out'
 
-        if lat is None or lng is None or lat == '' or lng == '':
+        if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
             return JsonResponse({'success': False, 'error': 'Location is required for attendance.'}, status=400)
+
+        if lat is None or lat == '':
+            lat = 0.0
+        if lng is None or lng == '':
+            lng = 0.0
 
         try:
             lat = float(lat)
@@ -298,16 +349,18 @@ def check_out(request):
         except (TypeError, ValueError):
             return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
 
+        # Validate Photo (dependent on policy)
         photo = request.FILES.get('photo')
-        if not photo:
+        if policy.photo_required and not photo:
             return JsonResponse({'success': False, 'error': 'Photo is required for attendance.'}, status=400)
 
-        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-        if photo.content_type not in allowed_types:
-            return JsonResponse({'success': False, 'error': 'Invalid file type. Only images allowed.'}, status=400)
+        if photo:
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            if photo.content_type not in allowed_types:
+                return JsonResponse({'success': False, 'error': 'Invalid file type. Only images allowed.'}, status=400)
 
-        if photo.size > 10 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
+            if photo.size > 10 * 1024 * 1024:
+                return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
 
         attendance.check_out_time = event_time
         duration = event_time - attendance.check_in_time
@@ -315,8 +368,15 @@ def check_out(request):
 
         from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
         schedule = get_branch_schedule(employee)
-        attendance.overtime_minutes = calculate_overtime(event_time, schedule, employee, attendance.date)
+        overtime_minutes = calculate_overtime(event_time, schedule, employee, attendance.date)
         attendance.is_early_checkout = calculate_early_checkout(event_time, schedule, attendance.date)
+
+        if overtime_minutes > 0:
+            attendance.overtime_minutes = overtime_minutes
+            attendance.ot_status = 'pending'
+        else:
+            attendance.overtime_minutes = 0
+            attendance.ot_status = 'none'
 
         if client_time:
             attendance.client_event_time = client_time
@@ -634,8 +694,18 @@ def field_visit_submit(request):
         site_address = data.get('site_address', '')
         note         = data.get('note', '')
 
-        if lat is None or lng is None or lat == '' or lng == '':
+        policy = get_attendance_policy(employee)
+        
+        from django.conf import settings
+        require_gps = getattr(settings, 'REQUIRE_GPS', True)
+
+        if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
             return JsonResponse({'success': False, 'error': 'Location is required.'}, status=400)
+
+        if lat is None or lat == '':
+            lat = 0.0
+        if lng is None or lng == '':
+            lng = 0.0
 
         try:
             lat = float(lat)
@@ -643,16 +713,18 @@ def field_visit_submit(request):
         except (TypeError, ValueError):
             return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
 
+        # Validate Photo (dependent on policy)
         photo = request.FILES.get('photo')
-        if not photo:
+        if policy.photo_required and not photo:
             return JsonResponse({'success': False, 'error': 'Photo is required.'}, status=400)
 
-        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-        if photo.content_type not in allowed_types:
-            return JsonResponse({'success': False, 'error': 'Invalid file type.'}, status=400)
+        if photo:
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            if photo.content_type not in allowed_types:
+                return JsonResponse({'success': False, 'error': 'Invalid file type.'}, status=400)
 
-        if photo.size > 10 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
+            if photo.size > 10 * 1024 * 1024:
+                return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
 
         # Check if project was submitted or can be inferred
         project = None
