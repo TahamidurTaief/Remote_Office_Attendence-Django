@@ -1,81 +1,72 @@
 <c-app-shell page_title="{% if object %}Edit{% else %}Add{% endif %} Leave Type | FieldTrack Admin" active_href="{{ request.path }}">
-<div class="p-4 max-w-xl mx-auto">
-    <!-- Header -->
-    <div class="mb-6 flex items-center justify-between">
+
+<div class="p-4 max-w-xl mx-auto space-y-4">
+
+    <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-[14px] font-semibold text-gray-900">
+            <h1 class="text-[14px] font-semibold" style="color:var(--text)">
                 {% if object %}Edit Leave Type{% else %}Add Leave Type{% endif %}
             </h1>
-            <p class="text-sm text-gray-500 mt-1">
-                Configure leave parameters for employee tracking.
-            </p>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Configure leave parameters for employee tracking.</p>
         </div>
-        <a href="{% url 'leave:admin_leave_types' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors bg-white shadow-sm">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            Back
-        </a>
+        <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" icon="arrow-left" label="Back" />
     </div>
 
-    <!-- Form Card -->
-    <div class="bg-white rounded-2xl border border-gray-150 shadow-sm overflow-hidden">
-        <form method="POST" class="p-6 space-y-6">
+    <c-card padding="md">
+        <form method="POST" class="space-y-4">
             {% csrf_token %}
-            
+
             {% if form.errors %}
-            <div class="rounded-xl bg-red-50 p-4 border border-red-200">
-                <div class="flex">
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-red-800 flex items-center gap-2">
-                            <i data-lucide="alert-circle" class="w-4 h-4"></i>
-                            Please fix the errors below.
-                        </h3>
-                        {{ form.non_field_errors }}
-                    </div>
+            <div class="rounded-[4px] p-3 border" style="background:rgba(228,30,63,0.06); border-color:rgba(228,30,63,0.25);">
+                <div class="flex items-center gap-2 text-[12px] font-semibold" style="color:#E41E3F">
+                    <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                    Please fix the errors below.
                 </div>
+                <div class="mt-1 text-[12px]" style="color:#E41E3F">{{ form.non_field_errors }}</div>
             </div>
             {% endif %}
 
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700">Leave Type Name</label>
-                    <div class="mt-1.5">{{ form.name }}</div>
-                    {% if form.name.errors %}<p class="mt-2 text-sm text-red-650">{{ form.name.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-gray-700">Category</label>
-                    <div class="mt-1.5">{{ form.category }}</div>
-                    {% if form.category.errors %}<p class="mt-2 text-sm text-red-650">{{ form.category.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-gray-700">Default Days Allowed Per Year</label>
-                    <div class="mt-1.5">{{ form.default_days_per_year }}</div>
-                    {% if form.default_days_per_year.errors %}<p class="mt-2 text-sm text-red-650">{{ form.default_days_per_year.errors.0 }}</p>{% endif %}
-                    <p class="text-xs text-gray-400 mt-1">This value will be used as the default starting allowance for employees when they request leaves of this type.</p>
-                </div>
-
-                <div class="pt-2">
-                    <div class="flex items-start">
-                        <div class="flex items-center h-5">
-                            {{ form.is_default }}
-                        </div>
-                        <div class="ml-3 text-sm">
-                            <label for="{{ form.is_default.id_for_label }}" class="font-bold text-gray-750 select-none cursor-pointer">Set as Default Leave Type for Absences</label>
-                            <p class="text-gray-400 text-xs mt-0.5">If checked, this leave type will be automatically deducted when marking daily employee absences. Only one leave type can be default at any time.</p>
-                        </div>
-                    </div>
-                    {% if form.is_default.errors %}<p class="mt-2 text-sm text-red-655">{{ form.is_default.errors.0 }}</p>{% endif %}
-                </div>
+            <!-- Name -->
+            <div>
+                <label class="ft-label">Leave Type Name</label>
+                <div class="mt-1">{{ form.name }}</div>
+                {% if form.name.errors %}<p class="ft-error-text">{{ form.name.errors.0 }}</p>{% endif %}
             </div>
 
-            <!-- Submit Button -->
-            <div class="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                <a href="{% url 'leave:admin_leave_types' %}" class="px-4 py-2.5 border border-gray-300 text-gray-750 font-medium rounded-xl hover:bg-gray-50 transition-colors bg-white">
-                    Cancel
-                </a>
-                <button type="submit" class="px-6 py-2.5 bg-primary hover:opacity-90 text-white font-semibold rounded-xl transition-colors shadow-sm">
-                    Save Leave Type
-                </button>
+            <!-- Category -->
+            <div>
+                <label class="ft-label">Category</label>
+                <div class="mt-1">{{ form.category }}</div>
+                {% if form.category.errors %}<p class="ft-error-text">{{ form.category.errors.0 }}</p>{% endif %}
             </div>
+
+            <!-- Default Days -->
+            <div>
+                <label class="ft-label">Default Days Allowed Per Year</label>
+                <div class="mt-1">{{ form.default_days_per_year }}</div>
+                {% if form.default_days_per_year.errors %}<p class="ft-error-text">{{ form.default_days_per_year.errors.0 }}</p>{% endif %}
+                <p class="ft-help-text">Used as the default starting allowance when employees request this type of leave.</p>
+            </div>
+
+            <!-- Is Default -->
+            <div class="flex items-start gap-2 p-3 rounded-[4px] border" style="background:var(--surface-2); border-color:var(--border)">
+                <div class="pt-0.5">{{ form.is_default }}</div>
+                <div>
+                    <label for="{{ form.is_default.id_for_label }}" class="text-[12px] font-semibold cursor-pointer" style="color:var(--text)">
+                        Set as Default Leave Type for Absences
+                    </label>
+                    <p class="ft-help-text">Auto-deducted on daily absences. Only one type can be default at a time.</p>
+                </div>
+            </div>
+            {% if form.is_default.errors %}<p class="ft-error-text">{{ form.is_default.errors.0 }}</p>{% endif %}
+
+            <!-- Actions -->
+            <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+                <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" label="Cancel" />
+                <c-button type="submit" variant="primary" icon="save" label="Save Leave Type" />
+            </div>
+        </form>
+    </c-card>
+
+</div>
 </c-app-shell>

@@ -96,8 +96,8 @@
   </div>
 
   {# Selected Employees Chips Container #}
-  <div class="flex flex-wrap gap-1.5 min-h-[34px] p-2 bg-white border border-gray-200 rounded-[4px] items-center"
-       style="border-color: #E4E6EB;">
+  <div class="flex flex-wrap gap-1.5 min-h-[34px] p-2 rounded-[4px] items-center border"
+       style="background: var(--surface); border-color: var(--border); color: var(--text);">
     
     <template x-for="emp in selectedObjects" :key="emp.id">
       <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-primary-50 text-primary-700 text-[11px] font-medium rounded border border-primary-100 transition-all">
@@ -132,8 +132,8 @@
        style="background: rgba(15, 20, 35, 0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);"
        x-cloak>
 
-    <div class="w-full bg-white overflow-hidden flex flex-col max-h-[85vh]"
-         style="max-width: 460px; border-radius: 10px; box-shadow: 0 16px 56px rgba(24,119,242,0.14), 0 2px 16px rgba(0,0,0,0.06); border: none;"
+    <div class="w-full overflow-hidden flex flex-col max-h-[85vh] border"
+         style="max-width: 460px; border-radius: 10px; background: var(--surface); border-color: var(--border); color: var(--text); box-shadow: var(--shadow-lg);"
          @click.stop
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 scale-95 -translate-y-2"

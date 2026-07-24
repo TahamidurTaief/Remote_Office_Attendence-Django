@@ -1,80 +1,70 @@
-<c-app-shell page_title="Manual Entry | FieldTrack Admin" active_href="{{ request.path }}">
-<div class="p-4 max-w-3xl mx-auto">
-    <div class="mb-6 flex items-center justify-between">
+<c-app-shell page_title="Manual Attendance Entry | FieldTrack Admin" active_href="{{ request.path }}">
+
+<div class="p-4 max-w-2xl mx-auto space-y-4">
+
+    <!-- Page header -->
+    <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-[14px] font-semibold text-gray-900">Manual Attendance Entry</h1>
-            <p class="text-[12px] text-gray-500 mt-0.5">Override or add missing attendance records.</p>
+            <h1 class="text-[14px] font-semibold" style="color:var(--text)">Manual Attendance Entry</h1>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Override or add missing attendance records.</p>
         </div>
-        <a href="{% url 'admin_panel:attendance_list' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            Back
-        </a>
+        <c-button href="{% url 'admin_panel:attendance_list' %}" variant="secondary" icon="arrow-left" label="Back" />
     </div>
 
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <form method="POST" class="p-4 space-y-4">
+    <!-- Form card -->
+    <c-card padding="md">
+        <form method="POST" class="space-y-4">
             {% csrf_token %}
-            
+
             {% if form.errors %}
-            <div class="rounded-xl bg-red-50 p-4 border border-red-200">
-                <div class="flex">
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-red-800 flex items-center gap-2"><i data-lucide="alert-circle" class="w-4 h-4"></i>Please fix the errors below.</h3>
-                        {{ form.non_field_errors }}
-                    </div>
+            <div class="rounded-[4px] p-3 border" style="background:rgba(228,30,63,0.06); border-color:rgba(228,30,63,0.25);">
+                <div class="flex items-center gap-2 text-[12px] font-semibold" style="color:#E41E3F">
+                    <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                    Please fix the errors below.
                 </div>
+                <div class="mt-1 text-[12px]" style="color:#E41E3F">{{ form.non_field_errors }}</div>
             </div>
             {% endif %}
 
-            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                <div class="sm:col-span-6">
-                    <label class="block text-sm font-bold text-gray-700">Employee</label>
-                    <div class="mt-1">{{ form.employee }}</div>
-                    {% if form.employee.errors %}<p class="mt-2 text-sm text-red-600">{{ form.employee.errors.0 }}</p>{% endif %}
-                </div>
+            <!-- Employee -->
+            <c-select name="employee" label="Employee" is_django_form="true" error="{{ form.employee.errors.0 }}" required="true">
+                {{ form.employee }}
+            </c-select>
 
-                <div class="sm:col-span-3">
-                    <label class="block text-sm font-bold text-gray-700">Date</label>
-                    <div class="mt-1">{{ form.date }}</div>
-                    {% if form.date.errors %}<p class="mt-2 text-sm text-red-600">{{ form.date.errors.0 }}</p>{% endif %}
-                </div>
-                
-                <div class="sm:col-span-3"></div>
+            <!-- Date -->
+            <c-datetime-picker name="date" label="Date" value="{{ form.date.value|default:'' }}"
+                               error="{{ form.date.errors.0 }}" required="true" />
 
-                <div class="sm:col-span-3">
-                    <label class="block text-sm font-bold text-gray-700">Check In Time</label>
-                    <div class="mt-1">{{ form.check_in_time }}</div>
-                    {% if form.check_in_time.errors %}<p class="mt-2 text-sm text-red-600">{{ form.check_in_time.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label class="block text-sm font-bold text-gray-700">Check Out Time</label>
-                    <div class="mt-1">{{ form.check_out_time }}</div>
-                    {% if form.check_out_time.errors %}<p class="mt-2 text-sm text-red-600">{{ form.check_out_time.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label class="block text-sm font-bold text-gray-700">Type</label>
-                    <div class="mt-1">{{ form.type }}</div>
-                    {% if form.type.errors %}<p class="mt-2 text-sm text-red-600">{{ form.type.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-3">
-                    <label class="block text-sm font-bold text-gray-700">Status</label>
-                    <div class="mt-1">{{ form.status }}</div>
-                    {% if form.status.errors %}<p class="mt-2 text-sm text-red-600">{{ form.status.errors.0 }}</p>{% endif %}
-                </div>
-
-                <div class="sm:col-span-6">
-                    <label class="block text-sm font-bold text-gray-700">{{ form.admin_override_reason.label }}</label>
-                    <div class="mt-1">{{ form.admin_override_reason }}</div>
-                    {% if form.admin_override_reason.errors %}<p class="mt-2 text-sm text-red-600">{{ form.admin_override_reason.errors.0 }}</p>{% endif %}
-                </div>
+            <!-- Check In / Check Out Times -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <c-datetime-picker name="check_in_time" label="Check In Time" value="{{ form.check_in_time.value|default:'' }}"
+                                   time="true" error="{{ form.check_in_time.errors.0 }}" />
+                <c-datetime-picker name="check_out_time" label="Check Out Time" value="{{ form.check_out_time.value|default:'' }}"
+                                   time="true" error="{{ form.check_out_time.errors.0 }}" />
             </div>
 
-            <div class="pt-5 flex justify-end gap-3 border-t border-gray-100 mt-6">
-                <button type="submit" class="flex items-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                    <i data-lucide="save" class="w-4 h-4"></i>
-                    Save Record
-                </button>
+            <!-- Type / Status -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <c-select name="type" label="Type" is_django_form="true" error="{{ form.type.errors.0 }}">
+                    {{ form.type }}
+                </c-select>
+                <c-select name="status" label="Status" is_django_form="true" error="{{ form.status.errors.0 }}">
+                    {{ form.status }}
+                </c-select>
+            </div>
+
+            <!-- Admin Override Reason -->
+            <c-textarea name="admin_override_reason"
+                        label="{{ form.admin_override_reason.label }}"
+                        value="{{ form.admin_override_reason.value|default:'' }}"
+                        error="{{ form.admin_override_reason.errors.0 }}" />
+
+            <!-- Submit -->
+            <div class="pt-3 flex justify-end border-t" style="border-color:var(--border)">
+                <c-button type="submit" variant="primary" icon="save" label="Save Record" />
+            </div>
+        </form>
+    </c-card>
+</div>
+
 </c-app-shell>

@@ -20,9 +20,9 @@ html:not(.dark) {
     --bg: #f2f4fb;
     --bg-gradient: linear-gradient(135deg, #f2f4fb 0%, #e8f1fc 45%, #edf8f6 100%);
     --surface: #FFFFFF;
-    --surface-2: #FFFFFF;
-    --surface-3: #F4F5F7;
-    --sidebar-dark: #243746;
+    --surface-2: #F4F5F7;
+    --surface-3: #E4E6EB;
+    --sidebar-dark: #1F2937;
 
     --text: #1C1E21;
     --text-secondary: #65676B;
@@ -274,6 +274,34 @@ html.dark {
         scrollbar-width: none;
     }
 
+    /* Global Dark Mode Input Background Resets */
+    html.dark input[type="text"],
+    html.dark input[type="email"],
+    html.dark input[type="password"],
+    html.dark input[type="number"],
+    html.dark input[type="date"],
+    html.dark input[type="tel"],
+    html.dark input[type="url"],
+    html.dark input[type="search"],
+    html.dark input[type="time"],
+    html.dark textarea,
+    html.dark select {
+        background-color: var(--surface-2) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }
+
+    html.dark input::placeholder,
+    html.dark textarea::placeholder {
+        color: var(--text-muted) !important;
+    }
+
+    html.dark input[type="file"]::file-selector-button {
+        background-color: var(--surface-3) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }
+
     .scrollbar-hide::-webkit-scrollbar {
         display: none;
     }
@@ -308,14 +336,14 @@ html.dark {
         left: 0;
         height: 100vh;
         width: var(--sidebar-w);
-        background: #FFFFFF;
+        background: var(--surface);
         border-right: 1px solid var(--border);
         z-index: var(--z-sidebar);
         display: flex;
         flex-direction: column;
         overflow: visible;
-        transition: width var(--transition-fast);
-        box-shadow: 1px 0 8px rgba(24,119,242,0.04);
+        transition: width var(--transition-fast), background-color var(--transition-fast);
+        box-shadow: var(--shadow-sm);
     }
 
     .ft-sidebar.collapsed {
@@ -369,13 +397,25 @@ html.dark {
     }
 
     .ft-nav-item.active {
-        background: var(--sidebar-dark) !important;
+        background: #1F2937 !important;
+        color: #FFFFFF !important;
+        font-weight: 600;
+    }
+
+    html.dark .ft-nav-item.active {
+        background: #4B5563 !important;
         color: #FFFFFF !important;
         font-weight: 600;
     }
 
     .ft-nav-item.active .ft-icon,
-    .ft-nav-item.active svg {
+    .ft-nav-item.active svg,
+    .ft-nav-item.active span,
+    .ft-nav-item.active i,
+    html.dark .ft-nav-item.active .ft-icon,
+    html.dark .ft-nav-item.active svg,
+    html.dark .ft-nav-item.active span,
+    html.dark .ft-nav-item.active i {
         color: #FFFFFF !important;
         stroke: #FFFFFF !important;
     }
@@ -390,7 +430,12 @@ html.dark {
     }
 
     .ft-sidebar.collapsed .ft-nav-item.active {
-        background: var(--sidebar-dark) !important;
+        background: #1F2937 !important;
+        color: #FFFFFF !important;
+    }
+
+    html.dark .ft-sidebar.collapsed .ft-nav-item.active {
+        background: #4B5563 !important;
         color: #FFFFFF !important;
     }
 
@@ -445,10 +490,10 @@ html.dark {
         top: 0;
         z-index: var(--z-header);
         height: var(--topbar-h);
-        background: rgba(255,255,255,0.92);
+        background: var(--surface);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        border-bottom: 1px solid rgba(228,230,235,0.6);
+        border-bottom: 1px solid var(--border);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -479,8 +524,8 @@ html.dark {
     .ft-card {
         background: var(--surface);
         border-radius: var(--radius-card);
-        border: 1px solid rgba(228,230,235,0.8);
-        box-shadow: 0 1px 4px rgba(24,119,242,0.04);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
         transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
     }
 
@@ -620,12 +665,12 @@ html.dark {
         width: 100%;
         height: 34px;
         padding: 6px 10px;
-        border: 1px solid #E4E6EB;
+        border: 1px solid var(--border);
         border-radius: 4px;
         font-family: inherit;
         font-size: 12px;
         color: var(--text);
-        background-color: #FFFFFF;
+        background-color: var(--surface);
         outline: none;
         transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
         box-shadow: none;
@@ -641,7 +686,7 @@ html.dark {
     }
 
     .ft-input:focus {
-        background-color: #FFFFFF;
+        background-color: var(--surface);
         border-color: var(--primary);
         box-shadow: 0 0 0 2px rgba(24,119,242,0.12);
     }
@@ -670,12 +715,12 @@ html.dark {
         padding-top: 6px;
         padding-bottom: 6px;
         padding-left: 10px;
-        border: 1px solid #E4E6EB;
+        border: 1px solid var(--border);
         border-radius: 4px;
         font-family: inherit;
         font-size: 12px;
         color: var(--text);
-        background-color: #FFFFFF;
+        background-color: var(--surface);
         outline: none;
         transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
         cursor: pointer;
@@ -738,6 +783,44 @@ html.dark {
         margin-top: var(--space-1);
     }
 
+    /* ── Tables — un-boxed, simple, non-fixed height ─── */
+    .ft-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        background-color: transparent;
+        color: var(--text);
+        border: none;
+        box-shadow: none;
+    }
+
+    .ft-table th {
+        padding: 10px 12px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        background: transparent;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        white-space: nowrap;
+    }
+
+    .ft-table td {
+        padding: 12px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-secondary);
+        vertical-align: middle;
+    }
+
+    .ft-table tbody tr {
+        transition: background var(--transition-fast);
+    }
+
     /* ── Badges & Status ─────────────────────────────────────────────────── */
     .ft-badge {
         display: inline-flex;
@@ -757,16 +840,6 @@ html.dark {
     .ft-badge-primary  { background: var(--primary-light); color: var(--primary); }
     .ft-badge-neutral  { background: var(--surface-2);   color: var(--text-secondary); }
 
-    /* ── Tables — border-only, no shadow (Part 3: pick one per element) ─── */
-    .ft-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-        background-color: #FFFFFF;
-        border: 1px solid rgba(228,230,235,0.7);
-        border-radius: var(--radius-card);
-        overflow: hidden;
-        box-shadow: 0 1px 4px rgba(24,119,242,0.04);
     }
 
     .ft-table th {
@@ -778,8 +851,8 @@ html.dark {
         letter-spacing: 0.04em;
         text-transform: uppercase;
         color: var(--text-muted);
-        background: #FAFBFF;
-        border-bottom: 1px solid rgba(228,230,235,0.7);
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border);
         position: sticky;
         top: 0;
         z-index: 5;
@@ -896,10 +969,11 @@ html.dark {
     }
 
     .ft-modal {
-        background: #FFFFFF;
+        background: var(--surface);
+        color: var(--text);
         border-radius: 8px;
-        box-shadow: 0 12px 48px rgba(24,119,242,0.12), 0 2px 12px rgba(0,0,0,0.06);
-        border: none;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border);
         width: 100%;
         max-height: 90vh;
         overflow: hidden;
@@ -972,10 +1046,11 @@ html.dark {
     .ft-command-box {
         width: 100%;
         max-width: 520px;
-        background: #FFFFFF;
-        border: none;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
         border-radius: 10px;
-        box-shadow: 0 16px 56px rgba(24,119,242,0.14), 0 2px 16px rgba(0,0,0,0.06);
+        box-shadow: var(--shadow-lg);
         overflow: hidden;
     }
 
@@ -1357,7 +1432,7 @@ html.dark {
         z-index: var(--z-sidebar);
     }
 
-    @media (max-width: 767px) {
+    @media (max-width: 1023px) {
         .ft-sidebar {
             transform: translateX(-100%);
             transition: transform var(--transition-fast), width var(--transition-fast);
@@ -1370,5 +1445,18 @@ html.dark {
         .ft-main {
             margin-left: 0 !important;
         }
+    }
+
+    .ft-ambient-indigo {
+        background: radial-gradient(circle, rgba(165,180,252,0.65) 0%, rgba(99,102,241,0) 70%);
+    }
+    .ft-ambient-yellow {
+        background: radial-gradient(circle, rgba(254,240,138,0.65) 0%, rgba(245,158,11,0) 70%);
+    }
+    .ft-ambient-sky {
+        background: radial-gradient(circle, rgba(186,230,253,0.65) 0%, rgba(14,165,233,0) 70%);
+    }
+    .ft-ambient-purple {
+        background: radial-gradient(circle, rgba(233,213,255,0.65) 0%, rgba(168,85,247,0) 70%);
     }
 }

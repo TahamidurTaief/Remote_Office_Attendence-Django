@@ -31,8 +31,9 @@
                     {% endif %}
                     
                     <div class="sm:col-span-3">
-                        <label for="{{ form.role.id_for_label }}" class="ft-label">System Role</label>
-                        {{ form.role }}
+                        <c-select name="role" label="System Role" value="{{ form.role.value }}" is_django_form="true">
+                            {{ form.role }}
+                        </c-select>
                         {% if form.role.errors %}<p class="ft-error-text">{{ form.role.errors.0 }}</p>{% endif %}
                     </div>
 
@@ -56,8 +57,9 @@
                     </div>
 
                     <div class="sm:col-span-3">
-                        <label for="{{ form.department.id_for_label }}" class="ft-label">Department</label>
-                        {{ form.department }}
+                        <c-select name="department" label="Department" value="{{ form.department.value }}" is_django_form="true">
+                            {{ form.department }}
+                        </c-select>
                         {% if form.department.errors %}<p class="ft-error-text">{{ form.department.errors.0 }}</p>{% endif %}
                     </div>
 
@@ -68,8 +70,9 @@
                     </div>
 
                     <div class="sm:col-span-6">
-                        <label for="{{ form.branch.id_for_label }}" class="ft-label">Assigned Branch</label>
-                        {{ form.branch }}
+                        <c-select name="branch" label="Assigned Branch" value="{{ form.branch.value }}" is_django_form="true">
+                            {{ form.branch }}
+                        </c-select>
                         {% if form.branch.errors %}<p class="ft-error-text">{{ form.branch.errors.0 }}</p>{% endif %}
                     </div>
 
@@ -125,14 +128,10 @@
 
                     <!-- Location Tracking -->
                     <div class="sm:col-span-6 pt-4 border-t" style="border-color:var(--border)">
-                        <div class="flex items-center gap-2 mb-1">
-                            <i data-lucide="map-pin" class="w-4 h-4" style="color:var(--primary)"></i>
-                            <label for="{{ form.tracking_interval.id_for_label }}" class="text-xs font-semibold" style="color:var(--text)">
-                                Auto Location Tracking Interval
-                            </label>
-                        </div>
-                        {{ form.tracking_interval }}
-                        <p class="ft-help-text">
+                        <c-select name="tracking_interval" label="Auto Location Tracking Interval" value="{{ form.tracking_interval.value }}" is_django_form="true">
+                            {{ form.tracking_interval }}
+                        </c-select>
+                        <p class="ft-help-text mt-1">
                             How often to sync GPS location while checked in. Set to <strong>Disabled</strong> if not needed.
                         </p>
                         {% if form.tracking_interval.errors %}<p class="ft-error-text">{{ form.tracking_interval.errors.0 }}</p>{% endif %}

@@ -1,82 +1,66 @@
 <c-app-shell page_title="{% if object %}Edit Progress Log{% else %}Add Progress Log{% endif %} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4 max-w-3xl mx-auto">
-    <!-- Header -->
-    <div class="mb-4 flex items-center justify-between">
+
+<div class="p-4 max-w-3xl mx-auto space-y-4">
+
+    <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-[14px] font-semibold text-gray-900">
+            <h1 class="text-[14px] font-semibold" style="color:var(--text)">
                 {% if object %}Edit Daily Progress Log: {{ object.date|date:"d/m/Y" }}{% else %}Add New Progress Log{% endif %}
-            </h2>
-            <p class="mt-0.5 text-[12px] text-gray-500">Project: <span class="font-semibold text-gray-700">{{ project.name }}</span></p>
+            </h1>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">
+                Project: <strong style="color:var(--text)">{{ project.name }}</strong>
+            </p>
         </div>
-        <a href="{% url 'projects:project_detail' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-            <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
-            Back to Project
-        </a>
+        <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" icon="arrow-left" label="Back to Project" />
     </div>
 
-    <!-- Main Card -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden">
-        <form method="POST" class="p-4 space-y-4">
+    <c-card padding="md">
+        <form method="POST" class="space-y-4">
             {% csrf_token %}
-            
+
             {% if form.errors %}
-            <div class="rounded-xl bg-red-50 p-3 border border-red-200">
-                <h3 class="text-[12px] font-medium text-red-800">Please correct the errors below:</h3>
-                <ul class="mt-1.5 list-disc list-inside text-[12px] text-red-700">
-                    {% for field in form %}
-                        {% for error in field.errors %}
-                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
-                        {% endfor %}
-                    {% endfor %}
+            <div class="rounded-[4px] p-3 border" style="background:rgba(228,30,63,0.06); border-color:rgba(228,30,63,0.25);">
+                <div class="text-[12px] font-semibold mb-1" style="color:#E41E3F">Please correct the errors below:</div>
+                <ul class="text-[12px] list-disc list-inside" style="color:#E41E3F">
+                    {% for field in form %}{% for error in field.errors %}<li><strong>{{ field.label }}:</strong> {{ error }}</li>{% endfor %}{% endfor %}
                 </ul>
             </div>
             {% endif %}
 
-            <div class="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
-                <!-- Log Date -->
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-6">
                 <div class="sm:col-span-2">
-                    <label for="{{ form.date.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Date *</label>
+                    <label for="{{ form.date.id_for_label }}" class="ft-label">Date *</label>
                     {{ form.date }}
                 </div>
-
-                <!-- Manpower Count -->
                 <div class="sm:col-span-2">
-                    <label for="{{ form.manpower_count.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Manpower Count</label>
+                    <label for="{{ form.manpower_count.id_for_label }}" class="ft-label">Manpower Count</label>
                     {{ form.manpower_count }}
                 </div>
-
-                <!-- Supervisor Name -->
                 <div class="sm:col-span-2">
-                    <label for="{{ form.supervisor_name.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Supervisor Name *</label>
+                    <label for="{{ form.supervisor_name.id_for_label }}" class="ft-label">Supervisor Name *</label>
                     {{ form.supervisor_name }}
                 </div>
-
-                <!-- Planned Work -->
                 <div class="sm:col-span-6">
-                    <label for="{{ form.planned_work.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Planned Work *</label>
+                    <label for="{{ form.planned_work.id_for_label }}" class="ft-label">Planned Work *</label>
                     {{ form.planned_work }}
                 </div>
-
-                <!-- Completed Work -->
                 <div class="sm:col-span-6">
-                    <label for="{{ form.completed_work.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Completed Work *</label>
+                    <label for="{{ form.completed_work.id_for_label }}" class="ft-label">Completed Work *</label>
                     {{ form.completed_work }}
                 </div>
-
-                <!-- Delay Reason -->
                 <div class="sm:col-span-6">
-                    <label for="{{ form.delay_reason.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Delay Reason</label>
+                    <label for="{{ form.delay_reason.id_for_label }}" class="ft-label">Delay Reason</label>
                     {{ form.delay_reason }}
                 </div>
             </div>
 
-            <!-- Submit buttons -->
-            <div class="pt-3 flex justify-end gap-2.5 border-t border-gray-100 mt-4">
-                <a href="{% url 'projects:project_detail' project.pk %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 hover:bg-gray-50">
-                    Cancel
-                </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-sm text-[12px] font-medium rounded-lg text-white bg-primary hover:opacity-90">
-                    <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
-                    {% if object %}Save Changes{% else %}Add Daily Log{% endif %}
-                </button>
+            <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+                <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" label="Cancel" />
+                <c-button type="submit" variant="primary" icon="check"
+                          label="{% if object %}Save Changes{% else %}Add Daily Log{% endif %}" />
+            </div>
+        </form>
+    </c-card>
+
+</div>
 </c-app-shell>

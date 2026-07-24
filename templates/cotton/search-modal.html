@@ -50,11 +50,11 @@
        @click="close()"
        @keydown.escape.window="close()"
        class="fixed inset-0 z-[200] flex items-start justify-center"
-       style="padding-top: 72px; background: rgba(15,20,35,0.3); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);"
+       style="padding-top: 72px; background: rgba(15,20,35,0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);"
        x-cloak>
 
-    <div class="w-full bg-white overflow-hidden"
-         style="max-width: 540px; border-radius: 10px; box-shadow: 0 16px 56px rgba(24,119,242,0.13), 0 2px 16px rgba(0,0,0,0.05); border: none;"
+    <div class="w-full overflow-hidden border"
+         style="max-width: 540px; border-radius: 10px; background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-lg);"
          @click.stop
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
@@ -64,19 +64,19 @@
          x-transition:leave-end="opacity-0 scale-95">
 
       {# Search bar #}
-      <div class="flex items-center gap-2.5 px-4 py-3.5"
-           style="border-bottom: 1px solid rgba(228,230,235,0.5)">
-        <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: #B0B3B8"></i>
+      <div class="flex items-center gap-2.5 px-4 py-3.5 border-b"
+           style="border-color: var(--border)">
+        <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: var(--text-muted)"></i>
         <input type="text"
                x-model.debounce.200="query"
                class="ft-search-modal-input flex-1 bg-transparent outline-none border-0 p-0 ring-0 shadow-none text-[13px]"
-               style="color: #1C1E21; font-family: inherit"
+               style="color: var(--text); font-family: inherit"
                placeholder="{{ placeholder|default:'Search…' }}"
                autocomplete="off">
         <button type="button"
                 @click="close()"
                 class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                style="background: rgba(228,230,235,0.5); color: #8A8D91; border: none; cursor: pointer">
+                style="background: var(--surface-2); color: var(--text-muted); border: none; cursor: pointer">
           ESC
         </button>
       </div>
@@ -86,28 +86,28 @@
            x-show="query.length > 0 || true">
         {{ slot }}
         {% if not slot %}
-        <div class="px-4 py-8 text-center text-[12px]" style="color: #B0B3B8">
+        <div class="px-4 py-8 text-center text-[12px]" style="color: var(--text-muted)">
           Start typing to search…
         </div>
         {% endif %}
       </div>
 
       {# Hint footer #}
-      <div class="px-4 py-2 flex items-center gap-3 text-[10px]"
-           style="border-top: 1px solid rgba(228,230,235,0.4); color: #B0B3B8">
+      <div class="px-4 py-2 flex items-center gap-3 text-[10px] border-t"
+           style="border-color: var(--border); color: var(--text-muted)">
         <span class="flex items-center gap-1">
           <kbd class="px-1 py-0.5 rounded text-[9px]"
-               style="background:rgba(228,230,235,0.5); color:#8A8D91">↑↓</kbd>
+               style="background: var(--surface-2); color: var(--text-muted)">↑↓</kbd>
           Navigate
         </span>
         <span class="flex items-center gap-1">
           <kbd class="px-1 py-0.5 rounded text-[9px]"
-               style="background:rgba(228,230,235,0.5); color:#8A8D91">↵</kbd>
+               style="background: var(--surface-2); color: var(--text-muted)">↵</kbd>
           Select
         </span>
         <span class="flex items-center gap-1">
           <kbd class="px-1 py-0.5 rounded text-[9px]"
-               style="background:rgba(228,230,235,0.5); color:#8A8D91">ESC</kbd>
+               style="background: var(--surface-2); color: var(--text-muted)">ESC</kbd>
           Close
         </span>
       </div>

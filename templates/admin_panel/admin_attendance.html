@@ -4,8 +4,8 @@
     {# ── Header Zone ───────────────────────────────────────────────────────── #}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-[16px] font-bold text-gray-900">Attendance Records</h1>
-            <p class="text-[11px] text-gray-500 mt-0.5">Manage, filter, and export employee attendance logs.</p>
+            <h1 class="text-[16px] font-bold" style="color:var(--text)">Attendance Records</h1>
+            <p class="text-[11px] mt-0.5" style="color:var(--text-muted)">Manage, filter, and export employee attendance logs.</p>
         </div>
         <div class="flex items-center gap-2.5 flex-wrap">
             <c-button href="{% url 'admin_panel:manual_entry' %}" variant="secondary" icon="plus" label="Manual Entry" size="sm" />
@@ -29,22 +29,26 @@
                      x-transition:leave="transition ease-in duration-75"
                      x-transition:leave-start="opacity-100 scale-100"
                      x-transition:leave-end="opacity-0 scale-95"
-                     class="absolute right-0 mt-1.5 w-40 bg-white rounded-md shadow-lg border border-gray-150 z-50 overflow-hidden py-1">
+                     class="absolute right-0 mt-1.5 w-40 rounded-md shadow-lg border z-50 overflow-hidden py-1"
+                     style="background:var(--surface); border-color:var(--border)">
                     
                     <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&{{ query_string }}"
-                       class="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-primary-50 hover:text-primary transition-colors">
+                       class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-primary-50 hover:text-primary"
+                       style="color:var(--text-secondary)">
                         <i data-lucide="table" class="w-3.5 h-3.5 text-emerald-600"></i>
                         <span>Excel (XLSX)</span>
                     </a>
                     
                     <a href="{% url 'admin_panel:export_attendance' %}?format=csv&{{ query_string }}"
-                       class="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-primary-50 hover:text-primary transition-colors">
+                       class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-primary-50 hover:text-primary"
+                       style="color:var(--text-secondary)">
                         <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-600"></i>
                         <span>CSV</span>
                     </a>
                     
                     <a href="{% url 'admin_panel:export_attendance' %}?format=pdf&{{ query_string }}"
-                       class="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-primary-50 hover:text-primary transition-colors">
+                       class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-primary-50 hover:text-primary"
+                       style="color:var(--text-secondary)">
                         <i data-lucide="file" class="w-3.5 h-3.5 text-rose-600"></i>
                         <span>PDF</span>
                     </a>
@@ -54,7 +58,7 @@
     </div>
 
     {# ── Filters Card (Ultra-minimal, Cotton Form Controls) ─────────────────── #}
-    <div class="ft-card p-4 bg-white">
+    <c-card padding="sm">
         <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-3 items-end">
             <div>
                 <c-datetime-picker name="date_from" value="{{ request.GET.date_from }}" label="From Date" placeholder="Select date…" />
@@ -63,72 +67,68 @@
                 <c-datetime-picker name="date_to" value="{{ request.GET.date_to }}" label="To Date" placeholder="Select date…" />
             </div>
             <div>
-                <label class="ft-label">Employee</label>
-                <select name="employee" class="ft-select w-full text-[11px]">
+                <c-select name="employee" label="Employee" value="{{ request.GET.employee }}">
                     <option value="">All Employees</option>
                     {% for emp in employees %}
                     <option value="{{ emp.id }}" {% if request.GET.employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
                     {% endfor %}
-                </select>
+                </c-select>
             </div>
             <div>
-                <label class="ft-label">Branch</label>
-                <select name="branch" class="ft-select w-full text-[11px]">
+                <c-select name="branch" label="Branch" value="{{ request.GET.branch }}">
                     <option value="">All Branches</option>
                     {% for b in branches %}
                     <option value="{{ b.id }}" {% if request.GET.branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
                     {% endfor %}
-                </select>
+                </c-select>
             </div>
             <div>
-                <label class="ft-label">Type</label>
-                <select name="type" class="ft-select w-full text-[11px]">
+                <c-select name="type" label="Type" value="{{ request.GET.type }}">
                     <option value="">All Types</option>
                     <option value="office" {% if request.GET.type == 'office' %}selected{% endif %}>Office</option>
                     <option value="field" {% if request.GET.type == 'field' %}selected{% endif %}>Field</option>
-                </select>
+                </c-select>
             </div>
             <div>
-                <label class="ft-label">Status</label>
-                <select name="status" class="ft-select w-full text-[11px]">
+                <c-select name="status" label="Status" value="{{ request.GET.status }}">
                     <option value="">All Statuses</option>
                     <option value="on_time" {% if request.GET.status == 'on_time' %}selected{% endif %}>On Time</option>
                     <option value="late" {% if request.GET.status == 'late' %}selected{% endif %}>Late</option>
                     <option value="absent" {% if request.GET.status == 'absent' %}selected{% endif %}>Absent</option>
                     <option value="on_leave" {% if request.GET.status == 'on_leave' %}selected{% endif %}>On Leave</option>
-                </select>
+                </c-select>
             </div>
             <div>
                 <c-button type="submit" variant="primary" icon="filter" label="Filter Results" size="md" extra_class="w-full justify-center" />
             </div>
         </form>
-    </div>
+    </c-card>
 
     {# ── Summary Stats Grid (Clean, Compact, Minimal Shadow) ───────────────── #}
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="ft-card p-3 bg-white text-center">
-            <span class="text-[10px] uppercase font-semibold text-gray-400 tracking-wider block">Total Records</span>
-            <span class="text-[18px] font-bold text-gray-900 block mt-0.5">{{ total_records }}</span>
+        <div class="ft-card p-3 text-center" style="background:var(--surface)">
+            <span class="text-[10px] uppercase font-semibold tracking-wider block" style="color:var(--text-muted)">Total Records</span>
+            <span class="text-[18px] font-bold block mt-0.5" style="color:var(--text)">{{ total_records }}</span>
         </div>
-        <div class="ft-card p-3 bg-white text-center">
-            <span class="text-[10px] uppercase font-semibold text-emerald-600 tracking-wider block">Present</span>
-            <span class="text-[18px] font-bold text-emerald-700 block mt-0.5">{{ total_present }}</span>
+        <div class="ft-card p-3 text-center" style="background:var(--surface)">
+            <span class="text-[10px] uppercase font-semibold tracking-wider block text-emerald-600">Present</span>
+            <span class="text-[18px] font-bold block mt-0.5 text-emerald-600">{{ total_present }}</span>
         </div>
-        <div class="ft-card p-3 bg-white text-center">
-            <span class="text-[10px] uppercase font-semibold text-rose-600 tracking-wider block">Absent</span>
-            <span class="text-[18px] font-bold text-rose-700 block mt-0.5">{{ total_absent }}</span>
+        <div class="ft-card p-3 text-center" style="background:var(--surface)">
+            <span class="text-[10px] uppercase font-semibold tracking-wider block text-rose-500">Absent</span>
+            <span class="text-[18px] font-bold block mt-0.5 text-rose-500">{{ total_absent }}</span>
         </div>
-        <div class="ft-card p-3 bg-white text-center">
-            <span class="text-[10px] uppercase font-semibold text-primary tracking-wider block">On Leave</span>
-            <span class="text-[18px] font-bold text-primary block mt-0.5">{{ total_on_leave }}</span>
+        <div class="ft-card p-3 text-center" style="background:var(--surface)">
+            <span class="text-[10px] uppercase font-semibold tracking-wider block text-primary">On Leave</span>
+            <span class="text-[18px] font-bold block mt-0.5 text-primary">{{ total_on_leave }}</span>
         </div>
-        <div class="ft-card p-3 bg-white text-center">
-            <span class="text-[10px] uppercase font-semibold text-amber-600 tracking-wider block">Late</span>
-            <span class="text-[18px] font-bold text-amber-700 block mt-0.5">{{ total_late }}</span>
+        <div class="ft-card p-3 text-center" style="background:var(--surface)">
+            <span class="text-[10px] uppercase font-semibold tracking-wider block text-amber-500">Late</span>
+            <span class="text-[18px] font-bold block mt-0.5 text-amber-500">{{ total_late }}</span>
         </div>
-        <div class="ft-card p-3 bg-white text-center">
-            <span class="text-[10px] uppercase font-semibold text-indigo-600 tracking-wider block">Field</span>
-            <span class="text-[18px] font-bold text-indigo-700 block mt-0.5">{{ total_field }}</span>
+        <div class="ft-card p-3 text-center" style="background:var(--surface)">
+            <span class="text-[10px] uppercase font-semibold tracking-wider block text-indigo-500">Field</span>
+            <span class="text-[18px] font-bold block mt-0.5 text-indigo-500">{{ total_field }}</span>
         </div>
     </div>
 

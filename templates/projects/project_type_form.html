@@ -1,45 +1,41 @@
 <c-app-shell page_title="{% if object %}Edit Project Type{% else %}Create Project Type{% endif %} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4 max-w-4xl mx-auto">
-    <!-- Header -->
-    <div class="mb-4 flex items-center justify-between">
+
+<div class="p-4 max-w-xl mx-auto space-y-4">
+
+    <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-[14px] font-semibold text-gray-900">
+            <h1 class="text-[14px] font-semibold" style="color:var(--text)">
                 {% if object %}Edit Project Type: {{ object.name }}{% else %}Create New Project Type{% endif %}
-            </h2>
-            <p class="mt-0.5 text-[12px] text-gray-500">Provide a name for the project type.</p>
+            </h1>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Provide a name for the project type.</p>
         </div>
-        <a href="{% url 'projects:project_type_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-            <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
-            Back to List
-        </a>
+        <c-button href="{% url 'projects:project_type_list' %}" variant="secondary" icon="arrow-left" label="Back to List" />
     </div>
 
-    <!-- Main Card -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden mb-4">
-        <form method="POST" class="p-4 space-y-4">
+    <c-card padding="md">
+        <form method="POST" class="space-y-4">
             {% csrf_token %}
 
             {% if form.errors %}
-            <div class="rounded-xl bg-red-50 p-3 border border-red-200">
-                <h3 class="text-[12px] font-medium text-red-800">Please correct the errors below.</h3>
-                {{ form.non_field_errors }}
+            <div class="rounded-[4px] p-3 border" style="background:rgba(228,30,63,0.06); border-color:rgba(228,30,63,0.25);">
+                <div class="text-[12px] font-semibold" style="color:#E41E3F">Please correct the errors below.</div>
+                <div class="text-[12px] mt-1" style="color:#E41E3F">{{ form.non_field_errors }}</div>
             </div>
             {% endif %}
 
-            <div class="space-y-3">
-                <div>
-                    <label for="{{ form.name.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Project Type Name *</label>
-                    {{ form.name }}
-                    {% if form.name.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.name.errors.0 }}</p>{% endif %}
-                </div>
+            <div>
+                <label for="{{ form.name.id_for_label }}" class="ft-label">Project Type Name *</label>
+                {{ form.name }}
+                {% if form.name.errors %}<p class="ft-error-text">{{ form.name.errors.0 }}</p>{% endif %}
             </div>
 
-            <div class="pt-3 flex justify-end gap-2.5 border-t border-gray-100 mt-4">
-                <a href="{% url 'projects:project_type_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 hover:bg-gray-50">
-                    Cancel
-                </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-sm text-[12px] font-medium rounded-lg text-white bg-primary hover:opacity-90">
-                    <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
-                    {% if object %}Save Changes{% else %}Create Project Type{% endif %}
-                </button>
+            <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+                <c-button href="{% url 'projects:project_type_list' %}" variant="secondary" label="Cancel" />
+                <c-button type="submit" variant="primary" icon="check"
+                          label="{% if object %}Save Changes{% else %}Create Project Type{% endif %}" />
+            </div>
+        </form>
+    </c-card>
+
+</div>
 </c-app-shell>

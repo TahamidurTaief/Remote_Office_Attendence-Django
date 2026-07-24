@@ -31,9 +31,9 @@
                     <input type="hidden" name="branch_id" value="{{ branch.id }}">
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <c-input type="time" id="office_start_time_{{ branch.id }}" name="office_start_time" label="Office Start Time" value="{{ schedule.office_start_time|time:'H:i' }}" required="true" />
+                        <c-time-picker id="office_start_time_{{ branch.id }}" name="office_start_time" label="Office Start Time" value="{{ schedule.office_start_time|time:'H:i' }}" required="true" />
 
-                        <c-input type="time" id="office_end_time_{{ branch.id }}" name="office_end_time" label="Office End Time" value="{{ schedule.office_end_time|time:'H:i' }}" required="true" />
+                        <c-time-picker id="office_end_time_{{ branch.id }}" name="office_end_time" label="Office End Time" value="{{ schedule.office_end_time|time:'H:i' }}" required="true" />
 
                         <c-input type="number" id="late_after_{{ branch.id }}" name="late_after_minutes" label="Late After (minutes)" value="{{ schedule.late_after_minutes }}" required="true" help="Late if check-in > X mins after start." />
 

@@ -76,7 +76,12 @@ class CustomLoginView(View):
 
         user_obj = CustomUser.objects.filter(Q(email__iexact=email) | Q(phone__iexact=email)).first()
 
-        # 1. Check account lock & 30-min auto-unlock
+        # 1. IP Rate Limiting (5 fails = 5min IP block)
+        if attempts >= 5:
+            messages.error(request, 'Too many login attempts. Please try again in 5 minutes.')
+            return render(request, 'accounts/login.html', {'email_entered': email, 'show_captcha': True})
+
+        # 2. Check account lock & 30-min auto-unlock
         if user_obj and user_obj.locked_until:
             if timezone.now() > user_obj.locked_until:
                 user_obj.locked_until = None
@@ -91,25 +96,24 @@ class CustomLoginView(View):
                     status='locked'
                 )
                 time_left = max(1, int((user_obj.locked_until - timezone.now()).total_seconds() // 60))
-                messages.error(request, f"Account is locked due to 5 failed attempts. Locked for {time_left} more minutes.")
+                messages.error(request, f"Account is locked due to 5 failed attempts. Please try again in {time_left} minutes.")
                 return render(request, 'accounts/login.html', {'email_entered': email, 'show_captcha': True})
 
-        # 2. Check 3-fail Captcha verification
+        # 3. Check 3-fail Captcha verification
         requires_captcha = (user_obj and user_obj.failed_login_count >= 3) or (attempts >= 3)
-        if requires_captcha:
-            expected_ans = request.session.get('captcha_ans')
-            if not captcha_ans_entered or captcha_ans_entered != str(expected_ans):
-                messages.error(request, 'Incorrect Security Verification answer.')
-                n1, n2 = random.randint(1, 9), random.randint(1, 9)
-                request.session['captcha_ans'] = str(n1 + n2)
-                return render(request, 'accounts/login.html', {
-                    'email_entered': email,
-                    'show_captcha': True,
-                    'captcha_num1': n1,
-                    'captcha_num2': n2
-                })
+        expected_ans = request.session.get('captcha_ans')
+        if requires_captcha and expected_ans and captcha_ans_entered != str(expected_ans):
+            messages.error(request, 'Incorrect Security Verification answer.')
+            n1, n2 = random.randint(1, 9), random.randint(1, 9)
+            request.session['captcha_ans'] = str(n1 + n2)
+            return render(request, 'accounts/login.html', {
+                'email_entered': email,
+                'show_captcha': True,
+                'captcha_num1': n1,
+                'captcha_num2': n2
+            })
 
-        # 3. Authenticate User
+        # 4. Authenticate User
         user = authenticate(request, username=email, password=password)
 
         if user is not None:

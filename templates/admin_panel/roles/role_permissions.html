@@ -1,53 +1,60 @@
 <c-app-shell page_title="Permissions for {{ role.name }} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4">
-    <form method="POST" class="space-y-6">
+
+<div class="p-4 space-y-4">
+
+    <form method="POST" class="space-y-4">
         {% csrf_token %}
+
+        <!-- Header -->
         <div class="flex items-center justify-between">
-            <div class="flex-1 min-w-0">
-                <h2 class="text-[14px] font-semibold text-gray-900">
-                    Permissions for role: <span class="text-primary-600 font-bold">{{ role.name }}</span>
-                </h2>
+            <div>
+                <h1 class="text-[14px] font-semibold" style="color:var(--text)">
+                    Permissions for:
+                    <span style="color:var(--primary)">{{ role.name }}</span>
+                </h1>
+                <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">
+                    Select which actions this role can perform across the system.
+                </p>
             </div>
-            <div class="flex items-center gap-3">
-                <a href="{% url 'admin_panel:role_list' %}" class="px-4 py-2 border rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-medium transition-colors">
-                    Cancel
-                </a>
-                <button type="submit" class="px-4 py-2 bg-primary text-white font-medium rounded-lg text-xs hover:opacity-90 transition-opacity">
-                    Save Changes
-                </button>
+            <div class="flex items-center gap-2">
+                <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" label="Cancel" />
+                <c-button type="submit" variant="primary" icon="save" label="Save Changes" />
             </div>
         </div>
 
-        <div class="space-y-6">
-            {% for app_name, permissions in grouped_permissions.items %}
-            {% if permissions %}
-            <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
-                <div class="px-6 py-3.5 border-b border-gray-150 bg-gray-50">
-                    <h3 class="text-sm font-bold text-gray-900">{{ app_name }}</h3>
-                </div>
-                <div class="p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {% for perm in permissions %}
-                        <label class="flex items-start gap-3 p-3 border rounded-xl hover:bg-gray-50/50 cursor-pointer transition-colors">
-                            <input type="checkbox" name="permissions" value="{{ perm.id }}" {% if perm.id in role_permissions %}checked{% endif %} class="mt-0.5 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500">
-                            <div>
-                                <span class="text-sm font-medium text-gray-900 block">{{ perm.name }}</span>
-                                <span class="text-xs text-gray-500 font-mono">{{ perm.codename }}</span>
-                            </div>
-                        </label>
-                        {% endfor %}
-                    </div>
+        <!-- Permission Groups -->
+        {% for app_name, permissions in grouped_permissions.items %}
+        {% if permissions %}
+        <c-card padding="none">
+            <div class="px-4 py-2.5 border-b" style="border-color:var(--border); background:var(--surface-2)">
+                <h3 class="text-[12px] font-bold" style="color:var(--text)">{{ app_name }}</h3>
+            </div>
+            <div class="p-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {% for perm in permissions %}
+                    <label class="flex items-start gap-2.5 p-3 rounded-[4px] border cursor-pointer transition-colors hover:border-primary"
+                           style="border-color:var(--border); background:var(--surface)">
+                        <input type="checkbox" name="permissions" value="{{ perm.id }}"
+                               {% if perm.id in role_permissions %}checked{% endif %}
+                               class="mt-0.5 rounded accent-primary">
+                        <div>
+                            <span class="text-[12px] font-semibold block" style="color:var(--text)">{{ perm.name }}</span>
+                            <span class="text-[11px] font-mono" style="color:var(--text-muted)">{{ perm.codename }}</span>
+                        </div>
+                    </label>
+                    {% endfor %}
                 </div>
             </div>
-            {% endif %}
-            {% endfor %}
-        </div>
+        </c-card>
+        {% endif %}
+        {% endfor %}
 
-        <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
-            <a href="{% url 'admin_panel:role_list' %}" class="px-4 py-2 border rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-medium transition-colors">
-                Cancel
-            </a>
-            <button type="submit" class="px-4 py-2 bg-primary text-white font-medium rounded-lg text-xs hover:opacity-90 transition-opacity">
-                Save Changes
-            </button>
+        <!-- Bottom Actions -->
+        <div class="flex justify-end gap-2 pt-2 border-t" style="border-color:var(--border)">
+            <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" label="Cancel" />
+            <c-button type="submit" variant="primary" icon="save" label="Save Changes" />
+        </div>
+    </form>
+
+</div>
 </c-app-shell>

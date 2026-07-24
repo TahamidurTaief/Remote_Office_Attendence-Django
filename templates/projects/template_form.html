@@ -1,86 +1,81 @@
 <c-app-shell page_title="{% if object %}Edit Template{% else %}Create Template{% endif %} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4 max-w-4xl mx-auto">
-    <!-- Header -->
-    <div class="mb-4 flex items-center justify-between">
+
+<div class="p-4 max-w-4xl mx-auto space-y-4">
+
+    <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-[14px] font-semibold text-gray-900">
+            <h1 class="text-[14px] font-semibold" style="color:var(--text)">
                 {% if object %}Edit Template: {{ object.name }}{% else %}Create New Template{% endif %}
-            </h2>
-            <p class="mt-0.5 text-[12px] text-gray-500">Define the steps and roles for this installation template.</p>
+            </h1>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Define the steps and roles for this installation template.</p>
         </div>
-        <a href="{% url 'projects:template_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-            <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
-            Back to List
-        </a>
+        <c-button href="{% url 'projects:template_list' %}" variant="secondary" icon="arrow-left" label="Back to List" />
     </div>
 
-    <!-- Main Card -->
-    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden mb-4">
-        <form method="POST" class="p-4 space-y-4">
+    <!-- Template Name/Desc Form -->
+    <c-card padding="md">
+        <form method="POST" class="space-y-4">
             {% csrf_token %}
 
             {% if form.errors %}
-            <div class="rounded-xl bg-red-50 p-3 border border-red-200">
-                <h3 class="text-[12px] font-medium text-red-800">Please correct the errors below.</h3>
-                {{ form.non_field_errors }}
+            <div class="rounded-[4px] p-3 border" style="background:rgba(228,30,63,0.06); border-color:rgba(228,30,63,0.25);">
+                <div class="text-[12px] font-semibold" style="color:#E41E3F">Please correct the errors below.</div>
+                <div class="text-[12px] mt-1" style="color:#E41E3F">{{ form.non_field_errors }}</div>
             </div>
             {% endif %}
 
             <div class="space-y-3">
                 <div>
-                    <label for="{{ form.name.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Template Name *</label>
+                    <label for="{{ form.name.id_for_label }}" class="ft-label">Template Name *</label>
                     {{ form.name }}
-                    {% if form.name.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.name.errors.0 }}</p>{% endif %}
+                    {% if form.name.errors %}<p class="ft-error-text">{{ form.name.errors.0 }}</p>{% endif %}
                 </div>
                 <div>
-                    <label for="{{ form.description.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Description</label>
+                    <label for="{{ form.description.id_for_label }}" class="ft-label">Description</label>
                     {{ form.description }}
-                    {% if form.description.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.description.errors.0 }}</p>{% endif %}
+                    {% if form.description.errors %}<p class="ft-error-text">{{ form.description.errors.0 }}</p>{% endif %}
                 </div>
             </div>
 
-            <div class="pt-3 flex justify-end gap-2.5 border-t border-gray-100 mt-4">
-                <a href="{% url 'projects:template_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 hover:bg-gray-50">
-                    Cancel
-                </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-soft text-[12px] font-medium rounded-lg text-white bg-primary hover:opacity-90">
-                    <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
-                    {% if object %}Save Template{% else %}Create Template{% endif %}
-                </button>
+            <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+                <c-button href="{% url 'projects:template_list' %}" variant="secondary" label="Cancel" />
+                <c-button type="submit" variant="primary" icon="check"
+                          label="{% if object %}Save Template{% else %}Create Template{% endif %}" />
             </div>
         </form>
-    </div>
+    </c-card>
 
-    <!-- Items Section (Only visible when updating template) -->
+    <!-- Items Section (only when editing) -->
     {% if object %}
-    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden">
-        <div class="p-4 border-b border-gray-100">
-            <h3 class="text-[14px] font-semibold text-gray-900">Template Steps & Checklist Items</h3>
-            <p class="text-[12px] text-gray-500 mt-0.5">Configure sequence, activities, responsible departments/roles, and duration offsets.</p>
+    <c-card padding="none">
+        <div class="px-4 py-3 border-b" style="border-color:var(--border)">
+            <h3 class="text-[13px] font-semibold" style="color:var(--text)">Template Steps & Checklist Items</h3>
+            <p class="text-[11px] mt-0.5" style="color:var(--text-muted)">Configure sequence, activities, responsible departments/roles, and duration offsets.</p>
         </div>
 
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100">
-                <thead class="bg-gray-50">
+            <table class="ft-table">
+                <thead>
                     <tr>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12">Seq</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Activity Description</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Default Responsible Role</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-28">Duration (Days)</th>
-                        <th scope="col" class="relative px-4 py-2.5 w-16"><span class="sr-only">Delete</span></th>
+                        <th class="w-12">Seq</th>
+                        <th>Activity Description</th>
+                        <th>Default Responsible Role</th>
+                        <th class="w-28">Duration (Days)</th>
+                        <th class="w-16 text-right">Delete</th>
                     </tr>
                 </thead>
-                <tbody id="template-items-tbody" class="bg-white divide-y divide-gray-100">
+                <tbody>
                     {% for item in items %}
-                    <tr class="hover:bg-gray-50/70 transition-colors">
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ item.order }}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-800">{{ item.activity }}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-500">{{ item.default_responsible_role|default:"-" }}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900">{{ item.default_duration_days|default:"1" }} days</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-right text-[12px] font-medium">
-                            <form action="{% url 'projects:template_delete_item' item.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Remove this step?', () => $el.submit())">
+                    <tr>
+                        <td><span class="font-semibold" style="color:var(--text)">{{ item.order }}</span></td>
+                        <td><span style="color:var(--text)">{{ item.activity }}</span></td>
+                        <td><span style="color:var(--text-muted)">{{ item.default_responsible_role|default:"-" }}</span></td>
+                        <td><span style="color:var(--text)">{{ item.default_duration_days|default:"1" }} days</span></td>
+                        <td class="text-right">
+                            <form action="{% url 'projects:template_delete_item' item.pk %}" method="POST" class="inline"
+                                  x-data @submit.prevent="window.confirmAction('Remove this step?', () => $el.submit())">
                                 {% csrf_token %}
-                                <button type="submit" class="text-red-500 hover:text-red-700">
+                                <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm p-1 text-red-500 hover:text-red-600">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
                             </form>
@@ -88,7 +83,9 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-[12px] text-gray-400 italic">No checklist steps defined. Add a step below.</td>
+                        <td colspan="5" class="py-8 text-center text-[12px] italic" style="color:var(--text-muted)">
+                            No checklist steps defined. Add a step below.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -96,34 +93,34 @@
         </div>
 
         <!-- Add Item Form -->
-        <div class="bg-gray-50 p-4 border-t border-gray-100">
-            <h4 class="text-[12px] font-semibold text-gray-800 mb-3">Add Checklist Step</h4>
-            <form action="{% url 'projects:template_add_item' object.pk %}" method="POST" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+        <div class="p-4 border-t" style="border-color:var(--border); background:var(--surface-2)">
+            <h4 class="text-[12px] font-semibold mb-3" style="color:var(--text)">Add Checklist Step</h4>
+            <form action="{% url 'projects:template_add_item' object.pk %}" method="POST"
+                  class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                 {% csrf_token %}
                 <div class="sm:col-span-1">
-                    <label for="id_order" class="block text-[11px] font-semibold text-gray-500 mb-1">Seq</label>
+                    <label for="id_order" class="ft-label">Seq</label>
                     {{ item_form.order }}
                 </div>
                 <div class="sm:col-span-5">
-                    <label for="id_activity" class="block text-[11px] font-semibold text-gray-500 mb-1">Activity Name</label>
+                    <label for="id_activity" class="ft-label">Activity Name</label>
                     {{ item_form.activity }}
                 </div>
                 <div class="sm:col-span-4">
-                    <label for="id_default_responsible_role" class="block text-[11px] font-semibold text-gray-500 mb-1">Responsible Role</label>
+                    <label for="id_default_responsible_role" class="ft-label">Responsible Role</label>
                     {{ item_form.default_responsible_role }}
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="id_default_duration_days" class="block text-[11px] font-semibold text-gray-500 mb-1">Duration (days)</label>
+                    <label for="id_default_duration_days" class="ft-label">Duration (days)</label>
                     {{ item_form.default_duration_days }}
                 </div>
                 <div class="sm:col-span-12 flex justify-end">
-                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-soft text-[12px] font-medium text-white bg-primary hover:opacity-90">
-                        <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
-                        Add Step
-                    </button>
+                    <c-button type="submit" variant="primary" icon="plus" label="Add Step" size="sm" />
                 </div>
             </form>
         </div>
-    </div>
+    </c-card>
     {% endif %}
+
+</div>
 </c-app-shell>

@@ -9,25 +9,199 @@
    - help: help text
    - extra_class: additional classes on wrapper
    - id: select id (defaults to name)
-   Slot: <option> elements
+   - is_django_form: boolean to indicate raw select inside slot
+   Slot: <option> elements or Django select field
 {% endcomment %}
 
-<div class="flex flex-col gap-0.5 {{ extra_class }}">
+<div 
+  x-data="{
+    open: false,
+    search: '',
+    options: [],
+    selectedValue: '{{ value|default:''|escapejs }}',
+    selectedLabel: '',
+    activeIndex: -1,
+
+    getSelect() {
+      if (this.$refs.select) return this.$refs.select;
+      if (this.$refs.selectContainer) return this.$refs.selectContainer.querySelector('select');
+      return null;
+    },
+
+    syncOptions() {
+      const select = this.getSelect();
+      if (!select) return;
+      this.options = Array.from(select.options).map((opt, index) => ({
+        value: opt.value,
+        label: opt.text.trim(),
+        index: index
+      }));
+      this.selectedValue = select.value;
+      const selectedOpt = Array.from(select.options).find(opt => opt.selected) || select.options[select.selectedIndex];
+      this.selectedLabel = selectedOpt ? selectedOpt.text.trim() : '';
+    },
+
+    init() {
+      this.$nextTick(() => {
+        const select = this.getSelect();
+        if (select) {
+          select.className = 'absolute inset-0 w-full h-full opacity-0 pointer-events-none -z-10';
+          this.syncOptions();
+          if (this.selectedValue && select.value !== this.selectedValue) {
+            select.value = this.selectedValue;
+            this.syncOptions();
+          }
+          const observer = new MutationObserver(() => this.syncOptions());
+          observer.observe(select, { childList: true, subtree: true });
+        }
+      });
+    },
+
+    selectOption(value) {
+      const select = this.getSelect();
+      if (!select) return;
+      select.value = value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      select.dispatchEvent(new Event('input', { bubbles: true }));
+      this.syncOptions();
+      this.open = false;
+      this.search = '';
+      this.activeIndex = -1;
+    },
+
+    get filteredOptions() {
+      if (!this.search) return this.options;
+      const q = this.search.toLowerCase();
+      return this.options.filter(o => o.label.toLowerCase().includes(q));
+    },
+
+    navigateOptions(dir) {
+      const opts = this.filteredOptions;
+      if (opts.length === 0) return;
+      if (dir === 'down') {
+        this.activeIndex = (this.activeIndex + 1) % opts.length;
+      } else if (dir === 'up') {
+        this.activeIndex = (this.activeIndex - 1 + opts.length) % opts.length;
+      }
+      this.$nextTick(() => {
+        const activeEl = this.$refs.listContainer.querySelector('[data-active=\'true\']');
+        if (activeEl) {
+          activeEl.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    },
+
+    selectActive() {
+      const opts = this.filteredOptions;
+      if (this.activeIndex >= 0 && this.activeIndex < opts.length) {
+        this.selectOption(opts[this.activeIndex].value);
+      }
+    }
+  }"
+  @click.outside="open = false"
+  class="flex flex-col gap-0.5 relative {{ extra_class }}"
+>
   {% if label %}
     <label for="{{ id|default:name }}" class="ft-label">
       {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
     </label>
   {% endif %}
 
-  <select
-    name="{{ name }}"
-    id="{{ id|default:name }}"
-    {% if required %}required{% endif %}
-    {% if disabled %}disabled{% endif %}
-    class="ft-input ft-select {% if error %}!border-red-500{% endif %}"
-  >
-    {{ slot }}
-  </select>
+  <!-- Hidden Native Select Container -->
+  {% if is_django_form %}
+    <div x-ref="selectContainer" class="absolute inset-0 w-full h-full opacity-0 pointer-events-none -z-10">
+      {{ slot }}
+    </div>
+  {% else %}
+    <select
+      x-ref="select"
+      name="{{ name }}"
+      id="{{ id|default:name }}"
+      {% if required %}required{% endif %}
+      {% if disabled %}disabled{% endif %}
+      class="absolute inset-0 w-full h-full opacity-0 pointer-events-none -z-10"
+      @change="syncOptions()"
+    >
+      {{ slot }}
+    </select>
+  {% endif %}
+
+  <!-- Custom Trigger Button -->
+  <div class="relative w-full">
+    <button
+      type="button"
+      {% if disabled %}disabled{% endif %}
+      @click="open = !open; if(open) { $nextTick(() => $refs.searchInput.focus()); activeIndex = -1; }"
+      class="ft-input w-full flex items-center justify-between text-[12px] rounded-[4px] focus:outline-none focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2]/10 disabled:opacity-50 cursor-pointer h-[34px] px-[10px]"
+      style="background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left;"
+    >
+      <span x-text="selectedLabel || 'Select option...'" class="truncate"></span>
+      <svg class="w-3 h-3 transition-transform duration-200" style="color: var(--text-muted)" :class="open ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+
+    <!-- Dropdown Menu -->
+    <div
+      x-show="open"
+      x-transition:enter="transition ease-out duration-100"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition ease-in duration-75"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+      class="absolute z-[100] w-full mt-1 rounded-[4px] overflow-hidden flex flex-col focus:outline-none"
+      style="background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-md); display: none;"
+    >
+      <!-- Search Input -->
+      <div class="px-2 py-1.5 border-b flex items-center gap-1.5" style="background: var(--surface-2); border-color: var(--border)">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" style="color: var(--text-muted)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          x-ref="searchInput"
+          x-model="search"
+          @input="activeIndex = -1"
+          @keydown.down.prevent="navigateOptions('down')"
+          @keydown.up.prevent="navigateOptions('up')"
+          @keydown.enter.prevent="selectActive()"
+          @keydown.escape.prevent.stop="open = false"
+          placeholder="Search..."
+          class="w-full bg-transparent text-[12px] border-none p-0 focus:ring-0 focus:outline-none"
+          style="color: var(--text)"
+          @click.stop
+        />
+      </div>
+
+      <!-- Options List -->
+      <div x-ref="listContainer" class="overflow-y-auto max-h-48 py-1">
+        <template x-for="(opt, idx) in filteredOptions" :key="opt.value + '_' + idx">
+          <button
+            type="button"
+            @click="selectOption(opt.value)"
+            class="w-full text-left px-3 py-1.5 text-[12px] flex items-center justify-between cursor-pointer transition-colors"
+            :style="selectedValue === opt.value
+              ? 'background: var(--primary-light); color: var(--primary); font-weight: 600;'
+              : activeIndex === idx
+                ? 'background: var(--surface-2); color: var(--text);'
+                : 'color: var(--text);'"
+            :data-active="activeIndex === idx"
+          >
+            <span x-text="opt.label" class="truncate"></span>
+            <svg x-show="selectedValue === opt.value" class="w-3.5 h-3.5 flex-shrink-0" style="color: var(--primary)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </template>
+        
+        <!-- Empty State -->
+        <div x-show="filteredOptions.length === 0" class="px-3 py-2 text-[12px] text-center italic" style="color: var(--text-muted)">
+          No matches found
+        </div>
+      </div>
+    </div>
+  </div>
 
   {% if error %}
     <p class="ft-error-text">{{ error }}</p>

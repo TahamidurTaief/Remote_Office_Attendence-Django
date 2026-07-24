@@ -21,7 +21,7 @@
   hour: 0,
   minute: 0,
   ampm: 'AM',
-  showTime: '{{ time|default:false }}' === 'true',
+  showTime: '{{ time|default:"false" }}' === 'true',
 
   get today() { return new Date(); },
 
@@ -152,12 +152,12 @@
   <button type="button"
           @click="open = !open"
           class="ft-input w-full text-left flex items-center gap-2 cursor-pointer"
-          style="justify-content: flex-start; background:#fff">
-    <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0" style="color: #B0B3B8"></i>
+          style="justify-content: flex-start; background:var(--surface); border:1px solid var(--border); color:var(--text)">
+    <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0" style="color: var(--text-muted)"></i>
     <span x-text="displayLabel || '{{ placeholder|default:'Select date…' }}'"
-          :style="displayLabel ? 'color:#1C1E21' : 'color:#B0B3B8'"
+          :style="displayLabel ? 'color:var(--text)' : 'color:var(--text-muted)'"
           class="text-[12px] flex-1 text-left truncate"></span>
-    <i data-lucide="chevron-down" class="w-3.5 h-3.5 flex-shrink-0" style="color:#B0B3B8"
+    <i data-lucide="chevron-down" class="w-3.5 h-3.5 flex-shrink-0" style="color:var(--text-muted)"
        :class="open ? 'rotate-180' : ''" class="transition-transform duration-150"></i>
   </button>
 
@@ -170,37 +170,37 @@
        x-transition:leave-start="opacity-100 scale-100"
        x-transition:leave-end="opacity-0 scale-95"
        @click.stop
-       class="absolute top-full left-0 mt-1 z-[300] bg-white select-none"
-       style="min-width: 280px; border-radius: 8px; box-shadow: 0 12px 40px rgba(24,119,242,0.12), 0 2px 12px rgba(0,0,0,0.05); border: none; padding: 12px;"
+       class="absolute top-full left-0 mt-1 z-[300] select-none rounded-[4px]"
+       style="min-width: 280px; padding: 10px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-md);"
        x-cloak>
 
     {# ── CALENDAR HEADER ── #}
     <div class="flex items-center justify-between mb-2" x-show="viewMode === 'days'">
       <button type="button" @click="prevMonth()"
               class="w-6 h-6 flex items-center justify-center rounded transition-colors"
-              style="background:transparent; border:none; cursor:pointer; color:#65676B"
-              onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+              style="background:transparent; border:none; cursor:pointer; color:var(--text-secondary)"
+              onmouseover="this.style.background='var(--surface-2)'"
               onmouseout="this.style.background='transparent'">
         <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
       </button>
       <div class="flex items-center gap-1">
         <button type="button" @click="viewMode = 'months'"
                 class="px-2 py-0.5 rounded text-[12px] font-semibold transition-colors"
-                style="border:none; background:transparent; cursor:pointer; color:#1C1E21"
-                onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                style="border:none; background:transparent; cursor:pointer; color:var(--text)"
+                onmouseover="this.style.background='var(--surface-2)'"
                 onmouseout="this.style.background='transparent'"
                 x-text="monthName"></button>
         <button type="button" @click="viewMode = 'years'"
                 class="px-2 py-0.5 rounded text-[12px] font-semibold transition-colors"
-                style="border:none; background:transparent; cursor:pointer; color:#1C1E21"
-                onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+                style="border:none; background:transparent; cursor:pointer; color:var(--text)"
+                onmouseover="this.style.background='var(--surface-2)'"
                 onmouseout="this.style.background='transparent'"
                 x-text="displayYear"></button>
       </div>
       <button type="button" @click="nextMonth()"
               class="w-6 h-6 flex items-center justify-center rounded transition-colors"
-              style="background:transparent; border:none; cursor:pointer; color:#65676B"
-              onmouseover="this.style.background='rgba(24,119,242,0.07)'"
+              style="background:transparent; border:none; cursor:pointer; color:var(--text-secondary)"
+              onmouseover="this.style.background='var(--surface-2)'"
               onmouseout="this.style.background='transparent'">
         <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
       </button>

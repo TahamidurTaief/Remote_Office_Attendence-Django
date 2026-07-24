@@ -1,58 +1,51 @@
 <c-app-shell page_title="Manage Leave Types | FieldTrack Admin" active_href="{{ request.path }}">
-<div class="p-6 max-w-5xl mx-auto space-y-6">
+
+<div class="p-4 max-w-5xl mx-auto space-y-4">
 
     <!-- Header -->
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-[18px] font-bold text-gray-900">Leave Types</h1>
-            <p class="text-[12px] text-gray-500 mt-0.5">Configure leave types and their default days allowed per year.</p>
+            <h1 class="text-[14px] font-semibold" style="color:var(--text)">Leave Types</h1>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Configure leave types and their default days allowed per year.</p>
         </div>
-        <c-button href="{% url 'leave:admin_leave_type_add' %}" variant="primary" icon="plus" label="Add Leave Type" size="md" />
+        <c-button href="{% url 'leave:admin_leave_type_add' %}" variant="primary" icon="plus" label="Add Leave Type" />
     </div>
 
-    <!-- Leave Types Table Card -->
-    <div class="ft-card overflow-hidden bg-white">
-        <table class="ft-table">
-            <thead>
-                <tr>
-                    <th>Leave Type Name</th>
-                    <th>Category</th>
-                    <th>Default Days Allowed Per Year</th>
-                    <th class="text-right">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for lt in leave_types %}
-                <tr>
-                    <td class="font-bold text-gray-900">
-                        {{ lt.name }}
-                    </td>
-                    <td class="capitalize text-gray-700 font-medium">
-                        {{ lt.get_category_display }}
-                    </td>
-                    <td>
-                        <span class="ft-badge ft-badge-primary">
-                            {{ lt.default_days_per_year }} Days
-                        </span>
-                    </td>
-                    <td class="text-right">
-                        <c-button href="{% url 'leave:admin_leave_type_edit' lt.pk %}" variant="secondary" size="sm" icon="edit-3" label="Edit defaults" />
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" class="py-12 text-center text-gray-500">
-                        <div class="flex flex-col items-center justify-center gap-2">
-                            <i data-lucide="settings" class="w-8 h-8 text-gray-300 animate-spin"></i>
-                            <p class="font-semibold text-gray-700 text-sm">No leave types defined yet</p>
-                            <p class="text-[12px] text-gray-400">Configure leave types (e.g. Casual, Sick) to begin tracking employee leaves.</p>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <!-- Table -->
+    <c-table id="leave-types-table">
+        <c-slot name="header">
+            <th>Leave Type Name</th>
+            <th>Category</th>
+            <th>Default Days / Year</th>
+            <th class="text-right">Actions</th>
+        </c-slot>
+
+        <c-slot name="body">
+            {% for lt in leave_types %}
+            <tr>
+                <td>
+                    <span class="font-semibold text-[12px]" style="color:var(--text)">{{ lt.name }}</span>
+                </td>
+                <td>
+                    <span class="capitalize text-[12px]" style="color:var(--text-secondary)">{{ lt.get_category_display }}</span>
+                </td>
+                <td>
+                    <c-badge variant="primary" label="{{ lt.default_days_per_year }} Days" />
+                </td>
+                <td class="text-right">
+                    <c-button href="{% url 'leave:admin_leave_type_edit' lt.pk %}" variant="ghost" size="sm" icon="edit-3" label="Edit" />
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="py-12">
+                    <c-empty-state icon="calendar-x" title="No Leave Types Defined"
+                                   description="Configure leave types (e.g. Casual, Sick) to begin tracking leaves." />
+                </td>
+            </tr>
+            {% endfor %}
+        </c-slot>
+    </c-table>
 
 </div>
 </c-app-shell>

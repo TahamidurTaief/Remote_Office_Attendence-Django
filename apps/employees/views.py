@@ -16,7 +16,7 @@ class EmployeeListView(AdminRequiredMixin, ListView):
     model = EmployeeProfile
     template_name = 'employees/employee_list.html'
     context_object_name = 'employees'
-    paginate_by = 10
+    paginate_by = 20
     
     def get_queryset(self):
         queryset = super().get_queryset().select_related('branch', 'user')
