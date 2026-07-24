@@ -70,6 +70,7 @@ MIDDLEWARE = [
     'django_browser_reload.middleware.BrowserReloadMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.accounts.middleware.SuspendedEmployeeMiddleware',
     'apps.accounts.middleware.SessionDeviceMiddleware',
     'apps.accounts.middleware.MFARequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

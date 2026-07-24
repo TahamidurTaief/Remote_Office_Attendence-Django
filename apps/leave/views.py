@@ -289,6 +289,15 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
     template_name = 'staff/leave/request_form.html'
     success_url = reverse_lazy('leave:staff_dashboard')
 
+    def dispatch(self, request, *args, **kwargs):
+        master = getattr(request.user, 'employee_master', None)
+        if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
+            master = request.user.employee_profile.master_employee
+        if master and master.is_suspended:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Your account is suspended. You cannot submit leave requests.")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_initial(self):
         initial = super().get_initial()
         date_str = self.request.GET.get('date')

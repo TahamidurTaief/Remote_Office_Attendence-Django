@@ -111,3 +111,42 @@ class MFARequiredMiddleware:
                     sec_prof = None
             if not sec_prof or not sec_prof.mfa_enabled:
                 request._mfa_force_redirect = redirect('/account/security/')
+
+
+class SuspendedEmployeeMiddleware:
+    """
+    Middleware enforcing suspension policy:
+    If a logged-in user has an associated Employee profile and that employee is suspended,
+    log them out immediately and redirect to login page with a suspension warning query parameter.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            # Check if master employee profile exists and is suspended
+            emp = getattr(request.user, 'employee_master', None)
+            if not emp:
+                # Try locating via legacy profile
+                profile = getattr(request.user, 'employee_profile', None)
+                if profile:
+                    emp = getattr(profile, 'master_employee', None)
+            
+            if emp and emp.is_suspended:
+                logout(request)
+                is_htmx = (
+                    request.path.startswith('/api/') or
+                    request.headers.get('hx-request') == 'true' or
+                    request.headers.get('Hx-Request') == 'true' or
+                    request.META.get('HTTP_HX_REQUEST') == 'true' or
+                    'application/json' in request.headers.get('Accept', '')
+                )
+                if is_htmx:
+                    return JsonResponse(
+                        {'success': False, 'error': 'Account is suspended.'},
+                        status=403
+                    )
+                return redirect('/login/?suspended=true')
+
+        response = self.get_response(request)
+        return response

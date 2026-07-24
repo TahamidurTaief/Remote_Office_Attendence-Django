@@ -412,6 +412,7 @@ class Employee(models.Model):
         default=EmployeeStatus.DRAFT, db_index=True
     )
 
+    is_suspended = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -436,6 +437,23 @@ class Employee(models.Model):
         if has_docs or has_emergency or has_assets:
             score += 20
         return score
+
+    def get_next_wizard_step(self) -> int:
+        if not (self.employee_number and self.first_name and self.last_name):
+            return 1
+        if not (self.department_id and self.designation_id and self.joined_date):
+            return 2
+        if self.basic_salary is None:
+            return 3
+        if not self.user_id:
+            return 4
+        if not self.documents.filter(is_active=True).exists():
+            return 5
+        if not (self.emergency_contact_name and self.emergency_contact_phone):
+            return 6
+        if not self.asset_assignments.filter(returned_date__isnull=True).exists():
+            return 7
+        return 8
 
     class Meta:
         ordering = ['employee_number']

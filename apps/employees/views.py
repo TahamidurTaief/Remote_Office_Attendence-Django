@@ -451,6 +451,13 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
         context['active_documents'] = self.object.documents.filter(is_active=True)
         context['asset_assignments'] = self.object.asset_assignments.select_related('asset').all()
         context['active_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
+        
+        # Payroll gating check
+        from apps.accounts.engine import PermissionEngine
+        user = self.request.user
+        can_view_payroll = user.is_superuser or PermissionEngine.evaluate(user, 'employees.view_payroll').allowed or getattr(user, 'role', '') in ('admin', 'hr', 'hr_manager', 'hr_admin')
+        context['can_view_payroll'] = can_view_payroll
+        
         return context
 
 
@@ -507,14 +514,10 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
     def form_valid(self, form):
         old_instance = Employee.objects.get(pk=self.object.pk)
         old_status = old_instance.status
-        old_dept = old_instance.department
-        old_desig = old_instance.designation
-        old_branch = old_instance.branch
-        old_mgr = old_instance.reporting_manager
 
         response = super().form_valid(form)
         employee = self.object
-        reason_text = self.request.POST.get('change_reason', 'Admin update')
+        reason_text = (self.request.POST.get('change_reason') or 'Admin update').strip()
 
         # Track status change history
         if old_status != employee.status:
@@ -534,50 +537,59 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                 summary=f"Changed status from {old_status} to {employee.status}"
             )
 
-        # Track org change history
-        org_changed = False
-        if old_dept != employee.department or old_desig != employee.designation or old_branch != employee.branch or old_mgr != employee.reporting_manager:
-            org_changed = True
-            changes_desc = []
-            if old_dept != employee.department:
-                changes_desc.append(f"Dept: {old_dept} -> {employee.department}")
-            if old_desig != employee.designation:
-                changes_desc.append(f"Designation: {old_desig} -> {employee.designation}")
-            if old_branch != employee.branch:
-                changes_desc.append(f"Branch: {old_branch} -> {employee.branch}")
-            if old_mgr != employee.reporting_manager:
-                changes_desc.append(f"Manager: {old_mgr} -> {employee.reporting_manager}")
+        # Track other field changes
+        fields_to_track = [
+            'first_name', 'last_name', 'dob', 'gender', 'national_id',
+            'phone', 'personal_email', 'address',
+            'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'emergency_contact_address',
+            'branch', 'department', 'designation', 'reporting_manager', 'joined_date',
+            'employment_type', 'shift', 'weekly_holiday_policy',
+            'basic_salary', 'salary_structure', 'bank_name', 'bank_account', 'payment_method',
+            'tax_profile', 'pf_enabled', 'overtime_policy', 'user', 'data_scope', 'mfa_required'
+        ]
 
-            EmploymentHistory.objects.create(
-                employee=employee,
-                field_changed='organization',
-                old_value=f"Dept: {old_dept}, Desig: {old_desig}, Branch: {old_branch}, Mgr: {old_mgr}",
-                new_value=f"Dept: {employee.department}, Desig: {employee.designation}, Branch: {employee.branch}, Mgr: {employee.reporting_manager}",
-                reason=reason_text,
-                approved_by=self.request.user,
-                effective_date=timezone.now().date()
-            )
-            log_audit(
-                actor=self.request.user,
-                action='employee_org_changed',
-                target=employee,
-                summary=f"Updated org details: {'; '.join(changes_desc)}"
-            )
+        for field in fields_to_track:
+            old_val = getattr(old_instance, field)
+            new_val = getattr(employee, field)
+            if old_val != new_val:
+                # Format FKs or objects nicely
+                old_str = str(old_val) if old_val is not None else ""
+                new_str = str(new_val) if new_val is not None else ""
+                
+                if field in ('reporting_manager', 'branch', 'department', 'designation', 'user'):
+                    old_str = old_val.get_full_name() if (field == 'reporting_manager' and old_val) else (old_val.name if (field in ('branch', 'department', 'designation') and old_val) else (old_val.email or old_val.phone if (field == 'user' and old_val) else str(old_val or "")))
+                    new_str = new_val.get_full_name() if (field == 'reporting_manager' and new_val) else (new_val.name if (field in ('branch', 'department', 'designation') and new_val) else (new_val.email or new_val.phone if (field == 'user' and new_val) else str(new_val or "")))
+
+                EmploymentHistory.objects.create(
+                    employee=employee,
+                    field_changed=field,
+                    old_value=old_str,
+                    new_value=new_str,
+                    reason=reason_text,
+                    approved_by=self.request.user,
+                    effective_date=timezone.now().date()
+                )
+                log_audit(
+                    actor=self.request.user,
+                    action=f'employee_{field}_changed',
+                    target=employee,
+                    summary=f"Changed {field} from '{old_str}' to '{new_str}'"
+                )
 
         if self.request.headers.get('HX-Request'):
             messages.success(self.request, f"Employee {employee.get_full_name()} updated.")
             response = render(self.request, 'employees/partials/form_success_htmx.html', {
                 'message': f"Employee {employee.get_full_name()} updated.",
-                'redirect_url': reverse_lazy('employees:master_detail', kwargs={'pk': employee.pk})
+                'redirect_url': reverse_lazy('employees:employee_detail', kwargs={'pk': employee.pk})
             })
-            response['HX-Redirect'] = reverse_lazy('employees:master_detail', kwargs={'pk': employee.pk})
+            response['HX-Redirect'] = reverse_lazy('employees:employee_detail', kwargs={'pk': employee.pk})
             return response
 
         messages.success(self.request, f"Employee {employee.get_full_name()} updated.")
         return response
 
     def get_success_url(self):
-        return reverse_lazy('employees:master_detail', kwargs={'pk': self.object.pk})
+        return reverse_lazy('employees:employee_detail', kwargs={'pk': self.object.pk})
 
 
 class EmployeeMasterArchiveView(AdminRequiredMixin, View):
@@ -1362,4 +1374,80 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
         combined.sort(key=lambda x: x['timestamp'], reverse=True)
         context['timeline_events'] = combined
         return context
+
+
+class EmployeeSuspendToggleView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        reason = request.POST.get('reason', '').strip()
+        if not reason:
+            messages.error(request, "Reason is required to suspend/unsuspend an employee.")
+            return redirect('employees:employee_detail', pk=employee.pk)
+
+        is_suspended = not employee.is_suspended
+        employee.is_suspended = is_suspended
+        employee.save()
+
+        # Log change to EmploymentHistory
+        action_str = "Suspended" if is_suspended else "Unsuspended"
+        EmploymentHistory.objects.create(
+            employee=employee,
+            field_changed='is_suspended',
+            old_value=str(not is_suspended),
+            new_value=str(is_suspended),
+            reason=reason,
+            approved_by=request.user,
+            effective_date=timezone.now().date()
+        )
+        
+        # Log to Activity Log (if model exists)
+        try:
+            from apps.employees.models import EmployeeActivityLog
+            EmployeeActivityLog.objects.create(
+                employee=employee,
+                actor=request.user,
+                action_description=f"{action_str} employee. Reason: {reason}",
+                field_changed='is_suspended'
+            )
+        except ImportError:
+            pass
+
+        log_audit(
+            actor=request.user,
+            action=f"employee_{action_str.lower()}",
+            target=employee,
+            summary=f"{action_str} employee: {reason}"
+        )
+
+        # Audit log (Scope 3)
+        try:
+            from apps.employees.models import EmployeeAuditLog
+            EmployeeAuditLog.objects.create(
+                employee=employee,
+                old_value={"is_suspended": not is_suspended},
+                new_value={"is_suspended": is_suspended},
+                changed_by=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+        except ImportError:
+            pass
+
+        messages.success(request, f"Employee has been successfully {action_str.lower()}ed.")
+        
+        if request.headers.get('HX-Request'):
+            from django.urls import reverse
+            response = render(request, 'employees/partials/form_success_htmx.html', {
+                'redirect_url': reverse('employees:employee_detail', kwargs={'pk': employee.pk})
+            })
+            response['HX-Redirect'] = reverse('employees:employee_detail', kwargs={'pk': employee.pk})
+            return response
+            
+        return redirect('employees:employee_detail', pk=employee.pk)
+
+
+class EmployeeSuspendModalView(AdminRequiredMixin, View):
+    def get(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        return render(request, 'employees/partials/suspend_modal.html', {'employee': employee})
 

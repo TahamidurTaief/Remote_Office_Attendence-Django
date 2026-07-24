@@ -36,6 +36,12 @@ def check_in(request):
     if not check_role(request.user):
         return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
 
+    master = getattr(request.user, 'employee_master', None)
+    if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
+        master = request.user.employee_profile.master_employee
+    if master and master.is_suspended:
+        return JsonResponse({'success': False, 'error': 'Account is suspended.'}, status=403)
+
     try:
         employee = get_employee(request.user)
         if not employee:
@@ -222,6 +228,12 @@ def check_in(request):
 def check_out(request):
     if not check_role(request.user):
         return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
+
+    master = getattr(request.user, 'employee_master', None)
+    if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
+        master = request.user.employee_profile.master_employee
+    if master and master.is_suspended:
+        return JsonResponse({'success': False, 'error': 'Account is suspended.'}, status=403)
 
     try:
         employee = get_employee(request.user)

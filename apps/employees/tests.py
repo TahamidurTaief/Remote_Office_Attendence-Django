@@ -927,6 +927,106 @@ class EmployeeWizardTests(TestCase):
             AssetAssignment.objects.create(asset=asset, employee=emp2)
 
 
+class SuspensionTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='suspend_admin@test.com', password='password123', role='admin')
+        self.staff_user = User.objects.create_user(email='suspend_staff@test.com', password='password123', role='staff')
+        
+        from apps.employees.models import Employee, EmployeeStatus
+        self.employee = Employee.objects.create(
+            employee_number='EMP-SUS-001',
+            first_name='Suspended',
+            last_name='User',
+            status=EmployeeStatus.ACTIVE,
+            user=self.staff_user
+        )
+        # Create legacy profile and link it (since attendance/leave views look up employee_profile)
+        from apps.employees.models import EmployeeProfile
+        self.profile = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            master_employee=self.employee,
+            employee_id='EMP-SUS-001',
+            full_name='Suspended User',
+            phone='+8801700000002',
+            joined_date=timezone.localdate()
+        )
+
+    def test_suspension_blocks_login_middleware(self):
+        self.employee.is_suspended = True
+        self.employee.save()
+        
+        self.client.force_login(self.staff_user)
+        response = self.client.get(reverse('employees:employee_list'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('suspended=true', response.url)
+
+    def test_suspension_blocks_attendance_clock_in(self):
+        self.employee.is_suspended = True
+        self.employee.save()
+        
+        # Test normal request redirects (302)
+        self.client.force_login(self.staff_user)
+        response = self.client.post(reverse('attendance:check_in'), {
+            'latitude': 23.8103,
+            'longitude': 90.4125
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Test HTMX request returns 403
+        self.client.force_login(self.staff_user)
+        response = self.client.post(reverse('attendance:check_in'), {
+            'latitude': 23.8103,
+            'longitude': 90.4125
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('suspended', response.json().get('error', '').lower())
+
+    def test_suspension_blocks_leave_submission(self):
+        self.employee.is_suspended = True
+        self.employee.save()
+        
+        self.client.force_login(self.staff_user)
+        from apps.leave.models import LeaveType
+        lt = LeaveType.objects.create(name='Casual', default_days_per_year=10, category='casual')
+        
+        # Test normal request redirects (302)
+        response = self.client.post(reverse('leave:staff_request_create'), {
+            'leave_type': lt.pk,
+            'start_date': '2026-08-01',
+            'end_date': '2026-08-02',
+            'reason': 'Vacation'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Test HTMX request returns 403
+        self.client.force_login(self.staff_user)
+        response = self.client.post(reverse('leave:staff_request_create'), {
+            'leave_type': lt.pk,
+            'start_date': '2026-08-01',
+            'end_date': '2026-08-02',
+            'reason': 'Vacation'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 403)
+
+    def test_suspend_action_toggle_and_history(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:employee_suspend_toggle', kwargs={'pk': self.employee.pk})
+        
+        self.assertFalse(self.employee.is_suspended)
+        
+        response = self.client.post(url, {'reason': 'Violation of policy'})
+        self.assertEqual(response.status_code, 302)
+        
+        self.employee.refresh_from_db()
+        self.assertTrue(self.employee.is_suspended)
+        
+        from apps.employees.models import EmploymentHistory
+        hist = EmploymentHistory.objects.filter(employee=self.employee, field_changed='is_suspended').first()
+        self.assertIsNotNone(hist)
+        self.assertEqual(hist.new_value, 'True')
+        self.assertEqual(hist.reason, 'Violation of policy')
+
+
 
 
 

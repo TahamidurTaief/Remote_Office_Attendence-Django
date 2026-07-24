@@ -4,11 +4,13 @@ from . import views
 app_name = 'employees'
 
 urlpatterns = [
-    path('', views.EmployeeListView.as_view(), name='employee_list'),
-    path('add/', views.EmployeeCreateView.as_view(), name='employee_add'),
-    path('<int:pk>/', views.EmployeeDetailView.as_view(), name='employee_detail'),
-    path('<int:pk>/edit/', views.EmployeeEditView.as_view(), name='employee_edit'),
+    path('', views.EmployeeMasterListView.as_view(), name='employee_list'),
+    path('add/', views.EmployeeWizardView.as_view(), name='employee_add'),
+    path('<int:pk>/', views.EmployeeMasterDetailView.as_view(), name='employee_detail'),
+    path('<int:pk>/edit/', views.EmployeeMasterEditView.as_view(), name='employee_edit'),
     path('<int:pk>/toggle-status/', views.ToggleStatusView.as_view(), name='toggle_status'),
+    path('<int:pk>/suspend/', views.EmployeeSuspendToggleView.as_view(), name='employee_suspend_toggle'),
+    path('<int:pk>/suspend/modal/', views.EmployeeSuspendModalView.as_view(), name='employee_suspend_toggle_modal'),
     
     # Document CRUD
     path('<int:employee_pk>/documents/add/', views.EmployeeDocumentCreateView.as_view(), name='document_add'),

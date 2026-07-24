@@ -1,0 +1,22 @@
+<c-modal id="suspend-modal" title="{% if employee.is_suspended %}Un-suspend Account{% else %}Suspend Account{% endif %}">
+    <form hx-post="{% url 'employees:employee_suspend_toggle' employee.pk %}" hx-target="#modal-container" class="space-y-4">
+        {% csrf_token %}
+        <p class="text-sm text-slate-500">
+            {% if employee.is_suspended %}
+            Are you sure you want to un-suspend <strong>{{ employee.get_full_name }}</strong>? This will restore their previous access.
+            {% else %}
+            Are you sure you want to suspend <strong>{{ employee.get_full_name }}</strong>? This will block their login, clock-in, and leave submission immediately.
+            {% endif %}
+        </p>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Reason for change</label>
+            <textarea name="reason" required class="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" rows="3" placeholder="Enter reason..."></textarea>
+        </div>
+        <div class="flex justify-end gap-2">
+            <button type="button" @click="open = False" class="px-4 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
+            <button type="submit" class="px-4 py-2 text-sm text-white {% if employee.is_suspended %}bg-emerald-600 hover:bg-emerald-700{% else %}bg-rose-600 hover:bg-rose-700{% endif %} rounded-xl shadow-sm transition-colors">
+                Confirm
+            </button>
+        </div>
+    </form>
+</c-modal>
