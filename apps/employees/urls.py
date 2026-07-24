@@ -28,6 +28,8 @@ urlpatterns = [
     # Document Management & Asset Assignment Routes (Phase 2 Step 3)
     path('master/<int:pk>/documents/upload/', views.EmployeeDocumentUploadView.as_view(), name='document_upload'),
     path('documents/<int:pk>/download/', views.EmployeeDocumentDownloadView.as_view(), name='document_download'),
+    path('documents/<int:pk>/verify/', views.EmployeeDocumentVerifyView.as_view(), name='document_verify'),
+    path('documents/<int:pk>/archive/', views.EmployeeDocumentArchiveView.as_view(), name='document_archive'),
     path('assets/', views.AssetListView.as_view(), name='asset_list'),
     path('assets/create/', views.AssetCreateView.as_view(), name='asset_create'),
     path('master/<int:pk>/assets/assign/', views.AssetAssignView.as_view(), name='asset_assign'),

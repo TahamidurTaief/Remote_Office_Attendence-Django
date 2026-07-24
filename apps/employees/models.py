@@ -148,6 +148,15 @@ class EmployeeDocument(models.Model):
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='verified_documents'
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    is_archived = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-is_active', '-version', '-uploaded_at']

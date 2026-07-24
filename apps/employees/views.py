@@ -362,6 +362,66 @@ class EmployeeDocumentDeleteView(AdminRequiredMixin, View):
         return redirect('employees:employee_detail', pk=employee_pk)
 
 
+class EmployeeDocumentVerifyView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def post(self, request, pk):
+        doc = get_object_or_404(EmployeeDocument, pk=pk)
+        employee_pk = doc.employee_master_id or doc.employee_id
+        
+        if doc.is_verified:
+            doc.is_verified = False
+            doc.verified_by = None
+            doc.verified_at = None
+            action_str = "unverified"
+        else:
+            doc.is_verified = True
+            doc.verified_by = request.user
+            doc.verified_at = timezone.now()
+            action_str = "verified"
+            
+        doc.save()
+        log_audit(
+            actor=request.user,
+            action='document_verified' if doc.is_verified else 'document_unverified',
+            target=doc,
+            summary=f"Marked document {doc.title} ({doc.get_document_type_display()}) as {action_str}"
+        )
+        messages.success(request, f"Document has been successfully {action_str}.")
+        
+        if request.headers.get('HX-Request'):
+            res = render(request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:master_detail', kwargs={'pk': employee_pk})})
+            res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': employee_pk})
+            return res
+        return redirect('employees:master_detail', pk=employee_pk)
+
+
+class EmployeeDocumentArchiveView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def post(self, request, pk):
+        doc = get_object_or_404(EmployeeDocument, pk=pk)
+        employee_pk = doc.employee_master_id or doc.employee_id
+        
+        doc.is_archived = not doc.is_archived
+        doc.save()
+        
+        action_str = "archived" if doc.is_archived else "restored"
+        log_audit(
+            actor=request.user,
+            action='document_archived' if doc.is_archived else 'document_restored',
+            target=doc,
+            summary=f"Marked document {doc.title} ({doc.get_document_type_display()}) as {action_str}"
+        )
+        messages.success(request, f"Document has been successfully {action_str}.")
+        
+        if request.headers.get('HX-Request'):
+            res = render(request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:master_detail', kwargs={'pk': employee_pk})})
+            res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': employee_pk})
+            return res
+        return redirect('employees:master_detail', pk=employee_pk)
+
+
 # ==========================================
 # PHASE 2: EMPLOYEE MASTER (SSOT) VIEWS
 # ==========================================
@@ -449,7 +509,8 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['active_tab'] = self.request.GET.get('tab', 'identity')
         context['documents'] = self.object.documents.all()
-        context['active_documents'] = self.object.documents.filter(is_active=True)
+        context['active_documents'] = self.object.documents.filter(is_active=True, is_archived=False)
+        context['archived_documents'] = self.object.documents.filter(is_active=True, is_archived=True)
         context['asset_assignments'] = self.object.asset_assignments.select_related('asset').all()
         context['active_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
         context['historical_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=False).select_related('asset', 'reassigned_to__employee')

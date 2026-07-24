@@ -284,7 +284,7 @@
  
                     <!-- Documents Tab Componentized -->
                     <div x-show="tab === 'documents'" style="display: none;">
-                        <c-doc-list :employee="employee" :documents="active_documents" ></c-doc-list>
+                        <c-doc-list :employee="employee" :documents="active_documents" :archived_documents="archived_documents" ></c-doc-list>
                     </div>
  
                     <!-- Assets Tab Componentized -->

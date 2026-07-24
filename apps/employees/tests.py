@@ -1211,6 +1211,61 @@ class DeviceLifecycleTests(TestCase):
         self.assertEqual(new_assign.notes, 'Reassigned to new hire')
 
 
+class DocumentLifecycleTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='doc_admin@test.com', password='password123', role='admin')
+        
+        from apps.employees.models import Employee, EmployeeStatus, EmployeeDocument, DocumentType
+        self.employee = Employee.objects.create(
+            employee_number='EMP-DOC-001',
+            first_name='Doc',
+            last_name='User',
+            status=EmployeeStatus.ACTIVE
+        )
+        self.document = EmployeeDocument.objects.create(
+            employee_master=self.employee,
+            document_type=DocumentType.NID,
+            title='NID Card',
+            is_active=True
+        )
+
+    def test_document_verification(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:document_verify', kwargs={'pk': self.document.pk})
+        
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.is_verified)
+        self.assertEqual(self.document.verified_by, self.admin)
+        self.assertIsNotNone(self.document.verified_at)
+
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.is_verified)
+        self.assertIsNone(self.document.verified_by)
+        self.assertIsNone(self.document.verified_at)
+
+    def test_document_archiving(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:document_archive', kwargs={'pk': self.document.pk})
+        
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.is_archived)
+
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.is_archived)
+
+
 
 
 
