@@ -5,6 +5,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from apps.accounts.models import SecurityPolicy, UserSession
 
+
 def require_reauth(view_func):
     """
     Decorator for sensitive views (e.g. payroll approval, role management, security settings).
@@ -18,7 +19,11 @@ def require_reauth(view_func):
                 return JsonResponse({'valid': False, 'message': 'Unauthenticated'}, status=401)
             return redirect('accounts:login')
 
-        policy = SecurityPolicy.objects.filter(role=request.user.role).first()
+        assigned_roles = [assignment.role for assignment in request.user.role_assignments.select_related('role').filter(role__is_active=True)]
+        policy = SecurityPolicy.objects.filter(role_model__in=assigned_roles).first() if hasattr(SecurityPolicy, 'role_model') else None
+        if not policy:
+            policy = SecurityPolicy.objects.filter(role=request.user.role).first()
+
         interval = policy.reauth_interval_hours if policy else 4
 
         if interval is not None and interval > 0:

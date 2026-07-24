@@ -263,11 +263,10 @@ class CustomLoginView(View):
         return self.redirect_based_on_role(user)
 
     def redirect_based_on_role(self, user):
-        if user.role == 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if user.is_superuser or PermissionEngine.evaluate(user, 'accounts.view').allowed:
             return redirect('/admin-panel/dashboard/')
-        elif user.role in ['staff', 'manager']:
-            return redirect('/staff/home/')
-        return redirect('/')
+        return redirect('/staff/home/')
 
 
 class CustomLogoutView(View):
@@ -456,7 +455,8 @@ class AdminForceLogoutUserView(LoginRequiredMixin, View):
     Admin force-logout action. Kills all active sessions for targeted user.
     """
     def post(self, request, pk):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.edit').allowed):
             return JsonResponse({'error': 'Permission denied'}, status=403)
 
         target_user = CustomUser.objects.filter(pk=pk).first()
@@ -488,7 +488,8 @@ class AdminUnlockUserView(LoginRequiredMixin, View):
     Admin manual unlock action. Resets failed attempts and clear locked_until.
     """
     def post(self, request, pk):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.edit').allowed):
             return JsonResponse({'error': 'Permission denied'}, status=403)
 
         target_user = CustomUser.objects.filter(pk=pk).first()
@@ -548,7 +549,8 @@ class AdminLoginActivityView(LoginRequiredMixin, View):
     Renders login activity logs for admin.
     """
     def get(self, request):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed):
             return redirect('/')
 
         status_filter = request.GET.get('status')
@@ -563,7 +565,8 @@ class AdminLoginActivityView(LoginRequiredMixin, View):
         })
 
     def post(self, request):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.edit').allowed):
             return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
 
         ids = request.POST.getlist('ids') or request.POST.get('ids', '').split(',')
@@ -942,7 +945,8 @@ class AdminDisableUserMFAView(LoginRequiredMixin, View):
     Admin action to disable a user's MFA if they lost their device & backup codes.
     """
     def post(self, request, pk):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.edit').allowed):
             return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
 
         target_user = CustomUser.objects.filter(pk=pk).first()
@@ -969,7 +973,8 @@ class AdminSecurityPolicyListView(LoginRequiredMixin, View):
     Manages per-role SecurityPolicy configurations.
     """
     def get(self, request):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.view').allowed):
             return redirect('/')
 
         roles = ['admin', 'manager', 'staff']
@@ -980,7 +985,8 @@ class AdminSecurityPolicyListView(LoginRequiredMixin, View):
         return render(request, 'admin_panel/security_policies.html', {'policies': policies})
 
     def post(self, request):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.edit').allowed):
             return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
 
         role = request.POST.get('role')
