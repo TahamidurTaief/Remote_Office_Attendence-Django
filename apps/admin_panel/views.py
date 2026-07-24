@@ -34,7 +34,8 @@ def admin_required(view_func):
     @wraps(view_func)
     @login_required
     def _wrapped(request, *args, **kwargs):
-        if request.user.role != 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.view').allowed or getattr(request.user, 'role', '') == 'admin'):
             return HttpResponseForbidden('Admins only.')
         return view_func(request, *args, **kwargs)
     return _wrapped

@@ -20,23 +20,27 @@ logger = logging.getLogger(__name__)
 
 def determine_user_role_variant(user):
     """
-    Determines which dashboard variant to render based on CustomUser.role
-    and whether the user is a reporting manager.
+    Determines which dashboard variant to render based on PermissionEngine resolved permissions,
+    assigned roles, and whether the user is a reporting manager.
     Returns: 'admin', 'hr', 'manager', or 'employee'.
     """
     if not user or not user.is_authenticated:
         return 'employee'
 
-    # Admin check (superuser or role=='admin')
-    if user.is_superuser or getattr(user, 'role', '') == 'admin':
+    from apps.accounts.engine import PermissionEngine
+
+    # Admin check (superuser or accounts.view/edit permission or role=='admin')
+    if user.is_superuser or PermissionEngine.evaluate(user, 'accounts.view').allowed or getattr(user, 'role', '') == 'admin':
         return 'admin'
 
-    # HR check
+    # HR check (hr permission or role in hr roles)
+    if PermissionEngine.evaluate(user, 'employees.view').allowed and PermissionEngine.evaluate(user, 'leave.approve').allowed:
+        return 'hr'
     if getattr(user, 'role', '') in ('hr', 'hr_manager', 'hr_admin'):
         return 'hr'
 
-    # Manager check (role=='manager' or user has direct reports in Employee master)
-    is_manager_role = getattr(user, 'role', '') == 'manager'
+    # Manager check (projects/leave approve permission or role=='manager' or user has direct reports)
+    is_manager_role = getattr(user, 'role', '') == 'manager' or PermissionEngine.evaluate(user, 'leave.approve').allowed
     emp_master = getattr(user, 'employee_master', None)
     has_direct_reports = False
     if emp_master:
