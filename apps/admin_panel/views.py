@@ -229,6 +229,69 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
             'notice': notice_master_emp,
         }
 
+        # Attendance Phase 4 Additional Metrics
+        from django.db.models import Sum
+        from apps.attendance.models import AttendanceCorrectionRequest, ForgotCheckoutRequest, AttendanceLocation
+
+        team_pending_corrections = AttendanceCorrectionRequest.objects.filter(
+            attendance__employee__in=allowed_employees,
+            status='pending'
+        ).count()
+
+        team_pending_ot = Attendance.objects.filter(
+            employee__in=allowed_employees,
+            date=today,
+            ot_status='pending'
+        ).count()
+
+        team_pending_forgot = ForgotCheckoutRequest.objects.filter(
+            attendance__employee__in=allowed_employees,
+            status__in=['pending_manager', 'pending_hr']
+        ).count()
+
+        team_live_locations = AttendanceLocation.objects.filter(
+            attendance__employee__in=allowed_employees,
+            attendance__date=today
+        ).select_related('attendance', 'attendance__employee').order_by('-timestamp')[:10]
+
+        # HR & Admin Analytics KPIs
+        total_employees_cnt = max(allowed_employees.count(), 1)
+        attendance_pct = round((present_count / total_employees_cnt) * 100, 1)
+        late_pct = round((late_count / max(present_count, 1)) * 100, 1)
+
+        gps_issues_count = Attendance.objects.filter(
+            date=today,
+            note__icontains='GEOFENCE WARNING'
+        ).count()
+
+        remote_count = todays_attendances.filter(type='field').count()
+
+        top_ot_employees = Attendance.objects.filter(
+            date__gte=today.replace(day=1),
+            date__lte=today,
+            ot_hours__gt=0,
+            employee__in=allowed_employees
+        ).values('employee__full_name').annotate(total_ot=Sum('ot_hours')).order_by('-total_ot')[:5]
+
+        hr_breakdown = {
+            'present': present_count,
+            'absent': absent_count,
+            'on_leave': on_leave_today,
+            'late': late_count,
+            'remote': remote_count,
+            'pending_corrections': team_pending_corrections,
+            'pending_ot': team_pending_ot,
+            'pending_forgot': team_pending_forgot,
+        }
+
+        admin_analytics = {
+            'total_employees': allowed_employees.count(),
+            'attendance_pct': attendance_pct,
+            'late_pct': late_pct,
+            'gps_issues_count': gps_issues_count,
+            'top_ot_employees': list(top_ot_employees),
+        }
+
         context.update({
             'can_view_all': can_view_all,
             'branches': branches_context,
@@ -252,6 +315,12 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
             'master_stats': master_stats,
             'dept_summary': dept_summary,
             'recent_master_joiners': recent_master_joiners,
+            'team_pending_corrections': team_pending_corrections,
+            'team_pending_ot': team_pending_ot,
+            'team_pending_forgot': team_pending_forgot,
+            'team_live_locations': team_live_locations,
+            'hr_breakdown': hr_breakdown,
+            'admin_analytics': admin_analytics,
         })
         return context
 
