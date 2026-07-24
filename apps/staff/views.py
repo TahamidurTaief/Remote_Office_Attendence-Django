@@ -15,7 +15,9 @@ def check_staff_role(user):
         return False
     if user.is_superuser:
         return True
-    return PermissionEngine.evaluate(user, 'attendance.view').allowed or hasattr(user, 'employee_profile')
+    if PermissionEngine.evaluate(user, 'attendance.view').allowed or hasattr(user, 'employee_profile'):
+        return True
+    return getattr(user, 'role', '') in ('staff', 'manager', 'admin')
 
 
 @login_required
