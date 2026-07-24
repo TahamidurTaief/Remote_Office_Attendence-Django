@@ -333,6 +333,35 @@ function checkBothReady() {
     }
     hint.className = 'text-center text-xs text-gray-400 mt-2';
   }
+// ==================
+// Offline IndexedDB Queue
+// ==================
+const dbName = "FieldTrackOfflineDB";
+const storeName = "attendanceQueue";
+
+function getDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(storeName)) {
+                db.createObjectStore(storeName, { keyPath: "sync_uuid" });
+            }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function queueOfflineAction(action) {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeName, "readwrite");
+        const store = transaction.objectStore(storeName);
+        const request = store.put(action);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
 }
 
 // ==================
@@ -345,24 +374,45 @@ function submitCheckIn() {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
   
+  const lat = document.getElementById('id_latitude').value;
+  const lng = document.getElementById('id_longitude').value;
+  const acc = document.getElementById('id_accuracy').value;
+  const address = document.getElementById('id_address').value;
+  const note = document.getElementById('id_note').value || '';
+  const type = document.querySelector('input[name="attendance_type"]:checked')?.value || 'office';
+
+  if (!navigator.onLine) {
+      const sync_uuid = (crypto.randomUUID && crypto.randomUUID()) || ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+      queueOfflineAction({
+          action: 'check_in',
+          latitude: lat || 0,
+          longitude: lng || 0,
+          accuracy: acc || 0,
+          address: address || 'Offline Check-in location',
+          note: note,
+          type: type,
+          sync_uuid: sync_uuid,
+          client_event_time: new Date().toISOString()
+      }).then(() => {
+          alert('You are offline. Checked in successfully locally. Your attendance will sync automatically when your connection is restored.');
+          window.location.href = '/staff/home/';
+      }).catch(err => {
+          alert('Failed to save check-in offline: ' + err);
+          btn.disabled = false;
+          btn.textContent = 'Complete Check In';
+      });
+      return;
+  }
+
   const formData = new FormData();
-  formData.append('latitude', 
-    document.getElementById('id_latitude').value);
-  formData.append('longitude', 
-    document.getElementById('id_longitude').value);
-  formData.append('accuracy', 
-    document.getElementById('id_accuracy').value);
-  formData.append('address', 
-    document.getElementById('id_address').value);
-  formData.append('photo', 
-    document.getElementById('camera-input').files[0]);
-  formData.append('note', 
-    document.getElementById('id_note').value || '');
-  formData.append('type',
-    document.querySelector('input[name="attendance_type"]:checked')
-    ?.value || 'office');
-  formData.append('csrfmiddlewaretoken', 
-    document.querySelector('[name=csrfmiddlewaretoken]').value);
+  formData.append('latitude', lat);
+  formData.append('longitude', lng);
+  formData.append('accuracy', acc);
+  formData.append('address', address);
+  formData.append('photo', document.getElementById('camera-input').files[0]);
+  formData.append('note', note);
+  formData.append('type', type);
+  formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
 
   fetch('/attendance/check-in/', {
     method: 'POST',

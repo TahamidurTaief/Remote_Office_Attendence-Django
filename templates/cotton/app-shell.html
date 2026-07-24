@@ -325,6 +325,35 @@
 
   {# ── Init lucide icons after each htmx swap ──────────────────────── #}
   <script>
+    // Offline IndexedDB Queue globals
+    const dbName = "FieldTrackOfflineDB";
+    const storeName = "attendanceQueue";
+
+    function getDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(dbName, 1);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    db.createObjectStore(storeName, { keyPath: "sync_uuid" });
+                }
+            };
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    async function queueOfflineAction(action) {
+        const db = await getDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(storeName, "readwrite");
+            const store = transaction.objectStore(storeName);
+            const request = store.put(action);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', () => { if(window.lucide) lucide.createIcons(); });
     document.addEventListener('htmx:afterSwap', () => { if(window.lucide) lucide.createIcons(); });
     document.addEventListener('htmx:afterSettle', () => { if(window.lucide) lucide.createIcons(); });

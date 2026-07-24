@@ -1,4 +1,13 @@
 <c-app-shell page_title="Attendance History | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
+{# Offline Sync Status Banner #}
+<div id="sync-banner" style="display:none" class="mb-6 p-4 bg-amber-500 text-white rounded-2xl flex items-center justify-between text-sm font-semibold shadow-sm animate-pulse">
+    <div class="flex items-center gap-2">
+        <i data-lucide="wifi-off" class="w-4 h-4"></i>
+        <span>Offline Mode: <span id="sync-pending-count" class="font-bold">0</span> pending check-in/out event(s)</span>
+    </div>
+    <button onclick="syncOfflineQueue()" class="px-3 py-1.5 bg-white text-amber-700 rounded-xl hover:bg-amber-50 transition-colors text-xs font-bold">Sync Now</button>
+</div>
+
 <div class="bg-primary text-white px-6 pt-8 pb-16 rounded-card mb-6">
     <h1 class="text-2xl font-bold mb-6">Attendance History</h1>
     
@@ -17,8 +26,48 @@
     </div>
 </div>
 
-<div id="attendance-list-wrapper">
-    {% include 'staff/partials/attendance_list.html' %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2" id="attendance-list-wrapper">
+        {% include 'staff/partials/attendance_list.html' %}
+    </div>
+    <div class="space-y-6">
+        {# Quick Actions Card #}
+        <c-card title="Quick Actions">
+            <div class="grid grid-cols-2 gap-3">
+                <a href="{% url 'attendance:employee_timeline' %}" class="flex flex-col items-center justify-center p-4 border rounded-2xl hover:bg-gray-50 transition-colors text-center" style="border-color:var(--border)">
+                    <i data-lucide="map-pin" class="w-6 h-6 text-indigo-600 mb-2"></i>
+                    <span class="text-xs font-bold" style="color:var(--text)">Timeline</span>
+                </a>
+                <a href="{% url 'staff:check_in_page' %}" class="flex flex-col items-center justify-center p-4 border rounded-2xl hover:bg-gray-50 transition-colors text-center" style="border-color:var(--border)">
+                    <i data-lucide="log-in" class="w-6 h-6 text-emerald-600 mb-2"></i>
+                    <span class="text-xs font-bold" style="color:var(--text)">Punch In</span>
+                </a>
+            </div>
+        </c-card>
+
+        {# Activity Feed Card #}
+        <c-card title="Activity Feed" subtitle="Recent attendance actions and updates">
+            <div class="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                {% for log in activity_logs %}
+                <div class="flex items-start gap-3 text-xs">
+                    <div class="mt-1 w-2 h-2 rounded-full flex-shrink-0
+                        {% if log.action == 'check_in' %}bg-emerald-500
+                        {% elif log.action == 'check_out' %}bg-rose-500
+                        {% else %}bg-amber-500{% endif %}">
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-semibold" style="color:var(--text)">{{ log.description }}</p>
+                        <p class="text-[10px]" style="color:var(--text-muted)">{{ log.timestamp|date:"d M Y, h:i A" }}</p>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-6 text-[11px]" style="color:var(--text-muted)">
+                    No recent activities.
+                </div>
+                {% endfor %}
+            </div>
+        </c-card>
+    </div>
 </div>
 
 <!-- Modals -->
@@ -162,6 +211,92 @@ async function submitCorrectionForm(event) {
         alert("Error: " + result.error);
     }
 }
+
+// ==================
+// Offline IndexedDB Queue
+// ==================
+const dbName = "FieldTrackOfflineDB";
+const storeName = "attendanceQueue";
+
+function getDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(storeName)) {
+                db.createObjectStore(storeName, { keyPath: "sync_uuid" });
+            }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function getQueue() {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeName, "readonly");
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function updateBanner() {
+    const queue = await getQueue();
+    const banner = document.getElementById('sync-banner');
+    const countSpan = document.getElementById('sync-pending-count');
+    if (banner && countSpan) {
+        if (queue.length > 0) {
+            banner.style.display = 'flex';
+            countSpan.textContent = queue.length;
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+}
+
+async function syncOfflineQueue() {
+    if (!navigator.onLine) return;
+    const queue = await getQueue();
+    if (queue.length === 0) return;
+    
+    try {
+        const response = await fetch("{% url 'attendance:bulk_sync' %}", {
+            method: 'POST',
+            body: JSON.stringify({ actions: queue }),
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        const result = await response.json();
+        if (result.success && result.synced > 0) {
+            const db = await getDB();
+            const transaction = db.transaction(storeName, "readwrite");
+            const store = transaction.objectStore(storeName);
+            for (const item of queue) {
+                store.delete(item.sync_uuid);
+            }
+            transaction.oncomplete = () => {
+                updateBanner();
+                alert(`Successfully synced ${result.synced} offline event(s) with the server.`);
+                location.reload();
+            };
+        }
+    } catch (err) {
+        console.error("Offline bulk sync error:", err);
+    }
+}
+
+window.addEventListener('online', syncOfflineQueue);
+document.addEventListener('DOMContentLoaded', () => {
+    updateBanner();
+    if (navigator.onLine) {
+        syncOfflineQueue();
+    }
+});
 </script>
 </c-app-shell>
 
