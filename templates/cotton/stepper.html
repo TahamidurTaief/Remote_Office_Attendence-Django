@@ -2,13 +2,14 @@
    Multi-step progress indicator.
    Props:
    - current: 1-based index of the active step (int, required)
-   - step_count: total number of steps (2-5, default 3)
-   - step1…step5: label for each step
+   - step_count: total number of steps (2-8, default 3)
+   - step1…step8: label for each step
    - extra_class: additional classes on wrapper
 
    Usage:
-     <c-stepper current="{{ wizard.step }}" step_count="3"
-                step1="Personal Info" step2="Work Details" step3="Review" ></c-stepper>
+     <c-stepper current="{{ wizard.step }}" step_count="8"
+                step1="Basic Info" step2="Organization" step3="Payroll" step4="Security"
+                step5="Documents" step6="Emergency Contact" step7="Assets" step8="Review"></c-stepper>
 {% endcomment %}
 
 {% with cur=current|default:1 cnt=step_count|default:3 %}
@@ -22,7 +23,7 @@
     <div class="ft-stepper-label">{{ step1|default:"Step 1" }}</div>
   </div>
 
-  {# Step 2 — always rendered for ≥2 step count #}
+  {# Step 2 #}
   {% if cnt >= 2 %}
   <div class="ft-stepper-step{% if cur > 2 %} completed{% elif cur == 2 %} active{% endif %}">
     <div class="ft-stepper-dot">
@@ -59,6 +60,36 @@
       {% if cur > 5 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}5{% endif %}
     </div>
     <div class="ft-stepper-label">{{ step5|default:"Step 5" }}</div>
+  </div>
+  {% endif %}
+
+  {# Step 6 #}
+  {% if cnt >= 6 %}
+  <div class="ft-stepper-step{% if cur > 6 %} completed{% elif cur == 6 %} active{% endif %}">
+    <div class="ft-stepper-dot">
+      {% if cur > 6 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}6{% endif %}
+    </div>
+    <div class="ft-stepper-label">{{ step6|default:"Step 6" }}</div>
+  </div>
+  {% endif %}
+
+  {# Step 7 #}
+  {% if cnt >= 7 %}
+  <div class="ft-stepper-step{% if cur > 7 %} completed{% elif cur == 7 %} active{% endif %}">
+    <div class="ft-stepper-dot">
+      {% if cur > 7 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}7{% endif %}
+    </div>
+    <div class="ft-stepper-label">{{ step7|default:"Step 7" }}</div>
+  </div>
+  {% endif %}
+
+  {# Step 8 #}
+  {% if cnt >= 8 %}
+  <div class="ft-stepper-step{% if cur > 8 %} completed{% elif cur == 8 %} active{% endif %}">
+    <div class="ft-stepper-dot">
+      {% if cur > 8 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}8{% endif %}
+    </div>
+    <div class="ft-stepper-label">{{ step8|default:"Step 8" }}</div>
   </div>
   {% endif %}
 

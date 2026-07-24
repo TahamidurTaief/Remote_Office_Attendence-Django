@@ -220,7 +220,7 @@
       </div>
       {% endif %}
       <div class="flex-1">
-        {{ slot }}
+        {% block content %}{{ slot }}{% endblock %}
       </div>
     </main>
   </div>
