@@ -1027,6 +1027,57 @@ class SuspensionTests(TestCase):
         self.assertEqual(hist.reason, 'Violation of policy')
 
 
+class ActivityLogTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='activity_admin@test.com', password='password123', role='admin')
+        self.staff_user = User.objects.create_user(email='activity_staff@test.com', password='password123', role='staff')
+        
+        from apps.employees.models import Employee, EmployeeStatus
+        self.employee = Employee.objects.create(
+            employee_number='EMP-ACT-001',
+            first_name='Activity',
+            last_name='User',
+            status=EmployeeStatus.ACTIVE,
+            user=self.staff_user
+        )
+
+    def test_activity_log_on_edit(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:master_edit', kwargs={'pk': self.employee.pk})
+        
+        response = self.client.post(url, {
+            'first_name': 'UpdatedName',
+            'last_name': 'User',
+            'employee_number': 'EMP-ACT-001',
+            'gender': 'male',
+            'joined_date': '2026-07-01',
+            'employment_type': 'full_time',
+            'status': 'active',
+            'change_reason': 'Updating name for test'
+        })
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.first_name, 'UpdatedName')
+
+        from apps.employees.models import EmployeeActivityLog
+        logs = EmployeeActivityLog.objects.filter(employee=self.employee)
+        self.assertTrue(logs.exists())
+        self.assertIn('first_name', [l.field_changed for l in logs])
+        log_first_name = logs.filter(field_changed='first_name').first()
+        self.assertIsNotNone(log_first_name)
+        self.assertIn('UpdatedName', log_first_name.action_description)
+
+    def test_activity_log_on_archive(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:master_archive', kwargs={'pk': self.employee.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+
+        from apps.employees.models import EmployeeActivityLog
+        log = EmployeeActivityLog.objects.filter(employee=self.employee, action_description__icontains='archived').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.field_changed, 'status')
+
+
 
 
 

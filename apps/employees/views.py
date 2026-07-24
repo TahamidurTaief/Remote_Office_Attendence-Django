@@ -536,6 +536,13 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                 target=employee,
                 summary=f"Changed status from {old_status} to {employee.status}"
             )
+            from apps.employees.models import EmployeeActivityLog
+            EmployeeActivityLog.objects.create(
+                employee=employee,
+                actor=self.request.user,
+                action_description=f"Changed Employment Status from '{old_status}' to '{employee.status}'",
+                field_changed='status'
+            )
 
         # Track other field changes
         fields_to_track = [
@@ -547,6 +554,8 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
             'basic_salary', 'salary_structure', 'bank_name', 'bank_account', 'payment_method',
             'tax_profile', 'pf_enabled', 'overtime_policy', 'user', 'data_scope', 'mfa_required'
         ]
+
+        from apps.employees.models import EmployeeActivityLog
 
         for field in fields_to_track:
             old_val = getattr(old_instance, field)
@@ -574,6 +583,13 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                     action=f'employee_{field}_changed',
                     target=employee,
                     summary=f"Changed {field} from '{old_str}' to '{new_str}'"
+                )
+                field_label = field.replace('_', ' ').capitalize()
+                EmployeeActivityLog.objects.create(
+                    employee=employee,
+                    actor=self.request.user,
+                    action_description=f"Updated {field_label} from '{old_str}' to '{new_str}'",
+                    field_changed=field
                 )
 
         if self.request.headers.get('HX-Request'):
@@ -612,6 +628,13 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
             action='employee_status_changed',
             target=employee,
             summary=f"Archived employee {employee.employee_number}"
+        )
+        from apps.employees.models import EmployeeActivityLog
+        EmployeeActivityLog.objects.create(
+            employee=employee,
+            actor=request.user,
+            action_description=f"Archived employee (soft deleted from status '{old_status}')",
+            field_changed='status'
         )
 
         messages.success(request, f"Employee {employee.get_full_name()} has been archived.")

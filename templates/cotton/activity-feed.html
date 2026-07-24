@@ -1,0 +1,48 @@
+{% comment %} c-activity-feed component
+   Props:
+   - logs: QuerySet of EmployeeActivityLog
+{% endcomment %}
+
+<div class="flow-root">
+    <ul role="list" class="-mb-8">
+        {% for log in logs %}
+        <li>
+            <div class="relative pb-8">
+                {% if not forloop.last %}
+                <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-slate-200" aria-hidden="true"></span>
+                {% endif %}
+                <div class="relative flex space-x-3">
+                    <div>
+                        <span class="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center ring-8 ring-white">
+                            {% if log.field_changed == 'status' %}
+                            <svg class="h-4 w-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            {% elif log.field_changed == 'is_suspended' %}
+                            <svg class="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            {% else %}
+                            <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
+                        <div>
+                            <p class="text-sm text-slate-600">
+                                {{ log.action_description }}
+                                <span class="font-medium text-slate-900">
+                                    by {% if log.actor %}{{ log.actor.get_full_name|default:log.actor.email }}{% else %}System{% endif %}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="text-right text-xs whitespace-nowrap text-slate-400">
+                            <time datetime="{{ log.timestamp|date:'c' }}">{{ log.timestamp|timesince }} ago</time>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </li>
+        {% empty %}
+        <div class="py-6 text-center text-slate-500 text-sm">
+            No recent activity logged for this employee profile.
+        </div>
+        {% endfor %}
+    </ul>
+</div>

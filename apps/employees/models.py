@@ -618,3 +618,17 @@ class LifecycleTransitionRequest(models.Model):
     def is_pending(self):
         return self.review_status == self.ReviewStatus.PENDING
 
+
+class EmployeeActivityLog(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='activity_logs')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    action_description = models.TextField()
+    field_changed = models.CharField(max_length=100, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.employee.get_full_name()} - {self.action_description} by {self.actor} ({self.timestamp})"
+
