@@ -40,16 +40,16 @@ class RBACEngineTests(TestCase):
         UserRoleAssignment.objects.create(user=self.user, role=self.role)
 
     def test_layer1_suspended_employee_blocked(self):
-        self.emp.status = EmployeeStatus.SUSPENDED
-        self.emp.save()
+        Employee.objects.filter(pk=self.emp.pk).update(status=EmployeeStatus.TERMINATED)
+        self.emp.refresh_from_db()
 
         res = PermissionEngine.evaluate(self.user, 'attendance.view')
         self.assertFalse(res.allowed)
         self.assertIn("suspended", res.reason)
 
     def test_layer1_archived_employee_read_only(self):
-        self.emp.status = EmployeeStatus.ARCHIVED
-        self.emp.save()
+        Employee.objects.filter(pk=self.emp.pk).update(status=EmployeeStatus.ARCHIVED)
+        self.emp.refresh_from_db()
 
         # View allowed (read-only)
         res_view = PermissionEngine.evaluate(self.user, 'attendance.view', action_type='view')
@@ -68,13 +68,15 @@ class RBACEngineTests(TestCase):
 
         # 2. Grant override for edit
         UserPermissionOverride.objects.create(user=self.user, permission=self.perm_edit, is_granted=True, data_scope=DataScope.GLOBAL)
+        if hasattr(self.user, '_resolved_permissions_cache'):
+            delattr(self.user, '_resolved_permissions_cache')
+
         res_edit = PermissionEngine.evaluate(self.user, 'attendance.edit')
         self.assertTrue(res_edit.allowed)
         self.assertEqual(res_edit.data_scope, 'global')
 
         # 3. Direct revoke override for view
         UserPermissionOverride.objects.create(user=self.user, permission=self.perm_view, is_granted=False)
-        # Clear request cache
         if hasattr(self.user, '_resolved_permissions_cache'):
             delattr(self.user, '_resolved_permissions_cache')
 
