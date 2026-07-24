@@ -21,5 +21,13 @@ urlpatterns = [
     path('master/<int:pk>/', views.EmployeeMasterDetailView.as_view(), name='master_detail'),
     path('master/<int:pk>/edit/', views.EmployeeMasterEditView.as_view(), name='master_edit'),
     path('master/<int:pk>/archive/', views.EmployeeMasterArchiveView.as_view(), name='master_archive'),
+
+    # Document Management & Asset Assignment Routes (Phase 2 Step 3)
+    path('master/<int:pk>/documents/upload/', views.EmployeeDocumentUploadView.as_view(), name='document_upload'),
+    path('documents/<int:pk>/download/', views.EmployeeDocumentDownloadView.as_view(), name='document_download'),
+    path('assets/', views.AssetListView.as_view(), name='asset_list'),
+    path('assets/create/', views.AssetCreateView.as_view(), name='asset_create'),
+    path('master/<int:pk>/assets/assign/', views.AssetAssignView.as_view(), name='asset_assign'),
+    path('assets/assignment/<int:pk>/return/', views.AssetReturnView.as_view(), name='asset_return'),
 ]
 

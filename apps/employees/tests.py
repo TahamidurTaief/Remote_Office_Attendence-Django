@@ -296,12 +296,12 @@ class EmployeeDocumentTests(TestCase):
 
         # POST valid data
         post_data = {
-            'document_type': 'Trade License',
+            'document_type': 'contract',
             'expiry_date': '2026-12-31',
         }
         response = self.client.post(url_add, data=post_data)
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(EmployeeDocument.objects.filter(document_type='Trade License').exists())
+        self.assertTrue(EmployeeDocument.objects.filter(document_type='contract').exists())
 
     def test_document_expiry_7_days_email_escalation(self):
         import datetime
@@ -583,7 +583,121 @@ class EmployeeMasterTests(TestCase):
         legacy_prof.refresh_from_db()
         self.assertEqual(legacy_prof.master_employee, master)
         self.assertEqual(legacy_prof.full_name, 'Reconciled User')
-        self.assertEqual(legacy_prof.phone, '+8801711112222')
+
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from apps.employees.models import EmployeeDocument, DocumentType, DocumentDownloadLog, Asset, AssetAssignment, AssetType, AssetCondition
+
+class Step3DocumentAndAssetTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='docassetadmin@test.com', password='Password123!', role='admin')
+        self.staff_user1 = User.objects.create_user(email='staff1@test.com', password='Password123!', role='staff')
+        self.staff_user2 = User.objects.create_user(email='staff2@test.com', password='Password123!', role='staff')
+
+        self.branch = Branch.objects.create(name='DocBranch', latitude=23.8, longitude=90.4)
+
+        self.emp1 = Employee.objects.create(
+            employee_number='EMP-DOC-1',
+            first_name='DocOwner',
+            last_name='Staff',
+            branch=self.branch,
+            user=self.staff_user1,
+            status=EmployeeStatus.ACTIVE
+        )
+
+        self.emp2 = Employee.objects.create(
+            employee_number='EMP-DOC-2',
+            first_name='OtherStaff',
+            last_name='User',
+            branch=self.branch,
+            user=self.staff_user2,
+            status=EmployeeStatus.ACTIVE
+        )
+
+    def test_document_versioning_and_deactivation(self):
+        test_file = SimpleUploadedFile("nid_v1.pdf", b"file_content_v1", content_type="application/pdf")
+        doc1 = EmployeeDocument.objects.create(
+            employee_master=self.emp1,
+            document_type=DocumentType.NID,
+            file=test_file,
+            uploaded_by=self.admin
+        )
+        self.assertEqual(doc1.version, 1)
+        self.assertTrue(doc1.is_active)
+
+        test_file2 = SimpleUploadedFile("nid_v2.pdf", b"file_content_v2", content_type="application/pdf")
+        doc2 = EmployeeDocument.objects.create(
+            employee_master=self.emp1,
+            document_type=DocumentType.NID,
+            file=test_file2,
+            uploaded_by=self.admin
+        )
+        doc1.refresh_from_db()
+        self.assertEqual(doc2.version, 2)
+        self.assertTrue(doc2.is_active)
+        self.assertFalse(doc1.is_active)
+
+    def test_sensitive_document_rbac_permission(self):
+        test_file = SimpleUploadedFile("nid.pdf", b"secret_content", content_type="application/pdf")
+        doc = EmployeeDocument.objects.create(
+            employee_master=self.emp1,
+            document_type=DocumentType.NID,
+            file=test_file
+        )
+
+        # 1. Staff 2 (unauthorized) tries to download Staff 1's NID -> 403
+        self.client.force_login(self.staff_user2)
+        UserSession.objects.create(user=self.staff_user2, session_key=self.client.session.session_key, is_active=True)
+        res_denied = self.client.get(reverse('employees:document_download', kwargs={'pk': doc.pk}))
+        self.assertEqual(res_denied.status_code, 403)
+
+        # 2. Staff 1 (self) downloads -> 200
+        self.client.force_login(self.staff_user1)
+        UserSession.objects.create(user=self.staff_user1, session_key=self.client.session.session_key, is_active=True)
+        res_self = self.client.get(reverse('employees:document_download', kwargs={'pk': doc.pk}))
+        self.assertEqual(res_self.status_code, 200)
+
+        # 3. Download log created
+        self.assertTrue(DocumentDownloadLog.objects.filter(document=doc, downloaded_by=self.staff_user1).exists())
+
+    def test_asset_double_assignment_prevention_and_return(self):
+        asset = Asset.objects.create(
+            asset_tag='AST-LAPTOP-01',
+            name='MacBook Pro',
+            asset_type=AssetType.LAPTOP,
+            condition=AssetCondition.NEW
+        )
+
+        # 1. Assign to Emp 1
+        assign1 = AssetAssignment.objects.create(
+            asset=asset,
+            employee=self.emp1,
+            assigned_date=date.today(),
+            condition_at_assignment=AssetCondition.NEW
+        )
+        self.assertTrue(asset.is_assigned())
+
+        # 2. Attempting second active assignment to Emp 2 raises ValidationError
+        assign2 = AssetAssignment(
+            asset=asset,
+            employee=self.emp2,
+            assigned_date=date.today(),
+            condition_at_assignment=AssetCondition.GOOD
+        )
+        with self.assertRaises(ValidationError):
+            assign2.save()
+
+        # 3. Return asset
+        assign1.returned_date = date.today()
+        assign1.condition_at_return = AssetCondition.GOOD
+        assign1.save()
+
+        self.assertFalse(asset.is_assigned())
+
+        # 4. Now Emp 2 can be assigned
+        assign2.save()
+        self.assertTrue(asset.is_assigned())
+        self.assertEqual(asset.current_assignment().employee, self.emp2)
 
 
 

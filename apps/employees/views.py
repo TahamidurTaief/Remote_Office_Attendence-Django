@@ -2,8 +2,10 @@ from datetime import datetime
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, DetailView, UpdateView, View
+from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib import messages
-from apps.accounts.mixins import AdminRequiredMixin
+from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
+from apps.notifications.models import log_audit
 from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument
 from .forms import EmployeeCreateForm, EmployeeEditForm, EmployeeDocumentForm
 from apps.branches.models import Branch
@@ -11,6 +13,12 @@ from apps.attendance.models import Attendance
 from django.db.models import Q
 from django.utils import timezone
 import calendar
+
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '')
 
 class EmployeeListView(AdminRequiredMixin, ListView):
     model = EmployeeProfile
@@ -429,11 +437,20 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
     def get_queryset(self):
         return Employee.objects.select_related(
             'branch', 'department', 'designation', 'reporting_manager', 'user'
-        ).prefetch_related('direct_reports', 'employment_history__approved_by')
+        ).prefetch_related(
+            'direct_reports',
+            'employment_history__approved_by',
+            'documents__uploaded_by',
+            'asset_assignments__asset'
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['active_tab'] = self.request.GET.get('tab', 'identity')
+        context['documents'] = self.object.documents.all()
+        context['active_documents'] = self.object.documents.filter(is_active=True)
+        context['asset_assignments'] = self.object.asset_assignments.select_related('asset').all()
+        context['active_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
         return context
 
 
@@ -594,4 +611,172 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
             return response
 
         return redirect('employees:master_list')
+
+
+# Document Management & Asset Assignment Views (Phase 2 Step 3)
+from apps.employees.models import Asset, AssetAssignment, DocumentDownloadLog, DocumentType, SENSITIVE_DOCUMENT_TYPES
+from apps.employees.forms import EmployeeDocumentForm, AssetForm, AssetAssignmentForm, AssetReturnForm
+
+class EmployeeDocumentUploadView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def get(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        form = EmployeeDocumentForm()
+        return render(request, 'employees/partials/document_upload_modal.html', {
+            'employee': employee,
+            'form': form
+        })
+
+    def post(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        form = EmployeeDocumentForm(request.POST, request.FILES)
+        if form.is_valid():
+            doc = form.save(commit=False)
+            doc.employee_master = employee
+            doc.uploaded_by = request.user
+            doc.save()
+
+            log_audit(actor=request.user, action='document_uploaded', target=doc, summary=f"Uploaded {doc.get_document_type_display()} v{doc.version} for {employee.get_full_name()}")
+            messages.success(request, f"Document {doc.get_document_type_display()} v{doc.version} uploaded successfully.")
+
+            if request.headers.get('HX-Request'):
+                response = render(request, 'employees/partials/form_success_htmx.html', {
+                    'redirect_url': reverse('employees:master_detail', kwargs={'pk': employee.pk})
+                })
+                response['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': employee.pk})
+                return response
+            return redirect('employees:master_detail', pk=employee.pk)
+
+        return render(request, 'employees/partials/document_upload_modal.html', {
+            'employee': employee,
+            'form': form
+        })
+
+
+class EmployeeDocumentDownloadView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager', 'staff']
+
+    def get(self, request, pk):
+        doc = get_object_or_404(EmployeeDocument.objects.select_related('employee_master', 'employee_master__reporting_manager'), pk=pk)
+
+        # Sensitive RBAC check
+        if doc.is_sensitive():
+            user = request.user
+            user_role = getattr(user, 'role', '')
+            is_hr_admin = user_role in ['admin', 'hr'] or user.is_superuser
+            is_self = doc.employee_master and doc.employee_master.user_id == user.id
+            is_manager = doc.employee_master and doc.employee_master.reporting_manager and doc.employee_master.reporting_manager.user_id == user.id
+
+            if not (is_hr_admin or is_self or is_manager):
+                log_audit(actor=user, action='document_access_denied', target=doc, summary=f"Unauthorized download attempt for document {doc.pk}")
+                return HttpResponseForbidden("Access denied: You do not have permission to view sensitive documents of this employee.")
+
+        DocumentDownloadLog.objects.create(
+            document=doc,
+            downloaded_by=request.user,
+            ip_address=get_client_ip(request)
+        )
+        log_audit(actor=request.user, action='document_downloaded', target=doc, summary=f"Downloaded document {doc.title or doc.get_document_type_display()} for {doc.employee_master}")
+
+        if not doc.file or not doc.file.storage.exists(doc.file.name):
+            messages.error(request, "Document file not found.")
+            return redirect('employees:master_detail', pk=doc.employee_master_id or 1)
+
+        response = HttpResponse(doc.file.read(), content_type='application/octet-stream')
+        filename = doc.file.name.split('/')[-1]
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
+class AssetListView(RoleRequiredMixin, ListView):
+    allowed_roles = ['admin', 'manager']
+    model = Asset
+    template_name = 'employees/asset_list.html'
+    context_object_name = 'assets'
+
+    def get_queryset(self):
+        qs = Asset.objects.prefetch_related('assignments__employee')
+        type_filter = self.request.GET.get('type')
+        q = self.request.GET.get('q')
+        if type_filter:
+            qs = qs.filter(asset_type=type_filter)
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(asset_tag__icontains=q) | Q(serial_number__icontains=q))
+        return qs
+
+
+class AssetCreateView(RoleRequiredMixin, CreateView):
+    allowed_roles = ['admin', 'manager']
+    model = Asset
+    form_class = AssetForm
+    template_name = 'employees/partials/asset_form_modal.html'
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        log_audit(actor=self.request.user, action='asset_created', target=self.object, summary=f"Created asset {self.object.asset_tag}")
+        messages.success(self.request, f"Asset {self.object.asset_tag} created.")
+        if self.request.headers.get('HX-Request'):
+            res = render(self.request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:asset_list')})
+            res['HX-Redirect'] = reverse('employees:asset_list')
+            return res
+        return response
+
+    def get_success_url(self):
+        return reverse('employees:asset_list')
+
+
+class AssetAssignView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def get(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        form = AssetAssignmentForm()
+        return render(request, 'employees/partials/asset_assign_modal.html', {'employee': employee, 'form': form})
+
+    def post(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        form = AssetAssignmentForm(request.POST)
+        if form.is_valid():
+            assignment = form.save(commit=False)
+            assignment.employee = employee
+            assignment.assigned_by = request.user
+            assignment.save()
+
+            log_audit(actor=request.user, action='asset_assigned', target=assignment, summary=f"Assigned asset {assignment.asset.asset_tag} to {employee.get_full_name()}")
+            messages.success(request, f"Asset {assignment.asset.asset_tag} assigned to {employee.get_full_name()}.")
+
+            if request.headers.get('HX-Request'):
+                res = render(request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:master_detail', kwargs={'pk': employee.pk})})
+                res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': employee.pk})
+                return res
+            return redirect('employees:master_detail', pk=employee.pk)
+
+        return render(request, 'employees/partials/asset_assign_modal.html', {'employee': employee, 'form': form})
+
+
+class AssetReturnView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'manager']
+
+    def get(self, request, pk):
+        assignment = get_object_or_404(AssetAssignment, pk=pk)
+        form = AssetReturnForm(instance=assignment, initial={'returned_date': timezone.localdate()})
+        return render(request, 'employees/partials/asset_return_modal.html', {'assignment': assignment, 'form': form})
+
+    def post(self, request, pk):
+        assignment = get_object_or_404(AssetAssignment, pk=pk)
+        form = AssetReturnForm(request.POST, instance=assignment)
+        if form.is_valid():
+            updated = form.save()
+            log_audit(actor=request.user, action='asset_returned', target=updated, summary=f"Returned asset {updated.asset.asset_tag} from {updated.employee.get_full_name()}")
+            messages.success(request, f"Asset {updated.asset.asset_tag} returned.")
+
+            if request.headers.get('HX-Request'):
+                res = render(request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:master_detail', kwargs={'pk': updated.employee_id})})
+                res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': updated.employee_id})
+                return res
+            return redirect('employees:master_detail', pk=updated.employee_id)
+
+        return render(request, 'employees/partials/asset_return_modal.html', {'assignment': assignment, 'form': form})
+
 

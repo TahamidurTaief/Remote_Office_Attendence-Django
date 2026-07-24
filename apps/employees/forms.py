@@ -342,3 +342,61 @@ class DesignationForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
 
+
+from apps.employees.models import Asset, AssetAssignment, DocumentType, AssetType, AssetCondition
+
+class EmployeeDocumentForm(forms.ModelForm):
+    class Meta:
+        model = EmployeeDocument
+        fields = ['document_type', 'title', 'file', 'expiry_date']
+        widgets = {
+            'document_type': forms.Select(attrs={'class': SELECT_INPUT}),
+            'title': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Passport 2026-2036'}),
+            'file': forms.FileInput(attrs={'class': FILE_INPUT}),
+            'expiry_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+        }
+
+
+class AssetForm(forms.ModelForm):
+    class Meta:
+        model = Asset
+        fields = ['asset_type', 'asset_tag', 'name', 'serial_number', 'condition', 'warranty_expiry', 'is_active']
+        widgets = {
+            'asset_type': forms.Select(attrs={'class': SELECT_INPUT}),
+            'asset_tag': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'AST-1001'}),
+            'name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'MacBook Pro 16"'}),
+            'serial_number': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'C02F...'}),
+            'condition': forms.Select(attrs={'class': SELECT_INPUT}),
+            'warranty_expiry': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+        }
+
+
+class AssetAssignmentForm(forms.ModelForm):
+    class Meta:
+        model = AssetAssignment
+        fields = ['asset', 'assigned_date', 'condition_at_assignment', 'notes']
+        widgets = {
+            'asset': forms.Select(attrs={'class': SELECT_INPUT}),
+            'assigned_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'condition_at_assignment': forms.Select(attrs={'class': SELECT_INPUT}),
+            'notes': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assigned_asset_ids = AssetAssignment.objects.filter(returned_date__isnull=True).values_list('asset_id', flat=True)
+        self.fields['asset'].queryset = Asset.objects.filter(is_active=True).exclude(id__in=assigned_asset_ids)
+
+
+class AssetReturnForm(forms.ModelForm):
+    class Meta:
+        model = AssetAssignment
+        fields = ['returned_date', 'condition_at_return', 'notes']
+        widgets = {
+            'returned_date': forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'condition_at_return': forms.Select(attrs={'class': SELECT_INPUT}),
+            'notes': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+        }
+
+

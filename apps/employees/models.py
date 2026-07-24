@@ -1,6 +1,8 @@
 import uuid
+from datetime import timedelta
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from apps.branches.models import Branch
 from imagekit.models import ProcessedImageField
 from imagekit.processors import ResizeToFit, Transpose
@@ -99,26 +101,167 @@ class EmployeeLeaveRule(models.Model):
         return f"{self.employee.full_name} - {self.leave_type.name}: {self.days_per_year} days"
 
 
+from datetime import timedelta
+
+class DocumentType(models.TextChoices):
+    NID = 'nid', 'National ID (NID)'
+    PASSPORT = 'passport', 'Passport'
+    PHOTO = 'photo', 'Profile Photo'
+    RESUME = 'resume', 'Resume / CV'
+    APPOINTMENT_LETTER = 'appointment_letter', 'Appointment Letter'
+    CONTRACT = 'contract', 'Employment Contract'
+    EDUCATION = 'education', 'Education Certificate'
+    CERTIFICATE = 'certificate', 'Professional Certificate'
+    MEDICAL = 'medical', 'Medical Report'
+    POLICE_CLEARANCE = 'police_clearance', 'Police Clearance'
+    OTHER = 'other', 'Other Document'
+
+SENSITIVE_DOCUMENT_TYPES = [
+    DocumentType.NID,
+    DocumentType.PASSPORT,
+    DocumentType.MEDICAL,
+    DocumentType.POLICE_CLEARANCE,
+]
+
 class EmployeeDocument(models.Model):
+    employee_master = models.ForeignKey(
+        'Employee',
+        on_delete=models.CASCADE,
+        related_name='documents',
+        null=True, blank=True
+    )
     employee = models.ForeignKey(
         EmployeeProfile,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
         related_name='documents'
     )
-    document_type = models.CharField(max_length=100)
-    expiry_date = models.DateField()
-    file = models.FileField(
-        upload_to='employees/documents/',
-        null=True,
-        blank=True
+    document_type = models.CharField(max_length=50, choices=DocumentType.choices, default=DocumentType.OTHER)
+    title = models.CharField(max_length=255, blank=True)
+    file = models.FileField(upload_to='employees/documents/', null=True, blank=True)
+    version = models.IntegerField(default=1)
+    expiry_date = models.DateField(null=True, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True
     )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-is_active', '-version', '-uploaded_at']
+
+    def is_expiring_soon(self, days=30):
+        if not self.expiry_date:
+            return False
+        today = timezone.localdate()
+        return today <= self.expiry_date <= (today + timedelta(days=days))
+
+    def is_expired(self):
+        if not self.expiry_date:
+            return False
+        return self.expiry_date < timezone.localdate()
+
+    def is_sensitive(self):
+        return self.document_type in SENSITIVE_DOCUMENT_TYPES
+
+    def save(self, *args, **kwargs):
+        if not self.pk and self.employee_master:
+            previous_docs = EmployeeDocument.objects.filter(
+                employee_master=self.employee_master,
+                document_type=self.document_type
+            )
+            if previous_docs.exists():
+                max_ver = previous_docs.order_by('-version').first().version
+                self.version = max_ver + 1
+                previous_docs.update(is_active=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        emp_name = self.employee_master.get_full_name() if self.employee_master else (self.employee.full_name if self.employee else 'Unknown')
+        return f"{emp_name} - {self.get_document_type_display()} v{self.version}"
+
+
+class DocumentDownloadLog(models.Model):
+    document = models.ForeignKey(EmployeeDocument, on_delete=models.CASCADE, related_name='download_logs')
+    downloaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    downloaded_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-downloaded_at']
+
+
+class AssetType(models.TextChoices):
+    LAPTOP = 'laptop', 'Laptop'
+    MOBILE = 'mobile', 'Mobile Phone'
+    SIM = 'sim', 'SIM Card'
+    TABLET = 'tablet', 'Tablet'
+    TOKEN = 'token', 'Security Token / Dongle'
+    OTHER = 'other', 'Other Asset'
+
+
+class AssetCondition(models.TextChoices):
+    NEW = 'new', 'Brand New'
+    GOOD = 'good', 'Good'
+    FAIR = 'fair', 'Fair'
+    DAMAGED = 'damaged', 'Damaged / Needs Repair'
+
+
+class Asset(models.Model):
+    asset_type = models.CharField(max_length=30, choices=AssetType.choices)
+    asset_tag = models.CharField(max_length=50, unique=True, db_index=True)
+    name = models.CharField(max_length=150)
+    serial_number = models.CharField(max_length=100, blank=True)
+    condition = models.CharField(max_length=30, choices=AssetCondition.choices, default=AssetCondition.GOOD)
+    warranty_expiry = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['expiry_date']
+        ordering = ['asset_tag']
+
+    def current_assignment(self):
+        return self.assignments.filter(returned_date__isnull=True).select_related('employee').first()
+
+    def is_assigned(self):
+        return self.assignments.filter(returned_date__isnull=True).exists()
 
     def __str__(self):
-        return f"{self.employee.full_name} - {self.document_type} (Expires: {self.expiry_date})"
+        return f"{self.asset_tag} - {self.name} ({self.get_asset_type_display()})"
+
+
+class AssetAssignment(models.Model):
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='assignments')
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='asset_assignments')
+    assigned_date = models.DateField(default=timezone.now)
+    returned_date = models.DateField(null=True, blank=True)
+    condition_at_assignment = models.CharField(max_length=30, choices=AssetCondition.choices, default=AssetCondition.GOOD)
+    condition_at_return = models.CharField(max_length=30, choices=AssetCondition.choices, null=True, blank=True)
+    notes = models.TextField(blank=True)
+    assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-assigned_date']
+
+    def clean(self):
+        super().clean()
+        if not self.returned_date:
+            active_qs = AssetAssignment.objects.filter(asset=self.asset, returned_date__isnull=True)
+            if self.pk:
+                active_qs = active_qs.exclude(pk=self.pk)
+            if active_qs.exists():
+                curr_assign = active_qs.first()
+                raise ValidationError(f"Asset '{self.asset.asset_tag}' is currently assigned to {curr_assign.employee.get_full_name()}. Must return first.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        status = f"Returned {self.returned_date}" if self.returned_date else "Active"
+        return f"{self.asset.asset_tag} -> {self.employee.get_full_name()} ({status})"
 
 
 from django.core.exceptions import ValidationError

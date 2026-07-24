@@ -24,8 +24,36 @@
         </div>
     </a>
     {% empty %}
+    {% if not asset_results %}
     <div class="p-6 text-center text-xs text-gray-400">
-        No employees found matching "<span class="font-medium text-gray-700">{{ query }}</span>"
+        No records found matching "<span class="font-medium text-gray-700">{{ query }}</span>"
     </div>
+    {% endif %}
     {% endfor %}
+
+    {% if asset_results %}
+    <div class="pt-2 mt-2 border-t border-gray-100">
+        <h5 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-1">Hardware / Assets</h5>
+        {% for ast in asset_results %}
+        <div class="flex items-center justify-between p-2.5 hover:bg-gray-50 rounded-xl transition-colors">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                    <i data-lucide="laptop" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold font-mono text-indigo-600">{{ ast.asset_tag }} — <span class="text-gray-900 font-sans">{{ ast.name }}</span></div>
+                    <div class="text-[11px] text-gray-400">Type: {{ ast.get_asset_type_display }}</div>
+                </div>
+            </div>
+            {% with assign=ast.current_assignment %}
+            {% if assign %}
+            <span class="text-[11px] text-gray-500 font-medium">Assigned to: {{ assign.employee.get_full_name }}</span>
+            {% else %}
+            <span class="text-[11px] text-emerald-600 font-medium">Available</span>
+            {% endif %}
+            {% endwith %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>

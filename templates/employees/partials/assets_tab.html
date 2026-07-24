@@ -1,0 +1,64 @@
+<div class="space-y-4">
+    <div class="flex justify-between items-center">
+        <div>
+            <h3 class="text-sm font-semibold text-gray-900">Assigned Assets & Devices</h3>
+            <p class="text-xs text-gray-500">Active hardware, devices, SIM cards, and assignment audit history.</p>
+        </div>
+        <button type="button"
+                hx-get="{% url 'employees:asset_assign' object.pk %}"
+                hx-target="#form-modal-container"
+                class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm inline-flex items-center gap-1.5 transition-colors">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+            Assign Asset
+        </button>
+    </div>
+
+    <!-- Active Assigned Assets -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% for assign in asset_assignments %}
+        <div class="p-3.5 bg-white border border-gray-200 rounded-2xl shadow-sm flex items-start justify-between {% if assign.returned_date %}bg-gray-50 opacity-70{% endif %}">
+            <div class="flex items-start space-x-3">
+                <div class="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <i data-lucide="laptop" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-mono font-bold text-gray-900">{{ assign.asset.asset_tag }}</span>
+                        <c-badge variant="neutral" label="{{ assign.asset.get_asset_type_display }}" />
+                        {% if not assign.returned_date %}
+                        <c-badge variant="success" label="Active" />
+                        {% else %}
+                        <c-badge variant="neutral" label="Returned" />
+                        {% endif %}
+                    </div>
+                    <h4 class="text-xs font-semibold text-gray-800 mt-1">{{ assign.asset.name }}</h4>
+                    {% if assign.asset.serial_number %}
+                    <p class="text-[11px] text-gray-400 font-mono">S/N: {{ assign.asset.serial_number }}</p>
+                    {% endif %}
+
+                    <div class="text-[11px] text-gray-500 mt-1 space-y-0.5">
+                        <p>Assigned: <span class="font-medium text-gray-700">{{ assign.assigned_date|date:"M d, Y" }}</span> (Condition: {{ assign.get_condition_at_assignment_display }})</p>
+                        {% if assign.returned_date %}
+                        <p>Returned: <span class="font-medium text-gray-700">{{ assign.returned_date|date:"M d, Y" }}</span> (Condition: {{ assign.get_condition_at_return_display }})</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if not assign.returned_date %}
+            <button type="button"
+                    hx-get="{% url 'employees:asset_return' assign.pk %}"
+                    hx-target="#form-modal-container"
+                    class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Return
+            </button>
+            {% endif %}
+        </div>
+        {% empty %}
+        <div class="col-span-2 p-8 text-center bg-gray-50 border border-dashed border-gray-200 rounded-2xl">
+            <i data-lucide="box" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
+            <p class="text-xs text-gray-500">No hardware or assets currently assigned to {{ object.get_full_name }}.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>

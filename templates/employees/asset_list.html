@@ -1,0 +1,68 @@
+<c-app-shell page_title="Asset Registry | FieldTrack ERP">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}" />
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Hardware & Asset Registry" />
+    </c-slot>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-[14px] font-semibold" style="color:var(--text)">Asset Registry</h1>
+                <p class="text-xs mt-0.5" style="color:var(--text-muted)">Manage laptops, devices, SIM cards, and hardware assignments.</p>
+            </div>
+            <button type="button"
+                    hx-get="{% url 'employees:asset_create' %}"
+                    hx-target="#form-modal-container"
+                    class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm inline-flex items-center gap-1.5 transition-colors">
+                <i data-lucide="plus" class="w-4 h-4"></i> Add New Asset
+            </button>
+        </div>
+
+        <c-card padding="sm">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold">
+                        <tr>
+                            <th class="p-3">Asset Tag</th>
+                            <th class="p-3">Name</th>
+                            <th class="p-3">Type</th>
+                            <th class="p-3">Condition</th>
+                            <th class="p-3">Currently Assigned To</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {% for asset in assets %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-mono font-bold text-indigo-600">{{ asset.asset_tag }}</td>
+                            <td class="p-3 font-medium text-gray-900">{{ asset.name }}</td>
+                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_asset_type_display }}" /></td>
+                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_condition_display }}" /></td>
+                            <td class="p-3">
+                                {% with assign=asset.current_assignment %}
+                                {% if assign %}
+                                <a href="{% url 'employees:master_detail' assign.employee.pk %}" class="text-indigo-600 font-semibold hover:underline flex items-center gap-1.5">
+                                    <c-avatar name="{{ assign.employee.get_full_name }}" size="xs" />
+                                    {{ assign.employee.get_full_name }}
+                                </a>
+                                {% else %}
+                                <span class="text-gray-400 font-medium">Unassigned / In Inventory</span>
+                                {% endif %}
+                                {% endwith %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="p-6 text-center text-gray-400">No assets registered yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </c-card>
+    </div>
+
+    <div id="form-modal-container" @open-modal.window="$nextTick(() => { const m = document.getElementById($event.detail.id); if (m) m.__x.$data.open = true; })"></div>
+</c-app-shell>

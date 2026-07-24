@@ -3,7 +3,7 @@ import calendar as cal_mod
 from datetime import datetime, date as _date, timedelta
 from collections import defaultdict
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -2936,13 +2936,15 @@ class GlobalSearchView(RoleRequiredMixin, View):
     allowed_roles = ['admin', 'manager', 'staff']
 
     def get(self, request):
-        from apps.employees.models import Employee
+        from apps.employees.models import Employee, Asset
         from django.db.models import Q
 
         query = (request.GET.get('query') or request.GET.get('q') or '').strip()
-        results = []
+        employee_results = []
+        asset_results = []
+
         if query:
-            results = Employee.objects.select_related(
+            employee_results = Employee.objects.select_related(
                 'branch', 'department', 'designation', 'reporting_manager', 'user'
             ).filter(
                 Q(first_name__icontains=query) |
@@ -2953,12 +2955,19 @@ class GlobalSearchView(RoleRequiredMixin, View):
                 Q(department__name__icontains=query) |
                 Q(designation__name__icontains=query) |
                 Q(branch__name__icontains=query)
-            )[:15]
+            )[:10]
+
+            asset_results = Asset.objects.prefetch_related('assignments__employee').filter(
+                Q(asset_tag__icontains=query) |
+                Q(name__icontains=query) |
+                Q(serial_number__icontains=query)
+            )[:5]
 
         if request.headers.get('HX-Request'):
             return render(request, 'admin_panel/partials/global_search_results.html', {
                 'query': query,
-                'results': results
+                'results': employee_results,
+                'asset_results': asset_results,
             })
 
         return JsonResponse({
@@ -2973,7 +2982,15 @@ class GlobalSearchView(RoleRequiredMixin, View):
                     'branch': emp.branch.name if emp.branch else '',
                     'status': emp.get_status_display(),
                     'url': f"/employees/master/{emp.pk}/"
-                } for emp in results
+                } for emp in employee_results
+            ],
+            'asset_results': [
+                {
+                    'id': ast.pk,
+                    'tag': ast.asset_tag,
+                    'name': ast.name,
+                    'type': ast.get_asset_type_display(),
+                } for ast in asset_results
             ]
         })
 
