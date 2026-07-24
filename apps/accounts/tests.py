@@ -162,3 +162,48 @@ class ProgressiveLoginProtectionTests(TestCase):
         prot = get_or_create_protection(user=self.user, email=self.email, ip=ip, device_id=device)
         self.assertFalse(is_locked)
         self.assertEqual(prot.failed_attempts, 0)
+
+
+from apps.accounts.models import WorkspaceLockEvent, UserSession
+
+class WorkspaceLockTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.password = 'password123'
+        self.user = User.objects.create_user(
+            email='lock_test@example.com',
+            password=self.password,
+            role='staff'
+        )
+
+    def test_workspace_lock_and_unlock_flow(self):
+        self.client.login(username='lock_test@example.com', password=self.password)
+
+        # Lock workspace
+        resp = self.client.post(reverse('accounts:workspace_lock'), {'reason': 'idle'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(WorkspaceLockEvent.objects.filter(user=self.user, lock_reason='idle').exists())
+
+        # Unlock with wrong password -> 400
+        resp_err = self.client.post(reverse('accounts:workspace_unlock'), {'password': 'wrongpassword'})
+        self.assertEqual(resp_err.status_code, 400)
+
+        # Unlock with correct password -> 200
+        resp_ok = self.client.post(reverse('accounts:workspace_unlock'), {'password': self.password})
+        self.assertEqual(resp_ok.status_code, 200)
+        self.assertTrue(resp_ok.json().get('valid'))
+
+    def test_security_heartbeat_session_invalidation(self):
+        self.client.login(username='lock_test@example.com', password=self.password)
+
+        # Active heartbeat
+        resp = self.client.get(reverse('accounts:security_heartbeat'))
+        self.assertEqual(resp.status_code, 200)
+
+        # Invalidate session (e.g. force logout)
+        UserSession.objects.filter(user=self.user).update(is_active=False)
+
+        # Heartbeat returns 401
+        resp_inv = self.client.get(reverse('accounts:security_heartbeat'))
+        self.assertEqual(resp_inv.status_code, 401)
+

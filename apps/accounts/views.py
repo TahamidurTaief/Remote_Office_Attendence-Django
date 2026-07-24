@@ -616,3 +616,69 @@ class UserSessionsView(LoginRequiredMixin, View):
 
 def index_view(request):
     return render(request, 'index.html')
+
+
+from apps.accounts.models import WorkspaceLockEvent
+
+class WorkspaceLockView(LoginRequiredMixin, View):
+    """
+    POST /security/workspace-lock/lock/
+    Records a workspace lock event.
+    """
+    def post(self, request):
+        reason = request.POST.get('reason', 'idle')
+        session_key = request.session.session_key
+        curr_session = UserSession.objects.filter(user=request.user, session_key=session_key, is_active=True).first()
+
+        evt = WorkspaceLockEvent.objects.create(
+            user=request.user,
+            session=curr_session,
+            lock_reason=reason,
+            locked_at=timezone.now()
+        )
+        log_audit(request.user, 'workspace_locked', target=evt, summary=f"Workspace locked ({reason})", ip=get_client_ip(request))
+        return JsonResponse({'status': 'locked', 'event_id': evt.id})
+
+
+class WorkspaceUnlockView(LoginRequiredMixin, View):
+    """
+    POST /security/workspace-lock/unlock/
+    Authenticates user password to unlock workspace overlay.
+    """
+    def post(self, request):
+        password = request.POST.get('password') or ''
+        if not request.user.check_password(password):
+            log_audit(request.user, 'workspace_unlock_failed', summary="Failed workspace unlock attempt", ip=get_client_ip(request))
+            return JsonResponse({'valid': False, 'message': 'Incorrect password. Please try again.'}, status=400)
+
+        evt = WorkspaceLockEvent.objects.filter(user=request.user, unlocked_at__isnull=True).order_by('-locked_at').first()
+        if evt:
+            evt.unlocked_at = timezone.now()
+            evt.unlock_method = 'password'
+            evt.save(update_fields=['unlocked_at', 'unlock_method'])
+
+        log_audit(request.user, 'workspace_unlocked', summary="Workspace unlocked successfully", ip=get_client_ip(request))
+        return JsonResponse({'valid': True, 'message': 'Unlocked'})
+
+
+class SecurityHeartbeatView(View):
+    """
+    GET /security/heartbeat/
+    Periodic client ping (every 30s). Validates server session & forces instant logout if session invalidated.
+    """
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({'valid': False, 'reason': 'unauthenticated'}, status=401)
+
+        session_key = request.session.session_key
+        active_sess = UserSession.objects.filter(
+            user=request.user,
+            session_key=session_key,
+            is_active=True
+        ).first()
+
+        if not active_sess or not request.user.is_active:
+            return JsonResponse({'valid': False, 'reason': 'session_invalidated'}, status=401)
+
+        return JsonResponse({'valid': True, 'timestamp': timezone.now().isoformat()})
+

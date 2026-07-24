@@ -21,6 +21,11 @@ urlpatterns = [
     path('admin-panel/users/<int:pk>/unlock/', views.AdminUnlockUserView.as_view(), name='admin_unlock_user'),
     path('admin-panel/login-activity/', views.AdminLoginActivityView.as_view(), name='admin_login_activity'),
 
+    # Workspace Lock & Heartbeat Security Endpoints
+    path('security/workspace-lock/lock/', views.WorkspaceLockView.as_view(), name='workspace_lock'),
+    path('security/workspace-lock/unlock/', views.WorkspaceUnlockView.as_view(), name='workspace_unlock'),
+    path('security/heartbeat/', views.SecurityHeartbeatView.as_view(), name='security_heartbeat'),
+
     # API and Session endpoints
     path('api/sync/', views.SyncApiView.as_view(), name='api_sync'),
     path('api/session/validate/', views.SessionValidateView.as_view(), name='api_session_validate'),

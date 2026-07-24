@@ -213,5 +213,22 @@ class LoginProtection(models.Model):
         return f"LoginProtection({ident}) - Fails: {self.failed_attempts}, Level: {self.current_lock_level}"
 
 
+class WorkspaceLockEvent(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='workspace_lock_events')
+    session = models.ForeignKey(UserSession, on_delete=models.SET_NULL, null=True, blank=True)
+    locked_at = models.DateTimeField(default=timezone.now)
+    unlocked_at = models.DateTimeField(null=True, blank=True)
+    lock_reason = models.CharField(max_length=50, default='idle')
+    unlock_method = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        db_table = 'workspace_lock_event'
+        ordering = ['-locked_at']
+
+    def __str__(self):
+        return f"WorkspaceLock({self.user}) - {self.lock_reason} at {self.locked_at}"
+
+
+
 
 

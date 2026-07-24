@@ -38,23 +38,8 @@ class SessionDeviceMiddleware:
                         )
                     return redirect('/login/?device_notice=logged_in_elsewhere')
 
-                # Check idle timeout (30 minutes)
-                now = timezone.now()
-                idle_threshold = timedelta(minutes=self.IDLE_TIMEOUT_MINUTES)
-                if user_session.last_activity and (now - user_session.last_activity) > idle_threshold:
-                    user_session.is_active = False
-                    user_session.logout_time = now
-                    user_session.save(update_fields=['is_active', 'logout_time'])
-                    logout(request)
-
-                    if self._is_api_or_htmx(request):
-                        return JsonResponse(
-                            {'valid': False, 'reason': 'idle_timeout', 'message': 'Session expired due to inactivity.'},
-                            status=401
-                        )
-                    return redirect('/login/?device_notice=idle_timeout')
-
                 # Update last_activity timestamp (throttled to avoid DB thrashing)
+                now = timezone.now()
                 if not user_session.last_activity or (now - user_session.last_activity) > timedelta(seconds=60):
                     user_session.last_activity = now
                     user_session.save(update_fields=['last_activity'])
