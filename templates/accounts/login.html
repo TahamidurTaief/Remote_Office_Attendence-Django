@@ -16,6 +16,7 @@
   {% tailwind_css %}
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="{% static 'js/offline/db.js' %}"></script>
 </head>
 <body class="ft-page-bg antialiased min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-md">
@@ -26,10 +27,20 @@
         <p class="text-[12px] mt-1" style="color:var(--text-secondary)">Welcome back to FieldTrack</p>
       </div>
 
-      <form class="space-y-4" action="{% url 'accounts:login' %}" method="POST">
+      <c-device-notice-banner notice_type="{{ device_notice }}" message="{{ notice_message }}" />
+
+      <form class="space-y-4" action="{% url 'accounts:login' %}" method="POST" id="loginForm">
         {% csrf_token %}
+        <input type="hidden" name="device_id" id="device_id_input">
         <c-input type="text" id="email" name="email" label="Phone number or Email address" required="true" />
         <c-input type="password" id="password" name="password" label="Password" required="true" />
+
+        <div class="flex items-center justify-between text-xs py-1">
+          <label class="flex items-center gap-2 cursor-pointer" style="color:var(--text-secondary)">
+            <input type="checkbox" name="remember_device" class="rounded border-gray-300 text-primary focus:ring-primary">
+            <span>Remember this device</span>
+          </label>
+        </div>
 
         <div class="pt-2">
           <c-button type="submit" variant="primary" label="Sign in" extra_class="w-full justify-center" />
@@ -41,6 +52,19 @@
       </form>
     </c-card>
   </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) lucide.createIcons();
+      // Generate / store persistent device UUID in IndexedDB / localStorage
+      let deviceId = localStorage.getItem('ft_device_id');
+      if (!deviceId) {
+        deviceId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'dev_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('ft_device_id', deviceId);
+      }
+      const devInput = document.getElementById('device_id_input');
+      if (devInput) devInput.value = deviceId;
+    });
+  </script>
 </body>
 </html>
-

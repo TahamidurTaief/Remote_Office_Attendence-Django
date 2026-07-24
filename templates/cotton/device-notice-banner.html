@@ -1,0 +1,30 @@
+{% comment %}
+   c-device-notice-banner
+   Banner component displaying single device login conflict or session timeout alerts.
+   Props:
+   - notice_type: logged_in_elsewhere | idle_timeout
+   - message: custom message string
+{% endcomment %}
+<c-vars notice_type="" message="" />
+
+{% if notice_type or message %}
+<div class="mb-4 p-4 rounded-xl border flex items-start gap-3 bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400" role="alert">
+  <div class="p-1.5 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
+    <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+  </div>
+  <div class="flex-1 text-xs">
+    <h4 class="font-semibold text-sm mb-0.5">Session Notice</h4>
+    <p>
+      {% if message %}
+        {{ message }}
+      {% elif notice_type == 'logged_in_elsewhere' %}
+        Your account was logged in from another device. For security, prior sessions have been ended.
+      {% elif notice_type == 'idle_timeout' %}
+        Your session expired automatically due to 30 minutes of inactivity. Please sign in again.
+      {% else %}
+        Your session state changed. Please sign in.
+      {% endif %}
+    </p>
+  </div>
+</div>
+{% endif %}
