@@ -1,5 +1,6 @@
 {% comment %} Trusted device list partial — rendered on page load and after each device removal {% endcomment %}
-<div id="trusted-device-list">
+{% csrf_token %}
+<div id="trusted-device-list" x-data x-init="if (window.lucide) window.lucide.createIcons()">
   {% if trusted_devices %}
     <div class="space-y-0.5">
       {% for device in trusted_devices %}
@@ -22,6 +23,7 @@
           </div>
           <button
             hx-post="{% url 'accounts:trusted_device_remove' device.pk %}"
+            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
             hx-target="#trusted-device-list"
             hx-swap="outerHTML"
             hx-confirm="Remove this trusted device? You'll need MFA next time you log in from it."

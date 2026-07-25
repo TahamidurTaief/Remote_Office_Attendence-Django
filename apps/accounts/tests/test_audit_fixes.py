@@ -106,3 +106,18 @@ class AuditFixesTestCase(TestCase):
         self.assertEqual(gate_resp.status_code, 200)
         self.assertContains(gate_resp, 'Verify Your Identity')
         self.assertContains(gate_resp, 'Current Password')
+
+    def test_trusted_device_removal(self):
+        from apps.accounts.models import TrustedDevice
+        self.client.force_login(self.user)
+        device = TrustedDevice.objects.create(
+            user=self.user,
+            device_hash='hash123456789',
+            device_name='My Laptop',
+            expire_at=timezone.now() + timezone.timedelta(days=30)
+        )
+        url = f'/account/security/trusted-device/{device.pk}/remove/'
+        resp = self.client.post(url, HTTP_HX_REQUEST='true')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(TrustedDevice.objects.filter(pk=device.pk).exists())
+        self.assertContains(resp, 'No trusted devices')
