@@ -12,7 +12,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['demotrackme.signtechlimited.com', 'trackme.signtechlimited.com', 'localhost', '127.0.0.1', 'testserver']
 
-CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://demotrackme.signtechlimited.com"]
+CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://demotrackme.signtechlimited.com", "https://trackme.signtechlimited.com"]
 
 # Security hardening defaults
 SESSION_COOKIE_HTTPONLY = True
