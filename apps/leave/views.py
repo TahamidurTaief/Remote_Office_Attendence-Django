@@ -42,6 +42,13 @@ class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
         context['current_status'] = self.request.GET.get('status', 'all')
         return context
 
+    def get(self, request, *args, **kwargs):
+        self.object_list = self.get_queryset()
+        context = self.get_context_data()
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'admin_panel/leave/partials/request_table.html', context)
+        return self.render_to_response(context)
+
 class BaseProcessLeaveRequestView(View):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:

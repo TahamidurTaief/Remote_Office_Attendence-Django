@@ -563,10 +563,13 @@ class AdminLoginActivityView(LoginRequiredMixin, View):
         if status_filter:
             activities = activities.filter(status=status_filter)
 
-        return render(request, 'admin_panel/login_activity.html', {
+        context = {
             'activities': activities[:100],
             'status_filter': status_filter
-        })
+        }
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'admin_panel/partials/login_activity_table.html', context)
+        return render(request, 'admin_panel/login_activity.html', context)
 
     def post(self, request):
         from apps.accounts.engine import PermissionEngine

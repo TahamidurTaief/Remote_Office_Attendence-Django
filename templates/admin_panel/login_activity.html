@@ -12,13 +12,15 @@
   <div class="p-4 space-y-4 max-w-7xl mx-auto">
     <c-card title="Login Security & Audit Trail" subtitle="Recent authentication attempts, status, and IP logs.">
       <div class="flex items-center gap-2 mb-4">
-        <c-button href="?status=" variant="{% if not status_filter %}primary{% else %}ghost{% endif %}" label="All" size="sm"></c-button>
-        <c-button href="?status=success" variant="{% if status_filter == 'success' %}primary{% else %}ghost{% endif %}" extra_class="{% if status_filter == 'success' %}!bg-emerald-600 !border-emerald-600 hover:!bg-emerald-700 text-white{% endif %}" label="Success" size="sm"></c-button>
-        <c-button href="?status=failed" variant="{% if status_filter == 'failed' %}primary{% else %}ghost{% endif %}" extra_class="{% if status_filter == 'failed' %}!bg-amber-500 !border-amber-500 hover:!bg-amber-600 text-white{% endif %}" label="Failed" size="sm"></c-button>
-        <c-button href="?status=locked" variant="{% if status_filter == 'locked' %}primary{% else %}ghost{% endif %}" extra_class="{% if status_filter == 'locked' %}!bg-rose-600 !border-rose-600 hover:!bg-rose-700 text-white{% endif %}" label="Locked" size="sm"></c-button>
+        <c-tab-button href="?status=" hx-get="?status=" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if not status_filter %}true{% endif %}" label="All" color="blue"></c-tab-button>
+        <c-tab-button href="?status=success" hx-get="?status=success" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if status_filter == 'success' %}true{% endif %}" label="Success" color="emerald"></c-tab-button>
+        <c-tab-button href="?status=failed" hx-get="?status=failed" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if status_filter == 'failed' %}true{% endif %}" label="Failed" color="amber"></c-tab-button>
+        <c-tab-button href="?status=locked" hx-get="?status=locked" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if status_filter == 'locked' %}true{% endif %}" label="Locked" color="rose"></c-tab-button>
       </div>
 
-      <c-audit-table type="login" logs="{{ activities }}"></c-audit-table>
+      <div id="login-activity-table-container">
+        {% include 'admin_panel/partials/login_activity_table.html' %}
+      </div>
     </c-card>
   </div>
 </c-app-shell>
