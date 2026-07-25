@@ -50,6 +50,15 @@ class StaffExpenseCreateView(StaffOrManagerMixin, CreateView):
     template_name = 'staff/expense/request_form.html'
     success_url = reverse_lazy('expense:staff_expense_list')
 
+    def dispatch(self, request, *args, **kwargs):
+        employee = getattr(request.user, 'employee_profile', None)
+        if employee:
+            master = getattr(employee, 'master_employee', None)
+            if master and (master.is_suspended or master.business_status == 'suspended'):
+                from django.core.exceptions import PermissionDenied
+                raise PermissionDenied("Your account is suspended. You cannot submit expense requests.")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         content_type = self.request.content_type or ''

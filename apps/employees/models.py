@@ -321,6 +321,7 @@ class EmployeeStatus(models.TextChoices):
     RESIGNED = 'resigned', 'Resigned'
     TERMINATED = 'terminated', 'Terminated'
     RETIRED = 'retired', 'Retired'
+    SUSPENDED = 'suspended', 'Suspended'
     ARCHIVED = 'archived', 'Archived'
 
 
@@ -486,6 +487,44 @@ class Employee(models.Model):
     def is_login_allowed(self):
         return self.status in ALLOWED_LOGIN_STATUSES
 
+    @property
+    def business_status(self) -> str:
+        if self.status == EmployeeStatus.ARCHIVED:
+            return 'archived'
+        if self.status == EmployeeStatus.TERMINATED:
+            return 'terminated'
+        if self.status == EmployeeStatus.RESIGNED:
+            return 'notice_period'
+        if self.status == EmployeeStatus.SUSPENDED:
+            return 'suspended'
+        if self.status == EmployeeStatus.PROBATION:
+            return 'on_probation'
+        
+        today = timezone.localdate()
+        profile = getattr(self, 'legacy_profile', None)
+        if profile and profile.leave_requests.filter(status='approved', start_date__lte=today, end_date__gte=today).exists():
+            return 'on_leave'
+            
+        if self.status in (EmployeeStatus.DRAFT, EmployeeStatus.PENDING_APPROVAL):
+            return 'inactive'
+            
+        return 'active'
+
+    @property
+    def business_status_display(self) -> str:
+        choices = {
+            'active': 'Active',
+            'inactive': 'Inactive',
+            'suspended': 'Suspended',
+            'on_leave': 'On Leave',
+            'on_probation': 'On Probation',
+            'notice_period': 'Notice Period',
+            'resigned': 'Resigned',
+            'terminated': 'Terminated',
+            'archived': 'Archived',
+        }
+        return choices.get(self.business_status, self.status.capitalize())
+
     # ── Lifecycle helpers ────────────────────────────────────────────────────
     def can_transition_to(self, target_status: str) -> bool:
         """True if moving from current status to target_status is allowed."""
@@ -519,9 +558,28 @@ class Employee(models.Model):
         # Skip on new records (pk is None) — initial status is always allowed.
         if self.pk:
             try:
-                db_status = Employee.objects.filter(pk=self.pk).values_list('status', flat=True).first()
+                db_record = Employee.objects.filter(pk=self.pk).values('status', 'is_suspended').first()
+                db_status = db_record['status']
+                db_is_suspended = db_record['is_suspended']
             except Exception:
                 db_status = None
+                db_is_suspended = False
+
+            if db_status == EmployeeStatus.ARCHIVED:
+                raise ValidationError("Archived employees are read-only and cannot be modified.")
+
+            # Bidirectional sync based on which field changed
+            if self.is_suspended != db_is_suspended:
+                if self.is_suspended:
+                    self.status = EmployeeStatus.SUSPENDED
+                else:
+                    self.status = EmployeeStatus.ACTIVE
+            elif self.status != db_status:
+                if self.status == EmployeeStatus.SUSPENDED:
+                    self.is_suspended = True
+                elif db_status == EmployeeStatus.SUSPENDED:
+                    self.is_suspended = False
+
             if db_status and db_status != self.status:
                 from apps.employees.lifecycle import is_valid_transition, describe_allowed
                 if not is_valid_transition(db_status, self.status):
@@ -539,7 +597,19 @@ class Employee(models.Model):
 
     def delete(self, *args, **kwargs):
         if self.pk:
-            Employee.objects.filter(pk=self.pk).update(status=EmployeeStatus.ARCHIVED, updated_at=timezone.now())
+            db_status = Employee.objects.filter(pk=self.pk).values_list('status', flat=True).first()
+            if db_status != EmployeeStatus.ARCHIVED:
+                Employee.objects.filter(pk=self.pk).update(status=EmployeeStatus.ARCHIVED, updated_at=timezone.now())
+                EmployeeActivityLog.objects.create(
+                    employee=self,
+                    action_description=f"Transitioned status from '{db_status}' to 'archived' via delete",
+                    field_changed='status'
+                )
+                EmployeeAuditLog.objects.create(
+                    employee=self,
+                    old_value={'status': db_status},
+                    new_value={'status': EmployeeStatus.ARCHIVED}
+                )
             self.status = EmployeeStatus.ARCHIVED
 
 

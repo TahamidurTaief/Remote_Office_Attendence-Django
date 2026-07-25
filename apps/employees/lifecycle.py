@@ -9,16 +9,12 @@ to avoid circular imports.
 TRANSITION_MAP: dict[str, set[str]] = {
     'draft':            {'pending_approval', 'active'},
     'pending_approval': {'active', 'draft'},
-    'active':           {'probation', 'transferred', 'promoted', 'demoted', 'notice_period', 'terminated'},
-    'probation':        {'confirmed', 'terminated'},
-    'confirmed':        {'transferred', 'promoted', 'demoted', 'notice_period', 'terminated', 'retired'},
-    'transferred':      {'active', 'notice_period', 'terminated'},
-    'promoted':         {'active', 'notice_period', 'terminated'},
-    'demoted':          {'active', 'notice_period', 'terminated'},
-    'notice_period':    {'resigned', 'terminated'},
+    'active':           {'probation', 'suspended', 'resigned', 'terminated', 'archived'},
+    'probation':        {'confirmed', 'suspended', 'resigned', 'terminated', 'archived'},
+    'confirmed':        {'suspended', 'resigned', 'terminated', 'archived'},
+    'suspended':        {'active', 'probation', 'confirmed', 'archived'},
     'resigned':         {'archived'},
     'terminated':       {'archived'},
-    'retired':          {'archived'},
     'archived':         set(),
 }
 
@@ -29,11 +25,10 @@ TRANSITION_MAP: dict[str, set[str]] = {
 LOW_RISK_TRANSITIONS: set[tuple[str, str]] = {
     ('draft',         'pending_approval'),
     ('draft',         'active'),
+    ('pending_approval', 'draft'),
     ('probation',     'confirmed'),
-    ('notice_period', 'resigned'),
     ('resigned',      'archived'),
     ('terminated',    'archived'),
-    ('retired',       'archived'),
 }
 
 

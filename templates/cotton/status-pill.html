@@ -1,49 +1,39 @@
 {% comment %} c-status-pill component
-   Opinionated badge for attendance/HR statuses.
+   Opinionated badge for attendance/HR/business statuses.
    Props:
-   - status: present | absent | late | on_leave | wfh | pending | approved | rejected | unknown
+   - status: active | inactive | suspended | on_leave | on_probation | notice_period | resigned | terminated | archived | present | absent | late | wfh | pending | approved | rejected | unknown
    - label: override display text (defaults to status capitalized)
 {% endcomment %}
 
-{% if status == 'present' %}
+{% if status == 'active' or status == 'present' or status == 'approved' %}
   <span class="ft-badge ft-badge-success" style="gap:4px">
     <span class="w-1.5 h-1.5 rounded-full bg-accent-500 inline-block"></span>
-    {{ label|default:"Present" }}
+    {{ label|default:status|title }}
   </span>
-{% elif status == 'late' %}
+{% elif status == 'inactive' or status == 'pending' %}
   <span class="ft-badge ft-badge-warning" style="gap:4px">
-    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
-    {{ label|default:"Late" }}
+    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
+    {{ label|default:status|title }}
   </span>
-{% elif status == 'absent' %}
+{% elif status == 'suspended' or status == 'absent' or status == 'rejected' or status == 'terminated' %}
   <span class="ft-badge ft-badge-danger" style="gap:4px">
     <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
-    {{ label|default:"Absent" }}
+    {{ label|default:status|title }}
   </span>
-{% elif status == 'on_leave' %}
+{% elif status == 'on_leave' or status == 'notice_period' or status == 'resigned' %}
   <span class="ft-badge ft-badge-info" style="gap:4px">
     <span class="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"></span>
-    {{ label|default:"On Leave" }}
+    {{ label|default:status|title }}
+  </span>
+{% elif status == 'on_probation' or status == 'late' %}
+  <span class="ft-badge ft-badge-warning" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
+    {{ label|default:status|title }}
   </span>
 {% elif status == 'wfh' %}
   <span class="ft-badge ft-badge-primary" style="gap:4px">
     <span class="w-1.5 h-1.5 rounded-full bg-primary-400 inline-block"></span>
     {{ label|default:"WFH" }}
-  </span>
-{% elif status == 'approved' %}
-  <span class="ft-badge ft-badge-success" style="gap:4px">
-    <span class="w-1.5 h-1.5 rounded-full bg-accent-500 inline-block"></span>
-    {{ label|default:"Approved" }}
-  </span>
-{% elif status == 'rejected' %}
-  <span class="ft-badge ft-badge-danger" style="gap:4px">
-    <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
-    {{ label|default:"Rejected" }}
-  </span>
-{% elif status == 'pending' %}
-  <span class="ft-badge ft-badge-warning" style="gap:4px">
-    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
-    {{ label|default:"Pending" }}
   </span>
 {% else %}
   <span class="ft-badge ft-badge-neutral">{{ label|default:status }}</span>

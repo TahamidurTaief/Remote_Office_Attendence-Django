@@ -703,8 +703,8 @@ from apps.employees.forms import EmployeeMasterForm
 
 class LifecycleStateMachineTests(TestCase):
     def setUp(self):
-        self.admin = User.objects.create_superuser(email='admin_life@example.com', password='pass123')
-        self.staff = User.objects.create_user(email='staff_life@example.com', password='pass123')
+        self.admin = User.objects.create_superuser(email='admin_life@example.com', password='pass123', role='admin')
+        self.staff = User.objects.create_user(email='staff_life@example.com', password='pass123', role='staff')
         self.employee = Employee.objects.create(
             employee_number='EMP-LIFE-001',
             first_name='Life',
@@ -735,17 +735,21 @@ class LifecycleStateMachineTests(TestCase):
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.status, 'pending_approval')
         self.assertTrue(EmploymentHistory.objects.filter(employee=self.employee, new_value='Pending Approval').exists())
+        # Logs should be created
+        from apps.employees.models import EmployeeActivityLog, EmployeeAuditLog
+        self.assertTrue(EmployeeActivityLog.objects.filter(employee=self.employee, field_changed='status').exists())
+        self.assertTrue(EmployeeAuditLog.objects.filter(employee=self.employee).exists())
 
     def test_high_risk_transition_creates_pending_request_and_does_not_change_status(self):
-        # Move to ACTIVE first via low-risk / valid steps
+        # Move to ACTIVE first via update to bypass state machine check for setup
         Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
         self.employee.refresh_from_db()
 
         self.client.force_login(self.admin)
         url = reverse('employees:lifecycle_action', kwargs={'pk': self.employee.pk})
         response = self.client.post(url, {
-            'to_status': 'promoted',
-            'reason': 'Great performance',
+            'to_status': 'probation',
+            'reason': 'Put on probation',
             'effective_date': '2026-07-24'
         })
         self.assertEqual(response.status_code, 302)
@@ -755,7 +759,7 @@ class LifecycleStateMachineTests(TestCase):
         self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
 
         # Pending request created
-        req = LifecycleTransitionRequest.objects.get(employee=self.employee, to_status='promoted')
+        req = LifecycleTransitionRequest.objects.get(employee=self.employee, to_status='probation')
         self.assertEqual(req.review_status, 'pending')
         self.assertEqual(req.requested_by, self.admin)
 
@@ -766,8 +770,8 @@ class LifecycleStateMachineTests(TestCase):
         req = LifecycleTransitionRequest.objects.create(
             employee=self.employee,
             from_status='active',
-            to_status='promoted',
-            reason='Promote test',
+            to_status='probation',
+            reason='Probation test',
             requested_by=self.staff
         )
 
@@ -784,8 +788,8 @@ class LifecycleStateMachineTests(TestCase):
         self.assertEqual(req.reviewed_by, self.admin)
 
         self.employee.refresh_from_db()
-        self.assertEqual(self.employee.status, 'promoted')
-        self.assertTrue(EmploymentHistory.objects.filter(employee=self.employee, new_value='Promoted').exists())
+        self.assertEqual(self.employee.status, 'probation')
+        self.assertTrue(EmploymentHistory.objects.filter(employee=self.employee, new_value='Probation').exists())
 
     def test_reject_high_risk_transition(self):
         Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
@@ -794,8 +798,8 @@ class LifecycleStateMachineTests(TestCase):
         req = LifecycleTransitionRequest.objects.create(
             employee=self.employee,
             from_status='active',
-            to_status='promoted',
-            reason='Promote test',
+            to_status='probation',
+            reason='Probation test',
             requested_by=self.staff
         )
 
@@ -813,6 +817,28 @@ class LifecycleStateMachineTests(TestCase):
 
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
+
+    def test_archived_employee_read_only(self):
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ARCHIVED)
+        self.employee.refresh_from_db()
+        self.employee.first_name = 'Changed'
+        with self.assertRaises(ValidationError) as ctx:
+            self.employee.clean()
+        self.assertIn("Archived employees are read-only and cannot be modified.", str(ctx.exception))
+
+    def test_mandatory_reason_enforced(self):
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
+        self.employee.refresh_from_db()
+
+        from apps.employees.views import _apply_transition
+        class FakeReq:
+            to_status = 'suspended'
+            reason = ''
+            effective_date = date.today()
+
+        with self.assertRaises(ValidationError) as ctx:
+            _apply_transition(self.employee, FakeReq(), self.admin)
+        self.assertIn("A transition reason is mandatory for 'suspended' status.", str(ctx.exception))
 
 
 class EmployeeWizardTests(TestCase):
@@ -1373,6 +1399,56 @@ class ReportingManagerChainTests(TestCase):
         
         self.expense.refresh_from_db()
         self.assertEqual(self.expense.status, 'approved')
+
+
+class EmployeeStatusEngineTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Test Branch', latitude=23.8, longitude=90.4, radius_meters=100)
+        self.user = User.objects.create_user(phone='+8801700000010', password='pass123', role='staff')
+        self.employee = Employee.objects.create(
+            employee_number='EMP-STAT-001',
+            first_name='Status',
+            last_name='Engine',
+            status=EmployeeStatus.DRAFT,
+            user=self.user
+        )
+        self.profile = EmployeeProfile.objects.create(
+            user=self.user,
+            master_employee=self.employee,
+            employee_id='EMP-STAT-001',
+            full_name='Status Engine',
+            phone='+8801700000010',
+            joined_date=date.today(),
+            branch=self.branch
+        )
+
+    def test_business_status_mapping(self):
+        self.assertEqual(self.employee.business_status, 'inactive')
+        self.assertEqual(self.employee.business_status_display, 'Inactive')
+
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.business_status, 'active')
+
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.PROBATION)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.business_status, 'on_probation')
+
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.SUSPENDED)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.business_status, 'suspended')
+
+    def test_bidirectional_suspension_sync(self):
+        Employee.objects.filter(pk=self.employee.pk).update(status=EmployeeStatus.ACTIVE)
+        self.employee.refresh_from_db()
+
+        self.employee.status = EmployeeStatus.SUSPENDED
+        self.employee.save()
+        self.assertTrue(self.employee.is_suspended)
+
+        self.employee.is_suspended = False
+        self.employee.save()
+        self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
 
 
 

@@ -39,15 +39,7 @@
                     {% endif %}
                 </td>
                 <td class="px-4 py-3">
-                    {% if emp.status == 'active' or emp.status == 'confirmed' %}
-                        <c-badge variant="success" label="{{ emp.get_status_display }}" ></c-badge>
-                    {% elif emp.status == 'probation' or emp.status == 'pending_approval' %}
-                        <c-badge variant="warning" label="{{ emp.get_status_display }}" ></c-badge>
-                    {% elif emp.status == 'archived' or emp.status == 'terminated' or emp.status == 'resigned' %}
-                        <c-badge variant="danger" label="{{ emp.get_status_display }}" ></c-badge>
-                    {% else %}
-                        <c-badge variant="neutral" label="{{ emp.get_status_display }}" ></c-badge>
-                    {% endif %}
+                    <c-status-pill status="{{ emp.business_status }}" label="{{ emp.business_status_display }}"></c-status-pill>
                 </td>
                 <td class="px-4 py-3">
                     {% with pct=emp.get_completion_percentage %}

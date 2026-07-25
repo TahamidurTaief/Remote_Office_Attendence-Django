@@ -4,6 +4,7 @@ from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, DetailView, UpdateView, View
 from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from apps.notifications.models import log_audit
 from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument, Employee, EmployeeAuditLog, EmployeeActivityLog, AssetAssignment
@@ -977,11 +978,11 @@ def _apply_transition(employee, req_obj, actor):
 
     # Apply org changes if bundled
     changes_desc = []
-    if req_obj and req_obj.new_department:
+    if req_obj and getattr(req_obj, 'new_department', None):
         old_dept = employee.department
         employee.department = req_obj.new_department
         changes_desc.append(f"Dept: {old_dept} → {req_obj.new_department}")
-    if req_obj and req_obj.new_designation:
+    if req_obj and getattr(req_obj, 'new_designation', None):
         old_desig = employee.designation
         employee.designation = req_obj.new_designation
         changes_desc.append(f"Designation: {old_desig} → {req_obj.new_designation}")
@@ -989,7 +990,13 @@ def _apply_transition(employee, req_obj, actor):
     # Bypass clean() status-machine check by using update() — we've already
     # validated the transition before calling _apply_transition.
     effective = req_obj.effective_date if req_obj else tz.now().date()
-    reason = req_obj.reason if req_obj else 'Direct lifecycle action'
+    reason = req_obj.reason if req_obj else ''
+    if not reason and req_obj:
+        reason = 'Direct lifecycle action'
+
+    # Enforce mandatory reason for: suspended, resigned, terminated, archived
+    if new_status in ('suspended', 'resigned', 'terminated', 'archived') and (not reason or reason == 'Direct lifecycle action'):
+        raise ValidationError(f"A transition reason is mandatory for '{new_status}' status.")
 
     Employee.objects.filter(pk=employee.pk).update(
         status=new_status,
@@ -1004,7 +1011,7 @@ def _apply_transition(employee, req_obj, actor):
         field_changed='status',
         old_value=dict(EmployeeStatus.choices).get(old_status, old_status),
         new_value=dict(EmployeeStatus.choices).get(new_status, new_status),
-        reason=reason,
+        reason=reason or 'Direct lifecycle action',
         approved_by=actor,
         effective_date=effective,
     )
@@ -1014,10 +1021,27 @@ def _apply_transition(employee, req_obj, actor):
             field_changed='organization',
             old_value='',
             new_value='; '.join(changes_desc),
-            reason=reason,
+            reason=reason or 'Direct lifecycle action',
             approved_by=actor,
             effective_date=effective,
         )
+
+    # Activity Log
+    EmployeeActivityLog.objects.create(
+        employee=employee,
+        actor=actor,
+        action_description=f"Transitioned status from '{old_status}' to '{new_status}'",
+        field_changed='status'
+    )
+
+    # Audit Log
+    EmployeeAuditLog.objects.create(
+        employee=employee,
+        old_value={'status': old_status},
+        new_value={'status': new_status},
+        changed_by=actor
+    )
+
     log_audit(
         actor=actor,
         action='lifecycle_transition_applied',

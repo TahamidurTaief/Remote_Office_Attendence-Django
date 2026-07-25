@@ -55,7 +55,7 @@ def check_in(request):
     master = getattr(request.user, 'employee_master', None)
     if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
         master = request.user.employee_profile.master_employee
-    if master and master.is_suspended:
+    if master and (master.is_suspended or master.business_status == 'suspended'):
         return JsonResponse({'success': False, 'error': 'Account is suspended.'}, status=403)
 
     try:
@@ -327,7 +327,7 @@ def check_out(request):
     master = getattr(request.user, 'employee_master', None)
     if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
         master = request.user.employee_profile.master_employee
-    if master and master.is_suspended:
+    if master and (master.is_suspended or master.business_status == 'suspended'):
         return JsonResponse({'success': False, 'error': 'Account is suspended.'}, status=403)
 
     try:

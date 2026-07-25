@@ -300,7 +300,7 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
         master = getattr(request.user, 'employee_master', None)
         if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
             master = request.user.employee_profile.master_employee
-        if master and master.is_suspended:
+        if master and (master.is_suspended or master.business_status == 'suspended'):
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("Your account is suspended. You cannot submit leave requests.")
         return super().dispatch(request, *args, **kwargs)
