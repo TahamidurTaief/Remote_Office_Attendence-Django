@@ -92,3 +92,17 @@ class AuditFixesTestCase(TestCase):
         self.assertIn(resp.status_code, [200, 302])
         if resp.status_code == 200:
             self.assertContains(resp, '/account/security/')
+
+    def test_mfa_setup_cta_button_and_htmx_gate(self):
+        self.client.force_login(self.user)
+        # 1. Page load when MFA is disabled shows 'Set Up MFA' button and NOT step 0 form
+        resp = self.client.get('/account/security/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Set Up MFA')
+        self.assertNotContains(resp, 'Verify Your Identity')
+
+        # 2. Clicking CTA (GET mfa_wizard_gate via htmx) loads Step 0 identity verification form
+        gate_resp = self.client.get('/account/security/mfa/wizard/gate/', HTTP_HX_REQUEST='true')
+        self.assertEqual(gate_resp.status_code, 200)
+        self.assertContains(gate_resp, 'Verify Your Identity')
+        self.assertContains(gate_resp, 'Current Password')

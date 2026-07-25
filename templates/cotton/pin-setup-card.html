@@ -26,14 +26,14 @@
     {% endif %}
   </c-slot>
 
-  {% if policy.unlock_method == 'pin' %}
+  {% if policy and policy.unlock_method == 'pin' %}
     <div id="pin-setup-container">
       {% include "accounts/partials/pin_setup_form.html" with pin_exists=sec_prof.pin_hash %}
     </div>
   {% else %}
     <div class="flex items-center gap-2 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-[11px] text-amber-600 dark:text-amber-400">
       <i data-lucide="lock" class="w-3.5 h-3.5 flex-shrink-0"></i>
-      <span>PIN unlock is not enabled by your role's security policy. Allowed unlock method: {{ policy.get_unlock_method_display|default:policy.unlock_method|title }}.</span>
+      <span>PIN unlock is not enabled by your role's security policy. Allowed unlock method: {% if policy %}{{ policy.get_unlock_method_display|default:policy.unlock_method|title }}{% else %}Password{% endif %}.</span>
     </div>
   {% endif %}
 </c-card>

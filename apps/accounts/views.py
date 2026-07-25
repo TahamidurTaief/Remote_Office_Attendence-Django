@@ -1143,9 +1143,18 @@ class SecuritySettingsView(LoginRequiredMixin, View):
 
 class MFAWizardGateView(LoginRequiredMixin, View):
     """
+    GET /account/security/mfa/wizard/gate/
+    Renders Step 0 password (+ PIN) verification form.
+
     POST /account/security/mfa/wizard/gate/
     Verify password (+ PIN if set). Sets session flag on success.
     """
+    def get(self, request):
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+        return render(request, 'accounts/partials/mfa_wizard/step0_gate.html', {
+            'has_pin': bool(sec_prof.pin_hash),
+        })
+
     def post(self, request):
         password = request.POST.get('password', '').strip()
         pin = request.POST.get('pin', '').strip()

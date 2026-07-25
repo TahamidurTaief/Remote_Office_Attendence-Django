@@ -57,16 +57,20 @@
         </div>
 
       {% else %}
-        {# ── MFA Disabled state — Enable wizard ─────────────────────────────── #}
-        <div class="space-y-4">
+        {# ── MFA Disabled state — Clean CTA state ───────────────────────────── #}
+        <div id="mfa-wizard-body" class="space-y-4">
           <p class="text-xs" style="color:var(--text-secondary)">
-            Add an extra layer of security to your account. You'll need your authenticator app each time you sign in.
+            Add an extra layer of security to your account with an authenticator app (Google Authenticator, Authy, or 1Password).
           </p>
 
-          {# Wizard container — htmx loads steps here #}
-          <div id="mfa-wizard-body">
-            {% include "accounts/partials/mfa_wizard/step0_gate.html" %}
-          </div>
+          <c-button
+            type="button"
+            variant="primary"
+            label="Set Up MFA"
+            icon="shield-check"
+            hx-get="{% url 'accounts:mfa_wizard_gate' %}"
+            hx-target="#mfa-wizard-body"
+            hx-swap="outerHTML" ></c-button>
         </div>
       {% endif %}
     </c-card>
