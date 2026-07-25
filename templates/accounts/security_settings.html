@@ -135,6 +135,22 @@
         {% include "accounts/partials/trusted_device_list.html" %}
       </div>
     </c-card>
+    {# ── Update Password Card ──────────────────────────────────────────────── #}
+    <c-card>
+      <c-slot name="header">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <i data-lucide="key" class="w-4 h-4 text-red-500"></i>
+          </div>
+          <div>
+            <h3 class="text-[13px] font-semibold" style="color:var(--text)">Update Password</h3>
+            <p class="text-[11px]" style="color:var(--text-muted)">Update your account password below. Other active devices will be logged out.</p>
+          </div>
+        </div>
+      </c-slot>
+
+      {% include "accounts/partials/change_password_form.html" %}
+    </c-card>
 
   </div>{# /max-w-3xl #}
 
