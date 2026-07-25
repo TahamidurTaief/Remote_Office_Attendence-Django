@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, DetailView, UpdateView, View
@@ -1610,7 +1610,7 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
                     title_str = f"Asset Returned: {ast.asset.name}"
                     desc_str += f" | Returned condition: {ast.condition_at_return.upper() if ast.condition_at_return else 'Unknown'}"
                 events.append({
-                    'timestamp': timezone.make_aware(datetime.combine(ast.assigned_date, datetime.min.time())) if timezone.is_naive(timezone.now()) else timezone.now(),  # Fallback helper
+                    'timestamp': timezone.make_aware(datetime.combine(ast.assigned_date, time.min)),
                     'category': 'asset',
                     'icon': 'laptop',
                     'title': title_str,
