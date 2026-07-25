@@ -1,0 +1,12 @@
+1. Optimizations
+2. Properly integrate Alpin.js and htmx and tailwind and custom css and js. no boostrap.
+3. super fash and button smoothness
+4. Sob page e django cotton components add korte hobe
+5. Kono feature updatehoilei git e push hobe
+6. Kono issues thaka jabe na ba create howa jabe na. and visualize hote hobe
+7. Kono code update hoile oi code er sathe related code o update hote hobe
+8. Dashboard er analysis update rakhte hobe
+9. Backend strong and super fast hobe and best practice maintain korte hobe
+10. must cotton components use korte hobe
+11. Ui follow kobe Facebook, Meta, Google, App ke
+12. and change er por global search o update korte hobe jeno eita searchlist e add hoy.

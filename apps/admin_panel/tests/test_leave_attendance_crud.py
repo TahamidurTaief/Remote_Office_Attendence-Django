@@ -20,7 +20,9 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
         user = User.objects.create_user(email='emp_crud@example.com', password=self.password)
         emp_master = Employee.objects.create(
             user=user,
-            full_name='Crud Employee'
+            employee_number='EMP-MASTER-CRUD-123',
+            first_name='Crud',
+            last_name='Employee'
         )
         self.employee = EmployeeProfile.objects.create(
             user=user,
@@ -59,7 +61,7 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
         self.attendance = Attendance.objects.create(
             employee=self.employee,
             date=timezone.now().date(),
-            check_in_time=timezone.now().time(),
+            check_in_time=timezone.now(),
             type='office',
             status='on_time'
         )
@@ -114,11 +116,12 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
 
     def test_attendance_create_post(self):
         url = reverse('admin_panel:attendance_create')
+        tomorrow = timezone.now() + datetime.timedelta(days=1)
         data = {
             'employee': self.employee.id,
-            'date': (timezone.now().date() + datetime.timedelta(days=1)).isoformat(),
-            'check_in_time': '09:00:00',
-            'check_out_time': '17:00:00',
+            'date': tomorrow.date().isoformat(),
+            'check_in_time': tomorrow.replace(hour=9, minute=0, second=0).strftime('%Y-%m-%dT%H:%M'),
+            'check_out_time': tomorrow.replace(hour=17, minute=0, second=0).strftime('%Y-%m-%dT%H:%M'),
             'type': 'office',
             'status': 'on_time',
             'ot_status': 'none'
@@ -129,11 +132,12 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
 
     def test_attendance_edit_post(self):
         url = reverse('admin_panel:attendance_edit', kwargs={'pk': self.attendance.pk})
+        dt = timezone.now()
         data = {
             'employee': self.employee.id,
             'date': self.attendance.date.isoformat(),
-            'check_in_time': '10:00:00',
-            'check_out_time': '18:00:00',
+            'check_in_time': dt.replace(hour=10, minute=0, second=0).strftime('%Y-%m-%dT%H:%M'),
+            'check_out_time': dt.replace(hour=18, minute=0, second=0).strftime('%Y-%m-%dT%H:%M'),
             'type': 'field',
             'status': 'late',
             'ot_status': 'none'

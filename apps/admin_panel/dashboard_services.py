@@ -398,7 +398,9 @@ def get_admin_dashboard_data(user):
     # Active sessions & security metrics
     data['active_sessions_count'] = UserSession.objects.filter(is_active=True).count()
     data['trusted_devices_count'] = TrustedDevice.objects.count()
-    data['recent_audit_events_count'] = 0
+    from apps.notifications.models import AuditLog
+    last_24h = timezone.now() - timedelta(hours=24)
+    data['recent_audit_events_count'] = AuditLog.objects.filter(timestamp__gte=last_24h).count()
 
     # Sync and GPS metrics
     from apps.attendance.models import SyncLog, AttendanceLocation, AttendanceCorrectionRequest

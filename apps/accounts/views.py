@@ -17,6 +17,8 @@ from django.db.models import Q
 from django.contrib.sessions.models import Session
 from apps.accounts.models import UserSession, TrustedDevice, CustomUser, PasswordResetOTP, UserLoginActivity, LoginProtection
 from apps.notifications.models import log_audit, AuditLog
+from django.utils.decorators import method_decorator
+from apps.accounts.decorators import require_reauth
 from apps.accounts.login_protection import (
     check_3layer_lock,
     record_failed_attempt,
@@ -453,6 +455,7 @@ class ForgotPasswordResetView(View):
         return render(request, 'accounts/partials/forgot_step4.html')
 
 
+@method_decorator(require_reauth, name='dispatch')
 class AdminForceLogoutUserView(LoginRequiredMixin, View):
     """
     POST /admin-panel/users/<int:pk>/force-logout/
@@ -486,6 +489,7 @@ class AdminForceLogoutUserView(LoginRequiredMixin, View):
         return redirect('/admin-panel/roles/')
 
 
+@method_decorator(require_reauth, name='dispatch')
 class AdminUnlockUserView(LoginRequiredMixin, View):
     """
     POST /admin-panel/users/<int:pk>/unlock/
@@ -949,6 +953,7 @@ class LoginMFAVerifyView(View):
         })
 
 
+@method_decorator(require_reauth, name='dispatch')
 class AdminDisableUserMFAView(LoginRequiredMixin, View):
     """
     POST /admin-panel/users/<int:pk>/mfa/disable/
@@ -977,6 +982,7 @@ class AdminDisableUserMFAView(LoginRequiredMixin, View):
 
 from apps.accounts.models import SecurityPolicy
 
+@method_decorator(require_reauth, name='dispatch')
 class AdminSecurityPolicyListView(LoginRequiredMixin, View):
     """
     GET/POST /admin-panel/security/policies/

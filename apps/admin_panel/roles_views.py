@@ -11,6 +11,8 @@ from apps.accounts.models import (
     Role, Module, Action, Permission, RolePermission,
     UserRoleAssignment, UserPermissionOverride, DataScope
 )
+from django.utils.decorators import method_decorator
+from apps.accounts.decorators import require_reauth
 
 User = get_user_model()
 
@@ -35,6 +37,7 @@ class DynamicRoleListView(AdminRequiredMixin, ListView):
         ).order_by('-is_system_protected', 'name')
 
 
+@method_decorator(require_reauth, name='dispatch')
 class DynamicRoleCreateView(AdminRequiredMixin, CreateView):
     model = Role
     template_name = 'admin_panel/roles/role_form.html'
@@ -47,6 +50,7 @@ class DynamicRoleCreateView(AdminRequiredMixin, CreateView):
         return response
 
 
+@method_decorator(require_reauth, name='dispatch')
 class DynamicRoleUpdateView(AdminRequiredMixin, UpdateView):
     model = Role
     template_name = 'admin_panel/roles/role_form.html'
@@ -63,6 +67,7 @@ class DynamicRoleUpdateView(AdminRequiredMixin, UpdateView):
         return response
 
 
+@method_decorator(require_reauth, name='dispatch')
 class DynamicRoleDeleteView(AdminRequiredMixin, DeleteView):
     model = Role
     success_url = reverse_lazy('admin_panel:role_list')
@@ -79,6 +84,7 @@ class DynamicRoleDeleteView(AdminRequiredMixin, DeleteView):
         return redirect(self.success_url)
 
 
+@method_decorator(require_reauth, name='dispatch')
 class DynamicRoleMatrixView(AdminRequiredMixin, DetailView):
     model = Role
     template_name = 'admin_panel/roles/role_matrix.html'
@@ -111,6 +117,7 @@ class DynamicRoleMatrixView(AdminRequiredMixin, DetailView):
         return context
 
 
+@method_decorator(require_reauth, name='dispatch')
 class RolePermissionToggleView(AdminRequiredMixin, View):
     def post(self, request, role_id, perm_id):
         role = get_object_or_404(Role, pk=role_id)
@@ -127,6 +134,7 @@ class RolePermissionToggleView(AdminRequiredMixin, View):
         return JsonResponse({'status': 'ok', 'granted': granted, 'role_id': role_id, 'perm_id': perm_id})
 
 
+@method_decorator(require_reauth, name='dispatch')
 class RolePermissionScopeView(AdminRequiredMixin, View):
     def post(self, request, role_id, perm_id):
         role = get_object_or_404(Role, pk=role_id)
@@ -140,6 +148,7 @@ class RolePermissionScopeView(AdminRequiredMixin, View):
         return JsonResponse({'status': 'ok', 'scope': new_scope})
 
 
+@method_decorator(require_reauth, name='dispatch')
 class UserPermissionsView(AdminRequiredMixin, DetailView):
     model = User
     template_name = 'admin_panel/roles/user_permissions.html'
@@ -175,6 +184,7 @@ class UserPermissionsView(AdminRequiredMixin, DetailView):
         return redirect('admin_panel:user_permissions', pk=target.pk)
 
 
+@method_decorator(require_reauth, name='dispatch')
 class UserPermissionOverrideSaveView(AdminRequiredMixin, View):
     def post(self, request, pk):
         target = get_object_or_404(User, pk=pk)

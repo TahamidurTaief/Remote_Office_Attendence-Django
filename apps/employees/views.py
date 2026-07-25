@@ -7,6 +7,8 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from apps.notifications.models import log_audit
+from django.utils.decorators import method_decorator
+from apps.accounts.decorators import require_reauth
 from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument, Employee, EmployeeAuditLog, EmployeeActivityLog, AssetAssignment
 from .forms import EmployeeCreateForm, EmployeeEditForm, EmployeeDocumentForm, AssetAssignmentForm, AssetReturnForm, AssetReassignForm
 from apps.branches.models import Branch
@@ -397,6 +399,7 @@ class EmployeeDocumentVerifyView(RoleRequiredMixin, View):
         return redirect('employees:master_detail', pk=employee_pk)
 
 
+@method_decorator(require_reauth, name='dispatch')
 class EmployeeDocumentArchiveView(RoleRequiredMixin, View):
     allowed_roles = ['admin', 'manager']
 
@@ -691,6 +694,7 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
         return reverse_lazy('employees:employee_detail', kwargs={'pk': self.object.pk})
 
 
+@method_decorator(require_reauth, name='dispatch')
 class EmployeeMasterArchiveView(AdminRequiredMixin, View):
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
@@ -1050,6 +1054,7 @@ def _apply_transition(employee, req_obj, actor):
     )
 
 
+@method_decorator(require_reauth, name='dispatch')
 class LifecycleActionView(AdminRequiredMixin, View):
     """
     POST: Initiate a lifecycle transition from master_detail page.
@@ -1180,6 +1185,7 @@ class LifecyclePendingListView(AdminRequiredMixin, ListView):
         return super().render_to_response(context, **response_kwargs)
 
 
+@method_decorator(require_reauth, name='dispatch')
 class LifecycleReviewView(AdminRequiredMixin, View):
     """
     POST: Admin approves or rejects a LifecycleTransitionRequest.
@@ -1476,12 +1482,24 @@ class EmployeeDocumentDownloadView(LoginRequiredMixin, View):
             pk=pk
         )
 
-        if doc.is_sensitive():
-            is_owner = (
-                (doc.employee_master and doc.employee_master.user == request.user) or
-                (doc.employee and doc.employee.user == request.user)
-            )
-            if not is_owner and not request.user.is_superuser:
+        is_owner = (
+            (doc.employee_master and doc.employee_master.user == request.user) or
+            (doc.employee and doc.employee.user == request.user)
+        )
+
+        if not is_owner and not request.user.is_superuser:
+            if not PermissionEngine.evaluate(request.user, 'employees.view').allowed:
+                log_audit(
+                    actor=request.user,
+                    action='document_access_denied',
+                    target=doc,
+                    summary=f"Unauthorized download attempt for document pk={doc.pk}"
+                )
+                return HttpResponseForbidden(
+                    "Permission Denied: You do not have permission to download this document."
+                )
+
+            if doc.is_sensitive():
                 res = PermissionEngine.evaluate(request.user, 'employees.download_sensitive_document')
                 if not res.allowed:
                     log_audit(
@@ -1673,6 +1691,7 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
         return context
 
 
+@method_decorator(require_reauth, name='dispatch')
 class EmployeeSuspendToggleView(AdminRequiredMixin, View):
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
