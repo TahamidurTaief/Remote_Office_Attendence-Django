@@ -310,6 +310,23 @@ def get_hr_dashboard_data(user):
     data['today_attendance_count'] = Attendance.objects.filter(date=today, status='present').count()
     data['today_late_count'] = Attendance.objects.filter(date=today, status='late').count()
 
+    # HR Breakdown
+    active_profiles_qs = EmployeeProfile.objects.filter(master_employee__status=EmployeeStatus.ACTIVE)
+    data['hr_present_count'] = Attendance.objects.filter(date=today, status__in=['on_time', 'present'], attendance_type='check_in', is_expired=False).values('employee').distinct().count()
+    data['hr_late_count'] = Attendance.objects.filter(date=today, status='late', attendance_type='check_in', is_expired=False).values('employee').distinct().count()
+    data['hr_leave_count'] = LeaveRequest.objects.filter(start_date__lte=today, end_date__gte=today, status='approved').values('employee').distinct().count()
+    data['hr_remote_count'] = Attendance.objects.filter(date=today, type='field', is_expired=False).values('employee').distinct().count()
+    data['hr_holiday_count'] = Attendance.objects.filter(date=today, status='holiday_attendance', is_expired=False).values('employee').distinct().count()
+
+    from apps.attendance.models import AttendanceCorrectionRequest, ForgotCheckoutRequest
+    data['hr_correction_count'] = AttendanceCorrectionRequest.objects.filter(requested_at__date=today).count()
+    data['hr_ot_count'] = Attendance.objects.filter(date=today, overtime_minutes__gt=0, is_expired=False).count()
+    data['hr_forgot_checkout_count'] = ForgotCheckoutRequest.objects.filter(requested_at__date=today).count()
+
+    checked_in_ids = Attendance.objects.filter(date=today, attendance_type='check_in', is_expired=False).values_list('employee_id', flat=True)
+    on_leave_ids = LeaveRequest.objects.filter(start_date__lte=today, end_date__gte=today, status='approved').values_list('employee_id', flat=True)
+    data['hr_absent_count'] = active_profiles_qs.exclude(id__in=set(checked_in_ids) | set(on_leave_ids)).count()
+
     # On Leave Today
     data['on_leave_today'] = LeaveRequest.objects.select_related('employee', 'leave_type').filter(
         start_date__lte=today, end_date__gte=today, status='approved'

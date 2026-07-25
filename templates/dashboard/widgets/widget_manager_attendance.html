@@ -1,5 +1,5 @@
 <c-card>
-  <div class="flex items-center justify-between mb-4" id="widget-manager-attendance">
+  <div class="flex items-center justify-between mb-3" id="widget-manager-attendance">
     <div class="flex items-center gap-2">
       <div class="p-2 rounded-lg bg-blue-500/10 text-blue-600">
         <i data-lucide="shield-alert" class="w-5 h-5"></i>
@@ -9,10 +9,9 @@
         <p class="text-2xs text-slate-500">Live operational & shift compliance</p>
       </div>
     </div>
-    <button hx-get="{% url 'dashboard' %}?widget=manager_attendance"
-            hx-target="#widget-manager-attendance"
-            hx-swap="outerHTML"
-            class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
+    <button hx-get="{% url 'dashboard' %}?widget=manager_attendance" hx-target="#widget-manager-attendance"
+      hx-swap="outerHTML"
+      class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors">
       <i data-lucide="rotate-cw" class="w-4 h-4"></i>
     </button>
   </div>
@@ -22,7 +21,8 @@
     <div class="grid grid-cols-3 gap-2">
       <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
         <span class="text-3xs uppercase font-bold text-emerald-600 block tracking-wider">Present</span>
-        <span class="text-lg font-black text-emerald-700 dark:text-emerald-400 mt-1 block">{{ team_present_count }}</span>
+        <span class="text-lg font-black text-emerald-700 dark:text-emerald-400 mt-1 block">{{ team_present_count
+          }}</span>
       </div>
       <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
         <span class="text-3xs uppercase font-bold text-amber-600 block tracking-wider">Late</span>
@@ -36,15 +36,17 @@
 
     <!-- Actions & Alerts Row -->
     <div class="grid grid-cols-2 gap-2 text-2xs">
-      <div class="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="p-2 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
         <span class="text-slate-500">Pending Corrections</span>
-        <span class="px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+        <span
+          class="px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
           {{ pending_corrections_count }}
         </span>
       </div>
-      <div class="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div class="p-2 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
         <span class="text-slate-500">Pending Overtime</span>
-        <span class="px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400">
+        <span
+          class="px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400">
           {{ pending_ot_count }}
         </span>
       </div>
@@ -54,24 +56,26 @@
     <div class="border-t border-slate-100 dark:border-slate-800 pt-3">
       <span class="text-2xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Live Coordinates Log</span>
       {% if live_locations %}
-        <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-          {% for loc in live_locations %}
-            <div class="flex items-center justify-between text-2xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-850">
-              <div class="flex items-center gap-2">
-                <span class="relative flex h-2 w-2">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                </span>
-                <span class="font-bold text-slate-700 dark:text-slate-300">{{ loc.attendance.employee.full_name }}</span>
-              </div>
-              <span class="text-slate-500 font-mono text-[10px]">{{ loc.latitude|floatformat:4 }}, {{ loc.longitude|floatformat:4 }}</span>
-            </div>
-          {% endfor %}
+      <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+        {% for loc in live_locations %}
+        <div
+          class="flex items-center justify-between text-2xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-850">
+          <div class="flex items-center gap-2">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            <span class="font-bold text-slate-700 dark:text-slate-300">{{ loc.attendance.employee.full_name }}</span>
+          </div>
+          <span class="text-slate-500 font-mono text-[10px]">{{ loc.latitude|floatformat:4 }}, {{
+            loc.longitude|floatformat:4 }}</span>
         </div>
+        {% endfor %}
+      </div>
       {% else %}
-        <div class="text-center py-2 text-slate-400 text-2xs">
-          No live coordinates logged recently.
-        </div>
+      <div class="text-center py-2 text-slate-400 text-2xs">
+        No live coordinates logged recently.
+      </div>
       {% endif %}
     </div>
 
@@ -79,48 +83,51 @@
     <div class="border-t border-slate-100 dark:border-slate-800 pt-3">
       <span class="text-2xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Today's Timeline</span>
       {% if team_timeline %}
-        <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
-          {% for log in team_timeline %}
-            <div class="flex gap-2.5 text-2xs items-start">
-              <div class="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500 flex-shrink-0"></div>
-              <div class="flex-1 min-w-0">
-                <p class="text-slate-700 dark:text-slate-300 font-medium">
-                  <strong>{{ log.employee.full_name }}</strong>: 
-                  {% if log.check_out_time %}
-                    Checked Out (In: {{ log.check_in_time|time:"H:i" }} | Out: {{ log.check_out_time|time:"H:i" }})
-                  {% else %}
-                    Checked In (In: {{ log.check_in_time|time:"H:i" }})
-                  {% endif %}
-                </p>
-                <p class="text-[10px] text-slate-400 mt-0.5">Session: {{ log.get_type_display }} (Status: {{ log.get_status_display }})</p>
-              </div>
-            </div>
-          {% endfor %}
+      <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+        {% for log in team_timeline %}
+        <div class="flex gap-2 text-2xs items-start">
+          <div class="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500 flex-shrink-0"></div>
+          <div class="flex-1 min-w-0">
+            <p class="text-slate-700 dark:text-slate-300 font-medium">
+              <strong>{{ log.employee.full_name }}</strong>:
+              {% if log.check_out_time %}
+              Checked Out (In: {{ log.check_in_time|time:"H:i" }} | Out: {{ log.check_out_time|time:"H:i" }})
+              {% else %}
+              Checked In (In: {{ log.check_in_time|time:"H:i" }})
+              {% endif %}
+            </p>
+            <p class="text-[10px] text-slate-400 mt-0.5">Session: {{ log.get_type_display }} (Status: {{
+              log.get_status_display }})</p>
+          </div>
         </div>
+        {% endfor %}
+      </div>
       {% else %}
-        <div class="text-center py-4 text-slate-400 text-2xs">
-          No activities recorded today.
-        </div>
+      <div class="text-center py-4 text-slate-400 text-2xs">
+        No activities recorded today.
+      </div>
       {% endif %}
     </div>
 
     <!-- Attendance Heatmap (Last 7 days summary) -->
     <div class="border-t border-slate-100 dark:border-slate-800 pt-3">
-      <span class="text-2xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Attendance Trend (Last 7 Days)</span>
+      <span class="text-2xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Attendance Trend (Last 7
+        Days)</span>
       {% if heatmap_data %}
-        <div class="flex gap-1.5 overflow-x-auto py-1">
-          {% for day in heatmap_data %}
-            <div class="flex-1 min-w-[50px] p-2 text-center rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-850">
-              <span class="text-[9px] text-slate-400 block font-bold">{{ day.date|date:"D" }}</span>
-              <span class="text-[8px] text-slate-500 block mt-0.5">{{ day.date|date:"d M" }}</span>
-              <span class="text-xs font-black text-slate-800 dark:text-slate-200 mt-1 block">{{ day.count }}</span>
-            </div>
-          {% endfor %}
+      <div class="flex gap-1.5 overflow-x-auto py-1">
+        {% for day in heatmap_data %}
+        <div
+          class="flex-1 min-w-[50px] p-2 text-center rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-850">
+          <span class="text-[9px] text-slate-400 block font-bold">{{ day.date|date:"D" }}</span>
+          <span class="text-[8px] text-slate-500 block mt-0.5">{{ day.date|date:"d M" }}</span>
+          <span class="text-xs font-black text-slate-800 dark:text-slate-200 mt-1 block">{{ day.count }}</span>
         </div>
+        {% endfor %}
+      </div>
       {% else %}
-        <div class="text-center py-2 text-slate-400 text-2xs">
-          No historical data available.
-        </div>
+      <div class="text-center py-2 text-slate-400 text-2xs">
+        No historical data available.
+      </div>
       {% endif %}
     </div>
 
