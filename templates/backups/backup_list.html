@@ -13,14 +13,7 @@
 
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <div class="relative overflow-hidden bg-linear-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-2xl p-6">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                    <i data-lucide="database" class="w-5 h-5 text-emerald-700"></i>
-                </div>
-                <span class="text-xs font-semibold text-emerald-700 bg-emerald-200/70 px-2 py-1 rounded-full">Manual</span>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-emerald-900">Create Backup</h3>
+        <c-backup-stat-card type="emerald" icon="database" badge_text="Manual" title="Create Backup">
             <p class="text-sm text-emerald-800 mt-1">Download JSON + upload to Drive.</p>
             <form method="POST" action="{% url 'backups:create_backup' %}" class="mt-5">
                 {% csrf_token %}
@@ -29,16 +22,9 @@
                     Create Now
                 </button>
             </form>
-        </div>
+        </c-backup-stat-card>
 
-        <div class="relative overflow-hidden bg-linear-to-br from-sky-50 to-sky-100 border border-sky-200 rounded-2xl p-6">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
-                    <i data-lucide="clock" class="w-5 h-5 text-sky-700"></i>
-                </div>
-                <span class="text-xs font-semibold text-sky-700 bg-sky-200/70 px-2 py-1 rounded-full">Latest</span>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-sky-900">Last Backup</h3>
+        <c-backup-stat-card type="sky" icon="clock" badge_text="Latest" title="Last Backup">
             {% if stats.last_backup %}
             <p class="text-sm text-sky-800 mt-1">{{ stats.last_backup.created_at|timesince }} ago</p>
             <div class="mt-4 flex items-center justify-between text-sm">
@@ -51,31 +37,17 @@
             <p class="text-sm text-sky-800 mt-1">No backups created yet.</p>
             <div class="mt-4 text-xs text-sky-700">Create your first backup above.</div>
             {% endif %}
-        </div>
+        </c-backup-stat-card>
 
-        <div class="relative overflow-hidden bg-linear-to-br from-fuchsia-50 to-fuchsia-100 border border-fuchsia-200 rounded-2xl p-6">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-xl bg-fuchsia-100 flex items-center justify-center">
-                    <i data-lucide="refresh-cw" class="w-5 h-5 text-fuchsia-700"></i>
-                </div>
-                <span class="text-xs font-semibold text-fuchsia-700 bg-fuchsia-200/70 px-2 py-1 rounded-full">Auto</span>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-fuchsia-900">Auto Backup</h3>
+        <c-backup-stat-card type="fuchsia" icon="refresh-cw" badge_text="Auto" title="Auto Backup">
             <div class="mt-2 space-y-1 text-sm text-fuchsia-800">
                 <div>Daily: <span class="font-semibold">{% if config.auto_daily_enabled %}ON{% else %}OFF{% endif %}</span></div>
                 <div>3-Day: <span class="font-semibold">{% if config.auto_3day_enabled %}ON{% else %}OFF{% endif %}</span></div>
                 <div>Drive Upload: <span class="font-semibold">{% if config.auto_upload_to_drive %}ON{% else %}OFF{% endif %}</span></div>
             </div>
-        </div>
+        </c-backup-stat-card>
 
-        <div class="relative overflow-hidden bg-linear-to-br from-primary-50 to-primary-100 border border-primary-200/50 rounded-2xl p-6">
-            <div class="flex items-center justify-between">
-                <div class="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center">
-                    <i data-lucide="cloud" class="w-5 h-5 text-primary-600"></i>
-                </div>
-                <span class="text-xs font-semibold text-primary-600 bg-primary-200/70 px-2 py-1 rounded-full">Drive</span>
-            </div>
-            <h3 class="mt-4 text-lg font-bold text-primary-800">Google Drive</h3>
+        <c-backup-stat-card type="primary" icon="cloud" badge_text="Drive" title="Google Drive">
             <p class="text-sm text-primary-700 mt-1">
                 {% if config.is_enabled and config.service_account_json %}
                 Configured and ready.
@@ -87,7 +59,7 @@
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 Configure
             </button>
-        </div>
+        </c-backup-stat-card>
     </div>
 
     <!-- Google Drive Settings -->

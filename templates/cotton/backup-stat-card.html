@@ -1,0 +1,43 @@
+{# c-backup-stat-card #}
+{# Props: #}
+{# - type: "emerald" | "sky" | "fuchsia" | "primary" #}
+{# - badge_text #}
+{# - title #}
+{# - icon #}
+
+{% if type == 'emerald' %}
+    {% define gradient_class="bg-linear-to-br from-emerald-50 to-emerald-100 border border-emerald-200" %}
+    {% define icon_bg="bg-emerald-100" %}
+    {% define icon_text="text-emerald-700" %}
+    {% define badge_class="text-emerald-700 bg-emerald-200/70" %}
+    {% define title_class="text-emerald-900" %}
+{% elif type == 'sky' %}
+    {% define gradient_class="bg-linear-to-br from-sky-50 to-sky-100 border border-sky-200" %}
+    {% define icon_bg="bg-sky-100" %}
+    {% define icon_text="text-sky-700" %}
+    {% define badge_class="text-sky-700 bg-sky-200/70" %}
+    {% define title_class="text-sky-900" %}
+{% elif type == 'fuchsia' %}
+    {% define gradient_class="bg-linear-to-br from-fuchsia-50 to-fuchsia-100 border border-fuchsia-200" %}
+    {% define icon_bg="bg-fuchsia-100" %}
+    {% define icon_text="text-fuchsia-700" %}
+    {% define badge_class="text-fuchsia-700 bg-fuchsia-200/70" %}
+    {% define title_class="text-fuchsia-900" %}
+{% else %}
+    {% define gradient_class="bg-linear-to-br from-primary-50 to-primary-100 border border-primary-200/50" %}
+    {% define icon_bg="bg-primary-100" %}
+    {% define icon_text="text-primary-600" %}
+    {% define badge_class="text-primary-600 bg-primary-200/70" %}
+    {% define title_class="text-primary-800" %}
+{% endif %}
+
+<div class="relative overflow-hidden {{ gradient_class }} rounded-2xl p-6">
+    <div class="flex items-center justify-between">
+        <div class="w-10 h-10 rounded-xl {{ icon_bg }} flex items-center justify-center">
+            <i data-lucide="{{ icon }}" class="w-5 h-5 {{ icon_text }}"></i>
+        </div>
+        <span class="text-xs font-semibold {{ badge_class }} px-2 py-1 rounded-full">{{ badge_text }}</span>
+    </div>
+    <h3 class="mt-4 text-lg font-bold {{ title_class }}">{{ title }}</h3>
+    {{ slot }}
+</div>
