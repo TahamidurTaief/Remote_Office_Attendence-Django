@@ -4,19 +4,30 @@ from django.conf import settings
 from apps.employees.models import EmployeeProfile
 from apps.projects.models import Project
 
+class ExpenseCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name_plural = "Expense Categories"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 class Expense(models.Model):
     STATUS_CHOICES = (
-        ('pending', 'Pending'),
+        ('draft', 'Draft'),
+        ('pending_manager', 'Pending Manager Approval'),
+        ('pending_finance', 'Pending Finance Approval'),
+        ('pending_accounts', 'Pending Accounts Approval'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
-    )
-
-    CATEGORY_CHOICES = (
-        ('travel', 'Travel'),
-        ('food', 'Food'),
-        ('accommodation', 'Accommodation'),
-        ('materials', 'Materials'),
-        ('other', 'Other'),
+        ('returned', 'Returned for Correction'),
+        ('returned_by_manager', 'Returned by Manager'),
+        ('returned_by_finance', 'Returned by Finance'),
     )
 
     employee = models.ForeignKey(
@@ -32,10 +43,16 @@ class Expense(models.Model):
         related_name='expenses'
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    category = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='expenses'
+    )
     description = models.TextField()
     attachment = models.FileField(upload_to='expenses/', null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='draft')
     requested_at = models.DateTimeField(auto_now_add=True)
     
     sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
@@ -57,6 +74,39 @@ class Expense(models.Model):
         permissions = [
             ('approve_expense', 'Can approve or reject expense requests'),
         ]
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['employee']),
+            models.Index(fields=['category']),
+            models.Index(fields=['requested_at']),
+        ]
 
     def __str__(self):
-        return f"{self.employee.full_name} - {self.category} ({self.amount}) - {self.status}"
+        cat_name = self.category.name if self.category else "Uncategorized"
+        return f"{self.employee.full_name} - {cat_name} ({self.amount}) - {self.status}"
+
+class ExpenseReturnEvent(models.Model):
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='return_events')
+    returned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    returned_from_status = models.CharField(max_length=50)
+    reason = models.TextField()
+    fields_to_correct = models.JSONField(default=list, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    attachment = models.FileField(upload_to='expenses/returns/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+class ExpenseHistory(models.Model):
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='history')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.SET_NULL, null=True)
+    description = models.TextField()
+    attachment = models.FileField(upload_to='expenses/history/', null=True, blank=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-changed_at']
+

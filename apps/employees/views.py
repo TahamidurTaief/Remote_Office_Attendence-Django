@@ -1672,6 +1672,22 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
                     'actor': profile.user,
                 })
 
+        # 6. Expenses
+        if category in ('all', 'expense') and profile:
+            from apps.expense.models import Expense
+            exp_qs = Expense.objects.filter(employee=profile)
+            exp_qs = filter_dates(exp_qs, 'requested_at')
+            for exp in exp_qs.order_by('-requested_at')[:limit]:
+                events.append({
+                    'timestamp': exp.requested_at,
+                    'category': 'expense',
+                    'icon': 'receipt',
+                    'title': f"Expense Claim ({exp.get_status_display()})",
+                    'description': f"Category: {exp.get_category_display()} | Amount: {exp.amount}",
+                    'reason': exp.description,
+                    'actor': exp.reviewed_by or profile.user,
+                })
+
         # Sort and Slice paginated segment
         events.sort(key=lambda x: x['timestamp'], reverse=True)
         start_idx = (page - 1) * page_size

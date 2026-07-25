@@ -70,4 +70,24 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    {% if expense_results %}
+    <div class="pt-2 mt-2 border-t border-gray-100">
+        <h5 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-1">Expense Claims</h5>
+        {% for exp in expense_results %}
+        <a href="{% url 'expense:expense_detail' exp.pk %}" class="flex items-center justify-between p-2.5 hover:bg-gray-50 rounded-xl transition-colors text-decoration-none">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                    <i data-lucide="receipt" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-gray-900">{{ exp.employee.full_name }} • {{ exp.get_category_display }}</div>
+                    <div class="text-[11px] text-gray-400">Amount: {{ exp.amount }} • {{ exp.requested_at|date:"d M Y" }}</div>
+                </div>
+            </div>
+            <c-badge variant="info" label="{{ exp.get_status_display }}" ></c-badge>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>

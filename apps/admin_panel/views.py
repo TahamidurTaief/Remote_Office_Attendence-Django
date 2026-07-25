@@ -3080,6 +3080,7 @@ class GlobalSearchView(RoleRequiredMixin, View):
         employee_results = []
         asset_results = []
         attendance_results = []
+        expense_results = []
 
         if query:
             employee_results = Employee.objects.select_related(
@@ -3109,12 +3110,20 @@ class GlobalSearchView(RoleRequiredMixin, View):
                 Q(site_address__icontains=query)
             ).order_by('-date', '-check_in_time')[:5]
 
+            from apps.expense.models import Expense
+            expense_results = Expense.objects.select_related('employee', 'project').filter(
+                Q(description__icontains=query) |
+                Q(employee__full_name__icontains=query) |
+                Q(category__icontains=query)
+            ).order_by('-requested_at')[:5]
+
         if request.headers.get('HX-Request'):
             return render(request, 'admin_panel/partials/global_search_results.html', {
                 'query': query,
                 'results': employee_results,
                 'asset_results': asset_results,
                 'attendance_results': attendance_results,
+                'expense_results': expense_results,
             })
 
         return JsonResponse({
@@ -3147,6 +3156,16 @@ class GlobalSearchView(RoleRequiredMixin, View):
                     'status': att.status,
                     'url': f"/admin-panel/attendance/{att.pk}/"
                 } for att in attendance_results
+            ],
+            'expense_results': [
+                {
+                    'id': exp.pk,
+                    'employee': exp.employee.full_name,
+                    'amount': str(exp.amount),
+                    'category': exp.get_category_display(),
+                    'status': exp.get_status_display(),
+                    'url': f"/expense/staff/{exp.pk}/"
+                } for exp in expense_results
             ]
         })
 

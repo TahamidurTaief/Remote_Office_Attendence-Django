@@ -97,7 +97,6 @@ class StaffExpenseCreateView(StaffOrManagerMixin, CreateView):
             return redirect('expense:staff_expense_list')
             
         form.instance.employee = employee
-        form.instance.status = 'pending'
 
         content_type = self.request.content_type or ''
         if 'application/json' in content_type:
@@ -107,6 +106,12 @@ class StaffExpenseCreateView(StaffOrManagerMixin, CreateView):
                 data = self.request.POST
         else:
             data = self.request.POST
+
+        action = data.get('action', 'submit')
+        if action == 'draft':
+            form.instance.status = 'draft'
+        else:
+            form.instance.status = 'pending_manager'
 
         sync_uuid = data.get('sync_uuid')
         if sync_uuid:
@@ -138,65 +143,155 @@ class AdminExpenseListView(AdminRequiredMixin, ListView):
     def get_queryset(self):
         qs = Expense.objects.all().select_related('employee', 'project', 'reviewed_by')
         status = self.request.GET.get('status')
-        if status in ['pending', 'approved', 'rejected']:
+        if status in ['pending_manager', 'pending_finance', 'pending_accounts', 'approved', 'rejected']:
             qs = qs.filter(status=status)
+        elif status == 'pending':
+            qs = qs.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts'])
+        elif not status:
+            # By default, show all
+            pass
         return qs
 
 class BaseProcessExpenseView(View):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect('/login/')
-        from apps.accounts.engine import PermissionEngine
-        res = PermissionEngine.evaluate(request.user, 'expense.approve')
-        if not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') not in ('admin', 'manager'):
-            return redirect('/')
-
-        # Scoping check for manager/team scope
-        if res.allowed and res.data_scope != 'global' and not request.user.is_superuser:
-            from django.shortcuts import get_object_or_404
-            from apps.expense.models import Expense
-            from apps.employees.models import EmployeeProfile
+        
+        from apps.expense.models import Expense
+        expense = get_object_or_404(Expense, pk=kwargs.get('pk'))
+        user = request.user
+        
+        # Self-approval restriction
+        if expense.employee.user == user:
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("You cannot approve or process your own expense claim.")
+        
+        # Superuser / Admin bypass
+        if user.is_superuser or getattr(user, 'role', '') == 'admin':
+            return super().dispatch(request, *args, **kwargs)
             
-            expense = get_object_or_404(Expense, pk=kwargs.get('pk'))
-            profile = getattr(request.user, 'employee_profile', None)
-            
-            is_reporting_manager = False
+        if expense.status == 'pending_manager':
+            # Needs to be reporting manager of the employee or their delegate
             emp_master = getattr(expense.employee, 'master_employee', None)
-            if emp_master and emp_master.reporting_manager:
-                if emp_master.reporting_manager.user == request.user:
-                    is_reporting_manager = True
-            
-            scoped = is_reporting_manager
-            if not scoped and profile:
-                if profile.branch and expense.employee.branch == profile.branch:
-                    scoped = True
-                elif not profile.branch:
-                    from django.db.models import Q
-                    from apps.projects.models import Project
-                    managed_projects = Project.objects.filter(project_manager=profile)
-                    project_employees = EmployeeProfile.objects.filter(
-                        Q(site_engineer_projects__in=managed_projects) |
-                        Q(assigned_tasks__project__in=managed_projects)
-                    ).distinct()
-                    if expense.employee in project_employees:
-                        scoped = True
-            if not scoped:
+            if not emp_master:
+                if getattr(user, 'role', '') == 'manager':
+                    return super().dispatch(request, *args, **kwargs)
                 from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("You do not have permission to process expense requests outside your scope.")
-
+                return HttpResponseForbidden("No manager link or profile found to evaluate.")
+            
+            reporting_manager = emp_master.reporting_manager
+            if not reporting_manager:
+                if getattr(user, 'role', '') == 'manager':
+                    return super().dispatch(request, *args, **kwargs)
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("This employee has no reporting manager assigned.")
+            
+            # Check direct manager
+            is_allowed = False
+            if reporting_manager.user == user:
+                is_allowed = True
+            
+            # Check hierarchy manager (any level)
+            from apps.employees.hierarchy_services import OrgHierarchyService
+            reviewer_emp = getattr(user, 'employee_master', None)
+            if not is_allowed and reviewer_emp:
+                if OrgHierarchyService.is_manager_of(reviewer_emp, emp_master):
+                    is_allowed = True
+            
+            # Check manager delegation
+            if not is_allowed and reviewer_emp:
+                from apps.employees.models import ManagerDelegation
+                from django.utils import timezone
+                today = timezone.localdate()
+                managers = [reporting_manager]
+                managers.extend(OrgHierarchyService.get_management_chain(emp_master))
+                active_delegations = ManagerDelegation.objects.filter(
+                    manager__in=managers,
+                    delegate_to=reviewer_emp,
+                    is_active=True,
+                    start_date__lte=today,
+                    end_date__gte=today
+                )
+                if active_delegations.exists():
+                    is_allowed = True
+            
+            if not is_allowed:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You are not authorized to approve this expense at the Manager stage.")
+                
+        elif expense.status == 'pending_finance':
+            from apps.accounts.engine import PermissionEngine
+            res = PermissionEngine.evaluate(user, 'expense.approve')
+            if getattr(user, 'role', '') != 'finance' and not res.allowed:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You do not have Finance permissions to process this expense.")
+                
+        elif expense.status == 'pending_accounts':
+            if getattr(user, 'role', '') != 'accounts':
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You do not have Accounts permissions to process this expense.")
+                
+        else:
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("This expense is already processed or in an invalid state.")
+            
         return super().dispatch(request, *args, **kwargs)
 
 class ApproveExpenseView(BaseProcessExpenseView, View):
     def post(self, request, pk):
         expense = get_object_or_404(Expense, pk=pk)
-        if expense.status == 'pending':
+        from apps.notifications.dispatch import log_activity
+        
+        if expense.status == 'pending_manager':
+            expense.status = 'pending_finance'
+            expense.save()
+            messages.success(request, f"Expense request for {expense.employee.full_name} has been approved by Manager and sent to Finance.")
+            log_activity(
+                actor=request.user,
+                verb='expense_approved_manager',
+                target=expense,
+                metadata={
+                    'title': 'Expense Approved by Manager',
+                    'message': f"Expense request approved by Manager {request.user.email} and forwarded to Finance.",
+                    'notif_type': 'expense'
+                },
+                notify_users=[expense.employee.user]
+            )
+        elif expense.status == 'pending_finance':
+            expense.status = 'pending_accounts'
+            expense.save()
+            messages.success(request, f"Expense request for {expense.employee.full_name} has been approved by Finance and sent to Accounts.")
+            log_activity(
+                actor=request.user,
+                verb='expense_approved_finance',
+                target=expense,
+                metadata={
+                    'title': 'Expense Approved by Finance',
+                    'message': f"Expense request approved by Finance {request.user.email} and forwarded to Accounts.",
+                    'notif_type': 'expense'
+                },
+                notify_users=[expense.employee.user]
+            )
+        elif expense.status == 'pending_accounts':
             expense.status = 'approved'
             expense.reviewed_by = request.user
             expense.reviewed_at = timezone.now()
             expense.save()
-            messages.success(request, f"Expense request for {expense.employee.full_name} has been approved.")
+            messages.success(request, f"Expense request for {expense.employee.full_name} has been fully approved.")
+            log_activity(
+                actor=request.user,
+                verb='expense_fully_approved',
+                target=expense,
+                metadata={
+                    'title': 'Expense Fully Approved',
+                    'message': f"Expense request has been fully approved/disbursed by Accounts ({request.user.email}).",
+                    'notif_type': 'expense'
+                },
+                notify_users=[expense.employee.user]
+            )
         else:
             messages.error(request, "This request has already been processed.")
+            
         referer = request.META.get('HTTP_REFERER')
         if referer:
             return redirect(referer)
@@ -205,16 +300,186 @@ class ApproveExpenseView(BaseProcessExpenseView, View):
 class RejectExpenseView(BaseProcessExpenseView, View):
     def post(self, request, pk):
         expense = get_object_or_404(Expense, pk=pk)
-        if expense.status == 'pending':
+        if expense.status in ('pending_manager', 'pending_finance', 'pending_accounts'):
+            old_status = expense.status
             expense.status = 'rejected'
             expense.reviewed_by = request.user
             expense.reviewed_at = timezone.now()
             expense.rejection_reason = request.POST.get('rejection_reason', '')
             expense.save()
+            
+            from apps.notifications.dispatch import log_activity
             messages.success(request, f"Expense request for {expense.employee.full_name} has been rejected.")
+            log_activity(
+                actor=request.user,
+                verb='expense_rejected',
+                target=expense,
+                metadata={
+                    'title': 'Expense Rejected',
+                    'message': f"Expense request rejected at {old_status} stage by {request.user.email}. Reason: {expense.rejection_reason}",
+                    'notif_type': 'expense'
+                },
+                notify_users=[expense.employee.user]
+            )
         else:
             messages.error(request, "This request has already been processed.")
+            
         referer = request.META.get('HTTP_REFERER')
         if referer:
             return redirect(referer)
         return redirect('expense:admin_expense_list')
+
+class ReturnExpenseView(BaseProcessExpenseView, View):
+    def post(self, request, pk):
+        from django.db import transaction
+        expense = get_object_or_404(Expense, pk=pk)
+        
+        reason = request.POST.get('reason')
+        if not reason:
+            messages.error(request, "Reason is required to return an expense.")
+            referer = request.META.get('HTTP_REFERER')
+            if referer:
+                return redirect(referer)
+            return redirect('expense:admin_expense_list')
+            
+        fields_to_correct = request.POST.getlist('fields_to_correct')
+        due_date_str = request.POST.get('due_date')
+        due_date = None
+        if due_date_str:
+            from datetime import datetime
+            try:
+                due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+                
+        attachment = request.FILES.get('attachment')
+        
+        with transaction.atomic():
+            old_status = expense.status
+            if old_status == 'pending_manager':
+                expense.status = 'returned_by_manager'
+            elif old_status == 'pending_finance':
+                expense.status = 'returned_by_finance'
+            else:
+                messages.error(request, "Only Manager or Finance stages can return expenses.")
+                return redirect('expense:admin_expense_list')
+                
+            expense.save()
+            
+            from .models import ExpenseReturnEvent
+            ExpenseReturnEvent.objects.create(
+                expense=expense,
+                returned_by=request.user,
+                returned_from_status=old_status,
+                reason=reason,
+                fields_to_correct=fields_to_correct,
+                due_date=due_date,
+                attachment=attachment
+            )
+            
+            from apps.notifications.dispatch import log_activity
+            messages.success(request, f"Expense request for {expense.employee.full_name} has been returned.")
+            log_activity(
+                actor=request.user,
+                verb='expense_returned',
+                target=expense,
+                metadata={
+                    'title': 'Expense Returned',
+                    'message': f"Expense request returned at {old_status} stage by {request.user.email}. Reason: {reason}",
+                    'notif_type': 'expense'
+                },
+                notify_users=[expense.employee.user]
+            )
+            
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
+        return redirect('expense:admin_expense_list')
+
+class SubmitExpenseDraftView(StaffOrManagerMixin, View):
+    def post(self, request, pk):
+        expense = get_object_or_404(Expense, pk=pk)
+        employee = getattr(request.user, 'employee_profile', None)
+        if expense.employee != employee:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to submit this draft.")
+        if expense.status not in ('draft', 'returned', 'returned_by_manager', 'returned_by_finance'):
+            messages.error(request, "Only drafts or returned expenses can be submitted.")
+            return redirect('expense:staff_expense_list')
+        
+        if expense.status == 'returned_by_finance':
+            expense.status = 'pending_finance'
+        else:
+            expense.status = 'pending_manager'
+            
+        expense.save()
+        messages.success(request, "Expense submitted successfully.")
+        return redirect('expense:staff_expense_list')
+
+class StaffExpenseUpdateView(StaffOrManagerMixin, UpdateView):
+    model = Expense
+    form_class = ExpenseForm
+    template_name = 'staff/expense/request_form.html'
+    success_url = reverse_lazy('expense:staff_expense_list')
+
+    def dispatch(self, request, *args, **kwargs):
+        expense = self.get_object()
+        employee = getattr(request.user, 'employee_profile', None)
+        if expense.employee != employee:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to edit this expense.")
+        if expense.status not in ('draft', 'returned', 'returned_by_manager', 'returned_by_finance'):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You can only edit draft or returned expenses.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        content_type = self.request.content_type or ''
+        if 'application/json' in content_type and self.request.method in ('POST', 'PUT'):
+            try:
+                import json
+                kwargs['data'] = json.loads(self.request.body)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return kwargs
+
+    def form_valid(self, form):
+        from django.db import transaction
+        from .models import ExpenseHistory
+        expense = self.get_object()
+        
+        with transaction.atomic():
+            ExpenseHistory.objects.create(
+                expense=expense,
+                updated_by=self.request.user,
+                amount=expense.amount,
+                category=expense.category,
+                description=expense.description,
+                attachment=expense.attachment
+            )
+            
+            content_type = self.request.content_type or ''
+            if 'application/json' in content_type:
+                try:
+                    data = json.loads(self.request.body)
+                except (json.JSONDecodeError, ValueError):
+                    data = self.request.POST
+            else:
+                data = self.request.POST
+
+            action = data.get('action', 'submit')
+            if action == 'draft':
+                # keep status unchanged (or draft if it was draft)
+                pass
+            else:
+                if expense.status == 'returned_by_finance':
+                    form.instance.status = 'pending_finance'
+                else:
+                    form.instance.status = 'pending_manager'
+            
+            response = super().form_valid(form)
+            
+        messages.success(self.request, "Expense updated and resubmitted successfully.")
+        return response
+

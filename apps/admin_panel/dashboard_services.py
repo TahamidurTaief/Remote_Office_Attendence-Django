@@ -233,7 +233,7 @@ def get_manager_dashboard_data(user):
 
     # Pending Expense Approvals for team
     data['pending_expense_approvals'] = Expense.objects.select_related('employee').filter(
-        employee__in=team_profiles, status='pending'
+        employee__in=team_profiles, status='pending_manager'
     ).order_by('-requested_at')[:5]
 
     # Projects managed by this user

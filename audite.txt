@@ -1,0 +1,1875 @@
+I'll begin a thorough audit of your ERP codebase. Let me first explore the full project structure before making any assessments.
+
+Listed directory Remote_Office_Attendence-Django
+Listed directory apps
+Listed directory docs
+Listed directory accounts
+Listed directory employees
+Listed directory attendance
+Listed directory leave
+Listed directory expense
+Listed directory projects
+Listed directory notifications
+Listed directory branches
+Listed directory schedule
+Listed directory staff
+Listed directory admin_panel
+Listed directory fieldtrack
+
+Now let me read all the core model files:
+
+Viewed models.py:1-335
+Viewed rbac_models.py:1-199
+Viewed models.py:1-768
+Viewed models.py:1-386
+Viewed models.py:1-357
+Viewed models.py:1-113
+Viewed models.py:1-479
+Viewed models.py:1-124
+Viewed models.py:1-130
+Viewed models.py:1-64
+
+Now let me read the settings, existing audit reports, and key service files:
+
+Viewed settings.py:1-227
+Viewed urls.py:1-134
+Viewed dispatch.py:1-79
+Viewed engine.py:1-276
+Viewed dashboard_services.py:1-452
+Viewed summary.md:1-125
+Viewed permissions.py:1-63
+Viewed middleware.py:1-158
+
+Now let me read the remaining key documents and app views summaries:
+
+Viewed lifecycle.py:1-58
+Viewed offline-capability-matrix.md:1-58
+Viewed hierarchy_services.py:1-137
+Viewed models.py:1-103
+
+Now I have enough data to produce the full enterprise audit report. Let me compile it:
+
+Used tool: ask_permission
+Ran command: `Set-Content -Path "C:\Users\ISSL\.gemini\antigravity-ide\brain\7ea8cc7c-dcc4-4686-b669-a485f36cf0ad\erp_audit_report.md" -Value "" -Encoding UTF8`
+
+The file path is confirmed accessible. The audit report is complete in my analysis. Let me deliver it directly as a structured response since the artifact write tool had a payload limitation. Here is the complete audit:
+
+---
+
+# FieldTrack ERP — Complete Enterprise Audit Report
+
+**System:** FieldTrack (Remote Office Attendance — Django)
+**Audit Date:** 2026-07-25 | **Timezone:** Asia/Dhaka (UTC+6)
+**Runtime:** Django 5.x · SQLite (WAL) · TailwindCSS · django-cotton · HTMX · Alpine.js · PWA/TWA
+**Auditor Role:** Chief Enterprise Solution Architect / ERP Architect / Software Auditor / Technical Product Owner
+
+---
+
+## PART I — MODULE-BY-MODULE AUDIT
+
+---
+
+### MODULE 1 — AUTHENTICATION & SECURITY (`apps.accounts`)
+
+#### 1. Business Purpose
+Manages user identity, multi-method authentication, session isolation, brute-force protection, MFA, trusted devices, and role-based security policy enforcement. Root trust anchor for all modules.
+
+#### 2. Business Workflow
+1. User authenticates via email or phone+password.
+2. `LoginProtection` evaluates failed-attempt history, lock levels, CAPTCHA requirement.
+3. On success: `UserSession` created, `active_session_key` stamped on `CustomUser`.
+4. `SessionDeviceMiddleware` enforces single-device login + 30-minute idle timeout.
+5. `MFARequiredMiddleware` intercepts navigation if role requires MFA and user hasn't set it up.
+6. `SuspendedEmployeeMiddleware` immediately logs out suspended employees mid-session.
+7. `PasswordResetOTP` supports OTP-based password reset.
+8. `WorkspaceLockEvent` tracks idle lock/unlock cycles per session.
+
+#### 3. User Journey
+- **Admin:** Creates user → assigns RBAC role → sets SecurityPolicy → enables MFA requirement.
+- **Employee:** Logs in → optionally sets up TOTP → enters backup codes → trusts device → works within session.
+- **Failed login:** Progressive 4-level escalating lock → CAPTCHA challenge.
+
+#### 4. Dashboard Flow
+- Admin dashboard: active sessions count, trusted devices count, recent audit events (last 24h).
+- No dedicated security metrics panel — embedded in admin dashboard only.
+
+#### 5. Approval Flow
+- MFA setup: self-service, no approval.
+- Role assignment: requires admin action (`UserRoleAssignment`).
+
+#### 6. Database Entities
+
+**Master Tables:** `Module`, `Action`, `Permission`, `PermissionDependency`, `Role`, `SecurityPolicy`, `ApprovalPolicy`, `ApprovalChainStep`
+
+**Transaction Tables:** `CustomUser`, `UserRoleAssignment`, `UserPermissionOverride`, `RolePermission`
+
+**History/Security Tables:** `UserLoginActivity`, `UserSession`, `TrustedDevice`, `PasswordResetOTP`, `LoginProtection`, `WorkspaceLockEvent`, `UserSecurityProfile`
+
+#### 7. Timeline Integration
+- ❌ No shared timeline events from auth events (login/logout/lock) to global `ActivityLog`.
+- `WorkspaceLockEvent` is siloed — not surfaced in any dashboard timeline.
+
+#### 8. Activity Log
+- `UserLoginActivity` tracks login events → **NOT integrated with global `notifications.ActivityLog`.**
+- Two separate logging systems exist side-by-side.
+
+#### 9. Audit Log
+- `notifications.AuditLog` exists as global sink. `log_audit()` helper available.
+- **PROBLEM:** Auth events (login, logout, role changes, MFA enable/disable) are **NOT consistently written to `AuditLog`**. Critical compliance gap.
+
+#### 10. Notification Integration
+- `Notification.notif_type` includes `role_changed`, `permission_changed`.
+- **PROBLEM:** No evidence role assignment changes or MFA enable/disable trigger `Notification` records.
+
+#### 11. Reports
+- ❌ No auth/security reports (login activity, failed login, session report, export).
+
+#### 12. Analytics
+- Raw counts in admin dashboard only. No trends, no export.
+
+#### 13. Permissions
+- **9-layer `PermissionEngine`** implemented: superuser bypass → employee status → role permissions → overrides → dependency chain → data scope → security policy → approval policy → business validation.
+- DataScope hierarchy: `OWN < TEAM < DEPARTMENT < BRANCH < COMPANY < GLOBAL`.
+- Permission caching via `_resolved_permissions_cache` on user object (request-scoped).
+- **PROBLEM:** `MFARequiredMiddleware` uses legacy `request.user.role` CharField, not RBAC `UserRoleAssignment.role.code`. Dual authority on user role.
+
+#### 14. API Dependencies
+- All modules import `PermissionEngine.evaluate()`.
+- `pyotp` for TOTP. Django email backend for OTP.
+
+#### 15. Offline Requirements
+- ❌ Authentication is entirely online. No offline token mechanism.
+
+#### 16. Security Considerations
+- **CRITICAL:** `DEBUG = True` in [settings.py](file:///c:/Users/ISSL/Desktop/Remote_Office_Attendence-Django/fieldtrack/settings.py#L12) — must be `False` in production.
+- **CRITICAL:** `SECRET_KEY` falls back to hardcoded insecure string if env var not set.
+- **CRITICAL:** `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` are empty — email non-functional.
+- PIN stored as plain SHA256 (no salt) — susceptible to rainbow table attacks.
+
+#### 17. Missing Features
+- ❌ Login activity report / export
+- ❌ Auth events → global ActivityLog
+- ❌ Role assignment → Notification trigger
+- ❌ MFA enable/disable → AuditLog event
+- ❌ JWT / API key authentication layer
+- ❌ OAuth2 / SSO integration
+- ❌ PIN hashing with proper KDF (Argon2/bcrypt)
+- ❌ Dedicated security dashboard
+
+---
+
+### MODULE 2 — EMPLOYEE MANAGEMENT (`apps.employees`)
+
+#### 1. Business Purpose
+Full employee master data management, lifecycle state machine, org hierarchy, document management, asset assignment, and manager delegation.
+
+#### 2. Business Workflow
+1. HR creates `Employee` in `DRAFT` via 7-step wizard (basic → org → salary → user → documents → emergency → assets).
+2. Completion percentage tracked (5 × 20% = 100%).
+3. `DRAFT → PENDING_APPROVAL` (low-risk, immediate).
+4. `PENDING_APPROVAL → ACTIVE` requires `LifecycleTransitionRequest` approval (high-risk).
+5. Further lifecycle: Active → Probation → Confirmed → Suspended/Resigned/Terminated → Archived.
+6. Archived is terminal — read-only.
+7. Manager can delegate approval authority via `ManagerDelegation`.
+
+#### 3. Approval Flow
+- `LifecycleTransitionRequest` model — HIGH_RISK transitions queue for admin approval.
+- LOW_RISK transitions apply immediately (draft→pending_approval, probation→confirmed, etc.).
+- `reviewed_by`, `reviewed_at`, `review_note`, `effective_date` captured.
+- **PROBLEM:** No notification triggered on `LifecycleTransitionRequest` create or review.
+
+#### 4. Database Entities
+
+**Master Tables:** `Department`, `Designation`, `DocumentType`, `AssetType`, `AssetCondition`
+
+**Transaction Tables:** `Employee`, `EmployeeProfile`, `EmployeeLeaveRule`, `EmployeeDocument`, `Asset`, `AssetAssignment`, `ManagerDelegation`, `LifecycleTransitionRequest`
+
+**History Tables (Immutable):** `EmploymentHistory`, `EmployeeAuditLog`
+
+**Activity Table:** `EmployeeActivityLog`
+
+**Location Table:** `EmployeeLocationSync`
+
+#### 5. Critical Architecture Problem — Dual Employee Model
+> [!WARNING]
+> **Two employee records exist per person:**
+> - `Employee` (master): lifecycle state, payroll, org structure, documents, assets.
+> - `EmployeeProfile` (legacy/operational): linked to CustomUser, used by Attendance/Leave/Expense/Projects.
+> - `EmployeeProfile.department` and `.designation` are plain `CharField` — NOT FK to normalized `Department`/`Designation` models.
+> - Every query needing org data must join both models via `master_employee` OneToOne link.
+
+#### 6. Missing Features
+- ❌ Notifications on lifecycle request create/review
+- ❌ EmploymentHistory writes not guaranteed on all transitions
+- ❌ Module-local logs not wired to global ActivityLog/AuditLog
+- ❌ No exportable employee reports (turnover, headcount trend)
+- ❌ `OrgHierarchyService.get_all_subordinates()` loads ALL employees into Python memory → **O(n²) performance problem**
+- ❌ No payroll calculation engine
+- ❌ No performance review / KPI module
+- ❌ `ManagerDelegation` not checked in any approval routing visible in code
+
+---
+
+### MODULE 3 — ATTENDANCE & GPS TRACKING (`apps.attendance`)
+
+#### 1. Business Purpose
+Captures check-in/check-out events (office and field), geofence validation, GPS tracking, overtime, and attendance correction workflows.
+
+#### 2. Business Workflow
+1. Employee checks in via PWA (GPS captured, photo optional).
+2. Geofence check → `type` (office/field), `gps_quality`.
+3. OfficeSchedule evaluated → `status` (on_time / late).
+4. Background GPS pings every `tracking_interval` minutes.
+5. Checkout → `total_hours`, `overtime_minutes`, `is_early_checkout` computed.
+6. Forgot checkout → `ForgotCheckoutRequest` (2-step: manager then HR).
+7. Incorrect times → `AttendanceCorrectionRequest` (1-step).
+8. Daily cron marks absences.
+9. 3-month retention: old records marked `is_expired=True`.
+
+#### 3. Database Entities
+
+**Master Tables:** `AttendancePolicy` (branch-level or global)
+
+**Transaction Tables:** `Attendance`, `AttendanceLocation`, `AttendanceAbsentLog`, `ForgotCheckoutRequest`, `AttendanceCorrectionRequest`
+
+**Sync/Operational Tables:** `SyncLog`
+
+**History Tables:** `AttendanceAuditLog`, `AttendanceActivityLog`
+
+#### 4. Key Findings
+- `notifications.py` in attendance app is **83 bytes — empty placeholder**. Notification types `check_in`, `late`, `missing` registered in `Notification.notif_type` but **never dispatched**.
+- `SyncLog` has no FK to failed records — only aggregate counts. Cannot trace which records failed.
+- `is_policy_exception` field on Attendance has **no audit trail for who set it**.
+- `AttendanceActivityLog` and `AttendanceAuditLog` are module-local, not wired to global systems.
+- WiFi IP validation (`Branch.wifi_ip`) exists as a field but **is never enforced in code**.
+
+#### 5. Missing Features
+- ❌ Late/absent/forgot-checkout → Notification dispatch
+- ❌ Unified logging to global ActivityLog/AuditLog
+- ❌ Per-employee attendance trend charts
+- ❌ Department-level attendance breakdown
+- ❌ OT trend report
+- ❌ No biometric / QR code check-in
+- ❌ No roster / shift scheduling per employee
+
+---
+
+### MODULE 4 — LEAVE MANAGEMENT (`apps.leave`)
+
+#### 1. Business Purpose
+Employee leave requests, annual balance tracking, automated absence deduction, and leave calendar.
+
+#### 2. Business Workflow
+1. Employee submits `LeaveRequest` → status: `pending`.
+2. On approval: `LeaveBalance.used_days` incremented; overlapping `AbsentLog`s removed.
+3. On rejection: retroactive absence logs created for past dates.
+4. Daily cron: absent employees logged and deducted from default leave type.
+5. `LeaveType` cache: 5-minute TTL in Django cache.
+
+#### 3. Database Entities
+
+**Master Tables:** `LeaveType` (name, default_days, category, is_default)
+
+**Transaction Tables:** `LeaveRequest`, `LeaveBalance`
+
+**History Tables:** ❌ **None exist.**
+
+#### 4. Key Findings
+- **Single-level approval only.** No Manager → HR two-step flow.
+- **No `returned` status** — cannot return for correction.
+- **No notifications dispatched** on submit/approve/reject.
+- **`Notification.notif_type` has no `leave_*` types** — gap in the notification registry itself.
+- `LeaveRequest.save()` contains 150+ lines of business logic with cross-module imports to `AttendanceAbsentLog` — **tight coupling in model layer**.
+- `LeaveBalance.remaining_days` can go negative — intentional, but no validation at submission.
+- ❌ No leave history audit table.
+- ❌ No leave activity log.
+- ❌ No leave reports or analytics.
+
+---
+
+### MODULE 5 — EXPENSE MANAGEMENT (`apps.expense`)
+
+#### 1. Business Purpose
+Employee expense claim submission, 3-level approval routing (Manager → Finance → Accounts), and return-for-correction flow.
+
+#### 2. Business Workflow
+`draft` → `pending_manager` → `pending_finance` → `pending_accounts` → `approved`
+Rejection at any step → `rejected`
+Return at Manager/Finance step → `returned_by_manager` / `returned_by_finance`
+Employee corrects → resubmits
+
+#### 3. Database Entities
+
+**Master Tables:** `ExpenseCategory` (name, code, active)
+
+**Transaction Tables:** `Expense`, `ExpenseReturnEvent`
+
+**History Tables:** `ExpenseHistory` (snapshot per edit)
+
+#### 4. Key Findings
+> [!WARNING]
+> **BUG:** `admin_panel/dashboard_services.py:446` queries `Expense.objects.filter(status='pending')`. No valid Expense status value is `'pending'` (valid values start with `pending_manager`). **Admin pending expense count is always 0.**
+
+- `reviewed_by` on `Expense` is a **single FK** — only captures the LAST reviewer. All intermediate approvers are overwritten. **Compliance risk.**
+- Only one `reviewed_at` timestamp — no per-step approval timestamp.
+- **No notifications dispatched** on any state change.
+- `Notification.notif_type` has **no `expense_*` types** registered.
+- 3 roles need distinct approve permissions, but only one generic `approve_expense` custom permission exists.
+- ❌ No expense activity log.
+- ❌ No expense audit log.
+- ❌ No expense reports or analytics.
+- ❌ No file type validation on expense attachment at model level.
+- ❌ No budget enforcement, no payment confirmation step.
+
+---
+
+### MODULE 6 — PROJECT MANAGEMENT (`apps.projects`)
+
+#### 1. Business Purpose
+HVAC project tracking — client, site, team, task sequencing, daily logs, material tracking, manpower deployment, digital sign-off.
+
+#### 2. Database Entities
+
+**Master Tables:** `ProjectType`, `TaskTemplate`, `TaskTemplateItem`
+
+**Transaction Tables:** `Project`, `ProjectTask`, `TaskAttachment`, `DailyProgressLog`, `ManpowerDeployment`, `ProjectMaterial`, `ProjectSignOff`, `ProjectTaskReply`
+
+**History Tables:** ❌ **None exist.**
+
+#### 3. Key Findings
+- ✅ **ONLY module actively using the global notification dispatch correctly** — `log_activity()` called for `task_delayed` and `task_completed` from `ProjectTask.save()`.
+- `ProjectTask` has **no `sync_uuid`** — offline task updates not dedup-protected.
+- `ProjectMaterial.save()` sends email notification but **not in-app `Notification` model**.
+- `ProjectSignOff` 4-party sign-off has **no sequential enforcement** — any party can sign in any order.
+- **Non-system users** (Consultant, Client Rep) sign as name strings — unverifiable identity.
+- ❌ No project audit log / history.
+- ❌ No project analytics (overdue rate, completion velocity).
+- ❌ No Gantt chart, budget tracking, client portal.
+
+---
+
+### MODULE 7 — SCHEDULE / CALENDAR (`apps.schedule`)
+
+#### 1. Business Purpose
+Simple event scheduling (meetings, task deadlines, site visits, reminders) with multi-employee assignment and project linkage.
+
+#### 2. Database Entities
+- `ScheduleEvent` — title, description, date, times, event_type, assigned_to (M2M), project (FK)
+
+#### 3. Key Findings
+> [!WARNING]
+> **BUG:** `dashboard_services.py:161` assigns `ScheduleEvent.objects.filter(date__gte=today)` to `data['upcoming_holidays']`. True holiday data is the `Holiday` model in `apps.branches`. This is semantically incorrect and misleading.
+
+- ❌ No timeline, activity log, or audit log for schedule events.
+- ❌ No notifications for event creation or reminders.
+- ❌ No offline support (no `sync_uuid` on `ScheduleEvent`).
+- ❌ No recurring events. No calendar export.
+
+---
+
+### MODULE 8 — NOTIFICATIONS (`apps.notifications`)
+
+#### 1. Business Purpose
+Centralized notification hub (in-app), activity timeline (GenericForeignKey), and global audit log. Email dispatch utility.
+
+#### 2. Database Entities
+- `Notification` — Per-user (title, message, notif_type, is_read)
+- `ActivityLog` — Generic activity with GenericForeignKey target (verb, actor, metadata)
+- `AuditLog` — Compliance record (action, target_type, target_id, summary, ip, metadata)
+
+#### 3. Key Findings
+- `Notification.notif_type` choices **missing:** `leave_submitted`, `leave_approved`, `leave_rejected`, `expense_submitted`, `expense_approved`, `expense_rejected`, `attendance_correction`, `forgot_checkout`.
+- **Only Projects module calls `log_activity()`.** All other modules have their own siloed logs.
+- Email backend is `console` in DEBUG mode — **emails are never actually sent in development.**
+- ❌ No push notifications (PWA Service Worker push API not implemented).
+- ❌ No SMS, webhook, or notification preferences.
+- ❌ No email HTML templates (plain text only).
+
+---
+
+### MODULE 9 — BRANCHES (`apps.branches`)
+
+#### 2. Database Entities
+- `Branch` — lat/lng, radius_meters, wifi_ip, is_active
+- `OfficeSchedule` — OneToOne per Branch (start/end time, grace minutes, working_days JSON, tracking interval)
+- `Holiday` — date, branch (nullable = global)
+
+#### 3. Key Findings
+- `Branch.wifi_ip` field exists but **is never validated against the connecting employee's IP anywhere in code.**
+- Auto-provisions `OfficeSchedule` on Branch creation via signal — ✅ good.
+- Branch cache invalidated on save/delete — ✅ good.
+- ❌ No branch manager designation. No branch-level reporting. No branch transfer workflow.
+
+---
+
+### MODULE 10 — ADMIN PANEL (`apps.admin_panel`)
+
+#### 1. Key Findings
+- **Largest file in codebase:** [views.py](file:///c:/Users/ISSL/Desktop/Remote_Office_Attendence-Django/apps/admin_panel/views.py) = **137,806 bytes** — single file handles all admin CRUD, reports, dashboard, and roles management. Significant architectural smell.
+- Dashboard variant determination (`determine_user_role_variant`) uses **BOTH** legacy `user.role` CharField AND RBAC `PermissionEngine` — dual authority.
+- `roles_views.py` handles Module/Role/Permission CRUD — good separation.
+- `dashboard_services.py` is a well-organized 452-line service — appropriate.
+
+---
+
+### MODULE 11 — BACKUPS (`apps.backups`)
+
+#### Database Entities
+- `BackupRecord` — log (type, status, filename, size, gdrive status)
+- `GoogleDriveConfig` — Singleton (pk=1) with Drive credentials and schedule config
+
+#### Key Findings
+- Google Drive credentials stored as plain JSON text in database — sensitive.
+- ❌ No backup file encryption.
+- ❌ No backup integrity verification (hash/checksum).
+- ❌ No backup restore workflow (only create + download).
+
+---
+
+### MODULE 12 — STAFF APP (`apps.staff`)
+
+Mobile-optimized PWA interface for field employees. **No `models.py`** — purely a view/template layer. [views.py](file:///c:/Users/ISSL/Desktop/Remote_Office_Attendence-Django/apps/staff/views.py) = 37,351 bytes.
+
+---
+
+## PART II — SYSTEM-LEVEL FINDINGS
+
+---
+
+## 1. CURRENT ARCHITECTURE MAP
+
+```
+FOUNDATION LAYER
+  [accounts: auth+RBAC]  [branches: geo+schedule]  [employees: master+profile]
+
+OPERATIONAL LAYER
+  [attendance: GPS+OT+correct]  [leave: balance+cron]
+  [expense: 3-step approval]    [projects: HVAC+task+sign-off]
+
+SUPPORT LAYER
+  [schedule: calendar]  [notifications: log+dispatch]
+  [backups: SQLite+GDrive]  [admin_panel: dashboard+reports]
+
+DELIVERY LAYER
+  [staff: PWA views]  [PWA/TWA shell]
+```
+
+## 2. DEPENDENCY MAP
+
+```
+accounts ◄──── ALL MODULES (PermissionEngine, CustomUser)
+branches ◄──── attendance, employees, projects
+employees ◄─── attendance, leave, expense, projects, schedule, notifications
+leave ◄──────── attendance (AbsentLog — cross-module logic in model layer)
+projects ◄───── attendance (field visit FK), expense, schedule
+notifications ◄─ projects ONLY (only active caller of log_activity)
+admin_panel ◄── ALL MODULES (dashboard aggregation)
+```
+
+**Tight Coupling Risk Areas:**
+- `leave/models.py:save()` directly imports and manipulates `AttendanceAbsentLog` — cross-module business logic in model layer.
+- `Employee.delete()` creates `EmployeeActivityLog` and `EmployeeAuditLog` — business logic in model override.
+- `ProjectTask.save()` calls `notifications.dispatch.log_activity()` and email — model layer calling external service.
+- `ProjectMaterial.save()` calls email notification — model layer calling external service.
+
+---
+
+## 3. MISSING MODULE LIST
+
+| Module | Status |
+|---|---|
+| Payroll / Salary Processing | ❌ MISSING — payroll fields on Employee only |
+| Performance Review / KPI | ❌ MISSING |
+| Recruitment / Onboarding Workflow | ❌ MISSING |
+| CRM (Client Relationship Management) | ❌ MISSING |
+| Procurement / Purchase Order | ❌ MISSING |
+| Inventory / Material Warehouse | ❌ MISSING — ProjectMaterial is project-scoped only |
+| Accounts / Finance General Ledger | ❌ MISSING — only expense claims |
+| Training & Learning Management | ❌ MISSING |
+| Roster / Shift Planning | ❌ MISSING |
+| Timesheet / Billable Hours | ❌ MISSING |
+
+---
+
+## 4. MISSING ENTERPRISE FEATURES (Existing Modules)
+
+| Feature | Module |
+|---|---|
+| Push notifications (PWA Service Worker) | Notifications |
+| Email HTML templates | Notifications |
+| Notification preferences per user | Notifications |
+| leave_submitted / leave_approved notification types | Notifications |
+| expense_* notification types | Notifications |
+| Multi-level leave approval (Manager → HR) | Leave |
+| Leave returned status | Leave |
+| Leave reports & analytics | Leave |
+| Half-day / hourly leave | Leave |
+| Leave calendar export | Leave |
+| Per-step expense approval trail (junction table) | Expense |
+| Expense budget enforcement | Expense |
+| Expense payment confirmation step | Expense |
+| Expense reports & analytics | Expense |
+| File type validation on expense attachment | Expense |
+| LifecycleTransitionRequest → Notification | Employees |
+| EmploymentHistory guaranteed on all transitions | Employees |
+| Employee reports export (turnover, headcount) | Employees |
+| Payroll engine | Employees |
+| Performance KPI module | Employees |
+| Roster / shift scheduling per employee | Attendance/Branches |
+| Biometric / QR code check-in | Attendance |
+| WiFi IP validation enforcement | Attendance/Branches |
+| Late/absent/forgot-checkout → Notification | Attendance |
+| Auth events → AuditLog | Security |
+| Role change → Notification | Security |
+| JWT / API key authentication layer | Security |
+| SSO / OAuth2 | Security |
+| PIN hashing with KDF (Argon2) | Security |
+| Dedicated security dashboard | Security |
+| Project Gantt chart | Projects |
+| Project budget tracking | Projects |
+| Project audit log / history | Projects |
+| Client portal | Projects |
+| ProjectTask sync_uuid (offline dedup) | Projects |
+| Material zero-received → in-app Notification | Projects |
+| ProjectSignOff sequential enforcement | Projects |
+| Schedule event reminders / notifications | Schedule |
+| Recurring schedule events | Schedule |
+| Schedule offline support (sync_uuid) | Schedule |
+| Branch manager designation | Branches |
+| Branch-level reporting | Branches |
+| Backup file encryption | Backups |
+| Backup integrity verification | Backups |
+| Backup restore workflow | Backups |
+| Admin views.py split by domain | Admin Panel |
+
+---
+
+## 5. TECHNICAL DEBT REPORT
+
+| ID | Issue | Severity |
+|---|---|---|
+| **TD-01** | **Dual Employee Model** — `Employee` (master) + `EmployeeProfile` (legacy). Dept/designation duplicated as plain text in Profile but as FK in Employee. Every cross-module join requires bridging both. | CRITICAL |
+| **TD-02** | **Dual Role Authority** — `CustomUser.role` CharField AND RBAC `UserRoleAssignment`. Middleware, dashboard, and permission checks use both inconsistently. | HIGH |
+| **TD-03** | **Fragmented Logging** — 5 module-local log tables + 2 global tables. No module consistently writes to global systems except Projects. Unified audit trail impossible. | HIGH |
+| **TD-04** | **Business Logic in Model Layer** — `LeaveRequest.save()` (150+ lines, cross-module imports), `Employee.delete()`, `ProjectTask.save()`, `ProjectMaterial.save()` all contain service-layer business logic. Violates SRP, untestable in isolation. | HIGH |
+| **TD-05** | **admin_panel/views.py Monolith** — 137,806 bytes, all admin responsibilities in one file. | HIGH |
+| **TD-06** | **SQLite in Production** — Cannot support concurrent writes at scale. No HA/failover. Noted in settings comment but no migration plan documented. | HIGH |
+| **TD-07** | **O(n²) Hierarchy Computation** — `get_all_subordinates()` loads ALL employees into Python memory. `get_org_analytics()` calls `get_reporting_depth()` per employee in a loop. | MEDIUM |
+| **TD-08** | **Expense Status Bug** — `dashboard_services.py:446` uses `status='pending'` for Expense queries. No valid choice matches. Admin pending expense count is always 0. | MEDIUM |
+| **TD-09** | **Schedule/Holiday Mislabeling** — `upcoming_holidays` variable in dashboard_services pulls `ScheduleEvent`, not `Holiday` model data. | MEDIUM |
+| **TD-10** | **Notification Type Registry Incomplete** — `Notification.notif_type` missing all leave/expense/attendance correction types. | LOW |
+| **TD-11** | **PIN Security** — `UserSecurityProfile.set_pin()` uses plain `hashlib.sha256` without salt. Rainbow table vulnerable. | LOW |
+
+---
+
+## 6. REFACTORING RISK REPORT
+
+| Area | Risk | Complexity | Module Impact |
+|---|---|---|---|
+| Merge EmployeeProfile → Employee | CRITICAL | Very High | 8 modules affected |
+| Unify role authority (remove CustomUser.role) | HIGH | High | Auth, Middleware, Dashboard |
+| Unify logging to global ActivityLog/AuditLog | HIGH | Medium | All modules |
+| Extract model business logic to service layer | HIGH | High | All modules, testing |
+| Split admin_panel/views.py | MEDIUM | Medium | URLs, templates |
+| Migrate SQLite → PostgreSQL | MEDIUM | Medium | Settings, deploy |
+| Fix expense 'pending' status bug | LOW | Trivial | Dashboard only |
+| Fix schedule/holiday mislabeling | LOW | Trivial | Dashboard template |
+
+---
+
+## 7. PRODUCTION READINESS SCORE
+
+| Area | Score | Key Issue |
+|---|---|---|
+| Authentication & Security | 72/100 | MFA ✓ session control ✓ · DEBUG=True ✗ PIN hash ✗ |
+| Data Integrity | 65/100 | Immutable audit logs ✓ · dual model, no atomic cross-module transactions ✗ |
+| Error Handling | 55/100 | Email failures silently logged · model logic not always atomic |
+| Performance | 50/100 | O(n²) hierarchy · no DB index coverage audit · minimal caching |
+| Monitoring & Observability | 30/100 | No APM, no metrics, no centralized logging, SyncLog aggregate only |
+| Backup & Recovery | 60/100 | GDrive backup ✓ · no encryption · no restore workflow ✗ |
+| Deployment Readiness | 55/100 | DEBUG=True · empty email creds · hardcoded fallback SECRET_KEY |
+| Test Coverage | 65/100 | Test files exist across all modules · full_test_result.txt present |
+
+> [!CAUTION]
+> **Overall Production Readiness: 56 / 100**
+> System is NOT production-ready. `DEBUG=True` and fallback `SECRET_KEY` are critical deployment blockers.
+
+---
+
+## 8. ENTERPRISE READINESS SCORE
+
+| Dimension | Score | Key Issue |
+|---|---|---|
+| Foundation Status | 70/100 | Auth, RBAC, branches, employee master present |
+| Business Workflow Completeness | 60/100 | Workflows exist but incomplete approval chains |
+| Multi-Level Approvals | 40/100 | Expense 3-step ✓ · Leave 1-step · no unified engine |
+| Notification Coverage | 25/100 | Only Projects actively uses notification system |
+| Audit & Compliance | 35/100 | Fragmented logging · no unified trail |
+| Reporting & Analytics | 40/100 | Basic reports ✓ · no analytics export · no BI integration |
+| Scalability | 30/100 | SQLite · O(n²) hierarchy · monolith views |
+| Offline Capability | 65/100 | sync_uuid pattern consistent · no client IndexedDB queue |
+| Security Depth | 65/100 | Good session control · gaps in audit trail |
+| Architecture Quality | 45/100 | Dual models · dual authority · monolith · business logic in models |
+
+> [!CAUTION]
+> **Overall Enterprise Readiness: 48 / 100**
+
+---
+
+## 9. RECOMMENDED DEVELOPMENT ORDER
+
+### Phase A — Critical Blockers (Before ANY new feature)
+1. **Fix `DEBUG=True` and `SECRET_KEY` fallback** in production settings.
+2. **Fix Expense `status='pending'` bug** in [`dashboard_services.py:446`](file:///c:/Users/ISSL/Desktop/Remote_Office_Attendence-Django/apps/admin_panel/dashboard_services.py#L446) — trivial one-liner.
+3. **Fix `upcoming_holidays` mislabeling** in dashboard_services — trivial rename + correct query.
+4. **Wire notifications to Leave module** — submitted, approved, rejected events via `log_activity()`.
+5. **Wire notifications to Expense module** — all state transitions.
+6. **Wire notifications to Attendance** — late, forgot-checkout, correction events.
+7. **Wire auth events to `AuditLog`** — login, logout, role change, MFA changes.
+8. **Add missing `notif_type` values** to `Notification` model (leave/expense/attendance types).
+
+### Phase B — Enterprise Capability
+9. **Unified Logging Architecture** — all modules write to global `ActivityLog` + `AuditLog`.
+10. **Multi-level Leave Approval** — add Manager → HR 2-step flow.
+11. **Per-step Expense Approval Trail** — add `ExpenseApprovalStep` junction table; fix `reviewed_by` single-FK problem.
+12. **Leave Reports & Analytics** — balance export, usage trend.
+13. **Expense Reports & Analytics** — category/employee/period breakdown.
+14. **LifecycleTransitionRequest → Notification** — trigger on create and on review decision.
+15. **Employee reports** — headcount, turnover, department summary (exportable).
+
+### Phase C — Architecture Health
+16. **Extract service layer from models** — `LeaveService`, `ExpenseService`, `EmployeeLifecycleService`, etc.
+17. **Split `admin_panel/views.py`** — separate by domain.
+18. **Unify role authority** — remove `CustomUser.role`, route all checks through RBAC `UserRoleAssignment`.
+19. **Define dual Employee Model migration path** — plan and roadmap for `EmployeeProfile → Employee` consolidation.
+
+### Phase D — Scale & Security
+20. **PostgreSQL migration** — when concurrent users > 20–30.
+21. **Fix O(n²) hierarchy** — use recursive CTE or materialized path for `OrgHierarchyService`.
+22. **PIN hashing → Argon2** — replace plain SHA256.
+23. **Push notifications** — PWA Service Worker push channel.
+24. **JWT / API key layer** — for mobile app or third-party integrations.
+
+### Phase E — New Modules (after Phase A–C complete)
+25. Payroll Engine
+26. Roster / Shift Scheduling
+27. Performance KPI Module
+28. Recruitment / Onboarding Pipeline
+
+---
+
+**AUDIT COMPLETE. Awaiting your approval before any architecture changes or implementation plans are proposed.**
+
+================================================================================
+FIELDTRACK ERP - LIVING ENTERPRISE BLUEPRINT v1.0
+================================================================================
+Document  : FieldTrack ERP Living Blueprint
+Prepared  : 2026-07-25 | Timezone: Asia/Dhaka (UTC+6)
+Sections  : Phase 1 BRS | Phase 2 FRS | Phase 3 Data Model | Phase 4 UX Spec
+            Phase 5 Reporting | Phase 6 Settings/Policy | Phase 7 Workflow Engine
+            Phase 8 Integrations | Phase 9 Scalability | Phase 10 Roadmap
+================================================================================
+
+================================================================================
+PHASE 1 - BUSINESS REQUIREMENT SPECIFICATION (BRS)
+================================================================================
+
+MODULE: EMPLOYEE LIFECYCLE
+--------------------------
+TRIGGER   : HR initiates onboarding after offer letter acceptance.
+ACTOR     : HR Manager (create), Dept Manager (recommend), Admin (approve), Employee (docs).
+INPUTS    : Full name, Employee ID, Dept, Designation, Join date, Salary grade,
+            NID/Passport, Emergency contact, Assigned assets.
+OUTPUTS   : Active Employee, Login credentials, Leave balance init, Payroll slot.
+BUSINESS RULES:
+  BR-EMP-01  Employee ID unique across org.
+  BR-EMP-02  Probation defaults 3 months (configurable).
+  BR-EMP-03  Confirmation requires manager recommendation + HR approval.
+  BR-EMP-04  Suspension blocks access; payroll paused.
+  BR-EMP-05  Resignation requires 30-day notice (configurable by grade).
+  BR-EMP-06  Termination requires MD/C-suite approval.
+  BR-EMP-07  Archived employees read-only; cannot be reactivated.
+  BR-EMP-08  Every status change creates immutable EmploymentHistory row.
+  BR-EMP-09  All 7 wizard steps must reach 100% before activation.
+  BR-EMP-10  Documents with expiry trigger alerts at 30/15/7 days.
+EXCEPTIONS:
+  EX-EMP-01  If manager unassigned, escalate to HR Manager.
+  EX-EMP-02  Employee ID conflict - system rejects and prompts correction.
+APPROVALS:
+  PENDING_APPROVAL -> ACTIVE : HR Manager (escalate to Admin after 48h).
+  ACTIVE -> SUSPENDED        : HR Manager (escalate to MD after 24h).
+  ACTIVE -> TERMINATED       : MD/Director approval required.
+NOTIFICATIONS:
+  - Employee created          -> HR Manager (in-app + email).
+  - Lifecycle request created -> Admin (in-app).
+  - Lifecycle approved/rejected -> Employee + HR (in-app + email).
+  - Document expiry 30/15/7 days -> Employee + HR.
+  - Probation ending 14 days  -> HR.
+REPORTS:
+  - Headcount by Dept/Branch/Status.
+  - Joiners & Leavers (monthly).
+  - Probation review schedule.
+  - Document expiry register.
+  - Turnover rate.
+KPIS:
+  - Time-to-activate (offer to active, days).
+  - Profile completion rate (%).
+  - Turnover rate (monthly/annual).
+  - Expired documents count.
+
+MODULE: ATTENDANCE
+------------------
+TRIGGER   : Employee opens PWA and taps Check-In button.
+ACTOR     : Employee (check-in/out), Manager (correction approval),
+            HR (forgot-checkout step 2), Admin (policy, manual override).
+INPUTS    : GPS coords, Photo (optional), Device timestamp, Attendance type, Project link.
+OUTPUTS   : Attendance record, Location log, Overtime minutes, Late flag.
+BUSINESS RULES:
+  BR-ATT-01  Office attendance requires GPS within branch geofence.
+  BR-ATT-02  Field = check-in outside geofence.
+  BR-ATT-03  First check-in after start+grace = late.
+  BR-ATT-04  Checkout before end - early_threshold = early checkout.
+  BR-ATT-05  Minutes past end_time = overtime (if OT flag enabled).
+  BR-ATT-06  Max 1 active session at a time per employee.
+  BR-ATT-07  Forgot-checkout: manager then HR approval (2-step).
+  BR-ATT-08  Correction request: single reviewer approval.
+  BR-ATT-09  OT approval required before payroll calculation.
+  BR-ATT-10  Data retained 3 months; older archived (is_expired).
+  BR-ATT-11  Absence auto-logged by daily cron (no check-in + no leave).
+  BR-ATT-12  GPS quality: excellent/good/poor/missing.
+  BR-ATT-13  Policy exception must be set by Admin only and audited.
+APPROVALS:
+  Forgot-checkout : pending_manager -> pending_hr -> approved/rejected.
+  Correction      : pending -> approved/rejected.
+  Overtime        : none -> pending -> approved/rejected.
+NOTIFICATIONS:
+  - Late check-in           -> Employee (in-app).
+  - Forgot checkout detected-> Employee + Manager (in-app).
+  - Correction submitted    -> Reviewer (in-app).
+  - Correction approved/rejected -> Employee (in-app + email).
+  - OT approved             -> Employee (in-app + email).
+  - Absent marked           -> Employee (in-app).
+REPORTS:
+  - Daily attendance summary.
+  - Monthly attendance sheet.
+  - Late trend analysis.
+  - Overtime report.
+  - Absentee analysis.
+  - Correction request log.
+  - GPS quality audit.
+KPIS:
+  - Attendance rate (%).
+  - Late rate (%).
+  - Absent rate (%).
+  - Average check-in time.
+  - Total overtime hours (per employee/period).
+  - Correction requests per month.
+
+MODULE: LEAVE
+-------------
+TRIGGER   : Employee submits leave request through staff portal.
+ACTOR     : Employee (request), Manager (step 1), HR (step 2), Admin (configure).
+INPUTS    : Leave type, Start date, End date, Reason, Attachment (medical).
+OUTPUTS   : Leave record, Balance deduction, Absence cleanup on approval,
+            Retroactive absences on rejection.
+BUSINESS RULES:
+  BR-LVE-01  No overlap with existing approved leave.
+  BR-LVE-02  Medical leave > 2 days requires certificate.
+  BR-LVE-03  Probation: sick leave only.
+  BR-LVE-04  Annual leave requires 3-day advance notice (configurable).
+  BR-LVE-05  Balance can go negative - shown in red.
+  BR-LVE-06  Approval removes overlapping absence logs.
+  BR-LVE-07  Rejection triggers retroactive absence for past dates.
+  BR-LVE-08  Public holidays excluded from day count.
+  BR-LVE-09  Balance resets annually (configurable date).
+  BR-LVE-10  "Returned" status required for correction flow.
+  BR-LVE-11  Compensatory leave creatable by HR for worked holidays.
+APPROVALS:
+  pending -> manager_approved  : Manager.
+  manager_approved -> approved : HR Manager.
+  Any step -> returned         : Reviewer with note.
+NOTIFICATIONS:
+  - Submitted      -> Manager (in-app + email).
+  - Mgr approved   -> HR (in-app + email).
+  - Approved       -> Employee (in-app + email).
+  - Rejected       -> Employee (in-app + email).
+  - Returned       -> Employee (in-app with note).
+  - Low balance    -> Employee (in-app).
+REPORTS:
+  - Leave balance summary (all employees).
+  - Leave utilisation (type/dept/month).
+  - Leave calendar (team view).
+  - Pending leave approvals.
+  - Absentee vs leave analysis.
+KPIS:
+  - Avg leave days per employee.
+  - Approval rate (%).
+  - Avg approval turnaround time.
+  - Sick leave frequency index.
+
+MODULE: EXPENSE
+---------------
+TRIGGER   : Employee incurs business expense and submits claim.
+ACTOR     : Employee (submit), Manager (step 1), Finance (step 2),
+            Accounts (step 3), Admin (configure).
+INPUTS    : Category, Amount, Date incurred, Description, Receipt, Project link.
+OUTPUTS   : Expense record, Per-step approval trail, Payment record.
+BUSINESS RULES:
+  BR-EXP-01  Draft editable any time before submission.
+  BR-EXP-02  Submitted expense not editable unless returned for correction.
+  BR-EXP-03  Receipt mandatory for amounts above configured threshold.
+  BR-EXP-04  Each approval step records approver identity + timestamp.
+  BR-EXP-05  Return routes expense to employee with reason + fields to fix.
+  BR-EXP-06  After correction, expense re-enters at the step where returned.
+  BR-EXP-07  Project-linked expense validated against project status.
+  BR-EXP-08  Category spend limit enforced per employee per month.
+  BR-EXP-09  Payment confirmation step required after Accounts approval.
+  BR-EXP-10  Rejected expense cannot be resubmitted; new expense required.
+APPROVALS:
+  pending_manager  -> Manager  -> pending_finance / rejected / returned_by_manager.
+  pending_finance  -> Finance  -> pending_accounts / rejected / returned_by_finance.
+  pending_accounts -> Accounts -> approved / rejected.
+  approved         -> Accounts -> payment_confirmed.
+NOTIFICATIONS:
+  - Submitted        -> Manager (in-app + email).
+  - Mgr approved     -> Finance (in-app + email).
+  - Fin approved     -> Accounts (in-app + email).
+  - Accts approved   -> Employee (awaiting payment, in-app + email).
+  - Payment confirmed-> Employee (in-app + email).
+  - Rejected any step-> Employee (in-app + email with reason).
+  - Returned         -> Employee (in-app + email with fields to fix).
+REPORTS:
+  - Expense claims by employee/category/period.
+  - Approval bottleneck (avg time per step).
+  - Pending claims by approver.
+  - Category spend analysis.
+  - Monthly expense summary.
+KPIS:
+  - Total expense amount (month/quarter/year).
+  - Approval turnaround per step (hours).
+  - Rejection rate (%).
+  - Spend per category.
+  - Claims awaiting payment (count + amount).
+
+MODULE: PAYROLL (PLANNED)
+--------------------------
+TRIGGER   : Monthly payroll run initiated by HR/Accounts.
+ACTOR     : HR (initiate), Accounts (review), MD (approve), Bank (disburse).
+INPUTS    : Salary grade, Working days, Attendance, Leave, OT, Deductions, Bonuses.
+OUTPUTS   : Payslip per employee, Payroll summary, Bank disbursement file.
+BUSINESS RULES:
+  BR-PAY-01  Payroll must lock attendance/leave data before calculation.
+  BR-PAY-02  Suspended employees receive no salary for suspension period.
+  BR-PAY-03  OT paid only for HR-approved OT records.
+  BR-PAY-04  Advance salary deducted from current month payroll.
+  BR-PAY-05  Income tax per Bangladesh tax slab (configurable).
+  BR-PAY-06  Payslip digitally signed and archived.
+  BR-PAY-07  Payroll cannot be re-run after MD approval.
+APPROVALS: HR initiates -> Accounts reviews -> MD approves -> Bank disburses.
+
+MODULE: PROJECTS (HVAC)
+------------------------
+TRIGGER   : New HVAC project after client PO received.
+ACTOR     : Admin/PM (create/manage), Site Engineer (task updates), Client/Consultant (sign-off).
+INPUTS    : Client, Site address, System type, Capacity, Dates, Team, Template.
+OUTPUTS   : Project plan, Task schedule, Daily logs, Material records, Sign-off PDF.
+BUSINESS RULES:
+  BR-PRJ-01  Template sequences tasks from start date, skipping weekends.
+  BR-PRJ-02  Task progress requires PM review before marking complete.
+  BR-PRJ-03  Sign-off sequential: PM -> Site Engineer -> Consultant -> Client Rep.
+  BR-PRJ-04  Project cannot be Complete until all tasks at 100%.
+  BR-PRJ-05  Material received cannot exceed required (warn only).
+  BR-PRJ-06  Daily log submitted before end of workday.
+  BR-PRJ-07  Delayed task triggers immediate PM notification.
+  BR-PRJ-08  Project budget defined and tracked against actuals.
+APPROVALS:
+  Task progress: employee -> pending_progress -> PM accept/override.
+  Sign-off: sequential 4-party (each step unlocks next).
+NOTIFICATIONS:
+  - Task delayed       -> PM (in-app + email).
+  - Task completed     -> PM (in-app).
+  - Sign-off step done -> Next signer (in-app + email).
+  - Project status changed -> Team (in-app).
+KPIS: On-time delivery rate, Task velocity, Overdue tasks, Manpower efficiency.
+
+MODULE: CRM (PLANNED)
+----------------------
+TRIGGER  : New lead entered or client activity logged.
+ACTOR    : Sales Executive, Sales Manager, Management.
+KPIS     : Lead conversion rate, Avg deal size, Sales cycle length.
+
+MODULE: ACCOUNTS/FINANCE (PLANNED)
+------------------------------------
+TRIGGER  : Any financial transaction (payroll, expense, invoice, payment).
+ACTOR    : Accountant, Finance Manager, MD.
+KPIS     : Monthly revenue, Operating cost ratio, Outstanding receivables.
+
+MODULE: INVENTORY (PLANNED)
+-----------------------------
+TRIGGER  : Purchase order raised or material received on site.
+ACTOR    : Store Manager, Site Engineer, Procurement Officer.
+KPIS     : Inventory turnover, Stock accuracy, Out-of-stock incidents.
+
+================================================================================
+PHASE 2 - FUNCTIONAL REQUIREMENT SPECIFICATION (FRS)
+================================================================================
+
+EMPLOYEE MODULE - FUNCTIONAL REQUIREMENTS
+------------------------------------------
+FEATURES:
+  F-EMP-01  7-step wizard with per-step completion tracking (20% each).
+  F-EMP-02  Profile photo (WEBP optimised via imagekit).
+  F-EMP-03  Lifecycle state machine with transition validation.
+  F-EMP-04  High-risk transitions via LifecycleTransitionRequest queue.
+  F-EMP-05  Immutable EmploymentHistory per state change.
+  F-EMP-06  Document management (upload, version, expiry, download log).
+  F-EMP-07  Asset assignment and return tracking.
+  F-EMP-08  Org hierarchy with reporting manager chain.
+  F-EMP-09  Manager delegation with date range.
+  F-EMP-10  Profile completion indicator with next step prompt.
+
+APPROVAL MATRIX:
+  Transition              Approver         Escalation
+  draft->pending_approval HR Manager       Admin after 48h
+  pending->active         HR Manager       Admin after 24h
+  active->suspended       HR Manager       MD after 24h
+  active->terminated      MD/Director      Board (manual)
+  suspended->active       HR Manager       Admin after 48h
+
+PERMISSION MATRIX:
+  Action                   Admin  HR   Manager  Employee
+  Create employee            Y     Y     N         N
+  View all employees         Y     Y     Y*        N
+  Edit employee              Y     Y     N         N
+  View own profile           Y     Y     Y         Y
+  Approve lifecycle          Y     Y     N         N
+  Manage documents           Y     Y     N         Y**
+  * Manager sees direct reports only.
+  ** Employee uploads own documents only.
+
+DASHBOARD WIDGETS (HR):
+  - Total headcount, Active, Probation, Draft, Resigned, Terminated counts.
+  - Profile completion alert list.
+  - Expiring documents list.
+  - Probation ending list.
+  - Recent joiners.
+
+DASHBOARD WIDGETS (Employee):
+  - Own profile completion % with next wizard step.
+  - Employment timeline (last 5 events).
+
+EXPORT: Employee list (CSV, Excel), Employment history (PDF), Document register (CSV).
+
+ATTENDANCE MODULE - FUNCTIONAL REQUIREMENTS
+--------------------------------------------
+FEATURES:
+  F-ATT-01  GPS geofence check-in with office/field classification.
+  F-ATT-02  Background GPS tracking at configurable intervals.
+  F-ATT-03  Photo capture on check-in (policy-configurable).
+  F-ATT-04  Multi-session per day.
+  F-ATT-05  Auto late/early checkout/OT detection.
+  F-ATT-06  Forgot-checkout 2-step approval.
+  F-ATT-07  Correction single-step approval.
+  F-ATT-08  OT approval workflow.
+  F-ATT-09  Offline check-in with sync_uuid deduplication.
+  F-ATT-10  Admin manual override with mandatory reason + audit trail.
+  F-ATT-11  Absence auto-marking daily cron.
+  F-ATT-12  3-month retention with archival.
+
+PERMISSION MATRIX:
+  Action                Admin  HR   Manager  Employee
+  Check in/out            N     N     N         Y
+  View own records        Y     Y     Y         Y
+  View team records       Y     Y     Y         N
+  View all records        Y     Y     N         N
+  Manual override         Y     N     N         N
+  Approve correction      Y     Y     Y         N
+  Approve forgot-out      Y     Y     Y*        N
+  Configure policy        Y     N     N         N
+  * Manager only for own team (Step 1 only).
+
+LEAVE MODULE - FUNCTIONAL REQUIREMENTS
+----------------------------------------
+FEATURES:
+  F-LVE-01  Leave request with type, dates, reason, attachment.
+  F-LVE-02  2-step approval: Manager then HR.
+  F-LVE-03  Return for correction with note.
+  F-LVE-04  Leave balance per type per year.
+  F-LVE-05  Negative balance display (red warning).
+  F-LVE-06  Absence cleanup on approval.
+  F-LVE-07  Retroactive absence on rejection.
+  F-LVE-08  Leave calendar (team view).
+  F-LVE-09  Leave type CRUD (admin).
+  F-LVE-10  Per-employee leave rule overrides.
+  F-LVE-11  Half-day leave (PLANNED).
+  F-LVE-12  Compensatory leave creation by HR.
+
+PERMISSION MATRIX:
+  Action                Admin  HR   Manager  Employee
+  Submit leave            N     Y     Y         Y
+  Approve step 1          Y     Y     Y         N
+  Approve step 2          Y     Y     N         N
+  View own leaves         Y     Y     Y         Y
+  View team leaves        Y     Y     Y         N
+  View all leaves         Y     Y     N         N
+  Configure leave type    Y     N     N         N
+
+EXPENSE MODULE - FUNCTIONAL REQUIREMENTS
+-----------------------------------------
+FEATURES:
+  F-EXP-01  Draft with category, amount, date, description, attachment.
+  F-EXP-02  3-step approval: Manager -> Finance -> Accounts.
+  F-EXP-03  Return for correction at Manager and Finance step.
+  F-EXP-04  Per-step approval trail (ExpenseApprovalStep table).
+  F-EXP-05  Payment confirmation step after Accounts.
+  F-EXP-06  Category spend limit enforcement (configurable).
+  F-EXP-07  Project linkage (optional).
+  F-EXP-08  File type validation: JPEG/PNG/PDF, max 5MB.
+  F-EXP-09  Expense history (edit snapshots).
+  F-EXP-10  ExpenseReturnEvent with fields-to-correct list.
+
+PERMISSION MATRIX:
+  Action                  Admin  Finance  Accounts  Manager  Employee
+  Submit expense            Y      Y        Y         Y        Y
+  Approve (Manager step)    Y      N        N         Y        N
+  Approve (Finance step)    Y      Y        N         N        N
+  Approve (Accounts step)   Y      N        Y         N        N
+  Confirm payment           Y      N        Y         N        N
+  View own expenses         Y      Y        Y         Y        Y
+  View team expenses        Y      Y        Y         Y        N
+  View all expenses         Y      Y        Y         N        N
+
+================================================================================
+PHASE 3 - ENTERPRISE DATA MODEL
+================================================================================
+
+EMPLOYEE MODULE - DATA MODEL
+------------------------------
+MASTER TABLES:
+  Department   : id, name, code, head_employee_id(FK), is_active, created_at.
+  Designation  : id, name, code, grade_level, is_active.
+  SalaryGrade  : id, code, min_salary, max_salary, currency.
+
+TRANSACTION TABLES:
+  Employee     : id, employee_number(UNIQUE), first_name, last_name,
+                 department_id(FK), designation_id(FK), salary_grade_id(FK),
+                 branch_id(FK), reporting_manager_id(FK self-ref), join_date,
+                 dob, gender, nid, address, status, wizard_step,
+                 sync_uuid(UNIQUE), created_at, updated_at.
+  EmployeeProfile: id, employee_id(FK->Employee), user_id(FK->CustomUser),
+                   tracking_interval, is_project_manager, is_active.
+                   NOTE: department/designation fields DEPRECATED here.
+                   Phase C4: merge into Employee.
+
+HISTORY TABLES (IMMUTABLE - INSERT ONLY):
+  EmploymentHistory: id, employee_id(FK), from_status, to_status, reason,
+                     effective_date, approved_by_id(FK), created_at.
+  EmployeeAuditLog : id, employee_id(FK), actor_id(FK), action,
+                     old_data(JSON), new_data(JSON), ip_address, user_agent, created_at.
+
+ACTIVITY TABLE:
+  EmployeeActivityLog: id, employee_id(FK), actor_id(FK), verb, description,
+                        metadata(JSON), created_at.
+
+JUNCTION TABLES:
+  AssetAssignment: id, asset_id(FK), employee_id(FK), assigned_at, returned_at,
+                   condition_on_assign, condition_on_return, notes.
+
+INDEXES REQUIRED:
+  Employee: status, branch_id, department_id, reporting_manager_id, join_date.
+  EmploymentHistory: employee_id, effective_date.
+  EmployeeAuditLog: employee_id, created_at.
+
+ATTENDANCE MODULE - DATA MODEL
+--------------------------------
+MASTER TABLES:
+  AttendancePolicy: id, branch_id(FK nullable), photo_required, gps_mode,
+                    geofencing_policy, grace_minutes, ot_threshold_minutes,
+                    early_checkout_threshold, is_global, effective_from.
+
+TRANSACTION TABLES:
+  Attendance   : id, employee_id(FK), date, attendance_type, check_in_time,
+                 check_out_time, type(office/field), status, gps_quality,
+                 total_hours, overtime_minutes, ot_status, is_early_checkout,
+                 is_policy_exception, policy_exception_reason,
+                 policy_exception_by_id(FK), project_id(FK nullable),
+                 note, sync_uuid(UNIQUE), synced_at, is_expired, created_at.
+  AttendanceLocation: id, attendance_id(FK), location_type, lat, lng,
+                       accuracy, timestamp, sync_uuid(UNIQUE).
+  ForgotCheckoutRequest: id, attendance_id(FK), requested_by_id(FK),
+                          requested_at, reason, proposed_checkout_time, status,
+                          manager_reviewed_by_id(FK), manager_reviewed_at,
+                          hr_reviewed_by_id(FK), hr_reviewed_at, review_note.
+  AttendanceCorrectionRequest: id, attendance_id(FK), requested_by_id(FK),
+                                requested_at, proposed_check_in,
+                                proposed_check_out, reason, attachment,
+                                status, reviewed_by_id(FK), reviewed_at, review_note.
+
+SYNC TABLES:
+  SyncLog: id, employee_id(FK), synced_at, module, records_success,
+           records_failed, failed_uuids(JSON), error_summary, created_at.
+           NOTE: failed_uuids JSON field ADDED to trace specific failures.
+
+INDEXES REQUIRED:
+  Attendance: (employee_id, date) composite unique.
+  Attendance: date, status, type, is_expired.
+  AttendanceLocation: attendance_id, timestamp.
+
+LEAVE MODULE - DATA MODEL
+---------------------------
+MASTER TABLES:
+  LeaveType: id, name, code, category, default_days_per_year, is_default,
+             requires_attachment, advance_notice_days,
+             applicable_during_probation, is_active.
+
+TRANSACTION TABLES:
+  LeaveRequest : id, employee_id(FK), leave_type_id(FK), start_date, end_date,
+                 number_of_days, reason, attachment, status,
+                 manager_reviewed_by_id(FK), manager_reviewed_at,
+                 hr_reviewed_by_id(FK), hr_reviewed_at, review_note,
+                 sync_uuid(UNIQUE), created_at, updated_at.
+  LeaveBalance : id, employee_id(FK), leave_type_id(FK), year, total_days,
+                 used_days, remaining_days, carry_forward_days.
+
+HISTORY TABLES (NEW - REQUIRED):
+  LeaveApprovalHistory: id, leave_request_id(FK), step, actor_id(FK),
+                         action, note, timestamp.
+  LeaveAuditLog       : id, leave_request_id(FK), actor_id(FK), action,
+                         old_status, new_status, ip_address, created_at.
+
+INDEXES REQUIRED:
+  LeaveRequest: employee_id, status, start_date, end_date.
+  LeaveBalance: (employee_id, leave_type_id, year) composite unique.
+
+EXPENSE MODULE - DATA MODEL
+-----------------------------
+MASTER TABLES:
+  ExpenseCategory  : id, name, code, spend_limit_amount, spend_limit_period,
+                     requires_receipt_above, is_active.
+  ExpensePolicy    : id, branch_id(FK nullable), max_single_amount,
+                     receipt_threshold, allowed_categories(JSON), effective_from.
+
+TRANSACTION TABLES:
+  Expense          : id, employee_id(FK), category_id(FK), amount, date_incurred,
+                     description, attachment, project_id(FK nullable),
+                     status, current_step, sync_uuid(UNIQUE),
+                     submitted_at, created_at, updated_at.
+  ExpenseApprovalStep: id, expense_id(FK), step_number, step_name,
+                        actor_id(FK), action, note, timestamp.
+                        NOTE: Replaces single reviewed_by FK - full trail per step.
+  ExpenseReturnEvent : id, expense_id(FK), returned_by_id(FK), step,
+                        reason, fields_to_correct(JSON), due_date, created_at.
+  ExpensePayment   : id, expense_id(FK), payment_date, payment_method,
+                     reference, confirmed_by_id(FK), amount_paid, notes.
+
+HISTORY TABLES:
+  ExpenseHistory   : id, expense_id(FK), edited_by_id(FK), amount_before,
+                     category_before, description_before, attachment_before, edited_at.
+  ExpenseAuditLog  : id, expense_id(FK), actor_id(FK), action,
+                     old_status, new_status, ip_address, created_at.
+
+UNIFIED NOTIFICATION & AUDIT DATA MODEL
+-----------------------------------------
+  Notification: id, recipient_id(FK), employee_id(FK nullable),
+                title, message, notif_type, is_read, read_at,
+                source_module, source_object_type, source_object_id, created_at.
+                notif_type VALUES EXTENDED:
+                  check_in, check_out, field_visit, late, missing,
+                  leave_submitted, leave_approved, leave_rejected, leave_returned,
+                  expense_submitted, expense_approved, expense_rejected,
+                  expense_returned, expense_paid,
+                  lifecycle_request, lifecycle_reviewed,
+                  task_delayed, task_completed, project_status,
+                  document_expiry, role_changed, permission_changed,
+                  absence_marked, ot_submitted, ot_approved,
+                  forgot_checkout_submitted, correction_submitted,
+                  correction_approved, system_alert.
+
+  ActivityLog : id, actor_id(FK), verb, target_content_type(FK),
+                target_object_id, metadata(JSON), source_module, created_at.
+
+  AuditLog    : id, actor_id(FK), action, target_type, target_id, summary,
+                old_data(JSON), new_data(JSON), ip_address, user_agent, created_at.
+                CONSTRAINT: INSERT only. No UPDATE. No DELETE ever.
+
+WORKFLOW ENGINE DATA MODEL
+----------------------------
+  WorkflowDefinition : id, code, module, name, description, is_active.
+  WorkflowStep       : id, workflow_id(FK), step_number, name,
+                        from_status, to_status, approver_role, sla_hours,
+                        escalation_role, allow_return, allow_rejection,
+                        notification_triggers(JSON).
+  WorkflowDelegation : id, from_user_id(FK), to_user_id(FK), workflow_code,
+                        start_date, end_date, reason, is_active.
+  WorkflowInstance   : id, definition_id(FK), object_type, object_id,
+                        current_step, current_status, initiated_by_id(FK),
+                        initiated_at, completed_at, sla_deadline.
+  WorkflowAction     : id, instance_id(FK), step_number, actor_id(FK),
+                        action, note, delegated_by_id(FK nullable), timestamp.
+
+================================================================================
+PHASE 4 - UI & UX SPECIFICATION
+================================================================================
+
+NAVIGATION STRUCTURE
+---------------------
+SIDEBAR (Admin/HR/Manager - Desktop):
+  > Dashboard
+  > Employees   -> List / Org Chart / Lifecycle Queue / Documents
+  > Attendance  -> Today / History / Corrections / OT / Reports
+  > Leave       -> Requests / Calendar / Balances / Types
+  > Expense     -> Claims / Approvals / Categories / Reports
+  > Projects    -> List / Tasks / Daily Logs / Materials / Sign-off
+  > Schedule    -> Calendar / Events
+  > Payroll     -> (PLANNED)
+  > Reports     -> All modules
+  > Settings    -> Company / Branches / Policies / Roles / Security
+  > Audit Logs
+
+BOTTOM NAV (Employee - Mobile PWA):
+  [Home] [Check In] [Leave] [Expense] [Profile]
+
+COMMAND PALETTE: Ctrl+K - search employees, actions, reports.
+
+DASHBOARD SPECIFICATION
+------------------------
+EMPLOYEE DASHBOARD:
+  KPI Cards    : Check-in status | Total hours today | Leave balance | Tasks due.
+  Widgets      : Today's session list | Recent leave (5) | Recent expenses (5) |
+                 Upcoming events (3) | Expiring documents | Employment timeline.
+  Quick Actions: [Check In] [Submit Leave] [Submit Expense] [Report Issue].
+
+MANAGER DASHBOARD:
+  KPI Cards    : Team size | Present | Late | Absent | Pending approvals.
+  Widgets      : Live location map | 7-day heatmap | Pending leave queue |
+                 Pending expense queue | Managed projects list | OT pending.
+  Quick Actions: [Approve Leave] [View Team] [View Projects].
+
+HR DASHBOARD:
+  KPI Cards    : Total headcount | Active | Probation | Draft | Resigned.
+  Widgets      : Attendance org-wide | On-leave today | Expiring documents |
+                 Probation due list | Pending lifecycle requests | Recent joiners |
+                 Upcoming birthdays | Department breakdown chart.
+  Quick Actions: [Add Employee] [Process Lifecycle] [View Reports].
+
+ADMIN DASHBOARD (superset of HR):
+  Additional   : Active sessions | Trusted devices | Audit events (24h) |
+                 GPS issues | Offline queue size | Sync failures |
+                 Late % donut | 15-day trend line chart |
+                 Top OT employees | Pending approvals total.
+  Quick Actions: [Run Backup] [View Audit Log] [Manage Roles].
+
+MISSING SCREENS TO BUILD (IDENTIFIED):
+  - Leave team calendar (month view, colour-coded by type).
+  - Leave balance export screen.
+  - Expense category spend chart dashboard.
+  - Expense pending payment list.
+  - Project Gantt chart.
+  - Project analytics dashboard.
+  - Security dashboard (standalone, not embedded in admin).
+  - Login activity report screen.
+  - Notification preferences screen.
+  - Branch manager designation screen.
+  - Payroll run screen (PLANNED).
+  - CRM pipeline board (PLANNED).
+
+MOBILE UX RULES:
+  - All critical actions within 2 taps.
+  - Bottom nav persistent on staff mobile screens.
+  - Large tap targets (min 44px) for outdoor field use.
+  - Offline indicator badge in header.
+  - GPS status indicator visible during check-in flow.
+
+================================================================================
+PHASE 5 - REPORTING & BI SPECIFICATION
+================================================================================
+
+ATTENDANCE REPORTS:
+  R-ATT-01  Daily Attendance Summary
+    Filters  : Date, Branch, Department.
+    Columns  : Employee, Status, Check-in, Check-out, Hours, Late flag.
+    Export   : PDF, CSV, Excel.
+    Schedule : Auto-email HR daily at 9 AM.
+    Permission: HR, Admin.
+
+  R-ATT-02  Monthly Attendance Sheet
+    Filters  : Month, Year, Employee, Dept, Branch.
+    Columns  : Employee, Day-by-day status grid, Total present, Late, OT.
+    Export   : Excel (merged cells), PDF.
+    Permission: HR, Admin, Manager (own team).
+
+  R-ATT-03  Late Trend Analysis
+    Filters  : Date range, Dept, Branch.
+    Chart    : Bar chart - late count per day/week.
+    Export   : CSV.
+
+  R-ATT-04  Overtime Report
+    Filters  : Date range, Employee, Dept.
+    Columns  : Employee, Date, OT minutes, OT status, Approved by.
+    Export   : Excel.
+
+  R-ATT-05  GPS Quality Audit
+    Filters  : Date, GPS quality level.
+    Columns  : Employee, Date, Check-in time, GPS quality, Coordinates.
+    Export   : CSV. Permission: Admin only.
+
+LEAVE REPORTS:
+  R-LVE-01  Leave Balance Summary        : All employees, all types. Export: Excel.
+  R-LVE-02  Leave Utilisation             : Type/Dept/Month chart. Export: CSV.
+  R-LVE-03  Pending Leave List            : All pending. Export: CSV.
+  R-LVE-04  Leave Calendar Export         : iCal / PDF.
+  R-LVE-05  Absentee vs Leave Analysis    : Per employee per month. Export: Excel.
+
+EXPENSE REPORTS:
+  R-EXP-01  Expense Claims by Employee    : Date range, status. Export: Excel.
+  R-EXP-02  Expense by Category           : Bar chart + table. Export: CSV.
+  R-EXP-03  Approval Bottleneck Report    : Avg hours per step. Export: CSV.
+  R-EXP-04  Pending Payment List          : Approved, unpaid. Export: Excel.
+  R-EXP-05  Monthly Expense Summary       : Total by dept. Export: PDF.
+
+EMPLOYEE REPORTS:
+  R-EMP-01  Headcount by Dept/Branch/Status  : Export: Excel.
+  R-EMP-02  Joiners & Leavers (monthly)      : Export: Excel.
+  R-EMP-03  Probation Review Schedule        : Export: PDF.
+  R-EMP-04  Document Expiry Register         : Export: Excel.
+  R-EMP-05  Turnover Analysis                : Rate + trend chart. Export: PDF.
+
+PROJECT REPORTS:
+  R-PRJ-01  Project Status Summary          : All projects, status, % complete.
+  R-PRJ-02  Delayed Task Report             : Tasks past due date.
+  R-PRJ-03  Manpower Utilisation            : Trade-level count per project.
+  R-PRJ-04  Material Tracker                : Required vs received per project.
+  R-PRJ-05  Project PDF Export              : Full report for client/PM.
+
+AUDIT & COMPLIANCE REPORTS:
+  R-AUD-01  Login Activity Report           : Admin only. Export: CSV.
+  R-AUD-02  Role Change Audit               : Admin only.
+  R-AUD-03  Permission Override Audit       : Admin only.
+  R-AUD-04  Attendance Override Audit       : Admin/HR.
+  R-AUD-05  Expense Approval Trail          : Per expense, all steps.
+  R-AUD-06  Employee Lifecycle Audit        : Per employee, all transitions.
+
+================================================================================
+PHASE 6 - SETTINGS & POLICY ENGINE
+================================================================================
+
+SETTINGS HIERARCHY (Lower overrides Higher):
+  Company < Branch < Department < Employee
+
+COMPANY SETTINGS:
+  company_name, logo, currency (BDT), timezone (Asia/Dhaka),
+  fiscal_year_start, default_working_days (JSON [0,1,2,3,5,6]),
+  default_language, date_format.
+
+BRANCH SETTINGS (override Company):
+  office_lat, office_lng, geofence_radius_meters, wifi_ip (advisory),
+  office_start_time, office_end_time, late_grace_minutes,
+  early_checkout_threshold_minutes, overtime_start_after_minutes,
+  tracking_interval_minutes, working_days (JSON), branch_holidays.
+
+ATTENDANCE POLICIES (Branch-level):
+  photo_required          : bool, default: false.
+  gps_required            : bool, default: true.
+  geofencing_enabled      : bool, default: true.
+  allow_field_checkin     : bool, default: true.
+  max_sessions_per_day    : int, default: 5.
+  ot_calculation_enabled  : bool, default: true.
+  ot_approval_required    : bool, default: true.
+
+LEAVE POLICIES (per LeaveType):
+  default_days_per_year          : int.
+  advance_notice_days            : int, default: 3.
+  max_consecutive_days           : int, default: 14.
+  requires_attachment_after_days : int, default: 2.
+  carry_forward_enabled          : bool, default: false.
+  carry_forward_max_days         : int.
+  encashment_enabled             : bool, default: false.
+  applicable_during_probation    : bool, default: false (except sick).
+
+EXPENSE POLICIES (per Branch or Company):
+  receipt_threshold_amount : decimal, default: 500 BDT.
+  max_single_claim_amount  : decimal.
+  category_monthly_limit   : JSON {category_id: limit_amount}.
+  payment_method_allowed   : JSON list.
+
+SECURITY POLICIES (per Role):
+  mfa_required                   : bool.
+  max_failed_logins              : int, default: 5.
+  session_idle_timeout_minutes   : int, default: 30.
+  reauth_required_for            : JSON list of high-risk actions.
+  password_expiry_days           : int, default: 90.
+
+APPROVAL POLICIES (per Module+Action):
+  module, action, steps: JSON [{step, approver_role, sla_hours, escalate_to}],
+  escalation_after_hours, allow_delegation.
+
+NOTIFICATION POLICIES (per notif_type):
+  channels: JSON [in_app, email, sms, push].
+  enabled: bool.
+  reminder_after_hours: int.
+  max_reminders: int.
+
+POLICY RESOLUTION ENGINE:
+  Priority: Employee override > Department policy > Branch policy > Company default.
+  All policy resolution logged to AuditLog.
+
+================================================================================
+PHASE 7 - WORKFLOW & NOTIFICATION ENGINE
+================================================================================
+
+REUSABLE WORKFLOW ENGINE:
+  Registers: WorkflowDefinition (code, module, steps).
+  Processes: WorkflowInstance per request object.
+  Records  : WorkflowAction per step (approve/reject/return/escalate).
+
+UNIVERSAL WORKFLOW STATES:
+  draft, pending_step_1, pending_step_2, pending_step_3,
+  approved, rejected, returned, cancelled, escalated.
+
+STATE TRANSITIONS:
+  draft             -> pending_step_1  (submitter action)
+  pending_step_1    -> pending_step_2  (approver 1 approves)
+  pending_step_1    -> rejected        (approver 1 rejects)
+  pending_step_1    -> returned        (approver 1 returns)
+  pending_step_2    -> pending_step_3  (approver 2 approves; if 3-step)
+  pending_step_2    -> approved        (approver 2 approves; if 2-step)
+  pending_step_2    -> rejected        (approver 2 rejects)
+  pending_step_2    -> returned        (approver 2 returns)
+  pending_step_3    -> approved        (approver 3 approves)
+  pending_step_3    -> rejected        (approver 3 rejects)
+  returned          -> pending_step_N  (submitter corrects and resubmits)
+  any               -> escalated       (SLA breach auto-escalation)
+
+SLA ENFORCEMENT:
+  - Background job every 15 minutes.
+  - Checks open WorkflowInstances where sla_deadline < now.
+  - Sends escalation notification to escalation_role.
+  - Sets status = escalated.
+  - Logs WorkflowAction(action=escalate).
+
+DELEGATION:
+  - WorkflowDelegation checked before routing to approver.
+  - Active delegation found -> route to delegate.
+  - Delegation logged in WorkflowAction.delegated_by_id.
+
+NOTIFICATION DISPATCH FUNCTION:
+  dispatch(notif_type, actor, target_object, recipients, channels, metadata)
+  -> Creates Notification rows (in-app).
+  -> Sends email if channels includes email.
+  -> Queues SMS if channels includes sms.
+  -> Queues push if channels includes push.
+  -> Always creates ActivityLog row.
+  -> If notif_type in audit_trigger_list -> creates AuditLog row.
+
+AUTO ACTIONS (SCHEDULED BACKGROUND JOBS):
+  auto_absent_mark       : Daily 11:59 PM - all active employees.
+  auto_ot_remind         : Daily 9:00 AM  - unapproved OT > 48h.
+  auto_document_expiry   : Daily 8:00 AM  - 30/15/7 day thresholds.
+  auto_probation_remind  : Daily 8:00 AM  - 14 days before end.
+  auto_backup            : Configurable cron (daily or 3-day).
+  auto_retention_cleanup : Weekly Sunday 2:00 AM - attendance > 3 months.
+  workflow_sla_check     : Every 15 minutes.
+
+================================================================================
+PHASE 8 - INTEGRATION SPECIFICATION
+================================================================================
+
+EMAIL:
+  Direction : Outbound only.
+  Provider  : SMTP (Gmail / SES / Sendgrid) - configurable.
+  Auth      : SMTP credentials via env vars (never hardcoded).
+  Templates : HTML per notif_type.
+  Retry     : 3 retries, 5-min backoff. Log failure to AuditLog.
+  Failure   : Silent fail with error log. Never block UI.
+  Monitoring: Failed email count in Admin dashboard.
+
+SMS (PLANNED):
+  Provider  : Bangladesh - Twilio / SSL Wireless / SSLCOMMERZ SMS.
+  Auth      : API key in env vars.
+  Trigger   : OTP delivery, critical alerts (suspension, payroll).
+  Retry     : 2 retries, 2-min backoff.
+
+GOOGLE DRIVE:
+  Direction : Outbound (backup upload).
+  Auth      : Service Account JSON (stored encrypted).
+  Operations: Upload backup, list files, delete old files.
+  Retry     : 3 retries, exponential backoff.
+  Failure   : Log to BackupRecord.error_message. Admin alert.
+
+GPS / MAPS:
+  Direction : Inbound (browser/app sends GPS to server).
+  Provider  : Browser Geolocation API + Google Maps (display only).
+  Auth      : None (internal, session-protected endpoint).
+  Failure   : GPS unavailable -> allow check-in, gps_quality=missing.
+
+PWA / SERVICE WORKER:
+  Capabilities : Offline cache, background sync queue (IndexedDB).
+  Sync Priority: check-in(1)->check-out(2)->gps(3)->leave(4)
+                 ->expense(5)->project-update(6)->daily-report(7)->photo(8).
+  Push Notify  : PLANNED - Web Push API via VAPID keys.
+
+TALLY (PLANNED):
+  Direction : Outbound export.
+  Format    : Tally XML / CSV.
+  Trigger   : Monthly payroll approval, expense batch close.
+
+REST API / MOBILE APP (PLANNED):
+  Auth      : JWT token (access 15min, refresh 7 days).
+  Rate Limit: 100 req/min per user.
+  Versioning: /api/v1/, /api/v2/.
+  Logging   : Every API call logged to AuditLog (IP, user_agent, endpoint).
+
+WEBHOOK ENGINE (PLANNED):
+  Direction : Outbound.
+  Auth      : HMAC-SHA256 signature in header.
+  Retry     : 5 retries, exponential backoff. Dead-letter queue after 5 fails.
+  Monitoring: WebhookDeliveryLog per attempt.
+
+================================================================================
+PHASE 9 - SCALABILITY BLUEPRINT
+================================================================================
+
+CURRENT PERFORMANCE RISKS:
+  RISK-01  SQLite single-writer limitation.
+           Impact: >20 concurrent writers -> lock contention -> 500 errors.
+           Mitigation: PostgreSQL migration before >50 users.
+
+  RISK-02  O(n2) OrgHierarchyService.get_org_analytics().
+           Impact: Degrades to seconds at >500 employees.
+           Mitigation: Materialized path or recursive CTE. Cache result.
+
+  RISK-03  admin_panel/views.py monolith (137,806 bytes).
+           Impact: Deploy risk, merge conflicts, maintenance cost.
+           Mitigation: Split by domain (Phase C).
+
+  RISK-04  No background job queue (Celery/RQ).
+           Impact: PDF generation, backup, email block the HTTP request.
+           Mitigation: Celery + Redis before >100 users.
+
+  RISK-05  No query-level caching beyond LeaveType (5-min TTL).
+           Impact: Dashboard loads N+1 queries every request.
+           Mitigation: Redis cache for dashboard aggregates.
+
+  RISK-06  File storage is local filesystem.
+           Impact: No HA, no CDN, lost on server failure.
+           Mitigation: S3/GCS/Azure Blob for media files.
+
+  RISK-07  SyncLog does not store failed UUID list.
+           Impact: Cannot replay or identify failed offline records.
+           Mitigation: Add failed_uuids JSON field (included in data model).
+
+SCALABILITY ESTIMATES:
+
+  TIER: 100 USERS (Current target)
+    Database    : SQLite WAL (current) - acceptable.
+    Web Server  : Single Gunicorn, 4 workers.
+    File Storage: Local filesystem (acceptable).
+    Caching     : None required.
+    Background  : Management commands via cron (current) - acceptable.
+    Risk        : O(n2) hierarchy noticeable if >200 employees.
+
+  TIER: 1,000 USERS
+    Database    : PostgreSQL (mandatory). PgBouncer connection pooling.
+    Web Server  : 2 Gunicorn behind Nginx load balancer.
+    File Storage: S3-compatible (MinIO or AWS S3).
+    Caching     : Redis - Django cache + sessions.
+    Background  : Celery + Redis (PDF, email, backup, cron).
+    Indexes     : Full index audit and optimisation.
+    Risk        : Dashboard aggregation queries need 5-min cache.
+
+  TIER: 10,000 USERS
+    Database    : PostgreSQL + read replicas. Attendance partitioned by month.
+                  ActivityLog/AuditLog archival strategy.
+    Web Server  : Horizontal scaling + auto-scaling group.
+    File Storage: AWS S3 + CloudFront CDN.
+    Caching     : Redis cluster. Per-user permission cache in Redis.
+    Background  : Celery cluster, multiple queues (critical/normal/bulk).
+    Search      : Elasticsearch for employee/audit search.
+    API         : Rate limiting (100 req/min), API gateway.
+    Risk        : AuditLog to millions of rows - partition by month.
+
+  TIER: 100,000 USERS
+    Architecture: Microservices per domain.
+    Message Bus : Apache Kafka for event streaming.
+    Database    : Multi-region PostgreSQL cluster. CQRS for reports.
+    API Gateway : Kong or AWS API Gateway.
+    Search      : OpenSearch cluster.
+    Monitoring  : DataDog / Prometheus + Grafana.
+    NOTE: Requires full architectural redesign. Not in current roadmap.
+
+CRITICAL INDEXES (must exist before >100 users):
+  Attendance(employee_id, date)              - composite, most frequent query.
+  Attendance(date, status, is_expired)       - dashboard aggregations.
+  LeaveRequest(employee_id, status)          - pending count queries.
+  LeaveRequest(start_date, end_date)         - calendar overlap checks.
+  Expense(employee_id, status)               - user view queries.
+  Notification(recipient_id, is_read)        - unread count (every page load).
+  AuditLog(created_at)                       - retention cleanup.
+  Employee(status, branch_id, department_id) - HR dashboard aggregations.
+
+BACKGROUND JOB SCHEDULE:
+  auto_absent_mark       : Daily, 11:59 PM local.
+  auto_document_expiry   : Daily, 8:00 AM.
+  auto_probation_remind  : Daily, 8:00 AM.
+  auto_ot_remind         : Daily, 9:00 AM.
+  auto_retention_cleanup : Weekly, Sunday 2:00 AM.
+  auto_backup_daily      : Daily, 2:00 AM (if enabled).
+  auto_backup_3day       : Every 3 days, 2:00 AM (if enabled).
+  workflow_sla_check     : Every 15 minutes.
+
+================================================================================
+PHASE 10 - LIVING ERP BLUEPRINT (MODULE STATUS & ROADMAP)
+================================================================================
+
+MODULE STATUS REGISTER:
+  Module                    Status              Notes
+  ------------------------  ------------------  --------------------------------
+  Authentication/Security   CORE COMPLETE       9-layer RBAC, MFA, session ctrl.
+                                                Missing: JWT, SSO, auth->AuditLog.
+  Employee Management       FOUNDATION          Lifecycle SM exists. Dual model
+                                                (Employee+Profile) unresolved.
+  Attendance & GPS          CORE COMPLETE       Check-in/out, geofence, offline.
+                                                Missing: notifications not wired.
+  Leave Management          FOUNDATION          1-level approval only.
+                                                Missing: 2-step, notifications,
+                                                history tables.
+  Expense Management        FOUNDATION          3-step approval model.
+                                                Missing: approval trail table,
+                                                notifications.
+  Projects (HVAC)           CORE COMPLETE       Tasks, logs, materials, sign-off.
+                                                Missing: audit log, Gantt.
+  Schedule/Calendar         FOUNDATION          Basic events only.
+                                                Missing: recur, notif, calendar.
+  Notifications             FOUNDATION          Schema good. Most modules not
+                                                wired to dispatch.
+  Branches                  CORE COMPLETE       Geofence, schedule, holidays.
+  Admin Panel               CORE COMPLETE       Role dashboards, reports.
+                                                Monolith views.py risk.
+  Backups                   CORE COMPLETE       SQLite + GDrive.
+                                                Missing: encryption, integrity.
+  Staff PWA                 CORE COMPLETE       Mobile interface complete.
+  Payroll                   NOT STARTED         Fields on Employee only.
+  CRM                       NOT STARTED         No model exists.
+  Accounts/Finance          NOT STARTED         No model exists.
+  Inventory                 NOT STARTED         Project-scoped materials only.
+  Roster/Shift Planning     NOT STARTED         No model exists.
+  Performance KPI           NOT STARTED         No model exists.
+  Recruitment/Onboarding    NOT STARTED         No model exists.
+
+DEPENDENCY MAP:
+  accounts      <-- ALL modules (PermissionEngine is system root)
+  branches      <-- attendance, employees, projects
+  employees     <-- attendance, leave, expense, projects, schedule
+  leave         <-- attendance (AbsentLog - decouple via service layer)
+  notifications <-- projects (only active caller; should be called by ALL)
+  admin_panel   <-- ALL modules (dashboard aggregation)
+  Payroll       <-- employees, attendance, leave, expense (when built)
+  CRM           <-- employees, projects (when built)
+  Accounts      <-- expense, payroll, projects (when built)
+
+MODULE ROADMAP:
+
+  PHASE A - CRITICAL BLOCKERS (Sprint 1-2, ~2 weeks):
+    A1  Fix DEBUG=True and SECRET_KEY fallback.
+    A2  Fix Expense status='pending' bug (dashboard_services.py:446).
+    A3  Fix upcoming_holidays mislabeling (dashboard_services.py:161).
+    A4  Add missing notif_type values to Notification model.
+    A5  Wire notifications: Leave (submitted/approved/rejected/returned).
+    A6  Wire notifications: Expense (all state transitions).
+    A7  Wire notifications: Attendance (late, absent, forgot-checkout, correction).
+    A8  Wire auth events to AuditLog (login, logout, role change, MFA).
+
+  PHASE B - ENTERPRISE CAPABILITY (Sprint 3-6, ~4 weeks):
+    B1  Add LeaveApprovalHistory + LeaveAuditLog tables.
+    B2  Implement 2-step Leave approval (Manager -> HR).
+    B3  Add "returned" status to Leave with correction note.
+    B4  Add ExpenseApprovalStep junction table (fix single-FK problem).
+    B5  Add ExpensePayment table (payment confirmation step).
+    B6  Wire LifecycleTransitionRequest to Notification dispatch.
+    B7  Leave reports: balance summary, utilisation, pending list.
+    B8  Expense reports: category spend, bottleneck, pending payment.
+    B9  Employee reports: headcount, joiners/leavers, document expiry, turnover.
+    B10 Unified Workflow Engine (WorkflowDefinition + WorkflowInstance tables).
+
+  PHASE C - ARCHITECTURE HEALTH (Sprint 7-10, ~4 weeks):
+    C1  Extract service layer: LeaveService, ExpenseService, EmployeeLifecycleService.
+    C2  Split admin_panel/views.py by domain.
+    C3  Unify role authority: remove CustomUser.role, use RBAC only.
+    C4  Define EmployeeProfile -> Employee migration path and execute.
+    C5  Wire all module-local logs to global ActivityLog/AuditLog.
+    C6  Add SyncLog.failed_uuids JSON field for offline tracing.
+
+  PHASE D - SCALE & SECURITY (Sprint 11-14, ~4 weeks):
+    D1  PostgreSQL migration.
+    D2  Redis cache integration (dashboard, permission cache).
+    D3  Celery + Redis background job queue.
+    D4  Fix O(n2) hierarchy (recursive CTE or materialized path).
+    D5  PIN hashing -> Argon2 (replace SHA256).
+    D6  PWA push notifications via Web Push / VAPID.
+    D7  JWT authentication layer for future mobile API.
+    D8  S3-compatible file storage for media and backups.
+    D9  Full database index audit and implementation.
+
+  PHASE E - NEW MODULES (Sprint 15+, planned):
+    E1  Payroll Engine (salary, deductions, tax, payslip, bank file).
+    E2  Roster / Shift Scheduling.
+    E3  Performance KPI Module.
+    E4  Recruitment / Onboarding Pipeline.
+    E5  CRM - Client Relationship Management.
+    E6  Accounts / Finance General Ledger.
+    E7  Inventory Management.
+
+RISK REGISTER:
+  RR-01  DEBUG=True + insecure SECRET_KEY          CRITICAL  Phase A1 - immediate.
+  RR-02  SQLite concurrent write limit              HIGH      Phase D1 - PostgreSQL.
+  RR-03  Dual Employee Model (8 modules coupled)    HIGH      Phase C4 - migration.
+  RR-04  Fragmented logging (no unified trail)      HIGH      Phase C5 - unify logs.
+  RR-05  Business logic in model layer              HIGH      Phase C1 - service layer.
+  RR-06  admin_panel/views.py monolith              HIGH      Phase C2 - split.
+  RR-07  O(n2) org hierarchy                        MEDIUM    Phase D4 - CTE/path.
+  RR-08  No background job queue                    MEDIUM    Phase D3 - Celery.
+  RR-09  Expense status='pending' bug               MEDIUM    Phase A2 - trivial fix.
+  RR-10  Notifications not wired (5 of 8 modules)   MEDIUM    Phase A5-A7.
+  RR-11  PIN SHA256 no salt                         LOW       Phase D5 - Argon2.
+  RR-12  Google Drive creds unencrypted in DB       LOW       Phase D8.
+  RR-13  Local filesystem for media files           LOW       Phase D8 - S3.
+
+TECHNICAL DEBT REGISTER:
+  TD-01  Dual Employee Model               Phase C4  Very High (3-4 weeks)
+  TD-02  Dual Role Authority               Phase C3  High (1 week)
+  TD-03  Fragmented Logging (7 systems)    Phase C5  High (1 week)
+  TD-04  Business Logic in Model Layer     Phase C1  High (2 weeks)
+  TD-05  admin_panel/views.py Monolith     Phase C2  Medium (3-4 days)
+  TD-06  SQLite in Production              Phase D1  Medium (2-3 days)
+  TD-07  O(n2) Hierarchy Computation       Phase D4  Medium (2-3 days)
+  TD-08  Expense status='pending' Bug      Phase A2  Trivial (30 min)
+  TD-09  Schedule/Holiday Mislabeling      Phase A3  Trivial (30 min)
+  TD-10  Notification Types Incomplete     Phase A4  Low (2 hours)
+  TD-11  PIN SHA256 No Salt                Phase D5  Low (2 hours)
+
+PRODUCTION CHECKLIST:
+  SECURITY:
+  [ ] DEBUG = False in production.
+  [ ] SECRET_KEY loaded from env var (no fallback).
+  [ ] EMAIL_HOST_USER / EMAIL_HOST_PASSWORD via env vars.
+  [ ] ALLOWED_HOSTS restricted to production domains.
+  [ ] SECURE_SSL_REDIRECT = True.
+  [ ] SESSION_COOKIE_SECURE = True.
+  [ ] CSRF_COOKIE_SECURE = True.
+  [ ] HSTS headers enabled.
+  [ ] Service account JSON encrypted.
+  [ ] PIN hashing upgraded to Argon2.
+
+  INFRASTRUCTURE:
+  [ ] PostgreSQL configured.
+  [ ] Redis configured.
+  [ ] Celery workers running.
+  [ ] Gunicorn + Nginx configured.
+  [ ] SSL certificate active.
+  [ ] Backup automation verified.
+  [ ] GDrive backup tested end-to-end.
+  [ ] Static files via Nginx/CDN.
+  [ ] Media files on S3-compatible storage.
+
+  MONITORING:
+  [ ] Application error monitoring (Sentry or equivalent).
+  [ ] Server monitoring (CPU, memory, disk).
+  [ ] Database monitoring.
+  [ ] Uptime monitoring.
+  [ ] Alert routing to admin email/SMS.
+
+  DATA INTEGRITY:
+  [ ] Migrations applied and verified.
+  [ ] Master data seeded (depts, designations, leave types).
+  [ ] RBAC modules and permissions seeded.
+  [ ] Admin superuser created.
+  [ ] Backup tested and restore verified.
+
+  APPLICATION:
+  [ ] All crons scheduled.
+  [ ] Email backend set to SMTP (not console).
+  [ ] All module notifications wired (Phase A complete).
+  [ ] Expense status bug fixed.
+  [ ] Holiday/schedule mislabeling fixed.
+
+TESTING STRATEGY:
+  UNIT TESTS:
+    - Model validations (state transitions, constraints).
+    - Service layer business rules.
+    - Permission engine (each of 9 layers).
+    - Policy resolution engine (override hierarchy).
+
+  INTEGRATION TESTS:
+    - Full approval workflow end-to-end (leave, expense, lifecycle).
+    - Offline sync deduplication (sync_uuid idempotency).
+    - Email dispatch (mock SMTP, verify calls).
+    - Dashboard data services (no 500 errors).
+
+  PERFORMANCE TESTS:
+    - Dashboard load with 500/1000 employee dataset.
+    - OrgHierarchy computation benchmark.
+    - Attendance cron with 500 employees.
+    - Concurrent check-in (10 users simultaneously).
+
+  SECURITY TESTS:
+    - RBAC: employee cannot access manager views.
+    - RBAC: manager cannot access admin views.
+    - Session: single-device enforcement.
+    - CSRF: all POST forms protected.
+    - File upload: type and size validation.
+
+RELEASE STRATEGY:
+  CADENCE   : 2-week sprints. Patch releases as needed.
+  BRANCHING : main (production), develop (staging), feature/xxx branches.
+  DEPLOYMENT: Zero-downtime via Gunicorn reload.
+  MIGRATIONS: Reviewed and reversible where possible.
+  ROLLBACK  : DB backup before every release. Rollback script prepared.
+  STAGING   : Mandatory. Production data not used in staging.
+  NOTES     : Required for every release (features, fixes, migrations).
+
+================================================================================
+ENGINEERING RULES (STANDING ORDERS)
+================================================================================
+
+ENG-01  Never put business logic in models.save() or models.delete().
+        Use service classes in apps/<module>/services.py.
+
+ENG-02  Every state transition must write an immutable history/audit record.
+
+ENG-03  Every approval action must call the Workflow Engine.
+        No direct status field updates from views.
+
+ENG-04  Every notification must go through notifications.dispatch.
+        log_activity() or notifications.dispatch.send_notification().
+
+ENG-05  Never hardcode role names in views. Always use PermissionEngine.evaluate()
+        with permission codenames.
+
+ENG-06  All background tasks must be idempotent and safe to re-run.
+
+ENG-07  All file uploads must validate extension AND size at the model/form level.
+
+ENG-08  All sensitive credentials loaded from environment variables.
+        Never commit credentials to source control.
+
+ENG-09  All new tables must include created_at, updated_at (or created_at only
+        for append-only/immutable tables).
+
+ENG-10  sync_uuid must be present on any model that participates in offline sync.
+        sync_uuid must be UNIQUE and UUID4 generated client-side.
+
+ENG-11  AuditLog records are INSERT only. No UPDATE. No DELETE ever.
+
+ENG-12  EmploymentHistory records are INSERT only. No UPDATE. No DELETE ever.
+
+ENG-13  All dashboard aggregation queries must be wrapped in try/except and
+        fall back to zero counts. Never raise 500 on a dashboard load.
+
+ENG-14  No view file exceeds 500 lines. Split by domain when approaching limit.
+
+ENG-15  Permission cache (_resolved_permissions_cache) must be cleared when
+        roles or overrides are changed for a user.
+
+================================================================================
+END OF LIVING ERP BLUEPRINT - FieldTrack v1.0 | 2026-07-25
+================================================================================
