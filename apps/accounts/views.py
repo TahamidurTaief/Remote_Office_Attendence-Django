@@ -312,6 +312,8 @@ class ChangePasswordView(LoginRequiredMixin, View):
         if errors:
             for err in errors:
                 messages.error(request, err)
+            if request.headers.get('HX-Request') == 'true':
+                return render(request, 'accounts/partials/change_password_form.html')
             return render(request, 'accounts/change_password.html')
 
         user = request.user
@@ -334,6 +336,8 @@ class ChangePasswordView(LoginRequiredMixin, View):
                 Session.objects.filter(session_key=sess.session_key).delete()
 
         messages.success(request, 'Your password was successfully updated! Other device sessions have been logged out.')
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'accounts/partials/change_password_form.html')
         return render(request, 'accounts/change_password.html')
 
 
