@@ -1,15 +1,14 @@
 {% comment %} c-tab-button component
-   Props:
-   - label: tab text (required)
-   - active: boolean (default: false)
-   - color: blue | emerald | amber | rose | neutral (default: blue)
-   - href: optional link
-   - extra_class: extra CSS classes
+Props:
+- label: tab text (required)
+- active: boolean (default: false)
+- color: blue | emerald | amber | rose | neutral (default: blue)
+- href: optional link
+- extra_class: extra CSS classes
 {% endcomment %}
 
 {% if href %}
-<a href="{{ href }}"
-   class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer
+<a href="{{ href }}" class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-sm transition-all duration-200 cursor-pointer
      {% if active %}
        {% if color == 'emerald' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400
        {% elif color == 'amber' %}bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400
@@ -19,13 +18,11 @@
      {% else %}
        bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
      {% endif %}
-     {{ extra_class }}"
-   {{ attrs }}>
+     {{ extra_class }}" {{ attrs }}>
   {{ label }}
 </a>
 {% else %}
-<button type="button"
-   class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer
+<button type="button" class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-sm transition-all duration-200 cursor-pointer
      {% if active %}
        {% if color == 'emerald' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400
        {% elif color == 'amber' %}bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400
@@ -35,8 +32,7 @@
      {% else %}
        bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
      {% endif %}
-     {{ extra_class }}"
-   {{ attrs }}>
+     {{ extra_class }}" {{ attrs }}>
   {{ label }}
 </button>
 {% endif %}
