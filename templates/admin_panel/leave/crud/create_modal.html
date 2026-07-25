@@ -1,0 +1,54 @@
+<c-modal id="create-leave-modal" title="Add Leave Request (Admin Override)" size="md">
+    <form hx-post="{% url 'admin_panel:leave_request_create' %}" hx-swap="none" class="space-y-4">
+        {% csrf_token %}
+        
+        <div>
+            <label class="ft-label">Employee</label>
+            <div class="mt-1">{{ form.employee }}</div>
+            {% if form.employee.errors %}<p class="ft-error-text">{{ form.employee.errors.0 }}</p>{% endif %}
+        </div>
+
+        <div>
+            <label class="ft-label">Leave Type</label>
+            <div class="mt-1">{{ form.leave_type }}</div>
+            {% if form.leave_type.errors %}<p class="ft-error-text">{{ form.leave_type.errors.0 }}</p>{% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="ft-label">Start Date</label>
+                <div class="mt-1">{{ form.start_date }}</div>
+                {% if form.start_date.errors %}<p class="ft-error-text">{{ form.start_date.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label class="ft-label">End Date</label>
+                <div class="mt-1">{{ form.end_date }}</div>
+                {% if form.end_date.errors %}<p class="ft-error-text">{{ form.end_date.errors.0 }}</p>{% endif %}
+            </div>
+        </div>
+
+        <div>
+            <label class="ft-label">Reason</label>
+            <div class="mt-1">{{ form.reason }}</div>
+            {% if form.reason.errors %}<p class="ft-error-text">{{ form.reason.errors.0 }}</p>{% endif %}
+        </div>
+
+        <div>
+            <label class="ft-label">Status</label>
+            <div class="mt-1">{{ form.status }}</div>
+            {% if form.status.errors %}<p class="ft-error-text">{{ form.status.errors.0 }}</p>{% endif %}
+        </div>
+
+        <c-slot name="footer">
+            <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary ft-btn-sm">
+                Cancel
+            </button>
+            <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm">
+                Create Request
+            </button>
+        </c-slot>
+    </form>
+</c-modal>
+<script>
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'create-leave-modal' } }));
+</script>

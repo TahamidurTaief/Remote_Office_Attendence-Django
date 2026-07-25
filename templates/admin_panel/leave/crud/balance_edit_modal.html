@@ -1,0 +1,35 @@
+<c-modal id="edit-balance-modal" title="Adjust Leave Balance (Admin Override)" size="md">
+    <form hx-post="{% url 'admin_panel:leave_balance_edit' object.pk %}" hx-swap="none" class="space-y-4">
+        {% csrf_token %}
+        
+        <div class="p-3 bg-gray-50 border rounded-lg text-xs space-y-1">
+            <p><strong>Employee:</strong> {{ object.employee.full_name }}</p>
+            <p><strong>Leave Type:</strong> {{ object.leave_type.name }}</p>
+            <p><strong>Year:</strong> {{ object.year }}</p>
+        </div>
+
+        <div>
+            <label class="ft-label">Total Days Allowed</label>
+            <div class="mt-1">{{ form.total_days }}</div>
+            {% if form.total_days.errors %}<p class="ft-error-text">{{ form.total_days.errors.0 }}</p>{% endif %}
+        </div>
+
+        <div>
+            <label class="ft-label">Used Days</label>
+            <div class="mt-1">{{ form.used_days }}</div>
+            {% if form.used_days.errors %}<p class="ft-error-text">{{ form.used_days.errors.0 }}</p>{% endif %}
+        </div>
+
+        <c-slot name="footer">
+            <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary ft-btn-sm">
+                Cancel
+            </button>
+            <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm">
+                Save Allowance
+            </button>
+        </c-slot>
+    </form>
+</c-modal>
+<script>
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'edit-balance-modal' } }));
+</script>

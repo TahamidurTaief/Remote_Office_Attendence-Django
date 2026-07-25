@@ -537,6 +537,14 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Settings</span>
           </a>
+          <a href="{% url 'leave:admin_dashboard' %}" class="ft-nav-item {% if '/leave/admin/' in path and '/types/' not in path and '/balances/' not in path %}active{% endif %}" x-show="matchSearch('Manage Leave Records')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Manage Leave Records</span>
+          </a>
+          <a href="{% url 'admin_panel:attendance_list' %}" class="ft-nav-item {% if path == '/admin-panel/attendance/' or '/admin-panel/attendance/' in path and '/manual' not in path %}active{% endif %}" x-show="matchSearch('Manage Attendance Records')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Manage Attendance Records</span>
+          </a>
           <a href="{% url 'admin_panel:role_list' %}" class="ft-nav-item {% if '/admin-panel/roles/' in path %}active{% endif %}" x-show="matchSearch('System Roles & Access')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">System Roles & Access</span>

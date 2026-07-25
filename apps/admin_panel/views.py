@@ -3214,3 +3214,184 @@ class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
         return context
 
 
+# ==============================================================================
+# Admin Leave & Attendance CRUD Views
+# ==============================================================================
+from django.views.generic import CreateView, UpdateView, View
+from apps.accounts.mixins import AdminRequiredMixin
+from apps.accounts.engine import PermissionEngine
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404, redirect
+from django.http import HttpResponse
+from django.utils import timezone
+from apps.leave.models import LeaveRequest, LeaveBalance
+from apps.attendance.models import Attendance
+from apps.notifications.models import log_audit
+from .forms import AdminLeaveBalanceForm, AdminAttendanceForm
+
+class AdminCRUDPermissionMixin:
+    codename = None
+    
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            res = PermissionEngine.evaluate(request.user, self.codename)
+            if not res.allowed:
+                raise PermissionDenied(f"Access Denied: Missing permission {self.codename}")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class AdminLeaveRequestCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, CreateView):
+    model = LeaveRequest
+    codename = 'leave.create'
+    template_name = 'admin_panel/leave/crud/create_modal.html'
+    
+    def get_form_class(self):
+        from apps.leave.forms import AdminAddLeaveForm
+        return AdminAddLeaveForm
+        
+    def form_valid(self, form):
+        instance = form.save(commit=False)
+        instance.reviewed_by = self.request.user
+        instance.reviewed_at = timezone.now()
+        instance.save()
+        log_audit(
+            actor=self.request.user,
+            action='leave_request_create',
+            target=instance,
+            summary=f"Admin created LeaveRequest for {instance.employee.full_name}: {instance.start_date} to {instance.end_date} status {instance.status}",
+            ip=self.request.META.get('REMOTE_ADDR')
+        )
+        if self.request.headers.get('HX-Request') == 'true':
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('leave:admin_dashboard')
+
+
+class AdminLeaveRequestUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, UpdateView):
+    model = LeaveRequest
+    codename = 'leave.edit'
+    template_name = 'admin_panel/leave/crud/edit_modal.html'
+    
+    def get_form_class(self):
+        from apps.leave.forms import AdminAddLeaveForm
+        return AdminAddLeaveForm
+        
+    def form_valid(self, form):
+        instance = form.save(commit=False)
+        instance.reviewed_by = self.request.user
+        instance.reviewed_at = timezone.now()
+        instance.save()
+        log_audit(
+            actor=self.request.user,
+            action='leave_request_edit',
+            target=instance,
+            summary=f"Admin updated LeaveRequest for {instance.employee.full_name}: {instance.start_date} to {instance.end_date} status {instance.status}",
+            ip=self.request.META.get('REMOTE_ADDR')
+        )
+        if self.request.headers.get('HX-Request') == 'true':
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('leave:admin_dashboard')
+
+
+class AdminLeaveRequestDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, View):
+    codename = 'leave.delete'
+    
+    def post(self, request, pk):
+        instance = get_object_or_404(LeaveRequest, pk=pk)
+        log_audit(
+            actor=request.user,
+            action='leave_request_delete',
+            target=instance,
+            summary=f"Admin deleted LeaveRequest for {instance.employee.full_name}: {instance.start_date} to {instance.end_date}",
+            ip=request.META.get('REMOTE_ADDR')
+        )
+        instance.delete()
+        if request.headers.get('HX-Request') == 'true':
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('leave:admin_dashboard')
+
+
+class AdminLeaveBalanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, UpdateView):
+    model = LeaveBalance
+    codename = 'leave.edit'
+    template_name = 'admin_panel/leave/crud/balance_edit_modal.html'
+    
+    def get_form_class(self):
+        return AdminLeaveBalanceForm
+        
+    def form_valid(self, form):
+        instance = form.save()
+        log_audit(
+            actor=self.request.user,
+            action='leave_balance_edit',
+            target=instance,
+            summary=f"Admin adjusted LeaveBalance for {instance.employee.full_name} ({instance.leave_type.name}): Total={instance.total_days}, Used={instance.used_days}",
+            ip=self.request.META.get('REMOTE_ADDR')
+        )
+        if self.request.headers.get('HX-Request') == 'true':
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('leave:admin_balances')
+
+
+class AdminAttendanceCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, CreateView):
+    model = Attendance
+    codename = 'attendance.create'
+    template_name = 'admin_panel/attendance/crud/create_modal.html'
+    
+    def get_form_class(self):
+        return AdminAttendanceForm
+        
+    def form_valid(self, form):
+        instance = form.save()
+        log_audit(
+            actor=self.request.user,
+            action='attendance_create',
+            target=instance,
+            summary=f"Admin created Attendance for {instance.employee.full_name} on {instance.date}",
+            ip=self.request.META.get('REMOTE_ADDR')
+        )
+        if self.request.headers.get('HX-Request') == 'true':
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('admin_panel:attendance_list')
+
+
+class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, UpdateView):
+    model = Attendance
+    codename = 'attendance.edit'
+    template_name = 'admin_panel/attendance/crud/edit_modal.html'
+    
+    def get_form_class(self):
+        return AdminAttendanceForm
+        
+    def form_valid(self, form):
+        instance = form.save()
+        log_audit(
+            actor=self.request.user,
+            action='attendance_edit',
+            target=instance,
+            summary=f"Admin updated Attendance for {instance.employee.full_name} on {instance.date}",
+            ip=self.request.META.get('REMOTE_ADDR')
+        )
+        if self.request.headers.get('HX-Request') == 'true':
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('admin_panel:attendance_list')
+
+
+class AdminAttendanceDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, View):
+    codename = 'attendance.delete'
+    
+    def post(self, request, pk):
+        instance = get_object_or_404(Attendance, pk=pk)
+        log_audit(
+            actor=request.user,
+            action='attendance_delete',
+            target=instance,
+            summary=f"Admin deleted Attendance for {instance.employee.full_name} on {instance.date}",
+            ip=request.META.get('REMOTE_ADDR')
+        )
+        instance.delete()
+        if request.headers.get('HX-Request') == 'true':
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('admin_panel:attendance_list')
+
+
+

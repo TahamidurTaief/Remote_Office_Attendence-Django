@@ -32,11 +32,11 @@
                     </c-select>
 
                     <c-select id="global_gps_required" name="gps_required" label="GPS Validation Policy">
-                        <option value="required" {% if global_policy.gps_required=='required' %}selected{% endif %}>
+                        <option value="required" {% if global_policy.gps_required == 'required' %}selected{% endif %}>
                             Required</option>
-                        <option value="optional" {% if global_policy.gps_required=='optional' %}selected{% endif %}>
+                        <option value="optional" {% if global_policy.gps_required == 'optional' %}selected{% endif %}>
                             Optional</option>
-                        <option value="warn_only" {% if global_policy.gps_required=='warn_only' %}selected{% endif %}>
+                        <option value="warn_only" {% if global_policy.gps_required == 'warn_only' %}selected{% endif %}>
                             Warn Only</option>
                     </c-select>
 
@@ -149,11 +149,11 @@
 
                                 <c-select id="gps_required_{{ branch.id }}" name="gps_required"
                                     label="GPS Validation Policy">
-                                    <option value="required" {% if policy.gps_required=='required' %}selected{% endif
+                                    <option value="required" {% if policy.gps_required == 'required' %}selected{% endif
                                         %}>Required</option>
-                                    <option value="optional" {% if policy.gps_required=='optional' %}selected{% endif
+                                    <option value="optional" {% if policy.gps_required == 'optional' %}selected{% endif
                                         %}>Optional</option>
-                                    <option value="warn_only" {% if policy.gps_required=='warn_only' %}selected{% endif
+                                    <option value="warn_only" {% if policy.gps_required == 'warn_only' %}selected{% endif
                                         %}>Warn Only</option>
                                 </c-select>
 

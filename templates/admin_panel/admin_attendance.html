@@ -8,6 +8,10 @@
             <p class="text-[11px] mt-0.5" style="color:var(--text-muted)">Manage, filter, and export employee attendance logs.</p>
         </div>
         <div class="flex items-center gap-2.5 flex-wrap">
+            <button hx-get="{% url 'admin_panel:attendance_create' %}" hx-target="#modal-container" class="ft-btn ft-btn-primary ft-btn-sm">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                Add Attendance
+            </button>
             <c-button href="{% url 'admin_panel:manual_entry' %}" variant="secondary" icon="plus" label="Manual Entry" size="sm" ></c-button>
 
             <!-- Export Dropdown -->
@@ -231,7 +235,15 @@
                     <!-- Action Button -->
                     <td class="text-right">
                         {% if att.id %}
-                        <c-button href="{% url 'admin_panel:attendance_detail' att.id %}" variant="secondary" icon="eye" label="Detail" size="sm" ></c-button>
+                        <div class="flex items-center justify-end gap-1.5">
+                            <c-button href="{% url 'admin_panel:attendance_detail' att.id %}" variant="secondary" icon="eye" label="Detail" size="sm" ></c-button>
+                            <button type="button" hx-get="{% url 'admin_panel:attendance_edit' att.id %}" hx-target="#modal-container" class="ft-btn ft-btn-secondary ft-btn-sm" title="Edit">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button type="button" hx-post="{% url 'admin_panel:attendance_delete' att.id %}" hx-confirm="Are you sure you want to delete this attendance record?" hx-swap="none" class="ft-btn ft-btn-danger ft-btn-sm" title="Delete">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
                         {% else %}
                         <span class="text-gray-300 text-[11px]">—</span>
                         {% endif %}
@@ -286,5 +298,7 @@
 </c-modal>
 {% endif %}
 {% endfor %}
+
+<div id="modal-container" @open-modal.window="$nextTick(() => { const m = document.getElementById($event.detail.id); if (m) m.__x.$data.open = true; })"></div>
 
 </c-app-shell>

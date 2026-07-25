@@ -10,10 +10,19 @@ urlpatterns = [
     path('dashboard/employee-kpis/', views.EmployeeKPIWidgetView.as_view(), name='employee_kpis'),
     path('global-search/', views.GlobalSearchView.as_view(), name='global_search'),
     path('attendance/', views.AdminAttendanceListView.as_view(), name='attendance_list'),
+    path('attendance/create/', views.AdminAttendanceCreateView.as_view(), name='attendance_create'),
+    path('attendance/<int:pk>/edit/', views.AdminAttendanceUpdateView.as_view(), name='attendance_edit'),
+    path('attendance/<int:pk>/delete/', views.AdminAttendanceDeleteView.as_view(), name='attendance_delete'),
     path('attendance/<int:pk>/detail/', views.AttendanceDetailView.as_view(), name='attendance_detail'),
     path('attendance/<int:pk>/locations/', views.AttendanceLocationsView.as_view(), name='attendance_locations'),
     path('attendance/export/', views.ExportAttendanceCSVView.as_view(), name='attendance_export'),
     path('attendance/manual-entry/', views.ManualEntryView.as_view(), name='manual_entry'),
+
+    # Leave CRUD
+    path('leave/requests/create/', views.AdminLeaveRequestCreateView.as_view(), name='leave_request_create'),
+    path('leave/requests/<int:pk>/edit/', views.AdminLeaveRequestUpdateView.as_view(), name='leave_request_edit'),
+    path('leave/requests/<int:pk>/delete/', views.AdminLeaveRequestDeleteView.as_view(), name='leave_request_delete'),
+    path('leave/balances/<int:pk>/edit/', views.AdminLeaveBalanceUpdateView.as_view(), name='leave_balance_edit'),
 
     # Reports
     path('reports/', views.ReportsMainView.as_view(), name='reports_main'),

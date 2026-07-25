@@ -94,6 +94,11 @@
                         <div class="flex justify-between items-center text-[10px] text-gray-500 mt-2">
                             <span>Used: {{ balance.used_days|default:balance.used }} days</span>
                             <span>Limit: {{ balance.total_days|default:balance.total }} days</span>
+                            {% if balance.id %}
+                            <button type="button" hx-get="{% url 'admin_panel:leave_balance_edit' balance.id %}" hx-target="#modal-container" class="text-primary hover:underline font-bold text-xs" style="background:none; border:none; padding:0; cursor:pointer;">
+                                Adjust
+                            </button>
+                            {% endif %}
                         </div>
                     </div>
                     {% empty %}
@@ -171,4 +176,11 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modal-container" @open-modal.window="$nextTick(() => { const m = document.getElementById($event.detail.id); if (m) m.__x.$data.open = true; })"></div>
+
 </c-app-shell>

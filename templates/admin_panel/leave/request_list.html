@@ -4,7 +4,10 @@
             <c-slot name="actions">
                 <c-button href="{% url 'leave:admin_balances' %}" variant="secondary" icon="users" label="Balances" ></c-button>
                 <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" icon="settings" label="Leave Types" ></c-button>
-                <c-button href="{% url 'admin_panel:reports_absent_add_leave' %}" variant="accent" icon="plus" label="Add Leave" ></c-button>
+                <button hx-get="{% url 'admin_panel:leave_request_create' %}" hx-target="#modal-container" class="ft-btn ft-btn-accent ft-btn-sm">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    Add Leave
+                </button>
             </c-slot>
         </c-topbar>
     </c-slot>
@@ -77,20 +80,25 @@
                                 {% endif %}
                             </td>
                             <td class="text-right">
-                                {% if req.status == 'PENDING' %}
-                                <div class="flex items-center justify-end gap-1">
-                                    <form action="{% url 'leave:admin_approve' req.pk %}" method="POST" class="inline">
+                                <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                                    {% if req.status == 'pending' or req.status == 'PENDING' %}
+                                    <form action="{% url 'leave:approve_request' req.pk %}" method="POST" class="inline">
                                         {% csrf_token %}
                                         <c-button type="submit" variant="accent" size="sm" label="Approve" ></c-button>
                                     </form>
-                                    <form action="{% url 'leave:admin_reject' req.pk %}" method="POST" class="inline">
+                                    <form action="{% url 'leave:reject_request' req.pk %}" method="POST" class="inline">
                                         {% csrf_token %}
                                         <c-button type="submit" variant="danger" size="sm" label="Reject" ></c-button>
                                     </form>
+                                    {% endif %}
+                                    
+                                    <button type="button" hx-get="{% url 'admin_panel:leave_request_edit' req.pk %}" hx-target="#modal-container" class="ft-btn ft-btn-secondary ft-btn-sm" title="Edit">
+                                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                    <button type="button" hx-post="{% url 'admin_panel:leave_request_delete' req.pk %}" hx-confirm="Are you sure you want to delete this leave request?" hx-swap="none" class="ft-btn ft-btn-danger ft-btn-sm" title="Delete">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
                                 </div>
-                                {% else %}
-                                <span class="text-xs" style="color:var(--text-muted)">Processed</span>
-                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
@@ -121,4 +129,6 @@
             {% endif %}
         </c-card>
     </div>
+<div id="modal-container" @open-modal.window="$nextTick(() => { const m = document.getElementById($event.detail.id); if (m) m.__x.$data.open = true; })"></div>
+
 </c-app-shell>

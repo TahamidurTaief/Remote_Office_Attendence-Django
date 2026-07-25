@@ -1,0 +1,69 @@
+<c-modal id="create-attendance-modal" title="Add Attendance Record (Admin Override)" size="md">
+    <form hx-post="{% url 'admin_panel:attendance_create' %}" hx-swap="none" class="space-y-4">
+        {% csrf_token %}
+        
+        <div>
+            <label class="ft-label">Employee</label>
+            <div class="mt-1">{{ form.employee }}</div>
+            {% if form.employee.errors %}<p class="ft-error-text">{{ form.employee.errors.0 }}</p>{% endif %}
+        </div>
+
+        <div>
+            <label class="ft-label">Date</label>
+            <div class="mt-1">{{ form.date }}</div>
+            {% if form.date.errors %}<p class="ft-error-text">{{ form.date.errors.0 }}</p>{% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="ft-label">Check In Time</label>
+                <div class="mt-1">{{ form.check_in_time }}</div>
+                {% if form.check_in_time.errors %}<p class="ft-error-text">{{ form.check_in_time.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label class="ft-label">Check Out Time</label>
+                <div class="mt-1">{{ form.check_out_time }}</div>
+                {% if form.check_out_time.errors %}<p class="ft-error-text">{{ form.check_out_time.errors.0 }}</p>{% endif %}
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="ft-label">Type</label>
+                <div class="mt-1">{{ form.type }}</div>
+                {% if form.type.errors %}<p class="ft-error-text">{{ form.type.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label class="ft-label">Status</label>
+                <div class="mt-1">{{ form.status }}</div>
+                {% if form.status.errors %}<p class="ft-error-text">{{ form.status.errors.0 }}</p>{% endif %}
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="ft-label">Overtime Status</label>
+                <div class="mt-1">{{ form.ot_status }}</div>
+                {% if form.ot_status.errors %}<p class="ft-error-text">{{ form.ot_status.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="flex items-center gap-2 pt-6">
+                {{ form.is_policy_exception }}
+                <label for="{{ form.is_policy_exception.id_for_label }}" class="text-[12px] font-semibold cursor-pointer" style="color:var(--text)">
+                    Is Policy Exception
+                </label>
+            </div>
+        </div>
+
+        <c-slot name="footer">
+            <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary ft-btn-sm">
+                Cancel
+            </button>
+            <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm">
+                Log Attendance
+            </button>
+        </c-slot>
+    </form>
+</c-modal>
+<script>
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'create-attendance-modal' } }));
+</script>
