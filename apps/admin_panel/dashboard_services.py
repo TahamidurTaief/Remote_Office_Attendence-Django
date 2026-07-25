@@ -67,8 +67,49 @@ def get_employee_dashboard_data(user):
         data['today_attendance'] = Attendance.objects.select_related('employee', 'employee__branch').filter(
             employee=emp_profile, date=today
         ).first()
+        data['active_session'] = Attendance.objects.filter(
+            employee=emp_profile,
+            date=today,
+            attendance_type='check_in',
+            check_out_time__isnull=True,
+            is_expired=False
+        ).first()
+        data['today_sessions_count'] = Attendance.objects.filter(
+            employee=emp_profile,
+            date=today,
+            attendance_type='check_in',
+            is_expired=False
+        ).count()
+        from apps.attendance.models import AttendanceCorrectionRequest
+        data['pending_correction_count'] = AttendanceCorrectionRequest.objects.filter(
+            attendance__employee=emp_profile,
+            status='pending'
+        ).count()
+        from apps.attendance.schedule_utils import get_branch_schedule
+        schedule = get_branch_schedule(emp_profile)
+        if schedule:
+            start_t = schedule.office_start_time
+            end_t = schedule.office_end_time
+            start_str = start_t if isinstance(start_t, str) else start_t.strftime('%I:%M %p')
+            end_str = end_t if isinstance(end_t, str) else end_t.strftime('%I:%M %p')
+            data['shift_info'] = f"{start_str} - {end_str}"
+        else:
+            data['shift_info'] = "Standard Shift"
+        data['recent_attendance'] = Attendance.objects.filter(
+            employee=emp_profile,
+            attendance_type='check_in',
+            is_expired=False
+        ).order_by('-date', '-check_in_time')[:5]
     else:
         data['today_attendance'] = None
+        data['active_session'] = None
+        data['today_sessions_count'] = 0
+        data['pending_correction_count'] = 0
+        data['shift_info'] = "Standard Shift"
+        data['recent_attendance'] = []
+
+    from apps.branches.models import Holiday
+    data['next_holiday'] = Holiday.objects.filter(date__gte=today).order_by('date').first()
 
     # Assigned tasks
     if emp_profile:

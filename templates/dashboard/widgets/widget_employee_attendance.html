@@ -1,12 +1,12 @@
 <c-card>
-  <div class="flex items-center justify-between mb-3">
+  <div class="flex items-center justify-between mb-4" id="widget-employee-attendance">
     <div class="flex items-center gap-2">
-      <div class="p-2 rounded-lg bg-primary/10 text-primary">
+      <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
         <i data-lucide="clock" class="w-5 h-5"></i>
       </div>
       <div>
-        <h3 class="font-semibold text-base text-slate-800 dark:text-white">Today's Attendance</h3>
-        <p class="text-xs text-slate-500">Live check-in status</p>
+        <h3 class="font-bold text-sm text-slate-800 dark:text-white">Attendance Control Centre</h3>
+        <p class="text-2xs text-slate-500">Manage sessions & sync status</p>
       </div>
     </div>
     <button hx-get="{% url 'dashboard' %}?widget=employee_attendance"
@@ -17,39 +17,268 @@
     </button>
   </div>
 
-  {% if today_attendance %}
-    <div class="space-y-3">
-      <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+  <div class="space-y-4" x-data="{
+    checkInTime: '{% if active_session.check_in_time %}{{ active_session.check_in_time|date:"c" }}{% endif %}',
+    elapsedSeconds: 0,
+    timer: null,
+    pendingSyncCount: 0,
+    init() {
+      if (this.checkInTime) {
+        const startTime = new Date(this.checkInTime).getTime();
+        this.updateTimer(startTime);
+        this.timer = setInterval(() => this.updateTimer(startTime), 1000);
+      }
+      this.fetchPendingSync();
+    },
+    updateTimer(startTime) {
+      const now = new Date().getTime();
+      this.elapsedSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
+    },
+    formatElapsed() {
+      const h = String(Math.floor(this.elapsedSeconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((this.elapsedSeconds % 3600) / 60)).padStart(2, '0');
+      const s = String(this.elapsedSeconds % 60).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    },
+    async fetchPendingSync() {
+      if (window.FieldTrackDB) {
+        try {
+          const items = await window.FieldTrackDB.getPendingSyncItems();
+          this.pendingSyncCount = items.length;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }">
+    <!-- Primary Info Card -->
+    <div class="relative overflow-hidden rounded-2xl border p-4 shadow-sm transition-all bg-gradient-to-br {% if active_session %}from-emerald-50 to-teal-50/50 border-emerald-200 dark:from-emerald-950/20 dark:to-teal-950/10 dark:border-emerald-800/30{% else %}from-slate-50 to-slate-100/50 border-slate-200 dark:from-slate-900 dark:to-slate-800/50 dark:border-slate-850{% endif %}">
+      <div class="flex items-center justify-between gap-3">
         <div>
-          <span class="text-xs text-slate-500 block">Check In Time</span>
-          <span class="font-medium text-sm text-slate-800 dark:text-white">
-            {{ today_attendance.check_in|time:"H:i A"|default:"--" }}
-          </span>
+          <span class="text-2xs font-bold uppercase tracking-wider text-slate-400">Current Status</span>
+          <h4 class="text-lg font-bold mt-0.5 {% if active_session %}text-emerald-700 dark:text-emerald-400{% else %}text-slate-700 dark:text-slate-350{% endif %}">
+            {% if active_session %}Checked In{% else %}Checked Out / Offline{% endif %}
+          </h4>
         </div>
-        <div>
-          <span class="text-xs text-slate-500 block">Check Out Time</span>
-          <span class="font-medium text-sm text-slate-800 dark:text-white">
-            {{ today_attendance.check_out|time:"H:i A"|default:"Not checked out" }}
+        <div class="flex items-center gap-1.5">
+          {% if active_session %}
+          <span class="flex h-2.5 w-2.5 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
-        </div>
-        <div>
-          <c-badge variant="{% if today_attendance.status == 'present' %}success{% else %}warning{% endif %}">
-            {{ today_attendance.get_status_display }}
-          </c-badge>
+          {% endif %}
+          <span class="text-2xs font-semibold px-2 py-0.5 rounded-full {% if active_session %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300{% else %}bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+            {{ today_attendance.get_status_display|default:"No sessions" }}
+          </span>
         </div>
       </div>
-      {% if today_attendance.status == 'late' %}
-        <div class="p-2 rounded-md bg-amber-500/10 text-amber-600 text-xs font-medium flex items-center gap-1.5">
-          <i data-lucide="alert-triangle" class="w-4 h-4"></i> Late Arrival Flagged
+
+      {% if active_session %}
+      <div class="mt-4 flex items-center justify-between bg-white dark:bg-slate-900 border border-emerald-100 dark:border-emerald-900/30 rounded-xl px-4 py-2.5">
+        <div>
+          <span class="text-3xs uppercase font-bold text-emerald-600 dark:text-emerald-400 block tracking-wider">Worked time today</span>
+          <span class="font-mono text-base font-bold text-emerald-700 dark:text-emerald-400" x-text="formatElapsed()">00:00:00</span>
         </div>
+        <button id="checkout-btn-widget" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all inline-flex items-center gap-1">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Check Out
+        </button>
+      </div>
+      {% else %}
+      <div class="mt-4 flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-xl px-4 py-2.5">
+        <div>
+          <span class="text-3xs uppercase font-bold text-slate-500 block tracking-wider">Assigned Shift</span>
+          <span class="text-xs font-bold text-slate-700 dark:text-slate-300">{{ shift_info }}</span>
+        </div>
+        <a href="{% url 'staff:check_in' %}" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all inline-flex items-center gap-1">
+          <i data-lucide="play" class="w-3.5 h-3.5"></i> Check In
+        </a>
+      </div>
       {% endif %}
     </div>
-  {% else %}
-    <div class="text-center py-4">
-      <p class="text-sm text-slate-500 mb-3">You have not checked in yet today.</p>
-      <a href="{% url 'attendance:check_in' %}" class="ft-btn ft-btn-primary ft-btn-sm inline-flex items-center gap-1.5">
-        <i data-lucide="log-in" class="w-4 h-4"></i> Check In Now
-      </a>
+
+    <!-- Quick Stats Grid -->
+    <div class="grid grid-cols-3 gap-2 text-center">
+      <div class="p-2.5 rounded-xl border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/40">
+        <span class="text-3xs uppercase font-bold text-slate-400 block tracking-wider">Sessions</span>
+        <span class="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1 block">{{ today_sessions_count }}</span>
+      </div>
+      <div class="p-2.5 rounded-xl border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/40">
+        <span class="text-3xs uppercase font-bold text-slate-400 block tracking-wider">Corrections</span>
+        <span class="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1 block">{{ pending_correction_count }}</span>
+      </div>
+      <div class="p-2.5 rounded-xl border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/40">
+        <span class="text-3xs uppercase font-bold text-slate-400 block tracking-wider">Unsynced Queue</span>
+        <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-1 block" x-text="pendingSyncCount">0</span>
+      </div>
     </div>
+
+    <!-- Extra meta information -->
+    <div class="flex items-center justify-between text-2xs text-slate-500 border-t pt-3 border-slate-100 dark:border-slate-850">
+      <span class="flex items-center gap-1">
+        <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+        Next Holiday: 
+        <strong class="text-slate-700 dark:text-slate-350">
+          {% if next_holiday %}{{ next_holiday.name }} ({{ next_holiday.date|date:"M d" }}){% else %}None{% endif %}
+        </strong>
+      </span>
+    </div>
+
+    <!-- Recent Attendance History Section -->
+    {% if recent_attendance %}
+    <div class="border-t border-slate-100 dark:border-slate-850 pt-3">
+      <span class="text-2xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Recent Attendance Sessions</span>
+      <div class="space-y-1.5">
+        {% for att in recent_attendance %}
+        <div class="flex items-center justify-between text-2xs p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-850">
+          <div class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full {% if att.status == 'on_time' %}bg-green-500{% elif att.status == 'late' %}bg-amber-500{% else %}bg-slate-400{% endif %}"></span>
+            <span class="font-medium text-slate-700 dark:text-slate-300">{{ att.date|date:"b d" }}</span>
+            <span class="text-slate-400">|</span>
+            <span class="text-slate-600 dark:text-slate-400">In: {{ att.check_in_time|time:"H:i" }}</span>
+            {% if att.check_out_time %}
+              <span class="text-slate-600 dark:text-slate-400">Out: {{ att.check_out_time|time:"H:i" }}</span>
+            {% endif %}
+          </div>
+          <span class="text-3xs uppercase font-bold px-1.5 py-0.5 rounded-md {% if att.status == 'on_time' %}bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400{% else %}bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400{% endif %}">
+            {{ att.get_status_display }}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Checkout Dialog and Flow integration -->
+  {% if active_session %}
+  <div class="hidden">
+    <input type="file" id="checkout-photo-widget" accept="image/*" capture="environment">
+    <div id="csrf-token-container">{% csrf_token %}</div>
+  </div>
+  <script>
+    (function () {
+      function getCsrf() {
+        const el = document.querySelector('#csrf-token-container [name=csrfmiddlewaretoken]');
+        if (el) return el.value;
+        const m = document.cookie.match(/csrftoken=([^;]+)/);
+        return m ? m[1] : '';
+      }
+
+      const btn = document.getElementById('checkout-btn-widget');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          const photoInput = document.getElementById('checkout-photo-widget');
+          if (!photoInput) return;
+          
+          // Trigger file selection for checkout
+          photoInput.click();
+
+          // Wait for photo input change to start checkout process
+          photoInput.onchange = function() {
+            if (!photoInput.files || !photoInput.files[0]) {
+              if (window.showToast) window.showToast('Photo is required for check out.', 'error');
+              return;
+            }
+            if (window.confirmAction) {
+              window.confirmAction('Are you sure you want to check out?', performCheckout);
+            } else if (confirm('Are you sure you want to check out?')) {
+              performCheckout();
+            }
+          };
+
+          function performCheckout() {
+            btn.innerHTML = '<div class="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin mr-1 inline-block"></div> GPS...';
+            btn.disabled = true;
+
+            function doCheckout(lat, lng, acc, address) {
+              if (!navigator.onLine) {
+                const sync_uuid = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (c === 'x' ? (Math.random() * 16) | 0 : ((Math.random() * 16) | 0 & 0x3) | 0x8).toString(16));
+                if (window.queueOfflineAction) {
+                  window.queueOfflineAction({
+                    action: 'check_out',
+                    latitude: lat || 0,
+                    longitude: lng || 0,
+                    accuracy: acc || 0,
+                    address: address || 'Offline Check-out location',
+                    sync_uuid: sync_uuid,
+                    client_event_time: new Date().toISOString()
+                  }).then(() => {
+                    if (window.LocationTracker) window.LocationTracker.stopTracking();
+                    alert('Offline mode: Checked out locally. Will sync when online.');
+                    location.reload();
+                  }).catch(err => {
+                    if (window.showToast) window.showToast('Offline save failed: ' + err, 'error');
+                    resetBtn();
+                  });
+                } else {
+                  alert('Offline queueing not ready. Network needed.');
+                  resetBtn();
+                }
+                return;
+              }
+
+              const fd = new FormData();
+              fd.append('latitude', lat || '0');
+              fd.append('longitude', lng || '0');
+              fd.append('accuracy', acc || '0');
+              fd.append('address', address || (lat + ', ' + lng) || 'Unknown location');
+              fd.append('photo', photoInput.files[0]);
+
+              btn.innerHTML = 'Saving...';
+
+              fetch('/attendance/check-out/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrf() },
+                body: fd
+              })
+              .then(r => r.json())
+              .then(res => {
+                if (res.success) {
+                  if (window.LocationTracker) window.LocationTracker.stopTracking();
+                  // Reload or HTMX update
+                  const el = document.getElementById('widget-employee-attendance');
+                  if (el && window.htmx) htmx.trigger(el, 'load');
+                  else location.reload();
+                } else {
+                  if (window.showToast) window.showToast('Error: ' + res.error, 'error');
+                  resetBtn();
+                }
+              })
+              .catch(() => {
+                if (window.showToast) window.showToast('Network error.', 'error');
+                resetBtn();
+              });
+            }
+
+            function resetBtn() {
+              btn.innerHTML = '<i data-lucide="log-out" class="w-3.5 h-3.5"></i> Check Out';
+              btn.disabled = false;
+            }
+
+            if (!navigator.geolocation) {
+              doCheckout(0, 0, 0, 'GPS not supported');
+              return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+              function(pos) {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const acc = pos.coords.accuracy;
+                fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json', { headers: { 'Accept-Language': 'en' } })
+                .then(r => r.json())
+                .then(data => doCheckout(lat, lng, acc, data.display_name || (lat + ', ' + lng)))
+                .catch(() => doCheckout(lat, lng, acc, lat + ', ' + lng));
+              },
+              function() {
+                doCheckout(0, 0, 0, 'Location unavailable');
+              },
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+          }
+        });
+      }
+    })();
+  </script>
   {% endif %}
 </c-card>
