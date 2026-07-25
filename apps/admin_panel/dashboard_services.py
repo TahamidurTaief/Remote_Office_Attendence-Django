@@ -405,9 +405,10 @@ def get_admin_dashboard_data(user):
     from django.db.models import Sum, Q
     data['sync_failed_count'] = SyncLog.objects.aggregate(total_failed=Sum('records_failed'))['total_failed'] or 0
     data['offline_queue_size'] = Attendance.objects.filter(synced_at__isnull=True).count()
-    data['gps_issues_count'] = AttendanceLocation.objects.filter(
-        Q(accuracy__gt=100) | Q(latitude=0.0, longitude=0.0),
-        timestamp__date=today
+    data['gps_issues_count'] = Attendance.objects.filter(
+        date=today,
+        gps_quality__in=['poor', 'missing'],
+        is_expired=False
     ).count()
 
     # Late %

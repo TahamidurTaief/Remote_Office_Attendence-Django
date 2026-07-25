@@ -25,7 +25,7 @@ def check_role(user):
     from apps.accounts.engine import PermissionEngine
     if PermissionEngine.evaluate(user, 'attendance.view').allowed and hasattr(user, 'employee_profile'):
         return True
-    return getattr(user, 'role', '') in ('staff', 'manager')
+    return getattr(user, 'role', '') in ('staff', 'manager', 'admin', 'hr')
 
 
 def get_attendance_policy(employee):
@@ -125,9 +125,6 @@ def check_in(request):
         note     = data.get('note', '')
         address  = data.get('address', '')
 
-        if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
-            return JsonResponse({'success': False, 'error': 'Location is required for attendance.'}, status=400)
-
         if lat is None or lat == '':
             lat = 0.0
         if lng is None or lng == '':
@@ -138,6 +135,40 @@ def check_in(request):
             lng = float(lng)
         except (TypeError, ValueError):
             return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
+
+        # GPS Validation (based on policy)
+        is_exception = False
+        gps_quality = 'good'
+        is_gps_missing = (lat == 0.0 and lng == 0.0)
+        is_gps_poor = False
+        
+        try:
+            acc_val = float(accuracy) if accuracy else 0.0
+        except (TypeError, ValueError):
+            acc_val = 0.0
+
+        if not is_gps_missing and policy.max_gps_accuracy_meters and acc_val > policy.max_gps_accuracy_meters:
+            is_gps_poor = True
+
+        is_admin_or_hr = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'hr')
+
+        if is_gps_missing:
+            gps_quality = 'missing'
+            if policy.gps_required == 'required' and not is_admin_or_hr:
+                return JsonResponse({'success': False, 'error': 'GPS location is required for attendance.'}, status=400)
+            else:
+                is_exception = True
+                note = f"{note} [POLICY EXCEPTION: GPS location missing]".strip()
+        elif is_gps_poor:
+            gps_quality = 'poor'
+            if policy.gps_required == 'required' and not is_admin_or_hr:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'GPS accuracy ({int(acc_val)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).'
+                }, status=400)
+            else:
+                is_exception = True
+                note = f"{note} [POLICY EXCEPTION: Poor GPS accuracy {int(acc_val)}m]".strip()
 
         # Validate Photo (dependent on policy)
         photo = request.FILES.get('photo')
@@ -182,7 +213,6 @@ def check_in(request):
         # Holiday validation
         from .schedule_utils import is_employee_holiday
         is_holiday = is_employee_holiday(employee, today)
-        is_exception = False
 
         if is_holiday:
             status = 'holiday_attendance'
@@ -242,6 +272,7 @@ def check_in(request):
             note=note,
             photo=photo,
             is_policy_exception=is_exception,
+            gps_quality=gps_quality,
             sync_uuid=sync_uuid or uuid.uuid4(),
             client_event_time=client_time,
             synced_at=synced_at

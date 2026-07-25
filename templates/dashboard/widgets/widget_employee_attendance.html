@@ -142,15 +142,25 @@
             {% else %}
               <span class="text-slate-500 italic">Active</span>
             {% endif %}
-          {% if s.status == 'on_time' %}
-            <c-badge variant="success" label="On Time"></c-badge>
-          {% elif s.status == 'late' %}
-            <c-badge variant="warning" label="Late"></c-badge>
-          {% elif s.status == 'holiday_attendance' %}
-            <c-badge variant="info" label="Holiday"></c-badge>
-          {% else %}
-            <c-badge variant="neutral" label="{{ s.get_status_display }}"></c-badge>
-          {% endif %}
+          <div class="flex gap-1 items-center">
+            {% if s.gps_quality == 'good' %}
+              <c-badge variant="success" label="GPS: Good" dot="true"></c-badge>
+            {% elif s.gps_quality == 'poor' %}
+              <c-badge variant="warning" label="GPS: Poor" dot="true"></c-badge>
+            {% elif s.gps_quality == 'missing' %}
+              <c-badge variant="danger" label="GPS: Missing" dot="true"></c-badge>
+            {% endif %}
+
+            {% if s.status == 'on_time' %}
+              <c-badge variant="success" label="On Time"></c-badge>
+            {% elif s.status == 'late' %}
+              <c-badge variant="warning" label="Late"></c-badge>
+            {% elif s.status == 'holiday_attendance' %}
+              <c-badge variant="info" label="Holiday"></c-badge>
+            {% else %}
+              <c-badge variant="neutral" label="{{ s.get_status_display }}"></c-badge>
+            {% endif %}
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -183,15 +193,25 @@
             {% if att.check_out_time %}
               <span class="text-slate-600 dark:text-slate-400">Out: {{ att.check_out_time|time:"H:i" }}</span>
             {% endif %}
-          {% if att.status == 'on_time' %}
-            <c-badge variant="success" label="On Time"></c-badge>
-          {% elif att.status == 'late' %}
-            <c-badge variant="warning" label="Late"></c-badge>
-          {% elif att.status == 'holiday_attendance' %}
-            <c-badge variant="info" label="Holiday"></c-badge>
-          {% else %}
-            <c-badge variant="neutral" label="{{ att.get_status_display }}"></c-badge>
-          {% endif %}
+          <div class="flex gap-1 items-center">
+            {% if att.gps_quality == 'good' %}
+              <c-badge variant="success" label="GPS: Good" dot="true"></c-badge>
+            {% elif att.gps_quality == 'poor' %}
+              <c-badge variant="warning" label="GPS: Poor" dot="true"></c-badge>
+            {% elif att.gps_quality == 'missing' %}
+              <c-badge variant="danger" label="GPS: Missing" dot="true"></c-badge>
+            {% endif %}
+
+            {% if att.status == 'on_time' %}
+              <c-badge variant="success" label="On Time"></c-badge>
+            {% elif att.status == 'late' %}
+              <c-badge variant="warning" label="Late"></c-badge>
+            {% elif att.status == 'holiday_attendance' %}
+              <c-badge variant="info" label="Holiday"></c-badge>
+            {% else %}
+              <c-badge variant="neutral" label="{{ att.get_status_display }}"></c-badge>
+            {% endif %}
+          </div>
         </div>
         {% endfor %}
       </div>

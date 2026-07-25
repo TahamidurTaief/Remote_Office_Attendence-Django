@@ -82,6 +82,11 @@ class Attendance(models.Model):
     )
     
     is_policy_exception = models.BooleanField(default=False)
+    gps_quality = models.CharField(
+        max_length=10,
+        choices=[('good', 'Good'), ('poor', 'Poor'), ('missing', 'Missing')],
+        default='good'
+    )
     
     sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     client_event_time = models.DateTimeField(null=True, blank=True)

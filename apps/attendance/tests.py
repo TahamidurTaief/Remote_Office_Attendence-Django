@@ -1253,6 +1253,72 @@ class AttendancePolicyTestCase(TestCase):
         self.assertEqual(att2.status, 'holiday_attendance')
         self.assertTrue(att2.is_policy_exception)
 
+    def test_gps_policy_validation_and_override(self):
+        from apps.attendance.models import AttendancePolicy
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        staff_user = User.objects.create_user(phone='+8801711110002', password='pass', role='staff')
+        staff_emp = EmployeeProfile.objects.create(
+            user=staff_user,
+            employee_id='EMP-GPS-S',
+            full_name='Staff GPS Tester',
+            phone='+8801711110002',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch1,
+            is_active=True
+        )
+
+        admin_user = User.objects.create_user(phone='+8801711110003', password='pass', role='admin')
+        admin_emp = EmployeeProfile.objects.create(
+            user=admin_user,
+            employee_id='EMP-GPS-A',
+            full_name='Admin GPS Tester',
+            phone='+8801711110003',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch1,
+            is_active=True
+        )
+
+        # Policy: GPS required, max accuracy 100 meters
+        policy = AttendancePolicy.objects.create(
+            branch=self.branch1,
+            gps_required='required',
+            max_gps_accuracy_meters=100,
+            photo_required=False,
+            allow_holiday_attendance=True
+        )
+
+        today = timezone.localdate()
+
+        # 1. Staff check-in with missing GPS (0.0, 0.0) -> should fail (400)
+        self.client.login(username='+8801711110002', password='pass')
+        response = self.client.post(
+            reverse('attendance:check_in'),
+            data={'latitude': 0.0, 'longitude': 0.0, 'accuracy': 0, 'type': 'office'}
+        )
+        self.assertEqual(response.status_code, 400)
+
+        # 2. Staff check-in with poor GPS accuracy (300 meters) -> should fail (400)
+        response = self.client.post(
+            reverse('attendance:check_in'),
+            data={'latitude': 23.8759, 'longitude': 90.3795, 'accuracy': 300.0, 'type': 'office'}
+        )
+        self.assertEqual(response.status_code, 400)
+
+        # 3. Admin check-in with missing GPS (0.0, 0.0) -> should succeed via override (200), tagged 'missing' and is exception
+        self.client.login(username='+8801711110003', password='pass')
+        response = self.client.post(
+            reverse('attendance:check_in'),
+            data={'latitude': 0.0, 'longitude': 0.0, 'accuracy': 0, 'type': 'office'}
+        )
+        self.assertEqual(response.status_code, 200)
+        att = Attendance.objects.filter(employee=admin_emp, date=today).first()
+        self.assertEqual(att.gps_quality, 'missing')
+        self.assertTrue(att.is_policy_exception)
+
+
 
 
 
