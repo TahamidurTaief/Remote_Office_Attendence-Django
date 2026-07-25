@@ -81,6 +81,31 @@ class AttendanceModelAndHelperTests(TestCase):
         other_leave.save()
         self.assertEqual(get_default_deduction_leave_type(), other_leave)
 
+    def test_multi_session_total_hours(self):
+        # Create first session (closed, 4 hours worked)
+        att1 = Attendance.objects.create(
+            employee=self.employee,
+            date=datetime.date(2026, 7, 25),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 7, 25, 9, 0)),
+            check_out_time=timezone.make_aware(datetime.datetime(2026, 7, 25, 13, 0)),
+            attendance_type='check_in',
+            total_hours=4.00,
+            status='on_time',
+            type='office'
+        )
+        # Create second session (closed, 3.5 hours worked)
+        att2 = Attendance.objects.create(
+            employee=self.employee,
+            date=datetime.date(2026, 7, 25),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 7, 25, 14, 0)),
+            check_out_time=timezone.make_aware(datetime.datetime(2026, 7, 25, 17, 30)),
+            attendance_type='check_in',
+            total_hours=3.50,
+            status='on_time',
+            type='office'
+        )
+        self.assertEqual(float(att1.total_daily_hours), 7.50)
+
 
 class AttendanceViewTests(TestCase):
     def setUp(self):

@@ -80,6 +80,21 @@ def get_employee_dashboard_data(user):
             attendance_type='check_in',
             is_expired=False
         ).count()
+        today_sessions = Attendance.objects.filter(
+            employee=emp_profile,
+            date=today,
+            attendance_type='check_in',
+            is_expired=False
+        ).order_by('check_in_time')
+        data['today_sessions'] = today_sessions
+        
+        import decimal
+        total_hours = decimal.Decimal('0.00')
+        for s in today_sessions:
+            if s.total_hours:
+                total_hours += s.total_hours
+        data['today_total_hours'] = total_hours
+
         from apps.attendance.models import AttendanceCorrectionRequest
         data['pending_correction_count'] = AttendanceCorrectionRequest.objects.filter(
             attendance__employee=emp_profile,
@@ -104,6 +119,8 @@ def get_employee_dashboard_data(user):
         data['today_attendance'] = None
         data['active_session'] = None
         data['today_sessions_count'] = 0
+        data['today_sessions'] = []
+        data['today_total_hours'] = 0.0
         data['pending_correction_count'] = 0
         data['shift_info'] = "Standard Shift"
         data['recent_attendance'] = []

@@ -1051,10 +1051,13 @@ class DailyReportView(AdminRequiredMixin, View):
         rows = []
         for emp in employees:
             emp_atts = att_map.get(emp.id, [])
-            check_in = next((a for a in emp_atts if a.attendance_type == 'check_in'), None)
+            check_in_sessions = [a for a in emp_atts if a.attendance_type == 'check_in']
+            check_in = check_in_sessions[0] if check_in_sessions else None
             fv_list  = [a for a in emp_atts if a.attendance_type == 'field_visit']
             loc = check_in.locations.filter(event='check_in').first() if check_in else None
             
+            emp_total_hours = sum((float(a.total_hours or 0)) for a in check_in_sessions)
+
             if check_in:
                 status = check_in.status
             elif fv_list:
@@ -1065,6 +1068,8 @@ class DailyReportView(AdminRequiredMixin, View):
             rows.append({
                 'employee':     emp,
                 'check_in':     check_in,
+                'check_in_sessions': check_in_sessions,
+                'total_hours':  emp_total_hours,
                 'field_visits': fv_list,
                 'location':     loc,
                 'status':       status,
@@ -1074,10 +1079,7 @@ class DailyReportView(AdminRequiredMixin, View):
         late        = sum(1 for r in rows if r['status'] == 'late')
         absent      = sum(1 for r in rows if r['status'] == 'absent')
         field_total = sum(len(r['field_visits']) for r in rows)
-        total_hours = round(sum(
-            float(r['check_in'].total_hours or 0)
-            for r in rows if r['check_in'] and r['check_in'].total_hours
-        ), 2)
+        total_hours = round(sum(r['total_hours'] for r in rows), 2)
 
         return render(request, self.template_name, {
             'report_date':       report_date,
