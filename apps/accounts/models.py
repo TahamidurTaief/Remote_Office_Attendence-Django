@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
 from .rbac_models import (
@@ -73,6 +74,17 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email or self.phone or "No Identifier"
+
+    @property
+    def security_policy(self):
+        policy = SecurityPolicy.objects.filter(role=self.role).first()
+        return policy
+
+    @property
+    def idle_timeout_minutes(self):
+        policy = self.security_policy
+        return policy.idle_timeout_minutes if policy else 30
+
 
 
 class UserLoginActivity(models.Model):
@@ -318,6 +330,7 @@ class SecurityPolicy(models.Model):
     unlock_method = models.CharField(max_length=20, choices=UNLOCK_CHOICES, default='password')
     reauth_interval_hours = models.PositiveIntegerField(null=True, blank=True, default=4)
     trusted_device_days = models.PositiveIntegerField(default=30)
+    idle_timeout_minutes = models.PositiveIntegerField(default=30, validators=[MinValueValidator(1), MaxValueValidator(240)])
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

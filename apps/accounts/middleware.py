@@ -9,10 +9,8 @@ from apps.accounts.models import UserSession
 
 class SessionDeviceMiddleware:
     """
-    Middleware enforcing Single Device Login and 30-minute idle session auto-expiration.
+    Middleware enforcing Single Device Login and per-role idle session auto-expiration.
     """
-
-    IDLE_TIMEOUT_MINUTES = 30
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -28,6 +26,15 @@ class SessionDeviceMiddleware:
                     is_active=True
                 ).first()
 
+                if user_session:
+                    # Check for idle timeout expiration
+                    timeout_minutes = getattr(request.user, 'idle_timeout_minutes', 30)
+                    now = timezone.now()
+                    if user_session.last_activity and (now - user_session.last_activity) > timedelta(minutes=timeout_minutes):
+                        user_session.is_active = False
+                        user_session.save(update_fields=['is_active'])
+                        user_session = None
+
                 if not user_session:
                     if request.META.get('SERVER_NAME') == 'testserver':
                         has_active = UserSession.objects.filter(user=request.user, is_active=True).exists()
@@ -42,11 +49,11 @@ class SessionDeviceMiddleware:
                             )
                     
                     if not user_session:
-                        # Session was invalidated (e.g. logged in on another device)
+                        # Session was invalidated (e.g. logged in on another device or idle timeout)
                         logout(request)
                         if self._is_api_or_htmx(request):
                             return JsonResponse(
-                                {'valid': False, 'reason': 'logged_in_elsewhere', 'message': 'Logged in from another device.'},
+                                {'valid': False, 'reason': 'logged_in_elsewhere', 'message': 'Logged in from another device or session expired.'},
                                 status=401
                             )
                         return redirect('/login/?device_notice=logged_in_elsewhere')
@@ -56,6 +63,7 @@ class SessionDeviceMiddleware:
                 if not user_session.last_activity or (now - user_session.last_activity) > timedelta(seconds=60):
                     user_session.last_activity = now
                     user_session.save(update_fields=['last_activity'])
+
 
         response = self.get_response(request)
         return response

@@ -1022,6 +1022,12 @@ class AdminSecurityPolicyListView(LoginRequiredMixin, View):
         except (ValueError, TypeError):
             policy.trusted_device_days = 30
 
+        try:
+            timeout_val = int(request.POST.get('idle_timeout_minutes', 30))
+            policy.idle_timeout_minutes = max(1, min(240, timeout_val))
+        except (ValueError, TypeError):
+            policy.idle_timeout_minutes = 30
+
         policy.save()
         log_audit(request.user, 'security_policy_changed', target=policy, summary=f"Updated SecurityPolicy for role '{role}'", ip=get_client_ip(request))
         messages.success(request, f"Security Policy for '{role}' updated successfully.")

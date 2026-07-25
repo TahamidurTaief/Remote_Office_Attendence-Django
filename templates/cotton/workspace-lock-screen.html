@@ -10,7 +10,7 @@
        isSubmitting: false,
        idleTimer: null,
        heartbeatTimer: null,
-       idleThresholdMs: 900000, // 15 minutes default
+       idleThresholdMs: {% if request.user.is_authenticated %}{{ request.user.idle_timeout_minutes|default:30 }}{% else %}30{% endif %} * 60000, // Dynamic per-role timeout in ms
 
        init() {
          this.resetIdleTimer();

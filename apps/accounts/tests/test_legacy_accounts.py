@@ -366,3 +366,26 @@ class SecurityPolicyTests(TestCase):
         })
         self.assertEqual(resp.status_code, 403)
 
+    def test_idle_timeout_policy(self):
+        self.client.post(reverse('accounts:login'), {'email': 'admin_pol@example.com', 'password': self.password})
+
+        pol, _ = SecurityPolicy.objects.get_or_create(role='admin')
+        self.assertEqual(pol.idle_timeout_minutes, 30)
+
+        resp = self.client.post(reverse('accounts:admin_security_policies'), {
+            'role': 'admin',
+            'mfa_required': 'false',
+            'unlock_method': 'password',
+            'reauth_interval_hours': '4',
+            'trusted_device_days': '30',
+            'idle_timeout_minutes': '45'
+        })
+        self.assertEqual(resp.status_code, 302)
+
+        pol.refresh_from_db()
+        self.assertEqual(pol.idle_timeout_minutes, 45)
+
+        self.admin.refresh_from_db()
+        self.assertEqual(self.admin.idle_timeout_minutes, 45)
+
+

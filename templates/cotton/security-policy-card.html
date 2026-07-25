@@ -25,6 +25,8 @@
 
     <c-input type="number" name="trusted_device_days" value="{{ policy.trusted_device_days|default:30 }}" label="Trusted Device Duration (Days)"></c-input>
 
+    <c-input type="number" name="idle_timeout_minutes" value="{{ policy.idle_timeout_minutes|default:30 }}" label="Idle Lock Timeout (Minutes)" help="Inactivity minutes before workspace locks (1-240)."></c-input>
+
     <c-button type="submit" label="Save Policy" extra_class="w-full"></c-button>
   </form>
 </c-card>
