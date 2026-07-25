@@ -46,7 +46,7 @@ class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
         self.object_list = self.get_queryset()
         context = self.get_context_data()
         if request.headers.get('HX-Request') == 'true':
-            return render(request, 'admin_panel/leave/partials/request_table.html', context)
+            return render(request, 'admin_panel/leave/partials/request_list_partial.html', context)
         return self.render_to_response(context)
 
 class BaseProcessLeaveRequestView(View):

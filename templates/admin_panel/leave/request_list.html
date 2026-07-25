@@ -21,17 +21,8 @@
 
         <!-- Table Card -->
         <c-card padding="none">
-            <c-slot name="header">
-                <div class="flex gap-1.5 flex-wrap">
-                    <c-tab-button href="?status=all" hx-get="?status=all" hx-target="#leave-request-table-container" hx-push-url="true" active="{% if current_status == 'all' or not current_status %}true{% endif %}" label="All" color="blue"></c-tab-button>
-                    <c-tab-button href="?status=pending" hx-get="?status=pending" hx-target="#leave-request-table-container" hx-push-url="true" active="{% if current_status == 'pending' %}true{% endif %}" label="Pending" color="amber"></c-tab-button>
-                    <c-tab-button href="?status=approved" hx-get="?status=approved" hx-target="#leave-request-table-container" hx-push-url="true" active="{% if current_status == 'approved' %}true{% endif %}" label="Approved" color="emerald"></c-tab-button>
-                    <c-tab-button href="?status=rejected" hx-get="?status=rejected" hx-target="#leave-request-table-container" hx-push-url="true" active="{% if current_status == 'rejected' %}true{% endif %}" label="Rejected" color="rose"></c-tab-button>
-                </div>
-            </c-slot>
-
-            <div id="leave-request-table-container">
-                {% include 'admin_panel/leave/partials/request_table.html' %}
+            <div id="leave-request-container">
+                {% include 'admin_panel/leave/partials/request_list_partial.html' %}
             </div>
         </c-card>
     </div>

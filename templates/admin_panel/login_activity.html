@@ -11,15 +11,8 @@
 
   <div class="p-4 space-y-4 max-w-7xl mx-auto">
     <c-card title="Login Security & Audit Trail" subtitle="Recent authentication attempts, status, and IP logs.">
-      <div class="flex items-center gap-2 mb-4">
-        <c-tab-button href="?status=" hx-get="?status=" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if not status_filter %}true{% endif %}" label="All" color="blue"></c-tab-button>
-        <c-tab-button href="?status=success" hx-get="?status=success" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if status_filter == 'success' %}true{% endif %}" label="Success" color="emerald"></c-tab-button>
-        <c-tab-button href="?status=failed" hx-get="?status=failed" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if status_filter == 'failed' %}true{% endif %}" label="Failed" color="amber"></c-tab-button>
-        <c-tab-button href="?status=locked" hx-get="?status=locked" hx-target="#login-activity-table-container" hx-push-url="true" active="{% if status_filter == 'locked' %}true{% endif %}" label="Locked" color="rose"></c-tab-button>
-      </div>
-
-      <div id="login-activity-table-container">
-        {% include 'admin_panel/partials/login_activity_table.html' %}
+      <div id="login-activity-container">
+        {% include 'admin_panel/partials/login_activity_partial.html' %}
       </div>
     </c-card>
   </div>

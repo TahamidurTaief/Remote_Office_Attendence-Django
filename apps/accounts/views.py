@@ -568,7 +568,7 @@ class AdminLoginActivityView(LoginRequiredMixin, View):
             'status_filter': status_filter
         }
         if request.headers.get('HX-Request') == 'true':
-            return render(request, 'admin_panel/partials/login_activity_table.html', context)
+            return render(request, 'admin_panel/partials/login_activity_partial.html', context)
         return render(request, 'admin_panel/login_activity.html', context)
 
     def post(self, request):

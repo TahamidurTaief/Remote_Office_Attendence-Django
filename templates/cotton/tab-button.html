@@ -9,15 +9,15 @@
 
 {% if href %}
 <a href="{{ href }}"
-   class="inline-flex items-center px-4 py-1.5 text-xs font-semibold rounded-xl border transition-all duration-200 cursor-pointer
+   class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer
      {% if active %}
-       {% if color == 'emerald' %}bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-950/30 dark:border-emerald-900/30 dark:text-emerald-400
-       {% elif color == 'amber' %}bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-950/30 dark:border-amber-900/30 dark:text-amber-400
-       {% elif color == 'rose' %}bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-950/30 dark:border-rose-900/30 dark:text-rose-400
-       {% elif color == 'neutral' %}bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300
-       {% else %}bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950/30 dark:border-blue-900/30 dark:text-blue-400{% endif %}
+       {% if color == 'emerald' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400
+       {% elif color == 'amber' %}bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400
+       {% elif color == 'rose' %}bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400
+       {% elif color == 'neutral' %}bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300
+       {% else %}bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400{% endif %}
      {% else %}
-       bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
+       bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
      {% endif %}
      {{ extra_class }}"
    {{ attrs }}>
@@ -25,15 +25,15 @@
 </a>
 {% else %}
 <button type="button"
-   class="inline-flex items-center px-4 py-1.5 text-xs font-semibold rounded-xl border transition-all duration-200 cursor-pointer
+   class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer
      {% if active %}
-       {% if color == 'emerald' %}bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-950/30 dark:border-emerald-900/30 dark:text-emerald-400
-       {% elif color == 'amber' %}bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-950/30 dark:border-amber-900/30 dark:text-amber-400
-       {% elif color == 'rose' %}bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-950/30 dark:border-rose-900/30 dark:text-rose-400
-       {% elif color == 'neutral' %}bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300
-       {% else %}bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950/30 dark:border-blue-900/30 dark:text-blue-400{% endif %}
+       {% if color == 'emerald' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400
+       {% elif color == 'amber' %}bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400
+       {% elif color == 'rose' %}bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400
+       {% elif color == 'neutral' %}bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300
+       {% else %}bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400{% endif %}
      {% else %}
-       bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
+       bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
      {% endif %}
      {{ extra_class }}"
    {{ attrs }}>
