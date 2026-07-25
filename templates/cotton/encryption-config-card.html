@@ -1,0 +1,113 @@
+{# Cotton component: encryption-config-card #}
+{# Props: config (GoogleDriveConfig instance) #}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+     x-data="{ showEncryption: false }">
+
+    {# ── Header / accordion toggle ── #}
+    <button type="button"
+            @click="showEncryption = !showEncryption"
+            class="w-full flex items-center justify-between px-6 py-2.5 text-left hover:bg-gray-50 transition-colors">
+        <span class="text-sm font-bold text-gray-800 flex items-center gap-2">
+            <i data-lucide="lock" class="w-4 h-4 text-gray-500"></i>
+            Backup Encryption
+            {% if config.encryption_enabled %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                <i data-lucide="shield-check" class="w-3 h-3"></i> ACTIVE
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500">
+                OFF
+            </span>
+            {% endif %}
+        </span>
+        <span class="text-xs text-gray-500" x-text="showEncryption ? 'Hide' : 'Show'"></span>
+    </button>
+
+    {# ── Expanded panel ── #}
+    <div x-show="showEncryption" x-cloak class="border-t border-gray-100 px-6 py-6 space-y-6">
+
+        {# Info banner #}
+        <div class="rounded-xl bg-amber-50 border border-amber-200 p-4 flex gap-3">
+            <i data-lucide="info" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
+            <div class="text-xs text-amber-800 space-y-1">
+                <p class="font-semibold">How it works</p>
+                <p>A random Fernet MEK is generated and wrapped with a KEK derived from your server's <code class="bg-amber-100 px-1 rounded">SECRET_KEY</code>.
+                   The raw key is <strong>never stored</strong>. Downloads are decrypted on-the-fly — files on disk are always encrypted.</p>
+                <p class="text-amber-700">⚠ Rotating the key will make existing encrypted backups unreadable without the old <code class="bg-amber-100 px-1 rounded">SECRET_KEY</code>.</p>
+            </div>
+        </div>
+
+        {# Current status #}
+        <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+            <div>
+                <p class="text-sm font-semibold text-gray-800">Encryption at rest</p>
+                <p class="text-xs text-gray-500 mt-0.5">New backups will be Fernet-encrypted before saving to disk.</p>
+            </div>
+            <span id="enc-status"
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold
+                         {% if config.encryption_enabled %}bg-emerald-100 text-emerald-700{% else %}bg-gray-100 text-gray-500{% endif %}">
+                {% if config.encryption_enabled %}
+                <i data-lucide="lock" class="w-3.5 h-3.5"></i> Encryption ON
+                {% else %}
+                <i data-lucide="lock-open" class="w-3.5 h-3.5"></i> Encryption OFF
+                {% endif %}
+            </span>
+        </div>
+
+        {# Key status #}
+        <div class="bg-gray-50 rounded-xl px-4 py-3">
+            <p class="text-xs font-semibold text-gray-700 mb-1">Master Key</p>
+            {% if config.master_key_wrapped %}
+            <p class="text-xs text-gray-500 font-mono break-all">{{ config.master_key_wrapped|truncatechars:48 }}…</p>
+            <p class="text-[10px] text-gray-400 mt-1">Wrapped MEK stored in DB — safe to view, useless without SECRET_KEY.</p>
+            {% else %}
+            <p class="text-xs text-red-500 font-medium">No key generated yet. Click "Generate Key" to enable encryption.</p>
+            {% endif %}
+        </div>
+
+        {# Actions #}
+        <div class="flex flex-wrap gap-3 items-center">
+
+            {% if not config.master_key_wrapped %}
+            {# Generate (first-time) #}
+            <form method="POST" action="{% url 'backups:manage_encryption' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="generate">
+                <button type="submit"
+                        class="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="key" class="w-4 h-4"></i>
+                    Generate Key &amp; Enable
+                </button>
+            </form>
+            {% else %}
+
+            {# Toggle on/off #}
+            <form method="POST" action="{% url 'backups:manage_encryption' %}"
+                  hx-post="{% url 'backups:manage_encryption' %}"
+                  hx-target="#enc-status"
+                  hx-swap="outerHTML">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle">
+                <button type="submit"
+                        class="flex items-center gap-2 px-4 py-2.5 border {% if config.encryption_enabled %}border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800{% else %}border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800{% endif %} text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="{% if config.encryption_enabled %}lock-open{% else %}lock{% endif %}" class="w-4 h-4"></i>
+                    {% if config.encryption_enabled %}Disable Encryption{% else %}Enable Encryption{% endif %}
+                </button>
+            </form>
+
+            {# Rotate — destructive, guarded with confirm #}
+            <form method="POST" action="{% url 'backups:manage_encryption' %}"
+                  @submit.prevent="if(confirm('⚠ Rotating the key means existing encrypted backups CANNOT be decrypted with the new key. Proceed?')) $el.submit()">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="rotate">
+                <button type="submit"
+                        class="flex items-center gap-2 px-4 py-2.5 border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-medium rounded-xl transition-colors">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    Rotate Key
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
+    </div>
+</div>

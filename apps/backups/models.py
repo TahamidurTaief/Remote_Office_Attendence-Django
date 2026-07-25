@@ -31,6 +31,10 @@ class BackupRecord(models.Model):
     gdrive_link = models.URLField(blank=True)
 
     file_path = models.CharField(max_length=500, blank=True)
+    is_encrypted = models.BooleanField(
+        default=False,
+        help_text="Whether the on-disk backup file is Fernet-encrypted",
+    )
 
     error_message = models.TextField(blank=True)
     created_by = models.ForeignKey(
@@ -78,6 +82,19 @@ class GoogleDriveConfig(models.Model):
     keep_local_copies = models.IntegerField(
         default=7,
         help_text="Keep this many local backup files",
+    )
+
+    # ── Encryption ────────────────────────────────────────────────────────────
+    encryption_enabled = models.BooleanField(
+        default=False,
+        help_text="Encrypt backup files at rest using a server-bound Fernet key",
+    )
+    master_key_wrapped = models.TextField(
+        blank=True,
+        help_text=(
+            "Base64-encoded Fernet key wrapped with a KEK derived from SECRET_KEY. "
+            "Never stores the raw key. Set via 'Generate Key' action."
+        ),
     )
 
     last_backup_at = models.DateTimeField(null=True, blank=True)

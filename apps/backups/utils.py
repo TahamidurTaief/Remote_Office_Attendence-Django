@@ -9,6 +9,7 @@ from apps.leave.models import LeaveRequest
 from apps.projects.models import Project, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial
 from apps.expense.models import Expense
 from .gdrive import upload_to_drive
+from .encryption import encrypt_file
 
 BACKUP_DIR = os.path.join(settings.BASE_DIR, "backups", "files")
 
@@ -294,9 +295,23 @@ def create_backup(backup_type="manual", created_by=None):
         backup.status = "completed"
         backup.file_size = file_size
         backup.record_count = record_count
-        backup.save()
 
+        # ── Encryption ───────────────────────────────────────────────────────
         config = GoogleDriveConfig.get_config()
+        if config.encryption_enabled and config.master_key_wrapped:
+            try:
+                encrypt_file(filepath, filepath, config.master_key_wrapped)
+                if os.path.exists(db_filepath):
+                    encrypt_file(db_filepath, db_filepath, config.master_key_wrapped)
+                backup.is_encrypted = True
+            except Exception as enc_err:
+                # Encryption failure is fatal — mark backup failed so admin knows.
+                backup.status = "failed"
+                backup.error_message = f"Encryption failed: {enc_err}"
+                backup.save(update_fields=["status", "error_message", "is_encrypted"])
+                raise RuntimeError(f"Encryption failed: {enc_err}") from enc_err
+
+        backup.save()
         if config.is_enabled and config.auto_upload_to_drive:
             try:
                 # Upload JSON backup (primary)

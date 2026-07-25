@@ -7,6 +7,7 @@ from .views import (
     save_drive_config,
     test_drive_connection_view,
     download_backup,
+    manage_encryption,
 )
 
 app_name = "backups"
@@ -19,4 +20,6 @@ urlpatterns = [
     path("<int:pk>/delete/", delete_backup, name="delete_backup"),
     path("settings/", save_drive_config, name="save_drive_config"),
     path("test-drive/", test_drive_connection_view, name="test_drive"),
+    path("encryption/", manage_encryption, name="manage_encryption"),
 ]
+

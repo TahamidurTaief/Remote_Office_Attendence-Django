@@ -7,6 +7,7 @@ from django.views.decorators.http import require_POST
 from .models import BackupRecord, GoogleDriveConfig
 from .utils import create_backup
 from .gdrive import upload_to_drive, test_drive_connection
+from .encryption import generate_wrapped_key, decrypt_file_to_bytes
 
 
 def _admin_required(view_func):
@@ -51,14 +52,24 @@ def create_manual_backup(request):
         )
         if backup.status == "completed" and backup.file_path:
             if os.path.exists(backup.file_path):
-                response = FileResponse(
-                    open(backup.file_path, "rb"),
-                    content_type="application/json",
-                )
-                response["Content-Disposition"] = (
-                    f"attachment; filename=\"{backup.file_name}\""
-                )
-                return response
+                # Decrypt on-the-fly if encrypted; serve plaintext JSON to the browser.
+                if backup.is_encrypted:
+                    config = GoogleDriveConfig.get_config()
+                    plaintext = decrypt_file_to_bytes(backup.file_path, config.master_key_wrapped)
+                    response = HttpResponse(plaintext, content_type="application/json")
+                    response["Content-Disposition"] = (
+                        f'attachment; filename="{backup.file_name}"'
+                    )
+                    return response
+                else:
+                    response = FileResponse(
+                        open(backup.file_path, "rb"),
+                        content_type="application/json",
+                    )
+                    response["Content-Disposition"] = (
+                        f'attachment; filename="{backup.file_name}"'
+                    )
+                    return response
             messages.error(request, "Backup file not found on disk.")
     except Exception as e:
         messages.error(request, f"Backup failed: {str(e)}")
@@ -134,15 +145,78 @@ def delete_backup(request, pk):
 
 @_admin_required
 def download_backup(request, pk):
+    """
+    Download a backup file.
+    - If the file is encrypted, decrypt it in-memory and serve the plaintext.
+    - If the file is plaintext, stream it directly.
+    """
     backup = get_object_or_404(BackupRecord, pk=pk)
     if not backup.file_path or not os.path.exists(backup.file_path):
         messages.error(request, "Backup file not found.")
         return redirect("backups:backup_list")
+
+    if backup.is_encrypted:
+        config = GoogleDriveConfig.get_config()
+        try:
+            plaintext = decrypt_file_to_bytes(backup.file_path, config.master_key_wrapped)
+        except Exception as e:
+            messages.error(request, f"Decryption failed: {e}")
+            return redirect("backups:backup_list")
+        response = HttpResponse(plaintext, content_type="application/octet-stream")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{backup.file_name}"'
+        )
+        return response
+
     response = FileResponse(
         open(backup.file_path, "rb"),
         content_type="application/json",
     )
     response["Content-Disposition"] = (
-        f"attachment; filename=\"{backup.file_name}\""
+        f'attachment; filename="{backup.file_name}"'
     )
     return response
+
+
+# ── Encryption management ─────────────────────────────────────────────────────
+
+@_admin_required
+@require_POST
+def manage_encryption(request):
+    """
+    Handles three actions via POST field `action`:
+      generate  – create a new MEK and enable encryption
+      rotate    – replace the MEK (old encrypted backups become unreadable)
+      toggle    – flip encryption_enabled without touching the key
+    """
+    config = GoogleDriveConfig.get_config()
+    action = request.POST.get("action", "")
+
+    if action in ("generate", "rotate"):
+        config.master_key_wrapped = generate_wrapped_key()
+        config.encryption_enabled = True
+        config.save(update_fields=["master_key_wrapped", "encryption_enabled", "updated_at"])
+        label = "generated" if action == "generate" else "rotated"
+        messages.success(
+            request,
+            f"Encryption key {label}. New backups will be encrypted. "
+            f"{'Note: previously encrypted backups are now unreadable without the old key.' if action == 'rotate' else ''}",
+        )
+
+    elif action == "toggle":
+        config.encryption_enabled = not config.encryption_enabled
+        config.save(update_fields=["encryption_enabled", "updated_at"])
+        state = "enabled" if config.encryption_enabled else "disabled"
+        messages.success(request, f"Backup encryption {state}.")
+
+    else:
+        messages.error(request, "Unknown encryption action.")
+
+    if request.headers.get("HX-Request"):
+        # Return a small status snippet for htmx swap
+        icon = "🔒" if config.encryption_enabled else "🔓"
+        return HttpResponse(
+            f'<span id="enc-status">{icon} Encryption {"ON" if config.encryption_enabled else "OFF"}</span>'
+        )
+
+    return redirect("backups:backup_list")
