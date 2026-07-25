@@ -1,54 +1,182 @@
 {% comment %} c-audit-table component
    Props:
-   - logs: QuerySet of EmployeeAuditLog
+   - logs: QuerySet of audit logs
+   - type: "employee" | "login" | "sensitive"
 {% endcomment %}
 {% load leave_extras %}
+<c-vars type="employee" logs="" ></c-vars>
 
 <c-table>
     <c-slot name="header">
-        <th>Timestamp</th>
-        <th>Field</th>
-        <th>Old Value</th>
-        <th>New Value</th>
-        <th>Changed By</th>
-        <th>IP & User Agent</th>
+        {% if type == 'employee' %}
+            <th>Timestamp</th>
+            <th>Field</th>
+            <th>Old Value</th>
+            <th>New Value</th>
+            <th>Changed By</th>
+            <th>IP & User Agent</th>
+        {% elif type == 'login' %}
+            <th class="py-2.5 px-3 font-semibold">User / Identifier</th>
+            <th class="py-2.5 px-3 font-semibold">Status</th>
+            <th class="py-2.5 px-3 font-semibold">IP Address</th>
+            <th class="py-2.5 px-3 font-semibold">User Agent / Device</th>
+            <th class="py-2.5 px-3 font-semibold">Timestamp</th>
+            <th class="py-2.5 px-3 font-semibold text-right">Admin Actions</th>
+        {% elif type == 'sensitive' %}
+            <th class="py-3 px-4 font-semibold">Actor / User</th>
+            <th class="py-3 px-3 font-semibold">Action</th>
+            <th class="py-3 px-3 font-semibold">Target</th>
+            <th class="py-3 px-4 font-semibold">Summary</th>
+            <th class="py-3 px-3 font-semibold">IP Address</th>
+            <th class="py-3 px-3 font-semibold">Timestamp</th>
+        {% endif %}
     </c-slot>
-    
-    {% for log in logs %}
-        {% for key, val in log.new_value.items %}
-        <tr class="hover:bg-slate-50/50 transition-colors">
-            <td class="whitespace-nowrap font-medium text-slate-700 text-xs">
-                {% if forloop.first %}
-                {{ log.timestamp|date:"M d, Y H:i:s" }}
-                {% endif %}
-            </td>
-            <td class="text-xs font-mono font-semibold text-slate-800">
-                {{ key }}
-            </td>
-            <td class="text-xs text-rose-600 font-mono bg-rose-50/30 px-2 py-0.5 rounded border border-rose-100 max-w-[200px] truncate" title="{{ log.old_value|dictget:key|default:'(empty)' }}">
-                {{ log.old_value|dictget:key|default:"(empty)" }}
-            </td>
-            <td class="text-xs text-emerald-600 font-mono bg-emerald-50/30 px-2 py-0.5 rounded border border-emerald-100 max-w-[200px] truncate" title="{{ val|default:'(empty)' }}">
-                {{ val|default:"(empty)" }}
-            </td>
-            <td class="whitespace-nowrap text-xs text-slate-600">
-                {% if forloop.first %}
-                {{ log.changed_by.get_full_name|default:log.changed_by.email }}
-                {% endif %}
-            </td>
-            <td class="text-xs text-slate-400 max-w-[200px] truncate" title="{{ log.user_agent }}">
-                {% if forloop.first %}
-                <span class="font-mono">{{ log.ip_address|default:"—" }}</span>
-                <span class="block text-[10px] text-slate-350 truncate">{{ log.user_agent }}</span>
-                {% endif %}
+
+    {% if type == 'employee' %}
+        {% for log in logs %}
+            {% for key, val in log.new_value.items %}
+            <tr class="hover:bg-slate-50/50 transition-colors">
+                <td class="whitespace-nowrap font-medium text-slate-700 text-xs">
+                    {% if forloop.first %}
+                    {{ log.timestamp|date:"M d, Y H:i:s" }}
+                    {% endif %}
+                </td>
+                <td class="text-xs font-mono font-semibold text-slate-800">
+                    {{ key }}
+                </td>
+                <td class="text-xs text-rose-600 font-mono bg-rose-50/30 px-2 py-0.5 rounded border border-rose-100 max-w-[200px] truncate" title="{{ log.old_value|dictget:key|default:'(empty)' }}">
+                    {{ log.old_value|dictget:key|default:"(empty)" }}
+                </td>
+                <td class="text-xs text-emerald-600 font-mono bg-emerald-50/30 px-2 py-0.5 rounded border border-emerald-100 max-w-[200px] truncate" title="{{ val|default:'(empty)' }}">
+                    {{ val|default:"(empty)" }}
+                </td>
+                <td class="whitespace-nowrap text-xs text-slate-600">
+                    {% if forloop.first %}
+                    {{ log.changed_by.get_full_name|default:log.changed_by.email }}
+                    {% endif %}
+                </td>
+                <td class="text-xs text-slate-400 max-w-[200px] truncate" title="{{ log.user_agent }}">
+                    {% if forloop.first %}
+                    <span class="font-mono">{{ log.ip_address|default:"—" }}</span>
+                    <span class="block text-[10px] text-slate-350 truncate">{{ log.user_agent }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        {% empty %}
+        <tr>
+            <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
+                <c-empty-state icon="database" title="No Audit Records" description="No technical audits logged for this employee profile yet." ></c-empty-state>
             </td>
         </tr>
         {% endfor %}
-    {% empty %}
-    <tr>
-        <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
-            <c-empty-state icon="database" title="No Audit Records" description="No technical audits logged for this employee profile yet." ></c-empty-state>
-        </td>
-    </tr>
-    {% endfor %}
+    {% elif type == 'login' %}
+        {% for act in logs %}
+          <tr class="hover:bg-slate-500/5">
+            <td class="py-3 px-3 font-medium" style="color:var(--text)">
+              {% if act.user %}
+                {{ act.user.email|default:act.user.phone }}
+                <span class="block text-[10px] text-slate-400">Role: {{ act.user.role }}</span>
+              {% else %}
+                {{ act.identifier_entered|default:"Unknown" }}
+              {% endif %}
+            </td>
+            <td class="py-3 px-3">
+              {% if act.status == 'success' %}
+                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                  Success
+                </span>
+              {% elif act.status == 'failed' %}
+                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                  Failed
+                </span>
+              {% else %}
+                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-red-500/20 text-red-600 dark:text-red-400">
+                  Account Locked
+                </span>
+              {% endif %}
+            </td>
+            <td class="py-3 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
+              {{ act.ip_address|default:"-" }}
+            </td>
+            <td class="py-3 px-3 text-[11px] max-w-xs truncate" style="color:var(--text-muted)" title="{{ act.user_agent }}">
+              {{ act.user_agent|default:"-" }}
+            </td>
+            <td class="py-3 px-3 text-[11px]" style="color:var(--text-muted)">
+              {{ act.timestamp|date:"d/m/Y g:i:s A" }}
+            </td>
+            <td class="py-3 px-3 text-right space-x-1">
+              {% if act.user %}
+                <div class="inline-flex items-center gap-1" id="action-zone-{{ act.user.id }}">
+                  <button hx-post="{% url 'accounts:admin_force_logout' pk=act.user.id %}"
+                          hx-target="#action-zone-{{ act.user.id }}"
+                          hx-swap="innerHTML"
+                          class="ft-btn ft-btn-secondary ft-btn-sm text-[10px] py-1 px-2">
+                    Force Logout
+                  </button>
+                  {% if act.user.locked_until %}
+                    <button hx-post="{% url 'accounts:admin_unlock_user' pk=act.user.id %}"
+                            hx-target="#action-zone-{{ act.user.id }}"
+                            hx-swap="innerHTML"
+                            class="ft-btn ft-btn-accent ft-btn-sm text-[10px] py-1 px-2">
+                      Unlock
+                    </button>
+                  {% endif %}
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="py-8 text-center text-xs" style="color:var(--text-muted)">
+              No login activities found.
+            </td>
+          </tr>
+        {% endfor %}
+    {% elif type == 'sensitive' %}
+        {% for log in logs %}
+          <tr class="hover:bg-slate-500/5">
+            <td class="py-3 px-4 font-medium" style="color:var(--text)">
+              {% if log.actor %}
+                {{ log.actor.email|default:log.actor.phone }}
+                <span class="block text-[10px] text-slate-400">ID: #{{ log.actor.id }}</span>
+              {% else %}
+                <span class="text-slate-400">System / Anonymous</span>
+              {% endif %}
+            </td>
+
+            <td class="py-3 px-3">
+              <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary border border-primary/20">
+                {{ log.action }}
+              </span>
+            </td>
+
+            <td class="py-3 px-3 text-[11px]" style="color:var(--text-muted)">
+              {% if log.target_type %}
+                <span class="font-mono text-[10px]">{{ log.target_type }} #{{ log.target_id }}</span>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="py-3 px-4 text-xs" style="color:var(--text)">
+              {{ log.summary|default:"-" }}
+            </td>
+
+            <td class="py-3 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
+              {{ log.ip_address|default:"-" }}
+            </td>
+
+            <td class="py-3 px-3 text-[11px]" style="color:var(--text-muted)">
+              {{ log.timestamp|date:"d/m/Y g:i:s A" }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="py-8 text-center text-xs" style="color:var(--text-muted)">
+              No sensitive action audit logs found matching criteria.
+            </td>
+          </tr>
+        {% endfor %}
+    {% endif %}
 </c-table>
