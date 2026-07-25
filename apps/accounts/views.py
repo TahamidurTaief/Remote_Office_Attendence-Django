@@ -1096,6 +1096,10 @@ class SecuritySettingsView(LoginRequiredMixin, View):
 
         backup_code_count = len(sec_prof.backup_codes) if sec_prof.backup_codes else 0
 
+        # Get active device sessions
+        sessions = UserSession.objects.filter(user=request.user).order_by('-login_time')[:10]
+        current_session_key = request.session.session_key
+
         # Clear stale gate flag on plain page load (not htmx)
         if not request.headers.get('HX-Request'):
             request.session.pop('mfa_wizard_gate_passed', None)
@@ -1108,6 +1112,8 @@ class SecuritySettingsView(LoginRequiredMixin, View):
             'policy': policy,
             'trusted_devices': trusted_devices,
             'backup_code_count': backup_code_count,
+            'sessions': sessions,
+            'current_session_key': current_session_key,
         })
 
 
