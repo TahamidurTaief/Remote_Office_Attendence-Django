@@ -1039,4 +1039,92 @@ class AttendancePhase2Tests(TestCase):
         self.assertContains(response, 'HQ Test Office')
 
 
+class AttendancePolicyTestCase(TestCase):
+    def setUp(self):
+        self.branch1 = Branch.objects.create(
+            name='Uttara Branch',
+            address='Sector 3, Uttara',
+            latitude=23.8759,
+            longitude=90.3795,
+            radius_meters=100,
+            wifi_ip='192.168.10.1',
+            is_active=True
+        )
+        self.branch2 = Branch.objects.create(
+            name='Dhanmondi Branch',
+            address='Dhanmondi, Dhaka',
+            latitude=23.7561,
+            longitude=90.3729,
+            radius_meters=100,
+            wifi_ip='192.168.20.1',
+            is_active=True
+        )
+
+    def test_policy_scoping_resolution(self):
+        from apps.attendance.models import AttendancePolicy
+        from apps.attendance.views import get_attendance_policy
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        # Create global default policy
+        global_policy = AttendancePolicy.objects.create(
+            branch=None,
+            photo_required=True,
+            gps_required='required',
+            max_gps_accuracy_meters=50,
+            allow_holiday_attendance=True,
+            allow_outside_geofence=True,
+            late_grace_minutes=10
+        )
+
+        # Create branch 1 specific policy
+        branch_policy = AttendancePolicy.objects.create(
+            branch=self.branch1,
+            photo_required=False,
+            gps_required='warn_only',
+            max_gps_accuracy_meters=200,
+            allow_holiday_attendance=False,
+            allow_outside_geofence=False,
+            late_grace_minutes=5
+        )
+
+        user1 = User.objects.create_user(phone='+8801711119999', password='pass', role='staff')
+        emp1 = EmployeeProfile.objects.create(
+            user=user1,
+            employee_id='EMP-P1',
+            full_name='Emp Branch 1',
+            phone='+8801711119999',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch1,
+            is_active=True
+        )
+
+        user2 = User.objects.create_user(phone='+8801711118888', password='pass', role='staff')
+        emp2 = EmployeeProfile.objects.create(
+            user=user2,
+            employee_id='EMP-P2',
+            full_name='Emp Branch 2',
+            phone='+8801711118888',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch2,
+            is_active=True
+        )
+
+        # Resolve policy for employee in Branch 1 (should override global with branch 1 policy)
+        p1 = get_attendance_policy(emp1)
+        self.assertEqual(p1.photo_required, False)
+        self.assertEqual(p1.gps_required, 'warn_only')
+        self.assertEqual(p1.max_gps_accuracy_meters, 200)
+        self.assertEqual(p1.late_grace_minutes, 5)
+
+        # Resolve policy for employee in Branch 2 (no policy exists, should fall back to global default policy)
+        p2 = get_attendance_policy(emp2)
+        self.assertEqual(p2.photo_required, True)
+        self.assertEqual(p2.gps_required, 'required')
+        self.assertEqual(p2.max_gps_accuracy_meters, 50)
+        self.assertEqual(p2.late_grace_minutes, 10)
+
+
+
 

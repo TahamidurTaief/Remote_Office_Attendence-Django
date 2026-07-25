@@ -197,6 +197,19 @@ class AttendancePolicy(models.Model):
         help_text="If null, this is the global default policy"
     )
     photo_required = models.BooleanField(default=True)
+    gps_required = models.CharField(
+        max_length=20,
+        choices=(
+            ('required', 'Required'),
+            ('optional', 'Optional'),
+            ('warn_only', 'Warn Only'),
+        ),
+        default='required'
+    )
+    max_gps_accuracy_meters = models.IntegerField(default=100)
+    allow_holiday_attendance = models.BooleanField(default=True)
+    allow_outside_geofence = models.BooleanField(default=True)
+    late_grace_minutes = models.IntegerField(default=15)
     geofencing_policy = models.CharField(
         max_length=20,
         choices=(

@@ -1724,6 +1724,7 @@ class OfficeScheduleView(AdminRequiredMixin, View):
     template_name = 'admin_panel/settings/schedule.html'
 
     def get(self, request):
+        from apps.attendance.models import AttendancePolicy
         branches = Branch.objects.all()
         schedules = []
         for branch in branches:
@@ -1736,10 +1737,35 @@ class OfficeScheduleView(AdminRequiredMixin, View):
                     ]
                 }
             )
+            policy, _ = AttendancePolicy.objects.get_or_create(
+                branch=branch,
+                defaults={
+                    'photo_required': True,
+                    'gps_required': 'required',
+                    'max_gps_accuracy_meters': 100,
+                    'allow_holiday_attendance': True,
+                    'allow_outside_geofence': True,
+                    'late_grace_minutes': 15,
+                }
+            )
             schedules.append({
                 'branch': branch,
-                'schedule': schedule
+                'schedule': schedule,
+                'policy': policy
             })
+        
+        global_policy, _ = AttendancePolicy.objects.get_or_create(
+            branch=None,
+            defaults={
+                'photo_required': True,
+                'gps_required': 'required',
+                'max_gps_accuracy_meters': 100,
+                'allow_holiday_attendance': True,
+                'allow_outside_geofence': True,
+                'late_grace_minutes': 15,
+            }
+        )
+
         TRACKING_CHOICES = [
             (1,   '1 minute'),
             (2,   '2 minutes'),
@@ -1763,14 +1789,29 @@ class OfficeScheduleView(AdminRequiredMixin, View):
         leave_types = LeaveType.objects.all().order_by('category', 'name')
         return render(request, self.template_name, {
             'schedules': schedules,
+            'global_policy': global_policy,
             'tracking_choices': TRACKING_CHOICES,
             'leave_types': leave_types
         })
 
     def post(self, request):
+        from apps.attendance.models import AttendancePolicy
         branch_id = request.POST.get('branch_id')
+        if branch_id == 'global':
+            policy, _ = AttendancePolicy.objects.get_or_create(branch=None)
+            policy.photo_required = request.POST.get('photo_required') == 'true'
+            policy.gps_required = request.POST.get('gps_required', 'required')
+            policy.max_gps_accuracy_meters = int(request.POST.get('max_gps_accuracy_meters', 100))
+            policy.allow_holiday_attendance = request.POST.get('allow_holiday_attendance') == 'true'
+            policy.allow_outside_geofence = request.POST.get('allow_outside_geofence') == 'true'
+            policy.late_grace_minutes = int(request.POST.get('late_grace_minutes', 15))
+            policy.save()
+            messages.success(request, "Global Attendance Policy updated successfully.")
+            return redirect('admin_panel:schedule_settings')
+
         branch = get_object_or_404(Branch, id=branch_id)
         schedule = get_object_or_404(OfficeSchedule, branch=branch)
+        policy, _ = AttendancePolicy.objects.get_or_create(branch=branch)
 
         schedule.office_start_time = request.POST.get('office_start_time', schedule.office_start_time)
         schedule.office_end_time = request.POST.get('office_end_time', schedule.office_end_time)
@@ -1787,7 +1828,17 @@ class OfficeScheduleView(AdminRequiredMixin, View):
             schedule.working_days = []
 
         schedule.save()
-        messages.success(request, f"Schedule for {branch.name} updated successfully.")
+
+        # Update policy fields
+        policy.photo_required = request.POST.get('photo_required') == 'true'
+        policy.gps_required = request.POST.get('gps_required', 'required')
+        policy.max_gps_accuracy_meters = int(request.POST.get('max_gps_accuracy_meters', 100))
+        policy.allow_holiday_attendance = request.POST.get('allow_holiday_attendance') == 'true'
+        policy.allow_outside_geofence = request.POST.get('allow_outside_geofence') == 'true'
+        policy.late_grace_minutes = int(request.POST.get('late_grace_minutes', 15))
+        policy.save()
+
+        messages.success(request, f"Schedule and Policy for {branch.name} updated successfully.")
         return redirect('admin_panel:schedule_settings')
 
 import openpyxl

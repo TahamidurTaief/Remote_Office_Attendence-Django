@@ -1,55 +1,192 @@
 <c-app-shell page_title="Office Schedule Settings | FieldTrack Admin" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Office Schedule Settings" ></c-topbar>
+        <c-topbar title="Office Schedule Settings"></c-topbar>
     </c-slot>
 
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <div class="p-3 max-w-7xl mx-auto space-y-6">
+        <!-- Global Default Attendance Policy Card -->
+        <div
+            class="border rounded-lg p-5 bg-gradient-to-br from-indigo-50/30 to-purple-50/20 border-indigo-200 dark:from-slate-900/60 dark:to-slate-900/40 dark:border-slate-800">
+            <div class="flex justify-between items-center pb-3 border-b border-indigo-100 dark:border-slate-800">
+                <h2 class="text-sm font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Global
+                    Default Policy Settings</h2>
+                <span
+                    class="text-3xs uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 font-bold rounded-full">System
+                    Wide Default</span>
+            </div>
+
+            <form method="POST" action="{% url 'admin_panel:schedule_settings' %}" class="space-y-4 mt-3">
+                {% csrf_token %}
+                <input type="hidden" name="branch_id" value="global">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <c-select id="global_photo_required" name="photo_required" label="Photo Required">
+                        <option value="true" {% if global_policy.photo_required %}selected{% endif %}>Yes</option>
+                        <option value="false" {% if not global_policy.photo_required %}selected{% endif %}>No</option>
+                    </c-select>
+
+                    <c-select id="global_gps_required" name="gps_required" label="GPS Validation Policy">
+                        <option value="required" {% if global_policy.gps_required=='required' %}selected{% endif %}>
+                            Required</option>
+                        <option value="optional" {% if global_policy.gps_required=='optional' %}selected{% endif %}>
+                            Optional</option>
+                        <option value="warn_only" {% if global_policy.gps_required=='warn_only' %}selected{% endif %}>
+                            Warn Only</option>
+                    </c-select>
+
+                    <c-input type="number" id="global_max_gps_accuracy" name="max_gps_accuracy_meters"
+                        label="Max GPS Accuracy (meters)" value="{{ global_policy.max_gps_accuracy_meters }}"
+                        required="true" help="Max allowed GPS inaccuracy radius."></c-input>
+
+                    <c-select id="global_allow_holiday_attendance" name="allow_holiday_attendance"
+                        label="Allow Holiday Attendance">
+                        <option value="true" {% if global_policy.allow_holiday_attendance %}selected{% endif %}>Yes
+                        </option>
+                        <option value="false" {% if not global_policy.allow_holiday_attendance %}selected{% endif %}>No
+                            (Exception Logged)</option>
+                    </c-select>
+
+                    <c-select id="global_allow_outside_geofence" name="allow_outside_geofence"
+                        label="Allow Outside Geofence">
+                        <option value="true" {% if global_policy.allow_outside_geofence %}selected{% endif %}>Yes
+                        </option>
+                        <option value="false" {% if not global_policy.allow_outside_geofence %}selected{% endif %}>No
+                            (Block Check-in)</option>
+                    </c-select>
+
+                    <c-input type="number" id="global_late_grace" name="late_grace_minutes" label="Late Grace Minutes"
+                        value="{{ global_policy.late_grace_minutes }}" required="true"
+                        help="Minutes allowed after shift start before marked Late."></c-input>
+                </div>
+
+                <div class="flex justify-end pt-3 border-t border-indigo-100 dark:border-slate-800">
+                    <c-button type="submit" variant="primary" label="Save Global Policy"></c-button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Branch Specific Settings List -->
         <div class="space-y-4">
             {% for item in schedules %}
-            {% with schedule=item.schedule branch=item.branch %}
-            <div class="border rounded-lg p-4 transition-all duration-200
+            {% with schedule=item.schedule branch=item.branch policy=item.policy %}
+            <div
+                class="border rounded-lg p-4 transition-all duration-200
                 {% if forloop.counter0|divisibleby:4 == 0 %}bg-yellow-500/5 border-yellow-200/70 dark:bg-yellow-500/5 dark:border-yellow-900/30
                 {% elif forloop.counter0|divisibleby:4 == 1 %}bg-sky-500/5 border-sky-200/70 dark:bg-sky-500/5 dark:border-sky-900/30
                 {% elif forloop.counter0|divisibleby:4 == 2 %}bg-emerald-500/5 border-emerald-200/70 dark:bg-emerald-500/5 dark:border-emerald-900/30
                 {% else %}bg-orange-500/5 border-orange-200/70 dark:bg-orange-500/5 dark:border-orange-900/30{% endif %}">
-                
+
                 <div class="flex justify-between items-center pb-2 border-b" style="border-color:var(--border-subtle)">
-                    <h2 class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">{{ branch.name }} Settings</h2>
+                    <h2 class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">{{ branch.name }} Settings
+                        & Policies</h2>
                     <span class="text-[11px] font-medium text-[var(--text-muted)]">
-                        Start: {{ schedule.office_start_time|time:"g:i A" }} | End: {{ schedule.office_end_time|time:"g:i A" }}
+                        Shift: {{ schedule.office_start_time|time:"g:i A" }} - {{ schedule.office_end_time|time:"g:i A"
+                        }}
                     </span>
                 </div>
 
                 <form method="POST" action="{% url 'admin_panel:schedule_settings' %}" class="space-y-4 mt-2">
                     {% csrf_token %}
                     <input type="hidden" name="branch_id" value="{{ branch.id }}">
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <c-time-picker id="office_start_time_{{ branch.id }}" name="office_start_time" label="Office Start Time" value="{{ schedule.office_start_time|time:'H:i' }}" required="true" ></c-time-picker>
 
-                        <c-time-picker id="office_end_time_{{ branch.id }}" name="office_end_time" label="Office End Time" value="{{ schedule.office_end_time|time:'H:i' }}" required="true" ></c-time-picker>
+                    <div class="space-y-4">
+                        <!-- Sub-section: Office Schedule -->
+                        <div>
+                            <span
+                                class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Office
+                                Schedule & Timing</span>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <c-time-picker id="office_start_time_{{ branch.id }}" name="office_start_time"
+                                    label="Office Start Time" value="{{ schedule.office_start_time|time:'H:i' }}"
+                                    required="true"></c-time-picker>
 
-                        <c-input type="number" id="late_after_{{ branch.id }}" name="late_after_minutes" label="Late After (minutes)" value="{{ schedule.late_after_minutes }}" required="true" help="Late if check-in > X mins after start." ></c-input>
+                                <c-time-picker id="office_end_time_{{ branch.id }}" name="office_end_time"
+                                    label="Office End Time" value="{{ schedule.office_end_time|time:'H:i' }}"
+                                    required="true"></c-time-picker>
 
-                        <c-input type="number" id="early_checkout_{{ branch.id }}" name="early_checkout_before_minutes" label="Early Checkout (minutes)" value="{{ schedule.early_checkout_before_minutes }}" required="true" help="Early checkout if > X mins before end." ></c-input>
+                                <c-input type="number" id="late_after_{{ branch.id }}" name="late_after_minutes"
+                                    label="Late After (minutes)" value="{{ schedule.late_after_minutes }}"
+                                    required="true" help="Late if check-in > X mins after start."></c-input>
 
-                        <c-input type="number" id="overtime_after_{{ branch.id }}" name="overtime_after_minutes" label="Overtime Starts After (minutes)" value="{{ schedule.overtime_after_minutes }}" required="true" help="Mins after end time before OT starts." ></c-input>
+                                <c-input type="number" id="early_checkout_{{ branch.id }}"
+                                    name="early_checkout_before_minutes" label="Early Checkout (minutes)"
+                                    value="{{ schedule.early_checkout_before_minutes }}" required="true"
+                                    help="Early checkout if > X mins before end."></c-input>
 
-                        <c-select id="tracking_{{ branch.id }}" name="tracking_interval_minutes" label="Auto Location Track Interval">
-                            {% for value, label in tracking_choices %}
-                            <option value="{{ value }}" {% if schedule.tracking_interval_minutes == value %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </c-select>
+                                <c-input type="number" id="overtime_after_{{ branch.id }}" name="overtime_after_minutes"
+                                    label="Overtime Starts After (minutes)"
+                                    value="{{ schedule.overtime_after_minutes }}" required="true"
+                                    help="Mins after end time before OT starts."></c-input>
+
+                                <c-select id="tracking_{{ branch.id }}" name="tracking_interval_minutes"
+                                    label="Auto Location Track Interval">
+                                    {% for value, label in tracking_choices %}
+                                    <option value="{{ value }}" {% if schedule.tracking_interval_minutes==value
+                                        %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </c-select>
+                            </div>
+                        </div>
+
+                        <!-- Sub-section: Attendance Policy & GPS -->
+                        <div class="border-t pt-3" style="border-color:var(--border-subtle)">
+                            <span
+                                class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Attendance
+                                Policy & GPS Validation</span>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <c-select id="photo_required_{{ branch.id }}" name="photo_required"
+                                    label="Photo Required">
+                                    <option value="true" {% if policy.photo_required %}selected{% endif %}>Yes</option>
+                                    <option value="false" {% if not policy.photo_required %}selected{% endif %}>No
+                                    </option>
+                                </c-select>
+
+                                <c-select id="gps_required_{{ branch.id }}" name="gps_required"
+                                    label="GPS Validation Policy">
+                                    <option value="required" {% if policy.gps_required=='required' %}selected{% endif
+                                        %}>Required</option>
+                                    <option value="optional" {% if policy.gps_required=='optional' %}selected{% endif
+                                        %}>Optional</option>
+                                    <option value="warn_only" {% if policy.gps_required=='warn_only' %}selected{% endif
+                                        %}>Warn Only</option>
+                                </c-select>
+
+                                <c-input type="number" id="max_gps_accuracy_{{ branch.id }}"
+                                    name="max_gps_accuracy_meters" label="Max GPS Accuracy (meters)"
+                                    value="{{ policy.max_gps_accuracy_meters }}" required="true"
+                                    help="Max allowed GPS inaccuracy radius."></c-input>
+
+                                <c-select id="allow_holiday_attendance_{{ branch.id }}" name="allow_holiday_attendance"
+                                    label="Allow Holiday Attendance">
+                                    <option value="true" {% if policy.allow_holiday_attendance %}selected{% endif %}>Yes
+                                    </option>
+                                    <option value="false" {% if not policy.allow_holiday_attendance %}selected{% endif
+                                        %}>No (Exception Logged)</option>
+                                </c-select>
+
+                                <c-select id="allow_outside_geofence_{{ branch.id }}" name="allow_outside_geofence"
+                                    label="Allow Outside Geofence">
+                                    <option value="true" {% if policy.allow_outside_geofence %}selected{% endif %}>Yes
+                                    </option>
+                                    <option value="false" {% if not policy.allow_outside_geofence %}selected{% endif %}>
+                                        No (Block Check-in)</option>
+                                </c-select>
+
+                                <c-input type="number" id="late_grace_{{ branch.id }}" name="late_grace_minutes"
+                                    label="Late Grace Minutes" value="{{ policy.late_grace_minutes }}" required="true"
+                                    help="Minutes allowed after shift start before marked Late."></c-input>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="flex justify-end pt-3 border-t" style="border-color:var(--border)">
-                        <c-button type="submit" variant="primary" label="Save {{ branch.name }} Schedule" ></c-button>
+                        <c-button type="submit" variant="primary" label="Save {{ branch.name }} Settings"></c-button>
                     </div>
                 </form>
             </div>
