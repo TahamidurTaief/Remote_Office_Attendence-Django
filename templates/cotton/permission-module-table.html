@@ -1,0 +1,58 @@
+<c-vars mod="" selected_role="" ></c-vars>
+
+<tr class="hover:bg-slate-500/5">
+  <td class="py-3.5 px-4 font-medium" style="color:var(--text)">
+    <div class="flex items-center gap-2">
+      <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
+      <span>{{ mod.title }}</span>
+    </div>
+  </td>
+
+  <td class="py-3.5 px-3 text-center">
+    {% if mod.view %}
+      <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.view.id }}" is_checked="{{ mod.view.is_checked }}" ></c-permission-toggle>
+    {% else %}
+      <span class="text-[10px] text-slate-400">-</span>
+    {% endif %}
+  </td>
+
+  <td class="py-3.5 px-3 text-center">
+    {% if mod.create %}
+      <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.create.id }}" is_checked="{{ mod.create.is_checked }}" ></c-permission-toggle>
+    {% else %}
+      <span class="text-[10px] text-slate-400">-</span>
+    {% endif %}
+  </td>
+
+  <td class="py-3.5 px-3 text-center">
+    {% if mod.edit %}
+      <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.edit.id }}" is_checked="{{ mod.edit.is_checked }}" ></c-permission-toggle>
+    {% else %}
+      <span class="text-[10px] text-slate-400">-</span>
+    {% endif %}
+  </td>
+
+  <td class="py-3.5 px-3 text-center">
+    {% if mod.delete %}
+      <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.delete.id }}" is_checked="{{ mod.delete.is_checked }}" ></c-permission-toggle>
+    {% else %}
+      <span class="text-[10px] text-slate-400">-</span>
+    {% endif %}
+  </td>
+
+  <td class="py-3.5 px-3 text-center">
+    {% if mod.approve %}
+      <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.approve.id }}" is_checked="{{ mod.approve.is_checked }}" ></c-permission-toggle>
+    {% else %}
+      <span class="text-[10px] text-slate-400">-</span>
+    {% endif %}
+  </td>
+
+  <td class="py-3.5 px-3 text-center">
+    {% if mod.export %}
+      <c-permission-toggle group_id="{{ selected_role.id }}" perm_id="{{ mod.export.id }}" is_checked="{{ mod.export.is_checked }}" ></c-permission-toggle>
+    {% else %}
+      <span class="text-[10px] text-slate-400">-</span>
+    {% endif %}
+  </td>
+</tr>
