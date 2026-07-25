@@ -573,10 +573,18 @@ class ManualEntryView(AdminRequiredMixin, FormView):
         messages.success(self.request, "Manual attendance record added successfully.")
         return super().form_valid(form)
 
-class AttendanceDetailView(AdminRequiredMixin, DetailView):
+class AttendanceDetailView(RoleRequiredMixin, DetailView):
+    allowed_roles = ['admin', 'system_owner', 'hr', 'manager']
     model = Attendance
     template_name = 'admin_panel/attendance_detail.html'
     context_object_name = 'attendance'
+
+    def dispatch(self, request, *args, **kwargs):
+        from apps.accounts.engine import PermissionEngine
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'attendance.view').allowed or getattr(request.user, 'role', '') in ('admin', 'hr')):
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("Unauthorized to view attendance details.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

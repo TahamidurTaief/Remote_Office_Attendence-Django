@@ -129,6 +129,9 @@ def attendance_card(request):
     schedule = get_branch_schedule(employee)
     shift_info = f"{schedule.office_start_time.strftime('%I:%M %p')} - {schedule.office_end_time.strftime('%I:%M %p')}" if schedule else "Standard Shift"
 
+    from apps.attendance.views import get_attendance_policy
+    policy = get_attendance_policy(employee)
+
     context = {
         'employee':                 employee,
         'active_session':           active_session,
@@ -140,6 +143,7 @@ def attendance_card(request):
         'pending_correction_count': pending_correction_count,
         'pending_forgot_count':     pending_forgot_count,
         'shift_info':               shift_info,
+        'policy':                   policy,
     }
     return render(request, 'staff/partials/attendance_card.html', context)
 
@@ -164,7 +168,13 @@ def check_in_page(request):
     if active:
         return redirect('staff:home')
 
-    return render(request, 'staff/check_in.html', {'employee': employee})
+    from apps.attendance.views import get_attendance_policy
+    policy = get_attendance_policy(employee)
+
+    return render(request, 'staff/check_in.html', {
+        'employee': employee,
+        'policy': policy,
+    })
 
 
 @login_required

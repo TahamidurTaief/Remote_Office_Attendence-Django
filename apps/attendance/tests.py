@@ -170,7 +170,7 @@ class AttendanceViewTests(TestCase):
         }
         response = self.client.post(reverse('attendance:check_in'), data=post_data)
         self.assertEqual(response.status_code, 400)
-        self.assertJSONEqual(response.content.decode(), {'success': False, 'error': 'Location is required for attendance.'})
+        self.assertJSONEqual(response.content.decode(), {'success': False, 'error': 'GPS location is required for attendance.'})
 
     def test_successful_check_in_and_check_out_flow(self):
         logged_in = self.client.login(username='+8801700000010', password='password123')
@@ -1064,6 +1064,8 @@ class AttendancePhase2Tests(TestCase):
         self.assertContains(response, 'HQ Test Office')
 
 
+
+
 class AttendancePolicyTestCase(TestCase):
     def setUp(self):
         self.branch1 = Branch.objects.create(
@@ -1317,6 +1319,8 @@ class AttendancePolicyTestCase(TestCase):
         att = Attendance.objects.filter(employee=admin_emp, date=today).first()
         self.assertEqual(att.gps_quality, 'missing')
         self.assertTrue(att.is_policy_exception)
+
+
 
 
 
