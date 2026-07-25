@@ -50,4 +50,6 @@ urlpatterns = [
     path('account/security/mfa/disable/', views.MFADisableWizardView.as_view(), name='mfa_disable_wizard'),
     path('account/security/trusted-device/<int:pk>/remove/', views.TrustedDeviceRemoveView.as_view(), name='trusted_device_remove'),
     path('account/security/backup-codes/regenerate/', views.BackupCodesRegenerateView.as_view(), name='backup_codes_regenerate'),
+    path('account/security/pin/setup/', views.SetupPINView.as_view(), name='setup_pin'),
 ]
+

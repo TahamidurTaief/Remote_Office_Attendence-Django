@@ -307,3 +307,62 @@ class SecurityPolicyTests(TestCase):
             'target_url': '/admin-panel/roles/'
         })
         self.assertEqual(resp.status_code, 302)
+
+    def test_setup_pin_view(self):
+        self.client.post(reverse('accounts:login'), {'email': 'admin_pol@example.com', 'password': self.password})
+
+        # By default, admin role policy unlock_method might not be 'pin'. Let's force it to 'pin'.
+        pol, _ = SecurityPolicy.objects.get_or_create(role='admin')
+        pol.unlock_method = 'pin'
+        pol.save()
+
+        # Success path
+        resp = self.client.post(reverse('accounts:setup_pin'), {
+            'password': self.password,
+            'pin': '1234',
+            'confirm_pin': '1234'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "successfully")
+
+        # Verify PIN is saved
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.security_profile.check_pin('1234'))
+
+        # Fail path: incorrect password
+        resp = self.client.post(reverse('accounts:setup_pin'), {
+            'password': 'wrongpassword',
+            'pin': '5678',
+            'confirm_pin': '5678'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Incorrect password")
+
+        # Fail path: mismatch PINs
+        resp = self.client.post(reverse('accounts:setup_pin'), {
+            'password': self.password,
+            'pin': '5678',
+            'confirm_pin': '1111'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "match")
+
+        # Fail path: non-4 digit PIN
+        resp = self.client.post(reverse('accounts:setup_pin'), {
+            'password': self.password,
+            'pin': '12345',
+            'confirm_pin': '12345'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "exactly 4 digits")
+
+        # Fail path: Forbidden due to role policy not 'pin'
+        pol.unlock_method = 'password'
+        pol.save()
+        resp = self.client.post(reverse('accounts:setup_pin'), {
+            'password': self.password,
+            'pin': '1234',
+            'confirm_pin': '1234'
+        })
+        self.assertEqual(resp.status_code, 403)
+

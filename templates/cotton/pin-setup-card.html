@@ -1,0 +1,39 @@
+<c-vars sec_prof="" policy=""></c-vars>
+
+<c-card>
+  <c-slot name="header">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+        <i data-lucide="hash" class="w-4 h-4 text-indigo-500"></i>
+      </div>
+      <div>
+        <h3 class="text-[13px] font-semibold" style="color:var(--text)">
+          {% if sec_prof.pin_hash %}Change Workspace PIN{% else %}Set Workspace PIN{% endif %}
+        </h3>
+        <p class="text-[11px]" style="color:var(--text-muted)">Secure PIN code to unlock your workspace screen overlay</p>
+      </div>
+    </div>
+  </c-slot>
+  <c-slot name="actions">
+    {% if sec_prof.pin_hash %}
+      <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500">
+        Active
+      </span>
+    {% else %}
+      <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full bg-slate-500/10 text-slate-400">
+        Not Configured
+      </span>
+    {% endif %}
+  </c-slot>
+
+  {% if policy.unlock_method == 'pin' %}
+    <div id="pin-setup-container">
+      {% include "accounts/partials/pin_setup_form.html" with pin_exists=sec_prof.pin_hash %}
+    </div>
+  {% else %}
+    <div class="flex items-center gap-2 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-[11px] text-amber-600 dark:text-amber-400">
+      <i data-lucide="lock" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>PIN unlock is not enabled by your role's security policy. Allowed unlock method: {{ policy.get_unlock_method_display|default:policy.unlock_method|title }}.</span>
+    </div>
+  {% endif %}
+</c-card>

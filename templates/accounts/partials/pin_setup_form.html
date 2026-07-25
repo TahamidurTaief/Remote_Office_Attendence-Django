@@ -1,0 +1,33 @@
+<form class="space-y-4"
+      hx-post="{% url 'accounts:setup_pin' %}"
+      hx-target="this"
+      hx-swap="outerHTML">
+    {% csrf_token %}
+
+    {% if error %}
+      <div class="p-3 rounded-lg text-xs bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    {% if success %}
+      <div class="p-3 rounded-lg text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+        PIN successfully {% if pin_exists %}updated{% else %}configured{% endif %}!
+      </div>
+    {% endif %}
+
+    <c-password-input name="password" id="password_pin" label="Current Password" required="true" ></c-password-input>
+    
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <c-input type="password" name="pin" id="pin" label="New PIN" help="Exactly 4 digits" required="true"></c-input>
+        </div>
+        <div>
+            <c-input type="password" name="confirm_pin" id="confirm_pin" label="Confirm PIN" required="true"></c-input>
+        </div>
+    </div>
+
+    <div class="pt-3 border-t" style="border-color:var(--border)">
+        <c-button type="submit" variant="primary" label="{% if pin_exists %}Update PIN{% else %}Save PIN{% endif %}" extra_class="w-full justify-center" ></c-button>
+    </div>
+</form>

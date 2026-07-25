@@ -1371,3 +1371,56 @@ class BackupCodesRegenerateView(LoginRequiredMixin, View):
             'backup_codes': raw_codes,
             'success': True,
         })
+
+
+class SetupPINView(LoginRequiredMixin, View):
+    """
+    POST /account/security/pin/setup/
+    Saves or changes the user's unlock PIN after password confirmation.
+    """
+    def post(self, request):
+        policy = SecurityPolicy.objects.filter(role=request.user.role).first()
+        if not policy or policy.unlock_method != 'pin':
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("PIN unlock is not permitted by your role's security policy.")
+
+        password = request.POST.get('password', '').strip()
+        pin = request.POST.get('pin', '').strip()
+        confirm_pin = request.POST.get('confirm_pin', '').strip()
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+
+        # Re-use password check pattern
+        if not request.user.check_password(password):
+            return render(request, 'accounts/partials/pin_setup_form.html', {
+                'error': 'Incorrect password. Please try again.',
+                'pin_exists': bool(sec_prof.pin_hash)
+            })
+
+        # Validate PIN: must be numeric and exactly 4 digits
+        import re
+        if not re.match(r'^\d{4}$', pin):
+            return render(request, 'accounts/partials/pin_setup_form.html', {
+                'error': 'PIN must be exactly 4 digits and numeric.',
+                'pin_exists': bool(sec_prof.pin_hash)
+            })
+
+        if pin != confirm_pin:
+            return render(request, 'accounts/partials/pin_setup_form.html', {
+                'error': 'PIN and confirm PIN do not match.',
+                'pin_exists': bool(sec_prof.pin_hash)
+            })
+
+        sec_prof.set_pin(pin)
+        log_audit(
+            actor=request.user,
+            action='pin_setup_success',
+            target=sec_prof,
+            summary="User successfully set/changed security PIN",
+            ip=get_client_ip(request)
+        )
+
+        return render(request, 'accounts/partials/pin_setup_form.html', {
+            'success': True,
+            'pin_exists': True
+        })
+

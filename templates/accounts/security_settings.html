@@ -152,6 +152,9 @@
       {% include "accounts/partials/change_password_form.html" %}
     </c-card>
 
+    {# ── PIN Setup Card ────────────────────────────────────────────────────── #}
+    <c-pin-setup-card sec_prof="{{ sec_prof }}" policy="{{ policy }}"></c-pin-setup-card>
+
     {# ── Active Device Sessions Card ────────────────────────────────────────── #}
     {% include "cotton/session-list.html" %}
 
