@@ -61,7 +61,7 @@ def check_in(request):
     try:
         employee = get_employee(request.user)
         if not employee:
-            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=403)
 
         # For multipart/form-data (file uploads), request.body is already consumed
         # by Django's parser, so we must use request.POST directly.
@@ -194,20 +194,22 @@ def check_in(request):
                 within_geofence, _ = is_within_geofence(float(lat), float(lng), branch)
                 if within_geofence:
                     attendance_type = 'office'
-
         # Geofence Validation: warn or block based on policy
-        if policy.geofencing_policy != 'disabled':
+        enforce_geofence = not policy.allow_outside_geofence or policy.geofencing_policy != 'disabled'
+        if enforce_geofence:
             branch = employee.branch
             if branch and branch.latitude and branch.longitude:
                 within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
                 if not within_geofence:
-                    if policy.geofencing_policy == 'block':
+                    should_block = (policy.geofencing_policy == 'block') or (not policy.allow_outside_geofence and policy.geofencing_policy == 'block')
+                    if should_block and not is_admin_or_hr:
                         return JsonResponse({
                             'success': False,
                             'error': f'Geofence validation failed. You are outside the office radius by {int(distance)} meters.'
                         }, status=400)
-                    elif policy.geofencing_policy == 'warning':
-                        warning_msg = f" [GEOFENCE WARNING: Checked in {int(distance)}m outside geofence]"
+                    else:
+                        is_exception = True
+                        warning_msg = f" [POLICY EXCEPTION: Checked in {int(distance)}m outside geofence GEOFENCE WARNING]"
                         note = f"{note}{warning_msg}".strip()
 
         # Holiday validation
@@ -331,7 +333,7 @@ def check_out(request):
     try:
         employee = get_employee(request.user)
         if not employee:
-            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=403)
 
         # For multipart/form-data (file uploads), request.body is already consumed
         # by Django's parser, so we must use request.POST directly.

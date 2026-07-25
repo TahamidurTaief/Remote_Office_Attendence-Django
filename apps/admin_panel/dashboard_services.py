@@ -406,10 +406,12 @@ def get_admin_dashboard_data(user):
     data['sync_failed_count'] = SyncLog.objects.aggregate(total_failed=Sum('records_failed'))['total_failed'] or 0
     data['offline_queue_size'] = Attendance.objects.filter(synced_at__isnull=True).count()
     data['gps_issues_count'] = Attendance.objects.filter(
+        Q(gps_quality__in=['poor', 'missing']) |
+        Q(note__icontains='GEOFENCE WARNING') |
+        Q(note__icontains='outside geofence'),
         date=today,
-        gps_quality__in=['poor', 'missing'],
         is_expired=False
-    ).count()
+    ).distinct().count()
 
     # Late %
     today_checkins_total = Attendance.objects.filter(date=today, attendance_type='check_in', is_expired=False).count()

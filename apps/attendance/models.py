@@ -120,6 +120,24 @@ class Attendance(models.Model):
                 total += s.total_hours
         return total
 
+    @property
+    def is_outside_geofence(self):
+        """
+        Returns True if the check-in was outside the office geofence.
+        """
+        if "outside geofence" in self.note.lower():
+            return True
+        try:
+            from apps.branches.utils import is_within_geofence
+            ci_loc = self.locations.filter(event='check_in').first()
+            if ci_loc and self.employee.branch:
+                within, _ = is_within_geofence(ci_loc.latitude, ci_loc.longitude, self.employee.branch)
+                return not within
+        except Exception:
+            pass
+        return False
+
+
 
 class AttendanceLocation(models.Model):
     EVENT_CHOICES = (

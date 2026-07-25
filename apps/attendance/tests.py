@@ -863,6 +863,35 @@ class AttendancePhase2Tests(TestCase):
         attendance = Attendance.objects.latest('id')
         self.assertIn('GEOFENCE WARNING', attendance.note)
 
+        # Scenario F: allow_outside_geofence = False, geofencing_policy = 'block'. Check-in outside should block (400)
+        policy.allow_outside_geofence = False
+        policy.geofencing_policy = 'block'
+        policy.save()
+        
+        Attendance.objects.all().delete()
+        
+        response = self.client.post(reverse('attendance:check_in'), data={
+            'latitude': 24.7925,
+            'longitude': 91.4078,
+            'accuracy': 10
+        })
+        self.assertEqual(response.status_code, 400)
+        
+        # Scenario G: allow_outside_geofence = True. Check-in outside should succeed silently (no warning)
+        policy.allow_outside_geofence = True
+        policy.geofencing_policy = 'disabled'
+        policy.save()
+        
+        response = self.client.post(reverse('attendance:check_in'), data={
+            'latitude': 24.7925,
+            'longitude': 91.4078,
+            'accuracy': 10
+        })
+        self.assertEqual(response.status_code, 200)
+        attendance = Attendance.objects.latest('id')
+        self.assertNotIn('GEOFENCE WARNING', attendance.note)
+        self.assertFalse(attendance.is_policy_exception)
+
     def test_forgot_checkout_workflow(self):
         from apps.attendance.models import ForgotCheckoutRequest, AttendanceAuditLog
         

@@ -259,10 +259,13 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
         attendance_pct = round((present_count / total_employees_cnt) * 100, 1)
         late_pct = round((late_count / max(present_count, 1)) * 100, 1)
 
+        from django.db.models import Q
         gps_issues_count = Attendance.objects.filter(
-            date=today,
-            note__icontains='GEOFENCE WARNING'
-        ).count()
+            Q(gps_quality__in=['poor', 'missing']) |
+            Q(note__icontains='GEOFENCE WARNING') |
+            Q(note__icontains='outside geofence'),
+            date=today
+        ).distinct().count()
 
         remote_count = todays_attendances.filter(type='field').count()
 
