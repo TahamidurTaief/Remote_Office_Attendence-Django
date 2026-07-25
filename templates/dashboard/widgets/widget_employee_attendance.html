@@ -67,9 +67,19 @@
             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
           {% endif %}
-          <span class="text-2xs font-semibold px-2 py-0.5 rounded-full {% if active_session %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300{% else %}bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300{% endif %}">
-            {{ today_attendance.get_status_display|default:"No sessions" }}
-          </span>
+          {% if today_attendance %}
+            {% if today_attendance.status == 'on_time' %}
+              <c-badge variant="success" label="On Time" dot="true"></c-badge>
+            {% elif today_attendance.status == 'late' %}
+              <c-badge variant="warning" label="Late" dot="true"></c-badge>
+            {% elif today_attendance.status == 'holiday_attendance' %}
+              <c-badge variant="info" label="Holiday" dot="true"></c-badge>
+            {% else %}
+              <c-badge variant="neutral" label="{{ today_attendance.get_status_display }}" dot="true"></c-badge>
+            {% endif %}
+          {% else %}
+            <c-badge variant="neutral" label="No sessions"></c-badge>
+          {% endif %}
         </div>
       </div>
 

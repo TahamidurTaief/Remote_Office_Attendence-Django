@@ -1150,6 +1150,54 @@ class AttendancePolicyTestCase(TestCase):
         self.assertEqual(p2.max_gps_accuracy_meters, 50)
         self.assertEqual(p2.late_grace_minutes, 10)
 
+    def test_dynamic_shift_grace_minutes(self):
+        from apps.attendance.models import AttendancePolicy
+        from apps.attendance.schedule_utils import get_branch_schedule, calculate_attendance_status
+        from apps.branches.models import OfficeSchedule
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        # Branch schedule setup (start time 09:00, default late after 15 mins)
+        OfficeSchedule.objects.get_or_create(
+            branch=self.branch1,
+            defaults={
+                'office_start_time': datetime.time(9, 0),
+                'office_end_time': datetime.time(18, 0),
+                'late_after_minutes': 15
+            }
+        )
+
+        user = User.objects.create_user(phone='+8801711110000', password='pass', role='staff')
+        emp = EmployeeProfile.objects.create(
+            user=user,
+            employee_id='EMP-DS1',
+            full_name='Emp Shift',
+            phone='+8801711110000',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch1,
+            is_active=True
+        )
+
+        # Policy sets grace minutes to 5 mins
+        AttendancePolicy.objects.create(
+            branch=self.branch1,
+            late_grace_minutes=5
+        )
+
+        schedule = get_branch_schedule(emp)
+        # Verify schedule.late_after_minutes matches policy (5) instead of branch schedule (15)
+        self.assertEqual(schedule.late_after_minutes, 5)
+
+        # Check-in at 09:04 -> should be On Time (grace is 5 mins, so late threshold is 09:05)
+        t_on_time = timezone.make_aware(datetime.datetime(2026, 7, 25, 9, 4), timezone.get_current_timezone())
+        self.assertEqual(calculate_attendance_status(t_on_time, schedule), 'on_time')
+
+        # Check-in at 09:06 -> should be Late (grace is 5 mins, late threshold is 09:05)
+        t_late = timezone.make_aware(datetime.datetime(2026, 7, 25, 9, 6), timezone.get_current_timezone())
+        self.assertEqual(calculate_attendance_status(t_late, schedule), 'late')
+
+
 
 
 

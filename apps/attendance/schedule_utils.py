@@ -106,6 +106,10 @@ class DynamicSchedule:
         if branch_schedule:
             self.office_start_time = branch_schedule.office_start_time
             self.office_end_time = branch_schedule.office_end_time
+            if isinstance(self.office_start_time, str):
+                self.office_start_time = parse_time_from_string(self.office_start_time)
+            if isinstance(self.office_end_time, str):
+                self.office_end_time = parse_time_from_string(self.office_end_time)
             self.late_after_minutes = branch_schedule.late_after_minutes
             self.early_checkout_before_minutes = branch_schedule.early_checkout_before_minutes
             self.overtime_after_minutes = branch_schedule.overtime_after_minutes
@@ -118,6 +122,20 @@ class DynamicSchedule:
                 self.office_start_time = s_time
             if e_time is not None:
                 self.office_end_time = e_time
+
+        # Override late grace minutes with policy settings
+        try:
+            from apps.attendance.models import AttendancePolicy
+            branch = getattr(employee, 'branch', None)
+            policy = None
+            if branch:
+                policy = AttendancePolicy.objects.filter(branch=branch).first()
+            if not policy:
+                policy = AttendancePolicy.objects.filter(branch__isnull=True).first()
+            if policy:
+                self.late_after_minutes = policy.late_grace_minutes
+        except Exception:
+            pass
 
     def get_late_threshold(self):
         start = datetime.combine(datetime.today(), self.office_start_time)
