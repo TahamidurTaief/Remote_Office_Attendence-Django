@@ -3092,7 +3092,8 @@ class GlobalSearchView(RoleRequiredMixin, View):
                 Q(phone__icontains=query) |
                 Q(department__name__icontains=query) |
                 Q(designation__name__icontains=query) |
-                Q(branch__name__icontains=query)
+                Q(branch__name__icontains=query) |
+                Q(status__icontains=query)
             )[:10]
 
             asset_results = Asset.objects.prefetch_related('assignments__employee').filter(

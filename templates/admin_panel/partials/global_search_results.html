@@ -14,13 +14,7 @@
             </div>
         </div>
         <div>
-            {% if emp.status == 'active' or emp.status == 'confirmed' %}
-                <c-badge variant="success" label="{{ emp.get_status_display }}" ></c-badge>
-            {% elif emp.status == 'probation' or emp.status == 'pending_approval' %}
-                <c-badge variant="warning" label="{{ emp.get_status_display }}" ></c-badge>
-            {% else %}
-                <c-badge variant="neutral" label="{{ emp.get_status_display }}" ></c-badge>
-            {% endif %}
+            <c-status-pill status="{{ emp.business_status }}" label="{{ emp.business_status_display }}"></c-status-pill>
         </div>
     </a>
     {% empty %}
