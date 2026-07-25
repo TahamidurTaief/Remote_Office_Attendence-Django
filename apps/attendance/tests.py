@@ -1197,6 +1197,63 @@ class AttendancePolicyTestCase(TestCase):
         t_late = timezone.make_aware(datetime.datetime(2026, 7, 25, 9, 6), timezone.get_current_timezone())
         self.assertEqual(calculate_attendance_status(t_late, schedule), 'late')
 
+    def test_dynamic_holiday_policy(self):
+        from apps.branches.models import Holiday
+        from apps.attendance.models import AttendancePolicy
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        user = User.objects.create_user(phone='+8801711110001', password='pass', role='staff')
+        emp = EmployeeProfile.objects.create(
+            user=user,
+            employee_id='EMP-H1',
+            full_name='Holiday Tester',
+            phone='+8801711110001',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch1,
+            is_active=True
+        )
+
+        # Create holiday for today
+        today = timezone.localdate()
+        Holiday.objects.create(name='Test Holiday', date=today, branch=self.branch1)
+
+        # Policy: allow holiday attendance is True
+        policy = AttendancePolicy.objects.create(
+            branch=self.branch1,
+            allow_holiday_attendance=True,
+            photo_required=False,
+            gps_required='optional'
+        )
+
+        self.client.login(username='+8801711110001', password='pass')
+        response = self.client.post(
+            reverse('attendance:check_in'),
+            data={'latitude': 23.8759, 'longitude': 90.3795, 'accuracy': 10.0, 'type': 'office'}
+        )
+        self.assertEqual(response.status_code, 200)
+        # Check status is holiday_attendance and not policy exception
+        att = Attendance.objects.filter(employee=emp, date=today).first()
+        self.assertEqual(att.status, 'holiday_attendance')
+        self.assertFalse(att.is_policy_exception)
+
+        # Policy: allow holiday attendance is False
+        policy.allow_holiday_attendance = False
+        policy.save()
+        att.delete()
+
+        response = self.client.post(
+            reverse('attendance:check_in'),
+            data={'latitude': 23.8759, 'longitude': 90.3795, 'accuracy': 10.0, 'type': 'office'}
+        )
+        self.assertEqual(response.status_code, 200)
+        # Check status is holiday_attendance and is policy exception
+        att2 = Attendance.objects.filter(employee=emp, date=today).first()
+        self.assertEqual(att2.status, 'holiday_attendance')
+        self.assertTrue(att2.is_policy_exception)
+
+
 
 
 

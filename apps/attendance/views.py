@@ -179,21 +179,33 @@ def check_in(request):
                         warning_msg = f" [GEOFENCE WARNING: Checked in {int(distance)}m outside geofence]"
                         note = f"{note}{warning_msg}".strip()
 
-        # Late check — only for the FIRST check-in of the day
-        first_checkin_today = Attendance.objects.filter(
-            employee=employee,
-            date=today,
-            attendance_type='check_in',
-            is_expired=False
-        ).order_by('check_in_time').first()
+        # Holiday validation
+        from .schedule_utils import is_employee_holiday
+        is_holiday = is_employee_holiday(employee, today)
+        is_exception = False
 
-        if first_checkin_today is None:
-            # This IS the first check-in → apply late logic
-            from .schedule_utils import get_branch_schedule, calculate_attendance_status
-            schedule = get_branch_schedule(employee)
-            status = calculate_attendance_status(event_time, schedule)
+        if is_holiday:
+            status = 'holiday_attendance'
+            if not policy.allow_holiday_attendance:
+                is_exception = True
+                warning_msg = " [POLICY EXCEPTION: Holiday attendance not allowed]"
+                note = f"{note}{warning_msg}".strip()
         else:
-            status = 'on_time'  # subsequent sessions are never "late"
+            # Late check — only for the FIRST check-in of the day
+            first_checkin_today = Attendance.objects.filter(
+                employee=employee,
+                date=today,
+                attendance_type='check_in',
+                is_expired=False
+            ).order_by('check_in_time').first()
+
+            if first_checkin_today is None:
+                # This IS the first check-in → apply late logic
+                from .schedule_utils import get_branch_schedule, calculate_attendance_status
+                schedule = get_branch_schedule(employee)
+                status = calculate_attendance_status(event_time, schedule)
+            else:
+                status = 'on_time'  # subsequent sessions are never "late"
 
         # Check if project was submitted or can be inferred
         project = None
@@ -229,6 +241,7 @@ def check_in(request):
             status=status,
             note=note,
             photo=photo,
+            is_policy_exception=is_exception,
             sync_uuid=sync_uuid or uuid.uuid4(),
             client_event_time=client_time,
             synced_at=synced_at

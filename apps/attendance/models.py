@@ -81,6 +81,8 @@ class Attendance(models.Model):
         help_text='When this record was marked expired'
     )
     
+    is_policy_exception = models.BooleanField(default=False)
+    
     sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     client_event_time = models.DateTimeField(null=True, blank=True)
     synced_at = models.DateTimeField(null=True, blank=True)

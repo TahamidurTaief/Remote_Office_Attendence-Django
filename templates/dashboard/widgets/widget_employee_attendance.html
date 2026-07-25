@@ -142,10 +142,15 @@
             {% else %}
               <span class="text-slate-500 italic">Active</span>
             {% endif %}
-          </div>
-          <span class="text-3xs uppercase font-bold px-1.5 py-0.5 rounded-md {% if s.status == 'on_time' %}bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400{% else %}bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400{% endif %}">
-            {{ s.get_status_display }}
-          </span>
+          {% if s.status == 'on_time' %}
+            <c-badge variant="success" label="On Time"></c-badge>
+          {% elif s.status == 'late' %}
+            <c-badge variant="warning" label="Late"></c-badge>
+          {% elif s.status == 'holiday_attendance' %}
+            <c-badge variant="info" label="Holiday"></c-badge>
+          {% else %}
+            <c-badge variant="neutral" label="{{ s.get_status_display }}"></c-badge>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
@@ -178,10 +183,15 @@
             {% if att.check_out_time %}
               <span class="text-slate-600 dark:text-slate-400">Out: {{ att.check_out_time|time:"H:i" }}</span>
             {% endif %}
-          </div>
-          <span class="text-3xs uppercase font-bold px-1.5 py-0.5 rounded-md {% if att.status == 'on_time' %}bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400{% else %}bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400{% endif %}">
-            {{ att.get_status_display }}
-          </span>
+          {% if att.status == 'on_time' %}
+            <c-badge variant="success" label="On Time"></c-badge>
+          {% elif att.status == 'late' %}
+            <c-badge variant="warning" label="Late"></c-badge>
+          {% elif att.status == 'holiday_attendance' %}
+            <c-badge variant="info" label="Holiday"></c-badge>
+          {% else %}
+            <c-badge variant="neutral" label="{{ att.get_status_display }}"></c-badge>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
