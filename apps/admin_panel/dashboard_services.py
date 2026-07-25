@@ -225,12 +225,55 @@ def get_manager_dashboard_data(user):
     else:
         data['managed_projects'] = []
 
-    # Recent team progress logs
-    data['team_recent_progress'] = DailyProgressLog.objects.select_related(
-        'project', 'logged_by'
-    ).filter(
-        logged_by__in=team_users
-    ).order_by('-date', '-created_at')[:5]
+    # Counts
+    present_set = Attendance.objects.filter(employee__in=team_profiles, date=today, status='on_time', attendance_type='check_in', is_expired=False).values_list('employee_id', flat=True)
+    late_set = Attendance.objects.filter(employee__in=team_profiles, date=today, status='late', attendance_type='check_in', is_expired=False).values_list('employee_id', flat=True)
+    
+    data['team_present_count'] = len(set(present_set))
+    data['team_late_count'] = len(set(late_set))
+    
+    checked_in_ids = set(present_set) | set(late_set)
+    data['team_absent_count'] = team_profiles.exclude(id__in=checked_in_ids).count()
+
+    # Corrections & OT
+    from apps.attendance.models import AttendanceCorrectionRequest
+    data['pending_corrections_count'] = AttendanceCorrectionRequest.objects.filter(
+        attendance__employee__in=team_profiles,
+        status='pending'
+    ).count()
+    data['pending_ot_count'] = Attendance.objects.filter(
+        employee__in=team_profiles,
+        ot_status='pending',
+        is_expired=False
+    ).count()
+
+    # Live Locations
+    from apps.attendance.models import AttendanceLocation
+    active_sessions = Attendance.objects.filter(
+        employee__in=team_profiles,
+        date=today,
+        check_out_time__isnull=True,
+        is_expired=False
+    )
+    data['live_locations'] = AttendanceLocation.objects.filter(
+        attendance__in=active_sessions
+    ).select_related('attendance', 'attendance__employee').order_by('-timestamp')[:10]
+
+    # Today's Timeline
+    data['team_timeline'] = Attendance.objects.filter(
+        employee__in=team_profiles,
+        date=today,
+        is_expired=False
+    ).select_related('employee').order_by('-check_in_time')[:15]
+
+    # Heatmap (distribution of statuses for the last 7 days)
+    seven_days_ago = today - timedelta(days=7)
+    data['heatmap_data'] = list(Attendance.objects.filter(
+        employee__in=team_profiles,
+        date__gte=seven_days_ago,
+        date__lte=today,
+        is_expired=False
+    ).values('date', 'status').annotate(count=Count('id')).order_by('date'))
 
     return data
 
