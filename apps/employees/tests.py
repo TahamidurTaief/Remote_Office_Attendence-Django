@@ -1494,6 +1494,151 @@ class EmployeeTimelineEngineTests(TestCase):
         self.assertNotContains(response_leave, "Field 'Status' updated")
 
 
+class OrgHierarchyTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='admin_h@example.com', password='pass123', role='admin')
+        
+        # Create hierarchy: CEO -> Director -> Manager -> Employee
+        self.ceo = Employee.objects.create(
+            employee_number='CEO-001',
+            first_name='CEO',
+            last_name='User',
+            status=EmployeeStatus.ACTIVE
+        )
+        self.director = Employee.objects.create(
+            employee_number='DIR-001',
+            first_name='Director',
+            last_name='User',
+            reporting_manager=self.ceo,
+            status=EmployeeStatus.ACTIVE
+        )
+        self.manager = Employee.objects.create(
+            employee_number='MGR-001',
+            first_name='Manager',
+            last_name='User',
+            reporting_manager=self.director,
+            status=EmployeeStatus.ACTIVE
+        )
+        self.emp = Employee.objects.create(
+            employee_number='EMP-001',
+            first_name='Employee',
+            last_name='User',
+            reporting_manager=self.manager,
+            status=EmployeeStatus.ACTIVE
+        )
+
+    def test_hierarchy_service_traversal(self):
+        from apps.employees.hierarchy_services import OrgHierarchyService
+        
+        # CEO reports
+        self.assertEqual(list(OrgHierarchyService.get_direct_reports(self.ceo)), [self.director])
+        
+        # CEO all subordinates
+        subordinates = list(OrgHierarchyService.get_all_subordinates(self.ceo))
+        self.assertIn(self.director, subordinates)
+        self.assertIn(self.manager, subordinates)
+        self.assertIn(self.emp, subordinates)
+        
+        # Management chain of Employee
+        chain = OrgHierarchyService.get_management_chain(self.emp)
+        self.assertEqual(chain, [self.manager, self.director, self.ceo])
+        
+        # Depths
+        self.assertEqual(OrgHierarchyService.get_reporting_depth(self.ceo), 1)
+        self.assertEqual(OrgHierarchyService.get_reporting_depth(self.emp), 4)
+        
+        # Manager checks
+        self.assertTrue(OrgHierarchyService.is_manager_of(self.ceo, self.emp))
+        self.assertTrue(OrgHierarchyService.is_manager_of(self.director, self.emp))
+        self.assertFalse(OrgHierarchyService.is_manager_of(self.emp, self.ceo))
+        
+        # Scoped queryset
+        scoped = list(OrgHierarchyService.get_subordinate_scoped_queryset(self.manager).values_list('id', flat=True))
+        self.assertIn(self.manager.id, scoped)
+        self.assertIn(self.emp.id, scoped)
+        self.assertNotIn(self.director.id, scoped)
+
+        # Analytics
+        analytics = OrgHierarchyService.get_org_analytics()
+        self.assertEqual(analytics['max_depth'], 4)
+        self.assertEqual(analytics['avg_span_of_control'], 1.0)
+
+
+class ManagerDelegationTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='admin_del@example.com', password='pass123', role='admin')
+        self.manager = Employee.objects.create(
+            employee_number='DEL-MGR-001',
+            first_name='Manager',
+            last_name='Delegator',
+            status=EmployeeStatus.ACTIVE
+        )
+        self.delegate = Employee.objects.create(
+            employee_number='DEL-EMP-001',
+            first_name='Delegate',
+            last_name='User',
+            status=EmployeeStatus.ACTIVE
+        )
+
+    def test_delegation_validation(self):
+        from apps.employees.models import ManagerDelegation
+        from django.core.exceptions import ValidationError
+        
+        # Self-delegation error
+        with self.assertRaises(ValidationError):
+            ManagerDelegation.objects.create(
+                manager=self.manager,
+                delegate_to=self.manager,
+                start_date=date.today(),
+                end_date=date.today()
+            )
+            
+        # Date order error
+        with self.assertRaises(ValidationError):
+            ManagerDelegation.objects.create(
+                manager=self.manager,
+                delegate_to=self.delegate,
+                start_date=date(2026, 7, 26),
+                end_date=date(2026, 7, 25)
+            )
+
+    def test_delegation_views(self):
+        self.client.force_login(self.admin)
+        
+        # Create via view
+        url_create = reverse('employees:delegation_create')
+        data = {
+            'manager': self.manager.id,
+            'delegate_to': self.delegate.id,
+            'start_date': '2026-07-25',
+            'end_date': '2026-07-30',
+            'reason': 'Vacation'
+        }
+        res = self.client.post(url_create, data=data)
+        self.assertEqual(res.status_code, 302)
+        
+        from apps.employees.models import ManagerDelegation
+        delg = ManagerDelegation.objects.get(manager=self.manager)
+        self.assertEqual(delg.delegate_to, self.delegate)
+        self.assertEqual(delg.reason, 'Vacation')
+        self.assertTrue(delg.is_active)
+        
+        # List view
+        url_list = reverse('employees:delegation_list')
+        res_list = self.client.get(url_list)
+        self.assertEqual(res_list.status_code, 200)
+        self.assertContains(res_list, 'Vacation')
+        
+        # End delegation via view
+        url_end = reverse('employees:delegation_end', kwargs={'pk': delg.pk})
+        res_end = self.client.post(url_end)
+        self.assertEqual(res_end.status_code, 302)
+        
+        delg.refresh_from_db()
+        self.assertFalse(delg.is_active)
+
+
+
 
 
 

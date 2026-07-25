@@ -1,0 +1,52 @@
+<div class="w-full flex flex-col items-center">
+    <!-- Horizontal connector line -->
+    <div class="flex items-center w-full justify-center">
+        <div class="w-1/2 h-0.5 bg-gray-300"></div>
+        <div class="w-1/2 h-0.5 bg-gray-300"></div>
+    </div>
+    
+    <!-- Children Row -->
+    <div class="flex flex-row justify-center items-start gap-8 mt-4 w-full">
+        {% for child in directs %}
+            <div class="flex flex-col items-center">
+                <!-- Vertical line up to parent -->
+                <div class="w-0.5 h-6 bg-gray-300 -mt-4 mb-2"></div>
+                
+                <div class="bg-white border border-gray-200 rounded-xl shadow-xs p-3 w-64 flex flex-col items-center transition-transform hover:scale-[1.01] duration-150 relative">
+                    <div class="w-12 h-12 rounded-full bg-gray-100 text-gray-700 font-bold flex items-center justify-center text-sm shadow-inner mb-2 overflow-hidden border border-gray-200">
+                        {% if child.legacy_profile and child.legacy_profile.profile_photo %}
+                            <img src="{{ child.legacy_profile.profile_photo.url }}" alt="{{ child.get_full_name }}" class="w-full h-full object-cover">
+                        {% else %}
+                            {{ child.first_name|slice:":1" }}{{ child.last_name|slice:":1" }}
+                        {% endif %}
+                    </div>
+                    <h5 class="font-bold text-gray-900 text-sm mb-0.5">{{ child.get_full_name }}</h5>
+                    <p class="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1">{{ child.designation.name }}</p>
+                    <span class="px-1.5 py-0.5 rounded bg-gray-50 text-[9px] text-gray-600 font-medium">{{ child.department.name }}</span>
+
+                    <div class="mt-3 flex space-x-2">
+                        <a href="{% url 'employees:master_detail' child.pk %}" class="px-2 py-0.5 bg-white border border-gray-200 text-[10px] font-bold text-gray-700 rounded hover:bg-gray-50 transition-colors shadow-sm text-decoration-none">
+                            Profile
+                        </a>
+                        {% if child.direct_reports.exists %}
+                            <button 
+                                hx-get="{% url 'employees:org_chart_node' child.id %}"
+                                hx-target="#reports-of-{{ child.id }}"
+                                hx-swap="innerHTML"
+                                onclick="this.remove()"
+                                class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-[10px] font-bold text-white rounded transition-colors shadow-sm">
+                                Expand
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Vertical line down to next level -->
+                <div class="w-0.5 h-6 bg-gray-300"></div>
+
+                <!-- Sub-children container -->
+                <div id="reports-of-{{ child.id }}" class="w-full flex flex-col items-center"></div>
+            </div>
+        {% endfor %}
+    </div>
+</div>

@@ -736,3 +736,32 @@ class EmployeeAuditLog(models.Model):
     def delete(self, *args, **kwargs):
         raise ValidationError("EmployeeAuditLog records are immutable and cannot be deleted.")
 
+
+class ManagerDelegation(models.Model):
+    manager = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='delegations_made')
+    delegate_to = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='delegations_received')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def clean(self):
+        super().clean()
+        if self.manager_id == self.delegate_to_id:
+            raise ValidationError("You cannot delegate tasks to yourself.")
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValidationError("Start date must be before or equal to end date.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.manager.get_full_name()} -> {self.delegate_to.get_full_name()} ({self.start_date} to {self.end_date})"
+
+

@@ -1,0 +1,64 @@
+<c-card>
+    <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+        <div class="flex items-center space-x-2">
+            <div class="p-2 rounded-lg bg-teal-500/10 text-teal-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            </div>
+            <div>
+                <h3 class="font-bold text-sm text-slate-800">Organization Hierarchy Analytics</h3>
+                <p class="text-2xs text-slate-500">Span of control, depths, and branch/dept headcounts</p>
+            </div>
+        </div>
+        <a href="{% url 'employees:org_chart' %}" class="px-2.5 py-1 bg-teal-650 hover:bg-teal-750 text-white font-bold text-2xs rounded-lg transition-colors text-decoration-none shadow-sm">
+            View Tree Chart
+        </a>
+    </div>
+
+    <!-- Analytics Stats Grid -->
+    <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+        <div class="p-3 bg-gray-50 rounded-xl border border-gray-150">
+            <span class="text-2xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Max Org Depth</span>
+            <span class="text-xl font-extrabold text-slate-800">{{ org_analytics.max_depth }}</span>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-xl border border-gray-150">
+            <span class="text-2xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Avg Control Span</span>
+            <span class="text-xl font-extrabold text-slate-800">{{ org_analytics.avg_span_of_control }}</span>
+        </div>
+        <div class="p-3 bg-gray-50 rounded-xl border border-gray-150">
+            <span class="text-2xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Total Active</span>
+            <span class="text-xl font-extrabold text-slate-800">{{ org_analytics.total_headcount }}</span>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Headcount by Department -->
+        <div>
+            <h4 class="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Department Headcounts</h4>
+            <div class="space-y-2">
+                {% for dept in org_analytics.department_headcounts %}
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-gray-600 font-medium">{{ dept.name }}</span>
+                        <span class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 font-bold">{{ dept.headcount }}</span>
+                    </div>
+                {% empty %}
+                    <p class="text-2xs text-gray-400">No department data available.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Headcount by Branch -->
+        <div>
+            <h4 class="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Branch Headcounts</h4>
+            <div class="space-y-2">
+                {% for br in org_analytics.branch_headcounts %}
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-gray-600 font-medium">{{ br.name }}</span>
+                        <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-750 font-bold">{{ br.headcount }}</span>
+                    </div>
+                {% empty %}
+                    <p class="text-2xs text-gray-400">No branch data available.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</c-card>

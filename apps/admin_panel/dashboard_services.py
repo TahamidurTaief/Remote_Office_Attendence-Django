@@ -217,6 +217,9 @@ def get_manager_dashboard_data(user):
     team_profiles = EmployeeProfile.objects.filter(master_employee__in=direct_reports_qs)
 
     data['team_count'] = direct_reports_qs.count()
+    from apps.employees.hierarchy_services import OrgHierarchyService
+    data['subordinate_count_direct'] = OrgHierarchyService.get_direct_reports(emp_master).count()
+    data['subordinate_count_all'] = OrgHierarchyService.get_all_subordinates(emp_master).count()
 
     # Team attendance today
     data['team_attendance_today'] = Attendance.objects.select_related('employee', 'employee__branch').filter(
@@ -301,6 +304,8 @@ def get_hr_dashboard_data(user):
     """
     today = timezone.localdate()
     data = {}
+    from apps.employees.hierarchy_services import OrgHierarchyService
+    data['org_analytics'] = OrgHierarchyService.get_org_analytics()
 
     # Headcount & status breakdown
     data['total_employees'] = Employee.objects.count()

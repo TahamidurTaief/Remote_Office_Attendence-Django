@@ -1,0 +1,92 @@
+<c-app-shell page_title="Manager Delegations | FieldTrack" active_href="{% url 'employees:employee_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'employees:employee_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Manager Delegations">
+            <c-slot name="actions">
+                <button hx-get="{% url 'employees:delegation_create' %}" hx-target="#modal-container" hx-swap="innerHTML" class="inline-flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-colors shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <span>Add Delegation</span>
+                </button>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 lg:p-6 w-full space-y-6">
+        <!-- Delegations Table -->
+        <c-card>
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-900">Active and Past Delegations</h3>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Manager</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Delegate To</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Period</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Reason</th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for delegation in delegations %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                {{ delegation.manager.get_full_name }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                {{ delegation.delegate_to.get_full_name }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                {{ delegation.start_date|date:"d M Y" }} to {{ delegation.end_date|date:"d M Y" }}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-650 max-w-xs truncate">
+                                {{ delegation.reason|default:"--" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                {% if delegation.is_active %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        Active
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                        Ended
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                {% if delegation.is_active %}
+                                <form action="{% url 'employees:delegation_end' delegation.pk %}" method="post" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-red-650 hover:text-red-900 font-bold transition-colors">
+                                        End Now
+                                    </button>
+                                </form>
+                                {% else %}
+                                    <span class="text-gray-400">--</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-8 text-center text-gray-500 font-medium">
+                                No delegations configured.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </c-card>
+    </div>
+
+    <!-- Container for HTMX loaded modals -->
+    <div id="modal-container"></div>
+</c-app-shell>

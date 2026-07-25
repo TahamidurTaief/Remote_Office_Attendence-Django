@@ -24,6 +24,11 @@ urlpatterns = [
     path('master/<int:pk>/edit/', views.EmployeeMasterEditView.as_view(), name='master_edit'),
     path('master/<int:pk>/archive/', views.EmployeeMasterArchiveView.as_view(), name='master_archive'),
     path('master/<int:pk>/audit/', views.EmployeeAuditLogView.as_view(), name='master_audit'),
+    path('org-chart/', views.OrgChartView.as_view(), name='org_chart'),
+    path('org-chart/node/<int:pk>/', views.OrgChartNodeView.as_view(), name='org_chart_node'),
+    path('delegations/', views.ManagerDelegationListView.as_view(), name='delegation_list'),
+    path('delegations/create/', views.ManagerDelegationCreateView.as_view(), name='delegation_create'),
+    path('delegations/<int:pk>/end/', views.ManagerDelegationEndView.as_view(), name='delegation_end'),
 
     # Document Management & Asset Assignment Routes (Phase 2 Step 3)
     path('master/<int:pk>/documents/upload/', views.EmployeeDocumentUploadView.as_view(), name='document_upload'),

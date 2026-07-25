@@ -1784,3 +1784,91 @@ class EmployeeAuditLogView(AdminRequiredMixin, ListView):
         context['employee'] = self.employee
         return context
 
+
+from django.views.generic import TemplateView
+from apps.employees.hierarchy_services import OrgHierarchyService
+from apps.employees.models import ManagerDelegation
+
+class OrgChartView(AdminRequiredMixin, TemplateView):
+    template_name = 'employees/org_chart.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Fetch root nodes (employees without reporting manager)
+        roots = Employee.objects.filter(reporting_manager__isnull=True).exclude(status='archived').select_related(
+            'branch', 'department', 'designation', 'user'
+        )
+        context['roots'] = roots
+        return context
+
+class OrgChartNodeView(AdminRequiredMixin, View):
+    def get(self, request, pk):
+        # HTMX lazy load node direct reports
+        employee = get_object_or_404(Employee, pk=pk)
+        directs = OrgHierarchyService.get_direct_reports(employee)
+        return render(request, 'employees/partials/org_node_children.html', {
+            'directs': directs
+        })
+
+class ManagerDelegationListView(AdminRequiredMixin, ListView):
+    model = ManagerDelegation
+    template_name = 'employees/delegation_list.html'
+    context_object_name = 'delegations'
+
+    def get_queryset(self):
+        return ManagerDelegation.objects.select_related('manager', 'delegate_to', 'created_by').all()
+
+class ManagerDelegationCreateView(AdminRequiredMixin, View):
+    def get(self, request):
+        active_employees = Employee.objects.exclude(status='archived').order_by('first_name')
+        return render(request, 'employees/partials/delegation_create_modal.html', {
+            'employees': active_employees
+        })
+
+    def post(self, request):
+        manager_id = request.POST.get('manager')
+        delegate_to_id = request.POST.get('delegate_to')
+        start_date = request.POST.get('start_date')
+        end_date = request.POST.get('end_date')
+        reason = request.POST.get('reason', '')
+
+        try:
+            delg = ManagerDelegation.objects.create(
+                manager_id=manager_id,
+                delegate_to_id=delegate_to_id,
+                start_date=start_date,
+                end_date=end_date,
+                reason=reason,
+                created_by=request.user
+            )
+            log_audit(
+                actor=request.user,
+                action='delegation_created',
+                target=delg,
+                summary=f"Created delegation from {delg.manager.get_full_name()} to {delg.delegate_to.get_full_name()}"
+            )
+            messages.success(request, "Delegation created successfully.")
+        except ValidationError as e:
+            messages.error(request, f"Error: {e.message_dict if hasattr(e, 'message_dict') else e.message}")
+        except Exception as e:
+            messages.error(request, f"Unexpected error: {str(e)}")
+
+        return redirect('employees:delegation_list')
+
+class ManagerDelegationEndView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        delg = get_object_or_404(ManagerDelegation, pk=pk)
+        delg.is_active = False
+        delg.end_date = timezone.localdate()
+        delg.save(update_fields=['is_active', 'end_date'])
+        
+        log_audit(
+            actor=request.user,
+            action='delegation_ended',
+            target=delg,
+            summary=f"Manually ended delegation from {delg.manager.get_full_name()} to {delg.delegate_to.get_full_name()}"
+        )
+        messages.success(request, "Delegation ended successfully.")
+        return redirect('employees:delegation_list')
+
+

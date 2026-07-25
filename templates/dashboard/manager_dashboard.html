@@ -26,8 +26,11 @@
     </div>
 
     <!-- Manager KPI Row -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <c-kpi-widget title="Direct Reports" value="{{ team_count }}" label="Team Members" icon="users" color="blue">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <c-kpi-widget title="Direct Reports" value="{{ subordinate_count_direct }}" label="Direct Team" icon="users" color="blue">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Total Subordinates" value="{{ subordinate_count_all }}" label="All Levels" icon="users" color="indigo">
       </c-kpi-widget>
 
       <c-kpi-widget title="Pending Approvals" value="{{ pending_leave_approvals|length|add:pending_expense_approvals|length }}" label="Action Required" icon="clipboard-check" color="purple">
@@ -35,6 +38,22 @@
 
       <c-kpi-widget title="Managed Projects" value="{{ managed_projects|length }}" label="Active Projects" icon="folder" color="teal">
       </c-kpi-widget>
+    </div>
+
+    <!-- Org Chart Link Banner -->
+    <div class="p-4 bg-white rounded-xl border border-gray-150 flex justify-between items-center shadow-sm">
+      <div class="flex items-center space-x-3">
+        <div class="p-2 rounded-lg bg-indigo-50 text-indigo-650">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-gray-800">Visual Team Hierarchy</h3>
+          <p class="text-xs text-gray-500">Explore management chains, depths, and direct reporting structures.</p>
+        </div>
+      </div>
+      <a href="{% url 'employees:org_chart' %}" class="ft-btn ft-btn-primary ft-btn-sm text-xs text-decoration-none">
+        View Org Chart
+      </a>
     </div>
 
     <!-- Widgets Grid -->
