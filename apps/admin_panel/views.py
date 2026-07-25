@@ -269,12 +269,15 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
 
         remote_count = todays_attendances.filter(type='field').count()
 
-        top_ot_employees = Attendance.objects.filter(
+        top_ot_employees = list(Attendance.objects.filter(
             date__gte=today.replace(day=1),
             date__lte=today,
-            ot_hours__gt=0,
+            overtime_minutes__gt=0,
+            ot_status='approved',
             employee__in=allowed_employees
-        ).values('employee__full_name').annotate(total_ot=Sum('ot_hours')).order_by('-total_ot')[:5]
+        ).values('employee__full_name').annotate(total_ot_min=Sum('overtime_minutes')).order_by('-total_ot_min')[:5])
+        for item in top_ot_employees:
+            item['total_ot'] = item['total_ot_min'] / 60.0
 
         hr_breakdown = {
             'present': present_count,
