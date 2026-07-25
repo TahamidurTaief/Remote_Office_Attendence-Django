@@ -138,6 +138,15 @@ class UserSession(models.Model):
             models.Index(fields=['device_id']),
         ]
 
+    @property
+    def device_display_name(self):
+        from .utils import parse_user_agent
+        if self.browser:
+            parsed = parse_user_agent(self.browser)
+            if parsed and parsed != "Unknown Device":
+                return parsed
+        return f"Device ({self.device_id[:8]})"
+
     def __str__(self):
         return f"{self.user} ({self.device_id[:8]}) - {'Active' if self.is_active else 'Expired'}"
 

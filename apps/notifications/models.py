@@ -103,19 +103,28 @@ class AuditLog(models.Model):
 
 
 def log_audit(actor, action, target=None, summary='', ip=None, metadata=None):
+    if hasattr(actor, 'user') and hasattr(actor, 'META'):
+        req = actor
+        actor = getattr(req, 'user', None)
+        if not ip:
+            from apps.accounts.views import get_client_ip
+            ip = get_client_ip(req)
+
     target_type = ''
     target_id = ''
     if target:
         target_type = target.__class__.__name__
         target_id = str(getattr(target, 'pk', getattr(target, 'id', '')))
 
+    real_actor = actor if (actor and getattr(actor, 'is_authenticated', False)) else None
+
     return AuditLog.objects.create(
-        actor=actor if (actor and getattr(actor, 'is_authenticated', False)) else None,
+        actor=real_actor,
         action=action,
         target_type=target_type,
         target_id=target_id,
         summary=summary,
-        ip_address=ip,
+        ip_address=ip or '',
         metadata=metadata or {},
         timestamp=timezone.now()
     )

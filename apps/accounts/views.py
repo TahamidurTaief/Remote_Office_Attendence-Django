@@ -30,10 +30,17 @@ logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
+    if not request or not hasattr(request, 'META'):
+        return ''
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
+        parts = [ip.strip() for ip in x_forwarded_for.split(',') if ip.strip()]
+        if parts:
+            return parts[0]
+    x_real_ip = request.META.get('HTTP_X_REAL_IP')
+    if x_real_ip and x_real_ip.strip():
+        return x_real_ip.strip()
+    return request.META.get('REMOTE_ADDR') or ''
 
 
 def get_device_id(request):
@@ -900,7 +907,7 @@ class LoginMFAVerifyView(View):
             now = timezone.now()
             UserLoginActivity.objects.create(
                 user=user,
-                identifier_entered=user.email,
+                identifier_entered=user.email or user.phone or 'MFA Login',
                 ip_address=ip,
                 user_agent=ua,
                 status='success'

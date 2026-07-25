@@ -8,7 +8,7 @@
     <div>
       <div class="flex items-center gap-2">
         <span class="font-medium" style="color:var(--text)">
-          {{ sess.device_id|slice:":12" }}...
+          {{ sess.device_display_name }}
         </span>
         {% if sess.session_key == current_session_key %}
           <span class="px-1.5 py-0.5 text-[10px] rounded bg-primary/20 text-primary font-semibold">Current Device</span>
@@ -27,7 +27,11 @@
       </span>
     {% else %}
       <span class="px-2 py-0.5 text-[10px] rounded bg-slate-500/20 text-slate-500">
-        Ended ({{ sess.logout_time|date:"g:i A" }})
+        {% if sess.logout_time %}
+          Ended ({{ sess.logout_time|date:"g:i A" }})
+        {% else %}
+          Ended
+        {% endif %}
       </span>
     {% endif %}
   </div>

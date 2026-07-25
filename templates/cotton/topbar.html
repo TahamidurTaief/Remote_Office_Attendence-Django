@@ -134,6 +134,14 @@
           <i data-lucide="user-circle" class="w-3.5 h-3.5"></i>
           My Profile
         </a>
+        <a href="{% url 'accounts:security_settings' %}"
+           class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-opacity-10"
+           style="color:var(--text-secondary)"
+           onmouseover="this.style.background='var(--surface-2)'"
+           onmouseout="this.style.background=''">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+          Security Settings
+        </a>
         <div class="h-px my-1" style="background:var(--border)"></div>
         <a href="{% url 'accounts:logout' %}"
            class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors"

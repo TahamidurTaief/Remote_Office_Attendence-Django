@@ -5,39 +5,42 @@
 {# - title #}
 {# - icon #}
 
-{% if type == 'emerald' %}
-    {% define gradient_class="bg-linear-to-br from-emerald-50 to-emerald-100 border border-emerald-200" %}
-    {% define icon_bg="bg-emerald-100" %}
-    {% define icon_text="text-emerald-700" %}
-    {% define badge_class="text-emerald-700 bg-emerald-200/70" %}
-    {% define title_class="text-emerald-900" %}
-{% elif type == 'sky' %}
-    {% define gradient_class="bg-linear-to-br from-sky-50 to-sky-100 border border-sky-200" %}
-    {% define icon_bg="bg-sky-100" %}
-    {% define icon_text="text-sky-700" %}
-    {% define badge_class="text-sky-700 bg-sky-200/70" %}
-    {% define title_class="text-sky-900" %}
-{% elif type == 'fuchsia' %}
-    {% define gradient_class="bg-linear-to-br from-fuchsia-50 to-fuchsia-100 border border-fuchsia-200" %}
-    {% define icon_bg="bg-fuchsia-100" %}
-    {% define icon_text="text-fuchsia-700" %}
-    {% define badge_class="text-fuchsia-700 bg-fuchsia-200/70" %}
-    {% define title_class="text-fuchsia-900" %}
-{% else %}
-    {% define gradient_class="bg-linear-to-br from-primary-50 to-primary-100 border border-primary-200/50" %}
-    {% define icon_bg="bg-primary-100" %}
-    {% define icon_text="text-primary-600" %}
-    {% define badge_class="text-primary-600 bg-primary-200/70" %}
-    {% define title_class="text-primary-800" %}
-{% endif %}
-
-<div class="relative overflow-hidden {{ gradient_class }} rounded-2xl p-6">
+<div class="relative overflow-hidden border rounded-2xl p-6
+    {% if type == 'emerald' %}bg-emerald-50 border-emerald-200
+    {% elif type == 'sky' %}bg-sky-50 border-sky-200
+    {% elif type == 'fuchsia' %}bg-fuchsia-50 border-fuchsia-200
+    {% else %}bg-primary-50 border-primary-200/50{% endif %}">
+    
     <div class="flex items-center justify-between">
-        <div class="w-10 h-10 rounded-xl {{ icon_bg }} flex items-center justify-center">
-            <i data-lucide="{{ icon }}" class="w-5 h-5 {{ icon_text }}"></i>
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center
+            {% if type == 'emerald' %}bg-emerald-100
+            {% elif type == 'sky' %}bg-sky-100
+            {% elif type == 'fuchsia' %}bg-fuchsia-100
+            {% else %}bg-primary-100{% endif %}">
+            
+            <i data-lucide="{{ icon }}" class="w-5 h-5 
+                {% if type == 'emerald' %}text-emerald-700
+                {% elif type == 'sky' %}text-sky-700
+                {% elif type == 'fuchsia' %}text-fuchsia-700
+                {% else %}text-primary-600{% endif %}"></i>
         </div>
-        <span class="text-xs font-semibold {{ badge_class }} px-2 py-1 rounded-full">{{ badge_text }}</span>
+        
+        <span class="text-xs font-semibold px-2 py-1 rounded-full
+            {% if type == 'emerald' %}text-emerald-700 bg-emerald-200/70
+            {% elif type == 'sky' %}text-sky-700 bg-sky-200/70
+            {% elif type == 'fuchsia' %}text-fuchsia-700 bg-fuchsia-200/70
+            {% else %}text-primary-600 bg-primary-200/70{% endif %}">
+            {{ badge_text }}
+        </span>
     </div>
-    <h3 class="mt-4 text-lg font-bold {{ title_class }}">{{ title }}</h3>
+    
+    <h3 class="mt-4 text-lg font-bold 
+        {% if type == 'emerald' %}text-emerald-900
+        {% elif type == 'sky' %}text-sky-900
+        {% elif type == 'fuchsia' %}text-fuchsia-900
+        {% else %}text-primary-800{% endif %}">
+        {{ title }}
+    </h3>
+    
     {{ slot }}
 </div>
