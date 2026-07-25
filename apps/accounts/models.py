@@ -270,6 +270,7 @@ class UserSecurityProfile(models.Model):
     mfa_enabled_at = models.DateTimeField(null=True, blank=True)
     backup_codes = models.JSONField(default=list, blank=True)
     pin_hash = models.CharField(max_length=128, blank=True)
+    workspace_password_hash = models.CharField(max_length=128, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -284,6 +285,20 @@ class UserSecurityProfile(models.Model):
         if not self.pin_hash or not pin:
             return False
         return self.pin_hash == hashlib.sha256(str(pin).strip().encode('utf-8')).hexdigest()
+
+    def set_workspace_password(self, raw_password):
+        from django.contrib.auth.hashers import make_password
+        if raw_password:
+            self.workspace_password_hash = make_password(str(raw_password).strip())
+        else:
+            self.workspace_password_hash = ''
+        self.save(update_fields=['workspace_password_hash'])
+
+    def check_workspace_password(self, raw_password):
+        from django.contrib.auth.hashers import check_password
+        if not self.workspace_password_hash or not raw_password:
+            return False
+        return check_password(str(raw_password).strip(), self.workspace_password_hash)
 
     def generate_new_secret(self):
         self.mfa_secret = pyotp.random_base32()
@@ -331,6 +346,7 @@ class SecurityPolicy(models.Model):
     UNLOCK_CHOICES = (
         ('password', 'Password'),
         ('pin', 'PIN'),
+        ('workspace_password', 'Dedicated Workspace Password'),
         ('mfa', 'MFA TOTP'),
     )
 

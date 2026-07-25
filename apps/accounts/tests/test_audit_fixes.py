@@ -121,3 +121,54 @@ class AuditFixesTestCase(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(TrustedDevice.objects.filter(pk=device.pk).exists())
         self.assertContains(resp, 'No trusted devices')
+
+    def test_workspace_password_feature_d(self):
+        from apps.accounts.models import SecurityPolicy, UserSecurityProfile
+        from apps.notifications.models import AuditLog
+
+        # 1. Test model methods
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=self.user)
+        sec_prof.set_workspace_password('MySecretWS123')
+        self.assertTrue(sec_prof.check_workspace_password('MySecretWS123'))
+        self.assertFalse(sec_prof.check_workspace_password('WrongSecret'))
+
+        # 2. Test Setup view validation
+        self.client.force_login(self.user)
+        policy, _ = SecurityPolicy.objects.get_or_create(role=self.user.role)
+        policy.unlock_method = 'workspace_password'
+        policy.save()
+
+        setup_url = '/account/security/workspace-password/setup/'
+
+        # Wrong current password
+        resp = self.client.post(setup_url, {'password': 'wrongpassword', 'ws_password': 'NewPassword1', 'confirm_ws_password': 'NewPassword1'})
+        self.assertContains(resp, 'Incorrect current password')
+
+        # Short workspace password
+        resp = self.client.post(setup_url, {'password': 'Password123!', 'ws_password': '123', 'confirm_ws_password': '123'})
+        self.assertContains(resp, 'at least 6 characters')
+
+        # Mismatched confirmation
+        resp = self.client.post(setup_url, {'password': 'Password123!', 'ws_password': 'NewPassword1', 'confirm_ws_password': 'NewPassword2'})
+        self.assertContains(resp, 'do not match')
+
+        # Valid setup
+        resp = self.client.post(setup_url, {'password': 'Password123!', 'ws_password': 'NewPassword1', 'confirm_ws_password': 'NewPassword1'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'successfully')
+
+        sec_prof.refresh_from_db()
+        self.assertTrue(sec_prof.check_workspace_password('NewPassword1'))
+        self.assertTrue(AuditLog.objects.filter(action='workspace_password_setup_success', actor=self.user).exists())
+
+        # 3. Test WorkspaceUnlockView via workspace_password
+        unlock_url = '/security/workspace-lock/unlock/'
+
+        # Failed unlock
+        fail_resp = self.client.post(unlock_url, {'password': 'WrongPassword'})
+        self.assertEqual(fail_resp.status_code, 400)
+
+        # Successful unlock
+        success_resp = self.client.post(unlock_url, {'password': 'NewPassword1'})
+        self.assertEqual(success_resp.status_code, 200)
+        self.assertTrue(success_resp.json().get('valid'))

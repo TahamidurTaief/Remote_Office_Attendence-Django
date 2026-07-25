@@ -742,13 +742,15 @@ class WorkspaceUnlockView(LoginRequiredMixin, View):
         if unlock_method == 'pin' and sec_prof and sec_prof.pin_hash:
             is_valid = sec_prof.check_pin(credential)
             method_used = 'pin'
-
-        if not is_valid and unlock_method == 'mfa' and sec_prof:
+        elif unlock_method == 'workspace_password' and sec_prof and sec_prof.workspace_password_hash:
+            is_valid = sec_prof.check_workspace_password(credential)
+            method_used = 'workspace_password'
+        elif unlock_method == 'mfa' and sec_prof:
             is_valid = sec_prof.verify_totp(credential) or sec_prof.verify_backup_code(credential)
             method_used = 'mfa'
-
-        if not is_valid:
+        elif unlock_method == 'password':
             is_valid = request.user.check_password(credential)
+            method_used = 'password'
 
         if not is_valid:
             log_audit(request.user, 'workspace_unlock_failed', summary="Failed workspace unlock attempt", ip=get_client_ip(request))
@@ -1445,4 +1447,56 @@ class SetupPINView(LoginRequiredMixin, View):
             'success': True,
             'pin_exists': True
         })
+
+
+class SetupWorkspacePasswordView(LoginRequiredMixin, View):
+    """
+    POST /account/security/workspace-password/setup/
+    Saves or changes the user's dedicated workspace unlock password after account password confirmation.
+    """
+    def post(self, request):
+        policy = SecurityPolicy.objects.filter(role=request.user.role).first()
+        if not policy or policy.unlock_method != 'workspace_password':
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("Dedicated workspace password unlock is not permitted by your role's security policy.")
+
+        password = request.POST.get('password', '').strip()
+        ws_password = request.POST.get('ws_password', '').strip()
+        confirm_ws_password = request.POST.get('confirm_ws_password', '').strip()
+        sec_prof, _ = UserSecurityProfile.objects.get_or_create(user=request.user)
+
+        # Confirm account login password
+        if not request.user.check_password(password):
+            return render(request, 'accounts/partials/workspace_password_setup_form.html', {
+                'error': 'Incorrect current password. Please try again.',
+                'ws_password_exists': bool(sec_prof.workspace_password_hash)
+            })
+
+        # Validate workspace password length (min 6 chars)
+        if len(ws_password) < 6:
+            return render(request, 'accounts/partials/workspace_password_setup_form.html', {
+                'error': 'Workspace password must be at least 6 characters long.',
+                'ws_password_exists': bool(sec_prof.workspace_password_hash)
+            })
+
+        if ws_password != confirm_ws_password:
+            return render(request, 'accounts/partials/workspace_password_setup_form.html', {
+                'error': 'Workspace password and confirmation do not match.',
+                'ws_password_exists': bool(sec_prof.workspace_password_hash)
+            })
+
+        sec_prof.set_workspace_password(ws_password)
+        log_audit(
+            actor=request.user,
+            action='workspace_password_setup_success',
+            target=sec_prof,
+            summary="User successfully set/changed dedicated workspace unlock password",
+            ip=get_client_ip(request)
+        )
+
+        return render(request, 'accounts/partials/workspace_password_setup_form.html', {
+            'success': True,
+            'ws_password_exists': True
+        })
+
 

@@ -18,6 +18,7 @@
     <c-select name="unlock_method" label="Workspace Unlock Method" value="{{ policy.unlock_method }}">
       <option value="password" {% if policy.unlock_method == 'password' %}selected{% endif %}>Password Only</option>
       <option value="pin" {% if policy.unlock_method == 'pin' %}selected{% endif %}>Hashed PIN</option>
+      <option value="workspace_password" {% if policy.unlock_method == 'workspace_password' %}selected{% endif %}>Dedicated Workspace Password</option>
       <option value="mfa" {% if policy.unlock_method == 'mfa' %}selected{% endif %}>MFA TOTP Code</option>
     </c-select>
 
