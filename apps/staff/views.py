@@ -205,7 +205,7 @@ def attendance_history(request):
         date__gte=start_date,
         date__lte=end_date,
         is_expired=False
-    ).order_by('-date', '-check_in_time')
+    ).prefetch_related('forgot_checkout_requests', 'correction_requests').order_by('-date', '-check_in_time')
 
     stats = {
         'present': attendances.filter(attendance_type='check_in', status__in=['on_time', 'late']).values('date').distinct().count(),
