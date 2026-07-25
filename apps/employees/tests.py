@@ -1451,6 +1451,49 @@ class EmployeeStatusEngineTests(TestCase):
         self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
 
 
+class EmployeeTimelineEngineTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email='admin_time@example.com', password='pass123', role='admin')
+        self.employee = Employee.objects.create(
+            employee_number='EMP-TIME-001',
+            first_name='Time',
+            last_name='Engine',
+            status=EmployeeStatus.DRAFT
+        )
+        self.profile = EmployeeProfile.objects.create(
+            user=self.admin,
+            master_employee=self.employee,
+            employee_id='EMP-TIME-001',
+            full_name='Time Engine',
+            phone='+8801700000020',
+            joined_date=date.today()
+        )
+
+    def test_timeline_compilation_and_filters(self):
+        self.client.force_login(self.admin)
+        url = reverse('employees:employee_timeline', kwargs={'pk': self.employee.pk})
+
+        # Add history record
+        EmploymentHistory.objects.create(
+            employee=self.employee,
+            field_changed='status',
+            old_value='draft',
+            new_value='active',
+            reason='Hired',
+            approved_by=self.admin
+        )
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Field &#x27;Status&#x27; updated")
+        self.assertContains(response, "Hired")
+
+        # Test filter by category
+        response_leave = self.client.get(url + "?category=leave")
+        self.assertEqual(response_leave.status_code, 200)
+        self.assertNotContains(response_leave, "Field 'Status' updated")
+
+
 
 
 

@@ -1,0 +1,23 @@
+{% for evt in timeline_events %}
+  <c-timeline-item 
+    title="{{ evt.title }}"
+    meta="{{ evt.timestamp|date:'M d, Y H:i' }}"
+    icon="{{ evt.icon }}"
+    dot="{% if evt.category == 'hr' %}warning{% elif evt.category == 'leave' %}primary{% elif evt.category == 'attendance' %}success{% elif evt.category == 'document' %}danger{% else %}neutral{% endif %}"
+    {% if forloop.last and has_next %}
+      hx-get="{% url 'employees:employee_timeline' employee.pk %}?page={{ next_page }}&category={{ category_filter }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}"
+      hx-trigger="revealed"
+      hx-swap="afterend"
+    {% endif %}
+  >
+    <div class="space-y-1">
+      <p class="text-sm text-gray-700">{{ evt.description }}</p>
+      {% if evt.reason %}
+        <p class="text-xs text-gray-500 italic">"{{ evt.reason }}"</p>
+      {% endif %}
+      {% if evt.actor %}
+        <p class="text-[11px] text-gray-400">By: {{ evt.actor.get_full_name|default:evt.actor.email }}</p>
+      {% endif %}
+    </div>
+  </c-timeline-item>
+{% endfor %}

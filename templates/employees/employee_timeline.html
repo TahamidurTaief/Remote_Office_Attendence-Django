@@ -7,12 +7,12 @@
     <div class="space-y-1">
       <div class="flex items-center space-x-3">
         <h1 class="text-2xl font-bold text-gray-900">
-          Employee Timeline & EmploymentHistory
+          Employee Timeline & Employment History
         </h1>
         <c-status-pill status="{{ employee.business_status }}" label="{{ employee.business_status_display }}"></c-status-pill>
       </div>
       <p class="text-sm text-gray-500">
-        Read-only chronological log of all field changes and status lifecycle transitions for {{ employee.get_full_name }}.
+        Unified chronological timeline tracking HR, Lifecycle, Leave, Attendance, Assets, and Documents for {{ employee.get_full_name }}.
       </p>
     </div>
     <a href="{% url 'employees:master_detail' pk=employee.pk %}" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold">
@@ -20,25 +20,46 @@
     </a>
   </div>
 
+  {# Filter Bar #}
+  <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+    <form hx-get="{% url 'employees:employee_timeline' employee.pk %}"
+          hx-target="#timeline-events-container"
+          hx-swap="innerHTML"
+          hx-trigger="change"
+          class="flex flex-wrap items-center gap-4">
+      
+      <div class="flex flex-col">
+        <label class="text-xs font-semibold text-gray-500 mb-1">Category</label>
+        <select name="category" class="rounded-xl border-gray-200 text-sm focus:ring-primary focus:border-primary">
+          <option value="all" {% if category_filter == 'all' %}selected{% endif %}>All Events</option>
+          <option value="hr" {% if category_filter == 'hr' %}selected{% endif %}>HR & Lifecycle</option>
+          <option value="leave" {% if category_filter == 'leave' %}selected{% endif %}>Leave Request</option>
+          <option value="asset" {% if category_filter == 'asset' %}selected{% endif %}>Asset Assignment</option>
+          <option value="document" {% if category_filter == 'document' %}selected{% endif %}>Document Upload</option>
+          <option value="attendance" {% if category_filter == 'attendance' %}selected{% endif %}>Attendance Session</option>
+        </select>
+      </div>
+
+      <div class="flex flex-col">
+        <label class="text-xs font-semibold text-gray-500 mb-1">Start Date</label>
+        <input type="date" name="start_date" value="{{ start_date|default:'' }}"
+               class="rounded-xl border-gray-200 text-sm focus:ring-primary focus:border-primary">
+      </div>
+
+      <div class="flex flex-col">
+        <label class="text-xs font-semibold text-gray-500 mb-1">End Date</label>
+        <input type="date" name="end_date" value="{{ end_date|default:'' }}"
+               class="rounded-xl border-gray-200 text-sm focus:ring-primary focus:border-primary">
+      </div>
+      
+    </form>
+  </div>
+
   <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
     <c-timeline>
-      {% for evt in timeline_events %}
-        <c-timeline-item 
-          title="{{ evt.title }}"
-          time="{{ evt.timestamp|date:'M d, Y H:i' }}"
-          badge="{{ evt.event_type }}"
-        >
-          <p class="text-sm text-gray-700 mt-1">{{ evt.description }}</p>
-          {% if evt.actor %}
-            <p class="text-xs text-gray-400 mt-1">Logged by: {{ evt.actor.get_full_name|default:evt.actor.email }}</p>
-          {% endif %}
-        </c-timeline-item>
-      {% empty %}
-        <c-empty-state 
-          title="No Timeline Events" 
-          description="No status transitions or employment history changes recorded yet."
-        ></c-empty-state>
-      {% endfor %}
+      <div id="timeline-events-container">
+        {% include 'employees/partials/timeline_events_rows.html' %}
+      </div>
     </c-timeline>
   </div>
 

@@ -1520,7 +1520,8 @@ class EmployeeDocumentDownloadView(LoginRequiredMixin, View):
 
 class EmployeeTimelineView(AdminRequiredMixin, DetailView):
     """
-    Read-only timeline view combining status transitions and EmploymentHistory logs.
+    Read-only timeline view combining HR history, lifecycle requests, leave requests,
+    asset assignments, document uploads, and attendance logs.
     """
     model = Employee
     template_name = 'employees/employee_timeline.html'
@@ -1529,29 +1530,146 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         employee = self.object
-        history_events = list(employee.employment_history.select_related('approved_by').all())
-        lifecycle_events = list(employee.lifecycle_requests.select_related('requested_by', 'reviewed_by').all())
-        
-        combined = []
-        for h in history_events:
-            combined.append({
-                'timestamp': h.created_at,
-                'event_type': 'Field Change',
-                'title': f"Field '{h.field_changed}' updated",
-                'description': f"Old: {h.old_value} → New: {h.new_value} (Reason: {h.reason})",
-                'actor': h.approved_by,
-            })
-        for l in lifecycle_events:
-            combined.append({
-                'timestamp': l.requested_at,
-                'event_type': 'Lifecycle Transition',
-                'title': f"Status Request: {l.from_status} → {l.to_status} [{l.review_status}]",
-                'description': f"Reason: {l.reason} | Note: {l.review_note}",
-                'actor': l.reviewed_by or l.requested_by,
-            })
+        profile = getattr(employee, 'legacy_profile', None)
 
-        combined.sort(key=lambda x: x['timestamp'], reverse=True)
-        context['timeline_events'] = combined
+        # Filters
+        category = self.request.GET.get('category', 'all')
+        start_date_str = self.request.GET.get('start_date')
+        end_date_str = self.request.GET.get('end_date')
+
+        # Pagination
+        try:
+            page = int(self.request.GET.get('page', 1))
+        except ValueError:
+            page = 1
+        page_size = 15
+        limit = page * page_size
+
+        events = []
+
+        # Helper to apply date filters
+        def filter_dates(qs, field):
+            nonlocal start_date_str, end_date_str
+            if start_date_str:
+                qs = qs.filter(**{f"{field}__gte": start_date_str})
+            if end_date_str:
+                qs = qs.filter(**{f"{field}__lte": f"{end_date_str} 23:59:59"})
+            return qs
+
+        # 1. HR & Lifecycle Transitions
+        if category in ('all', 'hr'):
+            hist_qs = employee.employment_history.select_related('approved_by')
+            hist_qs = filter_dates(hist_qs, 'created_at')
+            for h in hist_qs.order_by('-created_at')[:limit]:
+                events.append({
+                    'timestamp': h.created_at,
+                    'category': 'hr',
+                    'icon': 'user-cog',
+                    'title': f"Field '{h.field_changed.replace('_', ' ').title()}' updated",
+                    'description': f"Old: {h.old_value} → New: {h.new_value}",
+                    'reason': h.reason,
+                    'actor': h.approved_by,
+                })
+
+            life_qs = employee.lifecycle_requests.select_related('requested_by', 'reviewed_by')
+            life_qs = filter_dates(life_qs, 'requested_at')
+            for l in life_qs.order_by('-requested_at')[:limit]:
+                events.append({
+                    'timestamp': l.requested_at,
+                    'category': 'hr',
+                    'icon': 'git-pull-request',
+                    'title': f"Status transition: {l.from_status.title()} → {l.to_status.title()}",
+                    'description': f"Approval status: {l.review_status.upper()}",
+                    'reason': l.reason,
+                    'actor': l.reviewed_by or l.requested_by,
+                })
+
+        # 2. Leave requests
+        if category in ('all', 'leave') and profile:
+            leave_qs = profile.leave_requests.select_related('leave_type', 'reviewed_by')
+            leave_qs = filter_dates(leave_qs, 'requested_at')
+            for lv in leave_qs.order_by('-requested_at')[:limit]:
+                events.append({
+                    'timestamp': lv.requested_at,
+                    'category': 'leave',
+                    'icon': 'calendar',
+                    'title': f"Leave Request: {lv.leave_type.name}",
+                    'description': f"Period: {lv.start_date} to {lv.end_date} ({lv.number_of_days} days) - Status: {lv.status.upper()}",
+                    'reason': lv.reason,
+                    'actor': lv.reviewed_by or profile.user,
+                })
+
+        # 3. Asset Assignments
+        if category in ('all', 'asset'):
+            asset_qs = employee.asset_assignments.select_related('asset', 'assigned_by')
+            asset_qs = filter_dates(asset_qs, 'assigned_date')
+            for ast in asset_qs.order_by('-assigned_date')[:limit]:
+                title_str = f"Asset Assigned: {ast.asset.name}"
+                desc_str = f"Tag: {ast.asset.asset_tag} | Condition: {ast.condition_at_assignment.upper()}"
+                if ast.returned_date:
+                    title_str = f"Asset Returned: {ast.asset.name}"
+                    desc_str += f" | Returned condition: {ast.condition_at_return.upper() if ast.condition_at_return else 'Unknown'}"
+                events.append({
+                    'timestamp': timezone.make_aware(datetime.combine(ast.assigned_date, datetime.min.time())) if timezone.is_naive(timezone.now()) else timezone.now(),  # Fallback helper
+                    'category': 'asset',
+                    'icon': 'laptop',
+                    'title': title_str,
+                    'description': desc_str,
+                    'reason': ast.notes,
+                    'actor': ast.assigned_by,
+                })
+
+        # 4. Documents
+        if category in ('all', 'document'):
+            from apps.employees.models import EmployeeDocument
+            from django.db.models import Q
+            doc_qs = EmployeeDocument.objects.filter(
+                Q(employee_master=employee) | Q(employee=profile) if profile else Q(employee_master=employee)
+            ).select_related('uploaded_by')
+            doc_qs = filter_dates(doc_qs, 'uploaded_at')
+            for doc in doc_qs.order_by('-uploaded_at')[:limit]:
+                events.append({
+                    'timestamp': doc.uploaded_at,
+                    'category': 'document',
+                    'icon': 'file-text',
+                    'title': f"Document Uploaded: {doc.get_document_type_display()}",
+                    'description': f"Filename: {doc.file.name if doc.file else 'No file'} | Version: v{doc.version}",
+                    'reason': doc.title,
+                    'actor': doc.uploaded_by,
+                })
+
+        # 5. Attendance
+        if category in ('all', 'attendance') and profile:
+            from apps.attendance.models import Attendance
+            att_qs = Attendance.objects.filter(employee=profile)
+            att_qs = filter_dates(att_qs, 'check_in_time')
+            for att in att_qs.order_by('-check_in_time')[:limit]:
+                events.append({
+                    'timestamp': att.check_in_time,
+                    'category': 'attendance',
+                    'icon': 'clock',
+                    'title': f"Attendance Session ({att.status.title()})",
+                    'description': f"Checked in at {att.check_in_time.strftime('%H:%M') if att.check_in_time else '—'} | Checked out at {att.check_out_time.strftime('%H:%M') if att.check_out_time else '—'}",
+                    'reason': f"Work mode: {att.work_mode.upper()}",
+                    'actor': profile.user,
+                })
+
+        # Sort and Slice paginated segment
+        events.sort(key=lambda x: x['timestamp'], reverse=True)
+        start_idx = (page - 1) * page_size
+        end_idx = page * page_size
+        
+        context['timeline_events'] = events[start_idx:end_idx]
+        context['has_next'] = len(events) > end_idx
+        context['next_page'] = page + 1
+        context['category_filter'] = category
+        context['start_date'] = start_date_str
+        context['end_date'] = end_date_str
+
+        # If it's an HTMX request for infinite scroll/pagination, render only the partial row list
+        if self.request.headers.get('HX-Request') and self.request.GET.get('page'):
+            self.template_name = 'employees/partials/timeline_events_rows.html'
+
         return context
 
 
