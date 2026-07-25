@@ -376,10 +376,49 @@ def get_admin_dashboard_data(user):
     Admin dashboard: HR org-wide metrics + System security & session stats.
     """
     data = get_hr_dashboard_data(user)
+    today = timezone.localdate()
 
     # Active sessions & security metrics
     data['active_sessions_count'] = UserSession.objects.filter(is_active=True).count()
     data['trusted_devices_count'] = TrustedDevice.objects.count()
     data['recent_audit_events_count'] = 0
+
+    # Sync and GPS metrics
+    from apps.attendance.models import SyncLog, AttendanceLocation, AttendanceCorrectionRequest
+    from django.db.models import Sum, Q
+    data['sync_failed_count'] = SyncLog.objects.aggregate(total_failed=Sum('records_failed'))['total_failed'] or 0
+    data['offline_queue_size'] = Attendance.objects.filter(synced_at__isnull=True).count()
+    data['gps_issues_count'] = AttendanceLocation.objects.filter(
+        Q(accuracy__gt=100) | Q(latitude=0.0, longitude=0.0),
+        timestamp__date=today
+    ).count()
+
+    # Late %
+    today_checkins_total = Attendance.objects.filter(date=today, attendance_type='check_in', is_expired=False).count()
+    today_late_total = Attendance.objects.filter(date=today, status='late', attendance_type='check_in', is_expired=False).count()
+    data['late_percentage'] = int((today_late_total / today_checkins_total * 100)) if today_checkins_total > 0 else 0
+
+    # Trend (Last 15 days)
+    fifteen_days_ago = today - timedelta(days=15)
+    data['attendance_trend'] = list(Attendance.objects.filter(
+        date__gte=fifteen_days_ago,
+        date__lte=today,
+        attendance_type='check_in',
+        is_expired=False
+    ).values('date').annotate(count=Count('id')).order_by('date'))
+
+    # Top OT today
+    data['top_ot_employees'] = Attendance.objects.filter(
+        date=today,
+        overtime_minutes__gt=0,
+        is_expired=False
+    ).select_related('employee').order_by('-overtime_minutes')[:5]
+
+    # Pending approvals total count
+    pending_leaves = LeaveRequest.objects.filter(status='pending').count()
+    pending_expenses = Expense.objects.filter(status='pending').count()
+    pending_corrections = AttendanceCorrectionRequest.objects.filter(status='pending').count()
+    pending_ot = Attendance.objects.filter(ot_status='pending', is_expired=False).count()
+    data['pending_approvals_count'] = pending_leaves + pending_expenses + pending_corrections + pending_ot
 
     return data
