@@ -94,6 +94,9 @@ def record_action(instance, actor, action, note=''):
                 instance.sla_deadline = timezone.now() + timezone.timedelta(hours=prev_step.sla_hours)
             else:
                 instance.sla_deadline = None
+        else:
+            instance.current_status = 'returned'
+            instance.sla_deadline = None
         instance.save()
 
     return wf_action

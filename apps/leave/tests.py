@@ -460,3 +460,132 @@ class LeaveIdempotencyAndClientTimestampTests(TestCase):
         self.assertIsNotNone(req.client_event_time)
         self.assertIsNotNone(req.synced_at)
 
+
+from apps.workflow.models import WorkflowDefinition, WorkflowInstance, WorkflowStep, WorkflowAction
+
+class LeaveWorkflowIntegrationTests(TestCase):
+    def setUp(self):
+        # Ensure leave_approval definition is seeded
+        from django.core.management import call_command
+        call_command('seed_workflow_definitions')
+        
+        self.branch = Branch.objects.create(
+            name='HQ Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.staff_user = User.objects.create_user(
+            phone='+8801700000021',
+            password='password123',
+            role='staff'
+        )
+        self.manager_user = User.objects.create_user(
+            phone='+8801700000022',
+            password='password123',
+            role='manager'
+        )
+        self.hr_user = User.objects.create_user(
+            phone='+8801700000023',
+            password='password123',
+            role='hr'
+        )
+        self.employee = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            employee_id='EMP-2026-999',
+            full_name='Staff Workflow',
+            phone='+8801700000021',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        self.leave_type = LeaveType.objects.create(
+            name='Casual Leave WF',
+            category='casual',
+            default_days_per_year=10
+        )
+        LeaveBalance.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            year=2026,
+            total_days=10,
+            used_days=0
+        )
+
+    def test_leave_creation_creates_workflow_instance(self):
+        # 1. Create a LeaveRequest
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 7, 20),
+            end_date=datetime.date(2026, 7, 21),
+            reason='Family event',
+            status='pending'
+        )
+        # Verify workflow instance is automatically created and is at step 1
+        wf_instance = leave_request.workflow_instance
+        self.assertIsNotNone(wf_instance)
+        self.assertEqual(wf_instance.current_step, 1)
+        self.assertEqual(wf_instance.current_status, 'pending')
+        self.assertEqual(leave_request.status, 'pending')
+
+    def test_workflow_full_approval_flow_and_balance_deduction(self):
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 7, 20),
+            end_date=datetime.date(2026, 7, 21), # 2 days
+            reason='Family event',
+            status='pending'
+        )
+        wf_instance = leave_request.workflow_instance
+        self.assertIsNotNone(wf_instance)
+
+        # 1. Manager approves (Step 1 -> Step 2)
+        from apps.workflow.services import record_action
+        record_action(wf_instance, self.manager_user, 'approve', 'Approved by Manager')
+        
+        # Verify leave_request status matches manager_approved
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, 'manager_approved')
+        self.assertEqual(wf_instance.current_status, 'manager_approved')
+        self.assertEqual(wf_instance.current_step, 2)
+        
+        # Balance shouldn't be deducted yet since it's not fully approved
+        balance = LeaveBalance.objects.get(employee=self.employee, leave_type=self.leave_type, year=2026)
+        self.assertEqual(balance.used_days, 0)
+
+        # 2. HR approves (Step 2 -> complete)
+        record_action(wf_instance, self.hr_user, 'approve', 'Approved by HR')
+        
+        # Verify leave_request status matches approved
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, 'approved')
+        self.assertIsNotNone(wf_instance.completed_at)
+        
+        # Balance should be deducted by 2 days
+        balance.refresh_from_db()
+        self.assertEqual(balance.used_days, 2)
+
+    def test_workflow_return_flow(self):
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 7, 20),
+            end_date=datetime.date(2026, 7, 21),
+            reason='Family event',
+            status='pending'
+        )
+        wf_instance = leave_request.workflow_instance
+        self.assertIsNotNone(wf_instance)
+
+        # 1. Manager returns request
+        from apps.workflow.services import record_action
+        record_action(wf_instance, self.manager_user, 'return', 'Needs more explanation')
+        
+        # Verify state is returned
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, 'returned')
+        self.assertEqual(wf_instance.current_status, 'returned')
+
+

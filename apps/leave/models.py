@@ -49,8 +49,10 @@ class LeaveBalance(models.Model):
 class LeaveRequest(models.Model):
     STATUS_CHOICES = (
         ('pending', 'Pending'),
+        ('manager_approved', 'Manager Approved'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
+        ('returned', 'Returned'),
     )
 
     employee = models.ForeignKey(
@@ -288,6 +290,14 @@ class LeaveRequest(models.Model):
     def __str__(self):
         return f"{self.employee.full_name} - {self.leave_type.name} ({self.start_date} to {self.end_date})"
 
+    @property
+    def workflow_instance(self):
+        from apps.workflow.models import WorkflowInstance
+        return WorkflowInstance.objects.filter(
+            object_type='leave_request',
+            object_id=str(self.id)
+        ).first()
+
 class YearLeaveHelper(dict):
     """
     Helper class that acts like a dictionary (via dictget filter) to calculate
@@ -353,4 +363,41 @@ def clear_leave_type_cache_on_save(sender, instance, **kwargs):
 def clear_leave_type_cache_on_delete(sender, instance, **kwargs):
     from django.core.cache import cache
     cache.delete('all_leave_types')
+
+
+from apps.workflow.models import WorkflowInstance
+
+@receiver(post_save, sender=LeaveRequest)
+def create_leave_workflow_instance(sender, instance, created, **kwargs):
+    if created:
+        from apps.workflow.models import WorkflowDefinition, WorkflowInstance
+        definition = WorkflowDefinition.objects.filter(code='leave_approval').first()
+        if definition:
+            if not WorkflowInstance.objects.filter(object_type='leave_request', object_id=str(instance.id)).exists():
+                user = getattr(instance.employee, 'user', None)
+                wf_instance = WorkflowInstance.objects.create(
+                    definition=definition,
+                    object_type='leave_request',
+                    object_id=str(instance.id),
+                    initiated_by=user
+                )
+                wf_instance.start_workflow()
+
+
+@receiver(post_save, sender=WorkflowInstance)
+def sync_leave_request_status(sender, instance, **kwargs):
+    if instance.object_type == 'leave_request':
+        from apps.leave.models import LeaveRequest
+        try:
+            leave_req = LeaveRequest.objects.get(pk=instance.object_id)
+            if leave_req.status != instance.current_status:
+                leave_req.status = instance.current_status
+                last_action = instance.actions.order_by('-timestamp').first()
+                if last_action:
+                    leave_req.reviewed_by = last_action.actor
+                    leave_req.reviewed_at = last_action.timestamp
+                leave_req.save()
+        except LeaveRequest.DoesNotExist:
+            pass
+
 

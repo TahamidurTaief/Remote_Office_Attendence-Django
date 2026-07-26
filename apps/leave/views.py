@@ -95,14 +95,20 @@ class BaseProcessLeaveRequestView(View):
 class ApproveLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
         leave_request = get_object_or_404(LeaveRequest, pk=pk)
-        if leave_request.status == 'pending':
-            leave_request.status = 'approved'
-            leave_request.reviewed_by = request.user
-            leave_request.reviewed_at = timezone.now()
-            leave_request.save()
-            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been approved.")
+        wf_instance = leave_request.workflow_instance
+        if wf_instance and not wf_instance.completed_at:
+            from apps.workflow.services import record_action
+            record_action(wf_instance, request.user, 'approve', 'Approved via view')
+            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been processed.")
         else:
-            messages.error(request, "This request has already been processed.")
+            if leave_request.status in ('pending', 'manager_approved', 'returned'):
+                leave_request.status = 'approved'
+                leave_request.reviewed_by = request.user
+                leave_request.reviewed_at = timezone.now()
+                leave_request.save()
+                messages.success(request, f"Leave request for {leave_request.employee.full_name} has been approved.")
+            else:
+                messages.error(request, "This request has already been processed.")
         referer = request.META.get('HTTP_REFERER')
         if referer:
             return redirect(referer)
@@ -111,14 +117,35 @@ class ApproveLeaveRequestView(BaseProcessLeaveRequestView):
 class RejectLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
         leave_request = get_object_or_404(LeaveRequest, pk=pk)
-        if leave_request.status == 'pending':
-            leave_request.status = 'rejected'
-            leave_request.reviewed_by = request.user
-            leave_request.reviewed_at = timezone.now()
-            leave_request.save()
-            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been rejected.")
+        wf_instance = leave_request.workflow_instance
+        if wf_instance and not wf_instance.completed_at:
+            from apps.workflow.services import record_action
+            record_action(wf_instance, request.user, 'reject', 'Rejected via view')
+            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been processed.")
         else:
-            messages.error(request, "This request has already been processed.")
+            if leave_request.status in ('pending', 'manager_approved', 'returned'):
+                leave_request.status = 'rejected'
+                leave_request.reviewed_by = request.user
+                leave_request.reviewed_at = timezone.now()
+                leave_request.save()
+                messages.success(request, f"Leave request for {leave_request.employee.full_name} has been rejected.")
+            else:
+                messages.error(request, "This request has already been processed.")
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
+        return redirect('leave:admin_dashboard')
+
+class ReturnLeaveRequestView(BaseProcessLeaveRequestView):
+    def post(self, request, pk):
+        leave_request = get_object_or_404(LeaveRequest, pk=pk)
+        wf_instance = leave_request.workflow_instance
+        if wf_instance and not wf_instance.completed_at:
+            from apps.workflow.services import record_action
+            record_action(wf_instance, request.user, 'return', 'Returned via view')
+            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been returned.")
+        else:
+            messages.error(request, "This request cannot be returned.")
         referer = request.META.get('HTTP_REFERER')
         if referer:
             return redirect(referer)
