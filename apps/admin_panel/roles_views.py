@@ -148,7 +148,7 @@ class RolePermissionScopeView(AdminRequiredMixin, View):
         return JsonResponse({'status': 'ok', 'scope': new_scope})
 
 
-@method_decorator(require_reauth, name='dispatch')
+@method_decorator(require_reauth, name='post')
 class UserPermissionsView(AdminRequiredMixin, DetailView):
     model = User
     template_name = 'admin_panel/roles/user_permissions.html'
