@@ -116,166 +116,139 @@
     }
 }">
     <!-- Header Summary & Actions -->
-    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-white p-4 border border-gray-150 rounded-xl shadow-sm">
-        <div>
-            <h2 class="text-[16px] font-bold text-gray-800 leading-none">Task Assignment Control</h2>
-            <p class="text-[11px] text-gray-400 mt-1">Monitor, filter, and assign tasks across all active workspaces.</p>
-        </div>
-        <div class="flex gap-2">
-            <!-- Create Individual Task Button -->
-            <a href="{% url 'projects:global_task_add' %}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-white text-[12px] font-bold rounded-lg shadow-sm hover:opacity-90 transition-opacity whitespace-nowrap">
-                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Create Individual Task
-            </a>
-        </div>
-    </div>
+    <c-card padding="md" extra_class="mb-4">
+        <c-slot name="header">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 w-full">
+                <div>
+                    <h2 class="text-[16px] font-bold text-gray-800 leading-none">Task Assignment Control</h2>
+                    <p class="text-[11px] text-gray-400 mt-1">Monitor, filter, and assign tasks across all active workspaces.</p>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <c-button href="{% url 'projects:global_task_add' %}" variant="primary" icon="plus" label="Create Individual Task" size="sm"></c-button>
+                </div>
+            </div>
+        </c-slot>
+    </c-card>
 
     <!-- Filters Section -->
-    <div class="bg-white border border-gray-150 rounded-xl shadow-sm p-4">
+    <c-card padding="md">
         <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
             <!-- Filter Employee -->
-            <div>
-                <label for="filter_employee" class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Employee</label>
-                <select name="employee" id="filter_employee" class="w-full text-[12px] border border-gray-200 rounded px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
-                    <option value="">-- All Employees --</option>
-                    {% for emp in employees %}
-                    <option value="{{ emp.id }}" {% if selected_employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            <c-select name="employee" label="Employee" value="{{ selected_employee }}" id="filter_employee" extra_class="w-full">
+                <option value="">-- All Employees --</option>
+                {% for emp in employees %}
+                <option value="{{ emp.id }}" {% if selected_employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
+                {% endfor %}
+            </c-select>
 
             <!-- Filter Project -->
-            <div>
-                <label for="filter_project" class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Project</label>
-                <select name="project" id="filter_project" class="w-full text-[12px] border border-gray-200 rounded px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
-                    <option value="">-- All Projects --</option>
-                    {% for proj in projects %}
-                    <option value="{{ proj.id }}" {% if selected_project == proj.id|stringformat:"s" %}selected{% endif %}>{{ proj.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            <c-select name="project" label="Project" value="{{ selected_project }}" id="filter_project" extra_class="w-full">
+                <option value="">-- All Projects --</option>
+                {% for proj in projects %}
+                <option value="{{ proj.id }}" {% if selected_project == proj.id|stringformat:"s" %}selected{% endif %}>{{ proj.name }}</option>
+                {% endfor %}
+            </c-select>
 
             <!-- Filter Status -->
-            <div>
-                <label for="filter_status" class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Status</label>
-                <select name="status" id="filter_status" class="w-full text-[12px] border border-gray-200 rounded px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
-                    <option value="">-- All Statuses --</option>
-                    {% for st_val, st_lbl in statuses %}
-                    <option value="{{ st_val }}" {% if selected_status == st_val %}selected{% endif %}>{{ st_lbl }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            <c-select name="status" label="Status" value="{{ selected_status }}" id="filter_status" extra_class="w-full">
+                <option value="">-- All Statuses --</option>
+                {% for st_val, st_lbl in statuses %}
+                <option value="{{ st_val }}" {% if selected_status == st_val %}selected{% endif %}>{{ st_lbl }}</option>
+                {% endfor %}
+            </c-select>
 
             <!-- Date Range: Start -->
-            <div>
-                <label for="filter_date_start" class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Planned Start From</label>
-                <input type="date" name="date_start" id="filter_date_start" value="{{ selected_date_start }}" class="w-full text-[12px] border border-gray-200 rounded px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
-            </div>
+            <c-input type="date" name="date_start" label="Planned Start From" value="{{ selected_date_start }}" id="filter_date_start" extra_class="w-full"></c-input>
 
             <!-- Date Range: End -->
-            <div class="flex items-center gap-2">
-                <div class="flex-1">
-                    <label for="filter_date_end" class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Planned Finish To</label>
-                    <input type="date" name="date_end" id="filter_date_end" value="{{ selected_date_end }}" class="w-full text-[12px] border border-gray-200 rounded px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none">
-                </div>
-                <div class="shrink-0 flex gap-1.5">
-                    <button type="submit" class="p-2 bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors flex items-center justify-center" title="Apply Filters">
-                        <i data-lucide="search" class="w-3.5 h-3.5"></i>
-                    </button>
-                    <a href="{% url 'projects:global_task_list' %}" class="p-2 border border-gray-200 bg-white text-gray-500 rounded hover:bg-gray-50 transition-colors flex items-center justify-center" title="Reset Filters">
-                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-                    </a>
+            <div class="flex items-end gap-2 w-full">
+                <c-input type="date" name="date_end" label="Planned Finish To" value="{{ selected_date_end }}" id="filter_date_end" extra_class="flex-1"></c-input>
+                <div class="shrink-0 flex gap-1.5 mb-[1px]">
+                    <c-button type="submit" variant="primary" icon="search" extra_class="!p-2.5 !h-[34px] !w-[34px] flex items-center justify-center" title="Apply Filters"></c-button>
+                    <c-button href="{% url 'projects:global_task_list' %}" variant="secondary" icon="rotate-ccw" extra_class="!p-2.5 !h-[34px] !w-[34px] flex items-center justify-center" title="Reset Filters"></c-button>
                 </div>
             </div>
         </form>
-    </div>
+    </c-card>
 
     <!-- Tab Buttons -->
     <div class="bg-white border border-gray-150 rounded-xl p-1 shadow-sm flex">
-        <button type="button" @click="activeTab = 'individual'; localStorage.setItem('global_task_list_tab', 'individual')"
-                :class="activeTab === 'individual' ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
-                class="flex-1 py-2 px-4 text-center text-xs font-semibold rounded-lg transition-all">
-            Individual Tasks ({{ individual_tasks|length }})
-        </button>
-        <button type="button" @click="activeTab = 'project'; localStorage.setItem('global_task_list_tab', 'project')"
-                :class="activeTab === 'project' ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
-                class="flex-1 py-2 px-4 text-center text-xs font-semibold rounded-lg transition-all">
-            Project-based Tasks ({{ project_list|length }} Projects)
-        </button>
+        <c-tab-button label="Individual Tasks ({{ individual_tasks|length }})"
+                      ::active="activeTab === 'individual'"
+                      @click="activeTab = 'individual'; localStorage.setItem('global_task_list_tab', 'individual')"
+                      extra_class="flex-1 text-center justify-center py-2 text-xs font-semibold rounded-lg transition-all"></c-tab-button>
+        <c-tab-button label="Project-based Tasks ({{ project_list|length }} Projects)"
+                      ::active="activeTab === 'project'"
+                      @click="activeTab = 'project'; localStorage.setItem('global_task_list_tab', 'project')"
+                      extra_class="flex-1 text-center justify-center py-2 text-xs font-semibold rounded-lg transition-all"></c-tab-button>
     </div>
 
     <!-- Active Tab Panel Content -->
     <div>
         <!-- TAB 1: INDIVIDUAL TASKS -->
-        <div x-show="activeTab === 'individual'" class="bg-white border border-gray-150 rounded-xl shadow-sm overflow-hidden min-h-[300px]">
-            <div class="overflow-x-auto custom-scrollbar">
-                <table class="min-w-full divide-y divide-gray-150">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Seq</th>
-                            <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Activity</th>
-                            <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Assignee</th>
-                            <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Planned Dates</th>
-                            <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                            <th scope="col" class="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-100">
-                        {% for task in individual_tasks %}
-                        <tr class="hover:bg-slate-50/50 transition-colors">
-                            <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-500 font-semibold">
-                                #{{ task.order }}
-                            </td>
-                            <td class="px-4 py-3.5 text-[12px] text-gray-900 font-medium">
-                                {{ task.activity }}
-                            </td>
-                            <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-700">
-                                {% if task.responsible_person %}
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
-                                        <span class="font-semibold">{{ task.responsible_person.full_name }}</span>
-                                    </div>
-                                {% else %}
-                                    <span class="text-gray-400 font-medium italic">Unassigned</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3.5 whitespace-nowrap text-[11px] text-gray-500">
-                                {{ task.planned_start|date:"d/m/Y"|default:"—" }} to {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
-                                {% if task.duration_days %}
-                                <span class="font-bold text-gray-400 ml-1">({{ task.duration_days }}d)</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3.5 whitespace-nowrap text-[11px]">
-                                {% if task.status == 'Not Started' %}
-                                    <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-bold border border-gray-200">Not Started</span>
-                                {% elif task.status == 'In Progress' %}
-                                    <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200">In Progress</span>
-                                {% elif task.status == 'Delayed' %}
-                                    <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-bold border border-red-200 animate-pulse">Delayed</span>
-                                {% elif task.status == 'Under Review' %}
-                                    <span class="px-2 py-0.5 rounded-full bg-amber-55 text-amber-800 font-bold border border-amber-200 animate-pulse">Under Review</span>
-                                {% elif task.status == 'Completed' %}
-                                    <span class="px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-bold border border-green-200">Completed</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold space-x-2">
-                                <button type="button" @click="viewTaskDetails({{ task.pk }})" class="text-indigo-605 hover:underline">View</button>
-                                <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:underline">Edit</a>
-                                <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this individual task checklist item permanently?', () => $el.submit())">
-                                    {% csrf_token %}
-                                    <button type="submit" class="text-red-650 hover:underline">Delete</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="px-4 py-12 text-center text-gray-400 text-[12px] italic">
-                                No individual tasks found.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <div x-show="activeTab === 'individual'" class="min-h-[300px]">
+            <c-table extra_class="bg-white border border-gray-150 rounded-xl shadow-sm overflow-hidden">
+                <c-slot name="header">
+                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Seq</th>
+                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Activity</th>
+                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Assignee</th>
+                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Planned Dates</th>
+                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                </c-slot>
+                
+                {% for task in individual_tasks %}
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                    <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-500 font-semibold">
+                        #{{ task.order }}
+                    </td>
+                    <td class="px-4 py-3.5 text-[12px] text-gray-900 font-medium">
+                        {{ task.activity }}
+                    </td>
+                    <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-700">
+                        {% if task.responsible_person %}
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
+                                <span class="font-semibold">{{ task.responsible_person.full_name }}</span>
+                            </div>
+                        {% else %}
+                            <span class="text-gray-400 font-medium italic">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3.5 whitespace-nowrap text-[11px] text-gray-500">
+                        {{ task.planned_start|date:"d/m/Y"|default:"—" }} to {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
+                        {% if task.duration_days %}
+                        <span class="font-bold text-gray-400 ml-1">({{ task.duration_days }}d)</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3.5 whitespace-nowrap text-[11px]">
+                        {% if task.status == 'Not Started' %}
+                            <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-bold border border-gray-200">Not Started</span>
+                        {% elif task.status == 'In Progress' %}
+                            <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200">In Progress</span>
+                        {% elif task.status == 'Delayed' %}
+                            <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-bold border border-red-200 animate-pulse">Delayed</span>
+                        {% elif task.status == 'Under Review' %}
+                            <span class="px-2 py-0.5 rounded-full bg-amber-55 text-amber-800 font-bold border border-amber-200 animate-pulse">Under Review</span>
+                        {% elif task.status == 'Completed' %}
+                            <span class="px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-bold border border-green-200">Completed</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold space-x-2">
+                        <button type="button" @click="viewTaskDetails({{ task.pk }})" class="text-indigo-605 hover:underline">View</button>
+                        <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:underline">Edit</a>
+                        <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this individual task checklist item permanently?', () => $el.submit())">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-650 hover:underline">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <c-slot name="empty">
+                    <c-empty-state icon="check-square" title="No individual tasks" description="No individual tasks match the selected filters."></c-empty-state>
+                </c-slot>
+                {% endfor %}
+            </c-table>
         </div>
 
         <!-- TAB 2: PROJECT-BASED TASKS -->
