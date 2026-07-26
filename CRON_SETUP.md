@@ -60,3 +60,21 @@ Command:
 ```bash
 python manage.py check_expiring_documents
 ```
+
+## Daily Workflow SLA Escalation Check Job
+Time: 4:00 AM daily
+
+Command:
+```bash
+0 4 * * * cd /home/username/fieldtrack && /home/username/venv/bin/python manage.py check_workflow_sla >> /home/username/logs/check_workflow_sla.log 2>&1
+```
+
+## Manual Run
+```bash
+python manage.py check_workflow_sla
+```
+
+## Test (dry run - just shows planned actions):
+```bash
+python manage.py check_workflow_sla --dry-run
+```
