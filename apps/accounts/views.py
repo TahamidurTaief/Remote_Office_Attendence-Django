@@ -898,8 +898,6 @@ class LoginMFAVerifyView(View):
         device_id = get_device_id(request)
 
         if is_valid:
-            del request.session['pending_mfa_user_id']
-
             if used_backup:
                 log_audit(user, 'backup_code_used', summary="MFA verified via one-time backup code", ip=ip)
             else:
@@ -920,11 +918,21 @@ class LoginMFAVerifyView(View):
                 old_sess.is_active = False
                 old_sess.logout_time = now
                 old_sess.save(update_fields=['is_active', 'logout_time'])
+                if old_sess.session_key:
+                    from django.contrib.sessions.models import Session
+                    Session.objects.filter(session_key=old_sess.session_key).delete()
 
+            # Set backend before login — MUST match exactly as registered in AUTHENTICATION_BACKENDS.
+            # backends.py class is PhoneOrEmailBackend, not EmailOrPhoneModelBackend.
             if not hasattr(user, 'backend') or not user.backend:
-                user.backend = 'apps.accounts.backends.EmailOrPhoneModelBackend'
+                user.backend = 'apps.accounts.backends.PhoneOrEmailBackend'
+
+            # login() internally cycles the session key — do NOT call cycle_key() again
+            # as that would create a second new session, breaking the Set-Cookie chain.
             login(request, user)
-            request.session.cycle_key()
+
+            # Remove MFA pending marker (login() preserves non-auth session data)
+            request.session.pop('pending_mfa_user_id', None)
 
             # Record TrustedDevice if requested
             if remember_device:
@@ -938,6 +946,7 @@ class LoginMFAVerifyView(View):
                     }
                 )
 
+            # Create UserSession with the NEW session key (after login() cycled it)
             UserSession.objects.create(
                 user=user,
                 device_id=device_id,
@@ -949,9 +958,18 @@ class LoginMFAVerifyView(View):
                 is_active=True
             )
 
-            target_url = '/admin-panel/dashboard/' if user.role == 'admin' else '/staff/home/'
+            # Determine redirect target using the same role-based logic as normal login
+            from apps.accounts.engine import PermissionEngine
+            if user.is_superuser or PermissionEngine.evaluate(user, 'accounts.view').allowed:
+                target_url = '/admin-panel/dashboard/'
+            else:
+                target_url = '/staff/home/'
+
             if request.headers.get('HX-Request') == 'true':
-                response = render(request, 'accounts/partials/login_mfa_step.html')
+                from django.http import HttpResponse
+                # 204 No Content: htmx skips body-swap and processes HX-Redirect as
+                # a full-page navigation, ensuring the session cookie is carried correctly.
+                response = HttpResponse(status=204)
                 response['HX-Redirect'] = target_url
                 return response
             return redirect(target_url)
