@@ -13,6 +13,7 @@
    - extra_class: additional classes on wrapper
    - id: input id (defaults to name)
 {% endcomment %}
+<c-vars name="" type="text" label="" value="" placeholder="" required="" disabled="" error="" help="" icon="" extra_class="" id="" input_class=""></c-vars>
 
 <div class="flex flex-col gap-0.5 {{ extra_class }}">
   {% if label %}
@@ -36,7 +37,8 @@
       placeholder="{{ placeholder }}"
       {% if required %}required{% endif %}
       {% if disabled %}disabled{% endif %}
-      class="ft-input {% if icon %}pl-8{% endif %} {% if error %}!border-red-500 focus:!box-shadow-[0_0_0_3px_rgba(239,68,68,0.15)]{% endif %}"
+      class="ft-input {% if icon %}pl-8{% endif %} {% if error %}!border-red-500 focus:!box-shadow-[0_0_0_3px_rgba(239,68,68,0.15)]{% endif %} {{ input_class }}"
+      {{ attrs }}
     >
   </div>
 
