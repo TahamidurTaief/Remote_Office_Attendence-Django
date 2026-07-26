@@ -443,7 +443,7 @@ def get_admin_dashboard_data(user):
 
     # Pending approvals total count
     pending_leaves = LeaveRequest.objects.filter(status='pending').count()
-    pending_expenses = Expense.objects.filter(status='pending').count()
+    pending_expenses = Expense.objects.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts']).count()
     pending_corrections = AttendanceCorrectionRequest.objects.filter(status='pending').count()
     pending_ot = Attendance.objects.filter(ot_status='pending', is_expired=False).count()
     data['pending_approvals_count'] = pending_leaves + pending_expenses + pending_corrections + pending_ot

@@ -427,3 +427,106 @@ class ExpenseTests(TestCase):
         self.assertEqual(expense.history.count(), 1)
         self.assertEqual(expense.history.first().description, 'Client meal')
 
+
+from apps.expense.models import ExpenseCategory
+from apps.workflow.models import WorkflowDefinition, WorkflowInstance, WorkflowStep, WorkflowAction
+from apps.admin_panel.dashboard_services import get_admin_dashboard_data
+
+class ExpenseWorkflowIntegrationTests(TestCase):
+    def setUp(self):
+        from django.core.management import call_command
+        call_command('seed_workflow_definitions')
+        
+        self.branch = Branch.objects.create(
+            name='HQ', latitude=23.8, longitude=90.4
+        )
+        self.staff_user = User.objects.create_user(phone='+8801700000081', password='password123', role='staff')
+        self.manager_user = User.objects.create_user(phone='+8801700000082', password='password123', role='manager')
+        self.finance_user = User.objects.create_user(phone='+8801700000083', password='password123', role='finance')
+        self.accounts_user = User.objects.create_user(phone='+8801700000084', password='password123', role='accounts')
+        
+        self.employee = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            employee_id='EMP-EXP-888',
+            full_name='Staff Expense',
+            phone='+8801700000081',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        self.category = ExpenseCategory.objects.create(name='Travel', code='TRV')
+
+    def test_expense_creation_creates_workflow_instance(self):
+        expense = Expense.objects.create(
+            employee=self.employee,
+            amount=500.00,
+            category=self.category,
+            description='Client visit',
+            status='pending_manager'
+        )
+        wf_instance = expense.workflow_instance
+        self.assertIsNotNone(wf_instance)
+        self.assertEqual(wf_instance.current_step, 1)
+        self.assertEqual(wf_instance.current_status, 'pending_manager')
+
+    def test_full_approval_flow_and_dashboard_counts(self):
+        expense = Expense.objects.create(
+            employee=self.employee,
+            amount=500.00,
+            category=self.category,
+            description='Client visit',
+            status='pending_manager'
+        )
+        wf_instance = expense.workflow_instance
+        self.assertIsNotNone(wf_instance)
+
+        # Dashboard pending check
+        data = get_admin_dashboard_data(self.staff_user)
+        self.assertEqual(data['pending_approvals_count'], 1)
+
+        # 1. Manager approves (Step 1 -> Step 2)
+        from apps.workflow.services import record_action
+        record_action(wf_instance, self.manager_user, 'approve')
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'pending_finance')
+        self.assertEqual(wf_instance.current_step, 2)
+
+        # 2. Finance approves (Step 2 -> Step 3)
+        record_action(wf_instance, self.finance_user, 'approve')
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'pending_accounts')
+        self.assertEqual(wf_instance.current_step, 3)
+
+        # 3. Accounts approves (Step 3 -> Approved)
+        record_action(wf_instance, self.accounts_user, 'approve')
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'approved')
+        self.assertIsNotNone(wf_instance.completed_at)
+        
+        self.assertEqual(expense.reviewed_by, self.accounts_user)
+
+        # Dashboard count should decrease
+        data = get_admin_dashboard_data(self.staff_user)
+        self.assertEqual(data['pending_approvals_count'], 0)
+
+    def test_return_directly_to_employee(self):
+        expense = Expense.objects.create(
+            employee=self.employee,
+            amount=500.00,
+            category=self.category,
+            description='Client visit',
+            status='pending_manager'
+        )
+        wf_instance = expense.workflow_instance
+
+        from apps.workflow.services import record_action
+        record_action(wf_instance, self.manager_user, 'approve')
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'pending_finance')
+
+        record_action(wf_instance, self.finance_user, 'return', return_to_initiator=True)
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'returned_by_finance')
+        self.assertEqual(wf_instance.current_status, 'returned')
+
+

@@ -28,7 +28,7 @@ def resolve_approver(step, workflow_instance, target_date=None):
 
     return del_obj.to_user if del_obj else None
 
-def record_action(instance, actor, action, note=''):
+def record_action(instance, actor, action, note='', return_to_initiator=False):
     """
     Records a WorkflowAction for an instance.
     Checks if the action is done on behalf of a delegated user.
@@ -86,17 +86,21 @@ def record_action(instance, actor, action, note=''):
         instance.sla_deadline = None
         instance.save()
     elif action == 'return' and step.allow_return:
-        prev_step = WorkflowStep.objects.filter(workflow=instance.definition, step_number=instance.current_step - 1).first()
-        if prev_step:
-            instance.current_step = prev_step.step_number
-            instance.current_status = prev_step.from_status
-            if prev_step.sla_hours:
-                instance.sla_deadline = timezone.now() + timezone.timedelta(hours=prev_step.sla_hours)
-            else:
-                instance.sla_deadline = None
-        else:
+        if return_to_initiator:
             instance.current_status = 'returned'
             instance.sla_deadline = None
+        else:
+            prev_step = WorkflowStep.objects.filter(workflow=instance.definition, step_number=instance.current_step - 1).first()
+            if prev_step:
+                instance.current_step = prev_step.step_number
+                instance.current_status = prev_step.from_status
+                if prev_step.sla_hours:
+                    instance.sla_deadline = timezone.now() + timezone.timedelta(hours=prev_step.sla_hours)
+                else:
+                    instance.sla_deadline = None
+            else:
+                instance.current_status = 'returned'
+                instance.sla_deadline = None
         instance.save()
 
     return wf_action

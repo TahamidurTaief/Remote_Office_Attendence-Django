@@ -85,6 +85,14 @@ class Expense(models.Model):
         cat_name = self.category.name if self.category else "Uncategorized"
         return f"{self.employee.full_name} - {cat_name} ({self.amount}) - {self.status}"
 
+    @property
+    def workflow_instance(self):
+        from apps.workflow.models import WorkflowInstance
+        return WorkflowInstance.objects.filter(
+            object_type='expense',
+            object_id=str(self.id)
+        ).first()
+
 class ExpenseReturnEvent(models.Model):
     expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='return_events')
     returned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -109,4 +117,58 @@ class ExpenseHistory(models.Model):
 
     class Meta:
         ordering = ['-changed_at']
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from apps.workflow.models import WorkflowInstance
+
+@receiver(post_save, sender=Expense)
+def create_expense_workflow_instance(sender, instance, created, **kwargs):
+    if instance.status != 'draft':
+        from apps.workflow.models import WorkflowDefinition, WorkflowInstance
+        definition = WorkflowDefinition.objects.filter(code='expense_approval').first()
+        if definition:
+            if not WorkflowInstance.objects.filter(object_type='expense', object_id=str(instance.id)).exists():
+                user = getattr(instance.employee, 'user', None)
+                wf_instance = WorkflowInstance.objects.create(
+                    definition=definition,
+                    object_type='expense',
+                    object_id=str(instance.id),
+                    initiated_by=user
+                )
+                wf_instance.start_workflow()
+            else:
+                wf_instance = instance.workflow_instance
+                if wf_instance:
+                    if instance.status == 'pending_manager' and wf_instance.current_status != 'pending_manager':
+                        wf_instance.current_step = 1
+                        wf_instance.current_status = 'pending_manager'
+                        wf_instance.save()
+                    elif instance.status == 'pending_finance' and wf_instance.current_status != 'pending_finance':
+                        wf_instance.current_step = 2
+                        wf_instance.current_status = 'pending_finance'
+                        wf_instance.save()
+
+@receiver(post_save, sender=WorkflowInstance)
+def sync_expense_status(sender, instance, **kwargs):
+    if instance.object_type == 'expense':
+        from apps.expense.models import Expense
+        try:
+            expense = Expense.objects.get(pk=instance.object_id)
+            target_status = instance.current_status
+            if target_status == 'returned':
+                if instance.current_step == 1:
+                    target_status = 'returned_by_manager'
+                elif instance.current_step == 2:
+                    target_status = 'returned_by_finance'
+            if expense.status != target_status:
+                expense.status = target_status
+                last_action = instance.actions.order_by('-timestamp').first()
+                if last_action:
+                    expense.reviewed_by = last_action.actor
+                    expense.reviewed_at = last_action.timestamp
+                expense.save()
+        except Expense.DoesNotExist:
+            pass
 

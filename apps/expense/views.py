@@ -242,55 +242,91 @@ class ApproveExpenseView(BaseProcessExpenseView, View):
         expense = get_object_or_404(Expense, pk=pk)
         from apps.notifications.dispatch import log_activity
         
-        if expense.status == 'pending_manager':
-            expense.status = 'pending_finance'
-            expense.save()
-            messages.success(request, f"Expense request for {expense.employee.full_name} has been approved by Manager and sent to Finance.")
+        wf_instance = expense.workflow_instance
+        if wf_instance and not wf_instance.completed_at:
+            from apps.workflow.services import record_action
+            old_status = expense.status
+            record_action(wf_instance, request.user, 'approve', f"Approved via view")
+            
+            if old_status == 'pending_manager':
+                verb = 'expense_approved_manager'
+                title = 'Expense Approved by Manager'
+                msg = f"Expense request approved by Manager {request.user.email} and forwarded to Finance."
+            elif old_status == 'pending_finance':
+                verb = 'expense_approved_finance'
+                title = 'Expense Approved by Finance'
+                msg = f"Expense request approved by Finance {request.user.email} and forwarded to Accounts."
+            elif old_status == 'pending_accounts':
+                verb = 'expense_fully_approved'
+                title = 'Expense Fully Approved'
+                msg = f"Expense request has been fully approved/disbursed by Accounts ({request.user.email})."
+            else:
+                verb = 'expense_approved'
+                title = 'Expense Approved'
+                msg = f"Expense request approved by {request.user.email}."
+                
             log_activity(
                 actor=request.user,
-                verb='expense_approved_manager',
+                verb=verb,
                 target=expense,
                 metadata={
-                    'title': 'Expense Approved by Manager',
-                    'message': f"Expense request approved by Manager {request.user.email} and forwarded to Finance.",
+                    'title': title,
+                    'message': msg,
                     'notif_type': 'expense'
                 },
                 notify_users=[expense.employee.user]
             )
-        elif expense.status == 'pending_finance':
-            expense.status = 'pending_accounts'
-            expense.save()
-            messages.success(request, f"Expense request for {expense.employee.full_name} has been approved by Finance and sent to Accounts.")
-            log_activity(
-                actor=request.user,
-                verb='expense_approved_finance',
-                target=expense,
-                metadata={
-                    'title': 'Expense Approved by Finance',
-                    'message': f"Expense request approved by Finance {request.user.email} and forwarded to Accounts.",
-                    'notif_type': 'expense'
-                },
-                notify_users=[expense.employee.user]
-            )
-        elif expense.status == 'pending_accounts':
-            expense.status = 'approved'
-            expense.reviewed_by = request.user
-            expense.reviewed_at = timezone.now()
-            expense.save()
-            messages.success(request, f"Expense request for {expense.employee.full_name} has been fully approved.")
-            log_activity(
-                actor=request.user,
-                verb='expense_fully_approved',
-                target=expense,
-                metadata={
-                    'title': 'Expense Fully Approved',
-                    'message': f"Expense request has been fully approved/disbursed by Accounts ({request.user.email}).",
-                    'notif_type': 'expense'
-                },
-                notify_users=[expense.employee.user]
-            )
+            messages.success(request, f"Expense request for {expense.employee.full_name} has been processed.")
         else:
-            messages.error(request, "This request has already been processed.")
+            if expense.status == 'pending_manager':
+                expense.status = 'pending_finance'
+                expense.save()
+                messages.success(request, f"Expense request for {expense.employee.full_name} has been approved by Manager and sent to Finance.")
+                log_activity(
+                    actor=request.user,
+                    verb='expense_approved_manager',
+                    target=expense,
+                    metadata={
+                        'title': 'Expense Approved by Manager',
+                        'message': f"Expense request approved by Manager {request.user.email} and forwarded to Finance.",
+                        'notif_type': 'expense'
+                    },
+                    notify_users=[expense.employee.user]
+                )
+            elif expense.status == 'pending_finance':
+                expense.status = 'pending_accounts'
+                expense.save()
+                messages.success(request, f"Expense request for {expense.employee.full_name} has been approved by Finance and sent to Accounts.")
+                log_activity(
+                    actor=request.user,
+                    verb='expense_approved_finance',
+                    target=expense,
+                    metadata={
+                        'title': 'Expense Approved by Finance',
+                        'message': f"Expense request approved by Finance {request.user.email} and forwarded to Accounts.",
+                        'notif_type': 'expense'
+                    },
+                    notify_users=[expense.employee.user]
+                )
+            elif expense.status == 'pending_accounts':
+                expense.status = 'approved'
+                expense.reviewed_by = request.user
+                expense.reviewed_at = timezone.now()
+                expense.save()
+                messages.success(request, f"Expense request for {expense.employee.full_name} has been fully approved.")
+                log_activity(
+                    actor=request.user,
+                    verb='expense_fully_approved',
+                    target=expense,
+                    metadata={
+                        'title': 'Expense Fully Approved',
+                        'message': f"Expense request has been fully approved/disbursed by Accounts ({request.user.email}).",
+                        'notif_type': 'expense'
+                    },
+                    notify_users=[expense.employee.user]
+                )
+            else:
+                messages.error(request, "This request has already been processed.")
             
         referer = request.META.get('HTTP_REFERER')
         if referer:
@@ -300,15 +336,18 @@ class ApproveExpenseView(BaseProcessExpenseView, View):
 class RejectExpenseView(BaseProcessExpenseView, View):
     def post(self, request, pk):
         expense = get_object_or_404(Expense, pk=pk)
-        if expense.status in ('pending_manager', 'pending_finance', 'pending_accounts'):
+        from apps.notifications.dispatch import log_activity
+        
+        wf_instance = expense.workflow_instance
+        if wf_instance and not wf_instance.completed_at:
+            from apps.workflow.services import record_action
             old_status = expense.status
-            expense.status = 'rejected'
-            expense.reviewed_by = request.user
-            expense.reviewed_at = timezone.now()
-            expense.rejection_reason = request.POST.get('rejection_reason', '')
+            reason = request.POST.get('rejection_reason', '')
+            expense.rejection_reason = reason
             expense.save()
             
-            from apps.notifications.dispatch import log_activity
+            record_action(wf_instance, request.user, 'reject', f"Rejected via view: {reason}")
+            
             messages.success(request, f"Expense request for {expense.employee.full_name} has been rejected.")
             log_activity(
                 actor=request.user,
@@ -316,13 +355,34 @@ class RejectExpenseView(BaseProcessExpenseView, View):
                 target=expense,
                 metadata={
                     'title': 'Expense Rejected',
-                    'message': f"Expense request rejected at {old_status} stage by {request.user.email}. Reason: {expense.rejection_reason}",
+                    'message': f"Expense request rejected at {old_status} stage by {request.user.email}. Reason: {reason}",
                     'notif_type': 'expense'
                 },
                 notify_users=[expense.employee.user]
             )
         else:
-            messages.error(request, "This request has already been processed.")
+            if expense.status in ('pending_manager', 'pending_finance', 'pending_accounts'):
+                old_status = expense.status
+                expense.status = 'rejected'
+                expense.reviewed_by = request.user
+                expense.reviewed_at = timezone.now()
+                expense.rejection_reason = request.POST.get('rejection_reason', '')
+                expense.save()
+                
+                messages.success(request, f"Expense request for {expense.employee.full_name} has been rejected.")
+                log_activity(
+                    actor=request.user,
+                    verb='expense_rejected',
+                    target=expense,
+                    metadata={
+                        'title': 'Expense Rejected',
+                        'message': f"Expense request rejected at {old_status} stage by {request.user.email}. Reason: {expense.rejection_reason}",
+                        'notif_type': 'expense'
+                    },
+                    notify_users=[expense.employee.user]
+                )
+            else:
+                messages.error(request, "This request has already been processed.")
             
         referer = request.META.get('HTTP_REFERER')
         if referer:
@@ -354,42 +414,75 @@ class ReturnExpenseView(BaseProcessExpenseView, View):
                 
         attachment = request.FILES.get('attachment')
         
-        with transaction.atomic():
-            old_status = expense.status
-            if old_status == 'pending_manager':
-                expense.status = 'returned_by_manager'
-            elif old_status == 'pending_finance':
-                expense.status = 'returned_by_finance'
-            else:
-                messages.error(request, "Only Manager or Finance stages can return expenses.")
-                return redirect('expense:admin_expense_list')
-                
-            expense.save()
-            
-            from .models import ExpenseReturnEvent
-            ExpenseReturnEvent.objects.create(
-                expense=expense,
-                returned_by=request.user,
-                returned_from_status=old_status,
-                reason=reason,
-                fields_to_correct=fields_to_correct,
-                due_date=due_date,
-                attachment=attachment
-            )
-            
+        wf_instance = expense.workflow_instance
+        if wf_instance and not wf_instance.completed_at:
+            from apps.workflow.services import record_action
             from apps.notifications.dispatch import log_activity
-            messages.success(request, f"Expense request for {expense.employee.full_name} has been returned.")
-            log_activity(
-                actor=request.user,
-                verb='expense_returned',
-                target=expense,
-                metadata={
-                    'title': 'Expense Returned',
-                    'message': f"Expense request returned at {old_status} stage by {request.user.email}. Reason: {reason}",
-                    'notif_type': 'expense'
-                },
-                notify_users=[expense.employee.user]
-            )
+            old_status = expense.status
+            
+            with transaction.atomic():
+                record_action(wf_instance, request.user, 'return', f"Returned: {reason}", return_to_initiator=True)
+                
+                from .models import ExpenseReturnEvent
+                ExpenseReturnEvent.objects.create(
+                    expense=expense,
+                    returned_by=request.user,
+                    returned_from_status=old_status,
+                    reason=reason,
+                    fields_to_correct=fields_to_correct,
+                    due_date=due_date,
+                    attachment=attachment
+                )
+                
+                messages.success(request, f"Expense request for {expense.employee.full_name} has been returned.")
+                log_activity(
+                    actor=request.user,
+                    verb='expense_returned',
+                    target=expense,
+                    metadata={
+                        'title': 'Expense Returned',
+                        'message': f"Expense request returned at {old_status} stage by {request.user.email}. Reason: {reason}",
+                        'notif_type': 'expense'
+                    },
+                    notify_users=[expense.employee.user]
+                )
+        else:
+            with transaction.atomic():
+                old_status = expense.status
+                if old_status == 'pending_manager':
+                    expense.status = 'returned_by_manager'
+                elif old_status == 'pending_finance':
+                    expense.status = 'returned_by_finance'
+                else:
+                    messages.error(request, "Only Manager or Finance stages can return expenses.")
+                    return redirect('expense:admin_expense_list')
+                    
+                expense.save()
+                
+                from .models import ExpenseReturnEvent
+                ExpenseReturnEvent.objects.create(
+                    expense=expense,
+                    returned_by=request.user,
+                    returned_from_status=old_status,
+                    reason=reason,
+                    fields_to_correct=fields_to_correct,
+                    due_date=due_date,
+                    attachment=attachment
+                )
+                
+                from apps.notifications.dispatch import log_activity
+                messages.success(request, f"Expense request for {expense.employee.full_name} has been returned.")
+                log_activity(
+                    actor=request.user,
+                    verb='expense_returned',
+                    target=expense,
+                    metadata={
+                        'title': 'Expense Returned',
+                        'message': f"Expense request returned at {old_status} stage by {request.user.email}. Reason: {reason}",
+                        'notif_type': 'expense'
+                    },
+                    notify_users=[expense.employee.user]
+                )
             
         referer = request.META.get('HTTP_REFERER')
         if referer:
