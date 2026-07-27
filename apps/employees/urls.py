@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import api_views
 
 app_name = 'employees'
 
@@ -50,5 +51,12 @@ urlpatterns = [
     path('wizard/', views.EmployeeWizardView.as_view(), name='employee_wizard'),
     path('wizard/<int:pk>/step/<int:step>/', views.EmployeeWizardView.as_view(), name='employee_wizard_step'),
     path('master/<int:pk>/timeline/', views.EmployeeTimelineView.as_view(), name='employee_timeline'),
+
+    # API endpoints
+    path('api/employees/<int:pk>/subordinates/', api_views.SubordinatesAPIView.as_view(), name='api_subordinates'),
+    path('api/employees/<int:pk>/direct-reports/', api_views.DirectReportsAPIView.as_view(), name='api_direct_reports'),
+    path('api/employees/<int:pk>/org-chain/', api_views.OrgChainAPIView.as_view(), name='api_org_chain'),
+    path('api/employees/org-analytics/', api_views.OrgAnalyticsAPIView.as_view(), name='api_org_analytics'),
+    path('api/employees/<int:pk>/is-manager/<int:target_pk>/', api_views.IsManagerAPIView.as_view(), name='api_is_manager'),
 ]
 

@@ -1739,6 +1739,117 @@ class ManagerDelegationTests(TestCase):
         self.assertFalse(delg.is_active)
 
 
+class SubordinateAPITests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch
+        from apps.employees.models import Department, Designation, Employee, EmployeeStatus, EmployeeProfile
+        from apps.accounts.rbac_models import Permission as RBACPermission, Role as RBACRole, UserRoleAssignment, RolePermission, Module, Action
+        from apps.accounts.models import DataScope
+
+        self.branch1 = Branch.objects.create(name='Branch 1', latitude=23.8, longitude=90.4, radius_meters=100)
+        self.branch2 = Branch.objects.create(name='Branch 2', latitude=23.9, longitude=90.5, radius_meters=100)
+        
+        self.dept = Department.objects.create(name='Engineering', code='ENG')
+        self.desig = Designation.objects.create(name='Developer', code='DEV')
+
+        self.admin_user = User.objects.create_superuser(email='api_admin@test.com', password='password123', role='admin')
+        self.manager_user = User.objects.create_user(phone='+8801733333331', password='password123', role='manager')
+        self.staff_user = User.objects.create_user(phone='+8801733333332', password='password123', role='staff')
+        self.unrelated_user = User.objects.create_user(phone='+8801733333333', password='password123', role='staff')
+
+        self.manager_master = Employee.objects.create(
+            employee_number='API-MGR-001', first_name='API', last_name='Manager', status=EmployeeStatus.ACTIVE,
+            branch=self.branch1, department=self.dept, designation=self.desig, user=self.manager_user
+        )
+        self.staff_master = Employee.objects.create(
+            employee_number='API-STF-001', first_name='API', last_name='Staff', status=EmployeeStatus.ACTIVE,
+            branch=self.branch1, department=self.dept, designation=self.desig, user=self.staff_user,
+            reporting_manager=self.manager_master
+        )
+        self.unrelated_master = Employee.objects.create(
+            employee_number='API-STF-002', first_name='API', last_name='Unrelated', status=EmployeeStatus.ACTIVE,
+            branch=self.branch2, department=self.dept, designation=self.desig, user=self.unrelated_user
+        )
+
+        EmployeeProfile.objects.create(user=self.manager_user, full_name='API Manager', employee_id='API-MGR-001', master_employee=self.manager_master, joined_date='2026-07-01', phone='01733333331')
+        EmployeeProfile.objects.create(user=self.staff_user, full_name='API Staff', employee_id='API-STF-001', master_employee=self.staff_master, joined_date='2026-07-01', phone='01733333332')
+        EmployeeProfile.objects.create(user=self.unrelated_user, full_name='API Unrelated', employee_id='API-STF-002', master_employee=self.unrelated_master, joined_date='2026-07-01', phone='01733333333')
+
+        # Setup RBAC permissions for manager
+        module = Module.objects.create(name='EmployeesModule', code='employees')
+        action = Action.objects.create(name='View', code='view')
+        perm = RBACPermission.objects.create(module=module, action=action, codename='employees.view', name='View Employees')
+        
+        self.role_manager = RBACRole.objects.create(name='ManagerRole', code='manager')
+        UserRoleAssignment.objects.create(user=self.manager_user, role=self.role_manager)
+        RolePermission.objects.create(role=self.role_manager, permission=perm, data_scope=DataScope.TEAM)
+
+        self.role_staff = RBACRole.objects.create(name='StaffRole', code='staff')
+        UserRoleAssignment.objects.create(user=self.staff_user, role=self.role_staff)
+        RolePermission.objects.create(role=self.role_staff, permission=perm, data_scope=DataScope.TEAM)
+
+    def test_direct_reports_api(self):
+        self.client.force_login(self.manager_user)
+        url = reverse('employees:api_direct_reports', kwargs={'pk': self.manager_master.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['count'], 1)
+        self.assertEqual(data['results'][0]['employee_number'], 'API-STF-001')
+
+    def test_subordinates_api_recursive(self):
+        self.client.force_login(self.manager_user)
+        # Create a grand-report reporting to staff_master
+        from apps.employees.models import Employee, EmployeeStatus, EmployeeProfile
+        grand_user = User.objects.create_user(phone='+8801733333334', password='password123', role='staff')
+        grand_master = Employee.objects.create(
+            employee_number='API-STF-003', first_name='API', last_name='Grand', status=EmployeeStatus.ACTIVE,
+            branch=self.branch1, department=self.dept, designation=self.desig, user=grand_user,
+            reporting_manager=self.staff_master
+        )
+        EmployeeProfile.objects.create(user=grand_user, full_name='API Grand', employee_id='API-STF-003', master_employee=grand_master, joined_date='2026-07-01', phone='01733333334')
+
+        url = reverse('employees:api_subordinates', kwargs={'pk': self.manager_master.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['count'], 2)
+        numbers = [x['employee_number'] for x in data['results']]
+        self.assertIn('API-STF-001', numbers)
+        self.assertIn('API-STF-003', numbers)
+
+    def test_org_chain_api(self):
+        self.client.force_login(self.staff_user)
+        url = reverse('employees:api_org_chain', kwargs={'pk': self.staff_master.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['count'], 1)
+        self.assertEqual(data['results'][0]['employee_number'], 'API-MGR-001')
+
+    def test_org_analytics_api(self):
+        self.client.force_login(self.admin_user)
+        url = reverse('employees:api_org_analytics')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('max_depth', data)
+
+    def test_is_manager_api(self):
+        self.client.force_login(self.manager_user)
+        url = reverse('employees:api_is_manager', kwargs={'pk': self.manager_master.pk, 'target_pk': self.staff_master.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['is_manager'])
+
+    def test_api_permission_denied_data_scope(self):
+        # staff_user cannot view unrelated_master because unrelated_master is not in their team
+        self.client.force_login(self.staff_user)
+        url = reverse('employees:api_direct_reports', kwargs={'pk': self.unrelated_master.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+
 
 
 
