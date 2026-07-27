@@ -298,6 +298,12 @@ class LeaveRequest(models.Model):
             object_id=str(self.id)
         ).first()
 
+    @property
+    def workflow_timeline(self):
+        from apps.workflow.services import get_workflow_timeline
+        return get_workflow_timeline(self)
+
+
 class YearLeaveHelper(dict):
     """
     Helper class that acts like a dictionary (via dictget filter) to calculate

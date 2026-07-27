@@ -74,27 +74,36 @@
         <c-card title="Request History" padding="none">
             <div class="divide-y" style="border-color:var(--border)">
                 {% for req in history %}
-                <div class="p-3 flex items-center justify-between gap-4">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="font-semibold text-xs" style="color:var(--text)">{{ req.leave_type.name }}</span>
-                            <c-badge variant="neutral" label="{{ req.total_days }} day{% if req.total_days != 1 %}s{% endif %}" ></c-badge>
+                <div class="p-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors" x-data="{ expanded: false }">
+                    <div class="flex items-center justify-between gap-4 cursor-pointer" @click="expanded = !expanded">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-semibold text-xs" style="color:var(--text)">{{ req.leave_type.name }}</span>
+                                <c-badge variant="neutral" label="{{ req.total_days }} day{% if req.total_days != 1 %}s{% endif %}" ></c-badge>
+                            </div>
+                            <p class="text-xs mt-0.5" style="color:var(--text-muted)">
+                                {{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}
+                            </p>
+                            {% if req.reason %}
+                            <p class="text-[11px] mt-0.5 italic" style="color:var(--text-muted)">"{{ req.reason }}"</p>
+                            {% endif %}
                         </div>
-                        <p class="text-xs mt-0.5" style="color:var(--text-muted)">
-                            {{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}
-                        </p>
-                        {% if req.reason %}
-                        <p class="text-[11px] mt-0.5 italic" style="color:var(--text-muted)">"{{ req.reason }}"</p>
-                        {% endif %}
+                        <div class="flex items-center gap-2">
+                            {% if req.status == 'APPROVED' or req.status == 'approved' %}
+                                <c-status-pill status="approved" ></c-status-pill>
+                            {% elif req.status == 'REJECTED' or req.status == 'rejected' %}
+                                <c-status-pill status="rejected" ></c-status-pill>
+                            {% elif req.status == 'returned' %}
+                                <c-status-pill status="returned" ></c-status-pill>
+                            {% else %}
+                                <c-status-pill status="pending" ></c-status-pill>
+                            {% endif %}
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''"></i>
+                        </div>
                     </div>
-                    <div>
-                        {% if req.status == 'APPROVED' %}
-                            <c-status-pill status="approved" ></c-status-pill>
-                        {% elif req.status == 'REJECTED' %}
-                            <c-status-pill status="rejected" ></c-status-pill>
-                        {% else %}
-                            <c-status-pill status="pending" ></c-status-pill>
-                        {% endif %}
+                    
+                    <div x-show="expanded" x-collapse x-cloak class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <c-timeline :timeline_data="req.workflow_timeline"></c-timeline>
                     </div>
                 </div>
                 {% empty %}
@@ -104,5 +113,6 @@
                 {% endfor %}
             </div>
         </c-card>
+
     </div>
 </c-app-shell>

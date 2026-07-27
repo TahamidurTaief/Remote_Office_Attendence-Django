@@ -1,21 +1,115 @@
 {% comment %} c-timeline component
-   Vertical timeline for activity feeds and audit logs.
-   Rebuilt cleanly from the universal_timeline.html legacy pattern.
+   Vertical timeline for activity feeds, audit logs, or multi-step workflow visual journeys.
    Props:
+   - timeline_data: structured list of step dictionaries (from get_workflow_timeline())
    - extra_class: additional classes on wrapper
-   Slot: sequence of <c-timeline-item> components
-
-   Usage:
-     <c-timeline>
-       <c-timeline-item title="Check-In" meta="Today, 9:02 AM" dot="success">
-         John Doe checked in from Branch A.
-       </c-timeline-item>
-       <c-timeline-item title="Leave Approved" meta="Yesterday" dot="primary">
-         Annual leave 2 days approved by Manager.
-       </c-timeline-item>
-     </c-timeline>
+   Slot: fallback sequence of <c-timeline-item> components if timeline_data is not provided
 {% endcomment %}
 
-<div class="ft-timeline {{ extra_class }}" role="list">
-  {{ slot }}
-</div>
+{% if timeline_data %}
+  <div class="space-y-6 relative before:absolute before:inset-y-0 before:left-4 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-700 {{ extra_class }}">
+    {% for step in timeline_data %}
+      <div class="relative pl-10">
+        <!-- Dot indicator -->
+        <div class="absolute left-2 top-1.5 -translate-x-1/2 flex items-center justify-center">
+          {% if step.status == 'completed' %}
+            <div class="w-5 h-5 rounded-full bg-green-500 border-4 border-white dark:border-slate-900 flex items-center justify-center text-white shadow-sm">
+              <i data-lucide="check" class="w-3 h-3 animate-fade-in" style="stroke-width:3"></i>
+            </div>
+          {% elif step.status == 'current' %}
+            <div class="w-5 h-5 rounded-full bg-primary-500 border-4 border-white dark:border-slate-900 flex items-center justify-center text-white shadow-sm ring-4 ring-primary-100 dark:ring-primary-950 animate-pulse">
+              <i data-lucide="play" class="w-2.5 h-2.5 fill-current"></i>
+            </div>
+          {% elif step.status == 'skipped' %}
+            <div class="w-5 h-5 rounded-full bg-slate-350 border-4 border-white dark:border-slate-900 flex items-center justify-center text-white shadow-sm">
+              <i data-lucide="minus" class="w-3 h-3"></i>
+            </div>
+          {% else %}
+            <!-- pending -->
+            <div class="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 border-4 border-white dark:border-slate-900 flex items-center justify-center text-slate-400">
+              <div class="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Step content card -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-100 dark:border-slate-750 shadow-soft">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Step {{ step.step_number }}: {{ step.name }}
+              </h4>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                Approver Role: <span class="font-medium text-slate-750 dark:text-slate-300 uppercase">{{ step.approver_role }}</span>
+              </p>
+            </div>
+            <div>
+              {% if step.status == 'completed' %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400 border border-green-200/50 uppercase">Completed</span>
+              {% elif step.status == 'current' %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400 border border-primary-200/50 uppercase animate-pulse">Current</span>
+              {% elif step.status == 'skipped' %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-650 dark:bg-slate-500/10 dark:text-slate-400 border border-slate-200/50 uppercase">Skipped</span>
+              {% else %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-550 uppercase">Pending</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Actions taken in this step -->
+          {% if step.actions %}
+            <div class="mt-3 space-y-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+              {% for action in step.actions %}
+                <div class="text-xs text-slate-650 dark:text-slate-300 space-y-1">
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="font-bold text-slate-800 dark:text-slate-100">
+                      {{ action.actor }}
+                      {% if action.delegated_by %}
+                        <span class="text-[10px] font-normal text-slate-400">(on behalf of {{ action.delegated_by }})</span>
+                      {% endif %}
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-medium">
+                      {{ action.timestamp|date:"d M Y, h:i A" }}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    {% if action.action_taken == 'approve' %}
+                      <span class="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 dark:bg-green-500/10 px-1.5 py-0.5 rounded">
+                        <i data-lucide="check-circle" class="w-3 h-3"></i> Approved
+                      </span>
+                    {% elif action.action_taken == 'reject' %}
+                      <span class="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded">
+                        <i data-lucide="x-circle" class="w-3 h-3"></i> Rejected
+                      </span>
+                    {% elif action.action_taken == 'return' %}
+                      <span class="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded">
+                        <i data-lucide="arrow-left-circle" class="w-3 h-3"></i> Returned
+                      </span>
+                    {% elif action.action_taken == 'delegate' %}
+                      <span class="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded">
+                        <i data-lucide="arrow-right-circle" class="w-3 h-3"></i> Escalated/Delegated
+                      </span>
+                    {% else %}
+                      <span class="text-[10px] font-bold text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded">
+                        {{ action.action_taken|title }}
+                      </span>
+                    {% endif %}
+                  </div>
+                  {% if action.note %}
+                    <p class="text-xs italic bg-slate-50 dark:bg-slate-900 rounded-lg p-2 border border-slate-100 dark:border-slate-800 leading-normal text-slate-500 dark:text-slate-400">
+                      "{{ action.note }}"
+                    </p>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="ft-timeline {{ extra_class }}" role="list">
+    {{ slot }}
+  </div>
+{% endif %}
