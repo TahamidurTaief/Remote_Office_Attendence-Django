@@ -15,6 +15,11 @@
     <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
     {{ label|default:status|title }}
   </span>
+{% elif status == 'cancelled' %}
+  <span class="ft-badge ft-badge-neutral" style="gap:4px">
+    <span class="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block"></span>
+    {{ label|default:status|title }}
+  </span>
 {% elif status == 'suspended' or status == 'absent' or status == 'rejected' or status == 'terminated' %}
   <span class="ft-badge ft-badge-danger" style="gap:4px">
     <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>

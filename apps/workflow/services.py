@@ -85,6 +85,11 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
         instance.completed_at = timezone.now()
         instance.sla_deadline = None
         instance.save()
+    elif action == 'cancel':
+        instance.current_status = 'cancelled'
+        instance.completed_at = timezone.now()
+        instance.sla_deadline = None
+        instance.save()
     elif action == 'return' and step.allow_return:
         if return_to_initiator:
             instance.current_status = 'returned'
@@ -104,6 +109,20 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
         instance.save()
 
     return wf_action
+
+def cancel_workflow(instance, actor, reason=''):
+    """
+    Cancels a running workflow instance.
+    Sets the status to 'cancelled', marks completion time, and logs a cancel action.
+    """
+    if actor != instance.initiated_by and not actor.is_superuser and getattr(actor, 'role', '') != 'admin':
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("You do not have permission to cancel this workflow.")
+
+    if instance.completed_at:
+        raise ValueError("Cannot cancel a completed workflow.")
+
+    return record_action(instance, actor, 'cancel', note=reason)
 
 def escalate_instance(instance):
     """
@@ -224,6 +243,14 @@ def get_workflow_timeline(target_object):
                 if has_reject:
                     status = 'completed'
                 elif step.step_number < instance.current_step or (step.step_number == instance.current_step and has_any_action):
+                    status = 'completed'
+                else:
+                    status = 'skipped'
+            elif instance.current_status == 'cancelled':
+                has_cancel = any(a['action_taken'] == 'cancel' for a in step_actions)
+                if has_cancel or step.step_number == instance.current_step:
+                    status = 'cancelled'
+                elif step.step_number < instance.current_step:
                     status = 'completed'
                 else:
                     status = 'skipped'

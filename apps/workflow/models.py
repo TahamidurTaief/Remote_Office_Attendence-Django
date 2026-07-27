@@ -104,6 +104,7 @@ class WorkflowAction(models.Model):
         ('reject', 'Reject'),
         ('return', 'Return'),
         ('delegate', 'Delegate'),
+        ('cancel', 'Cancel'),
     )
 
     instance = models.ForeignKey(WorkflowInstance, on_delete=models.CASCADE, related_name='actions')

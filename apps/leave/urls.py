@@ -15,10 +15,12 @@ urlpatterns = [
     path('admin/types/', views.AdminLeaveTypesView.as_view(), name='admin_leave_types'),
     path('admin/types/add/', views.AdminLeaveTypeCreateView.as_view(), name='admin_leave_type_add'),
     path('admin/types/<int:pk>/edit/', views.AdminLeaveTypeUpdateView.as_view(), name='admin_leave_type_edit'),
+    path('admin/types/<int:pk>/delete/', views.AdminLeaveTypeDeleteView.as_view(), name='admin_leave_type_delete'),
 
     # Staff URLs
     path('staff/', views.StaffLeaveDashboardView.as_view(), name='staff_dashboard'),
     path('staff/request/', views.StaffLeaveRequestCreateView.as_view(), name='staff_request_create'),
+    path('staff/requests/<int:pk>/cancel/', views.CancelLeaveRequestView.as_view(), name='cancel_request'),
     path('admin/requests/<int:pk>/reschedule/', views.RescheduleLeaveRequestView.as_view(), name='reschedule_request'),
     path('admin/requests/<int:pk>/return/', views.ReturnLeaveRequestView.as_view(), name='return_request'),
 ]

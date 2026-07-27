@@ -247,6 +247,11 @@ class AdminLeaveTypesView(AdminRequiredMixin, ListView):
     template_name = 'admin_panel/leave/leave_types.html'
     context_object_name = 'leave_types'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = LeaveTypeForm()
+        return context
+
 class AdminLeaveTypeCreateView(AdminRequiredMixin, CreateView):
     model = LeaveType
     form_class = LeaveTypeForm
@@ -263,21 +268,39 @@ class AdminLeaveTypeCreateView(AdminRequiredMixin, CreateView):
             return redirect(next_url)
         return response
 
+
 class AdminLeaveTypeUpdateView(AdminRequiredMixin, UpdateView):
     model = LeaveType
     form_class = LeaveTypeForm
     template_name = 'admin_panel/leave/leave_type_form.html'
     success_url = reverse_lazy('leave:admin_leave_types')
 
+    def get_template_names(self):
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['admin_panel/leave/partials/edit_drawer.html']
+        return [self.template_name]
+
     def form_valid(self, form):
         messages.success(self.request, f"Leave type '{form.cleaned_data['name']}' updated successfully.")
         response = super().form_valid(form)
+        if self.request.headers.get('HX-Request') == 'true':
+            from django.http import HttpResponse
+            return HttpResponse('<script>window.location.reload();</script>')
         next_url = self.request.GET.get('next') or self.request.POST.get('next')
         from django.utils.http import url_has_allowed_host_and_scheme
         if next_url and url_has_allowed_host_and_scheme(url=next_url, allowed_hosts={self.request.get_host()}):
             from django.shortcuts import redirect
             return redirect(next_url)
         return response
+
+
+class AdminLeaveTypeDeleteView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        leave_type = get_object_or_404(LeaveType, pk=pk)
+        name = leave_type.name
+        leave_type.delete()
+        messages.success(request, f"Leave type '{name}' deleted successfully.")
+        return redirect('leave:admin_leave_types')
 
 # ==============================================================================
 # Staff (Employee) Views
@@ -466,3 +489,38 @@ class RescheduleLeaveRequestView(AdminRequiredMixin, UpdateView):
 
     def get_success_url(self):
         return reverse_lazy('leave:admin_dashboard')
+
+
+class CancelLeaveRequestView(StaffOrManagerMixin, View):
+    def post(self, request, pk):
+        leave_request = get_object_or_404(LeaveRequest, pk=pk)
+        
+        # Verify ownership
+        if leave_request.employee.user != request.user:
+            messages.error(request, "You do not have permission to cancel this request.")
+            return redirect('leave:staff_dashboard')
+            
+        # Verify status eligibility
+        if leave_request.status not in ('pending', 'manager_approved', 'returned'):
+            messages.error(request, f"This request cannot be cancelled because it is already {leave_request.status}.")
+            return redirect('leave:staff_dashboard')
+            
+        wf_instance = leave_request.workflow_instance
+        if wf_instance:
+            if not wf_instance.completed_at:
+                from apps.workflow.services import cancel_workflow
+                try:
+                    cancel_workflow(wf_instance, request.user, 'Cancelled by requester')
+                except Exception as e:
+                    messages.error(request, f"Failed to cancel workflow: {str(e)}")
+                    return redirect('leave:staff_dashboard')
+            else:
+                messages.error(request, "The workflow has already completed.")
+                return redirect('leave:staff_dashboard')
+        
+        # Transition leave request status to cancelled
+        leave_request.status = 'cancelled'
+        leave_request.save()
+        messages.success(request, "Your leave request has been cancelled.")
+        
+        return redirect('leave:staff_dashboard')

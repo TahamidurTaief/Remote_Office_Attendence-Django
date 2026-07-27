@@ -588,4 +588,74 @@ class LeaveWorkflowIntegrationTests(TestCase):
         self.assertEqual(leave_request.status, 'returned')
         self.assertEqual(wf_instance.current_status, 'returned')
 
+    def test_cancel_pending_request_success(self):
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 7, 20),
+            end_date=datetime.date(2026, 7, 21),
+            reason='Family event',
+            status='pending'
+        )
+        wf_instance = leave_request.workflow_instance
+        self.assertIsNotNone(wf_instance)
+
+        self.client.force_login(self.staff_user)
+        response = self.client.post(reverse('leave:cancel_request', kwargs={'pk': leave_request.pk}))
+        self.assertEqual(response.status_code, 302)
+        
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, 'cancelled')
+        wf_instance.refresh_from_db()
+        self.assertEqual(wf_instance.current_status, 'cancelled')
+        self.assertIsNotNone(wf_instance.completed_at)
+        
+        timeline = wf_instance.actions.all()
+        self.assertTrue(any(a.action == 'cancel' for a in timeline))
+        
+        struct_timeline = leave_request.workflow_timeline
+        step_1 = struct_timeline[0]
+        self.assertEqual(step_1['status'], 'cancelled')
+        cancel_actions = [a for a in step_1['actions'] if a['action_taken'] == 'cancel']
+        self.assertEqual(len(cancel_actions), 1)
+
+    def test_cancel_request_unauthorized(self):
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 7, 20),
+            end_date=datetime.date(2026, 7, 21),
+            reason='Family event',
+            status='pending'
+        )
+        
+        self.client.force_login(self.manager_user)
+        response = self.client.post(reverse('leave:cancel_request', kwargs={'pk': leave_request.pk}))
+        self.assertEqual(response.status_code, 302)
+        
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, 'pending')
+
+    def test_cancel_approved_request_blocked(self):
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 7, 20),
+            end_date=datetime.date(2026, 7, 21),
+            reason='Family event',
+            status='approved'
+        )
+        wf_instance = leave_request.workflow_instance
+        self.assertIsNotNone(wf_instance)
+        wf_instance.completed_at = timezone.now()
+        wf_instance.current_status = 'approved'
+        wf_instance.save()
+        
+        self.client.force_login(self.staff_user)
+        response = self.client.post(reverse('leave:cancel_request', kwargs={'pk': leave_request.pk}))
+        self.assertEqual(response.status_code, 302)
+        
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, 'approved')
+
 

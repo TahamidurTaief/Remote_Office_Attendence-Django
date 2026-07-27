@@ -53,6 +53,7 @@ class LeaveRequest(models.Model):
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
         ('returned', 'Returned'),
+        ('cancelled', 'Cancelled'),
     )
 
     employee = models.ForeignKey(
