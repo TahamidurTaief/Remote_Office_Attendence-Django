@@ -23,6 +23,7 @@ urlpatterns = [
     path('templates/<int:pk>/delete/', views.TaskTemplateDeleteView.as_view(), name='template_delete'),
     path('templates/<int:template_pk>/items/add/', views.TemplateAddItemView.as_view(), name='template_add_item'),
     path('templates/items/<int:pk>/delete/', views.TemplateDeleteItemView.as_view(), name='template_delete_item'),
+    path('templates/items/<int:pk>/edit/', views.TemplateEditItemView.as_view(), name='template_edit_item'),
     
     # Project Tasks
     path('tasks/', views.GlobalTaskListView.as_view(), name='global_task_list'),

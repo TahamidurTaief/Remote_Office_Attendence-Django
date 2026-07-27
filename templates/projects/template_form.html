@@ -61,7 +61,7 @@
                         <th>Activity Description</th>
                         <th>Default Responsible Role</th>
                         <th class="w-28">Duration (Days)</th>
-                        <th class="w-16 text-right">Delete</th>
+                        <th class="w-24 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -71,13 +71,12 @@
                         <td><span style="color:var(--text)">{{ item.activity }}</span></td>
                         <td><span style="color:var(--text-muted)">{{ item.default_responsible_role|default:"-" }}</span></td>
                         <td><span style="color:var(--text)">{{ item.default_duration_days|default:"1" }} days</span></td>
-                        <td class="text-right">
+                        <td class="text-right flex items-center justify-end gap-1">
+                            <c-button hx-get="{% url 'projects:template_edit_item' item.pk %}" hx-target="#edit-item-drawer-container" hx-swap="innerHTML" variant="ghost" size="sm" icon="edit-3" title="Edit"></c-button>
                             <form action="{% url 'projects:template_delete_item' item.pk %}" method="POST" class="inline"
                                   x-data @submit.prevent="window.confirmAction('Remove this step?', () => $el.submit())">
                                 {% csrf_token %}
-                                <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm p-1 text-red-500 hover:text-red-600">
-                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                </button>
+                                <c-button type="submit" variant="ghost" size="sm" icon="trash-2" extra_class="text-red-500 hover:text-red-650" title="Delete"></c-button>
                             </form>
                         </td>
                     </tr>
@@ -99,20 +98,16 @@
                   class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                 {% csrf_token %}
                 <div class="sm:col-span-1">
-                    <label for="id_order" class="ft-label">Seq</label>
-                    {{ item_form.order }}
+                    <c-input type="number" id="id_order" name="order" label="Seq" required="true" value="{{ item_form.order.value|default:'' }}" error="{{ item_form.order.errors.0 }}"></c-input>
                 </div>
                 <div class="sm:col-span-5">
-                    <label for="id_activity" class="ft-label">Activity Name</label>
-                    {{ item_form.activity }}
+                    <c-input type="text" id="id_activity" name="activity" label="Activity Name" placeholder="Activity Name" required="true" value="{{ item_form.activity.value|default:'' }}" error="{{ item_form.activity.errors.0 }}"></c-input>
                 </div>
                 <div class="sm:col-span-4">
-                    <label for="id_default_responsible_role" class="ft-label">Responsible Role</label>
-                    {{ item_form.default_responsible_role }}
+                    <c-input type="text" id="id_default_responsible_role" name="default_responsible_role" label="Responsible Role" placeholder="Role (e.g. Project Manager)" value="{{ item_form.default_responsible_role.value|default:'' }}" error="{{ item_form.default_responsible_role.errors.0 }}"></c-input>
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="id_default_duration_days" class="ft-label">Duration (days)</label>
-                    {{ item_form.default_duration_days }}
+                    <c-input type="number" id="id_default_duration_days" name="default_duration_days" label="Duration (days)" required="true" value="{{ item_form.default_duration_days.value|default:'' }}" error="{{ item_form.default_duration_days.errors.0 }}"></c-input>
                 </div>
                 <div class="sm:col-span-12 flex justify-end">
                     <c-button type="submit" variant="primary" icon="plus" label="Add Step" size="sm" ></c-button>
@@ -123,4 +118,6 @@
     {% endif %}
 
 </div>
+
+<div id="edit-item-drawer-container"></div>
 </c-app-shell>

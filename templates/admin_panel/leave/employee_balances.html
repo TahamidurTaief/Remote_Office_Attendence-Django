@@ -113,6 +113,7 @@
 
 </div>
 
+<c-slot name="scripts">
 {# ── Employee Detail Modals (Cotton Component Modals) ─────────────────────── #}
 {% for emp in employees %}
 {% with total_left=emp.total_leave_left_by_year|dictget:year %}
@@ -171,7 +172,7 @@
             </div>
         </div>
 
-    </div>
+     </div>
 
     <c-slot name="footer">
         <button type="button" @click="$dispatch('close-modal', {id: 'emp-modal-{{ emp.id }}'})" class="ft-btn ft-btn-secondary ft-btn-sm">
@@ -182,5 +183,5 @@
 </c-modal>
 {% endwith %}
 {% endfor %}
-
+</c-slot>
 </c-app-shell>

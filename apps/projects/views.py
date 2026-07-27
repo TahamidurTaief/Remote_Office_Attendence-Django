@@ -276,6 +276,24 @@ class TemplateDeleteItemView(AdminRequiredMixin, View):
         messages.success(request, 'Template item deleted successfully.')
         return redirect('projects:template_edit', pk=template_pk)
 
+class TemplateEditItemView(AdminRequiredMixin, UpdateView):
+    model = TaskTemplateItem
+    form_class = TaskTemplateItemForm
+    template_name = 'projects/template_form.html'  # default fallback
+
+    def get_template_names(self):
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['projects/partials/edit_item_drawer.html']
+        return [self.template_name]
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Template item updated successfully.')
+        self.object = form.save()
+        if self.request.headers.get('HX-Request') == 'true':
+            from django.http import HttpResponse
+            return HttpResponse('<script>window.location.reload();</script>')
+        return redirect('projects:template_edit', pk=self.object.template.pk)
+
 # ProjectTask CRUD
 class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
     model = ProjectTask
@@ -1207,6 +1225,7 @@ class ProjectTypeListView(AdminRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['search'] = self.request.GET.get('search', '')
+        context['form'] = ProjectTypeForm()
         return context
 
 
@@ -1216,9 +1235,18 @@ class ProjectTypeCreateView(AdminRequiredMixin, CreateView):
     template_name = 'projects/project_type_form.html'
     success_url = reverse_lazy('projects:project_type_list')
 
+    def get_template_names(self):
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['projects/partials/create_type_drawer.html']
+        return [self.template_name]
+
     def form_valid(self, form):
         messages.success(self.request, 'Project type created successfully.')
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        if self.request.headers.get('HX-Request') == 'true':
+            from django.http import HttpResponse
+            return HttpResponse('<script>window.location.reload();</script>')
+        return response
 
 
 class ProjectTypeUpdateView(AdminRequiredMixin, UpdateView):
@@ -1227,9 +1255,18 @@ class ProjectTypeUpdateView(AdminRequiredMixin, UpdateView):
     template_name = 'projects/project_type_form.html'
     success_url = reverse_lazy('projects:project_type_list')
 
+    def get_template_names(self):
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['projects/partials/edit_type_drawer.html']
+        return [self.template_name]
+
     def form_valid(self, form):
         messages.success(self.request, 'Project type updated successfully.')
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        if self.request.headers.get('HX-Request') == 'true':
+            from django.http import HttpResponse
+            return HttpResponse('<script>window.location.reload();</script>')
+        return response
 
 
 class ProjectTypeDeleteView(AdminRequiredMixin, DeleteView):

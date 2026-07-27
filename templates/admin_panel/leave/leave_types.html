@@ -8,44 +8,83 @@
             <h1 class="text-[14px] font-semibold" style="color:var(--text)">Leave Types</h1>
             <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Configure leave types and their default days allowed per year.</p>
         </div>
-        <c-button href="{% url 'leave:admin_leave_type_add' %}" variant="primary" icon="plus" label="Add Leave Type" ></c-button>
+        <c-button variant="primary" icon="plus" label="Add Leave Type" @click="$dispatch('open-drawer', {id: 'add-leave-type-drawer'})" ></c-button>
     </div>
 
-    <!-- Table -->
-    <c-table id="leave-types-table">
-        <c-slot name="header">
-            <th>Leave Type Name</th>
-            <th>Category</th>
-            <th>Default Days / Year</th>
-            <th class="text-right">Actions</th>
-        </c-slot>
+    <c-card padding="none">
+        <c-table id="leave-types-table">
+            <c-slot name="header">
+                <th>Leave Type Name</th>
+                <th>Category</th>
+                <th>Default Days / Year</th>
+                <th class="text-right">Actions</th>
+            </c-slot>
 
-        <c-slot name="body">
-            {% for lt in leave_types %}
-            <tr>
-                <td>
-                    <span class="font-semibold text-[12px]" style="color:var(--text)">{{ lt.name }}</span>
-                </td>
-                <td>
-                    <span class="capitalize text-[12px]" style="color:var(--text-secondary)">{{ lt.get_category_display }}</span>
-                </td>
-                <td>
-                    <c-badge variant="primary" label="{{ lt.default_days_per_year }} Days" ></c-badge>
-                </td>
-                <td class="text-right">
-                    <c-button href="{% url 'leave:admin_leave_type_edit' lt.pk %}" variant="ghost" size="sm" icon="edit-3" label="Edit" ></c-button>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="4" class="py-12">
-                    <c-empty-state icon="calendar-x" title="No Leave Types Defined"
-                                   description="Configure leave types (e.g. Casual, Sick) to begin tracking leaves." ></c-empty-state>
-                </td>
-            </tr>
-            {% endfor %}
-        </c-slot>
-    </c-table>
+            <c-slot name="body">
+                {% for lt in leave_types %}
+                <tr>
+                    <td>
+                        <span class="font-semibold text-[12px]" style="color:var(--text)">{{ lt.name }}</span>
+                    </td>
+                    <td>
+                        <span class="capitalize text-[12px]" style="color:var(--text-secondary)">{{ lt.get_category_display }}</span>
+                    </td>
+                    <td>
+                        <c-badge variant="primary" label="{{ lt.default_days_per_year }} Days" ></c-badge>
+                    </td>
+                    <td class="text-right flex items-center justify-end gap-1">
+                        <c-button hx-get="{% url 'leave:admin_leave_type_edit' lt.pk %}" hx-target="#edit-drawer-container" hx-swap="innerHTML" variant="ghost" size="sm" icon="edit-3" label="Edit" ></c-button>
+                        <form action="{% url 'leave:admin_leave_type_delete' lt.pk %}" method="POST" onsubmit="return confirm('Are you sure you want to delete the leave type &quot;{{ lt.name|escapejs }}&quot;?');" class="inline">
+                            {% csrf_token %}
+                            <c-button type="submit" variant="ghost" size="sm" icon="trash-2" extra_class="text-red-500 hover:text-red-700" title="Delete" ></c-button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="py-12">
+                        <c-empty-state icon="calendar-x" title="No Leave Types Defined"
+                                       description="Configure leave types (e.g. Casual, Sick) to begin tracking leaves." ></c-empty-state>
+                    </td>
+                </tr>
+                {% endfor %}
+            </c-slot>
+        </c-table>
+    </c-card>
 
 </div>
+
+<c-right-drawer id="add-leave-type-drawer" title="Add Leave Type" width="md">
+    <form method="POST" action="{% url 'leave:admin_leave_type_add' %}" class="space-y-4">
+        {% csrf_token %}
+
+        <c-input type="text" name="name" label="Leave Type Name" placeholder="e.g. Casual, Sick" required="true" value="{{ form.name.value|default:'' }}" error="{{ form.name.errors.0 }}"></c-input>
+
+        <c-select name="category" label="Category" required="true" value="{{ form.category.value|default:'' }}" error="{{ form.category.errors.0 }}">
+            {% for val, label in form.category.field.choices %}
+                <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+        </c-select>
+
+        <c-input type="number" name="default_days_per_year" label="Default Days Allowed Per Year" required="true" value="{{ form.default_days_per_year.value|default:0 }}" error="{{ form.default_days_per_year.errors.0 }}" help="Used as the default starting allowance when employees request this type of leave."></c-input>
+
+        <div class="flex items-start gap-2 p-3 rounded-[4px] border" style="background:var(--surface-2); border-color:var(--border)">
+            <input type="checkbox" name="is_default" id="id_is_default" class="h-4 w-4 text-primary focus:ring-primary border-[var(--border)] rounded" {% if form.is_default.value %}checked{% endif %}>
+            <div>
+                <label for="id_is_default" class="text-[12px] font-semibold cursor-pointer" style="color:var(--text)">
+                    Set as Default Leave Type for Absences
+                </label>
+                <p class="ft-help-text">Auto-deducted on daily absences. Only one type can be default at a time.</p>
+            </div>
+        </div>
+
+        <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+            <c-button type="button" variant="secondary" label="Cancel" @click="$dispatch('close-drawer', {id: 'add-leave-type-drawer'})" ></c-button>
+            <c-button type="submit" variant="primary" icon="save" label="Save Leave Type" ></c-button>
+        </div>
+    </form>
+</c-right-drawer>
+
+<div id="edit-drawer-container"></div>
+
 </c-app-shell>

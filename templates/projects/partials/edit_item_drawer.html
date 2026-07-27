@@ -1,0 +1,22 @@
+<c-right-drawer id="edit-template-item-drawer" title="Edit Template Step" width="md">
+    <form method="POST" action="{% url 'projects:template_edit_item' object.pk %}" class="space-y-4">
+        {% csrf_token %}
+
+        <c-input type="number" name="order" label="Seq" required="true" value="{{ form.order.value|default:'' }}" error="{{ form.order.errors.0 }}"></c-input>
+
+        <c-input type="text" name="activity" label="Activity Description" placeholder="Activity Description" required="true" value="{{ form.activity.value|default:'' }}" error="{{ form.activity.errors.0 }}"></c-input>
+
+        <c-input type="text" name="default_responsible_role" label="Default Responsible Role" placeholder="Role (e.g. Project Manager)" value="{{ form.default_responsible_role.value|default:'' }}" error="{{ form.default_responsible_role.errors.0 }}"></c-input>
+
+        <c-input type="number" name="default_duration_days" label="Duration (days)" required="true" value="{{ form.default_duration_days.value|default:'' }}" error="{{ form.default_duration_days.errors.0 }}"></c-input>
+
+        <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+            <c-button type="button" variant="secondary" label="Cancel" @click="$dispatch('close-drawer', {id: 'edit-template-item-drawer'})" ></c-button>
+            <c-button type="submit" variant="primary" icon="save" label="Save Changes" ></c-button>
+        </div>
+    </form>
+</c-right-drawer>
+
+<script>
+    window.dispatchEvent(new CustomEvent('open-drawer', { detail: { id: 'edit-template-item-drawer' } }));
+</script>

@@ -26,52 +26,39 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Employee ID <span class="text-red-500">*</span></label>
-      {{ form.employee_number }}
-      {% if form.employee_number.errors %}<p class="text-xs text-red-500 mt-1">{{ form.employee_number.errors.0 }}</p>{% endif %}
+      <c-input type="text" name="employee_number" id="id_employee_number" label="Employee ID" required="true" value="{{ form.employee_number.value|default:'' }}" error="{{ form.employee_number.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Gender</label>
-      {{ form.gender }}
-      {% if form.gender.errors %}<p class="text-xs text-red-500 mt-1">{{ form.gender.errors.0 }}</p>{% endif %}
+      <c-select name="gender" id="id_gender" label="Gender" value="{{ form.gender.value|default:'' }}" error="{{ form.gender.errors.0 }}">
+        {% for val, label in form.gender.field.choices %}
+          <option value="{{ val }}" {% if form.gender.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">First Name <span class="text-red-500">*</span></label>
-      {{ form.first_name }}
-      {% if form.first_name.errors %}<p class="text-xs text-red-500 mt-1">{{ form.first_name.errors.0 }}</p>{% endif %}
+      <c-input type="text" name="first_name" id="id_first_name" label="First Name" required="true" value="{{ form.first_name.value|default:'' }}" error="{{ form.first_name.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Last Name <span class="text-red-500">*</span></label>
-      {{ form.last_name }}
-      {% if form.last_name.errors %}<p class="text-xs text-red-500 mt-1">{{ form.last_name.errors.0 }}</p>{% endif %}
+      <c-input type="text" name="last_name" id="id_last_name" label="Last Name" required="true" value="{{ form.last_name.value|default:'' }}" error="{{ form.last_name.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Personal Email</label>
-      {{ form.personal_email }}
-      {% if form.personal_email.errors %}<p class="text-xs text-red-500 mt-1">{{ form.personal_email.errors.0 }}</p>{% endif %}
+      <c-input type="email" name="personal_email" id="id_personal_email" label="Personal Email" value="{{ form.personal_email.value|default:'' }}" error="{{ form.personal_email.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Phone Number</label>
-      {{ form.phone }}
-      {% if form.phone.errors %}<p class="text-xs text-red-500 mt-1">{{ form.phone.errors.0 }}</p>{% endif %}
+      <c-input type="tel" name="phone" id="id_phone" label="Phone Number" value="{{ form.phone.value|default:'' }}" error="{{ form.phone.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Date of Birth</label>
-      {{ form.dob }}
-      {% if form.dob.errors %}<p class="text-xs text-red-500 mt-1">{{ form.dob.errors.0 }}</p>{% endif %}
+      <c-input type="date" name="dob" id="id_dob" label="Date of Birth" value="{{ form.dob.value|date:'Y-m-d'|default:form.dob.value|default:'' }}" error="{{ form.dob.errors.0 }}"></c-input>
     </div>
   </div>
 
-  <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
-    <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all flex items-center space-x-2">
-      <span>Save & Continue to Step 2</span>
-      <i data-lucide="arrow-right" class="w-4 h-4"></i>
-    </button>
+  <div class="flex items-center justify-end pt-4 border-t" style="border-color:var(--border)">
+    <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 2" ></c-button>
   </div>
 </form>

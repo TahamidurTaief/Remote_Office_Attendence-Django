@@ -1,0 +1,34 @@
+<c-right-drawer id="edit-leave-type-drawer" title="Edit Leave Type" width="md">
+    <form method="POST" action="{% url 'leave:admin_leave_type_edit' object.pk %}" class="space-y-4">
+        {% csrf_token %}
+
+        <c-input type="text" name="name" label="Leave Type Name" placeholder="e.g. Casual, Sick" required="true" value="{{ form.name.value|default:'' }}" error="{{ form.name.errors.0 }}"></c-input>
+
+        <c-select name="category" label="Category" required="true" value="{{ form.category.value|default:'' }}" error="{{ form.category.errors.0 }}">
+            {% for val, label in form.category.field.choices %}
+                <option value="{{ val }}" {% if form.category.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </c-select>
+
+        <c-input type="number" name="default_days_per_year" label="Default Days Allowed Per Year" required="true" value="{{ form.default_days_per_year.value|default:0 }}" error="{{ form.default_days_per_year.errors.0 }}" help="Used as the default starting allowance when employees request this type of leave."></c-input>
+
+        <div class="flex items-start gap-2 p-3 rounded-[4px] border" style="background:var(--surface-2); border-color:var(--border)">
+            <input type="checkbox" name="is_default" id="id_edit_is_default" class="h-4 w-4 text-primary focus:ring-primary border-[var(--border)] rounded" {% if form.is_default.value %}checked{% endif %}>
+            <div>
+                <label for="id_edit_is_default" class="text-[12px] font-semibold cursor-pointer" style="color:var(--text)">
+                    Set as Default Leave Type for Absences
+                </label>
+                <p class="ft-help-text">Auto-deducted on daily absences. Only one type can be default at a time.</p>
+            </div>
+        </div>
+
+        <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+            <c-button type="button" variant="secondary" label="Cancel" @click="$dispatch('close-drawer', {id: 'edit-leave-type-drawer'})" ></c-button>
+            <c-button type="submit" variant="primary" icon="save" label="Save Changes" ></c-button>
+        </div>
+    </form>
+</c-right-drawer>
+
+<script>
+    window.dispatchEvent(new CustomEvent('open-drawer', { detail: { id: 'edit-leave-type-drawer' } }));
+</script>

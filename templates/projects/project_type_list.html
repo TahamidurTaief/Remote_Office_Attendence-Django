@@ -6,7 +6,7 @@
     <c-slot name="topbar">
         <c-topbar title="Project Types">
             <c-slot name="actions">
-                <c-button href="{% url 'projects:project_type_create' %}" variant="accent" icon="plus" label="Create Project Type" ></c-button>
+                <c-button hx-get="{% url 'projects:project_type_create' %}" hx-target="#drawer-container" hx-swap="innerHTML" variant="accent" icon="plus" label="Create Project Type" ></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
@@ -38,7 +38,7 @@
                         {% for type in project_types %}
                         <tr>
                             <td>
-                                <a href="{% url 'projects:project_type_edit' type.pk %}" class="font-semibold hover:underline" style="color:var(--primary)">
+                                <a href="javascript:void(0)" hx-get="{% url 'projects:project_type_edit' type.pk %}" hx-target="#drawer-container" hx-swap="innerHTML" class="font-semibold hover:underline" style="color:var(--primary)">
                                     {{ type.name }}
                                 </a>
                             </td>
@@ -47,9 +47,7 @@
                             </td>
                             <td class="text-right">
                                 <div class="flex items-center justify-end gap-1">
-                                    <a href="{% url 'projects:project_type_edit' type.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1" title="Edit">
-                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-                                    </a>
+                                    <c-button hx-get="{% url 'projects:project_type_edit' type.pk %}" hx-target="#drawer-container" hx-swap="innerHTML" variant="ghost" size="sm" icon="pencil" title="Edit" ></c-button>
                                     <form action="{% url 'projects:project_type_delete' type.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this project type?', () => $el.submit())">
                                         {% csrf_token %}
                                         <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm p-1 text-red-500 hover:text-red-600" title="Delete">
@@ -87,4 +85,6 @@
             {% endif %}
         </c-card>
     </div>
+
+    <div id="drawer-container"></div>
 </c-app-shell>

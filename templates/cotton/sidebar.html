@@ -322,11 +322,11 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Leave Requests</span>
           </a>
-          <a href="{% url 'leave:admin_leave_types' %}" class="ft-nav-item {% if '/leave/types/' in path %}active{% endif %}" x-show="matchSearch('Leave Types')">
+          <a href="{% url 'leave:admin_leave_types' %}" class="ft-nav-item {% if '/leave/admin/types/' in path %}active{% endif %}" x-show="matchSearch('Leave Types')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Leave Types</span>
           </a>
-          <a href="{% url 'leave:admin_balances' %}" class="ft-nav-item {% if '/leave/balances/' in path %}active{% endif %}" x-show="matchSearch('Leave Balance')">
+           <a href="{% url 'leave:admin_balances' %}" class="ft-nav-item {% if '/leave/admin/balances/' in path %}active{% endif %}" x-show="matchSearch('Leave Balance')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Leave Balance</span>
           </a>
@@ -440,9 +440,8 @@
         </div>
       </div>
 
-      {# Menu direct link: Project Types #}
       <a href="{% url 'projects:project_type_list' %}"
-         class="ft-nav-item {% if '/types/' in path %}active{% endif %}"
+         class="ft-nav-item {% if '/projects/types/' in path %}active{% endif %}"
          x-show="matchSearch('Project Types')"
          :title="collapsed ? 'Project Types' : ''"
          :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">

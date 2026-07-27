@@ -8,19 +8,26 @@
             <c-slot name="actions">
                 <div class="flex items-center space-x-2">
                     {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
-                    <button hx-get="{% url 'employees:employee_suspend_toggle_modal' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 {% if employee.is_suspended %}bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60{% else %}bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60{% endif %} font-medium text-sm rounded-xl transition-colors">
-                        {% if employee.is_suspended %}Un-suspend Profile{% else %}Suspend Profile{% endif %}
-                    </button>
+                    <c-button hx-get="{% url 'employees:employee_suspend_toggle_modal' employee.pk %}"
+                              hx-target="#modal-container"
+                              variant="{% if employee.is_suspended %}secondary{% else %}danger{% endif %}"
+                              size="sm"
+                              label="{% if employee.is_suspended %}Un-suspend Profile{% else %}Suspend Profile{% endif %}"
+                              extra_class="rounded-xl {% if employee.is_suspended %}!bg-emerald-50 dark:!bg-emerald-950/40 !text-emerald-700 dark:!text-emerald-300 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/60{% endif %}"></c-button>
                     {% endif %}
-                    <button hx-get="{% url 'employees:employee_edit' employee.pk %}" hx-target="#modal-container" class="px-3.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-medium text-sm rounded-xl transition-colors">
-                        Edit Profile
-                    </button>
+                    <c-button hx-get="{% url 'employees:employee_edit' employee.pk %}"
+                              hx-target="#modal-container"
+                              variant="secondary"
+                              size="sm"
+                              label="Edit Profile"
+                              extra_class="rounded-xl"></c-button>
                     {% include "employees/partials/lifecycle_action_buttons.html" %}
                     {% if employee.status != 'archived' %}
-                    <a href="{% url 'employees:lifecycle_requests' %}"
-                       class="px-2 py-1 text-xs font-semibold rounded-xl transition-colors hover:bg-slate-500/10 text-gray-600 dark:text-gray-400">
-                        Pending requests
-                    </a>
+                    <c-button href="{% url 'employees:lifecycle_requests' %}"
+                              variant="ghost"
+                              size="sm"
+                              label="Pending requests"
+                              extra_class="rounded-xl text-xs"></c-button>
                     {% endif %}
                 </div>
             </c-slot>
@@ -41,55 +48,69 @@
         </div>
         {% endif %}
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <!-- Left Column: Reusable profile-card Cotton component -->
             <div class="lg:col-span-1">
                 <c-profile-card :employee="employee" ></c-profile-card>
             </div>
  
-            <!-- Right Column: Detail Tabs -->
-            <div class="lg:col-span-2 space-y-6" x-data="{ tab: '{{ active_tab }}' }">
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="lg:col-span-3 space-y-6" x-data="{ tab: '{{ active_tab }}' }">
+                <c-card padding="lg">
                     <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
-                        <nav class="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-3">
-                            <button @click="tab = 'identity'" :class="tab === 'identity' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
-                                Identity & Demographics
-                            </button>
-                            <button @click="tab = 'contact'" :class="tab === 'contact' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
-                                Contact & Emergency
-                            </button>
-                            <button @click="tab = 'organization'" :class="tab === 'organization' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
-                                Organization & Reporting
-                            </button>
+                        <nav class="flex flex-wrap items-center gap-2 pb-3">
+                            <c-tab-button @click="tab = 'identity'"
+                                          :class="tab === 'identity' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="whitespace-nowrap"
+                                          label="Identity & Demographics"></c-tab-button>
+                            <c-tab-button @click="tab = 'contact'"
+                                          :class="tab === 'contact' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="whitespace-nowrap"
+                                          label="Contact & Emergency"></c-tab-button>
+                            <c-tab-button @click="tab = 'organization'"
+                                          :class="tab === 'organization' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="whitespace-nowrap"
+                                          label="Organization & Reporting"></c-tab-button>
                             {% if can_view_payroll %}
-                            <button @click="tab = 'payroll'" :class="tab === 'payroll' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
-                                Payroll & Compliance
-                            </button>
+                            <c-tab-button @click="tab = 'payroll'"
+                                          :class="tab === 'payroll' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="whitespace-nowrap"
+                                          label="Payroll & Compliance"></c-tab-button>
                             {% endif %}
-                            <button @click="tab = 'history'" :class="tab === 'history' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
-                                Employment History
-                            </button>
-                            <button @click="tab = 'documents'" :class="tab === 'documents' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap flex items-center gap-1.5">
-                                Documents
+                            <c-tab-button @click="tab = 'history'"
+                                          :class="tab === 'history' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="whitespace-nowrap"
+                                          label="Employment History"></c-tab-button>
+                            <c-tab-button @click="tab = 'documents'"
+                                          :class="tab === 'documents' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="flex items-center gap-1.5 whitespace-nowrap"
+                                          label="Documents">
                                 {% if active_documents.count > 0 %}
                                 <span class="px-1.5 py-0.5 text-[10px] bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-full font-mono font-bold">{{ active_documents.count }}</span>
                                 {% endif %}
-                            </button>
-                            <button @click="tab = 'assets'" :class="tab === 'assets' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap flex items-center gap-1.5">
-                                Assets
+                            </c-tab-button>
+                            <c-tab-button @click="tab = 'assets'"
+                                          :class="tab === 'assets' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="flex items-center gap-1.5 whitespace-nowrap"
+                                          color="emerald"
+                                          label="Assets">
                                 {% if active_asset_assignments.count > 0 %}
                                 <span class="px-1.5 py-0.5 text-[10px] bg-emerald-100 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 rounded-full font-mono font-bold">{{ active_asset_assignments.count }}</span>
                                 {% endif %}
-                            </button>
+                            </c-tab-button>
                             {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
-                            <button @click="tab = 'activity'" :class="tab === 'activity' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap">
-                                Activity Feed
-                            </button>
+                            <c-tab-button @click="tab = 'activity'"
+                                          :class="tab === 'activity' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="whitespace-nowrap"
+                                          label="Activity Feed"></c-tab-button>
                             {% endif %}
                             {% if request.user.is_superuser or request.user.role == 'admin' %}
-                            <button @click="tab = 'audit'" :class="tab === 'audit' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold border-indigo-500/40' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700/50'" class="px-3.5 py-2 text-xs md:text-sm font-medium rounded-xl border transition-all whitespace-nowrap" hx-get="{% url 'employees:master_audit' employee.pk %}" hx-target="#audit-tab-content" hx-trigger="click once">
-                                Audit Log
-                            </button>
+                            <c-tab-button @click="tab = 'audit'"
+                                          :class="tab === 'audit' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+                                          extra_class="whitespace-nowrap"
+                                          hx-get="{% url 'employees:master_audit' employee.pk %}"
+                                          hx-target="#audit-tab-content"
+                                          hx-trigger="click once"
+                                          label="Audit Log"></c-tab-button>
                             {% endif %}
                         </nav>
                     </div>
@@ -176,7 +197,7 @@
                         </div>
                     </div>
                     {% endif %}
-
+ 
  
                     <!-- Employment History Tab -->
                     <div x-show="tab === 'history'" class="space-y-4" style="display: none;">
@@ -204,14 +225,14 @@
                     <div x-show="tab === 'assets'" style="display: none;">
                         <c-asset-list :employee="employee" :asset_assignments="active_asset_assignments" :historical_assignments="historical_asset_assignments" ></c-asset-list>
                     </div>
-
+ 
                     <!-- Activity Feed Tab -->
                     {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
                     <div x-show="tab === 'activity'" style="display: none;">
                         <c-activity-feed :logs="employee.activity_logs.all" ></c-activity-feed>
                     </div>
                     {% endif %}
-
+ 
                     <!-- Audit Log Tab -->
                     {% if request.user.is_superuser or request.user.role == 'admin' %}
                     <div x-show="tab === 'audit'" style="display: none;">
@@ -230,7 +251,7 @@
                         </div>
                     </div>
                     {% endif %}
-                </div>
+                </c-card>
             </div>
         </div>
     </div>

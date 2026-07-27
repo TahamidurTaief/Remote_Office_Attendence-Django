@@ -84,7 +84,6 @@ class DynamicRoleDeleteView(AdminRequiredMixin, DeleteView):
         return redirect(self.success_url)
 
 
-@method_decorator(require_reauth, name='dispatch')
 class DynamicRoleMatrixView(AdminRequiredMixin, DetailView):
     model = Role
     template_name = 'admin_panel/roles/role_matrix.html'

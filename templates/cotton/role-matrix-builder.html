@@ -38,13 +38,17 @@
              class="ft-input w-full pl-9 text-xs">
     </div>
 
-    <div class="flex items-center gap-2">
-      <select x-model="selectedModule" class="ft-select text-xs py-1.5 px-2.5">
+    <div class="flex items-center gap-2" @change="selectedModule = $event.target.value">
+      <c-select
+        name="selectedModule"
+        value="all"
+        extra_class="w-48 text-xs"
+      >
         <option value="all">All Modules</option>
         {% for item in modules_with_perms %}
           <option value="{{ item.module.code }}">{{ item.module.name }}</option>
         {% endfor %}
-      </select>
+      </c-select>
 
       <span class="text-[11px] font-medium px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)]">
         {{ role.role_permissions.count }} / {{ total_permissions_count }} Active

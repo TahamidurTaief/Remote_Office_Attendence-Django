@@ -1,0 +1,16 @@
+<c-right-drawer id="edit-project-type-drawer" title="Edit Project Type" width="md">
+    <form method="POST" action="{% url 'projects:project_type_edit' object.pk %}" class="space-y-4">
+        {% csrf_token %}
+
+        <c-input type="text" name="name" label="Project Type Name" placeholder="e.g. HVAC Installation" required="true" value="{{ form.name.value|default:'' }}" error="{{ form.name.errors.0 }}"></c-input>
+
+        <div class="pt-3 flex justify-end gap-2 border-t" style="border-color:var(--border)">
+            <c-button type="button" variant="secondary" label="Cancel" @click="$dispatch('close-drawer', {id: 'edit-project-type-drawer'})" ></c-button>
+            <c-button type="submit" variant="primary" icon="save" label="Save Changes" ></c-button>
+        </div>
+    </form>
+</c-right-drawer>
+
+<script>
+    window.dispatchEvent(new CustomEvent('open-drawer', { detail: { id: 'edit-project-type-drawer' } }));
+</script>

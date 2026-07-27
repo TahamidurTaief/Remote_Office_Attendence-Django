@@ -25,66 +25,68 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Branch</label>
-      {{ form.branch }}
-      {% if form.branch.errors %}<p class="text-xs text-red-500 mt-1">{{ form.branch.errors.0 }}</p>{% endif %}
+      <c-select name="branch" id="id_branch" label="Branch" value="{{ form.branch.value|default:'' }}" error="{{ form.branch.errors.0 }}">
+        {% for val, label in form.branch.field.choices %}
+          <option value="{{ val }}" {% if form.branch.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Department</label>
-      {{ form.department }}
-      {% if form.department.errors %}<p class="text-xs text-red-500 mt-1">{{ form.department.errors.0 }}</p>{% endif %}
+      <c-select name="department" id="id_department" label="Department" value="{{ form.department.value|default:'' }}" error="{{ form.department.errors.0 }}">
+        {% for val, label in form.department.field.choices %}
+          <option value="{{ val }}" {% if form.department.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Designation</label>
-      {{ form.designation }}
-      {% if form.designation.errors %}<p class="text-xs text-red-500 mt-1">{{ form.designation.errors.0 }}</p>{% endif %}
+      <c-select name="designation" id="id_designation" label="Designation" value="{{ form.designation.value|default:'' }}" error="{{ form.designation.errors.0 }}">
+        {% for val, label in form.designation.field.choices %}
+          <option value="{{ val }}" {% if form.designation.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Reporting Manager</label>
-      {{ form.reporting_manager }}
-      {% if form.reporting_manager.errors %}<p class="text-xs text-red-500 mt-1">{{ form.reporting_manager.errors.0 }}</p>{% endif %}
+      <c-select name="reporting_manager" id="id_reporting_manager" label="Reporting Manager" value="{{ form.reporting_manager.value|default:'' }}" error="{{ form.reporting_manager.errors.0 }}">
+        {% for val, label in form.reporting_manager.field.choices %}
+          <option value="{{ val }}" {% if form.reporting_manager.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Employment Type</label>
-      {{ form.employment_type }}
-      {% if form.employment_type.errors %}<p class="text-xs text-red-500 mt-1">{{ form.employment_type.errors.0 }}</p>{% endif %}
+      <c-select name="employment_type" id="id_employment_type" label="Employment Type" value="{{ form.employment_type.value|default:'' }}" error="{{ form.employment_type.errors.0 }}">
+        {% for val, label in form.employment_type.field.choices %}
+          <option value="{{ val }}" {% if form.employment_type.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Joining Date</label>
-      {{ form.joined_date }}
-      {% if form.joined_date.errors %}<p class="text-xs text-red-500 mt-1">{{ form.joined_date.errors.0 }}</p>{% endif %}
+      <c-input type="date" name="joined_date" id="id_joined_date" label="Joining Date" value="{{ form.joined_date.value|date:'Y-m-d'|default:form.joined_date.value|default:'' }}" error="{{ form.joined_date.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Shift Schedule</label>
-      {{ form.shift }}
-      {% if form.shift.errors %}<p class="text-xs text-red-500 mt-1">{{ form.shift.errors.0 }}</p>{% endif %}
+      <c-select name="shift" id="id_shift" label="Shift Schedule" value="{{ form.shift.value|default:'' }}" error="{{ form.shift.errors.0 }}">
+        {% for val, label in form.shift.field.choices %}
+          <option value="{{ val }}" {% if form.shift.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Weekly Holiday Policy</label>
-      {{ form.weekly_holiday_policy }}
-      {% if form.weekly_holiday_policy.errors %}<p class="text-xs text-red-500 mt-1">{{ form.weekly_holiday_policy.errors.0 }}</p>{% endif %}
+      <c-select name="weekly_holiday_policy" id="id_weekly_holiday_policy" label="Weekly Holiday Policy" value="{{ form.weekly_holiday_policy.value|default:'' }}" error="{{ form.weekly_holiday_policy.errors.0 }}">
+        {% for val, label in form.weekly_holiday_policy.field.choices %}
+          <option value="{{ val }}" {% if form.weekly_holiday_policy.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
   </div>
 
-  <div class="flex items-center justify-between pt-4 border-t border-gray-100">
-    <a 
-      hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}"
-      hx-target="#wizard-step-container"
-      hx-swap="innerHTML"
-      class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-all cursor-pointer"
-    >
-      Back to Step 1
-    </a>
-    <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all flex items-center space-x-2">
-      <span>Save & Continue to Step 3</span>
-      <i data-lucide="arrow-right" class="w-4 h-4"></i>
-    </button>
+  <div class="flex items-center justify-between pt-4 border-t" style="border-color:var(--border)">
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}" hx-target="#wizard-step-container" hx-swap="innerHTML" label="Back to Step 1" ></c-button>
+    <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 3" ></c-button>
   </div>
 </form>

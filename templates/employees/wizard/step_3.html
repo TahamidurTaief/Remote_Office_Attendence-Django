@@ -25,65 +25,52 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Basic Salary</label>
-      {{ form.basic_salary }}
-      {% if form.basic_salary.errors %}<p class="text-xs text-red-500 mt-1">{{ form.basic_salary.errors.0 }}</p>{% endif %}
+      <c-input type="number" name="basic_salary" id="id_basic_salary" label="Basic Salary" value="{{ form.basic_salary.value|default:'' }}" error="{{ form.basic_salary.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Salary Structure</label>
-      {{ form.salary_structure }}
-      {% if form.salary_structure.errors %}<p class="text-xs text-red-500 mt-1">{{ form.salary_structure.errors.0 }}</p>{% endif %}
+      <c-select name="salary_structure" id="id_salary_structure" label="Salary Structure" value="{{ form.salary_structure.value|default:'' }}" error="{{ form.salary_structure.errors.0 }}">
+        {% for val, label in form.salary_structure.field.choices %}
+          <option value="{{ val }}" {% if form.salary_structure.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Bank Name</label>
-      {{ form.bank_name }}
-      {% if form.bank_name.errors %}<p class="text-xs text-red-500 mt-1">{{ form.bank_name.errors.0 }}</p>{% endif %}
+      <c-input type="text" name="bank_name" id="id_bank_name" label="Bank Name" placeholder="e.g. City Bank Ltd" value="{{ form.bank_name.value|default:'' }}" error="{{ form.bank_name.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Bank Account Number</label>
-      {{ form.bank_account }}
-      {% if form.bank_account.errors %}<p class="text-xs text-red-500 mt-1">{{ form.bank_account.errors.0 }}</p>{% endif %}
+      <c-input type="text" name="bank_account" id="id_bank_account" label="Bank Account Number" placeholder="Account Number" value="{{ form.bank_account.value|default:'' }}" error="{{ form.bank_account.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Payment Method</label>
-      {{ form.payment_method }}
-      {% if form.payment_method.errors %}<p class="text-xs text-red-500 mt-1">{{ form.payment_method.errors.0 }}</p>{% endif %}
+      <c-select name="payment_method" id="id_payment_method" label="Payment Method" value="{{ form.payment_method.value|default:'' }}" error="{{ form.payment_method.errors.0 }}">
+        {% for val, label in form.payment_method.field.choices %}
+          <option value="{{ val }}" {% if form.payment_method.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Tax Profile / TIN</label>
-      {{ form.tax_profile }}
-      {% if form.tax_profile.errors %}<p class="text-xs text-red-500 mt-1">{{ form.tax_profile.errors.0 }}</p>{% endif %}
+      <c-input type="text" name="tax_profile" id="id_tax_profile" label="Tax Profile / TIN" placeholder="TIN / Tax Region" value="{{ form.tax_profile.value|default:'' }}" error="{{ form.tax_profile.errors.0 }}"></c-input>
     </div>
 
     <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1">Overtime Policy</label>
-      {{ form.overtime_policy }}
-      {% if form.overtime_policy.errors %}<p class="text-xs text-red-500 mt-1">{{ form.overtime_policy.errors.0 }}</p>{% endif %}
+      <c-select name="overtime_policy" id="id_overtime_policy" label="Overtime Policy" value="{{ form.overtime_policy.value|default:'' }}" error="{{ form.overtime_policy.errors.0 }}">
+        {% for val, label in form.overtime_policy.field.choices %}
+          <option value="{{ val }}" {% if form.overtime_policy.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </c-select>
     </div>
 
-    <div class="flex items-center space-x-3 pt-6">
-      {{ form.pf_enabled }}
-      <label class="text-sm font-medium text-gray-700">Enable Provident Fund (PF) Contributions</label>
+    <div class="flex items-center gap-2 pt-6">
+      <input type="checkbox" name="pf_enabled" id="id_pf_enabled" class="h-4 w-4 text-primary focus:ring-primary border-[var(--border)] rounded" {% if form.pf_enabled.value %}checked{% endif %}>
+      <label for="id_pf_enabled" class="text-sm font-medium text-gray-700 cursor-pointer">Enable Provident Fund (PF) Contributions</label>
     </div>
   </div>
-
-  <div class="flex items-center justify-between pt-4 border-t border-gray-100">
-    <a 
-      hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=2 %}"
-      hx-target="#wizard-step-container"
-      hx-swap="innerHTML"
-      class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-all cursor-pointer"
-    >
-      Back to Step 2
-    </a>
-    <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all flex items-center space-x-2">
-      <span>Save & Continue to Step 4</span>
-      <i data-lucide="arrow-right" class="w-4 h-4"></i>
-    </button>
+  <div class="flex items-center justify-between pt-4 border-t" style="border-color:var(--border)">
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=2 %}" hx-target="#wizard-step-container" hx-swap="innerHTML" label="Back to Step 2" ></c-button>
+    <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 4" ></c-button>
   </div>
 </form>

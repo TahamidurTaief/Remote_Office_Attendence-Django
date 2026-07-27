@@ -38,10 +38,11 @@
             
             {% if pct < 100 %}
             <div class="mt-3">
-                <a href="{% url 'employees:employee_wizard_step' pk=employee.pk step=employee.get_next_wizard_step %}" 
-                   class="inline-block w-full text-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors text-decoration-none">
-                   Resume Wizard
-                </a>
+                <c-button href="{% url 'employees:employee_wizard_step' pk=employee.pk step=employee.get_next_wizard_step %}" 
+                          variant="accent"
+                          size="sm"
+                          label="Resume Wizard"
+                          extra_class="w-full text-center justify-center rounded-xl font-semibold !bg-amber-500 hover:!bg-amber-600 !text-white"></c-button>
             </div>
             {% endif %}
         </div>
