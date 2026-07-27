@@ -97,118 +97,55 @@
                     <!-- Identity Tab -->
                     <div x-show="tab === 'identity'" class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">First Name</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.first_name }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Last Name</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.last_name }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Date of Birth</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.dob|date:"M d, Y"|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Gender</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 capitalize mt-0.5">{{ employee.gender|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">National ID Reference</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.national_id|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Created Date</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.created_at|date:"M d, Y H:i" }}</div>
-                            </div>
+                            <c-info-field label="First Name" :value="employee.first_name"></c-info-field>
+                            <c-info-field label="Last Name" :value="employee.last_name"></c-info-field>
+                            <c-info-field label="Date of Birth" value='{{ employee.dob|date:"M d, Y"|default:"" }}'></c-info-field>
+                            <c-info-field label="Gender" :value="employee.gender|default:''" extra_class="capitalize"></c-info-field>
+                            <c-info-field label="National ID Reference" :value="employee.national_id|default:''"></c-info-field>
+                            <c-info-field label="Created Date" value='{{ employee.created_at|date:"M d, Y H:i" }}'></c-info-field>
                         </div>
                     </div>
  
                     <!-- Contact Tab -->
                     <div x-show="tab === 'contact'" class="space-y-4" style="display: none;">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Phone Number</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.phone|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Personal Email</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.personal_email|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl sm:col-span-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Address</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.address|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Name</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_name|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Relation</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_relation|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Phone</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_phone|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl sm:col-span-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Emergency Contact Address</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.emergency_contact_address|default:"—" }}</div>
-                            </div>
+                            <c-info-field label="Phone Number" :value="employee.phone|default:''"></c-info-field>
+                            <c-info-field label="Personal Email" :value="employee.personal_email|default:''"></c-info-field>
+                            <c-info-field label="Address" :value="employee.address|default:''" extra_class="sm:col-span-2"></c-info-field>
+                            <c-info-field label="Emergency Contact Name" :value="employee.emergency_contact_name|default:''"></c-info-field>
+                            <c-info-field label="Emergency Contact Relation" :value="employee.emergency_contact_relation|default:''"></c-info-field>
+                            <c-info-field label="Emergency Contact Phone" :value="employee.emergency_contact_phone|default:''"></c-info-field>
+                            <c-info-field label="Emergency Contact Address" :value="employee.emergency_contact_address|default:''" extra_class="sm:col-span-2"></c-info-field>
                         </div>
                     </div>
  
                     <!-- Organization Tab -->
                     <div x-show="tab === 'organization'" class="space-y-4" style="display: none;">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Branch</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.branch.name|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Department</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.department.name|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Designation</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.designation.name|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Employment Type</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 capitalize mt-0.5">{{ employee.get_employment_type_display|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Work Shift</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.shift|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Weekly Holiday Policy</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.weekly_holiday_policy|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Reporting Manager</span>
-                                <div class="text-sm font-semibold mt-0.5">
-                                    {% if employee.reporting_manager %}
-                                    <a href="{% url 'employees:employee_detail' employee.reporting_manager.pk %}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
-                                        {{ employee.reporting_manager.get_full_name }} ({{ employee.reporting_manager.employee_number }})
+                            <c-info-field label="Branch" :value="employee.branch.name|default:''"></c-info-field>
+                            <c-info-field label="Department" :value="employee.department.name|default:''"></c-info-field>
+                            <c-info-field label="Designation" :value="employee.designation.name|default:''"></c-info-field>
+                            <c-info-field label="Employment Type" :value="employee.get_employment_type_display|default:''" extra_class="capitalize"></c-info-field>
+                            <c-info-field label="Work Shift" :value="employee.shift|default:''"></c-info-field>
+                            <c-info-field label="Weekly Holiday Policy" :value="employee.weekly_holiday_policy|default:''"></c-info-field>
+                            <c-info-field label="Reporting Manager">
+                                {% if employee.reporting_manager %}
+                                <a href="{% url 'employees:employee_detail' employee.reporting_manager.pk %}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+                                    {{ employee.reporting_manager.get_full_name }} ({{ employee.reporting_manager.employee_number }})
+                                </a>
+                                {% else %}
+                                <span class="text-gray-400">None</span>
+                                {% endif %}
+                            </c-info-field>
+                            <c-info-field label="Direct Reports" extra_class="sm:col-span-2">
+                                {% for dr in employee.direct_reports.all %}
+                                    <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-block bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-semibold text-decoration-none border border-indigo-200/50 dark:border-indigo-700/50">
+                                        {{ dr.get_full_name }}
                                     </a>
-                                    {% else %}
-                                    <span class="text-gray-400">None</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl sm:col-span-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Direct Reports</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
-                                    {% for dr in employee.direct_reports.all %}
-                                        <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-block bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-semibold text-decoration-none border border-indigo-200/50 dark:border-indigo-700/50">
-                                            {{ dr.get_full_name }}
-                                        </a>
-                                    {% empty %}
-                                        <span class="text-xs text-gray-400">No direct reports</span>
-                                    {% endfor %}
-                                </div>
-                            </div>
+                                {% empty %}
+                                    <span class="text-xs text-gray-400">No direct reports</span>
+                                {% endfor %}
+                            </c-info-field>
                         </div>
                     </div>
  
@@ -216,53 +153,30 @@
                     {% if can_view_payroll %}
                     <div x-show="tab === 'payroll'" class="space-y-4" style="display: none;">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Basic Salary</span>
-                                <div class="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5 font-mono">
-                                    {% if employee.basic_salary is not None %}
-                                        ${{ employee.basic_salary }}
-                                    {% else %}
-                                        <span class="text-gray-400 italic">Not Set</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Salary Structure</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.salary_structure|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Bank Name</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.bank_name|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Bank Account</span>
-                                <div class="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5 font-mono">{{ employee.bank_account|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Payment Method</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5 capitalize">{{ employee.get_payment_method_display|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Tax Profile</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.tax_profile|default:"—" }}</div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Provident Fund (PF)</span>
-                                <div class="text-sm font-semibold mt-0.5">
-                                    {% if employee.pf_enabled %}
-                                        <span class="text-emerald-600 dark:text-emerald-400 font-bold">Enabled</span>
-                                    {% else %}
-                                        <span class="text-gray-400">Disabled</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50 rounded-xl">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Overtime Policy</span>
-                                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{{ employee.overtime_policy|default:"—" }}</div>
-                            </div>
+                            <c-info-field label="Basic Salary">
+                                {% if employee.basic_salary is not None %}
+                                    <span class="font-mono font-bold">${{ employee.basic_salary }}</span>
+                                {% else %}
+                                    <span class="text-gray-400 italic">Not Set</span>
+                                {% endif %}
+                            </c-info-field>
+                            <c-info-field label="Salary Structure" :value="employee.salary_structure|default:''"></c-info-field>
+                            <c-info-field label="Bank Name" :value="employee.bank_name|default:''"></c-info-field>
+                            <c-info-field label="Bank Account" :value="employee.bank_account|default:''" extra_class="font-mono"></c-info-field>
+                            <c-info-field label="Payment Method" :value="employee.get_payment_method_display|default:''" extra_class="capitalize"></c-info-field>
+                            <c-info-field label="Tax Profile" :value="employee.tax_profile|default:''"></c-info-field>
+                            <c-info-field label="Provident Fund (PF)">
+                                {% if employee.pf_enabled %}
+                                    <span class="text-emerald-600 dark:text-emerald-400 font-bold">Enabled</span>
+                                {% else %}
+                                    <span class="text-gray-400">Disabled</span>
+                                {% endif %}
+                            </c-info-field>
+                            <c-info-field label="Overtime Policy" :value="employee.overtime_policy|default:''"></c-info-field>
                         </div>
                     </div>
                     {% endif %}
+
  
                     <!-- Employment History Tab -->
                     <div x-show="tab === 'history'" class="space-y-4" style="display: none;">
