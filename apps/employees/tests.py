@@ -1371,13 +1371,14 @@ class ReportingManagerChainTests(TestCase):
             reason='Family trip'
         )
 
-        from apps.expense.models import Expense
+        from apps.expense.models import Expense, ExpenseCategory
+        cat = ExpenseCategory.objects.create(name='Travel', code='travel')
         self.expense = Expense.objects.create(
             employee=self.staff_profile,
             amount=500.00,
-            category='travel',
+            category=cat,
             description='Client site travel',
-            status='pending'
+            status='pending_manager'
         )
 
     def test_leave_approval_via_reporting_manager(self):
@@ -1398,7 +1399,7 @@ class ReportingManagerChainTests(TestCase):
         self.assertEqual(response.status_code, 302)
         
         self.expense.refresh_from_db()
-        self.assertEqual(self.expense.status, 'approved')
+        self.assertEqual(self.expense.status, 'pending_finance')
 
 
 class EmployeeStatusEngineTests(TestCase):
@@ -1562,6 +1563,106 @@ class OrgHierarchyTests(TestCase):
         analytics = OrgHierarchyService.get_org_analytics()
         self.assertEqual(analytics['max_depth'], 4)
         self.assertEqual(analytics['avg_span_of_control'], 1.0)
+
+    def test_get_all_subordinates_query_count_scales_with_depth_not_total_employees(self):
+        from apps.employees.hierarchy_services import OrgHierarchyService
+        
+        # 1. Measure queries for the original chain (depth = 4)
+        with self.assertNumQueries(5):
+            subordinates_1 = list(OrgHierarchyService.get_all_subordinates(self.ceo))
+        self.assertEqual(len(subordinates_1), 3)
+
+        # 2. Add 20 unrelated employees to the database
+        for i in range(20):
+            Employee.objects.create(
+                employee_number=f'UNRELATED-{i}',
+                first_name='Unrelated',
+                last_name=str(i),
+                status=EmployeeStatus.ACTIVE
+            )
+
+        # 3. Assert query count remains exactly the same (5 queries) and is independent of total employee count
+        with self.assertNumQueries(5):
+            subordinates_2 = list(OrgHierarchyService.get_all_subordinates(self.ceo))
+        self.assertEqual(len(subordinates_2), 3)
+
+    def test_team_data_scope_includes_grand_reports(self):
+        from apps.accounts.rbac_models import Permission as RBACPermission, Role as RBACRole, UserRoleAssignment, RolePermission, Module, Action
+        from apps.accounts.models import DataScope
+        from apps.accounts.engine import PermissionEngine
+        
+        # Setup a manager user for the director employee
+        director_user = get_user_model().objects.create_user(
+            phone='+8801700000201',
+            password='testpassword123',
+            role='manager'
+        )
+        self.director.user = director_user
+        self.director.save()
+
+        # Create profiles for employees in the tree
+        from apps.employees.models import EmployeeProfile
+        director_profile = EmployeeProfile.objects.create(
+            user=director_user, full_name='Director User', employee_id='DIR-001',
+            master_employee=self.director, joined_date='2026-07-01', phone='01700000201'
+        )
+        
+        manager_user = get_user_model().objects.create_user(phone='+8801700000202', password='testpassword123', role='staff')
+        self.manager.user = manager_user
+        self.manager.save()
+        manager_profile = EmployeeProfile.objects.create(
+            user=manager_user, full_name='Manager User', employee_id='MGR-001',
+            master_employee=self.manager, joined_date='2026-07-01', phone='01700000202'
+        )
+        
+        emp_user = get_user_model().objects.create_user(phone='+8801700000203', password='testpassword123', role='staff')
+        self.emp.user = emp_user
+        self.emp.save()
+        emp_profile = EmployeeProfile.objects.create(
+            user=emp_user, full_name='Emp User', employee_id='EMP-001',
+            master_employee=self.emp, joined_date='2026-07-01', phone='01700000203'
+        )
+
+        ceo_user = get_user_model().objects.create_user(phone='+8801700000204', password='testpassword123', role='staff')
+        self.ceo.user = ceo_user
+        self.ceo.save()
+        ceo_profile = EmployeeProfile.objects.create(
+            user=ceo_user, full_name='CEO User', employee_id='CEO-001',
+            master_employee=self.ceo, joined_date='2026-07-01', phone='01700000204'
+        )
+
+        # Setup permission system for TEAM scope view using RBAC models
+        module = Module.objects.create(name='EmployeesModule', code='employees')
+        action = Action.objects.create(name='View', code='view')
+        perm = RBACPermission.objects.create(
+            module=module,
+            action=action,
+            codename='employees.view',
+            name='View Employees'
+        )
+        role = RBACRole.objects.create(name='ManagerRole', code='manager')
+        UserRoleAssignment.objects.create(user=director_user, role=role)
+        RolePermission.objects.create(role=role, permission=perm, data_scope=DataScope.TEAM)
+
+        # Create leave requests to filter
+        from apps.leave.models import LeaveType, LeaveRequest
+        leave_type = LeaveType.objects.create(name='Casual', default_days_per_year=10)
+        from datetime import date
+        req_director = LeaveRequest.objects.create(employee=director_profile, leave_type=leave_type, start_date=date(2026, 8, 1), end_date=date(2026, 8, 2), status='pending')
+        req_manager = LeaveRequest.objects.create(employee=manager_profile, leave_type=leave_type, start_date=date(2026, 8, 1), end_date=date(2026, 8, 2), status='pending')
+        req_emp = LeaveRequest.objects.create(employee=emp_profile, leave_type=leave_type, start_date=date(2026, 8, 1), end_date=date(2026, 8, 2), status='pending')
+        req_ceo = LeaveRequest.objects.create(employee=ceo_profile, leave_type=leave_type, start_date=date(2026, 8, 1), end_date=date(2026, 8, 2), status='pending')
+
+        # Filter queryset under TEAM scope for the director
+        filtered_qs = PermissionEngine.filter_by_data_scope(
+            director_user, LeaveRequest.objects.all(), 'employees.view', employee_field='employee'
+        )
+        
+        filtered_list = list(filtered_qs)
+        self.assertIn(req_director, filtered_list)
+        self.assertIn(req_manager, filtered_list)
+        self.assertIn(req_emp, filtered_list)
+        self.assertNotIn(req_ceo, filtered_list)
 
 
 class ManagerDelegationTests(TestCase):

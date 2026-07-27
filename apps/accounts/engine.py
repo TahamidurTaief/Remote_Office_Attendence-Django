@@ -247,9 +247,10 @@ class PermissionEngine:
         if scope == DataScope.TEAM:
             q_filter = Q()
             if emp_master:
-                # Direct reports
-                q_filter |= Q(**{f"{employee_field}__master_employee__reporting_manager": emp_master})
-                q_filter |= Q(**{f"{employee_field}__master_employee": emp_master})
+                from apps.employees.hierarchy_services import OrgHierarchyService
+                subordinate_ids = list(OrgHierarchyService.get_all_subordinates(emp_master).values_list('id', flat=True))
+                subordinate_ids.append(emp_master.id)
+                q_filter |= Q(**{f"{employee_field}__master_employee_id__in": subordinate_ids})
             return queryset.filter(q_filter)
 
         if scope == DataScope.BRANCH:

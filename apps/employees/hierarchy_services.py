@@ -13,35 +13,22 @@ class OrgHierarchyService:
 
     @staticmethod
     def get_all_subordinates(employee):
-        """Recursively fetches all subordinates down the tree in a single query by doing in-memory build or recursion."""
-        # For reasonable org sizes, we pull all active employees and construct the tree.
-        # This avoids recursive DB queries or complex raw SQL CTEs that might fail on SQLite/MySQL/PG difference.
-        all_emps = list(Employee.objects.select_related(
-            'branch', 'department', 'designation', 'user'
-        ).all())
-        
-        # Build adjacency list
-        manager_map = {}
-        for emp in all_emps:
-            if emp.reporting_manager_id:
-                manager_map.setdefault(emp.reporting_manager_id, []).append(emp)
-                
-        subordinates = []
-        queue = [employee.id]
-        visited = set()
-        
-        while queue:
-            curr_id = queue.pop(0)
-            if curr_id in visited:
-                continue
-            visited.add(curr_id)
-            directs = manager_map.get(curr_id, [])
-            for d in directs:
-                subordinates.append(d)
-                queue.append(d.id)
-                
-        # Return as queryset
-        subordinate_ids = [s.id for s in subordinates]
+        """Recursively fetches all subordinates down the tree level-by-level to avoid loading all active employees into memory."""
+        subordinate_ids = []
+        current_level_ids = [employee.id]
+        depth = 0
+        max_depth = 20  # safety cap to prevent infinite loops
+
+        while current_level_ids and depth < max_depth:
+            # Query the next level of direct reports
+            next_level_ids = list(Employee.objects.filter(
+                reporting_manager_id__in=current_level_ids
+            ).exclude(status='archived').values_list('id', flat=True))
+            
+            subordinate_ids.extend(next_level_ids)
+            current_level_ids = next_level_ids
+            depth += 1
+
         return Employee.objects.filter(id__in=subordinate_ids).select_related(
             'branch', 'department', 'designation', 'user'
         )
