@@ -29,6 +29,7 @@ class Command(BaseCommand):
                 'from_status': 'pending',
                 'to_status': 'manager_approved',
                 'approver_role': 'manager',
+                'approver_resolution_type': 'reporting_manager',
                 'sla_hours': 24,
                 'escalation_role': 'admin',
                 'allow_return': True,

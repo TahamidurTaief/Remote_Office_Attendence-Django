@@ -7,26 +7,62 @@ def resolve_approver(step, workflow_instance, target_date=None):
     """
     Checks active delegations for the expected approver of a step.
     Returns the delegate (User) if a valid active delegation is found,
-    otherwise returns None.
+    otherwise returns the dynamically resolved expected approver (if reporting_manager) or None.
     """
     if not target_date:
         target_date = timezone.localdate()
 
-    # Find active delegations from users with the matching step.approver_role
-    delegations = WorkflowDelegation.objects.filter(
-        from_user__role=step.approver_role,
-        is_active=True,
-        start_date__lte=target_date,
-        end_date__gte=target_date,
-    )
-    
-    # Specific workflow delegation takes precedence over global (empty workflow_code)
-    w_code = workflow_instance.definition.code
-    del_obj = delegations.filter(workflow_code=w_code).first()
-    if not del_obj:
-        del_obj = delegations.filter(workflow_code='').first()
+    expected_approver = None
 
-    return del_obj.to_user if del_obj else None
+    if getattr(step, 'approver_resolution_type', 'static_role') == 'reporting_manager':
+        initiator = workflow_instance.initiated_by
+        if initiator:
+            from apps.employees.models import Employee
+            employee = Employee.objects.filter(user=initiator).first()
+            if employee and employee.reporting_manager:
+                expected_approver = employee.reporting_manager.user
+        
+        # Fallback to configured static role if no reporting manager
+        if not expected_approver:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            expected_approver = User.objects.filter(role=step.approver_role, is_active=True).first()
+
+        if expected_approver:
+            # Check active delegation for this specific user
+            delegations = WorkflowDelegation.objects.filter(
+                from_user=expected_approver,
+                is_active=True,
+                start_date__lte=target_date,
+                end_date__gte=target_date,
+            )
+            w_code = workflow_instance.definition.code
+            del_obj = delegations.filter(workflow_code=w_code).first()
+            if not del_obj:
+                del_obj = delegations.filter(workflow_code='').first()
+            
+            if del_obj:
+                return del_obj.to_user
+            return expected_approver
+        return None
+
+    else:
+        # Legacy static role behavior
+        # Find active delegations from users with the matching step.approver_role
+        delegations = WorkflowDelegation.objects.filter(
+            from_user__role=step.approver_role,
+            is_active=True,
+            start_date__lte=target_date,
+            end_date__gte=target_date,
+        )
+        
+        # Specific workflow delegation takes precedence over global (empty workflow_code)
+        w_code = workflow_instance.definition.code
+        del_obj = delegations.filter(workflow_code=w_code).first()
+        if not del_obj:
+            del_obj = delegations.filter(workflow_code='').first()
+
+        return del_obj.to_user if del_obj else None
 
 def record_action(instance, actor, action, note='', return_to_initiator=False):
     """
@@ -39,13 +75,37 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
     delegated_by = None
     if step:
         now_date = timezone.localdate()
-        delegation = WorkflowDelegation.objects.filter(
-            to_user=actor,
-            from_user__role=step.approver_role,
-            is_active=True,
-            start_date__lte=now_date,
-            end_date__gte=now_date,
-        )
+        expected_approver = None
+        if getattr(step, 'approver_resolution_type', 'static_role') == 'reporting_manager':
+            initiator = instance.initiated_by
+            if initiator:
+                from apps.employees.models import Employee
+                employee = Employee.objects.filter(user=initiator).first()
+                if employee and employee.reporting_manager:
+                    expected_approver = employee.reporting_manager.user
+            if not expected_approver:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                expected_approver = User.objects.filter(role=step.approver_role, is_active=True).first()
+
+        if expected_approver:
+            # Check active delegation specifically from this expected_approver
+            delegation = WorkflowDelegation.objects.filter(
+                to_user=actor,
+                from_user=expected_approver,
+                is_active=True,
+                start_date__lte=now_date,
+                end_date__gte=now_date,
+            )
+        else:
+            # Legacy static role delegation check
+            delegation = WorkflowDelegation.objects.filter(
+                to_user=actor,
+                from_user__role=step.approver_role,
+                is_active=True,
+                start_date__lte=now_date,
+                end_date__gte=now_date,
+            )
         
         w_code = instance.definition.code
         del_obj = delegation.filter(workflow_code=w_code).first()

@@ -28,6 +28,15 @@ class WorkflowStep(models.Model):
     from_status = models.CharField(max_length=50)
     to_status = models.CharField(max_length=50)
     approver_role = models.CharField(max_length=50, blank=True, default='manager', help_text="Static config role for approval")
+    approver_resolution_type = models.CharField(
+        max_length=30,
+        choices=(
+            ('static_role', 'Static Role'),
+            ('reporting_manager', 'Reporting Manager'),
+        ),
+        default='static_role',
+        help_text="Whether to resolve approver by static role or dynamic reporting manager"
+    )
     sla_hours = models.PositiveIntegerField(null=True, blank=True, help_text="Static config SLA hours for step completion")
     escalation_role = models.CharField(max_length=50, blank=True)
     allow_return = models.BooleanField(default=True)

@@ -279,3 +279,176 @@ class WorkflowServicesTestCase(TestCase):
         with self.assertRaises(ValidationError):
             action.delete()
 
+
+class DynamicApproverWorkflowTests(TestCase):
+    def setUp(self):
+        # Create roles/users
+        self.staff_user = User.objects.create_user(
+            email='staff_dyn@example.com',
+            password='Password123!',
+            role='staff'
+        )
+        self.manager_user = User.objects.create_user(
+            email='manager_dyn@example.com',
+            password='Password123!',
+            role='manager'
+        )
+        self.delegate_user = User.objects.create_user(
+            email='delegate_dyn@example.com',
+            password='Password123!',
+            role='manager'
+        )
+        self.static_manager_user = User.objects.create_user(
+            email='static_mgr@example.com',
+            password='Password123!',
+            role='manager'
+        )
+        self.hr_user = User.objects.create_user(
+            email='hr_dyn@example.com',
+            password='Password123!',
+            role='hr'
+        )
+
+        # Create master employee structures
+        from apps.employees.models import Employee, EmployeeStatus, EmployeeProfile
+        self.manager_emp = Employee.objects.create(
+            employee_number='EMP-DYN-MGR',
+            first_name='Dynamic',
+            last_name='Manager',
+            status=EmployeeStatus.ACTIVE,
+            user=self.manager_user
+        )
+        self.staff_emp = Employee.objects.create(
+            employee_number='EMP-DYN-STF',
+            first_name='Dynamic',
+            last_name='Staff',
+            status=EmployeeStatus.ACTIVE,
+            user=self.staff_user,
+            reporting_manager=self.manager_emp
+        )
+        
+        # Create profiles
+        EmployeeProfile.objects.create(
+            user=self.staff_user,
+            full_name='Dynamic Staff',
+            employee_id='EMP-DYN-STF',
+            master_employee=self.staff_emp,
+            joined_date='2026-07-01',
+            phone='01800000001'
+        )
+        EmployeeProfile.objects.create(
+            user=self.manager_user,
+            full_name='Dynamic Manager',
+            employee_id='EMP-DYN-MGR',
+            master_employee=self.manager_emp,
+            joined_date='2026-07-01',
+            phone='01800000002'
+        )
+
+        # Definitions and steps
+        self.definition = WorkflowDefinition.objects.create(
+            code='DYN_LEAVE_APPROVAL',
+            module='leave',
+            name='Dynamic Leave Approval'
+        )
+        self.step1 = WorkflowStep.objects.create(
+            workflow=self.definition,
+            step_number=1,
+            name='Manager Review',
+            from_status='pending',
+            to_status='manager_approved',
+            approver_role='manager',
+            approver_resolution_type='reporting_manager',
+            sla_hours=24,
+            escalation_role='admin'
+        )
+        self.step2 = WorkflowStep.objects.create(
+            workflow=self.definition,
+            step_number=2,
+            name='HR Review',
+            from_status='manager_approved',
+            to_status='approved',
+            approver_role='hr',
+            approver_resolution_type='static_role',
+            sla_hours=24,
+            escalation_role='admin'
+        )
+
+    def test_dynamic_reporting_manager_resolution(self):
+        """Step 1 resolves to the initiator's specific reporting manager."""
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='201',
+            initiated_by=self.staff_user
+        ).start_workflow()
+
+        resolved = resolve_approver(self.step1, instance)
+        self.assertEqual(resolved, self.manager_user)
+
+    def test_dynamic_resolution_delegation_override(self):
+        """Active delegation correctly overrides the resolved reporting manager."""
+        WorkflowDelegation.objects.create(
+            from_user=self.manager_user,
+            to_user=self.delegate_user,
+            workflow_code='DYN_LEAVE_APPROVAL',
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=2),
+            is_active=True
+        )
+
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='201',
+            initiated_by=self.staff_user
+        ).start_workflow()
+
+        resolved = resolve_approver(self.step1, instance)
+        self.assertEqual(resolved, self.delegate_user)
+
+    def test_dynamic_resolution_no_reporting_manager_fallback(self):
+        """Fallback to static role user if initiator has no reporting manager."""
+        no_mgr_user = User.objects.create_user(
+            email='nomgr@example.com',
+            password='Password123!',
+            role='staff'
+        )
+        # Create employee with no reporting manager
+        from apps.employees.models import Employee, EmployeeStatus
+        Employee.objects.create(
+            employee_number='EMP-DYN-NOMGR',
+            first_name='No',
+            last_name='Manager',
+            status=EmployeeStatus.ACTIVE,
+            user=no_mgr_user
+        )
+
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='202',
+            initiated_by=no_mgr_user
+        ).start_workflow()
+
+        resolved = resolve_approver(self.step1, instance)
+        # Should resolve to self.manager_user since it is the first manager role user
+        self.assertEqual(resolved, self.manager_user)
+
+    def test_static_role_steps_remain_unaffected(self):
+        """Steps configured as static_role are resolved using the legacy static mechanism."""
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='201',
+            initiated_by=self.staff_user
+        ).start_workflow()
+        
+        # Advance to step 2 (HR Review - static role)
+        instance.current_step = 2
+        instance.save()
+
+        resolved = resolve_approver(self.step2, instance)
+        # Without delegation, static_role steps return None
+        self.assertIsNone(resolved)
+
