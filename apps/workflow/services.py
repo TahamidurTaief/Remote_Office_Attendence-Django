@@ -153,3 +153,99 @@ def notify_escalation(instance, escalation_role):
             notify_users=list(target_users),
             email_also=True
         )
+
+def get_timeline(instance):
+    """
+    Returns ordered queryset of WorkflowActions for backwards compatibility.
+    """
+    from apps.workflow.models import WorkflowAction
+    return WorkflowAction.objects.filter(instance=instance).order_by('timestamp')
+
+def get_workflow_history(target_object):
+    """
+    Returns a read-only sequence of history events (WorkflowActions)
+    for a given target business object (e.g. LeaveRequest).
+    """
+    from apps.workflow.models import WorkflowInstance, WorkflowAction
+    
+    model_name = target_object._meta.model_name
+    object_type = 'leave_request' if model_name == 'leaverequest' else model_name
+    object_id = str(target_object.id)
+    
+    instance = WorkflowInstance.objects.filter(object_type=object_type, object_id=object_id).first()
+    if not instance:
+        return []
+        
+    return list(WorkflowAction.objects.filter(instance=instance).order_by('timestamp'))
+
+def get_workflow_timeline(target_object):
+    """
+    Returns a structured, display-ready list of timeline steps and their statuses.
+    Each step dictionary contains:
+        - step_number: int
+        - name: str
+        - status: 'completed' | 'current' | 'pending' | 'skipped'
+        - approver_role: str
+        - actions: list of dicts detailing actions matching this step
+    """
+    from apps.workflow.models import WorkflowInstance, WorkflowAction
+    
+    model_name = target_object._meta.model_name
+    object_type = 'leave_request' if model_name == 'leaverequest' else model_name
+    object_id = str(target_object.id)
+    
+    instance = WorkflowInstance.objects.filter(object_type=object_type, object_id=object_id).first()
+    if not instance:
+        return []
+        
+    steps = list(instance.definition.steps.all().order_by('step_number'))
+    actions = list(WorkflowAction.objects.filter(instance=instance).order_by('timestamp'))
+    
+    timeline = []
+    
+    for step in steps:
+        step_actions = [
+            {
+                'actor': action.actor.email or action.actor.phone,
+                'action_taken': action.action,
+                'note': action.note,
+                'timestamp': action.timestamp,
+                'delegated_by': action.delegated_by.email if action.delegated_by else None
+            }
+            for action in actions if action.step_number == step.step_number
+        ]
+        
+        # Determine status
+        status = 'pending'
+        if instance.completed_at:
+            if instance.current_status == 'rejected':
+                has_reject = any(a['action_taken'] == 'reject' for a in step_actions)
+                has_any_action = len(step_actions) > 0
+                if has_reject:
+                    status = 'completed'
+                elif step.step_number < instance.current_step or (step.step_number == instance.current_step and has_any_action):
+                    status = 'completed'
+                else:
+                    status = 'skipped'
+            elif instance.current_status == 'approved':
+                status = 'completed'
+            else:
+                status = 'completed'
+        else:
+            if step.step_number < instance.current_step:
+                status = 'completed'
+            elif step.step_number == instance.current_step:
+                status = 'current'
+            else:
+                status = 'pending'
+                
+        timeline.append({
+            'step_number': step.step_number,
+            'name': step.name,
+            'status': status,
+            'approver_role': step.approver_role,
+            'actions': step_actions
+        })
+        
+    return timeline
+

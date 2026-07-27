@@ -95,6 +95,8 @@ class WorkflowInstance(models.Model):
         return f"WorkflowInstance({self.definition.code} #{self.id} for {self.object_type}:{self.object_id})"
 
 
+from django.core.exceptions import ValidationError
+
 class WorkflowAction(models.Model):
     ACTION_CHOICES = (
         ('submit', 'Submit'),
@@ -118,3 +120,12 @@ class WorkflowAction(models.Model):
 
     def __str__(self):
         return f"Action {self.action} by {self.actor} on {self.instance}"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("WorkflowAction records are immutable and cannot be updated.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("WorkflowAction records are immutable and cannot be deleted.")
+
