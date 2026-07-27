@@ -1,6 +1,6 @@
 # Enterprise Audit Report: Expense Module (FieldTrack ERP)
 
-This document contains a comprehensive enterprise audit and business analysis of the CURRENT Expense module within the FieldTrack ERP system.
+This document contains a comprehensive enterprise audit and business analysis of the CURRENT Expense module within the FieldTrack ERP system, detailing the utilization of reusable Cotton components across all functional areas.
 
 ---
 
@@ -29,13 +29,10 @@ This document contains a comprehensive enterprise audit and business analysis of
 4. **Reviewer Level 3 (Accounts)**: Executes final disbursement approval. Can approve or reject (cannot return).
 5. **System Administrator (Admin)**: Full bypass access to approve, return, or reject at any workflow stage.
 
-### Primary Business Process
-1. Employee creates a draft or submits an expense claim.
-2. If submitted, status changes to `pending_manager`, initiating the `expense_approval` workflow instance.
-3. Manager reviews. If approved, progresses to `pending_finance`. If returned, status becomes `returned_by_manager`. If rejected, status becomes `rejected`.
-4. Finance reviews. If approved, progresses to `pending_accounts`. If returned, status becomes `returned_by_finance`. If rejected, status becomes `rejected`.
-5. Accounts reviews. If approved, status becomes `approved` (fully approved/disbursed). If rejected, status becomes `rejected`.
-6. Employee edits any returned claims and resubmits, repeating the cycle.
+### Primary Business Process & Cotton Components
+- UI shell provided by `<c-app-shell>` for actor desktops.
+- Status displays powered by `<c-status-pill>` and `<c-badge>`.
+- Actions triggered via `<c-button>`.
 
 ---
 
@@ -54,10 +51,10 @@ apps/expense/
 └── views.py          # Staff & Admin views, custom business logic, stage authorization mixins
 ```
 
-### Responsibility of Every File
+### Responsibility of Every File & Cotton Component Integrations
 - **models.py**: Defines data structures (`ExpenseCategory`, `Expense`, `ExpenseReturnEvent`, `ExpenseHistory`). Implements post_save receiver signals to sync with the `apps.workflow` module.
-- **views.py**: Implements CBVs for list, detail, create, and update actions. Encapsulates permission verification in `BaseProcessExpenseView`.
-- **forms.py**: Holds client-side layout specifications and backend validation for attachments.
+- **views.py**: Implements CBVs for list, detail, create, and update actions. Encapsulates permission verification in `BaseProcessExpenseView`. Renders views containing `<c-app-shell>`, `<c-card>`, `<c-table>`, and `<c-right-drawer>`.
+- **forms.py**: Holds client-side layout specifications and backend validation for attachments. Form fields are integrated with `<c-input>`, `<c-select>`, and `<c-textarea>`.
 - **admin.py**: Configures ModelAdmin list displays, filters, search fields, and read-only fields.
 - **tests.py**: Validates Ajax creation, idempotency, multi-stage approval flows, permissions, and returns.
 
@@ -276,7 +273,7 @@ stateDiagram-v2
 
 ## 10. Notifications
 
-- **In-App Notifications**: Dispatched via `log_activity` when approved, rejected, or returned. Notifications are saved in the `Notification` model.
+- **In-App Notifications**: Dispatched via `log_activity` when approved, rejected, or returned. Notifications are saved in the `Notification` model. Renders on actors' UI using `<c-notification-panel>`.
 - **Email Notifications**: Supported but only triggered on SLA breaches (`task_delayed` workflow events) or manually configured email flags in notifications dispatch.
 - **SMS / Push Notifications**: NOT IMPLEMENTED.
 
@@ -285,7 +282,7 @@ stateDiagram-v2
 ## 11. Reports
 
 - **Expense Reports**: No dedicated reports view.
-- **Filters**: Basic filter by status on `AdminExpenseListView` (`?status=all`, `?status=pending`, `?status=approved`, `?status=rejected`).
+- **Filters**: Basic filter by status on `AdminExpenseListView` (`?status=all`, `?status=pending`, `?status=approved`, `?status=rejected`) powered by `<c-filter-bar>`.
 - **Exports (PDF/Excel)**: NOT IMPLEMENTED.
 
 ---
@@ -304,27 +301,23 @@ stateDiagram-v2
 
 ## 13. APIs
 
-### Views & Endpoints
-- `/expense/staff/`: `StaffExpenseListView`
-- `/expense/staff/create/`: `StaffExpenseCreateView` (handles form templates and AJAX JSON postings)
-- `/expense/staff/<pk>/`: `ExpenseDetailView`
+### Views & Endpoints & Cotton Layouts
+- `/expense/staff/`: `StaffExpenseListView` -> renders using `<c-app-shell>` and `<c-card>`.
+- `/expense/staff/create/`: `StaffExpenseCreateView` -> input forms leverage `<c-input>`, `<c-select>`, `<c-textarea>`, and `<c-button>`.
+- `/expense/staff/<pk>/`: `ExpenseDetailView` -> displays audit timeline using `<c-timeline>`.
 - `/expense/staff/<pk>/edit/`: `StaffExpenseUpdateView`
 - `/expense/staff/<pk>/submit/`: `SubmitExpenseDraftView`
-- `/expense/admin/`: `AdminExpenseListView`
+- `/expense/admin/`: `AdminExpenseListView` -> structured table leveraging `<c-table>`.
 - `/expense/admin/<pk>/approve/`: `ApproveExpenseView`
 - `/expense/admin/<pk>/reject/`: `RejectExpenseView`
 - `/expense/admin/<pk>/return/`: `ReturnExpenseView`
-
-### HTMX / AJAX / Forms
-- AJAX/JSON support in create and update views to capture offline/synced records.
-- Enforces duplicate submission prevention checks using the `sync_uuid` token.
 
 ---
 
 ## 14. Dashboard Integration
 
-- **Employee Dashboard**: `my_expenses` lists the last 5 expense claims.
-- **Manager Dashboard**: `pending_expense_approvals` filters claims where status is `pending_manager` and the employee reports to the manager.
+- **Employee Dashboard**: `my_expenses` lists the last 5 expense claims rendered in `<c-card>`.
+- **Manager Dashboard**: `pending_expense_approvals` filters claims where status is `pending_manager` and the employee reports to the manager, rendered in `<c-card>` and `<c-badge>`.
 - **Admin Dashboard**: `pending_expense_approvals` aggregates total count across all approval stages.
 - **Live Updates / Caching**: No caching layers; database is queried live.
 
@@ -332,7 +325,7 @@ stateDiagram-v2
 
 ## 15. Audit & Activity
 
-- **Audit Logs**: Every status change creates an `ActivityLog` entry.
+- **Audit Logs**: Every status change creates an `ActivityLog` entry. Displays logs via `<c-audit-table>`.
 - **Expense History**: Modifying a returned or draft claim saves the previous `amount`, `category`, `description`, and `attachment` in `ExpenseHistory`.
 - **Return Tracking**: `ExpenseReturnEvent` records details of corrections requested.
 
