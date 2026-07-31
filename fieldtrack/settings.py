@@ -1,17 +1,26 @@
 import os
 from pathlib import Path
+import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+env = environ.Env(
+    DEBUG=(bool, False)
+)
+_env_file = BASE_DIR / '.env'
+if _env_file.exists():
+    environ.Env.read_env(str(_env_file))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Production must set the DJANGO_SECRET_KEY environment variable.
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-placehojkbkj-ssdfsadflder')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# For Coolify/production deployment: set DEBUG=True in environment variables or .env for local/staging; default is False for production.
+DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = ['demotrackme.signtechlimited.com', 'trackme.signtechlimited.com', 'localhost', '127.0.0.1', 'testserver']
+ALLOWED_HOSTS = ['demotrackme.signtechlimited.com', 'trackme.signtechlimited.com', 'localhost', '127.0.0.1', 'testserver', '192.168.10.191']
 
 CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://demotrackme.signtechlimited.com", "https://trackme.signtechlimited.com"]
 
@@ -69,7 +78,6 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django_browser_reload.middleware.BrowserReloadMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'apps.accounts.middleware.SuspendedEmployeeMiddleware',
@@ -78,6 +86,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if DEBUG:
+    MIDDLEWARE.insert(3, 'django_browser_reload.middleware.BrowserReloadMiddleware')
+
 
 ROOT_URLCONF = 'fieldtrack.urls'
 
