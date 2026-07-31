@@ -13,6 +13,7 @@ from apps.accounts.models import (
 )
 from django.utils.decorators import method_decorator
 from apps.accounts.decorators import require_reauth
+from apps.employees.models import EmployeeProfile
 
 User = get_user_model()
 
@@ -114,6 +115,60 @@ class DynamicRoleMatrixView(AdminRequiredMixin, DetailView):
         context['total_permissions_count'] = Permission.objects.count()
         context['data_scope_choices'] = DataScope.choices
         return context
+
+
+@method_decorator(require_reauth, name='post')
+class RoleMembersView(AdminRequiredMixin, View):
+    def get(self, request, pk):
+        role = get_object_or_404(Role, pk=pk)
+        members = User.objects.filter(
+            role_assignments__role=role
+        ).select_related('employee_profile', 'employee_profile__branch').order_by('email')
+
+        non_members = EmployeeProfile.objects.filter(
+            is_active=True,
+            user__is_active=True
+        ).exclude(
+            user__role_assignments__role=role
+        ).select_related('user').order_by('full_name')
+
+        context = {
+            'role': role,
+            'members': members,
+            'non_members': non_members,
+        }
+        return render(request, 'admin_panel/roles/role_members.html', context)
+
+    def post(self, request, pk):
+        role = get_object_or_404(Role, pk=pk)
+        action = request.POST.get('action')
+
+        if action == 'add':
+            user_ids = request.POST.getlist('user_ids')
+            added_count = 0
+            if user_ids:
+                users_to_add = User.objects.filter(pk__in=user_ids)
+                for user in users_to_add:
+                    _, created = UserRoleAssignment.objects.get_or_create(
+                        user=user,
+                        role=role,
+                        defaults={'assigned_by': request.user}
+                    )
+                    if created:
+                        added_count += 1
+            messages.success(request, f"Successfully added {added_count} user(s) to role '{role.name}'.")
+
+        elif action == 'remove':
+            user_id = request.POST.get('user_id')
+            if user_id:
+                deleted_count, _ = UserRoleAssignment.objects.filter(
+                    role=role,
+                    user_id=user_id
+                ).delete()
+                if deleted_count > 0:
+                    messages.info(request, f"Removed user from role '{role.name}'.")
+
+        return redirect('admin_panel:role_members', pk=role.pk)
 
 
 @method_decorator(require_reauth, name='dispatch')
