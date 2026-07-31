@@ -1,4 +1,5 @@
 {% load static %}
+<c-vars shell_type="admin" active_href="" pending_leave_count="" unread_notifications="" expired_data_count="" pending_expense_count="" ></c-vars>
 {% comment %} c-sidebar — Full hierarchical navigation sidebar
    Props:
    - active_href: request.path string for active state detection
@@ -130,7 +131,7 @@
         <i data-lucide="search" class="absolute left-2.5 w-3.5 h-3.5" style="color:#B0B3B8; z-index:1; pointer-events:none"></i>
         <input type="text"
                x-model="search"
-               placeholder="Search menu…"
+               placeholder="Search menu..."
                class="ft-search-input w-full text-[11px]"
                style="padding-left: 28px">
         <button type="button"
@@ -146,7 +147,10 @@
     {# ── Nav ─────────────────────────────────────────────────────────── #}
     <nav class="flex-1 py-1 overflow-y-auto scrollbar-hide" aria-label="Sidebar Navigation">
 
-      {% with path=active_href %}
+      {% firstof active_href request.path '' as path %}
+      {% firstof request.GET.type '' as req_get_type %}
+      {% firstof request.GET.urlencode '' as req_get_urlencode %}
+      {% firstof request.user.email user.email 'User' as user_email %}
 
       {# ════════════════════ SECTION: DASHBOARD ════════════════════ #}
       <div x-show="!collapsed && (matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity'))" x-cloak>
@@ -232,23 +236,23 @@
             <span class="ft-nav-label">Employee Directory</span>
           </a>
           <a href="{% url 'employees:employee_add' %}"
-             class="ft-nav-item {% if '/employees/add/' in path %}active{% endif %}"
-             x-show="matchSearch('Employee Profile')">
+             class="ft-nav-item {% if '/employees/add/' in path or '/employees/wizard/' in path %}active{% endif %}"
+             x-show="matchSearch('New Employee')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Employee Profile</span>
+            <span class="ft-nav-label">New Employee</span>
           </a>
-          <a href="{% url 'branches:branch_list' %}"
-             class="ft-nav-item {% if '/branches/' in path %}active{% endif %}"
+          <a href="{% url 'branches:branch_list' %}?type=department"
+             class="ft-nav-item {% if '/branches/' in path and req_get_type == 'department' %}active{% endif %}"
              x-show="matchSearch('Departments')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Departments</span>
           </a>
-          <a href="{% url 'admin_panel:role_list' %}"
-             class="ft-nav-item {% if '/admin-panel/roles/' in path %}active{% endif %}"
+          <a href="{% url 'admin_panel:role_list' %}?type=designation"
+             class="ft-nav-item {% if '/admin-panel/roles/' in path and req_get_type == 'designation' %}active{% endif %}"
              x-show="matchSearch('Designations')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Designations</span>
-          </a>
+          </a> 
         </div>
       </div>
 
@@ -285,9 +289,25 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Manual Attendance</span>
           </a>
-          <a href="{% url 'admin_panel:reports_attendance' %}" class="ft-nav-item {% if '/reports/attendance' in path %}active{% endif %}" x-show="matchSearch('Attendance Reports')">
+          <a href="{% url 'admin_panel:reports_main' %}" class="ft-nav-item {% if path == '/admin-panel/reports/' %}active{% endif %}" x-show="matchSearch('Reports & Analytics Hub')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Attendance Reports</span>
+            <span class="ft-nav-label">Reports & Analytics Hub</span>
+          </a>
+          <a href="{% url 'admin_panel:reports_daily' %}" class="ft-nav-item {% if '/reports/daily' in path or '/reports/attendance' in path %}active{% endif %}" x-show="matchSearch('Daily Report')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Daily Report</span>
+          </a>
+          <a href="{% url 'admin_panel:reports_monthly' %}" class="ft-nav-item {% if '/reports/monthly' in path %}active{% endif %}" x-show="matchSearch('Monthly Report')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Monthly Report</span>
+          </a>
+          <a href="{% url 'admin_panel:reports_main' %}#employee-profile" class="ft-nav-item {% if '/reports/employee' in path %}active{% endif %}" x-show="matchSearch('Employee Profile Report')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Employee Report</span>
+          </a>
+          <a href="{% url 'admin_panel:reports_absent' %}" class="ft-nav-item {% if '/reports/absent' in path %}active{% endif %}" x-show="matchSearch('Absence Report')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Absence Report</span>
           </a>
         </div>
       </div>
@@ -389,15 +409,15 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <a href="{% url 'projects:project_list' %}" class="ft-nav-item {% if path == '/projects/' and 'status=' not in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('All Projects')">
+          <a href="{% url 'projects:project_list' %}" class="ft-nav-item {% if path == '/projects/' and 'status=' not in req_get_urlencode %}active{% endif %}" x-show="matchSearch('All Projects')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">All Projects</span>
           </a>
-          <a href="{% url 'projects:project_list' %}?status=active" class="ft-nav-item {% if 'status=active' in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Active Projects')">
+          <a href="{% url 'projects:project_list' %}?status=active" class="ft-nav-item {% if 'status=active' in req_get_urlencode %}active{% endif %}" x-show="matchSearch('Active Projects')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Active Projects</span>
           </a>
-          <a href="{% url 'projects:project_list' %}?status=completed" class="ft-nav-item {% if 'status=completed' in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Completed Projects')">
+          <a href="{% url 'projects:project_list' %}?status=completed" class="ft-nav-item {% if 'status=completed' in req_get_urlencode %}active{% endif %}" x-show="matchSearch('Completed Projects')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Completed Projects</span>
           </a>
@@ -429,11 +449,11 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">My Tasks</span>
           </a>
-          <a href="{% url 'projects:global_task_list' %}" class="ft-nav-item {% if '/projects/tasks/' in path and 'view=kanban' not in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Team Tasks')">
+          <a href="{% url 'projects:global_task_list' %}" class="ft-nav-item {% if '/projects/tasks/' in path and 'view=kanban' not in req_get_urlencode %}active{% endif %}" x-show="matchSearch('Team Tasks')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Team Tasks</span>
           </a>
-          <a href="{% url 'projects:global_task_list' %}?view=kanban" class="ft-nav-item {% if '/projects/tasks/' in path and 'view=kanban' in request.GET.urlencode %}active{% endif %}" x-show="matchSearch('Task Board')">
+          <a href="{% url 'projects:global_task_list' %}?view=kanban" class="ft-nav-item {% if '/projects/tasks/' in path and 'view=kanban' in req_get_urlencode %}active{% endif %}" x-show="matchSearch('Task Board')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Task Board</span>
           </a>
@@ -487,7 +507,7 @@
       </div>
 
       <a href="{% url 'branches:branch_list' %}"
-         class="ft-nav-item {% if '/branches/' in path and '/holidays/' not in path %}active{% endif %}"
+         class="ft-nav-item {% if '/branches/' in path and '/holidays/' not in path and not req_get_type %}active{% endif %}"
          x-show="matchSearch('Branches')"
          :title="collapsed ? 'Branches' : ''"
          :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
@@ -536,7 +556,7 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Settings</span>
           </a>
-          <a href="{% url 'admin_panel:role_list' %}" class="ft-nav-item {% if '/admin-panel/roles/' in path %}active{% endif %}" x-show="matchSearch('System Roles & Access')">
+          <a href="{% url 'admin_panel:role_list' %}" class="ft-nav-item {% if '/admin-panel/roles/' in path and not req_get_type %}active{% endif %}" x-show="matchSearch('System Roles & Access')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">System Roles & Access</span>
           </a>
@@ -567,7 +587,6 @@
         </div>
       </div>
 
-      {% endwith %}
 
     </nav>
 
@@ -576,12 +595,12 @@
          :class="collapsed ? 'justify-center' : ''"
          style="border-color:var(--border)">
       <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-[11px] font-semibold shrink-0">
-        {{ request.user.email|default:"User"|make_list|first|upper }}
+        {{ user_email|make_list|first|upper }}
       </div>
       <div class="flex-1 min-w-0" x-show="!collapsed" x-cloak>
         <p class="text-[12px] font-medium truncate" style="color:var(--text)">Admin</p>
         <p class="text-[11px] truncate" style="color:var(--text-muted)">
-          {{ request.user.email|default:"User" }}
+          {{ user_email }}
         </p>
       </div>
       <a href="{% url 'accounts:logout' %}"
