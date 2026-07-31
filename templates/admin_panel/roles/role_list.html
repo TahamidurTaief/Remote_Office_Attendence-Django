@@ -50,10 +50,13 @@
         </div>
 
         <div class="pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
-          <a href="{% url 'admin_panel:role_matrix' role.id %}" class="ft-btn ft-btn-ghost ft-btn-xs text-xs text-primary">
-            <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
-            Permission Matrix
-          </a>
+          <div class="flex items-center gap-1">
+            <a href="{% url 'admin_panel:role_matrix' role.id %}" class="ft-btn ft-btn-ghost ft-btn-xs text-xs text-primary">
+              <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+              Permission Matrix
+            </a>
+            <c-button href="{% url 'admin_panel:role_members' role.id %}" variant="ghost" size="xs" icon="users" label="Members" extra_class="text-xs text-indigo-600 dark:text-indigo-400" ></c-button>
+          </div>
 
           <div class="flex items-center gap-1">
             <a href="{% url 'admin_panel:role_edit' role.id %}" class="ft-btn ft-btn-ghost ft-btn-xs" title="Edit Role">
