@@ -452,3 +452,174 @@ class DynamicApproverWorkflowTests(TestCase):
         # Without delegation, static_role steps return None
         self.assertIsNone(resolved)
 
+    def test_manager_delegation_fallback_routing(self):
+        """ManagerDelegation fallback routes approval to delegate when no WorkflowDelegation exists."""
+        from apps.employees.models import Employee, EmployeeStatus, ManagerDelegation
+
+        del_emp = Employee.objects.create(
+            employee_number='EMP-DYN-DEL1',
+            first_name='Delegate',
+            last_name='User1',
+            status=EmployeeStatus.ACTIVE,
+            user=self.delegate_user
+        )
+
+        ManagerDelegation.objects.create(
+            manager=self.manager_emp,
+            delegate_to=del_emp,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=5),
+            reason='On vacation',
+            is_active=True
+        )
+
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='301',
+            initiated_by=self.staff_user
+        ).start_workflow()
+
+        resolved = resolve_approver(self.step1, instance)
+        self.assertEqual(resolved, self.delegate_user)
+
+    def test_workflow_delegation_precedence_over_manager_delegation(self):
+        """When BOTH WorkflowDelegation and ManagerDelegation exist, WorkflowDelegation wins."""
+        from apps.employees.models import Employee, EmployeeStatus, ManagerDelegation
+
+        del_emp = Employee.objects.create(
+            employee_number='EMP-DYN-DEL2',
+            first_name='Delegate',
+            last_name='User2',
+            status=EmployeeStatus.ACTIVE,
+            user=self.delegate_user
+        )
+
+        other_delegate_user = User.objects.create_user(
+            email='other_delegate@example.com',
+            password='Password123!',
+            role='manager'
+        )
+
+        # ManagerDelegation -> self.delegate_user
+        ManagerDelegation.objects.create(
+            manager=self.manager_emp,
+            delegate_to=del_emp,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=5),
+            is_active=True
+        )
+
+        # WorkflowDelegation -> other_delegate_user
+        WorkflowDelegation.objects.create(
+            from_user=self.manager_user,
+            to_user=other_delegate_user,
+            workflow_code='DYN_LEAVE_APPROVAL',
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=5),
+            is_active=True
+        )
+
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='302',
+            initiated_by=self.staff_user
+        ).start_workflow()
+
+        resolved = resolve_approver(self.step1, instance)
+        # WorkflowDelegation wins -> other_delegate_user
+        self.assertEqual(resolved, other_delegate_user)
+
+    def test_expired_manager_delegation_ignored(self):
+        """Expired ManagerDelegation does not apply."""
+        from apps.employees.models import Employee, EmployeeStatus, ManagerDelegation
+
+        del_emp = Employee.objects.create(
+            employee_number='EMP-DYN-DEL3',
+            first_name='Delegate',
+            last_name='User3',
+            status=EmployeeStatus.ACTIVE,
+            user=self.delegate_user
+        )
+
+        ManagerDelegation.objects.create(
+            manager=self.manager_emp,
+            delegate_to=del_emp,
+            start_date=date.today() - timedelta(days=10),
+            end_date=date.today() - timedelta(days=2),
+            is_active=True
+        )
+
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='303',
+            initiated_by=self.staff_user
+        ).start_workflow()
+
+        resolved = resolve_approver(self.step1, instance)
+        self.assertEqual(resolved, self.manager_user)
+
+    def test_inactive_manager_delegation_ignored(self):
+        """Inactive ManagerDelegation (is_active=False) does not apply."""
+        from apps.employees.models import Employee, EmployeeStatus, ManagerDelegation
+
+        del_emp = Employee.objects.create(
+            employee_number='EMP-DYN-DEL4',
+            first_name='Delegate',
+            last_name='User4',
+            status=EmployeeStatus.ACTIVE,
+            user=self.delegate_user
+        )
+
+        ManagerDelegation.objects.create(
+            manager=self.manager_emp,
+            delegate_to=del_emp,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=5),
+            is_active=False
+        )
+
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='304',
+            initiated_by=self.staff_user
+        ).start_workflow()
+
+        resolved = resolve_approver(self.step1, instance)
+        self.assertEqual(resolved, self.manager_user)
+
+    def test_record_action_manager_delegation_audit(self):
+        """Approving via ManagerDelegation records delegated_by in WorkflowAction."""
+        from apps.employees.models import Employee, EmployeeStatus, ManagerDelegation
+
+        del_emp = Employee.objects.create(
+            employee_number='EMP-DYN-DEL5',
+            first_name='Delegate',
+            last_name='User5',
+            status=EmployeeStatus.ACTIVE,
+            user=self.delegate_user
+        )
+
+        ManagerDelegation.objects.create(
+            manager=self.manager_emp,
+            delegate_to=del_emp,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=5),
+            is_active=True
+        )
+
+        instance = WorkflowInstance.objects.create(
+            definition=self.definition,
+            object_type='leave_request',
+            object_id='305',
+            initiated_by=self.staff_user
+        ).start_workflow()
+
+        action = record_action(instance, self.delegate_user, 'approve', 'Approved on behalf of manager via org delegation')
+        self.assertEqual(action.actor, self.delegate_user)
+        self.assertEqual(action.delegated_by, self.manager_user)
+
+
