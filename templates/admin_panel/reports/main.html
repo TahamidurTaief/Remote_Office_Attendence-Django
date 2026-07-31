@@ -1,64 +1,553 @@
-<c-app-shell page_title="Reports | FieldTrack" active_href="{{ request.path }}">
-<div class="p-6 max-w-7xl mx-auto space-y-6">
+<c-app-shell page_title="Reports & Analytics Hub | FieldTrack" active_href="{{ request.path }}">
+  <div class="p-6 max-w-7xl mx-auto space-y-6" x-data="{ activeTab: 'analytics', searchFilter: '', excelView: false }">
+    
+    <!-- Breadcrumb + Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4" style="border-color: var(--border);">
+      <div>
+        <c-breadcrumb page1_href="/admin-panel/dashboard/" page1_label="Dashboard" current="Reports & Analytics Hub" />
+        <h1 class="text-xl font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">
+          <i data-lucide="bar-chart-3" class="w-6 h-6 text-primary"></i>
+          Attendance Reports & Data Analytics Hub
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Comprehensive organizational intelligence, daily/monthly breakdown matrix, employee profiles, and multi-format exports.
+        </p>
+      </div>
 
-    <!-- Header -->
-    <div>
-        <h1 class="text-[18px] font-bold" style="color:var(--text)">Attendance Reports</h1>
-        <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Generate and export attendance data for your team</p>
-    </div>
+      <!-- Clean Export & Layout Controls Bar -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Excel Dense Layout Toggle -->
+        <button type="button"
+                @click="excelView = !excelView"
+                :class="excelView ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'"
+                class="ft-btn ft-btn-sm text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border"
+                title="Toggle Dense Excel Spreadsheet Grid View">
+          <i data-lucide="table" class="w-4 h-4"></i>
+          <span x-text="excelView ? 'Excel Grid: Active' : 'Excel Grid View'"></span>
+        </button>
 
-    <!-- Report Type Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Export Dropdown -->
+        <div class="relative" x-data="{ open: false }">
+          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export Reports" extra_class="!bg-primary text-xs font-semibold" />
 
-        <!-- Daily Report -->
-        <div class="ft-card p-6 flex flex-col" style="background:var(--surface)">
-            <div class="w-10 h-10 rounded bg-primary-50 flex items-center justify-center text-primary-500 mb-4"><i data-lucide="calendar" class="w-5 h-5"></i></div>
-            <h2 class="text-[16px] font-bold mb-1.5" style="color:var(--text)">Daily Report</h2>
-            <p class="text-[12px] mb-6 flex-1" style="color:var(--text-muted)">
-                View attendance for a specific day. See who checked in, late arrivals, field visits, and location data.
-            </p>
-            <c-button href="{% url 'admin_panel:reports_daily' %}" variant="primary" label="View Daily" extra_class="w-full justify-center" ></c-button>
-        </div>
-
-        <!-- Monthly Report -->
-        <div class="ft-card p-6 flex flex-col" style="background:var(--surface)">
-            <div class="w-10 h-10 rounded bg-emerald-50 flex items-center justify-center text-emerald-600 mb-4"><i data-lucide="bar-chart-2" class="w-5 h-5"></i></div>
-            <h2 class="text-[16px] font-bold mb-1.5" style="color:var(--text)">Monthly Report</h2>
-            <p class="text-[12px] mb-6 flex-1" style="color:var(--text-muted)">
-                Monthly summary for all employees. Track attendance rates, total hours, and individual performance.
-            </p>
-            <c-button href="{% url 'admin_panel:reports_monthly' %}" variant="primary" label="View Monthly" extra_class="w-full justify-center" ></c-button>
-        </div>
-
-        <!-- Employee Report -->
-        <div class="ft-card p-6 flex flex-col" style="background:var(--surface)" x-data="{ open: false }">
-            <div class="w-10 h-10 rounded bg-purple-50 flex items-center justify-center text-purple-600 mb-4"><i data-lucide="user-circle" class="w-5 h-5"></i></div>
-            <h2 class="text-[16px] font-bold mb-1.5" style="color:var(--text)">Employee Report</h2>
-            <p class="text-[12px] mb-4 flex-1" style="color:var(--text-muted)">
-                Detailed report per employee with a calendar heatmap, daily breakdown, and monthly statistics.
-            </p>
-            <c-button @click="open = !open" variant="primary" label="Select Employee" extra_class="w-full justify-center" ></c-button>
-            <div x-show="open" x-cloak class="mt-3">
-                <select onchange="if(this.value) window.location='/admin-panel/reports/employee/' + this.value + '/'"
-                        class="ft-select w-full">
-                    <option value="">— Choose employee —</option>
-                    {% for emp in employees %}
-                    <option value="{{ emp.pk }}">{{ emp.full_name }} ({{ emp.employee_id }})</option>
-                    {% endfor %}
-                </select>
+          <div x-show="open"
+               x-cloak
+               x-transition:enter="transition ease-out duration-100"
+               x-transition:enter-start="opacity-0 scale-95"
+               x-transition:enter-end="opacity-100 scale-100"
+               x-transition:leave="transition ease-in duration-75"
+               x-transition:leave-start="opacity-100 scale-100"
+               x-transition:leave-end="opacity-0 scale-95"
+               class="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 overflow-hidden">
+            
+            <div class="px-3 py-2 text-[10px] font-bold tracking-wider uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800">
+              Download Formats
             </div>
-        </div>
 
+            <a href="{% url 'admin_panel:reports_export_csv' %}"
+               class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
+              <div class="w-6 h-6 bg-blue-50 text-blue-600 rounded flex items-center justify-center font-bold text-[10px]">
+                CSV
+              </div>
+              <div class="flex-1">
+                <p class="font-medium">Comma Separated (CSV)</p>
+                <p class="text-[10px] text-slate-400">Raw tabular dataset</p>
+              </div>
+            </a>
+
+            <a href="{% url 'admin_panel:reports_export_monthly_xlsx' %}"
+               class="flex items-center gap-3 px-4 py-2.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 text-xs">
+              <div class="w-6 h-6 bg-emerald-50 text-emerald-600 rounded flex items-center justify-center font-bold text-[10px]">
+                XLSX
+              </div>
+              <div class="flex-1">
+                <p class="font-medium">Excel Spreadsheet (.xlsx)</p>
+                <p class="text-[10px] text-slate-400">Formatted workbook</p>
+              </div>
+            </a>
+
+            <a href="{% url 'admin_panel:reports_export_pdf' %}"
+               class="flex items-center gap-3 px-4 py-2.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 text-xs">
+              <div class="w-6 h-6 bg-rose-50 text-rose-600 rounded flex items-center justify-center font-bold text-[10px]">
+                PDF
+              </div>
+              <div class="flex-1">
+                <p class="font-medium">Printable PDF Report</p>
+                <p class="text-[10px] text-slate-400">Formatted document</p>
+              </div>
+            </a>
+
+            <button type="button"
+                    @click="copyTableTSV(); open = false;"
+                    class="w-full flex items-center gap-3 px-4 py-2.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <div class="w-6 h-6 bg-purple-50 text-purple-600 rounded flex items-center justify-center font-bold text-[10px]">
+                TSV
+              </div>
+              <div class="flex-1">
+                <p class="font-medium">Copy to Google Sheets</p>
+                <p class="text-[10px] text-slate-400">Clipboard TSV format</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Quick Exports -->
-    <div class="ft-card p-6 space-y-3" style="background:var(--surface)">
-        <h3 class="text-[14px] font-bold" style="color:var(--text)">Quick Exports</h3>
-        <div class="flex flex-wrap gap-3">
-            <c-button href="{% url 'admin_panel:reports_export_csv' %}" variant="accent" icon="download" label="Export All CSV" ></c-button>
-            <c-button href="{% url 'admin_panel:reports_export_pdf' %}" variant="danger" icon="download" label="Export All PDF" ></c-button>
-        </div>
+    <!-- Analytics Summary KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <c-kpi-widget title="Active Headcount" value="{{ total_employees_count }}" label="Monitored Staff" icon="users" color="teal">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Attendance Rate" value="{{ avg_attendance_rate }}%" label="30-Day Avg Presence" icon="user-check" color="success">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Approved Leave Days" value="{{ leave_approved_days_month }}" label="Current Month Total" icon="calendar-check" color="indigo">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Pending Leave Reqs" value="{{ leave_pending_count }}" label="Awaiting Approval" icon="clock" color="warning">
+      </c-kpi-widget>
     </div>
 
-</div>
+    <!-- All Report Navigation Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- 1. Daily Report Card -->
+      <c-card padding="md" extra_class="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+            <i data-lucide="calendar-days" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-sm text-slate-800 dark:text-white">Daily Attendance Report</h4>
+            <p class="text-[11px] text-slate-400">Today & single-day log breakdown</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+          Real-time check-ins, late arrivals, geofence coordinates, total session hours, and captured photos.
+        </p>
+        <c-button href="{% url 'admin_panel:reports_daily' %}" variant="primary" label="Open Daily Report" extra_class="w-full justify-center text-xs" />
+      </c-card>
+
+      <!-- 2. Monthly Report Card -->
+      <c-card padding="md" extra_class="hover:shadow-md transition-shadow border-l-4 border-l-emerald-500">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+            <i data-lucide="calendar-range" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-sm text-slate-800 dark:text-white">Monthly Attendance Matrix</h4>
+            <p class="text-[11px] text-slate-400">Monthly attendance matrix</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+          Aggregated present, absent, on-leave, overtime hours, and leave balance summary for all employees.
+        </p>
+        <c-button href="{% url 'admin_panel:reports_monthly' %}" variant="primary" label="Open Monthly Matrix" extra_class="w-full justify-center text-xs !bg-emerald-600 hover:!bg-emerald-700" />
+      </c-card>
+
+      <!-- 3. Monthly Leave Report Card -->
+      <c-card padding="md" extra_class="hover:shadow-md transition-shadow border-l-4 border-l-indigo-500">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="p-2 rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
+            <i data-lucide="calendar-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-sm text-slate-800 dark:text-white">Monthly Leave Matrix</h4>
+            <p class="text-[11px] text-slate-400">Monthly leave breakdown</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+          Leave days taken per category, pending leave approvals, and employee remaining balances.
+        </p>
+        <c-button href="{% url 'admin_panel:reports_leave_monthly' %}" variant="primary" label="Open Leave Report" extra_class="w-full justify-center text-xs !bg-indigo-600 hover:!bg-indigo-700" />
+      </c-card>
+
+      <!-- 4. Employee Profile Report Card -->
+      <c-card padding="md" extra_class="hover:shadow-md transition-shadow border-l-4 border-l-purple-500" id="employee-profile" x-data="{ showSelect: false }">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="p-2 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
+            <i data-lucide="user-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-sm text-slate-800 dark:text-white">Employee Profile Report</h4>
+            <p class="text-[11px] text-slate-400">Individual calendar & heatmap</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+          Deep-dive single employee history, attendance heatmaps, project tasks, and overtime statistics.
+        </p>
+        <c-button @click="showSelect = !showSelect" variant="secondary" label="Select Employee" extra_class="w-full justify-center text-xs" />
+        <div x-show="showSelect" x-cloak class="mt-2">
+          <c-select name="employee_picker" label="" onchange="if(this.value) window.location='/admin-panel/reports/employee/' + this.value + '/'">
+            <option value="">- Choose Employee -</option>
+            {% for emp in employees %}
+              <option value="{{ emp.pk }}">{{ emp.full_name }} ({{ emp.employee_id }})</option>
+            {% endfor %}
+          </c-select>
+        </div>
+      </c-card>
+
+      <!-- 5. Employee Leave Profile Report Card -->
+      <c-card padding="md" extra_class="hover:shadow-md transition-shadow border-l-4 border-l-cyan-500" x-data="{ showLeaveSelect: false }">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="p-2 rounded-lg bg-cyan-50 text-cyan-600 dark:bg-cyan-950 dark:text-cyan-400">
+            <i data-lucide="wallet" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-sm text-slate-800 dark:text-white">Employee Leave History</h4>
+            <p class="text-[11px] text-slate-400">Individual leave history & balances</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+          Single employee full leave application history, approval statuses, and remaining leave quotas.
+        </p>
+        <c-button @click="showLeaveSelect = !showLeaveSelect" variant="secondary" label="Select Employee" extra_class="w-full justify-center text-xs" />
+        <div x-show="showLeaveSelect" x-cloak class="mt-2">
+          <c-select name="leave_employee_picker" label="" onchange="if(this.value) window.location='/admin-panel/reports/leave/employee/' + this.value + '/'">
+            <option value="">- Choose Employee -</option>
+            {% for emp in employees %}
+              <option value="{{ emp.pk }}">{{ emp.full_name }} ({{ emp.employee_id }})</option>
+            {% endfor %}
+          </c-select>
+        </div>
+      </c-card>
+
+      <!-- 6. Absence Report Card -->
+      <c-card padding="md" extra_class="hover:shadow-md transition-shadow border-l-4 border-l-rose-500">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="p-2 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
+            <i data-lucide="user-x" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-sm text-slate-800 dark:text-white">Absence Report</h4>
+            <p class="text-[11px] text-slate-400">Absence logs & leave deductions</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+          Track unexcused absences, system-generated leave deductions, and register quick leaves.
+        </p>
+        <c-button href="{% url 'admin_panel:reports_absent' %}" variant="danger" label="View Absence Report" extra_class="w-full justify-center text-xs" />
+      </c-card>
+    </div>
+
+    <!-- Analytics Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Attendance Trend Chart -->
+      <c-card extra_class="lg:col-span-2">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <div class="p-2 rounded-lg bg-sky-500/10 text-sky-500">
+              <i data-lucide="trending-up" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-slate-800 dark:text-white">15-Day Attendance Trend Analysis</h3>
+              <p class="text-[11px] text-slate-400">Daily breakdown of On-Time vs Late Check-ins</p>
+            </div>
+          </div>
+          <c-badge variant="info" label="Live Data" />
+        </div>
+        <div class="relative h-64 flex items-center justify-center">
+          <canvas id="dashboardTrendChart"></canvas>
+        </div>
+      </c-card>
+
+      <!-- Peak Arrival Hours Chart -->
+      <c-card extra_class="lg:col-span-1">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
+            <i data-lucide="clock" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 dark:text-white">Peak Arrival Distribution</h3>
+            <p class="text-[11px] text-slate-400">Check-in hour frequency (7 AM - 1 PM)</p>
+          </div>
+        </div>
+        <div class="relative h-64 flex items-center justify-center">
+          <canvas id="dashboardArrivalsChart"></canvas>
+        </div>
+      </c-card>
+
+      <!-- Department Performance Ranking -->
+      <c-card extra_class="lg:col-span-3">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <div class="p-2 rounded-lg bg-teal-500/10 text-teal-600">
+              <i data-lucide="building" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-slate-800 dark:text-white">Department On-Time Arrival Leaderboard</h3>
+              <p class="text-[11px] text-slate-400">30-day punctual attendance percentage by department</p>
+            </div>
+          </div>
+        </div>
+        {% if dept_stats %}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for dept in dept_stats %}
+              <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div class="flex items-center justify-between text-xs mb-1.5">
+                  <span class="font-semibold text-slate-700 dark:text-slate-200">{{ dept.name }}</span>
+                  <span class="text-emerald-600 dark:text-emerald-400 font-bold">{{ dept.on_time_pct }}% On-Time</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                  <div class="bg-teal-500 h-2 rounded-full transition-all duration-500" style="width: {{ dept.on_time_pct }}%"></div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <c-empty-state title="No Department Data" message="Department statistics will appear once check-in logs are generated." icon="building" />
+        {% endif %}
+      </c-card>
+    </div>
+
+    <!-- Direct Excel Format Tabular Grid Section -->
+    <c-card padding="none" extra_class="overflow-hidden">
+      <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 rounded-lg">
+            <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 dark:text-white">Live Attendance Data Grid</h3>
+            <p class="text-[11px] text-slate-400">Direct spreadsheet layout formatted for quick review and export</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <input type="text"
+                   x-model="searchFilter"
+                   placeholder="Search records..."
+                   class="ft-input text-xs pl-8 py-1.5 w-48 rounded-lg border-slate-300">
+            <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400"></i>
+          </div>
+          <c-button href="{% url 'admin_panel:reports_daily' %}" variant="ghost" size="sm" label="View Full Daily" icon="arrow-right" class="text-xs" />
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse" id="excelReportTable" :class="excelView ? 'font-mono text-[11px]' : ''">
+          <thead>
+            <tr class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700 w-12 text-center">#</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700">Employee Name</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700">Emp ID</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700">Date</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700">Check-in</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700">Check-out</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700 text-right">Hours</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700">Type</th>
+              <th class="px-3 py-2.5 font-bold border-r border-slate-200 dark:border-slate-700">Status</th>
+              <th class="px-3 py-2.5 font-bold">Location / Branch</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% if recent_records %}
+              {% for r in recent_records %}
+                <tr class="hover:bg-sky-50/50 dark:hover:bg-slate-800/50 transition-colors"
+                    x-show="!searchFilter || '{{ r.employee.full_name|escapejs }}'.toLowerCase().includes(searchFilter.toLowerCase()) || '{{ r.employee.employee_id|escapejs }}'.toLowerCase().includes(searchFilter.toLowerCase())">
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-semibold text-slate-400">{{ forloop.counter }}</td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-medium text-slate-800 dark:text-slate-100">
+                    <div class="flex items-center gap-2">
+                      {% if r.employee.profile_photo %}
+                        <c-avatar :src="r.employee.profile_photo.url" size="xs" />
+                      {% else %}
+                        <c-avatar :initials="r.employee.full_name|make_list|first" size="xs" />
+                      {% endif %}
+                      <span>{{ r.employee.full_name }}</span>
+                    </div>
+                  </td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-mono">{{ r.employee.employee_id }}</td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400">{{ r.date|date:'Y-m-d' }}</td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-medium text-slate-700 dark:text-slate-300">
+                    {% if r.check_in_time %}{{ r.check_in_time|time:'H:i' }}{% else %}-{% endif %}
+                  </td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-medium text-slate-700 dark:text-slate-300">
+                    {% if r.check_out_time %}{{ r.check_out_time|time:'H:i' }}{% else %}-{% endif %}
+                  </td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 text-right font-semibold text-slate-800 dark:text-slate-200">
+                    {% if r.total_hours %}{{ r.total_hours }} hrs{% else %}-{% endif %}
+                  </td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800">
+                    <c-badge variant="neutral" label="{{ r.type }}" />
+                  </td>
+                  <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800">
+                    {% if r.status == 'late' %}
+                      <c-status-pill status="warning" label="Late" />
+                    {% elif r.status == 'on_time' or r.status == 'present' %}
+                      <c-status-pill status="active" label="On-Time" />
+                    {% else %}
+                      <c-status-pill status="inactive" label="{{ r.status_display }}" />
+                    {% endif %}
+                  </td>
+                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400 truncate max-w-xs" title="{{ r.location }}">
+                    {{ r.location }}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="10" class="px-4 py-8 text-center text-slate-400">
+                  <c-empty-state title="No Recent Attendance Records" message="Attendance check-ins will populate this grid in real-time." icon="inbox" />
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+          <tfoot>
+            <tr class="bg-slate-100/80 dark:bg-slate-800/80 font-bold border-t border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+              <td colspan="6" class="px-3 py-2 text-right border-r border-slate-200 dark:border-slate-700">Summary Totals:</td>
+              <td class="px-3 py-2 text-right border-r border-slate-200 dark:border-slate-700 text-primary">{{ avg_work_hours }} hrs (Avg)</td>
+              <td colspan="3" class="px-3 py-2 text-slate-500 font-normal">Present: {{ today_present_count }} | Late: {{ today_late_count }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </c-card>
+
+  </div>
+
+  <!-- Charts & Clipboard Toast Script -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    function copyTableTSV() {
+      const table = document.getElementById('excelReportTable');
+      if (!table) return;
+      let tsv = [];
+      const rows = table.querySelectorAll('tr');
+      rows.forEach(row => {
+        const cols = row.querySelectorAll('th, td');
+        let rowData = [];
+        cols.forEach(col => {
+          rowData.push(col.innerText.replace(/\n/g, ' ').trim());
+        });
+        tsv.push(rowData.join('\t'));
+      });
+      const tsvString = tsv.join('\n');
+      navigator.clipboard.writeText(tsvString).then(() => {
+        alert('Copied attendance data in TSV format! You can now paste directly into Google Sheets or Excel.');
+      }).catch(err => {
+        console.error('Failed to copy TSV: ', err);
+      });
+    }
+
+    (function() {
+      function initDashboardCharts() {
+        const trendCanvas = document.getElementById('dashboardTrendChart');
+        const arrivalsCanvas = document.getElementById('dashboardArrivalsChart');
+        if (!trendCanvas || !arrivalsCanvas) return;
+        if (typeof Chart === 'undefined') {
+          setTimeout(initDashboardCharts, 100);
+          return;
+        }
+
+        if (Chart.getChart(trendCanvas)) Chart.getChart(trendCanvas).destroy();
+        if (Chart.getChart(arrivalsCanvas)) Chart.getChart(arrivalsCanvas).destroy();
+
+        // 1. Trend Chart
+        const ctxTrend = trendCanvas.getContext('2d');
+        new Chart(ctxTrend, {
+          type: 'line',
+          data: {
+            labels: [
+              {% for day in attendance_trend %}
+                "{{ day.date|date:'d M' }}",
+              {% endfor %}
+            ],
+            datasets: [
+              {
+                label: 'On-Time',
+                data: [
+                  {% for day in attendance_trend %}
+                    {{ day.present }},
+                  {% endfor %}
+                ],
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+              },
+              {
+                label: 'Late',
+                data: [
+                  {% for day in attendance_trend %}
+                    {{ day.late }},
+                  {% endfor %}
+                ],
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: { font: { size: 10 }, color: '#64748b' }
+              }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 9 }, color: '#64748b' }
+              },
+              y: {
+                grid: { color: '#f1f5f9' },
+                ticks: { font: { size: 9 }, color: '#64748b', stepSize: 1 }
+              }
+            }
+          }
+        });
+
+        // 2. Arrivals Chart
+        const ctxArrivals = arrivalsCanvas.getContext('2d');
+        new Chart(ctxArrivals, {
+          type: 'bar',
+          data: {
+            labels: [
+              {% for item in hour_breakdown %}
+                "{{ item.hour }}",
+              {% endfor %}
+            ],
+            datasets: [{
+              label: 'Check-ins',
+              data: [
+                {% for item in hour_breakdown %}
+                  {{ item.count }},
+                {% endfor %}
+              ],
+              backgroundColor: '#6366f1',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 9 }, color: '#64748b' }
+              },
+              y: {
+                grid: { color: '#f1f5f9' },
+                ticks: { font: { size: 9 }, color: '#64748b', stepSize: 1 }
+              }
+            }
+          }
+        });
+      }
+      document.addEventListener('DOMContentLoaded', initDashboardCharts);
+      document.body.addEventListener('htmx:afterSwap', function(evt) {
+        initDashboardCharts();
+      });
+    })();
+  </script>
 </c-app-shell>

@@ -1,0 +1,208 @@
+<c-app-shell page_title="Monthly Leave Report | FieldTrack" active_href="{{ request.path }}">
+  <div class="p-6 max-w-7xl mx-auto space-y-6" x-data="{ excelView: false }">
+
+    <!-- Breadcrumb + Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4" style="border-color: var(--border);">
+      <div>
+        <c-breadcrumb page1_href="/admin-panel/reports/" page1_label="Reports Hub" current="Monthly Leave Report" />
+        <h1 class="text-xl font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">
+          <i data-lucide="calendar-check" class="w-6 h-6 text-indigo-600"></i>
+          Monthly Leave Matrix — {{ month_name }} {{ year }}
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Comprehensive breakdown of approved leave days, pending requests, and leave balances per employee.
+        </p>
+      </div>
+
+      <!-- Export Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button"
+                @click="excelView = !excelView"
+                :class="excelView ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'"
+                class="ft-btn ft-btn-sm text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border"
+                title="Toggle Dense Grid View">
+          <i data-lucide="table" class="w-4 h-4"></i>
+          <span x-text="excelView ? 'Excel Grid Active' : 'Excel Grid View'"></span>
+        </button>
+
+        <div class="relative" x-data="{ open: false }">
+          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export Leave Report" extra_class="!bg-indigo-600 hover:!bg-indigo-700 text-xs font-semibold" />
+
+          <div x-show="open"
+               x-cloak
+               x-transition:enter="transition ease-out duration-100"
+               x-transition:enter-start="opacity-0 scale-95"
+               x-transition:enter-end="opacity-100 scale-100"
+               x-transition:leave="transition ease-in duration-75"
+               x-transition:leave-start="opacity-100 scale-100"
+               x-transition:leave-end="opacity-0 scale-95"
+               class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 overflow-hidden">
+            
+            <a href="{% url 'admin_panel:reports_leave_export_xlsx' %}?year={{ year }}&month={{ month }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+               class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
+              <i data-lucide="table" class="w-4 h-4 text-emerald-600"></i>
+              <span>Excel (.xlsx)</span>
+            </a>
+
+            <a href="{% url 'admin_panel:reports_leave_export_csv' %}?date_from={{ month_start|date:'Y-m-d' }}&date_to={{ month_end|date:'Y-m-d' }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+               class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
+              <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
+              <span>CSV File</span>
+            </a>
+
+            <a href="{% url 'admin_panel:reports_leave_export_pdf' %}?date_from={{ month_start|date:'Y-m-d' }}&date_to={{ month_end|date:'Y-m-d' }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+               class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
+              <i data-lucide="file" class="w-4 h-4 text-rose-600"></i>
+              <span>PDF Document</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <c-kpi-widget title="Approved Leave Days" value="{{ total_approved_days }}" label="Current Month Total" icon="check-circle" color="success">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Pending Requests" value="{{ total_pending_requests }}" label="Awaiting Approval" icon="clock" color="warning">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Total Headcount" value="{{ page_obj.paginator.count }}" label="Staff Filtered" icon="users" color="indigo">
+      </c-kpi-widget>
+    </div>
+
+    <!-- Month Navigation + Filters -->
+    <c-card padding="sm">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <!-- Month Nav Controls -->
+        <div class="flex items-center gap-2">
+          <a href="?year={{ prev_y }}&month={{ prev_m }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+             class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </a>
+          <span class="px-4 py-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg font-bold text-xs min-w-[140px] text-center">
+            {{ month_name }} {{ year }}
+          </span>
+          <a href="?year={{ next_y }}&month={{ next_m }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+             class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </a>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="get" class="flex flex-wrap gap-3 items-end flex-1 justify-end">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          
+          <div class="w-48">
+            <c-select name="employee" label="Employee" value="{{ selected_employee }}">
+              <option value="">All Employees</option>
+              {% for emp in employees %}
+                <option value="{{ emp.pk }}" {% if selected_employee == emp.pk|stringformat:'s' %}selected{% endif %}>{{ emp.full_name }}</option>
+              {% endfor %}
+            </c-select>
+          </div>
+
+          <div class="w-48">
+            <c-select name="branch" label="Branch" value="{{ selected_branch }}">
+              <option value="">All Branches</option>
+              {% for b in branches %}
+                <option value="{{ b.pk }}" {% if selected_branch == b.pk|stringformat:'s' %}selected{% endif %}>{{ b.name }}</option>
+              {% endfor %}
+            </c-select>
+          </div>
+
+          <c-button type="submit" variant="primary" label="Filter" extra_class="!bg-indigo-600 text-xs font-semibold h-[38px]" />
+          <c-button href="{% url 'admin_panel:reports_leave_monthly' %}" variant="ghost" label="Reset" extra_class="text-xs h-[38px]" />
+        </form>
+      </div>
+    </c-card>
+
+    <!-- Monthly Leave Table -->
+    <c-card padding="none" extra_class="overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse" :class="excelView ? 'font-mono text-[11px] leading-tight' : ''">
+          <thead>
+            <tr class="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider">
+              <th class="py-3 px-4 w-12 text-center">#</th>
+              <th class="py-3 px-4 min-w-[200px]">Employee</th>
+              <th class="py-3 px-4">Branch</th>
+              <th class="py-3 px-4 text-center font-extrabold text-indigo-600 dark:text-indigo-400">Total Days</th>
+              <th class="py-3 px-4 text-center">Pending</th>
+              <th class="py-3 px-4 min-w-[220px]">Remaining Balances</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+            {% for row in rows %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                <td class="py-3 px-4 text-center font-medium text-slate-400">{{ forloop.counter }}</td>
+                <td class="py-3 px-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs overflow-hidden">
+                      {% if row.employee.profile_photo %}
+                        <img src="{{ row.employee.profile_photo.url }}" alt="{{ row.employee.full_name }}" class="w-full h-full object-cover">
+                      {% else %}
+                        {{ row.employee.full_name|slice:":2"|upper }}
+                      {% endif %}
+                    </div>
+                    <div>
+                      <a href="{% url 'admin_panel:reports_leave_employee_month' row.employee.pk year month %}" class="font-bold text-slate-800 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400">
+                        {{ row.employee.full_name }}
+                      </a>
+                      <p class="text-[11px] text-slate-400 font-mono">{{ row.employee.employee_id }}</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-3 px-4 text-slate-600 dark:text-slate-400">
+                  {{ row.employee.branch.name|default:"—" }}
+                </td>
+
+                <td class="py-3 px-4 text-center font-extrabold text-indigo-600 dark:text-indigo-400 text-sm">
+                  {{ row.total_approved_days }}
+                </td>
+
+                <td class="py-3 px-4 text-center">
+                  {% if row.pending_count > 0 %}
+                    <c-badge variant="warning" label="{{ row.pending_count }} pending" />
+                  {% else %}
+                    <span class="text-slate-300 dark:text-slate-600">0</span>
+                  {% endif %}
+                </td>
+
+                <td class="py-3 px-4">
+                  <div class="flex flex-wrap gap-1">
+                    {% for bal in row.balances %}
+                      <span class="text-[10px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-slate-600 dark:text-slate-300" title="{{ bal.leave_type.name }}">
+                        <strong>{{ bal.leave_type.name|slice:":3" }}:</strong> {{ bal.remaining }}/{{ bal.total }}
+                      </span>
+                    {% endfor %}
+                  </div>
+                </td>
+
+                <td class="py-3 px-4 text-right">
+                  <c-button href="{% url 'admin_panel:reports_leave_employee_month' row.employee.pk year month %}" variant="ghost" label="View History" extra_class="text-xs !py-1 !px-2 text-indigo-600 dark:text-indigo-400" />
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="8" class="py-8 text-center text-slate-400">
+                  <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                  No employee leave records found matching current criteria.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+        <div class="p-4 border-t border-slate-200 dark:border-slate-700">
+          <c-pagination :page_obj="page_obj" />
+        </div>
+      {% endif %}
+    </c-card>
+  </div>
+</c-app-shell>

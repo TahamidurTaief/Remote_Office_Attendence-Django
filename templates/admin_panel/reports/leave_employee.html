@@ -1,0 +1,200 @@
+<c-app-shell page_title="{{ employee.full_name }} — Leave Report | FieldTrack" active_href="{{ request.path }}">
+  <div class="p-6 max-w-7xl mx-auto space-y-6">
+
+    <!-- Breadcrumb + Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4" style="border-color: var(--border);">
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center text-xl overflow-hidden shadow-sm border border-indigo-200 dark:border-indigo-800">
+          {% if employee.profile_photo %}
+            <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}" class="w-full h-full object-cover">
+          {% else %}
+            {{ employee.full_name|slice:":2"|upper }}
+          {% endif %}
+        </div>
+        <div>
+          <c-breadcrumb page1_href="/admin-panel/reports/" page1_label="Reports Hub" page2_href="/admin-panel/reports/leave/monthly/" page2_label="Monthly Leave" current="{{ employee.full_name }}" />
+          <h1 class="text-xl font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">
+            {{ employee.full_name }}
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono font-normal">
+              {{ employee.employee_id }}
+            </span>
+          </h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            {{ employee.designation|default:"Staff Member" }} • {{ employee.branch.name|default:"Main Branch" }} • Joined: {{ employee.joined_date|default:"N/A" }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Export & Action Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative" x-data="{ open: false }">
+          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export History" extra_class="!bg-indigo-600 hover:!bg-indigo-700 text-xs font-semibold" />
+
+          <div x-show="open"
+               x-cloak
+               x-transition:enter="transition ease-out duration-100"
+               x-transition:enter-start="opacity-0 scale-95"
+               x-transition:enter-end="opacity-100 scale-100"
+               x-transition:leave="transition ease-in duration-75"
+               x-transition:leave-start="opacity-100 scale-100"
+               x-transition:leave-end="opacity-0 scale-95"
+               class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 overflow-hidden">
+            
+            <a href="{% url 'admin_panel:reports_leave_export_csv' %}?employee={{ employee.pk }}"
+               class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
+              <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
+              <span>Export CSV</span>
+            </a>
+
+            <a href="{% url 'admin_panel:reports_leave_export_pdf' %}?employee={{ employee.pk }}"
+               class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
+              <i data-lucide="file" class="w-4 h-4 text-rose-600"></i>
+              <span>Export PDF</span>
+            </a>
+          </div>
+        </div>
+
+        <c-button href="{% url 'admin_panel:reports_leave_monthly' %}?year={{ year }}&month={{ month }}" variant="ghost" icon="arrow-left" label="Back to Matrix" extra_class="text-xs" />
+      </div>
+    </div>
+
+    <!-- Summary KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <c-kpi-widget title="Approved Days" value="{{ total_approved_days }}" label="Total Days Taken" icon="calendar-check" color="success">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Approved Requests" value="{{ approved_count }}" label="Approved Applications" icon="check-circle" color="indigo">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Pending Requests" value="{{ pending_count }}" label="Awaiting Review" icon="clock" color="warning">
+      </c-kpi-widget>
+    </div>
+
+    <!-- Leave Balances Section -->
+    <div>
+      <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+        <i data-lucide="wallet" class="w-4 h-4 text-indigo-600"></i>
+        Current Year Leave Balances ({{ year }})
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {% for bal in leave_balances %}
+          <c-card padding="sm" extra_class="border-l-4 border-l-indigo-500">
+            <div class="flex justify-between items-start mb-2">
+              <h4 class="font-bold text-xs text-slate-800 dark:text-white">{{ bal.leave_type.name }}</h4>
+              <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+                {{ bal.leave_type.category }}
+              </span>
+            </div>
+            <div class="flex items-baseline gap-1 mt-1">
+              <span class="text-xl font-extrabold text-slate-800 dark:text-white">{{ bal.remaining_days }}</span>
+              <span class="text-xs text-slate-400">/ {{ bal.total_days }} days left</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+              <div class="bg-indigo-600 h-full rounded-full" style="width: {% if bal.total_days > 0 %}{% widthratio bal.remaining_days bal.total_days 100 %}{% else %}0{% endif %}%;"></div>
+            </div>
+          </c-card>
+        {% empty %}
+          <div class="col-span-full p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-xs text-slate-400 text-center">
+            No active leave balance structures defined for {{ year }}.
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Leave Request History Table -->
+    <c-card padding="none" extra_class="overflow-hidden">
+      <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+        <h3 class="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-2">
+          <i data-lucide="history" class="w-4 h-4 text-indigo-600"></i>
+          Leave Request History
+        </h3>
+
+        <!-- Month Navigation -->
+        <div class="flex items-center gap-2">
+          <a href="{% url 'admin_panel:reports_leave_employee_month' employee.pk prev_y prev_m %}"
+             class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </a>
+          <span class="px-3 py-1 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg font-bold text-xs">
+            {{ month_name }} {{ year }}
+          </span>
+          <a href="{% url 'admin_panel:reports_leave_employee_month' employee.pk next_y next_m %}"
+             class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </a>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider">
+              <th class="py-3 px-4 w-12 text-center">#</th>
+              <th class="py-3 px-4 min-w-[130px]">Leave Type</th>
+              <th class="py-3 px-4">Start Date</th>
+              <th class="py-3 px-4">End Date</th>
+              <th class="py-3 px-4 text-center">Days</th>
+              <th class="py-3 px-4 min-w-[200px]">Reason</th>
+              <th class="py-3 px-4 text-center">Status</th>
+              <th class="py-3 px-4">Reviewed By</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+            {% for req in leave_requests %}
+              <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                <td class="py-3 px-4 text-center font-medium text-slate-400">{{ forloop.counter }}</td>
+                <td class="py-3 px-4 font-bold text-slate-800 dark:text-white">
+                  {{ req.leave_type.name }}
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">
+                  {{ req.start_date }}
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">
+                  {{ req.end_date }}
+                </td>
+                <td class="py-3 px-4 text-center font-extrabold text-indigo-600 dark:text-indigo-400">
+                  {{ req.number_of_days }}
+                </td>
+                <td class="py-3 px-4 text-slate-600 dark:text-slate-400 max-w-xs truncate">
+                  {{ req.reason|default:"—" }}
+                </td>
+                <td class="py-3 px-4 text-center">
+                  {% if req.status == 'approved' %}
+                    <c-badge variant="success" label="Approved" />
+                  {% elif req.status == 'manager_approved' %}
+                    <c-badge variant="info" label="Manager Approved" />
+                  {% elif req.status == 'pending' %}
+                    <c-badge variant="warning" label="Pending" />
+                  {% elif req.status == 'rejected' %}
+                    <c-badge variant="danger" label="Rejected" />
+                  {% else %}
+                    <c-badge variant="neutral" label="{{ req.get_status_display }}" />
+                  {% endif %}
+                </td>
+                <td class="py-3 px-4 text-slate-600 dark:text-slate-400">
+                  {% if req.reviewed_by %}
+                    <div class="font-medium text-slate-800 dark:text-white">
+                      {{ req.reviewed_by.get_full_name|default:req.reviewed_by.email }}
+                    </div>
+                    {% if req.reviewed_at %}
+                      <div class="text-[10px] text-slate-400 font-mono">{{ req.reviewed_at|date:"Y-m-d H:i" }}</div>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-slate-300 dark:text-slate-600">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="8" class="py-8 text-center text-slate-400">
+                  <i data-lucide="calendar-x" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                  No leave requests logged for {{ employee.full_name }}.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </c-card>
+  </div>
+</c-app-shell>
