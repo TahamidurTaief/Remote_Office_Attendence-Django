@@ -5,6 +5,8 @@ from collections import defaultdict
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
+from django.db import models
+from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from dateutil.relativedelta import relativedelta
@@ -896,13 +898,8 @@ def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branc
 
 
 def _get_employee_schedule(employee):
-    branch = getattr(employee, 'branch', None)
-    if not branch:
-        return None
-    try:
-        return branch.schedule
-    except OfficeSchedule.DoesNotExist:
-        return None
+    from apps.attendance.schedule_utils import DynamicSchedule
+    return DynamicSchedule(employee)
 
 
 def _get_working_day_set(schedule):
@@ -1021,7 +1018,150 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['employees'] = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        from django.db.models import Avg, Count, Q, F
+        from django.db.models.functions import ExtractHour
+        
+        today = timezone.localdate()
+        thirty_days_ago = today - timedelta(days=30)
+        
+        # 1. Total headcount
+        employees = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        ctx['employees'] = employees
+        total_employees = employees.count() or 1
+        
+        # 2. Query 30-day check-in records
+        checkins_30d = Attendance.objects.filter(
+            date__range=(thirty_days_ago, today),
+            attendance_type='check_in',
+            is_expired=False
+        )
+        
+        # 3. Overall rate calculations
+        total_checkins_count = checkins_30d.count()
+        on_time_count = checkins_30d.filter(status__in=['on_time', 'present']).count()
+        
+        on_time_rate = int((on_time_count / total_checkins_count * 100)) if total_checkins_count > 0 else 0
+        avg_hours = checkins_30d.aggregate(avg_h=Avg('total_hours'))['avg_h'] or 0.0
+        avg_hours_formatted = round(float(avg_hours), 1)
+        
+        # 4. Average Attendance Rate (days present / working days)
+        daily_presence_counts = checkins_30d.values('date').annotate(count=Count('id'))
+        if daily_presence_counts:
+            avg_daily_present = sum(d['count'] for d in daily_presence_counts) / len(daily_presence_counts)
+            avg_attendance_rate = int((avg_daily_present / total_employees) * 100)
+            avg_attendance_rate = min(avg_attendance_rate, 100)
+        else:
+            avg_attendance_rate = 0
+            
+        ctx['avg_attendance_rate'] = avg_attendance_rate
+        ctx['avg_work_hours'] = avg_hours_formatted
+        ctx['on_time_rate'] = on_time_rate
+        ctx['total_employees_count'] = total_employees
+
+        # 5. Daily Attendance Trend for Chart (Last 15 days)
+        fifteen_days_ago = today - timedelta(days=15)
+        trend_qs = Attendance.objects.filter(
+            date__range=(fifteen_days_ago, today),
+            attendance_type='check_in',
+            is_expired=False
+        ).values('date').annotate(
+            present=Count('id', filter=Q(status__in=['on_time', 'present'])),
+            late=Count('id', filter=Q(status='late'))
+        ).order_by('date')
+        
+        ctx['attendance_trend'] = list(trend_qs)
+
+        # 6. Peak check-in hours breakdown
+        hour_qs = checkins_30d.annotate(
+            hour=ExtractHour('check_in_time')
+        ).values('hour').annotate(count=Count('id')).order_by('hour')
+        
+        hour_breakdown = {h: 0 for h in range(7, 14)}
+        for entry in hour_qs:
+            h = entry['hour']
+            if h is not None and 7 <= h <= 13:
+                hour_breakdown[h] = entry['count']
+                
+        ctx['hour_breakdown'] = [{'hour': f"{h:02d}:00", 'count': count} for h, count in hour_breakdown.items()]
+
+        # 7. Department comparison
+        dept_qs = checkins_30d.filter(
+            employee__master_employee__department__isnull=False
+        ).values(
+            dept_name=F('employee__master_employee__department__name')
+        ).annotate(
+            total=Count('id'),
+            late=Count('id', filter=Q(status='late'))
+        ).order_by('-total')[:5]
+        
+        dept_stats = []
+        for d in dept_qs:
+            tot = d['total']
+            late_c = d['late']
+            ot_rate = int(((tot - late_c) / tot * 100)) if tot > 0 else 0
+            dept_stats.append({
+                'name': d['dept_name'],
+                'on_time_pct': ot_rate,
+                'total': tot
+            })
+        ctx['dept_stats'] = dept_stats
+
+        # 8. Today Summary & Recent Log Preview for Direct Excel Table View
+        today_records = Attendance.objects.filter(date=today, is_expired=False).select_related('employee', 'employee__branch')
+        ctx['today_present_count'] = today_records.filter(attendance_type='check_in').count()
+        ctx['today_late_count'] = today_records.filter(status='late').count()
+        
+        recent_logs = Attendance.objects.filter(
+            is_expired=False
+        ).select_related('employee', 'employee__branch').prefetch_related('locations').order_by('-date', '-check_in_time')[:20]
+        
+        recent_list = []
+        for a in recent_logs:
+            loc = a.locations.filter(event='check_in').first() if a.attendance_type == 'check_in' else None
+            recent_list.append({
+                'id': a.id,
+                'employee': a.employee,
+                'date': a.date,
+                'check_in_time': a.check_in_time,
+                'check_out_time': a.check_out_time,
+                'total_hours': a.total_hours,
+                'type': a.get_type_display(),
+                'status': a.status,
+                'status_display': a.get_status_display(),
+                'location': loc.address if (loc and loc.address) else (a.employee.branch.name if (a.employee and a.employee.branch) else '—'),
+                'note': a.note or '',
+            })
+        ctx['recent_records'] = recent_list
+        ctx['today_date'] = today
+
+        # 9. Leave KPIs for current month
+        from apps.leave.models import LeaveRequest
+        m_start = today.replace(day=1)
+        _, m_last_day = cal_mod.monthrange(today.year, today.month)
+        m_end = today.replace(day=m_last_day)
+
+        approved_leaves_month = LeaveRequest.objects.filter(
+            status='approved',
+            start_date__lte=m_end,
+            end_date__gte=m_start
+        )
+        total_leave_days_month = sum(
+            (min(req.end_date, m_end) - max(req.start_date, m_start)).days + 1
+            for req in approved_leaves_month
+        )
+
+        ctx['leave_approved_days_month'] = total_leave_days_month
+        ctx['leave_pending_count'] = LeaveRequest.objects.filter(
+            status__in=['pending', 'manager_approved']
+        ).count()
+
+        top_leave_type_obj = LeaveRequest.objects.filter(
+            start_date__lte=m_end,
+            end_date__gte=m_start
+        ).values('leave_type__name').annotate(count=Count('id')).order_by('-count').first()
+
+        ctx['top_leave_type'] = top_leave_type_obj['leave_type__name'] if top_leave_type_obj else "None"
+
         return ctx
 
 
@@ -1095,9 +1235,14 @@ class DailyReportView(AdminRequiredMixin, View):
         field_total = sum(len(r['field_visits']) for r in rows)
         total_hours = round(sum(r['total_hours'] for r in rows), 2)
 
+        page_number = request.GET.get('page', 1)
+        paginator = Paginator(rows, 15)
+        page_obj = paginator.get_page(page_number)
+
         return render(request, self.template_name, {
             'report_date':       report_date,
-            'rows':              rows,
+            'page_obj':          page_obj,
+            'rows':              page_obj.object_list,
             'present':           present,
             'absent':            absent,
             'late':              late,
@@ -1262,13 +1407,19 @@ class MonthlyReportView(AdminRequiredMixin, View):
         prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
         next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
 
+        from django.core.paginator import Paginator
+        page = request.GET.get('page', 1)
+        paginator = Paginator(rows, 30)
+        page_obj = paginator.get_page(page)
+
         return render(request, self.template_name, {
             'year': year, 'month': month,
             'month_name':        cal_mod.month_name[month],
             'working_days':      working_days,
             'month_start':       month_start,
             'month_end':         month_end,
-            'rows':              rows,
+            'page_obj':          page_obj,
+            'rows':              page_obj.object_list,
             'total_present':     total_present,
             'total_absent':      total_absent,
             'total_on_leave':    total_on_leave,
@@ -1494,6 +1645,16 @@ class EmployeeReportView(AdminRequiredMixin, View):
             })
             current += dt_mod.timedelta(days=1)
 
+        from apps.projects.models import Project
+        connected_projects = Project.objects.filter(
+            models.Q(project_managers=employee) |
+            models.Q(site_engineers=employee) |
+            models.Q(project_members=employee)
+        ).distinct()
+        
+        completed_projects_count = connected_projects.filter(status='Completed').count()
+        in_progress_projects_count = connected_projects.filter(status='In Progress').count()
+
         prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
         next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
 
@@ -1516,6 +1677,9 @@ class EmployeeReportView(AdminRequiredMixin, View):
             'overtime_hours':  overtime_hours_str,
             'att_pct':         att_pct,
             'table_rows':      table_rows,
+            'connected_projects': connected_projects,
+            'completed_projects_count': completed_projects_count,
+            'in_progress_projects_count': in_progress_projects_count,
             'prev_m': prev_m, 'prev_y': prev_y,
             'next_m': next_m, 'next_y': next_y,
         })
@@ -1551,6 +1715,418 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
             'co_loc':       co_loc,
             'field_visits': fv_list,
         })
+
+
+# ─────────────────────────────────────────────────────────────────
+# LEAVE REPORT VIEWS & EXPORTS
+# ─────────────────────────────────────────────────────────────────
+
+class LeaveMonthlyReportView(AdminRequiredMixin, View):
+    template_name = 'admin_panel/reports/leave_monthly.html'
+
+    def get(self, request):
+        from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
+        import datetime as dt_mod
+
+        today = timezone.localdate()
+        try:
+            year = int(request.GET.get('year', today.year))
+            month = int(request.GET.get('month', today.month))
+        except (ValueError, TypeError):
+            year, month = today.year, today.month
+        month = max(1, min(12, month))
+
+        emp_id = request.GET.get('employee', '')
+        branch_id = request.GET.get('branch', '')
+
+        _, last_day = cal_mod.monthrange(year, month)
+        month_start = dt_mod.date(year, month, 1)
+        month_end = dt_mod.date(year, month, last_day)
+
+        employees = (
+            EmployeeProfile.objects.filter(is_active=True)
+            .select_related('branch').order_by('full_name')
+        )
+        if emp_id:
+            employees = employees.filter(id=emp_id)
+        if branch_id:
+            employees = employees.filter(branch_id=branch_id)
+
+        leave_types = list(LeaveType.objects.all().order_by('name'))
+
+        leave_requests_qs = LeaveRequest.objects.filter(
+            start_date__lte=month_end,
+            end_date__gte=month_start
+        ).select_related('employee', 'leave_type')
+
+        if emp_id:
+            leave_requests_qs = leave_requests_qs.filter(employee_id=emp_id)
+        if branch_id:
+            leave_requests_qs = leave_requests_qs.filter(employee__branch_id=branch_id)
+
+        leave_requests = list(leave_requests_qs)
+
+        emp_ids = [e.id for e in employees]
+        balances_qs = LeaveBalance.objects.filter(employee_id__in=emp_ids, year=year).select_related('leave_type')
+        balances_map = defaultdict(dict)
+        for b in balances_qs:
+            balances_map[b.employee_id][b.leave_type_id] = b
+
+        rows = []
+        total_approved_days = 0
+        total_pending_requests = 0
+
+        for emp in employees:
+            emp_reqs = [r for r in leave_requests if r.employee_id == emp.id]
+            approved_reqs = [r for r in emp_reqs if r.status == 'approved']
+            pending_reqs = [r for r in emp_reqs if r.status in ['pending', 'manager_approved']]
+
+            type_days = {}
+            emp_approved_days = 0
+            for lt in leave_types:
+                type_approved = [r for r in approved_reqs if r.leave_type_id == lt.id]
+                days_taken = 0
+                for r in type_approved:
+                    s_date = max(r.start_date, month_start)
+                    e_date = min(r.end_date, month_end)
+                    days_taken += (e_date - s_date).days + 1
+                type_days[lt.id] = days_taken
+                emp_approved_days += days_taken
+
+            emp_balances = []
+            for lt in leave_types:
+                bal_obj = balances_map[emp.id].get(lt.id)
+                rem = bal_obj.remaining_days if bal_obj else lt.default_days_per_year
+                tot = bal_obj.total_days if bal_obj else lt.default_days_per_year
+                emp_balances.append({
+                    'leave_type': lt,
+                    'remaining': rem,
+                    'total': tot
+                })
+
+            rows.append({
+                'employee': emp,
+                'type_days': type_days,
+                'total_approved_days': emp_approved_days,
+                'pending_count': len(pending_reqs),
+                'approved_count': len(approved_reqs),
+                'total_requests': len(emp_reqs),
+                'balances': emp_balances
+            })
+
+            total_approved_days += emp_approved_days
+            total_pending_requests += len(pending_reqs)
+
+        prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
+        next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
+
+        from django.core.paginator import Paginator
+        page = request.GET.get('page', 1)
+        paginator = Paginator(rows, 30)
+        page_obj = paginator.get_page(page)
+
+        return render(request, self.template_name, {
+            'year': year,
+            'month': month,
+            'month_name': cal_mod.month_name[month],
+            'month_start': month_start,
+            'month_end': month_end,
+            'page_obj': page_obj,
+            'rows': page_obj.object_list,
+            'leave_types': leave_types,
+            'total_approved_days': total_approved_days,
+            'total_pending_requests': total_pending_requests,
+            'employees': EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
+            'branches': Branch.objects.all(),
+            'selected_employee': emp_id,
+            'selected_branch': branch_id,
+            'prev_m': prev_m, 'prev_y': prev_y,
+            'next_m': next_m, 'next_y': next_y,
+        })
+
+
+class LeaveEmployeeReportView(AdminRequiredMixin, View):
+    template_name = 'admin_panel/reports/leave_employee.html'
+
+    def get(self, request, pk, year=None, month=None):
+        from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
+        import datetime as dt_mod
+
+        employee = get_object_or_404(EmployeeProfile.objects.select_related('branch', 'user'), pk=pk)
+        today = timezone.localdate()
+
+        if not year or not month:
+            try:
+                year = int(request.GET.get('year', today.year))
+                month = int(request.GET.get('month', today.month))
+            except (ValueError, TypeError):
+                year, month = today.year, today.month
+        month = max(1, min(12, month))
+
+        _, last_day = cal_mod.monthrange(year, month)
+        month_start = dt_mod.date(year, month, 1)
+        month_end = dt_mod.date(year, month, last_day)
+
+        requests_qs = LeaveRequest.objects.filter(
+            employee=employee
+        ).select_related('leave_type', 'reviewed_by').order_by('-start_date')
+
+        month_requests = requests_qs.filter(
+            start_date__lte=month_end,
+            end_date__gte=month_start
+        )
+
+        leave_types = list(LeaveType.objects.all().order_by('name'))
+        balances_qs = LeaveBalance.objects.filter(employee=employee, year=year).select_related('leave_type')
+        balances_dict = {b.leave_type_id: b for b in balances_qs}
+
+        leave_balances = []
+        for lt in leave_types:
+            bal = balances_dict.get(lt.id)
+            total = bal.total_days if bal else lt.default_days_per_year
+            used = bal.used_days if bal else 0
+            rem = bal.remaining_days if bal else lt.default_days_per_year
+            leave_balances.append({
+                'leave_type': lt,
+                'total_days': total,
+                'used_days': used,
+                'remaining_days': rem,
+            })
+
+        approved_count = requests_qs.filter(status='approved').count()
+        pending_count = requests_qs.filter(status__in=['pending', 'manager_approved']).count()
+        total_approved_days = sum(r.number_of_days for r in requests_qs.filter(status='approved'))
+
+        prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
+        next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
+
+        return render(request, self.template_name, {
+            'employee': employee,
+            'year': year,
+            'month': month,
+            'month_name': cal_mod.month_name[month],
+            'leave_requests': list(requests_qs[:50]),
+            'month_requests': list(month_requests),
+            'leave_balances': leave_balances,
+            'approved_count': approved_count,
+            'pending_count': pending_count,
+            'total_approved_days': total_approved_days,
+            'employees': EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
+            'prev_m': prev_m, 'prev_y': prev_y,
+            'next_m': next_m, 'next_y': next_y,
+        })
+
+
+class ExportLeaveReportCSVView(AdminRequiredMixin, View):
+    def get(self, request):
+        from apps.leave.models import LeaveRequest
+
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        emp_id = request.GET.get('employee')
+        branch_id = request.GET.get('branch')
+        status = request.GET.get('status')
+        leave_type_id = request.GET.get('leave_type')
+
+        qs = LeaveRequest.objects.select_related('employee', 'employee__branch', 'leave_type', 'reviewed_by').order_by('-start_date')
+
+        if date_from:
+            qs = qs.filter(end_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(start_date__lte=date_to)
+        if emp_id:
+            qs = qs.filter(employee_id=emp_id)
+        if branch_id:
+            qs = qs.filter(employee__branch_id=branch_id)
+        if status:
+            qs = qs.filter(status=status)
+        if leave_type_id:
+            qs = qs.filter(leave_type_id=leave_type_id)
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="leave_report_{timezone.localdate()}.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'SN', 'Employee', 'Employee ID', 'Branch', 'Leave Type',
+            'Start Date', 'End Date', 'Days', 'Status', 'Reason', 'Reviewed By'
+        ])
+        for idx, req in enumerate(qs, 1):
+            rev_by = req.reviewed_by.get_full_name() or req.reviewed_by.email if req.reviewed_by else '—'
+            branch = req.employee.branch.name if req.employee.branch else '—'
+            writer.writerow([
+                idx,
+                req.employee.full_name,
+                req.employee.employee_id,
+                branch,
+                req.leave_type.name,
+                req.start_date,
+                req.end_date,
+                req.number_of_days,
+                req.get_status_display(),
+                req.reason or '',
+                rev_by
+            ])
+        return response
+
+
+class ExportLeaveReportPDFView(AdminRequiredMixin, View):
+    def get(self, request):
+        from apps.leave.models import LeaveRequest
+
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        emp_id = request.GET.get('employee')
+        branch_id = request.GET.get('branch')
+        status = request.GET.get('status')
+        leave_type_id = request.GET.get('leave_type')
+
+        qs = LeaveRequest.objects.select_related('employee', 'employee__branch', 'leave_type').order_by('-start_date')
+
+        if date_from:
+            qs = qs.filter(end_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(start_date__lte=date_to)
+        if emp_id:
+            qs = qs.filter(employee_id=emp_id)
+        if branch_id:
+            qs = qs.filter(employee__branch_id=branch_id)
+        if status:
+            qs = qs.filter(status=status)
+        if leave_type_id:
+            qs = qs.filter(leave_type_id=leave_type_id)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="leave_report_{timezone.localdate()}.pdf"'
+
+        doc = SimpleDocTemplate(
+            response, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30
+        )
+        styles = getSampleStyleSheet()
+        elements = []
+
+        elements.append(Paragraph('FieldTrack — Leave Management Report', styles['Title']))
+        elements.append(Paragraph(
+            f'Generated: {timezone.localtime(timezone.now()).strftime("%d %b %Y, %I:%M %p")}',
+            styles['Normal']
+        ))
+        elements.append(Spacer(1, 14))
+
+        header = ['SN', 'Employee', 'Emp ID', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Status']
+        data = [header]
+
+        for idx, req in enumerate(qs, 1):
+            data.append([
+                str(idx),
+                req.employee.full_name,
+                req.employee.employee_id,
+                req.leave_type.name,
+                str(req.start_date),
+                str(req.end_date),
+                str(req.number_of_days),
+                req.get_status_display(),
+            ])
+
+        table = Table(data, colWidths=[25, 110, 55, 80, 65, 65, 35, 65], repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, 0), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 1), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9FAFB')]),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#E5E7EB')),
+            ('BOX', (0, 0), (-1, -1), 0.8, colors.HexColor('#D1D5DB')),
+        ]))
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+
+def export_leave_monthly_xlsx(request):
+    if not request.user.is_authenticated or request.user.role not in ['admin', 'hr', 'manager']:
+        return HttpResponseForbidden("Access Denied")
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from apps.leave.models import LeaveRequest, LeaveType
+    import datetime as dt_mod
+
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get('year', today.year))
+        month = int(request.GET.get('month', today.month))
+    except (ValueError, TypeError):
+        year, month = today.year, today.month
+
+    emp_id = request.GET.get('employee', '')
+    branch_id = request.GET.get('branch', '')
+
+    _, last_day = cal_mod.monthrange(year, month)
+    month_start = dt_mod.date(year, month, 1)
+    month_end = dt_mod.date(year, month, last_day)
+
+    employees = EmployeeProfile.objects.filter(is_active=True).select_related('branch').order_by('full_name')
+    if emp_id:
+        employees = employees.filter(id=emp_id)
+    if branch_id:
+        employees = employees.filter(branch_id=branch_id)
+
+    leave_types = list(LeaveType.objects.all().order_by('name'))
+    leave_requests = LeaveRequest.objects.filter(
+        start_date__lte=month_end, end_date__gte=month_start
+    ).select_related('employee', 'leave_type')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Leave_{year}_{month:02d}"
+
+    ws.merge_cells('A1:H1')
+    ws['A1'] = f"FieldTrack Monthly Leave Summary — {cal_mod.month_name[month]} {year}"
+    ws['A1'].font = Font(name='Calibri', size=14, bold=True, color='1F2937')
+
+    headers = ['SN', 'Employee Name', 'Emp ID', 'Branch'] + [lt.name for lt in leave_types] + ['Approved Days', 'Pending Requests']
+    ws.append([])
+    ws.append(headers)
+
+    header_row_idx = 3
+    for col_num in range(1, len(headers) + 1):
+        cell = ws.cell(row=header_row_idx, column=col_num)
+        cell.font = Font(name='Calibri', size=10, bold=True, color='FFFFFF')
+        cell.fill = PatternFill(start_color='4F46E5', end_color='4F46E5', fill_type='solid')
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+    for idx, emp in enumerate(employees, 1):
+        emp_reqs = [r for r in leave_requests if r.employee_id == emp.id]
+        approved_reqs = [r for r in emp_reqs if r.status == 'approved']
+        pending_reqs = [r for r in emp_reqs if r.status in ['pending', 'manager_approved']]
+
+        row_data = [idx, emp.full_name, emp.employee_id, emp.branch.name if emp.branch else '—']
+        emp_approved_days = 0
+        for lt in leave_types:
+            type_reqs = [r for r in approved_reqs if r.leave_type_id == lt.id]
+            days = sum((min(r.end_date, month_end) - max(r.start_date, month_start)).days + 1 for r in type_reqs)
+            row_data.append(days)
+            emp_approved_days += days
+
+        row_data.append(emp_approved_days)
+        row_data.append(len(pending_reqs))
+        ws.append(row_data)
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="monthly_leave_report_{year}_{month:02d}.xlsx"'
+    wb.save(response)
+    return response
 
 
 class ExportReportCSVView(AdminRequiredMixin, View):
@@ -3081,6 +3657,7 @@ class GlobalSearchView(RoleRequiredMixin, View):
         asset_results = []
         attendance_results = []
         expense_results = []
+        leave_results = []
 
         if query:
             employee_results = Employee.objects.select_related(
@@ -3111,11 +3688,18 @@ class GlobalSearchView(RoleRequiredMixin, View):
             ).order_by('-date', '-check_in_time')[:5]
 
             from apps.expense.models import Expense
-            expense_results = Expense.objects.select_related('employee', 'project').filter(
+            expense_results = Expense.objects.select_related('employee', 'project', 'category').filter(
                 Q(description__icontains=query) |
                 Q(employee__full_name__icontains=query) |
-                Q(category__icontains=query)
+                Q(category__name__icontains=query)
             ).order_by('-requested_at')[:5]
+
+            from apps.leave.models import LeaveRequest
+            leave_results = LeaveRequest.objects.select_related('employee', 'leave_type').filter(
+                Q(employee__full_name__icontains=query) |
+                Q(reason__icontains=query) |
+                Q(leave_type__name__icontains=query)
+            ).order_by('-start_date')[:5]
 
         if request.headers.get('HX-Request'):
             return render(request, 'admin_panel/partials/global_search_results.html', {
@@ -3124,6 +3708,7 @@ class GlobalSearchView(RoleRequiredMixin, View):
                 'asset_results': asset_results,
                 'attendance_results': attendance_results,
                 'expense_results': expense_results,
+                'leave_results': leave_results,
             })
 
         return JsonResponse({
@@ -3186,6 +3771,16 @@ class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
             variant = role_override
         else:
             variant = determine_user_role_variant(self.request.user)
+
+        if self.request.headers.get('HX-Request') and self.request.GET.get('partial') == 'true':
+            if variant == 'admin':
+                return ['dashboard/partials/admin_dashboard_content.html']
+            elif variant == 'hr':
+                return ['dashboard/partials/hr_dashboard_content.html']
+            elif variant == 'manager':
+                return ['dashboard/partials/manager_dashboard_content.html']
+            else:
+                return ['dashboard/partials/employee_dashboard_content.html']
 
         if variant == 'admin':
             return ['dashboard/admin_dashboard.html']

@@ -39,7 +39,14 @@ urlpatterns = [
     path('reports/absent/', views.AbsentReportView.as_view(), name='reports_absent'),
     path('reports/absent/add/', views.AdminAddLeaveView.as_view(), name='reports_absent_add_leave'),
     path('reports/absent/export/excel/', views.ExportAbsentReportExcelView.as_view(), name='reports_absent_excel'),
-    path('reports/absent/export/pdf/', views.ExportAbsentReportPDFView.as_view(), name='reports_absent_pdf'),
+    # Leave Reports
+    path('reports/leave/monthly/', views.LeaveMonthlyReportView.as_view(), name='reports_leave_monthly'),
+    path('reports/leave/employee/<int:pk>/', views.LeaveEmployeeReportView.as_view(), name='reports_leave_employee'),
+    path('reports/leave/employee/<int:pk>/month/<int:year>/<int:month>/', views.LeaveEmployeeReportView.as_view(), name='reports_leave_employee_month'),
+    path('reports/leave/export/csv/', views.ExportLeaveReportCSVView.as_view(), name='reports_leave_export_csv'),
+    path('reports/leave/export/pdf/', views.ExportLeaveReportPDFView.as_view(), name='reports_leave_export_pdf'),
+    path('reports/leave/export/monthly-xlsx/', views.export_leave_monthly_xlsx, name='reports_leave_export_xlsx'),
+
     path('settings/schedule/', views.OfficeScheduleView.as_view(), name='schedule_settings'),
     path('expired-data/', views.ExpiredDataView.as_view(), name='expired_data'),
     path('expired-data/delete/', views.delete_expired_selected, name='delete_expired_selected'),
