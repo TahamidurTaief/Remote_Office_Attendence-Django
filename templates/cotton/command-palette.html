@@ -79,6 +79,12 @@
 
        init() {
          window.addEventListener('open-command-palette', () => this.openPalette());
+         window.addEventListener('keydown', (e) => {
+           if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+             e.preventDefault();
+             this.openPalette();
+           }
+         });
        },
        openPalette() {
          this.open = true;

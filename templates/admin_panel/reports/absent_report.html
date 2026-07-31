@@ -145,11 +145,11 @@
             {% endfor %}
 
             {% if is_paginated %}
-            <x-slot name="pagination">
+            <c-slot name="pagination">
                 <c-pagination current_page="{{ page_obj.number }}"
                               total_pages="{{ page_obj.paginator.num_pages }}"
                               base_url="?{% if query_string %}{{ query_string }}&{% endif %}page="></c-pagination>
-            </x-slot>
+            </c-slot>
             {% endif %}
         </c-table>
         {% else %}

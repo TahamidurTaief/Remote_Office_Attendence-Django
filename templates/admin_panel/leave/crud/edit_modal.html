@@ -2,50 +2,34 @@
     <form hx-post="{% url 'admin_panel:leave_request_edit' object.pk %}" hx-swap="none" class="space-y-4">
         {% csrf_token %}
         
-        <div>
-            <label class="ft-label">Employee</label>
-            <div class="mt-1">{{ form.employee }}</div>
-            {% if form.employee.errors %}<p class="ft-error-text">{{ form.employee.errors.0 }}</p>{% endif %}
+        <c-select label="EMPLOYEE" name="employee" is_django_form="true" error="{{ form.employee.errors.0 }}">
+            {{ form.employee }}
+        </c-select>
+
+        <c-select label="LEAVE TYPE" name="leave_type" is_django_form="true" error="{{ form.leave_type.errors.0 }}">
+            {{ form.leave_type }}
+        </c-select>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <c-select label="START DATE" name="start_date" is_django_form="true" error="{{ form.start_date.errors.0 }}">
+                {{ form.start_date }}
+            </c-select>
+            <c-select label="END DATE" name="end_date" is_django_form="true" error="{{ form.end_date.errors.0 }}">
+                {{ form.end_date }}
+            </c-select>
         </div>
 
-        <div>
-            <label class="ft-label">Leave Type</label>
-            <div class="mt-1">{{ form.leave_type }}</div>
-            {% if form.leave_type.errors %}<p class="ft-error-text">{{ form.leave_type.errors.0 }}</p>{% endif %}
-        </div>
+        <c-select label="REASON" name="reason" is_django_form="true" error="{{ form.reason.errors.0 }}">
+            {{ form.reason }}
+        </c-select>
 
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="ft-label">Start Date</label>
-                <div class="mt-1">{{ form.start_date }}</div>
-                {% if form.start_date.errors %}<p class="ft-error-text">{{ form.start_date.errors.0 }}</p>{% endif %}
-            </div>
-            <div>
-                <label class="ft-label">End Date</label>
-                <div class="mt-1">{{ form.end_date }}</div>
-                {% if form.end_date.errors %}<p class="ft-error-text">{{ form.end_date.errors.0 }}</p>{% endif %}
-            </div>
-        </div>
-
-        <div>
-            <label class="ft-label">Reason</label>
-            <div class="mt-1">{{ form.reason }}</div>
-            {% if form.reason.errors %}<p class="ft-error-text">{{ form.reason.errors.0 }}</p>{% endif %}
-        </div>
-
-        <div>
-            <label class="ft-label">Status</label>
-            <div class="mt-1">{{ form.status }}</div>
-            {% if form.status.errors %}<p class="ft-error-text">{{ form.status.errors.0 }}</p>{% endif %}
-        </div>
+        <c-select label="STATUS" name="status" is_django_form="true" error="{{ form.status.errors.0 }}">
+            {{ form.status }}
+        </c-select>
 
         <c-slot name="footer">
-            <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary ft-btn-sm">
-                Cancel
-            </button>
-            <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm">
-                Save Changes
-            </button>
+            <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel" ></c-button>
+            <c-button type="submit" variant="primary" size="sm" label="Save Changes" extra_class="!bg-[#1877F2] hover:!bg-[#166FE5]" ></c-button>
         </c-slot>
     </form>
 </c-modal>

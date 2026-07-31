@@ -51,9 +51,16 @@
         </div>
     </div>
 
-    {# ── Filters Card (Ultra-minimal, Cotton Form Controls) ─────────────────── #}
+    {# ── Filters Card (Ultra-minimal, Cotton Form Controls with HTMX) ─────────── #}
     <c-card padding="sm">
-        <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-3 items-end">
+        <form method="GET"
+              hx-get="{% url 'admin_panel:attendance_list' %}"
+              hx-target="#attendance-list-container"
+              hx-select="#attendance-list-container"
+              hx-swap="outerHTML"
+              hx-push-url="true"
+              hx-trigger="change delay:200ms, submit"
+              class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-3 items-end">
             <div>
                 <c-datetime-picker name="date_from" value="{{ request.GET.date_from }}" label="From Date" placeholder="Select date…" ></c-datetime-picker>
             </div>
@@ -98,156 +105,164 @@
         </form>
     </c-card>
 
-    {# ── Summary Stats Grid (Clean, Compact, Minimal Shadow) ───────────────── #}
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="ft-card p-3 text-center" style="background:var(--surface)">
-            <span class="text-[10px] uppercase font-semibold tracking-wider block" style="color:var(--text-muted)">Total Records</span>
-            <span class="text-[18px] font-bold block mt-0.5" style="color:var(--text)">{{ total_records }}</span>
+    {# ── Async HTMX Data Container ────────────────────────────────────────────── #}
+    <div id="attendance-list-container" class="space-y-4">
+
+        {# ── Summary Stats Grid (Clean, Compact, Minimal Shadow) ───────────────── #}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div class="ft-card p-3 text-center" style="background:var(--surface)">
+                <span class="text-[10px] uppercase font-semibold tracking-wider block" style="color:var(--text-muted)">Total Records</span>
+                <span class="text-[18px] font-bold block mt-0.5" style="color:var(--text)">{{ total_records }}</span>
+            </div>
+            <div class="ft-card p-3 text-center" style="background:var(--surface)">
+                <span class="text-[10px] uppercase font-semibold tracking-wider block text-emerald-600">Present</span>
+                <span class="text-[18px] font-bold block mt-0.5 text-emerald-600">{{ total_present }}</span>
+            </div>
+            <div class="ft-card p-3 text-center" style="background:var(--surface)">
+                <span class="text-[10px] uppercase font-semibold tracking-wider block text-rose-500">Absent</span>
+                <span class="text-[18px] font-bold block mt-0.5 text-rose-500">{{ total_absent }}</span>
+            </div>
+            <div class="ft-card p-3 text-center" style="background:var(--surface)">
+                <span class="text-[10px] uppercase font-semibold tracking-wider block text-primary">On Leave</span>
+                <span class="text-[18px] font-bold block mt-0.5 text-primary">{{ total_on_leave }}</span>
+            </div>
+            <div class="ft-card p-3 text-center" style="background:var(--surface)">
+                <span class="text-[10px] uppercase font-semibold tracking-wider block text-amber-500">Late</span>
+                <span class="text-[18px] font-bold block mt-0.5 text-amber-500">{{ total_late }}</span>
+            </div>
+            <div class="ft-card p-3 text-center" style="background:var(--surface)">
+                <span class="text-[10px] uppercase font-semibold tracking-wider block text-indigo-500">Field</span>
+                <span class="text-[18px] font-bold block mt-0.5 text-indigo-500">{{ total_field }}</span>
+            </div>
         </div>
-        <div class="ft-card p-3 text-center" style="background:var(--surface)">
-            <span class="text-[10px] uppercase font-semibold tracking-wider block text-emerald-600">Present</span>
-            <span class="text-[18px] font-bold block mt-0.5 text-emerald-600">{{ total_present }}</span>
-        </div>
-        <div class="ft-card p-3 text-center" style="background:var(--surface)">
-            <span class="text-[10px] uppercase font-semibold tracking-wider block text-rose-500">Absent</span>
-            <span class="text-[18px] font-bold block mt-0.5 text-rose-500">{{ total_absent }}</span>
-        </div>
-        <div class="ft-card p-3 text-center" style="background:var(--surface)">
-            <span class="text-[10px] uppercase font-semibold tracking-wider block text-primary">On Leave</span>
-            <span class="text-[18px] font-bold block mt-0.5 text-primary">{{ total_on_leave }}</span>
-        </div>
-        <div class="ft-card p-3 text-center" style="background:var(--surface)">
-            <span class="text-[10px] uppercase font-semibold tracking-wider block text-amber-500">Late</span>
-            <span class="text-[18px] font-bold block mt-0.5 text-amber-500">{{ total_late }}</span>
-        </div>
-        <div class="ft-card p-3 text-center" style="background:var(--surface)">
-            <span class="text-[10px] uppercase font-semibold tracking-wider block text-indigo-500">Field</span>
-            <span class="text-[18px] font-bold block mt-0.5 text-indigo-500">{{ total_field }}</span>
-        </div>
-    </div>
 
-    {# ── Attendance Table (Cotton Table Layout) ─────────────────────────────── #}
-    <c-card padding="none">
-        {% if attendances %}
-        <c-table>
-            <x-slot name="header">
-                <th>Employee</th>
-                <th>Date</th>
-                <th>Time (In/Out)</th>
-                <th>Hours</th>
-                <th>Photo</th>
-                <th>Event Type</th>
-                <th>Type / Status</th>
-                <th class="text-right">Action</th>
-            </x-slot>
+        {# ── Attendance Table (Cotton Table Layout) ─────────────────────────────── #}
+        <c-card padding="none">
+            {% if attendances %}
+            <c-table>
+                <c-slot name="header">
+                    <th>Employee</th>
+                    <th>Date</th>
+                    <th>Time (In/Out)</th>
+                    <th>Hours</th>
+                    <th>Photo</th>
+                    <th>Event Type</th>
+                    <th>Type / Status</th>
+                    <th class="text-right">Action</th>
+                </c-slot>
 
-            {% for att in attendances %}
-            <tr>
-                <!-- Employee -->
-                <td>
-                    <div class="flex items-center gap-2.5">
-                        {% if att.employee.profile_photo %}
-                        <img src="{{ att.employee.profile_photo.url }}" class="w-7 h-7 rounded-full object-cover shrink-0">
-                        {% else %}
-                        <div class="w-7 h-7 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-[10px] shrink-0">
-                            {{ att.employee.full_name|first|upper }}
-                        </div>
-                        {% endif %}
-                        <div class="min-w-0">
-                            <p class="text-[12px] font-bold text-gray-900 truncate">{{ att.employee.full_name }}</p>
-                            <p class="text-[10px] text-gray-500 truncate">{{ att.employee.branch.name|default:"Unassigned" }}</p>
-                        </div>
-                    </div>
-                </td>
-
-                <!-- Date -->
-                <td class="font-medium text-gray-700 text-[11px]">
-                    {{ att.date|date:"Y-m-d" }}
-                </td>
-
-                <!-- Time (In / Out) -->
-                <td>
-                    <div class="text-[11px] font-bold text-gray-900">{{ att.check_in_time|time:"h:i A"|default:"-" }}</div>
-                    <div class="text-[10px] text-gray-500">{{ att.check_out_time|time:"h:i A"|default:"-" }}</div>
-                </td>
-
-                <!-- Hours -->
-                <td class="font-bold text-primary text-[12px]">
-                    {{ att.total_hours|default:"0.00" }}h
-                </td>
-
-                <!-- Photo -->
-                <td>
-                    {% if att.photo %}
-                    <img src="{{ att.photo.url }}"
-                         class="w-8 h-8 rounded object-cover cursor-pointer hover:scale-105 transition-transform border border-gray-200"
-                         @click="$dispatch('open-modal', {id: 'photo-modal-{{ att.id }}'})">
-                    {% else %}
-                    <span class="text-gray-300 text-[11px]">—</span>
-                    {% endif %}
-                </td>
-
-                <!-- Event Type -->
-                <td>
-                    {% if att.attendance_type == 'check_in' %}
-                    <c-badge variant="info" label="Check In"></c-badge>
-                    {% elif att.attendance_type == 'check_out' %}
-                    <c-badge variant="neutral" label="Check Out"></c-badge>
-                    {% elif att.attendance_type == 'field_visit' %}
-                    <c-badge variant="primary" label="Field Visit"></c-badge>
-                    {% endif %}
-                </td>
-
-                <!-- Type / Status -->
-                <td>
-                    <div class="flex flex-col gap-1 items-start">
-                        {% if att.status != 'absent' %}
-                            {% if att.type == 'field' %}
-                            <c-badge variant="primary" label="Field"></c-badge>
+                {% for att in attendances %}
+                <tr>
+                    <!-- Employee -->
+                    <td>
+                        <div class="flex items-center gap-2.5">
+                            {% if att.employee.profile_photo %}
+                            <img src="{{ att.employee.profile_photo.url }}" class="w-7 h-7 rounded-full object-cover shrink-0">
                             {% else %}
-                            <c-badge variant="info" label="Office"></c-badge>
+                            <div class="w-7 h-7 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-[10px] shrink-0">
+                                {{ att.employee.full_name|first|upper }}
+                            </div>
                             {% endif %}
-                        {% endif %}
+                            <div class="min-w-0">
+                                <p class="text-[12px] font-bold text-gray-900 truncate">{{ att.employee.full_name }}</p>
+                                <p class="text-[10px] text-gray-500 truncate">{{ att.employee.branch.name|default:"Unassigned" }}</p>
+                            </div>
+                        </div>
+                    </td>
 
-                        {% if att.status == 'on_time' %}
-                        <c-badge variant="success" label="On Time"></c-badge>
-                        {% elif att.status == 'late' %}
-                        <c-badge variant="danger" label="Late"></c-badge>
-                        {% elif att.status == 'on_leave' %}
-                        <c-badge variant="info" label="On Leave"></c-badge>
+                    <!-- Date -->
+                    <td class="font-medium text-gray-700 text-[11px]">
+                        {{ att.date|date:"Y-m-d" }}
+                    </td>
+
+                    <!-- Time (In / Out) -->
+                    <td>
+                        <div class="text-[11px] font-bold text-gray-900">{{ att.check_in_time|time:"h:i A"|default:"-" }}</div>
+                        <div class="text-[10px] text-gray-500">{{ att.check_out_time|time:"h:i A"|default:"-" }}</div>
+                    </td>
+
+                    <!-- Hours -->
+                    <td class="font-bold text-primary text-[12px]">
+                        {{ att.total_hours|default:"0.00" }}h
+                    </td>
+
+                    <!-- Photo -->
+                    <td>
+                        {% if att.photo %}
+                        <img src="{{ att.photo.url }}"
+                             class="w-8 h-8 rounded object-cover cursor-pointer hover:scale-105 transition-transform border border-gray-200"
+                             @click="$dispatch('open-modal', {id: 'photo-modal-{{ att.id }}'})">
                         {% else %}
-                        <c-badge variant="danger" label="Absent"></c-badge>
+                        <span class="text-gray-300 text-[11px]">—</span>
                         {% endif %}
-                    </div>
-                </td>
+                    </td>
 
-                <!-- Action Button -->
-                <td class="text-right">
-                    {% if att.id %}
-                    <div class="flex items-center justify-end gap-1.5">
-                        <c-button href="{% url 'admin_panel:attendance_detail' att.id %}" variant="secondary" icon="eye" label="Detail" size="sm" ></c-button>
-                        <c-button hx-get="{% url 'admin_panel:attendance_edit' att.id %}" hx-target="#modal-container" variant="secondary" size="sm" icon="edit-3" title="Edit"></c-button>
-                        <c-button hx-post="{% url 'admin_panel:attendance_delete' att.id %}" hx-confirm="Are you sure you want to delete this attendance record?" hx-swap="none" variant="danger" size="sm" icon="trash-2" title="Delete"></c-button>
-                    </div>
-                    {% else %}
-                    <span class="text-gray-300 text-[11px]">—</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
+                    <!-- Event Type -->
+                    <td>
+                        {% if att.attendance_type == 'check_in' %}
+                        <c-badge variant="info" label="Check In"></c-badge>
+                        {% elif att.attendance_type == 'check_out' %}
+                        <c-badge variant="neutral" label="Check Out"></c-badge>
+                        {% elif att.attendance_type == 'field_visit' %}
+                        <c-badge variant="primary" label="Field Visit"></c-badge>
+                        {% endif %}
+                    </td>
 
-            {% if is_paginated %}
-            <x-slot name="pagination">
-                <c-pagination current_page="{{ page_obj.number }}"
-                              total_pages="{{ page_obj.paginator.num_pages }}"
-                              base_url="?{{ query_string }}&page="></c-pagination>
-            </x-slot>
+                    <!-- Type / Status -->
+                    <td>
+                        <div class="flex flex-col gap-1 items-start">
+                            {% if att.status != 'absent' %}
+                                {% if att.type == 'field' %}
+                                <c-badge variant="primary" label="Field"></c-badge>
+                                {% else %}
+                                <c-badge variant="info" label="Office"></c-badge>
+                                {% endif %}
+                            {% endif %}
+
+                            {% if att.status == 'on_time' %}
+                            <c-badge variant="success" label="On Time"></c-badge>
+                            {% elif att.status == 'late' %}
+                            <c-badge variant="danger" label="Late"></c-badge>
+                            {% elif att.status == 'on_leave' %}
+                            <c-badge variant="info" label="On Leave"></c-badge>
+                            {% else %}
+                            <c-badge variant="danger" label="Absent"></c-badge>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Action Button -->
+                    <td class="text-right">
+                        {% if att.id %}
+                        <div class="flex items-center justify-end gap-1.5">
+                            <c-button href="{% url 'admin_panel:attendance_detail' att.id %}" variant="secondary" icon="eye" label="Detail" size="sm" ></c-button>
+                            <c-button hx-get="{% url 'admin_panel:attendance_edit' att.id %}" hx-target="#modal-container" variant="secondary" size="sm" icon="edit-3" title="Edit"></c-button>
+                            <c-button hx-post="{% url 'admin_panel:attendance_delete' att.id %}" hx-confirm="Are you sure you want to delete this attendance record?" hx-swap="none" variant="danger" size="sm" icon="trash-2" title="Delete"></c-button>
+                        </div>
+                        {% else %}
+                        <span class="text-gray-300 text-[11px]">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+
+                {% if is_paginated %}
+                <c-slot name="pagination">
+                    <c-pagination current_page="{{ page_obj.number }}"
+                                  total_pages="{{ page_obj.paginator.num_pages }}"
+                                  base_url="?{{ query_string }}&page="
+                                  hx_target="#attendance-list-container"
+                                  hx_select="#attendance-list-container"
+                                  hx_swap="outerHTML"></c-pagination>
+                </c-slot>
+                {% endif %}
+            </c-table>
+            {% else %}
+            <c-empty-state icon="clock" title="No records match the given criteria." description="Try adjusting the filter options above." ></c-empty-state>
             {% endif %}
-        </c-table>
-        {% else %}
-        <c-empty-state icon="clock" title="No records match the given criteria." description="Try adjusting the filter options above." ></c-empty-state>
-        {% endif %}
-    </c-card>
+        </c-card>
+
+    </div>
 
 </div>
 

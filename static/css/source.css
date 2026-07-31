@@ -969,20 +969,22 @@ html.dark {
     .ft-modal {
         background: var(--surface);
         color: var(--text);
-        border-radius: 8px;
+        border-radius: 12px;
         box-shadow: var(--shadow-lg);
         border: 1px solid var(--border);
         width: 100%;
+        max-width: min(94vw, 560px);
         max-height: 90vh;
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        margin: 0 auto;
     }
 
-    .ft-modal-sm { max-width: 400px; }
-    .ft-modal-md { max-width: 560px; }
-    .ft-modal-lg { max-width: 768px; }
-    .ft-modal-xl { max-width: 1024px; }
+    .ft-modal-sm { max-width: min(94vw, 400px); }
+    .ft-modal-md { max-width: min(94vw, 560px); }
+    .ft-modal-lg { max-width: min(94vw, 768px); }
+    .ft-modal-xl { max-width: min(94vw, 920px); }
 
     /* ── Right Drawer — floating: shadow only ─────────────────────────── */
     .ft-drawer {

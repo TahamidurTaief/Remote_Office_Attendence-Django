@@ -4,7 +4,7 @@
     <!-- Breadcrumb + Header -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4" style="border-color: var(--border);">
       <div>
-        <c-breadcrumb page1_href="/admin-panel/dashboard/" page1_label="Dashboard" current="Reports & Analytics Hub" />
+        <c-breadcrumb page1_href="/admin-panel/dashboard/" page1_label="Dashboard" current="Reports & Analytics Hub" ></c-breadcrumb>
         <h1 class="text-xl font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">
           <i data-lucide="bar-chart-3" class="w-6 h-6 text-primary"></i>
           Attendance Reports & Data Analytics Hub
@@ -28,7 +28,7 @@
 
         <!-- Export Dropdown -->
         <div class="relative" x-data="{ open: false }">
-          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export Reports" extra_class="!bg-primary text-xs font-semibold" />
+          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export Reports" extra_class="!bg-primary text-xs font-semibold" ></c-button>
 
           <div x-show="open"
                x-cloak
@@ -124,7 +124,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
           Real-time check-ins, late arrivals, geofence coordinates, total session hours, and captured photos.
         </p>
-        <c-button href="{% url 'admin_panel:reports_daily' %}" variant="primary" label="Open Daily Report" extra_class="w-full justify-center text-xs" />
+        <c-button href="{% url 'admin_panel:reports_daily' %}" variant="primary" label="Open Daily Report" extra_class="w-full justify-center text-xs" ></c-button>
       </c-card>
 
       <!-- 2. Monthly Report Card -->
@@ -141,7 +141,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
           Aggregated present, absent, on-leave, overtime hours, and leave balance summary for all employees.
         </p>
-        <c-button href="{% url 'admin_panel:reports_monthly' %}" variant="primary" label="Open Monthly Matrix" extra_class="w-full justify-center text-xs !bg-emerald-600 hover:!bg-emerald-700" />
+        <c-button href="{% url 'admin_panel:reports_monthly' %}" variant="primary" label="Open Monthly Matrix" extra_class="w-full justify-center text-xs !bg-emerald-600 hover:!bg-emerald-700" ></c-button>
       </c-card>
 
       <!-- 3. Monthly Leave Report Card -->
@@ -158,7 +158,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
           Leave days taken per category, pending leave approvals, and employee remaining balances.
         </p>
-        <c-button href="{% url 'admin_panel:reports_leave_monthly' %}" variant="primary" label="Open Leave Report" extra_class="w-full justify-center text-xs !bg-indigo-600 hover:!bg-indigo-700" />
+        <c-button href="{% url 'admin_panel:reports_leave_monthly' %}" variant="primary" label="Open Leave Report" extra_class="w-full justify-center text-xs !bg-indigo-600 hover:!bg-indigo-700" ></c-button>
       </c-card>
 
       <!-- 4. Employee Profile Report Card -->
@@ -175,7 +175,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
           Deep-dive single employee history, attendance heatmaps, project tasks, and overtime statistics.
         </p>
-        <c-button @click="showSelect = !showSelect" variant="secondary" label="Select Employee" extra_class="w-full justify-center text-xs" />
+        <c-button @click="showSelect = !showSelect" variant="secondary" label="Select Employee" extra_class="w-full justify-center text-xs" ></c-button>
         <div x-show="showSelect" x-cloak class="mt-2">
           <c-select name="employee_picker" label="" onchange="if(this.value) window.location='/admin-panel/reports/employee/' + this.value + '/'">
             <option value="">- Choose Employee -</option>
@@ -200,7 +200,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
           Single employee full leave application history, approval statuses, and remaining leave quotas.
         </p>
-        <c-button @click="showLeaveSelect = !showLeaveSelect" variant="secondary" label="Select Employee" extra_class="w-full justify-center text-xs" />
+        <c-button @click="showLeaveSelect = !showLeaveSelect" variant="secondary" label="Select Employee" extra_class="w-full justify-center text-xs" ></c-button>
         <div x-show="showLeaveSelect" x-cloak class="mt-2">
           <c-select name="leave_employee_picker" label="" onchange="if(this.value) window.location='/admin-panel/reports/leave/employee/' + this.value + '/'">
             <option value="">- Choose Employee -</option>
@@ -225,7 +225,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
           Track unexcused absences, system-generated leave deductions, and register quick leaves.
         </p>
-        <c-button href="{% url 'admin_panel:reports_absent' %}" variant="danger" label="View Absence Report" extra_class="w-full justify-center text-xs" />
+        <c-button href="{% url 'admin_panel:reports_absent' %}" variant="danger" label="View Absence Report" extra_class="w-full justify-center text-xs" ></c-button>
       </c-card>
     </div>
 
@@ -243,7 +243,7 @@
               <p class="text-[11px] text-slate-400">Daily breakdown of On-Time vs Late Check-ins</p>
             </div>
           </div>
-          <c-badge variant="info" label="Live Data" />
+          <c-badge variant="info" label="Live Data" ></c-badge>
         </div>
         <div class="relative h-64 flex items-center justify-center">
           <canvas id="dashboardTrendChart"></canvas>
@@ -294,7 +294,7 @@
             {% endfor %}
           </div>
         {% else %}
-          <c-empty-state title="No Department Data" message="Department statistics will appear once check-in logs are generated." icon="building" />
+          <c-empty-state title="No Department Data" message="Department statistics will appear once check-in logs are generated." icon="building" ></c-empty-state>
         {% endif %}
       </c-card>
     </div>
@@ -320,7 +320,7 @@
                    class="ft-input text-xs pl-8 py-1.5 w-48 rounded-lg border-slate-300">
             <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400"></i>
           </div>
-          <c-button href="{% url 'admin_panel:reports_daily' %}" variant="ghost" size="sm" label="View Full Daily" icon="arrow-right" class="text-xs" />
+          <c-button href="{% url 'admin_panel:reports_daily' %}" variant="ghost" size="sm" label="View Full Daily" icon="arrow-right" class="text-xs" ></c-button>
         </div>
       </div>
 
@@ -350,9 +350,9 @@
                   <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-medium text-slate-800 dark:text-slate-100">
                     <div class="flex items-center gap-2">
                       {% if r.employee.profile_photo %}
-                        <c-avatar :src="r.employee.profile_photo.url" size="xs" />
+                        <c-avatar :src="r.employee.profile_photo.url" size="xs" ></c-avatar>
                       {% else %}
-                        <c-avatar :initials="r.employee.full_name|make_list|first" size="xs" />
+                        <c-avatar :initials="r.employee.full_name|make_list|first" size="xs" ></c-avatar>
                       {% endif %}
                       <span>{{ r.employee.full_name }}</span>
                     </div>
@@ -369,15 +369,15 @@
                     {% if r.total_hours %}{{ r.total_hours }} hrs{% else %}-{% endif %}
                   </td>
                   <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800">
-                    <c-badge variant="neutral" label="{{ r.type }}" />
+                    <c-badge variant="neutral" label="{{ r.type }}" ></c-badge>
                   </td>
                   <td class="px-3 py-2 border-r border-slate-200 dark:border-slate-800">
                     {% if r.status == 'late' %}
-                      <c-status-pill status="warning" label="Late" />
+                      <c-status-pill status="warning" label="Late" ></c-status-pill>
                     {% elif r.status == 'on_time' or r.status == 'present' %}
-                      <c-status-pill status="active" label="On-Time" />
+                      <c-status-pill status="active" label="On-Time" ></c-status-pill>
                     {% else %}
-                      <c-status-pill status="inactive" label="{{ r.status_display }}" />
+                      <c-status-pill status="inactive" label="{{ r.status_display }}" ></c-status-pill>
                     {% endif %}
                   </td>
                   <td class="px-3 py-2 text-slate-600 dark:text-slate-400 truncate max-w-xs" title="{{ r.location }}">
@@ -388,7 +388,7 @@
             {% else %}
               <tr>
                 <td colspan="10" class="px-4 py-8 text-center text-slate-400">
-                  <c-empty-state title="No Recent Attendance Records" message="Attendance check-ins will populate this grid in real-time." icon="inbox" />
+                  <c-empty-state title="No Recent Attendance Records" message="Attendance check-ins will populate this grid in real-time." icon="inbox" ></c-empty-state>
                 </td>
               </tr>
             {% endif %}

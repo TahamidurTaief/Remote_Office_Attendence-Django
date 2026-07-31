@@ -17,6 +17,8 @@ from django.db.models import Q
 from django.utils import timezone
 import calendar
 
+from apps.accounts.rbac_models import UserRoleAssignment, Role
+
 def get_client_ip(request):
     if not request or not hasattr(request, 'META'):
         return ''
@@ -580,7 +582,7 @@ class EmployeeMasterCreateView(AdminRequiredMixin, CreateView):
 class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
     model = Employee
     form_class = EmployeeMasterForm
-    template_name = 'employees/master_form_modal.html'
+    template_name = 'employees/master_edit_page.html'
 
     def get_queryset(self):
         return Employee.objects.select_related('branch', 'department', 'designation', 'reporting_manager', 'user')
@@ -1315,7 +1317,7 @@ class EmployeeWizardView(AdminRequiredMixin, View):
         step = int(step)
         ctx = self.get_context_data(request, pk, step)
         if request.headers.get('HX-Request'):
-            return render(request, f'employees/wizard/step_{step}.html', ctx)
+            return render(request, 'employees/wizard/wizard_content.html', ctx)
         return render(request, 'employees/employee_wizard.html', ctx)
 
     def post(self, request, pk=None, step=1):
@@ -1333,13 +1335,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 next_step = int(request.POST.get('next_step', 2))
                 if request.headers.get('HX-Request'):
                     ctx = self.get_context_data(request, pk=emp.pk, step=next_step)
-                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
                     response['HX-Push-Url'] = f"/employees/wizard/{emp.pk}/step/{next_step}/"
                     return response
                 return redirect('employees:employee_wizard_step', pk=emp.pk, step=next_step)
             else:
                 ctx = self.get_context_data(request, pk=pk, step=1, form=form)
-                return render(request, f'employees/wizard/step_1.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 2:
             form = WizardStep2Form(request.POST, instance=employee)
@@ -1349,13 +1351,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 next_step = int(request.POST.get('next_step', 3))
                 if request.headers.get('HX-Request'):
                     ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
-                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
                     response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
                     return response
                 return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
             else:
                 ctx = self.get_context_data(request, pk=employee.pk, step=2, form=form)
-                return render(request, f'employees/wizard/step_2.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 3:
             form = WizardStep3Form(request.POST, instance=employee)
@@ -1365,13 +1367,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 next_step = int(request.POST.get('next_step', 4))
                 if request.headers.get('HX-Request'):
                     ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
-                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
                     response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
                     return response
                 return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
             else:
                 ctx = self.get_context_data(request, pk=employee.pk, step=3, form=form)
-                return render(request, f'employees/wizard/step_3.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 4:
             form = WizardStep4Form(request.POST, employee=employee)
@@ -1381,35 +1383,34 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 next_step = int(request.POST.get('next_step', 5))
                 if request.headers.get('HX-Request'):
                     ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
-                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
                     response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
                     return response
                 return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
             else:
                 ctx = self.get_context_data(request, pk=employee.pk, step=4, form=form)
-                return render(request, f'employees/wizard/step_4.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 5:
             # Document Upload
-            doc_form = EmployeeDocumentForm(request.POST, request.FILES)
-            if doc_form.is_valid():
-                doc = doc_form.save(commit=False)
-                doc.employee_master = employee
-                doc.uploaded_by = request.user
-                doc.save()
-                messages.success(request, f"Document '{doc.get_document_type_display()}' uploaded successfully.")
-            else:
-                messages.error(request, "Failed to upload document. Please check the form fields.")
-            
             action_type = request.POST.get('action_type', 'upload')
-            if action_type == 'next':
-                next_step = 6
-            else:
+            if action_type == 'upload':
+                doc_form = EmployeeDocumentForm(request.POST, request.FILES)
+                if doc_form.is_valid():
+                    doc = doc_form.save(commit=False)
+                    doc.employee_master = employee
+                    doc.uploaded_by = request.user
+                    doc.save()
+                    messages.success(request, f"Document '{doc.get_document_type_display()}' uploaded successfully.")
+                else:
+                    messages.error(request, "Failed to upload document. Please select a valid file.")
                 next_step = 5
+            else:
+                next_step = 6
 
             ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
             if request.headers.get('HX-Request'):
-                response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                response = render(request, 'employees/wizard/wizard_content.html', ctx)
                 response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
                 return response
             return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
@@ -1422,32 +1423,34 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 next_step = int(request.POST.get('next_step', 7))
                 if request.headers.get('HX-Request'):
                     ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
-                    response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
                     response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
                     return response
                 return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
             else:
                 ctx = self.get_context_data(request, pk=employee.pk, step=6, form=form)
-                return render(request, f'employees/wizard/step_6.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 7:
             # Asset Assignment
-            asset_form = AssetAssignmentForm(request.POST)
-            if asset_form.is_valid():
-                assign = asset_form.save(commit=False)
-                assign.employee = employee
-                assign.assigned_by = request.user
-                assign.save()
-                messages.success(request, f"Asset '{assign.asset.name}' assigned successfully.")
-            else:
-                messages.error(request, "Could not assign asset. Check if asset is already assigned.")
-
             action_type = request.POST.get('action_type', 'assign')
-            next_step = 8 if action_type == 'next' else 7
+            if action_type == 'assign':
+                asset_form = AssetAssignmentForm(request.POST)
+                if asset_form.is_valid():
+                    assign = asset_form.save(commit=False)
+                    assign.employee = employee
+                    assign.assigned_by = request.user
+                    assign.save()
+                    messages.success(request, f"Asset '{assign.asset.name}' assigned successfully.")
+                else:
+                    messages.error(request, "Could not assign asset. Check if asset is available.")
+                next_step = 7
+            else:
+                next_step = 8
 
             ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
             if request.headers.get('HX-Request'):
-                response = render(request, f'employees/wizard/step_{next_step}.html', ctx)
+                response = render(request, 'employees/wizard/wizard_content.html', ctx)
                 response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
                 return response
             return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)

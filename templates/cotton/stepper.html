@@ -1,97 +1,208 @@
 {% comment %} c-stepper component
-   Multi-step progress indicator.
-   Props:
-   - current: 1-based index of the active step (int, required)
-   - step_count: total number of steps (2-8, default 3)
-   - step1…step8: label for each step
-   - extra_class: additional classes on wrapper
-
-   Usage:
-     <c-stepper current="{{ wizard.step }}" step_count="8"
-                step1="Basic Info" step2="Organization" step3="Payroll" step4="Security"
-                step5="Documents" step6="Emergency Contact" step7="Assets" step8="Review"></c-stepper>
+   Multi-step progress indicator pipeline.
 {% endcomment %}
 
-{% with cur=current|default:1 cnt=step_count|default:3 %}
-<div class="ft-stepper {{ extra_class }}" aria-label="Progress">
-
-  {# Step 1 #}
-  <div class="ft-stepper-step{% if cur > 1 %} completed{% elif cur == 1 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 1 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}1{% endif %}
+{% with cur=current|add:"0" cnt=step_count|default:8|add:"0" %}
+<div class="w-full py-2 overflow-x-auto scrollbar-hide">
+  <div class="flex items-center justify-between min-w-[680px] w-full px-2">
+    
+    {# Step 1 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 1 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 1 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 1 %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          1
+        {% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 1 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif cur > 1 %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-400 dark:text-gray-500
+        {% endif %}">
+        {{ step1|default:"Basic Info" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step1|default:"Step 1" }}</div>
-  </div>
 
-  {# Step 2 #}
-  {% if cnt >= 2 %}
-  <div class="ft-stepper-step{% if cur > 2 %} completed{% elif cur == 2 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 2 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}2{% endif %}
+    {# Connector 1-2 #}
+    {% if cnt >= 2 %}
+    <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
+      {% if cur > 1 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+    
+    {# Step 2 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 2 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 2 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 2 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}2{% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 2 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 2 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+        {{ step2|default:"Organization" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step2|default:"Step 2" }}</div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {# Step 3 #}
-  {% if cnt >= 3 %}
-  <div class="ft-stepper-step{% if cur > 3 %} completed{% elif cur == 3 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 3 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}3{% endif %}
+    {# Connector 2-3 #}
+    {% if cnt >= 3 %}
+    <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
+      {% if cur > 2 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+    
+    {# Step 3 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 3 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 3 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 3 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}3{% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 3 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 3 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+        {{ step3|default:"Payroll" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step3|default:"Step 3" }}</div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {# Step 4 #}
-  {% if cnt >= 4 %}
-  <div class="ft-stepper-step{% if cur > 4 %} completed{% elif cur == 4 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 4 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}4{% endif %}
+    {# Connector 3-4 #}
+    {% if cnt >= 4 %}
+    <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
+      {% if cur > 3 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+    
+    {# Step 4 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 4 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 4 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 4 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}4{% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 4 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 4 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+        {{ step4|default:"Security" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step4|default:"Step 4" }}</div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {# Step 5 #}
-  {% if cnt >= 5 %}
-  <div class="ft-stepper-step{% if cur > 5 %} completed{% elif cur == 5 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 5 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}5{% endif %}
+    {# Connector 4-5 #}
+    {% if cnt >= 5 %}
+    <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
+      {% if cur > 4 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+    
+    {# Step 5 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 5 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 5 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 5 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}5{% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 5 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 5 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+        {{ step5|default:"Documents" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step5|default:"Step 5" }}</div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {# Step 6 #}
-  {% if cnt >= 6 %}
-  <div class="ft-stepper-step{% if cur > 6 %} completed{% elif cur == 6 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 6 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}6{% endif %}
+    {# Connector 5-6 #}
+    {% if cnt >= 6 %}
+    <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
+      {% if cur > 5 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+    
+    {# Step 6 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 6 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 6 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 6 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}6{% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 6 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 6 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+        {{ step6|default:"Emergency" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step6|default:"Step 6" }}</div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {# Step 7 #}
-  {% if cnt >= 7 %}
-  <div class="ft-stepper-step{% if cur > 7 %} completed{% elif cur == 7 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 7 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}7{% endif %}
+    {# Connector 6-7 #}
+    {% if cnt >= 7 %}
+    <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
+      {% if cur > 6 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+    
+    {# Step 7 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 7 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 7 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 7 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}7{% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 7 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 7 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+        {{ step7|default:"Assets" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step7|default:"Step 7" }}</div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {# Step 8 #}
-  {% if cnt >= 8 %}
-  <div class="ft-stepper-step{% if cur > 8 %} completed{% elif cur == 8 %} active{% endif %}">
-    <div class="ft-stepper-dot">
-      {% if cur > 8 %}<i data-lucide="check" class="w-3 h-3" style="stroke-width:2.5"></i>{% else %}8{% endif %}
+    {# Connector 7-8 #}
+    {% if cnt >= 8 %}
+    <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
+      {% if cur > 7 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+    
+    {# Step 8 #}
+    <div class="flex flex-col items-center relative z-10 group">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+        {% if cur > 8 %}
+          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+        {% elif cur == 8 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
+        {% else %}
+          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+        {% endif %}">
+        {% if cur > 8 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}8{% endif %}
+      </div>
+      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+        {% if cur == 8 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 8 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+        {{ step8|default:"Review" }}
+      </span>
     </div>
-    <div class="ft-stepper-label">{{ step8|default:"Step 8" }}</div>
-  </div>
-  {% endif %}
+    {% endif %}
 
+  </div>
 </div>
 {% endwith %}
+

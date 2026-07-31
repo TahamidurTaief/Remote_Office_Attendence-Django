@@ -1,0 +1,16 @@
+<div id="wizard-root" class="max-w-6xl mx-auto px-4 py-6 space-y-6" x-data="{ activeStep: {{ step|default:1 }} }">
+  
+  {# Header Banner #}
+  {% include "employees/wizard/header.html" %}
+
+  {# Stepper Header Component #}
+  {% include "employees/wizard/stepper_wrapper.html" %}
+
+  {# Step Content Container (HTMX Target inside a Card) #}
+  <c-card padding="lg">
+    <div id="wizard-step-container">
+      {% include step_template %}
+    </div>
+  </c-card>
+
+</div>

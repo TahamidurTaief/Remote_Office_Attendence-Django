@@ -42,37 +42,19 @@
                           variant="accent"
                           size="sm"
                           label="Resume Wizard"
-                          extra_class="w-full text-center justify-center rounded-xl font-semibold !bg-amber-500 hover:!bg-amber-600 !text-white"></c-button>
+                          extra_class="w-full text-center justify-center"></c-button>
             </div>
             {% endif %}
         </div>
         {% endwith %}
     </div>
  
-    <div class="p-6 space-y-4 text-sm">
-        <div class="flex justify-between items-center border-b pb-2" style="border-color:var(--border)">
-            <span class="text-xs font-medium text-slate-400">Employee ID</span>
-            <span class="font-mono font-bold text-slate-700 dark:text-slate-300">{{ employee.employee_number }}</span>
-        </div>
-        <div class="flex justify-between items-center border-b pb-2" style="border-color:var(--border)">
-            <span class="text-xs font-medium text-slate-400">Personal Email</span>
-            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ employee.personal_email|default:"—" }}</span>
-        </div>
-        <div class="flex justify-between items-center border-b pb-2" style="border-color:var(--border)">
-            <span class="text-xs font-medium text-slate-400">Phone</span>
-            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ employee.phone|default:"—" }}</span>
-        </div>
-        <div class="flex justify-between items-center border-b pb-2" style="border-color:var(--border)">
-            <span class="text-xs font-medium text-slate-400">Branch</span>
-            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ employee.branch.name|default:"—" }}</span>
-        </div>
-        <div class="flex justify-between items-center border-b pb-2" style="border-color:var(--border)">
-            <span class="text-xs font-medium text-slate-400">Shift</span>
-            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ employee.shift|default:"—" }}</span>
-        </div>
-        <div class="flex justify-between items-center border-b pb-2" style="border-color:var(--border)">
-            <span class="text-xs font-medium text-slate-400">Joined Date</span>
-            <span class="font-semibold text-slate-700 dark:text-slate-300">{{ employee.joined_date|date:"M d, Y"|default:"—" }}</span>
-        </div>
+    <div class="p-6 space-y-2.5">
+        <c-info-field label="Employee ID" :value="employee.employee_number" extra_class="font-mono"></c-info-field>
+        <c-info-field label="Personal Email" :value="employee.personal_email|default:''"></c-info-field>
+        <c-info-field label="Phone" :value="employee.phone|default:''"></c-info-field>
+        <c-info-field label="Branch" :value="employee.branch.name|default:''"></c-info-field>
+        <c-info-field label="Shift" :value="employee.shift|default:''"></c-info-field>
+        <c-info-field label="Joined Date" :value="employee.joined_date|date:'M d, Y'|default:''"></c-info-field>
     </div>
 </c-card>

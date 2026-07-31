@@ -200,7 +200,8 @@ def calculate_attendance_status(check_in_time, schedule):
     else:
         session_date = check_in_time.date()
         
-    if is_employee_holiday(schedule.employee, session_date):
+    employee = getattr(schedule, 'employee', None)
+    if employee and is_employee_holiday(employee, session_date):
         return 'holiday_attendance'
         
     late_threshold_time = schedule.get_late_threshold()
@@ -251,7 +252,8 @@ def calculate_early_checkout(check_out_time, schedule, session_date=None):
         else:
             session_date = check_out_time.date()
             
-    if is_employee_holiday(schedule.employee, session_date):
+    employee = getattr(schedule, 'employee', None)
+    if employee and is_employee_holiday(employee, session_date):
         return False
         
     threshold_time = schedule.get_early_checkout_threshold()

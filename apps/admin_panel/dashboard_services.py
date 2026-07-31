@@ -448,4 +448,112 @@ def get_admin_dashboard_data(user):
     pending_ot = Attendance.objects.filter(ot_status='pending', is_expired=False).count()
     data['pending_approvals_count'] = pending_leaves + pending_expenses + pending_corrections + pending_ot
 
+    # Data Science: Expense & Attendance Analysis
+    from apps.expense.models import ExpenseCategory
+    from django.db.models import Sum, Q, Avg
+    import math
+
+    # 1. Total Expenses Approved vs Pending
+    data['total_approved_expenses'] = float(Expense.objects.filter(status='approved').aggregate(total=Sum('amount'))['total'] or 0.0)
+    data['total_pending_expenses'] = float(Expense.objects.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts']).aggregate(total=Sum('amount'))['total'] or 0.0)
+
+    # 2. Expense Category breakdown
+    expenses_by_cat = Expense.objects.filter(status='approved').values('category__name').annotate(total=Sum('amount')).order_by('-total')
+    category_labels = []
+    category_values = []
+    for ec in expenses_by_cat:
+        category_labels.append(ec['category__name'] or 'Uncategorized')
+        category_values.append(float(ec['total']))
+    data['expense_category_labels'] = category_labels
+    data['expense_category_values'] = category_values
+
+    # 3. Predict/Forecast Tomorrow's Attendance
+    seven_days_ago = today - timedelta(days=7)
+    past_7_days_atts = Attendance.objects.filter(
+        date__range=(seven_days_ago, today),
+        attendance_type='check_in',
+        is_expired=False
+    ).values('date').annotate(count=Count('id')).order_by('date')
+    
+    n = len(past_7_days_atts)
+    if n >= 3:
+        xs = list(range(1, n + 1))
+        ys = [item['count'] for item in past_7_days_atts]
+        sum_x = sum(xs)
+        sum_y = sum(ys)
+        sum_xy = sum(x * y for x, y in zip(xs, ys))
+        sum_x_squared = sum(x**2 for x in xs)
+        
+        denominator = (n * sum_x_squared - sum_x**2)
+        if denominator != 0:
+            m = (n * sum_xy - sum_x * sum_y) / denominator
+            c = (sum_y - m * sum_x) / n
+            forecasted_count = max(0, m * (n + 1) + c)
+        else:
+            forecasted_count = sum_y / n
+    else:
+        avg_checkins = Attendance.objects.filter(
+            date__range=(today - timedelta(days=5), today),
+            attendance_type='check_in',
+            is_expired=False
+        ).values('date').annotate(count=Count('id')).aggregate(avg=Avg('count'))['avg'] or 0
+        forecasted_count = avg_checkins
+
+    total_emp_count = Employee.objects.count() or 1
+    data['forecasted_attendance_count'] = round(forecasted_count)
+    data['forecasted_attendance_rate'] = min(100.0, round((float(forecasted_count) / total_emp_count) * 100, 1))
+
+    # 4. Correlation between Daily Approved Expenses and Daily Check-ins (over last 10 days)
+    ten_days_ago = today - timedelta(days=10)
+    daily_expenses_qs = Expense.objects.filter(
+        requested_at__date__range=(ten_days_ago, today),
+        status='approved'
+    ).values('requested_at__date').annotate(total_amount=Sum('amount'))
+    expense_map = {item['requested_at__date']: float(item['total_amount']) for item in daily_expenses_qs}
+
+    daily_checkins_qs = Attendance.objects.filter(
+        date__range=(ten_days_ago, today),
+        attendance_type='check_in',
+        is_expired=False
+    ).values('date').annotate(count=Count('id'))
+    checkin_map = {item['date']: item['count'] for item in daily_checkins_qs}
+
+    x_vals = []
+    y_vals = []
+    for offset in range(11):
+        d_date = ten_days_ago + timedelta(days=offset)
+        if d_date in checkin_map:
+            x_vals.append(float(checkin_map[d_date]))
+            y_vals.append(expense_map.get(d_date, 0.0))
+
+    n_corr = len(x_vals)
+    correlation_coefficient = 0.0
+    correlation_strength = "No Data"
+    if n_corr >= 3:
+        sum_x = sum(x_vals)
+        sum_y = sum(y_vals)
+        sum_x_sq = sum(x**2 for x in x_vals)
+        sum_y_sq = sum(y**2 for y in y_vals)
+        sum_xy = sum(x * y for x, y in zip(x_vals, y_vals))
+        
+        num = (n_corr * sum_xy) - (sum_x * sum_y)
+        den_val = ((n_corr * sum_x_sq) - (sum_x**2)) * ((n_corr * sum_y_sq) - (sum_y**2))
+        if den_val > 0:
+            den = math.sqrt(den_val)
+            correlation_coefficient = round(num / den, 3)
+            
+        if correlation_coefficient > 0.6:
+            correlation_strength = "Strong Positive Correlation"
+        elif correlation_coefficient > 0.2:
+            correlation_strength = "Moderate Positive Correlation"
+        elif correlation_coefficient < -0.6:
+            correlation_strength = "Strong Negative Correlation"
+        elif correlation_coefficient < -0.2:
+            correlation_strength = "Moderate Negative Correlation"
+        else:
+            correlation_strength = "Weak / No Correlation"
+            
+    data['expense_attendance_correlation'] = correlation_coefficient
+    data['correlation_strength'] = correlation_strength
+
     return data

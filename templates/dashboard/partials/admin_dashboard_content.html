@@ -1,0 +1,333 @@
+    <!-- Header -->
+    <div class="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/10 flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white">
+          System Overview & HR Analytics
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">Full executive oversight across workforce, operations, and system security.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="{% url 'admin_panel:security_dashboard' %}" class="ft-btn ft-btn-primary ft-btn-sm">
+          Security Center
+        </a>
+      </div>
+    </div>
+
+    <!-- Admin Executive KPI Row -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <c-kpi-widget title="Total Headcount" value="{{ total_employees }}" label="Active: {{ active_employees_count }}" icon="users" color="teal">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Today Present" value="{{ today_attendance_count }}" label="Late: {{ today_late_count }}" icon="user-check" color="success">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Active Sessions" value="{{ active_sessions_count }}" label="Single Device Monitored" icon="monitor" color="sky">
+      </c-kpi-widget>
+
+      <c-kpi-widget title="Pending Approvals" value="{{ pending_approvals_count }}" label="Needs Action" icon="clipboard-check" color="rose">
+      </c-kpi-widget>
+    </div>
+
+    <!-- Administrative Operations & Analytics Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <!-- Sync & GPS Quality Metrics Card -->
+      <c-card extra_class="lg:col-span-1">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="p-2 rounded-lg bg-orange-500/10 text-orange-500">
+            <i data-lucide="radio" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 dark:text-white">Sync & Quality Control</h3>
+            <p class="text-2xs text-slate-500">Offline queue & GPS telemetry</p>
+          </div>
+        </div>
+        <div class="space-y-3.5 mt-4">
+          <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+            <div class="flex items-center gap-2">
+              <i data-lucide="cloud-off" class="w-4 h-4 text-slate-500"></i>
+              <span class="text-xs text-slate-600 dark:text-slate-400">Offline Queue Size</span>
+            </div>
+            <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ offline_queue_size }}</span>
+          </div>
+          <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+            <div class="flex items-center gap-2">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
+              <span class="text-xs text-slate-600 dark:text-slate-400">GPS Inaccuracies</span>
+            </div>
+            <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ gps_issues_count }}</span>
+          </div>
+          <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+            <div class="flex items-center gap-2">
+              <i data-lucide="refresh-cw" class="w-4 h-4 text-rose-500"></i>
+              <span class="text-xs text-slate-600 dark:text-slate-400">Sync Failures</span>
+            </div>
+            <span class="text-sm font-bold text-rose-600 dark:text-rose-450">{{ sync_failed_count }}</span>
+          </div>
+          <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+            <div class="flex items-center gap-2">
+              <i data-lucide="clock-alert" class="w-4 h-4 text-indigo-500"></i>
+              <span class="text-xs text-slate-600 dark:text-slate-400">Today Late Rate</span>
+            </div>
+            <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400">{{ late_percentage }}%</span>
+          </div>
+        </div>
+      </c-card>
+
+      <!-- Attendance Trend Chart -->
+      <c-card extra_class="lg:col-span-2">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="p-2 rounded-lg bg-sky-500/10 text-sky-500">
+            <i data-lucide="trending-up" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 dark:text-white">Attendance Trend</h3>
+            <p class="text-2xs text-slate-500">Check-in statistics over last 15 days</p>
+          </div>
+        </div>
+        <div class="relative h-60 flex items-center justify-center">
+          <canvas id="attendanceTrendLineChart"></canvas>
+        </div>
+      </c-card>
+
+      <!-- Top Overtime Earners -->
+      <c-card extra_class="lg:col-span-3">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+            <i data-lucide="award" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-800 dark:text-white">Top Overtime Performers</h3>
+            <p class="text-2xs text-slate-500">Highest overtime registered today</p>
+          </div>
+        </div>
+        {% if top_ot_employees %}
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-400 uppercase tracking-wider text-3xs font-bold">
+                  <th class="py-2 px-1">Employee</th>
+                  <th class="py-2 px-1">Branch</th>
+                  <th class="py-2 px-1">Overtime Minutes</th>
+                  <th class="py-2 px-1">Date</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50 dark:divide-slate-850">
+                {% for att in top_ot_employees %}
+                  <tr class="text-slate-700 dark:text-slate-300">
+                    <td class="py-2 px-1 font-semibold">{{ att.employee.full_name }}</td>
+                    <td class="py-2 px-1">{{ att.employee.branch.name|default:"Head Office" }}</td>
+                    <td class="py-2 px-1 font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ att.overtime_minutes }} mins</td>
+                    <td class="py-2 px-1">{{ att.date|date:"M d, Y" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-center py-6 text-slate-400 text-xs">
+            No overtime logged today.
+          </div>
+        {% endif %}
+      </c-card>
+    </div>
+
+    <!-- Data Science & Predictive Operations Console -->
+    <c-card>
+      <div class="flex items-center gap-2 mb-4">
+        <div class="p-2 rounded-lg bg-purple-500/10 text-purple-650">
+          <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-sm text-slate-800 dark:text-white">Data Science & Predictive Operations</h3>
+          <p class="text-2xs text-slate-500">Linear regression trends, claim correlations, and future projections</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Projection Column -->
+        <div class="p-4 rounded-xl border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-505">Attendance Prediction</span>
+            <span class="text-3xs uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">Tomorrow</span>
+          </div>
+          <div class="pt-2">
+            <div class="text-3xl font-extrabold text-slate-850 dark:text-white">{{ forecasted_attendance_count }} <span class="text-xs font-semibold text-slate-505">present</span></div>
+            <div class="text-xs text-slate-405 mt-1">Projected Rate: <strong>{{ forecasted_attendance_rate }}%</strong></div>
+          </div>
+          <div class="w-full bg-slate-100 dark:bg-slate-850 rounded-full h-1.5 overflow-hidden">
+            <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ forecasted_attendance_rate }}%"></div>
+          </div>
+          <p class="text-[10px] text-slate-405 leading-relaxed">Calculated using linear regression from the past 7 days of attendance counts.</p>
+        </div>
+
+        <!-- Correlation Column -->
+        <div class="p-4 rounded-xl border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-550">Expense-Attendance Correlation</span>
+            <span class="text-3xs uppercase px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-750 font-bold">Pearson r</span>
+          </div>
+          <div class="pt-2">
+            <div class="text-3xl font-extrabold text-slate-850 dark:text-white">{{ expense_attendance_correlation }}</div>
+            <div class="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-bold">{{ correlation_strength }}</div>
+          </div>
+          <div class="text-[10px] text-slate-405 leading-relaxed">
+            Measures connection between approved expense amounts and on-site check-in counts over the last 10 days.
+          </div>
+        </div>
+
+        <!-- Financial Summary Column -->
+        <div class="p-4 rounded-xl border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col justify-between">
+          <div class="space-y-3">
+            <span class="text-xs font-semibold text-slate-550 block">Expense Claims Breakdown</span>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <div>
+                <span class="text-[10px] text-slate-405 block uppercase font-semibold">Approved BDT</span>
+                <span class="text-sm font-extrabold text-slate-800 dark:text-slate-200">৳{{ total_approved_expenses|floatformat:2 }}</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-405 block uppercase font-semibold">Pending BDT</span>
+                <span class="text-sm font-extrabold text-amber-600 dark:text-amber-500">৳{{ total_pending_expenses|floatformat:2 }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div class="relative h-16 w-full">
+              <canvas id="expenseCategoryPieChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </c-card>
+
+    <script>
+      (function() {
+        function initChart() {
+          const canvas = document.getElementById('attendanceTrendLineChart');
+          if (!canvas) return;
+          if (typeof Chart === 'undefined') {
+            setTimeout(initChart, 100);
+            return;
+          }
+          if (Chart.getChart(canvas)) {
+            Chart.getChart(canvas).destroy();
+          }
+          const ctxLine = canvas.getContext('2d');
+          new Chart(ctxLine, {
+            type: 'line',
+            data: {
+              labels: [
+                {% for day in attendance_trend %}
+                  "{{ day.date|date:'d M' }}",
+                {% endfor %}
+              ],
+              datasets: [{
+                label: 'Daily Check-ins',
+                data: [
+                  {% for day in attendance_trend %}
+                    {{ day.count }},
+                  {% endfor %}
+                ],
+                borderColor: '#0284c7',
+                backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                borderWidth: 2.5,
+                fill: true,
+                tension: 0.3,
+                pointBackgroundColor: '#0284c7',
+                pointRadius: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false }
+              },
+              scales: {
+                x: {
+                  grid: { display: false },
+                  ticks: { font: { size: 9 }, color: '#64748b' }
+                },
+                y: {
+                  grid: { color: '#f1f5f9' },
+                  ticks: { font: { size: 9 }, color: '#64748b' }
+                }
+              }
+            }
+          });
+        }
+
+        function initExpenseChart() {
+          const canvas = document.getElementById('expenseCategoryPieChart');
+          if (!canvas) return;
+          if (typeof Chart === 'undefined') {
+            setTimeout(initExpenseChart, 100);
+            return;
+          }
+          if (Chart.getChart(canvas)) {
+            Chart.getChart(canvas).destroy();
+          }
+          const ctxPie = canvas.getContext('2d');
+          new Chart(ctxPie, {
+            type: 'bar',
+            data: {
+              labels: [
+                {% for label in expense_category_labels %}
+                  "{{ label|escapejs }}",
+                {% endfor %}
+              ],
+              datasets: [{
+                data: [
+                  {% for val in expense_category_values %}
+                    {{ val }},
+                  {% endfor %}
+                ],
+                backgroundColor: ['#8b5cf6', '#10b981', '#3b82f6', '#f59e0b', '#ec4899'],
+                borderRadius: 4
+              }]
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false }
+              },
+              scales: {
+                x: { grid: { display: false }, ticks: { display: false } },
+                y: { grid: { display: false }, ticks: { font: { size: 8 }, color: '#64748b' } }
+              }
+            }
+          });
+        }
+
+        initChart();
+        initExpenseChart();
+      })();
+    </script>
+
+    <!-- Widgets Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div id="widget-hr-org-analytics" class="lg:col-span-2">
+        {% include "dashboard/widgets/widget_hr_org_analytics.html" %}
+      </div>
+
+      <div id="widget-admin-security">
+        {% include "dashboard/widgets/widget_admin_security.html" %}
+      </div>
+
+      <div id="widget-hr-headcount">
+        {% include "dashboard/widgets/widget_hr_headcount.html" %}
+      </div>
+
+      <div id="widget-hr-lifecycle" class="lg:col-span-2">
+        {% include "dashboard/widgets/widget_hr_lifecycle.html" %}
+      </div>
+
+      <div id="widget-hr-incomplete-profiles" class="lg:col-span-2">
+        {% include "dashboard/widgets/widget_hr_incomplete_profiles.html" %}
+      </div>
+
+      <div id="widget-hr-doc-expiry" class="lg:col-span-2">
+        {% include "dashboard/widgets/widget_hr_doc_expiry.html" %}
+      </div>
+    </div>

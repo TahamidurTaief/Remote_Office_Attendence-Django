@@ -29,18 +29,20 @@ CHECKBOX_INPUT = 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 
 
 User = get_user_model()
 
+import uuid
+
 def generate_employee_id():
+    from apps.employees.models import EmployeeProfile, Employee
     year = date.today().year
-    last_emp = EmployeeProfile.objects.filter(employee_id__startswith=f'EMP-{year}-').order_by('-employee_id').first()
-    if last_emp:
-        try:
-            last_num = int(last_emp.employee_id.split('-')[-1])
-            new_num = last_num + 1
-        except ValueError:
-            new_num = 1
-    else:
-        new_num = 1
-    return f'EMP-{year}-{new_num:03d}'
+    for _ in range(200):
+        rand_num = random.randint(1000, 9999)
+        candidate = f"EMP-{year}-{rand_num}"
+        if not EmployeeProfile.objects.filter(employee_id=candidate).exists() and \
+           not Employee.objects.filter(employee_number=candidate).exists():
+            return candidate
+    
+    unique_hex = uuid.uuid4().hex[:6].upper()
+    return f"EMP-{year}-{unique_hex}"
 
 def generate_random_password(length=10):
     chars = string.ascii_letters + string.digits
@@ -85,6 +87,17 @@ class EmployeeCreateForm(forms.ModelForm):
                 field.widget.attrs.update({'class': CHECKBOX_INPUT})
             elif not field.widget.attrs.get('class'):
                 field.widget.attrs.update({'class': TEXT_INPUT})
+
+    def clean_employee_id(self):
+        emp_id = self.cleaned_data.get('employee_id', '').strip()
+        if not emp_id:
+            return generate_employee_id()
+        qs = EmployeeProfile.objects.filter(employee_id=emp_id)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            return generate_employee_id()
+        return emp_id
 
     def clean_email(self):
         email = self.cleaned_data.get('email')
@@ -558,11 +571,13 @@ class WizardStep1Form(forms.ModelForm):
 
     def clean_employee_number(self):
         emp_num = self.cleaned_data.get('employee_number', '').strip()
+        if not emp_num:
+            return generate_employee_id()
         qs = Employee.objects.filter(employee_number=emp_num)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise forms.ValidationError("An employee with this Employee ID already exists.")
+            return generate_employee_id()
         return emp_num
 
     def clean_personal_email(self):

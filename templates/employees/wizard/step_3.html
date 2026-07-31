@@ -1,7 +1,7 @@
 <form 
   hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=3 %}"
-  hx-target="#wizard-step-container"
-  hx-swap="innerHTML"
+  hx-target="#wizard-root"
+  hx-swap="outerHTML"
   class="space-y-6"
 >
   {% csrf_token %}
@@ -70,7 +70,7 @@
     </div>
   </div>
   <div class="flex items-center justify-between pt-4 border-t" style="border-color:var(--border)">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=2 %}" hx-target="#wizard-step-container" hx-swap="innerHTML" label="Back to Step 2" ></c-button>
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=2 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 2" ></c-button>
     <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 4" ></c-button>
   </div>
 </form>

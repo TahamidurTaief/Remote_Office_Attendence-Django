@@ -14,9 +14,19 @@ from apps.notifications.utils import notify_admins
 
 
 def get_employee(user):
-    if not hasattr(user, 'employee_profile'):
-        return None
-    return user.employee_profile
+    try:
+        if hasattr(user, 'employee_profile') and user.employee_profile:
+            return user.employee_profile
+    except Exception:
+        pass
+    try:
+        if hasattr(user, 'employee_master') and user.employee_master:
+            emp = user.employee_master
+            if hasattr(emp, 'legacy_profile') and emp.legacy_profile:
+                return emp.legacy_profile
+    except Exception:
+        pass
+    return None
 
 
 def check_role(user):
@@ -479,11 +489,14 @@ def attendance_status(request):
     if not check_role(request.user):
         return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
 
+    accept_header = request.headers.get('accept', '')
+    is_html_request = ('text/html' in accept_header or 'application/xhtml+xml' in accept_header) and not request.headers.get('x-requested-with') == 'XMLHttpRequest' and request.GET.get('format') != 'json'
+
     try:
         employee = get_employee(request.user)
         if not employee:
-            from apps.employees.models import Employee
-            employee = Employee.objects.filter(is_active=True).first()
+            from apps.employees.models import EmployeeProfile
+            employee = EmployeeProfile.objects.filter(is_active=True).first()
 
         today = timezone.localdate()
 
@@ -515,25 +528,26 @@ def attendance_status(request):
                 'type': s.type,
             })
 
-        # If requested directly in browser (HTML page request)
-        accept_header = request.headers.get('accept', '')
-        is_html_request = ('text/html' in accept_header or 'application/xhtml+xml' in accept_header) and not request.headers.get('x-requested-with') == 'XMLHttpRequest' and request.GET.get('format') != 'json'
+        tracking_interval = getattr(employee, 'tracking_interval', 0) if employee else 0
+        branch = getattr(employee, 'branch', None) if employee else None
 
         if is_html_request:
             from django.shortcuts import render
             recent_locations = AttendanceLocation.objects.filter(
                 attendance__employee=employee,
                 attendance__date=today
-            ).order_by('-timestamp')[:10]
+            ).order_by('-timestamp')[:10] if employee else []
 
-            branch = employee.branch
+            total_hours_today = sum([float(s.total_hours or 0) for s in all_sessions])
+
             context = {
                 'employee': employee,
                 'active_session': active,
                 'sessions_today': all_sessions,
-                'tracking_interval': employee.tracking_interval,
+                'tracking_interval': tracking_interval,
                 'recent_locations': recent_locations,
                 'branch': branch,
+                'total_hours_today': total_hours_today,
             }
             return render(request, 'attendance/status.html', context)
 
@@ -543,10 +557,22 @@ def attendance_status(request):
             'active_session_id': active.id if active else None,
             'active_check_in_time': active.check_in_time.isoformat() if active else None,
             'sessions_today': sessions_data,
-            'tracking_interval': employee.tracking_interval,  # minutes, 0=disabled
+            'tracking_interval': tracking_interval,  # minutes, 0=disabled
         })
 
     except Exception as e:
+        if is_html_request:
+            from django.shortcuts import render
+            return render(request, 'attendance/status.html', {
+                'error_message': str(e),
+                'employee': None,
+                'active_session': None,
+                'sessions_today': [],
+                'tracking_interval': 0,
+                'recent_locations': [],
+                'branch': None,
+                'total_hours_today': 0,
+            })
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

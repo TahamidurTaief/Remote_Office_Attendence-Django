@@ -1,38 +1,25 @@
 {% comment %} c-tab-button component
 Props:
-- label: tab text (required)
-- active: boolean (default: false)
-- color: blue | emerald | amber | rose | neutral (default: blue)
+- label: tab text
+- active_condition: AlpineJS boolean expression for active state
 - href: optional link
 - extra_class: extra CSS classes
 {% endcomment %}
 
 {% if href %}
-<a href="{{ href }}" class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-sm transition-all duration-200 cursor-pointer
-     {% if active %}
-       {% if color == 'emerald' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400
-       {% elif color == 'amber' %}bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400
-       {% elif color == 'rose' %}bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400
-       {% elif color == 'neutral' %}bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300
-       {% else %}bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400{% endif %}
-     {% else %}
-       bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
-     {% endif %}
-     {{ extra_class }}" {{ attrs }}>
-  {{ label }}
+<a href="{{ href }}"
+  class="px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap {{ extra_class }}"
+  :class="{{ active_condition|default:'false' }} ? 'bg-sky-50 text-blue-600 dark:bg-sky-950/40 dark:text-blue-400 font-bold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+  {{ attrs }}>
+  {% if label %}{{ label }}{% endif %}
+  {{ slot }}
 </a>
 {% else %}
-<button type="button" class="inline-flex items-center px-4 py-1 text-xs font-semibold rounded-sm transition-all duration-200 cursor-pointer
-     {% if active %}
-       {% if color == 'emerald' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400
-       {% elif color == 'amber' %}bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400
-       {% elif color == 'rose' %}bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400
-       {% elif color == 'neutral' %}bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300
-       {% else %}bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400{% endif %}
-     {% else %}
-       bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200
-     {% endif %}
-     {{ extra_class }}" {{ attrs }}>
-  {{ label }}
+<button type="button"
+  class="px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap {{ extra_class }}"
+  :class="{{ active_condition|default:'false' }} ? 'bg-sky-50 text-blue-600 dark:bg-sky-950/40 dark:text-blue-400 font-bold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
+  {{ attrs }}>
+  {% if label %}{{ label }}{% endif %}
+  {{ slot }}
 </button>
 {% endif %}

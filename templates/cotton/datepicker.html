@@ -1,0 +1,269 @@
+{% comment %} c-datepicker component — Custom Alpine.js date picker dropdown with Year, Month, and Date selection
+   Props:
+   - name: field name (required)
+   - value: YYYY-MM-DD date string (optional)
+   - label: label text (optional)
+   - placeholder: placeholder text
+   - required: boolean
+   - extra_class: extra container classes
+   - id: field id
+{% endcomment %}
+
+<div x-data="{
+    open: false,
+    dateValue: '{{ value|default:'' }}',
+    displayValue: '',
+    year: new Date().getFullYear(),
+    month: new Date().getMonth(),
+    viewMode: 'days', // 'days' | 'months' | 'years'
+    yearRangeStart: Math.floor(new Date().getFullYear() / 12) * 12,
+    monthNames: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    monthShortNames: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    days: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+    blankDays: [],
+    dayList: [],
+    yearsList: Array.from({ length: 110 }, (_, i) => new Date().getFullYear() - 90 + i),
+
+    init() {
+        if (this.dateValue) {
+            const d = new Date(this.dateValue + 'T00:00:00');
+            if (!isNaN(d)) {
+                this.year = d.getFullYear();
+                this.month = d.getMonth();
+            }
+        }
+        this.yearRangeStart = Math.floor(this.year / 12) * 12;
+        this.updateDisplay();
+        this.generateCalendar();
+    },
+
+    updateDisplay() {
+        if (this.dateValue) {
+            const d = new Date(this.dateValue + 'T00:00:00');
+            if (!isNaN(d)) {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                this.displayValue = `${year}-${month}-${day}`;
+                return;
+            }
+        }
+        this.displayValue = '';
+    },
+
+    generateCalendar() {
+        const firstDay = new Date(this.year, this.month, 1).getDay();
+        const daysInMonth = new Date(this.year, this.month + 1, 0).getDate();
+        
+        this.blankDays = Array.from({ length: firstDay });
+        this.dayList = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    },
+
+    get yearGrid() {
+        return Array.from({ length: 12 }, (_, i) => this.yearRangeStart + i);
+    },
+
+    prev() {
+        if (this.viewMode === 'days') {
+            if (this.month === 0) {
+                this.month = 11;
+                this.year--;
+            } else {
+                this.month--;
+            }
+            this.generateCalendar();
+        } else if (this.viewMode === 'months') {
+            this.year--;
+        } else if (this.viewMode === 'years') {
+            this.yearRangeStart -= 12;
+        }
+    },
+
+    next() {
+        if (this.viewMode === 'days') {
+            if (this.month === 11) {
+                this.month = 0;
+                this.year++;
+            } else {
+                this.month++;
+            }
+            this.generateCalendar();
+        } else if (this.viewMode === 'months') {
+            this.year++;
+        } else if (this.viewMode === 'years') {
+            this.yearRangeStart += 12;
+        }
+    },
+
+    selectYear(y) {
+        this.year = y;
+        this.generateCalendar();
+        this.viewMode = 'months';
+    },
+
+    selectMonth(mIdx) {
+        this.month = mIdx;
+        this.generateCalendar();
+        this.viewMode = 'days';
+    },
+
+    selectDate(day) {
+        const formattedMonth = String(this.month + 1).padStart(2, '0');
+        const formattedDay = String(day).padStart(2, '0');
+        this.dateValue = `${this.year}-${formattedMonth}-${formattedDay}`;
+        this.updateDisplay();
+        this.open = false;
+        
+        this.$nextTick(() => {
+            if (this.$refs.hiddenInput) {
+                this.$refs.hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    },
+
+    clearDate() {
+        this.dateValue = '';
+        this.displayValue = '';
+        this.open = false;
+    },
+
+    selectToday() {
+        const today = new Date();
+        this.year = today.getFullYear();
+        this.month = today.getMonth();
+        this.yearRangeStart = Math.floor(this.year / 12) * 12;
+        this.viewMode = 'days';
+        this.selectDate(today.getDate());
+    },
+
+    isSelected(day) {
+        if (!this.dateValue) return false;
+        const d = new Date(this.dateValue + 'T00:00:00');
+        return d.getFullYear() === this.year && d.getMonth() === this.month && d.getDate() === day;
+    }
+}" @click.outside="open = false" class="flex flex-col gap-0.5 relative {{ extra_class }}">
+    {% if label %}
+    <label for="{{ id|default:name }}" class="ft-label">
+        {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+    {% endif %}
+
+    <!-- Hidden Native Input -->
+    <input type="hidden" name="{{ name }}" id="{{ id|default:name }}" x-ref="hiddenInput" :value="dateValue">
+
+    <!-- Trigger Input Box -->
+    <div class="relative w-full">
+        <button type="button" @click="open = !open"
+                class="ft-input w-full flex items-center justify-between text-[12px] rounded-[4px] focus:outline-none focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2]/10 h-[34px] px-[10px]"
+                style="background: var(--surface); border: 1px solid var(--border); color: var(--text);">
+            <span x-text="displayValue || '{{ placeholder|default:'YYYY-MM-DD' }}'" :class="!displayValue ? 'text-slate-400 dark:text-slate-500' : 'font-medium text-slate-800 dark:text-slate-200'"></span>
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i>
+        </button>
+
+        <!-- Custom Calendar Dropdown Modal -->
+        <div x-show="open" x-cloak
+             x-transition:enter="transition ease-out duration-100"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-75"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="absolute z-[250] mt-1 w-72 p-3 rounded-xl shadow-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+
+            <!-- Month/Year Header & Nav -->
+            <div class="flex items-center justify-between gap-1 mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <!-- Dropdowns / Mode Switchers -->
+                <div class="flex items-center gap-1.5 min-w-0">
+                    <!-- Month Selector Dropdown -->
+                    <select x-model.number="month"
+                            @change="generateCalendar(); viewMode = 'days';"
+                            class="text-xs font-bold bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary">
+                        <template x-for="(mName, idx) in monthNames" :key="idx">
+                            <option :value="idx" x-text="mName" class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"></option>
+                        </template>
+                    </select>
+
+                    <!-- Year Selector Dropdown -->
+                    <select x-model.number="year"
+                            @change="generateCalendar(); viewMode = 'days';"
+                            class="text-xs font-bold bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary">
+                        <template x-for="y in yearsList" :key="y">
+                            <option :value="y" x-text="y" class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- Nav Controls & Mode Toggle Button -->
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button"
+                            @click="viewMode = (viewMode === 'days' ? 'months' : (viewMode === 'months' ? 'years' : 'days'))"
+                            class="p-1 text-[11px] font-bold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-primary"
+                            title="Toggle Year/Month Grid View">
+                        <span x-text="viewMode === 'days' ? 'Grid' : (viewMode === 'months' ? 'Years' : 'Days')"></span>
+                    </button>
+                    <button type="button" @click="prev()" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </button>
+                    <button type="button" @click="next()" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW 1: DAYS GRID -->
+            <div x-show="viewMode === 'days'">
+                <!-- Days of Week Header -->
+                <div class="grid grid-cols-7 gap-1 text-center mb-1">
+                    <template x-for="d in days">
+                        <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase py-0.5" x-text="d"></div>
+                    </template>
+                </div>
+
+                <!-- Calendar Days Grid -->
+                <div class="grid grid-cols-7 gap-1 text-center">
+                    <template x-for="blank in blankDays">
+                        <div class="h-7"></div>
+                    </template>
+
+                    <template x-for="day in dayList" :key="day">
+                        <button type="button" @click="selectDate(day)"
+                                class="h-7 text-xs rounded-lg flex items-center justify-center font-medium transition-colors"
+                                :class="isSelected(day) ? 'bg-primary text-white font-bold' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'"
+                                x-text="day">
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- VIEW 2: MONTHS GRID -->
+            <div x-show="viewMode === 'months'" class="grid grid-cols-3 gap-2 py-2">
+                <template x-for="(mShort, idx) in monthShortNames" :key="idx">
+                    <button type="button"
+                            @click="selectMonth(idx)"
+                            class="py-2 text-xs font-semibold rounded-lg transition-colors text-center"
+                            :class="month === idx ? 'bg-primary text-white font-bold' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'"
+                            x-text="mShort">
+                    </button>
+                </template>
+            </div>
+
+            <!-- VIEW 3: YEARS GRID -->
+            <div x-show="viewMode === 'years'" class="grid grid-cols-3 gap-2 py-2">
+                <template x-for="y in yearGrid" :key="y">
+                    <button type="button"
+                            @click="selectYear(y)"
+                            class="py-2 text-xs font-semibold rounded-lg transition-colors text-center"
+                            :class="year === y ? 'bg-primary text-white font-bold' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'"
+                            x-text="y">
+                    </button>
+                </template>
+            </div>
+
+            <!-- Quick Action Footer -->
+            <div class="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 mt-2.5 pt-2 text-xs">
+                <button type="button" @click="clearDate()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium">Clear</button>
+                <button type="button" @click="selectToday()" class="text-primary font-bold hover:underline">Today</button>
+            </div>
+        </div>
+    </div>
+</div>

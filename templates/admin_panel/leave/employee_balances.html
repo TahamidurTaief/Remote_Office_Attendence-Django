@@ -117,28 +117,28 @@
 {# ── Employee Detail Modals (Cotton Component Modals) ─────────────────────── #}
 {% for emp in employees %}
 {% with total_left=emp.total_leave_left_by_year|dictget:year %}
-<c-modal id="emp-modal-{{ emp.id }}" title="{{ emp.full_name }} — Leave & Attendance Summary" size="lg">
-    <div class="space-y-5">
+<c-modal id="emp-modal-{{ emp.id }}" title="{{ emp.full_name }} — Leave Summary" size="md">
+    <div class="space-y-4">
 
         <!-- Employee Info Bar -->
-        <div class="flex items-center gap-4 p-4 rounded-card bg-gray-50 border border-gray-200">
-            {% if emp.profile_photo %}
-            <img src="{{ emp.profile_photo.url }}" class="w-12 h-12 rounded-full object-cover shrink-0">
-            {% else %}
-            <div class="w-12 h-12 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-lg shrink-0">
-                {{ emp.full_name|first|upper }}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gray-50/80 border border-gray-150">
+            <div class="flex items-center gap-3 min-w-0">
+                {% if emp.profile_photo %}
+                <c-avatar :src="emp.profile_photo.url" size="md" ></c-avatar>
+                {% else %}
+                <c-avatar :initials="emp.full_name|first" size="md" ></c-avatar>
+                {% endif %}
+                <div class="min-w-0">
+                    <h3 class="text-sm font-bold text-gray-900 truncate">{{ emp.full_name }}</h3>
+                    <p class="text-xs text-[#1877F2] font-semibold">{{ emp.employee_id }}</p>
+                    <p class="text-[11px] text-gray-500 truncate">
+                        {{ emp.designation|default:"Staff" }} • {{ emp.department|default:"Unassigned" }}
+                    </p>
+                </div>
             </div>
-            {% endif %}
-            <div class="min-w-0 flex-1">
-                <h3 class="text-[15px] font-bold text-gray-900 truncate">{{ emp.full_name }}</h3>
-                <p class="text-[12px] text-primary font-semibold">{{ emp.employee_id }}</p>
-                <p class="text-[11px] text-gray-500 truncate mt-0.5">
-                    {{ emp.designation|default:"Staff" }} • {{ emp.department|default:"Unassigned" }} • Joined {{ emp.joined_date|date:"d/m/Y" }}
-                </p>
-            </div>
-            <div class="text-right shrink-0">
-                <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Total Leave Left</span>
-                <span class="text-[20px] font-extrabold {% if total_left < 0 %}text-red-600{% else %}text-gray-900{% endif %}">
+            <div class="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-200/60 flex sm:block justify-between items-center">
+                <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Leave Left</span>
+                <span class="text-lg font-extrabold {% if total_left < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
                     {{ total_left }} days
                 </span>
             </div>
@@ -146,26 +146,26 @@
 
         <!-- Leave Allowances Grid -->
         <div>
-            <h4 class="text-[12px] font-bold text-gray-500 uppercase tracking-wider mb-3">Leave Allowances Breakdown ({{ year }})</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2.5">Leave Allowances ({{ year }})</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {% for balance in employee_balances|dictget:emp.id %}
-                <div class="p-3.5 rounded-card bg-white border border-gray-200 space-y-2">
+                <c-card padding="md" extra_class="!p-3 space-y-2">
                     <div class="flex items-center justify-between">
-                        <span class="text-[12px] font-bold text-gray-800">{{ balance.type.name }}</span>
-                        <span class="text-[11px] text-gray-500">{{ balance.used }} / {{ balance.total }} used</span>
+                        <span class="text-xs font-bold text-gray-800">{{ balance.type.name }}</span>
+                        <span class="text-[11px] text-gray-400">{{ balance.used }}/{{ balance.total }} used</span>
                     </div>
                     <div class="flex justify-between items-baseline">
-                        <span class="text-[22px] font-black {% if balance.remaining < 0 %}text-red-600{% else %}text-gray-900{% endif %}">
+                        <span class="text-xl font-extrabold {% if balance.remaining < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
                             {{ balance.remaining }}
                         </span>
-                        <span class="text-[11px] text-gray-500">days left</span>
+                        <span class="text-[11px] text-gray-500 font-medium">days left</span>
                     </div>
-                    <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden flex">
-                        <div class="bg-primary h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
+                    <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden flex">
+                        <div class="bg-[#1877F2] h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
                     </div>
-                </div>
+                </c-card>
                 {% empty %}
-                <div class="col-span-2 text-center text-[12px] text-gray-400 py-4">
+                <div class="col-span-2 text-center text-xs text-gray-400 py-3">
                     No leave types configured.
                 </div>
                 {% endfor %}
@@ -175,10 +175,8 @@
      </div>
 
     <c-slot name="footer">
-        <button type="button" @click="$dispatch('close-modal', {id: 'emp-modal-{{ emp.id }}'})" class="ft-btn ft-btn-secondary ft-btn-sm">
-            Close
-        </button>
-        <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="primary" icon="external-link" label="Full History & Adjust" size="sm" ></c-button>
+        <c-button type="button" @click="$dispatch('close-modal', {id: 'emp-modal-{{ emp.id }}'})" variant="secondary" size="sm" label="Close" ></c-button>
+        <c-button href="{% url 'leave:admin_balance_detail' emp.id %}?year={{ year }}" variant="primary" icon="external-link" label="History & Adjust" size="sm" extra_class="!bg-[#1877F2] hover:!bg-[#166FE5]" ></c-button>
     </c-slot>
 </c-modal>
 {% endwith %}

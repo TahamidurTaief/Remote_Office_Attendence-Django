@@ -1,214 +1,185 @@
 <c-app-shell page_title="Attendance Detail | FieldTrack Admin" active_href="{{ request.path }}">
 <div class="p-4 max-w-5xl mx-auto space-y-4">
+    <!-- Header Section -->
     <div class="flex justify-between items-center">
         <div>
             <h1 class="text-[14px] font-semibold text-gray-900">Attendance Detail Overview</h1>
             <p class="text-xs text-gray-500 mt-1">Detailed check-in logs and tracking history for {{ attendance.employee.full_name }} on {{ attendance.date }}.</p>
         </div>
-        <a href="{% url 'admin_panel:attendance_list' %}" class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            Back to List
-        </a>
+        <c-button href="{% url 'admin_panel:attendance_list' %}" variant="secondary" size="md" icon="arrow-left" label="Back to List" ></c-button>
     </div>
 
-    <!-- Stats & Meta Panel -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-2xl p-6">
+    <!-- Stats & Meta Panel Card -->
+    <c-card padding="lg">
         <dl class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-6">
-            <div>
-                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Employee</dt>
-                <dd class="mt-1 text-sm font-bold text-gray-900">{{ attendance.employee.full_name }}</dd>
-                <dd class="text-xs text-gray-500 mt-0.5">{{ attendance.employee.designation }} • ID: {{ attendance.employee.employee_id }}</dd>
-            </div>
-            <div>
-                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Date & Shift</dt>
-                <dd class="mt-1 text-sm font-bold text-gray-900">{{ attendance.date|date:"d/m/Y" }}</dd>
-                <dd class="text-xs text-gray-500 mt-0.5 capitalize">{{ attendance.type }} duty</dd>
-            </div>
-            <div>
-                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Status</dt>
-                <dd class="mt-1">
-                    {% if attendance.status == 'on_time' %}
-                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                        <i data-lucide="check-circle" class="w-3 h-3"></i>
-                        On Time
-                    </span>
-                    {% elif attendance.status == 'late' %}
-                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                        <i data-lucide="alert-circle" class="w-3 h-3"></i>
-                        Late
-                    </span>
-                    {% else %}
-                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                        <i data-lucide="x-circle" class="w-3 h-3"></i>
-                        Absent
-                    </span>
-                    {% endif %}
-                </dd>
-            </div>
+            <c-info-field label="EMPLOYEE">
+                <div class="font-bold text-gray-900">{{ attendance.employee.full_name }}</div>
+                <div class="text-xs text-gray-500 font-normal mt-0.5">{{ attendance.employee.designation }} • ID: {{ attendance.employee.employee_id }}</div>
+            </c-info-field>
+
+            <c-info-field label="DATE & SHIFT">
+                <div class="font-bold text-gray-900">{{ attendance.date|date:"d/m/Y" }}</div>
+                <div class="text-xs text-gray-500 font-normal mt-0.5 capitalize">{{ attendance.type }} duty</div>
+            </c-info-field>
+
+            <c-info-field label="STATUS">
+                <div class="mt-0.5">
+                    <c-status-pill :status="attendance.status" ></c-status-pill>
+                </div>
+            </c-info-field>
+
             <div class="border-t border-gray-100 pt-4">
-                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Check In Time</dt>
-                <dd class="mt-1 text-sm font-semibold text-gray-900">{{ attendance.check_in_time|time:"h:i A"|default:"-" }}</dd>
+                <c-info-field label="CHECK IN TIME" :value="attendance.check_in_time|time:'h:i A'|default:'-'" ></c-info-field>
             </div>
+
             <div class="border-t border-gray-100 pt-4">
-                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Check Out Time</dt>
-                <dd class="mt-1 text-sm font-semibold text-gray-900">{{ attendance.check_out_time|time:"h:i A"|default:"-" }}</dd>
+                <c-info-field label="CHECK OUT TIME" :value="attendance.check_out_time|time:'h:i A'|default:'-'" ></c-info-field>
             </div>
+
             <div class="border-t border-gray-100 pt-4">
-                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Hours Worked</dt>
-                <dd class="mt-1 text-sm font-bold text-primary-500">{{ attendance.total_hours|default:"0.00" }} hours</dd>
+                <c-info-field label="HOURS WORKED">
+                    <span class="text-primary-500 font-bold">{{ attendance.total_hours|default:"0.00" }} hours</span>
+                </c-info-field>
             </div>
+
             <div class="col-span-1 md:col-span-3 border-t border-gray-100 pt-4">
-                <dt class="text-xs font-bold text-gray-500 uppercase tracking-wide">Note / Override Reason</dt>
-                <dd class="mt-1 text-sm text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-150 italic">"{{ attendance.note|default:"No notes provided." }}"</dd>
+                <c-info-field label="NOTE / OVERRIDE REASON">
+                    <div class="text-sm text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-150 italic font-normal mt-1">
+                        "{{ attendance.note|default:"No notes provided." }}"
+                    </div>
+                </c-info-field>
             </div>
         </dl>
-    </div>
+    </c-card>
     
     <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
-        <!-- Photo Section -->
+        <!-- Photo Section Card -->
         <div class="md:col-span-5 flex flex-col space-y-4">
-            <h2 class="text-lg font-bold text-gray-900">Attendance Verification Photo</h2>
-                        <div class="bg-white p-6 shadow-sm border border-gray-100 rounded-2xl flex flex-col items-center justify-center">
-              {% if attendance.photo %}
-                <div class="group relative overflow-hidden rounded-xl border border-gray-150 shadow-sm cursor-zoom-in" 
+            <c-card title="Attendance Verification Photo" subtitle="Check-in verification snapshot" padding="lg">
+                <c-slot name="header">
+                    <div class="flex items-center gap-2 px-2 pt-2">
+                        <i data-lucide="camera" class="w-4 h-4 text-[#4285F4]"></i>
+                        <h2 class="text-sm font-bold text-gray-900">Attendance Verification Photo</h2>
+                    </div>
+                </c-slot>
+                {% if attendance.photo %}
+                <div class="group relative overflow-hidden rounded-xl border border-gray-150 shadow-sm cursor-zoom-in mt-3" 
                      onclick="openPhotoModal('{{ attendance.photo.url }}', '{{ attendance.employee.full_name }} (Check-in)')">
                     <img src="{{ attendance.photo.url }}" 
                          class="w-full max-h-72 object-cover group-hover:scale-105 transition-all duration-300"
                          alt="Attendance photo">
                     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
-                                                <span class="inline-flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider bg-black/60 px-3 py-1.5 rounded-lg">
-                                                        <i data-lucide="eye" class="w-3 h-3"></i>
-                                                        Zoom Photo
-                                                </span>
+                        <span class="inline-flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider bg-black/60 px-3 py-1.5 rounded-lg backdrop-blur-xs">
+                            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                            Zoom Photo
+                        </span>
                     </div>
                 </div>
-                <p class="text-xs text-gray-500 mt-3 flex items-center gap-1.5 font-medium">
-                                    <i data-lucide="camera" class="w-4 h-4 text-gray-400"></i>
-                  Captured at check-in ({{ attendance.check_in_time|time:"h:i A" }})
-                </p>
-              {% else %}
-                <div class="bg-gray-50 rounded-xl p-8 border border-dashed border-gray-300 text-center w-full">
-                                    <i data-lucide="camera" class="w-12 h-12 text-gray-300 mx-auto mb-2"></i>
-                  <p class="text-gray-400 text-sm font-semibold">No photo captured for this attendance</p>
+                <div class="mt-3 flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                    <span class="text-xs text-gray-600 flex items-center gap-1.5 font-medium">
+                        <i data-lucide="clock" class="w-3.5 h-3.5 text-[#4285F4]"></i>
+                        Time: {{ attendance.check_in_time|time:"h:i A" }}
+                    </span>
+                    <c-button size="sm" variant="ghost" icon="maximize-2" label="Expand" onclick="openPhotoModal('{{ attendance.photo.url }}', '{{ attendance.employee.full_name }} (Check-in)')" ></c-button>
                 </div>
-              {% endif %}
-            </div>
+                {% else %}
+                <div class="bg-slate-50 rounded-xl p-8 border border-dashed border-slate-200 text-center w-full mt-3 flex flex-col items-center justify-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 text-slate-400">
+                        <i data-lucide="camera-off" class="w-6 h-6"></i>
+                    </div>
+                    <p class="text-slate-500 text-sm font-semibold">No photo captured</p>
+                    <p class="text-xs text-slate-400 mt-1">Verification photo was not provided during check-in</p>
+                </div>
+                {% endif %}
+            </c-card>
         </div>
 
-        <!-- Location Snapshots Table -->
+        <!-- Location Snapshots Table & Details Cards -->
         <div class="md:col-span-7 flex flex-col space-y-4">
-            <h2 class="text-lg font-bold text-gray-900">Attendance Location Snapshots</h2>
-            <div class="bg-white shadow-sm border border-gray-100 rounded-2xl overflow-hidden flex-1">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Event</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Time</th>
-                                <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Direction</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            {% for loc in locations %}
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-gray-900 uppercase">
-                                    {% if loc.event == 'check_in' %}
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                        <i data-lucide="log-in" class="w-3 h-3"></i>
-                                        Check In
-                                    </span>
-                                    {% elif loc.event == 'check_out' %}
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                                        <i data-lucide="log-out" class="w-3 h-3"></i>
-                                        Check Out
-                                    </span>
-                                    {% else %}
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                                        <i data-lucide="navigation" class="w-3 h-3"></i>
-                                        {{ loc.get_event_display }}
-                                    </span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">{{ loc.timestamp|time:"h:i A" }}</td>
-                                <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm">
-                                    <a href="https://www.google.com/maps/dir/?api=1&destination={{ loc.latitude }},{{ loc.longitude }}" 
-                                       target="_blank" 
-                                       class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-xl transition-colors">
-                                        <i data-lucide="map-pin" class="w-4 h-4"></i>
-                                        Direction
-                                    </a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="4" class="px-6 py-10 text-center text-gray-400 font-medium">No check-in or checkout location snapshots available.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <c-card title="Attendance Location Snapshots" subtitle="Real-time map tracking logs" padding="none" extra_class="overflow-hidden flex-1">
+                <c-slot name="header">
+                    <div class="flex items-center gap-2 px-4 pt-4 pb-2">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-[#4285F4]"></i>
+                        <h2 class="text-sm font-bold text-gray-900">Attendance Location Snapshots</h2>
+                    </div>
+                </c-slot>
+                <c-table>
+                    <c-slot name="header">
+                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Event</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Time</th>
+                        <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Direction</th>
+                    </c-slot>
+                    {% for loc in locations %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-gray-900 uppercase">
+                            {% if loc.event == 'check_in' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#006a4e]/10 text-[#006a4e]">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#006a4e] inline-block"></span>
+                                Check In
+                            </span>
+                            {% elif loc.event == 'check_out' %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#f42a41]/10 text-[#f42a41]">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#f42a41] inline-block"></span>
+                                Check Out
+                            </span>
+                            {% else %}
+                            <c-status-pill status="unknown" :label="loc.get_event_display" ></c-status-pill>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-500">{{ loc.timestamp|time:"h:i A" }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm">
+                            <c-button href="https://www.google.com/maps/dir/?api=1&destination={{ loc.latitude }},{{ loc.longitude }}"
+                                      size="sm" icon="navigation" label="Direction" 
+                                      extra_class="!bg-[#4285F4] hover:!bg-[#3367D6] !text-white" ></c-button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="px-6 py-10 text-center text-gray-400 font-medium">No check-in or checkout location snapshots available.</td></tr>
+                    {% endfor %}
+                </c-table>
+            </c-card>
 
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-6">
-              <div class="px-6 py-2.5 border-b border-gray-100">
-                <h3 class="font-semibold text-gray-800 flex items-center gap-2">
-                  <i data-lucide="map-pin" class="w-4 h-4 text-primary-500"></i>
-                  Location Details
-                </h3>
-              </div>
-              <div class="p-6">
-                
+            <c-card padding="lg" extra_class="mt-6">
+                <c-slot name="header">
+                    <div class="px-6 py-3 border-b border-gray-100 flex items-center gap-2">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-[#4285F4]"></i>
+                        <h3 class="font-bold text-gray-900 text-sm">Location Details</h3>
+                    </div>
+                </c-slot>
+
                 <!-- Check-in location -->
-                                {% if first_location %}
+                {% if first_location %}
                 <div class="mb-4">
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Check-in Location
-                  </p>
-                  <div class="bg-gray-50 rounded-xl p-4">
-                    <p class="text-sm text-gray-800 mb-1">
-                                            {{ first_location.address|default:"Address not available" }}
-                    </p>
-                    <p class="text-xs text-gray-500 font-mono">
-                                            {{ first_location.latitude }}, {{ first_location.longitude }}
-                    </p>
-                    <p class="text-xs text-gray-400 mt-1">
-                                            Accuracy: ±{{ first_location.accuracy|floatformat:0 }}m
-                    </p>
-                  </div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Check-in Location</p>
+                    <div class="bg-gray-50 rounded-xl p-4 border border-slate-150">
+                        <p class="text-sm text-gray-800 mb-1 font-medium">{{ first_location.address|default:"Address not available" }}</p>
+                        <p class="text-xs text-gray-500 font-mono">{{ first_location.latitude }}, {{ first_location.longitude }}</p>
+                        <p class="text-xs text-slate-400 mt-1">Accuracy: ±{{ first_location.accuracy|floatformat:0 }}m</p>
+                    </div>
                 </div>
                 {% endif %}
-                
+
                 <!-- Check-out location -->
-                                {% if attendance.check_out_time and last_location and locations|length > 1 %}
+                {% if attendance.check_out_time and last_location and locations|length > 1 %}
                 <div>
-                  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Check-out Location
-                  </p>
-                  <div class="bg-gray-50 rounded-xl p-4">
-                    <p class="text-sm text-gray-800 mb-1">
-                                            {{ last_location.address|default:"Address not available" }}
-                    </p>
-                    <p class="text-xs text-gray-500 font-mono">
-                                            {{ last_location.latitude }}, {{ last_location.longitude }}
-                    </p>
-                    <p class="text-xs text-gray-400 mt-1">
-                                            Accuracy: ±{{ last_location.accuracy|floatformat:0 }}m
-                    </p>
-                  </div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Check-out Location</p>
+                    <div class="bg-gray-50 rounded-xl p-4 border border-slate-150">
+                        <p class="text-sm text-gray-800 mb-1 font-medium">{{ last_location.address|default:"Address not available" }}</p>
+                        <p class="text-xs text-gray-500 font-mono">{{ last_location.latitude }}, {{ last_location.longitude }}</p>
+                        <p class="text-xs text-slate-400 mt-1">Accuracy: ±{{ last_location.accuracy|floatformat:0 }}m</p>
+                    </div>
                 </div>
                 {% endif %}
-                
-              </div>
-            </div>
+            </c-card>
         </div>
     </div>
 
-    <!-- Auto Sync Tracking Section -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-2xl overflow-hidden mt-6 p-6"
-         hx-get="{% url 'admin_panel:attendance_locations' attendance.pk %}"
-         hx-trigger="load">
+    <!-- Auto Sync Tracking Section Card -->
+    <c-card padding="lg" extra_class="mt-6" hx-get="{% url 'admin_panel:attendance_locations' attendance.pk %}" hx-trigger="load">
         <div class="flex justify-center p-8">
             <div class="w-8 h-8 rounded-full border-2 border-primary-500 border-t-transparent animate-spin"></div>
         </div>
-    </div>
+    </c-card>
 </div>
 
 <!-- Photo Modal -->
@@ -265,5 +236,5 @@
             document.getElementById('modalImg').src = '';
         }, 300);
     }
-
+</script>
 </c-app-shell>

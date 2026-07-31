@@ -1,7 +1,7 @@
 <form 
   hx-post="{% if employee %}{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}{% else %}{% url 'employees:employee_wizard' %}{% endif %}"
-  hx-target="#wizard-step-container"
-  hx-swap="innerHTML"
+  hx-target="#wizard-root"
+  hx-swap="outerHTML"
   class="space-y-6"
   enctype="multipart/form-data"
 >
@@ -54,7 +54,8 @@
     </div>
 
     <div>
-      <c-input type="date" name="dob" id="id_dob" label="Date of Birth" value="{{ form.dob.value|date:'Y-m-d'|default:form.dob.value|default:'' }}" error="{{ form.dob.errors.0 }}"></c-input>
+      <c-datepicker name="dob" id="id_dob" label="Date of Birth" value="{{ form.dob.value|date:'Y-m-d'|default:form.dob.value|default:'' }}" placeholder="Select Date of Birth"></c-datepicker>
+      {% if form.dob.errors %}<p class="ft-error-text mt-0.5">{{ form.dob.errors.0 }}</p>{% endif %}
     </div>
   </div>
 

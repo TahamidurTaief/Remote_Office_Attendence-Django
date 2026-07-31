@@ -1,13 +1,13 @@
 <div id="employee-table-container">
     <c-table>
         <c-slot name="header">
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Employee</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Branch & Org</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Manager</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Completion</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User Link</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+            <th>Employee</th>
+            <th>Branch & Org</th>
+            <th>Manager</th>
+            <th>Status</th>
+            <th>Completion</th>
+            <th>User Link</th>
+            <th class="text-right">Actions</th>
         </c-slot>
         
         {% for emp in employees %}
@@ -62,18 +62,12 @@
                     {% endif %}
                 </td>
                 <td class="px-4 py-3 text-right">
-                    <div class="flex items-center justify-end space-x-1.5">
+                    <div class="flex items-center justify-end gap-1.5">
                         {% if emp.get_completion_percentage < 100 %}
-                        <c-button href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" variant="accent" size="sm">
-                            Resume Wizard
-                        </c-button>
+                        <c-button href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" variant="accent" size="sm" label="Resume Wizard" extra_class="!bg-emerald-600 hover:!bg-emerald-700 !text-white" ></c-button>
                         {% endif %}
-                        <c-button href="{% url 'employees:employee_detail' emp.pk %}" variant="secondary" size="sm">
-                            View
-                        </c-button>
-                        <c-button variant="ghost" size="sm" hx-get="{% url 'employees:employee_edit' emp.pk %}" hx-target="#modal-container">
-                            Edit
-                        </c-button>
+                        <c-button href="{% url 'employees:employee_detail' emp.pk %}" variant="secondary" size="sm" icon="eye" label="View" ></c-button>
+                        <c-button href="{% url 'employees:employee_wizard_step' pk=emp.pk step=1 %}" variant="ghost" size="sm" icon="edit" label="Edit" ></c-button>
                     </div>
                 </td>
             </tr>
@@ -84,11 +78,11 @@
                 </td>
             </tr>
             {% endfor %}
-    </c-table>
 
-    {% if is_paginated %}
-    <div class="mt-4">
-        <c-pagination :page_obj="page_obj" ></c-pagination>
-    </div>
-    {% endif %}
+            {% if is_paginated %}
+            <c-slot name="pagination">
+                <c-pagination :page_obj="page_obj" ></c-pagination>
+            </c-slot>
+            {% endif %}
+    </c-table>
 </div>

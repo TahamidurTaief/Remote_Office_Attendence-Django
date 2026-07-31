@@ -700,7 +700,50 @@ class UserSessionsView(LoginRequiredMixin, View):
 
 
 def index_view(request):
-    return render(request, 'index.html')
+    from apps.employees.models import EmployeeProfile
+    from apps.branches.models import Branch
+    from apps.projects.models import Project
+    from apps.attendance.models import Attendance
+    from django.utils import timezone
+    
+    try:
+        total_employees = EmployeeProfile.objects.filter(is_active=True).count()
+        total_branches = Branch.objects.count()
+        total_projects = Project.objects.count()
+        today = timezone.localdate()
+        active_checkins = Attendance.objects.filter(
+            date=today, 
+            attendance_type='check_in',
+            check_out_time__isnull=True
+        ).values('employee').distinct().count()
+    except Exception as e:
+        logger.error(f"Error compiling index statistics: {e}")
+        total_employees = 0
+        total_branches = 0
+        total_projects = 0
+        active_checkins = 0
+        
+    context = {
+        'total_employees': total_employees,
+        'total_branches': total_branches,
+        'total_projects': total_projects,
+        'active_checkins': active_checkins,
+    }
+    return render(request, 'index.html', context)
+
+
+import os
+from django.http import FileResponse, Http404
+from django.conf import settings
+
+def download_apk(request):
+    apk_path = os.path.join(settings.BASE_DIR, 'static', 'app', 'signtech_track.apk')
+    if os.path.exists(apk_path):
+        response = FileResponse(open(apk_path, 'rb'), content_type='application/vnd.android.package-archive')
+        response['Content-Disposition'] = 'attachment; filename="signtech_track.apk"'
+        return response
+    else:
+        raise Http404("APK file not found")
 
 
 from apps.accounts.models import WorkspaceLockEvent

@@ -1,7 +1,7 @@
 <form 
   hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=2 %}"
-  hx-target="#wizard-step-container"
-  hx-swap="innerHTML"
+  hx-target="#wizard-root"
+  hx-swap="outerHTML"
   class="space-y-6"
 >
   {% csrf_token %}
@@ -65,7 +65,8 @@
     </div>
 
     <div>
-      <c-input type="date" name="joined_date" id="id_joined_date" label="Joining Date" value="{{ form.joined_date.value|date:'Y-m-d'|default:form.joined_date.value|default:'' }}" error="{{ form.joined_date.errors.0 }}"></c-input>
+      <c-datepicker name="joined_date" id="id_joined_date" label="Joining Date" value="{{ form.joined_date.value|date:'Y-m-d'|default:form.joined_date.value|default:'' }}" placeholder="Select Joining Date"></c-datepicker>
+      {% if form.joined_date.errors %}<p class="ft-error-text mt-0.5">{{ form.joined_date.errors.0 }}</p>{% endif %}
     </div>
 
     <div>
@@ -86,7 +87,7 @@
   </div>
 
   <div class="flex items-center justify-between pt-4 border-t" style="border-color:var(--border)">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}" hx-target="#wizard-step-container" hx-swap="innerHTML" label="Back to Step 1" ></c-button>
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 1" ></c-button>
     <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 3" ></c-button>
   </div>
 </form>

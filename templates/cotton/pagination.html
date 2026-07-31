@@ -1,67 +1,118 @@
 {% comment %} c-pagination component
-   Renders a pagination row with prev/next buttons and page number links.
+   Renders a fully responsive pagination row with working prev/next buttons, smart elided page numbers, HTMX support, and a page jump selector.
    Props:
    - current_page: active page number (int, default 1)
    - total_pages: total pages (int, required)
+   - page_obj: Django Page object (optional)
    - base_url: base URL for page links, e.g. "/employees/?page=". Page number is appended.
    - show_info: true | false — show "Page X of Y" text (default true)
+   - hx_target: CSS selector for HTMX target container (optional, e.g. "#attendance-list-container")
+   - hx_select: CSS selector for HTMX content selection (optional)
+   - hx_swap: HTMX swap strategy (optional, default "outerHTML")
    - extra_class: additional classes on wrapper
-
-   Usage:
-     <c-pagination current_page="{{ page_obj.number }}"
-                   total_pages="{{ page_obj.paginator.num_pages }}"
-                   base_url="/employees/?page=" ></c-pagination>
 {% endcomment %}
 
-{% with cp=current_page|default:1 tp=total_pages|default:1 %}
-<div class="flex items-center justify-between gap-4 {{ extra_class }}" aria-label="Pagination">
+{% with curr=current_page|default:page_obj.number|default:1|add:0 total=total_pages|default:page_obj.paginator.num_pages|default:1|add:0 url=base_url|default:"?page=" swap=hx_swap|default:"outerHTML" %}
+{% with prev_p=curr|add:"-1" next_p=curr|add:"1" %}
+<div class="flex flex-col sm:flex-row items-center justify-between gap-3 w-full py-2 px-1 {{ extra_class }}" aria-label="Pagination">
 
-  {# Info text #}
-  {% if show_info != "false" %}
-  <span class="text-[13px]" style="color:var(--text-muted)">
-    Page {{ cp }} of {{ tp }}
-  </span>
-  {% endif %}
+  {# Left side: Page Info & Page Selector Dropdown #}
+  <div class="flex items-center gap-3 order-2 sm:order-1 flex-wrap justify-center sm:justify-start">
+    {% if show_info != "false" %}
+    <div class="text-[12px] sm:text-[13px] font-medium text-gray-500 dark:text-gray-400">
+      Showing page <strong class="text-gray-900 dark:text-white">{{ curr }}</strong> of <strong class="text-gray-900 dark:text-white">{{ total }}</strong>
+    </div>
+    {% endif %}
 
-  {# Page buttons #}
-  <div class="ft-pagination">
+    {# All Pages Dropdown Selector #}
+    {% if total > 1 %}
+    <div class="relative flex items-center">
+      <label for="page-select-jump" class="sr-only">Jump to page</label>
+      <select id="page-select-jump"
+              onchange="if(this.value){ if(this.dataset.hxTarget && window.htmx){ htmx.ajax('GET', this.dataset.baseUrl + this.value, {target: this.dataset.hxTarget, select: this.dataset.hxSelect || this.dataset.hxTarget, swap: this.dataset.hxSwap || 'outerHTML'}); } else { window.location.href = this.dataset.baseUrl + this.value; } }"
+              data-base-url="{{ url }}"
+              {% if hx_target %}data-hx-target="{{ hx_target }}"{% endif %}
+              {% if hx_select %}data-hx-select="{{ hx_select }}"{% endif %}
+              {% if hx_swap %}data-hx-swap="{{ swap }}"{% endif %}
+              class="appearance-none pl-3 pr-7 py-1 text-xs border rounded-xl bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1877F2] cursor-pointer shadow-2xs font-semibold">
+        {% for _ in "x"|rjust:total %}
+          <option value="{{ forloop.counter }}" {% if forloop.counter == curr %}selected{% endif %}>
+            Page {{ forloop.counter }} of {{ total }}
+          </option>
+        {% endfor %}
+      </select>
+      <i data-lucide="chevron-down" class="w-3.5 h-3.5 absolute right-2 text-gray-400 pointer-events-none"></i>
+    </div>
+    {% endif %}
+  </div>
 
-    {# Prev #}
-    {% if cp > 1 %}
-    <a href="{{ base_url }}{{ cp|add:'-1' }}"
-       class="ft-page-btn"
+  {# Right side: Navigation Controls #}
+  <div class="flex items-center gap-1 sm:gap-1.5 order-1 sm:order-2 flex-wrap justify-center">
+
+    {# Previous Button #}
+    {% if curr > 1 %}
+    <a href="{{ url }}{{ prev_p }}"
+       {% if hx_target %}hx-get="{{ url }}{{ prev_p }}" hx-target="{{ hx_target }}" {% if hx_select %}hx-select="{{ hx_select }}"{% endif %} hx-swap="{{ swap }}" hx-push-url="true"{% endif %}
+       class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors shadow-2xs"
        aria-label="Previous page">
-      <i data-lucide="chevron-left" class="w-4 h-4" style="stroke-width:1.5"></i>
+      <i data-lucide="chevron-left" class="w-4 h-4 shrink-0"></i>
+      <span class="inline">Prev</span>
     </a>
     {% else %}
-    <button class="ft-page-btn" disabled aria-label="Previous page">
-      <i data-lucide="chevron-left" class="w-4 h-4" style="stroke-width:1.5"></i>
+    <button class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 text-gray-300 dark:text-gray-600 cursor-not-allowed shadow-2xs" disabled aria-label="Previous page">
+      <i data-lucide="chevron-left" class="w-4 h-4 shrink-0"></i>
+      <span class="inline">Prev</span>
     </button>
     {% endif %}
 
-    {# Page numbers — show at most 5 centered around current #}
-    {% for p in paginator.page_range %}
-    <a href="{{ base_url }}{{ p }}"
-       class="ft-page-btn {% if p == cp %}active{% endif %}"
-       aria-label="Page {{ p }}"
-       {% if p == cp %}aria-current="page"{% endif %}>
-      {{ p }}
-    </a>
-    {% endfor %}
+    {# Page Numbers #}
+    {% if total <= 7 %}
+      {# If 7 or fewer total pages, show all #}
+      {% for _ in "x"|rjust:total %}
+        {% if forloop.counter == curr %}
+          <span class="inline-flex items-center justify-center min-w-[32px] h-8 px-2.5 py-1 text-xs font-bold rounded-lg !bg-[#1877F2] !text-white shadow-2xs" aria-current="page">{{ forloop.counter }}</span>
+        {% else %}
+          <a href="{{ url }}{{ forloop.counter }}"
+             {% if hx_target %}hx-get="{{ url }}{{ forloop.counter }}" hx-target="{{ hx_target }}" {% if hx_select %}hx-select="{{ hx_select }}"{% endif %} hx-swap="{{ swap }}" hx-push-url="true"{% endif %}
+             class="inline-flex items-center justify-center min-w-[32px] h-8 px-2.5 py-1 text-xs font-semibold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 transition-colors shadow-2xs" aria-label="Page {{ forloop.counter }}">{{ forloop.counter }}</a>
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      {# Elided range for > 7 total pages #}
+      {% for _ in "x"|rjust:total %}
+        {% if forloop.counter == 1 or forloop.counter == total or forloop.counter == curr or forloop.counter == curr|add:'-1' or forloop.counter == curr|add:'1' or curr <= 3 and forloop.counter <= 4 or curr >= total|add:'-2' and forloop.counter >= total|add:'-3' %}
+          {% if forloop.counter == curr %}
+            <span class="inline-flex items-center justify-center min-w-[32px] h-8 px-2.5 py-1 text-xs font-bold rounded-lg !bg-[#1877F2] !text-white shadow-2xs" aria-current="page">{{ forloop.counter }}</span>
+          {% else %}
+            <a href="{{ url }}{{ forloop.counter }}"
+               {% if hx_target %}hx-get="{{ url }}{{ forloop.counter }}" hx-target="{{ hx_target }}" {% if hx_select %}hx-select="{{ hx_select }}"{% endif %} hx-swap="{{ swap }}" hx-push-url="true"{% endif %}
+               class="inline-flex items-center justify-center min-w-[32px] h-8 px-2.5 py-1 text-xs font-semibold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 transition-colors shadow-2xs" aria-label="Page {{ forloop.counter }}">{{ forloop.counter }}</a>
+          {% endif %}
+        {% elif forloop.counter == 2 and curr > 3 %}
+          <span class="inline-flex items-center justify-center min-w-[24px] h-8 text-xs text-gray-400 select-none">…</span>
+        {% elif forloop.counter == total|add:'-1' and curr < total|add:'-2' %}
+          <span class="inline-flex items-center justify-center min-w-[24px] h-8 text-xs text-gray-400 select-none">…</span>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
 
-    {# Next #}
-    {% if cp < tp %}
-    <a href="{{ base_url }}{{ cp|add:'1' }}"
-       class="ft-page-btn"
+    {# Next Button #}
+    {% if curr < total %}
+    <a href="{{ url }}{{ next_p }}"
+       {% if hx_target %}hx-get="{{ url }}{{ next_p }}" hx-target="{{ hx_target }}" {% if hx_select %}hx-select="{{ hx_select }}"{% endif %} hx-swap="{{ swap }}" hx-push-url="true"{% endif %}
+       class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors shadow-2xs"
        aria-label="Next page">
-      <i data-lucide="chevron-right" class="w-4 h-4" style="stroke-width:1.5"></i>
+      <span class="inline">Next</span>
+      <i data-lucide="chevron-right" class="w-4 h-4 shrink-0"></i>
     </a>
     {% else %}
-    <button class="ft-page-btn" disabled aria-label="Next page">
-      <i data-lucide="chevron-right" class="w-4 h-4" style="stroke-width:1.5"></i>
+    <button class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 text-gray-300 dark:text-gray-600 cursor-not-allowed shadow-2xs" disabled aria-label="Next page">
+      <span class="inline">Next</span>
+      <i data-lucide="chevron-right" class="w-4 h-4 shrink-0"></i>
     </button>
     {% endif %}
 
   </div>
 </div>
+{% endwith %}
 {% endwith %}

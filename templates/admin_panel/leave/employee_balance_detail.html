@@ -1,41 +1,48 @@
 {% load leave_extras %}
 <c-app-shell page_title="{{ employee.full_name }} - Leave Profile | FieldTrack Admin" active_href="{{ request.path }}">
-    <c-slot name="topbar">
-        <c-topbar title="{{ employee.full_name }} - Leave Profile">
-            <c-slot name="actions">
-                <c-button href="{% url 'leave:admin_balances' %}?year={{ year }}"
-                          variant="secondary"
-                          icon="arrow-left"
-                          label="Back to Balances"
-                          extra_class="rounded-xl shadow-sm bg-white"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
+    <div class="p-6 max-w-7xl mx-auto space-y-6">
 
-    <div class="p-4 max-w-7xl mx-auto">
+        <!-- Breadcrumb + Navigation Header -->
+        <div class="flex items-center justify-between">
+            <div>
+                {% url 'leave:admin_balances' as balances_url %}
+                <c-breadcrumb page1_href="{{ balances_url }}" page1_label="Leave Balances" current="{{ employee.full_name }}" ></c-breadcrumb>
+                <h1 class="text-[14px] font-semibold text-gray-900 mt-1">{{ employee.full_name }} — Leave Profile</h1>
+            </div>
+            {% url 'leave:admin_balances' as back_url %}
+            <c-button href="{{ back_url }}?year={{ year }}" variant="secondary" size="md" icon="arrow-left" label="Back to Balances" ></c-button>
+        </div>
+
         <!-- Profile Header Card -->
-        <c-card padding="lg" extra_class="mb-8 relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-2 bg-primary"></div>
-            <div class="flex flex-col sm:flex-row items-center gap-6">
-                <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}"
-                          initials="{{ employee.full_name|first }}"
-                          extra_class="w-20 h-20 text-2xl border-2 border-primary-100/50 shadow-sm"></c-avatar>
-                <div class="text-center sm:text-left min-w-0">
-                    <h1 class="text-[14px] font-semibold text-gray-900">{{ employee.full_name }}</h1>
-                    <p class="text-sm text-primary-500 font-semibold mt-1">{{ employee.employee_id }}</p>
-                    <p class="text-sm text-gray-555 mt-1">{{ employee.designation|default:"Staff" }} • {{ employee.department|default:"Unassigned" }}</p>
-                    <p class="text-xs text-gray-400 mt-2">Joined Date: {{ employee.joined_date|date:"d/m/Y" }}</p>
+        <c-card padding="lg">
+            <div class="flex flex-col sm:flex-row items-center gap-5">
+                {% if employee.profile_photo %}
+                <c-avatar :src="employee.profile_photo.url" size="lg" ></c-avatar>
+                {% else %}
+                <c-avatar :initials="employee.full_name|first" size="lg" ></c-avatar>
+                {% endif %}
+                <div class="text-center sm:text-left min-w-0 flex-1">
+                    <h2 class="text-[15px] font-bold text-gray-900">{{ employee.full_name }}</h2>
+                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-1 text-sm text-gray-500">
+                        <span>ID: <strong class="text-gray-700">{{ employee.employee_id }}</strong></span>
+                        <span>•</span>
+                        <span>{{ employee.designation|default:"Staff" }}</span>
+                        <span>•</span>
+                        <span>{{ employee.department|default:"Unassigned" }}</span>
+                        <span>•</span>
+                        <span>Joined: {{ employee.joined_date|date:"d/m/Y" }}</span>
+                    </div>
                 </div>
             </div>
         </c-card>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Balances Summary Column -->
             <div class="lg:col-span-1 space-y-6">
                 <c-card title="Balances Summary" padding="lg">
                     <c-slot name="actions">
                         <form method="GET" class="flex items-center gap-1.5">
-                            <select name="year" onchange="this.form.submit()" class="px-2 py-1 border border-gray-150 rounded-lg text-xs bg-white focus:outline-none">
+                            <select name="year" onchange="this.form.submit()" class="px-2.5 py-1 border border-gray-200 rounded-lg text-xs bg-white text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1877F2]">
                                 {% for y in available_years %}
                                 <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
                                 {% endfor %}
@@ -44,59 +51,53 @@
                     </c-slot>
 
                     {% with total_left=employee.total_leave_left_by_year|dictget:year %}
-                    <div class="bg-primary-50/50 p-4 rounded-xl border border-primary-200/50 mb-6 flex justify-between items-center mt-4">
+                    <c-card padding="md" extra_class="bg-blue-50/60 !border-blue-200 mb-4 flex justify-between items-center">
                         <div>
-                            <p class="text-xs font-bold text-primary-800 uppercase tracking-wider">Total Leave Left</p>
-                            <p class="text-[10px] text-primary-500/70 mt-0.5">Across all leave types</p>
+                            <p class="text-xs font-bold text-[#1877F2] uppercase tracking-wider">Total Leave Left</p>
+                            <p class="text-[10px] text-blue-600/80 mt-0.5">Across all leave types</p>
                         </div>
-                        <span class="text-xl font-black {% if total_left < 0 %}text-red-600{% else %}text-primary-900{% endif %}">
+                        <span class="text-2xl font-black {% if total_left < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
                             {{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}
                         </span>
-                    </div>
+                    </c-card>
                     {% endwith %}
 
-                    <div class="space-y-4">
+                    <div class="space-y-3">
                         {% for balance in balances %}
-                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-bold text-gray-700">
-                                    {% if balance.leave_type %}
-                                        {{ balance.leave_type.name }}
-                                    {% else %}
-                                        {{ balance.name }}
-                                    {% endif %}
+                        <c-card padding="md" extra_class="!p-4 bg-gray-50/70 border-gray-150">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-bold text-gray-800">
+                                    {% if balance.leave_type %}{{ balance.leave_type.name }}{% else %}{{ balance.name }}{% endif %}
                                 </span>
-                                <span class="text-xs font-medium text-gray-500">Year: {{ year }}</span>
+                                <span class="text-xs text-gray-400">Year: {{ year }}</span>
                             </div>
                             <div class="flex justify-between items-baseline mt-2">
-                                <span class="text-2xl font-black {% if balance.remaining_days < 0 %}text-red-600{% else %}text-gray-900{% endif %}">
+                                <span class="text-2xl font-extrabold {% if balance.remaining_days < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
                                     {{ balance.remaining_days }}
                                 </span>
-                                <span class="text-xs text-gray-555">
+                                <span class="text-xs text-gray-500 font-medium">
                                     remaining of {{ balance.total_days }}
                                 </span>
                             </div>
-                            <div class="w-full bg-gray-200 h-2 rounded-full mt-3 overflow-hidden">
-                                <div class="bg-primary h-full rounded-full" 
-                                     style="width: {% widthratio balance.used_days balance.total_days 100 %}%">
-                                </div>
+                            <div class="w-full bg-gray-200/70 h-2 rounded-full mt-2.5 overflow-hidden flex">
+                                <div class="bg-[#1877F2] h-full rounded-full" style="width: {% widthratio balance.used_days balance.total_days 100 %}%"></div>
                             </div>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500 mt-2">
-                                <span>Used: {{ balance.used_days }} days</span>
-                                <span>Limit: {{ balance.total_days }} days</span>
+                            <div class="flex justify-between items-center text-xs text-gray-500 mt-3 pt-2 border-t border-gray-200/60">
+                                <span>Used: <strong>{{ balance.used_days }}</strong> days</span>
+                                <span>Limit: <strong>{{ balance.total_days }}</strong> days</span>
                                 {% if balance.id %}
                                 <c-button hx-get="{% url 'admin_panel:leave_balance_edit' balance.id %}"
                                           hx-target="#modal-container"
                                           variant="ghost"
                                           size="sm"
                                           label="Adjust"
-                                          extra_class="!p-0 hover:underline text-xs font-bold text-primary"></c-button>
+                                          extra_class="!text-[#1877F2] hover:!text-[#166FE5] !p-0 font-bold" ></c-button>
                                 {% endif %}
                             </div>
-                        </div>
+                        </c-card>
                         {% empty %}
-                        <div class="text-center text-sm text-gray-500 py-6">
-                            No leave types are configured.
+                        <div class="text-center text-xs text-gray-400 py-6">
+                            No leave types configured.
                         </div>
                         {% endfor %}
                     </div>
@@ -105,55 +106,55 @@
 
             <!-- History Column -->
             <div class="lg:col-span-2 space-y-6">
-                <c-card title="Leave History" subtitle="Full historical list of requests submitted by this employee." padding="none" extra_class="overflow-hidden">
+                <c-card title="Leave History" subtitle="Full historical list of requests submitted by this employee" padding="none" extra_class="overflow-hidden">
+                    {% if history %}
                     <c-table>
                         <c-slot name="header">
-                            <th class="px-6 py-3">Leave Type</th>
-                            <th class="px-6 py-3">Dates</th>
-                            <th class="px-6 py-3 text-center">Days</th>
-                            <th class="px-6 py-3">Reason</th>
-                            <th class="px-6 py-3">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Leave Type</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Dates</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Days</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Reason</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
                         </c-slot>
 
                         {% for req in history %}
-                        <tr class="hover:bg-gray-50/30 transition-colors">
-                            <td class="px-6 py-2.5 whitespace-nowrap font-medium text-gray-900">
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-4 py-3 font-bold text-sm text-gray-900">
                                 {{ req.leave_type.name }}
                             </td>
-                            <td class="px-6 py-2.5 whitespace-nowrap">
-                                <div class="text-xs">
-                                    <p class="font-medium text-gray-800">{{ req.start_date|date:"d/m/Y" }}</p>
-                                    <p class="text-gray-450">to {{ req.end_date|date:"d/m/Y" }}</p>
+                            <td class="px-4 py-3 text-xs text-gray-700">
+                                <div>
+                                    <span class="font-medium text-gray-900">{{ req.start_date|date:"d/m/Y" }}</span>
+                                    <span class="text-gray-400">to {{ req.end_date|date:"d/m/Y" }}</span>
                                 </div>
                             </td>
-                            <td class="px-6 py-2.5 text-center whitespace-nowrap font-semibold">
+                            <td class="px-4 py-3 text-center text-xs font-bold text-gray-900">
                                 {{ req.number_of_days }}
                             </td>
-                            <td class="px-6 py-2.5 max-w-xs truncate" title="{{ req.reason }}">
+                            <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title="{{ req.reason }}">
                                 {{ req.reason }}
                             </td>
-                            <td class="px-6 py-2.5 whitespace-nowrap">
+                            <td class="px-4 py-3">
                                 {% if req.status == 'pending' %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                                    Pending
-                                </span>
+                                <c-status-pill status="pending" label="Pending" ></c-status-pill>
                                 {% elif req.status == 'approved' %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-800 border border-green-200">
-                                    Approved
-                                </span>
+                                <c-status-pill status="approved" label="Approved" ></c-status-pill>
                                 {% else %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-800 border border-red-200">
-                                    Rejected
-                                </span>
+                                <c-status-pill status="rejected" label="Rejected" ></c-status-pill>
                                 {% endif %}
                             </td>
                         </tr>
-                        {% empty %}
-                        <c-slot name="empty">
-                            <c-empty-state icon="calendar" title="No requests found" description="No leave requests submitted yet."></c-empty-state>
-                        </c-slot>
                         {% endfor %}
                     </c-table>
+                    {% else %}
+                    <div class="py-16 text-center">
+                        <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <i data-lucide="calendar" class="w-6 h-6 text-gray-400"></i>
+                        </div>
+                        <p class="font-bold text-gray-900 text-sm">No requests found</p>
+                        <p class="text-xs text-gray-400 mt-1">No leave requests submitted yet.</p>
+                    </div>
+                    {% endif %}
                 </c-card>
             </div>
         </div>

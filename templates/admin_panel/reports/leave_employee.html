@@ -12,7 +12,7 @@
           {% endif %}
         </div>
         <div>
-          <c-breadcrumb page1_href="/admin-panel/reports/" page1_label="Reports Hub" page2_href="/admin-panel/reports/leave/monthly/" page2_label="Monthly Leave" current="{{ employee.full_name }}" />
+          <c-breadcrumb page1_href="/admin-panel/reports/" page1_label="Reports Hub" page2_href="/admin-panel/reports/leave/monthly/" page2_label="Monthly Leave" current="{{ employee.full_name }}" ></c-breadcrumb>
           <h1 class="text-xl font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">
             {{ employee.full_name }}
             <span class="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono font-normal">
@@ -28,7 +28,7 @@
       <!-- Export & Action Controls -->
       <div class="flex flex-wrap items-center gap-2">
         <div class="relative" x-data="{ open: false }">
-          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export History" extra_class="!bg-indigo-600 hover:!bg-indigo-700 text-xs font-semibold" />
+          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export History" extra_class="!bg-indigo-600 hover:!bg-indigo-700 text-xs font-semibold" ></c-button>
 
           <div x-show="open"
                x-cloak
@@ -54,7 +54,7 @@
           </div>
         </div>
 
-        <c-button href="{% url 'admin_panel:reports_leave_monthly' %}?year={{ year }}&month={{ month }}" variant="ghost" icon="arrow-left" label="Back to Matrix" extra_class="text-xs" />
+        <c-button href="{% url 'admin_panel:reports_leave_monthly' %}?year={{ year }}&month={{ month }}" variant="ghost" icon="arrow-left" label="Back to Matrix" extra_class="text-xs" ></c-button>
       </div>
     </div>
 
@@ -160,15 +160,15 @@
                 </td>
                 <td class="py-3 px-4 text-center">
                   {% if req.status == 'approved' %}
-                    <c-badge variant="success" label="Approved" />
+                    <c-badge variant="success" label="Approved" ></c-badge>
                   {% elif req.status == 'manager_approved' %}
-                    <c-badge variant="info" label="Manager Approved" />
+                    <c-badge variant="info" label="Manager Approved" ></c-badge>
                   {% elif req.status == 'pending' %}
-                    <c-badge variant="warning" label="Pending" />
+                    <c-badge variant="warning" label="Pending" ></c-badge>
                   {% elif req.status == 'rejected' %}
-                    <c-badge variant="danger" label="Rejected" />
+                    <c-badge variant="danger" label="Rejected" ></c-badge>
                   {% else %}
-                    <c-badge variant="neutral" label="{{ req.get_status_display }}" />
+                    <c-badge variant="neutral" label="{{ req.get_status_display }}" ></c-badge>
                   {% endif %}
                 </td>
                 <td class="py-3 px-4 text-slate-600 dark:text-slate-400">

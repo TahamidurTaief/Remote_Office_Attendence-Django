@@ -15,10 +15,10 @@
                               label="{% if employee.is_suspended %}Un-suspend Profile{% else %}Suspend Profile{% endif %}"
                               extra_class="rounded-xl {% if employee.is_suspended %}!bg-emerald-50 dark:!bg-emerald-950/40 !text-emerald-700 dark:!text-emerald-300 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/60{% endif %}"></c-button>
                     {% endif %}
-                    <c-button hx-get="{% url 'employees:employee_edit' employee.pk %}"
-                              hx-target="#modal-container"
+                    <c-button href="{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}"
                               variant="secondary"
                               size="sm"
+                              icon="edit"
                               label="Edit Profile"
                               extra_class="rounded-xl"></c-button>
                     {% include "employees/partials/lifecycle_action_buttons.html" %}
@@ -57,60 +57,29 @@
             <div class="lg:col-span-3 space-y-6" x-data="{ tab: '{{ active_tab }}' }">
                 <c-card padding="lg">
                     <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
-                        <nav class="flex flex-wrap items-center gap-2 pb-3">
-                            <c-tab-button @click="tab = 'identity'"
-                                          :class="tab === 'identity' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="whitespace-nowrap"
-                                          label="Identity & Demographics"></c-tab-button>
-                            <c-tab-button @click="tab = 'contact'"
-                                          :class="tab === 'contact' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="whitespace-nowrap"
-                                          label="Contact & Emergency"></c-tab-button>
-                            <c-tab-button @click="tab = 'organization'"
-                                          :class="tab === 'organization' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="whitespace-nowrap"
-                                          label="Organization & Reporting"></c-tab-button>
+                        <nav class="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-3">
+                            <c-tab-button @click="tab = 'identity'" active_condition="tab === 'identity'" label="Identity & Demographics" ></c-tab-button>
+                            <c-tab-button @click="tab = 'contact'" active_condition="tab === 'contact'" label="Contact & Emergency" ></c-tab-button>
+                            <c-tab-button @click="tab = 'organization'" active_condition="tab === 'organization'" label="Organization & Reporting" ></c-tab-button>
                             {% if can_view_payroll %}
-                            <c-tab-button @click="tab = 'payroll'"
-                                          :class="tab === 'payroll' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="whitespace-nowrap"
-                                          label="Payroll & Compliance"></c-tab-button>
+                            <c-tab-button @click="tab = 'payroll'" active_condition="tab === 'payroll'" label="Payroll & Compliance" ></c-tab-button>
                             {% endif %}
-                            <c-tab-button @click="tab = 'history'"
-                                          :class="tab === 'history' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="whitespace-nowrap"
-                                          label="Employment History"></c-tab-button>
-                            <c-tab-button @click="tab = 'documents'"
-                                          :class="tab === 'documents' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="flex items-center gap-1.5 whitespace-nowrap"
-                                          label="Documents">
+                            <c-tab-button @click="tab = 'history'" active_condition="tab === 'history'" label="Employment History" ></c-tab-button>
+                            <c-tab-button @click="tab = 'documents'" active_condition="tab === 'documents'" label="Documents">
                                 {% if active_documents.count > 0 %}
                                 <span class="px-1.5 py-0.5 text-[10px] bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-full font-mono font-bold">{{ active_documents.count }}</span>
                                 {% endif %}
                             </c-tab-button>
-                            <c-tab-button @click="tab = 'assets'"
-                                          :class="tab === 'assets' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="flex items-center gap-1.5 whitespace-nowrap"
-                                          color="emerald"
-                                          label="Assets">
+                            <c-tab-button @click="tab = 'assets'" active_condition="tab === 'assets'" label="Assets">
                                 {% if active_asset_assignments.count > 0 %}
                                 <span class="px-1.5 py-0.5 text-[10px] bg-emerald-100 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 rounded-full font-mono font-bold">{{ active_asset_assignments.count }}</span>
                                 {% endif %}
                             </c-tab-button>
                             {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
-                            <c-tab-button @click="tab = 'activity'"
-                                          :class="tab === 'activity' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="whitespace-nowrap"
-                                          label="Activity Feed"></c-tab-button>
+                            <c-tab-button @click="tab = 'activity'" active_condition="tab === 'activity'" label="Activity Feed" ></c-tab-button>
                             {% endif %}
                             {% if request.user.is_superuser or request.user.role == 'admin' %}
-                            <c-tab-button @click="tab = 'audit'"
-                                          :class="tab === 'audit' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 font-semibold' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'"
-                                          extra_class="whitespace-nowrap"
-                                          hx-get="{% url 'employees:master_audit' employee.pk %}"
-                                          hx-target="#audit-tab-content"
-                                          hx-trigger="click once"
-                                          label="Audit Log"></c-tab-button>
+                            <c-tab-button @click="tab = 'audit'" active_condition="tab === 'audit'" hx-get="{% url 'employees:master_audit' employee.pk %}" hx-target="#audit-tab-content" hx-trigger="click once" label="Audit Log" ></c-tab-button>
                             {% endif %}
                         </nav>
                     </div>

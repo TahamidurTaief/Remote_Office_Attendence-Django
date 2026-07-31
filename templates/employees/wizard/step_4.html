@@ -1,7 +1,7 @@
 <form 
   hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=4 %}"
-  hx-target="#wizard-step-container"
-  hx-swap="innerHTML"
+  hx-target="#wizard-root"
+  hx-swap="outerHTML"
   class="space-y-6"
   x-data="{
     genPassword() {
@@ -20,23 +20,23 @@
   {% csrf_token %}
   <input type="hidden" name="next_step" value="5">
 
-  <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+  <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
     <div>
-      <h2 class="text-lg font-bold text-gray-900">Step 4: Security & User Role Assignment</h2>
-      <p class="text-xs text-gray-500">Creates User Login Account and assigns dynamic RBAC roles via UserRoleAssignment.</p>
+      <h2 class="text-lg font-bold text-slate-900 dark:text-white">Step 4: Security & User Role Assignment</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Creates User Login Account and assigns dynamic RBAC roles via UserRoleAssignment.</p>
     </div>
-    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
+    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
       PermissionEngine RBAC Gated
     </span>
   </div>
 
   {% if form.non_field_errors %}
-    <div class="p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-200">
+    <div class="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200 dark:border-rose-800">
       {% for err in form.non_field_errors %}<p>{{ err }}</p>{% endfor %}
     </div>
   {% endif %}
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
     <div class="md:col-span-2">
       <c-input type="email" name="login_email" id="id_login_email" label="Login Email" required="true" value="{{ form.login_email.value|default:'' }}" error="{{ form.login_email.errors.0 }}" placeholder="user@company.com"></c-input>
     </div>
@@ -44,7 +44,7 @@
     <div>
       <div class="flex items-center justify-between mb-1">
         <label class="ft-label">Password</label>
-        <button type="button" @click="genPassword()" class="text-xs font-semibold text-primary hover:text-primary-dark">
+        <button type="button" @click="genPassword()" class="text-xs font-semibold text-primary hover:text-primary/80">
           Generate Strong Password
         </button>
       </div>
@@ -55,33 +55,66 @@
       <c-input type="password" name="password2" x-ref="pass2" label="Confirm Password" placeholder="Repeat password" error="{{ form.password2.errors.0 }}"></c-input>
     </div>
 
-    <div>
-      <label for="id_roles" class="ft-label">Role Assignment (UserRoleAssignment) <span class="text-red-500">*</span></label>
-      <select name="roles" id="id_roles" multiple class="ft-input h-32 py-1.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 mt-1">
-        {% for val, label in form.roles.field.choices %}
-          <option value="{{ val }}" {% if val in form.roles.value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <p class="ft-help-text mt-1">Multi-role enabled. Hold Ctrl/Cmd to select multiple roles.</p>
-      {% if form.roles.errors %}<p class="ft-error-text mt-1">{{ form.roles.errors.0 }}</p>{% endif %}
+    <!-- OPEN SPACE ROLE ASSIGNMENT SECTION WITH CHECKBOX CARDS -->
+    <div class="md:col-span-2">
+      <c-card padding="md" extra_class="!bg-slate-50/60 dark:!bg-slate-900/40 !border-slate-200 dark:!border-slate-800 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-2.5">
+          <div>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-2">
+              <i data-lucide="shield-check" class="w-4 h-4 text-primary"></i>
+              Role Assignment (UserRoleAssignment) <span class="text-rose-500">*</span>
+            </h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Select one or more active RBAC system roles to grant system permissions.</p>
+          </div>
+          <span class="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+            Multi-role Checkboxes
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+          {% for val, label in form.roles.field.choices %}
+            <label class="group relative flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-primary/50 dark:hover:border-primary/50 cursor-pointer transition-all shadow-2xs hover:shadow-xs">
+              <input type="checkbox"
+                     name="roles"
+                     value="{{ val }}"
+                     {% if val in form.roles.value or val|stringformat:"s" in form.roles.value %}checked{% endif %}
+                     class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary/20 accent-primary shrink-0">
+              <div class="flex-1 min-w-0">
+                <span class="block text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors">
+                  {{ label }}
+                </span>
+                <span class="block text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
+                  ID: {{ val }}
+                </span>
+              </div>
+            </label>
+          {% endfor %}
+        </div>
+
+        {% if form.roles.errors %}
+          <p class="text-xs text-rose-500 font-medium mt-1">{{ form.roles.errors.0 }}</p>
+        {% endif %}
+      </c-card>
     </div>
 
-    <div>
-      <c-select name="data_scope" id="id_data_scope" label="Data Scope" value="{{ form.data_scope.value|default:'' }}" error="{{ form.data_scope.errors.0 }}">
-        {% for val, label in form.data_scope.field.choices %}
-          <option value="{{ val }}" {% if form.data_scope.value == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </c-select>
-    </div>
+    <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <c-select name="data_scope" id="id_data_scope" label="Data Scope" value="{{ form.data_scope.value|default:'' }}" error="{{ form.data_scope.errors.0 }}">
+          {% for val, label in form.data_scope.field.choices %}
+            <option value="{{ val }}" {% if form.data_scope.value == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </c-select>
+      </div>
 
-    <div class="flex items-center gap-2 pt-4">
-      <input type="checkbox" name="mfa_required" id="id_mfa_required" class="h-4 w-4 text-primary focus:ring-primary border-[var(--border)] rounded" {% if form.mfa_required.value %}checked{% endif %}>
-      <label for="id_mfa_required" class="text-sm font-medium text-gray-700 cursor-pointer">Require Multi-Factor Authentication (MFA)</label>
+      <div class="flex items-center gap-2 pt-6">
+        <input type="checkbox" name="mfa_required" id="id_mfa_required" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 dark:border-slate-700 rounded" {% if form.mfa_required.value %}checked{% endif %}>
+        <label for="id_mfa_required" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Require Multi-Factor Authentication (MFA)</label>
+      </div>
     </div>
   </div>
 
-  <div class="flex items-center justify-between pt-4 border-t" style="border-color:var(--border)">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=3 %}" hx-target="#wizard-step-container" hx-swap="innerHTML" label="Back to Step 3" ></c-button>
-    <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 5" ></c-button>
+  <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=3 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 3"></c-button>
+    <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 5"></c-button>
   </div>
 </form>

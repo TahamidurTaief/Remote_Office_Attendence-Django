@@ -9,87 +9,11 @@
     </c-topbar>
   </c-slot>
 
-  <div class="p-4 max-w-7xl mx-auto space-y-4">
-    <!-- Welcome Header -->
-    <div class="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/10 flex items-center justify-between">
-      <div>
-        <h2 class="text-xl font-bold text-slate-800 dark:text-white">
-          Welcome back, {{ request.user.get_full_name|default:request.user.email }}!
-        </h2>
-        <p class="text-xs text-slate-500 mt-1">Here is your daily operational summary and assigned tasks.</p>
-      </div>
-      <div class="hidden sm:block">
-        <span class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
-          {{ user_employee.employee_number|default:"ID: --" }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Profile Completion Alert -->
-    {% if my_completion_percentage < 100 %}
-    <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-700 dark:text-amber-300">
-      <div class="flex items-center gap-2.5">
-        <i data-lucide="alert-triangle" class="w-5 h-5 flex-shrink-0 text-amber-500"></i>
-        <div>
-          <span class="text-sm font-semibold block">Your profile is incomplete ({{ my_completion_percentage }}%)</span>
-          <span class="text-xs">Please complete the remaining steps to fully setup your profile.</span>
-        </div>
-      </div>
-      <a href="{% url 'employees:employee_wizard_step' pk=user_employee.pk step=my_next_wizard_step %}" class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors text-decoration-none whitespace-nowrap self-start sm:self-auto">
-        Resume Profile Setup
-      </a>
-    </div>
-    {% endif %}
-
-    <!-- Document Expiry Alert -->
-    {% if my_expiring_documents %}
-    <div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-700 dark:text-rose-300">
-      <div class="flex items-center gap-2.5">
-        <i data-lucide="file-warning" class="w-5 h-5 flex-shrink-0 text-rose-500"></i>
-        <div>
-          <span class="text-sm font-semibold block">Document Expiry Alerts</span>
-          <span class="text-xs">The following documents are expiring in the next 30 days:</span>
-        </div>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        {% for doc in my_expiring_documents %}
-        <span class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-750 dark:text-rose-300 text-2xs font-mono font-bold">
-          {{ doc.get_document_type_display }}: {{ doc.expiry_date|date:"M d, Y" }}
-        </span>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Quick KPI Row -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <c-kpi-widget title="Today Status" value="{% if today_attendance %}{{ today_attendance.get_status_display }}{% else %}Not Checked In{% endif %}" label="Live Status" icon="clock" color="{% if today_attendance.status == 'present' %}success{% else %}amber{% endif %}">
-      </c-kpi-widget>
-
-      <c-kpi-widget title="Pending Tasks" value="{{ assigned_tasks|length }}" label="Action Required" icon="check-square" color="indigo">
-      </c-kpi-widget>
-
-      <c-kpi-widget title="Notifications" value="{{ my_notifications|length }}" label="Unread" icon="bell" color="rose">
-      </c-kpi-widget>
-    </div>
-
-    <!-- Widgets Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div id="widget-employee-attendance">
-        {% include "dashboard/widgets/widget_employee_attendance.html" %}
-      </div>
-
-      <div id="widget-employee-tasks">
-        {% include "dashboard/widgets/widget_employee_tasks.html" %}
-      </div>
-
-      <div id="widget-employee-leaves">
-        {% include "dashboard/widgets/widget_employee_leaves.html" %}
-      </div>
-
-      <div id="widget-employee-expenses">
-        {% include "dashboard/widgets/widget_employee_expenses.html" %}
-      </div>
-    </div>
+  <div id="dashboard-content" 
+       class="p-4 max-w-7xl mx-auto space-y-4"
+       hx-get="{% url 'dashboard' %}?partial=true{% if request.GET.role_view %}&role_view={{ request.GET.role_view }}{% endif %}"
+       hx-trigger="every 30s"
+       hx-swap="innerHTML">
+    {% include "dashboard/partials/employee_dashboard_content.html" %}
   </div>
 </c-app-shell>

@@ -1,73 +1,95 @@
 <div class="space-y-6">
-  <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+  <!-- Step Header -->
+  <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
     <div>
-      <h2 class="text-lg font-bold text-gray-900">Step 7: Assets & Devices Assignment</h2>
-      <p class="text-xs text-gray-500">Assign hardware (Laptop, Mobile, SIM, Tokens) with full assignment history and double-assignment blocking.</p>
+      <h2 class="text-lg font-bold text-slate-900 dark:text-white">Step 7: Assets & Devices Assignment</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Assign hardware (Laptop, Mobile, SIM, Tokens) with full assignment history and double-assignment blocking.</p>
     </div>
-    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
       Optional Completion Tier
     </span>
   </div>
 
-  {# Assign Asset Form #}
-  <form 
-    hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=7 %}"
-    hx-target="#wizard-step-container"
-    hx-swap="innerHTML"
-    class="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4"
-  >
-    {% csrf_token %}
-    <input type="hidden" name="action_type" value="assign">
-    <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Assign Available Asset</h3>
+  <!-- Assign Asset Form Card -->
+  <c-card padding="lg">
+    <form 
+      hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=7 %}"
+      hx-target="#wizard-root"
+      hx-swap="outerHTML"
+      class="space-y-4"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="action_type" value="assign">
+      
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <i data-lucide="laptop" class="w-4 h-4 text-primary"></i>
+          Assign Available Asset
+        </h3>
+      </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Select Asset Tag / Item</label>
-        {{ asset_form.asset }}
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="ft-label">Select Asset Tag / Item</label>
+          <c-select name="asset" id="id_asset" is_django_form="true">
+            {% for val, label in asset_form.asset.field.choices %}
+              <option value="{{ val }}" {% if asset_form.asset.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </c-select>
+        </div>
+
+        <div>
+          <c-datepicker name="assigned_date" label="Assigned Date" value="{{ asset_form.assigned_date.value|default:'' }}" ></c-datepicker>
+        </div>
+
+        <div>
+          <label class="ft-label">Condition at Assignment</label>
+          <c-select name="condition_at_assignment" id="id_condition_at_assignment" is_django_form="true">
+            {% for val, label in asset_form.condition_at_assignment.field.choices %}
+              <option value="{{ val }}" {% if asset_form.condition_at_assignment.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </c-select>
+        </div>
+
+        <div class="md:col-span-3">
+          <c-input name="notes" label="Notes" placeholder="Additional notes or specifications..." value="{{ asset_form.notes.value|default:'' }}" ></c-input>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Assigned Date</label>
-        {{ asset_form.assigned_date }}
+
+      <div class="flex justify-end pt-1">
+        <c-button type="submit" variant="primary" icon="plus" label="Assign Asset" extra_class="text-xs font-semibold" ></c-button>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-700 mb-1">Condition at Assignment</label>
-        {{ asset_form.condition_at_assignment }}
-      </div>
-      <div class="md:col-span-3">
-        <label class="block text-xs font-medium text-gray-700 mb-1">Notes</label>
-        {{ asset_form.notes }}
-      </div>
+    </form>
+  </c-card>
+
+  <!-- Assigned Assets History Card -->
+  <c-card padding="lg">
+    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <i data-lucide="history" class="w-4 h-4 text-primary"></i>
+        Assigned Assets History ({{ assigned_assets|length }})
+      </h3>
     </div>
 
-    <div class="text-right">
-      <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all">
-        Assign Asset
-      </button>
-    </div>
-  </form>
-
-  {# Assigned Assets List #}
-  <div class="space-y-3">
-    <h3 class="text-sm font-semibold text-gray-800">Assigned Assets History</h3>
     {% if assigned_assets %}
-      <div class="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
+      <div class="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
         {% for assign in assigned_assets %}
-          <div class="p-3 bg-white flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+          <div class="p-3.5 bg-white dark:bg-slate-900 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 bg-slate-100 dark:bg-slate-800 text-primary rounded-xl shrink-0">
                 <i data-lucide="laptop" class="w-5 h-5"></i>
               </div>
               <div>
-                <div class="flex items-center space-x-2">
-                  <span class="text-sm font-semibold text-gray-900">{{ assign.asset.name }}</span>
-                  <span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono">{{ assign.asset.asset_tag }}</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ assign.asset.name }}</span>
+                  <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-primary font-bold">{{ assign.asset.asset_tag }}</span>
                   {% if assign.returned_date %}
-                    <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">Returned {{ assign.returned_date }}</span>
+                    <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Returned {{ assign.returned_date }}</span>
                   {% else %}
-                    <span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">Currently Active</span>
+                    <c-status-pill status="active" label="Currently Active" ></c-status-pill>
                   {% endif %}
                 </div>
-                <p class="text-xs text-gray-400 mt-0.5">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Assigned on {{ assign.assigned_date }} • Condition: {{ assign.get_condition_at_assignment_display }}
                   {% if assign.notes %} • {{ assign.notes }}{% endif %}
                 </p>
@@ -77,27 +99,21 @@
         {% endfor %}
       </div>
     {% else %}
-      <p class="text-xs text-gray-400 italic">No assets assigned yet. You can assign assets now or complete later.</p>
+      <div class="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+        <i data-lucide="hard-drive" class="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600"></i>
+        No assets assigned yet. You can assign assets now or complete later.
+      </div>
     {% endif %}
-  </div>
+  </c-card>
 
-  <div class="flex items-center justify-between pt-4 border-t border-gray-100">
-    <a 
-      hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=6 %}"
-      hx-target="#wizard-step-container"
-      hx-swap="innerHTML"
-      class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-all cursor-pointer"
-    >
-      Back to Step 6
-    </a>
+  <!-- Step Navigation Footer -->
+  <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=6 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 6"></c-button>
 
-    <form hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=7 %}" hx-target="#wizard-step-container" hx-swap="innerHTML">
+    <form hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=7 %}" hx-target="#wizard-root" hx-swap="outerHTML">
       {% csrf_token %}
       <input type="hidden" name="action_type" value="next">
-      <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all flex items-center space-x-2">
-        <span>Proceed to Step 8 (Review)</span>
-        <i data-lucide="arrow-right" class="w-4 h-4"></i>
-      </button>
+      <c-button type="submit" variant="primary" icon_right="arrow-right" label="Proceed to Step 8 (Review)"></c-button>
     </form>
   </div>
 </div>

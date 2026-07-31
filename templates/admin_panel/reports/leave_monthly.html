@@ -4,7 +4,7 @@
     <!-- Breadcrumb + Header -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4" style="border-color: var(--border);">
       <div>
-        <c-breadcrumb page1_href="/admin-panel/reports/" page1_label="Reports Hub" current="Monthly Leave Report" />
+        <c-breadcrumb page1_href="/admin-panel/reports/" page1_label="Reports Hub" current="Monthly Leave Report" ></c-breadcrumb>
         <h1 class="text-xl font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">
           <i data-lucide="calendar-check" class="w-6 h-6 text-indigo-600"></i>
           Monthly Leave Matrix — {{ month_name }} {{ year }}
@@ -26,7 +26,7 @@
         </button>
 
         <div class="relative" x-data="{ open: false }">
-          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export Leave Report" extra_class="!bg-indigo-600 hover:!bg-indigo-700 text-xs font-semibold" />
+          <c-button type="button" @click="open = !open" @click.outside="open = false" variant="primary" icon="download" icon_right="chevron-down" label="Export Leave Report" extra_class="!bg-indigo-600 hover:!bg-indigo-700 text-xs font-semibold" ></c-button>
 
           <div x-show="open"
                x-cloak
@@ -113,8 +113,8 @@
             </c-select>
           </div>
 
-          <c-button type="submit" variant="primary" label="Filter" extra_class="!bg-indigo-600 text-xs font-semibold h-[38px]" />
-          <c-button href="{% url 'admin_panel:reports_leave_monthly' %}" variant="ghost" label="Reset" extra_class="text-xs h-[38px]" />
+          <c-button type="submit" variant="primary" label="Filter" extra_class="!bg-indigo-600 text-xs font-semibold h-[38px]" ></c-button>
+          <c-button href="{% url 'admin_panel:reports_leave_monthly' %}" variant="ghost" label="Reset" extra_class="text-xs h-[38px]" ></c-button>
         </form>
       </div>
     </c-card>
@@ -165,7 +165,7 @@
 
                 <td class="py-3 px-4 text-center">
                   {% if row.pending_count > 0 %}
-                    <c-badge variant="warning" label="{{ row.pending_count }} pending" />
+                    <c-badge variant="warning" label="{{ row.pending_count }} pending" ></c-badge>
                   {% else %}
                     <span class="text-slate-300 dark:text-slate-600">0</span>
                   {% endif %}
@@ -182,7 +182,7 @@
                 </td>
 
                 <td class="py-3 px-4 text-right">
-                  <c-button href="{% url 'admin_panel:reports_leave_employee_month' row.employee.pk year month %}" variant="ghost" label="View History" extra_class="text-xs !py-1 !px-2 text-indigo-600 dark:text-indigo-400" />
+                  <c-button href="{% url 'admin_panel:reports_leave_employee_month' row.employee.pk year month %}" variant="ghost" label="View History" extra_class="text-xs !py-1 !px-2 text-indigo-600 dark:text-indigo-400" ></c-button>
                 </td>
               </tr>
             {% empty %}
@@ -200,7 +200,7 @@
       <!-- Pagination -->
       {% if page_obj.has_other_pages %}
         <div class="p-4 border-t border-slate-200 dark:border-slate-700">
-          <c-pagination :page_obj="page_obj" />
+          <c-pagination :page_obj="page_obj" ></c-pagination>
         </div>
       {% endif %}
     </c-card>
