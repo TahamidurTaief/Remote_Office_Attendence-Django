@@ -52,7 +52,7 @@
       });
     }
   </script>
-  {% if debug %}<script src="{% url '__reload__:events' %}" type="text/javascript" defer></script>{% endif %}
+  {% if debug %}<script src="{% url 'django_browser_reload:events' %}" type="text/javascript" defer></script>{% endif %}
 
   {# ── Sound FX ──────────────────────────────────────────────────────── #}
   <script>
@@ -162,6 +162,75 @@
         setTimeout(() => { window.location.href = href; }, 80);
       }
     }, true);
+
+    // Global Google-Style Loader Controller for HTMX & Page Navigation
+    (function() {
+      let loaderTimer = null;
+      let badgeTimer = null;
+      let currentWidth = 0;
+
+      function startLoader() {
+        const loader = document.getElementById('ft-global-loader');
+        const bar = document.getElementById('ft-global-loader-bar');
+        const badge = document.getElementById('ft-global-loading-badge');
+        if (!loader || !bar) return;
+
+        loader.style.opacity = '1';
+        currentWidth = 15;
+        bar.style.width = currentWidth + '%';
+
+        if (loaderTimer) clearInterval(loaderTimer);
+        loaderTimer = setInterval(() => {
+          if (currentWidth < 88) {
+            currentWidth += Math.random() * 6 + 2;
+            bar.style.width = currentWidth + '%';
+          }
+        }, 180);
+
+        if (badgeTimer) clearTimeout(badgeTimer);
+        badgeTimer = setTimeout(() => {
+          if (badge && loader.style.opacity === '1') {
+            badge.style.opacity = '1';
+            badge.style.transform = 'translateY(0)';
+          }
+        }, 220);
+      }
+
+      function stopLoader() {
+        const loader = document.getElementById('ft-global-loader');
+        const bar = document.getElementById('ft-global-loader-bar');
+        const badge = document.getElementById('ft-global-loading-badge');
+        if (!loader || !bar) return;
+
+        if (loaderTimer) clearInterval(loaderTimer);
+        if (badgeTimer) clearTimeout(badgeTimer);
+
+        bar.style.width = '100%';
+
+        if (badge) {
+          badge.style.opacity = '0';
+          badge.style.transform = 'translateY(-8px)';
+        }
+
+        setTimeout(() => {
+          loader.style.opacity = '0';
+          setTimeout(() => {
+            bar.style.width = '0%';
+            currentWidth = 0;
+          }, 300);
+        }, 200);
+      }
+
+      // HTMX Event Lifecycle
+      document.addEventListener('htmx:configRequest', startLoader);
+      document.addEventListener('htmx:afterRequest', stopLoader);
+      document.addEventListener('htmx:responseError', stopLoader);
+      document.addEventListener('htmx:timeout', stopLoader);
+
+      // Standard Navigation Lifecycle
+      window.addEventListener('beforeunload', startLoader);
+      window.addEventListener('pageshow', stopLoader);
+    })();
   </script>
 
   <style>
@@ -170,6 +239,19 @@
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     /* Share Tech Mono only for clock readout */
     .ft-mono { font-family: "Courier New", Courier, monospace; letter-spacing: 0.04em; }
+
+    @keyframes ftProgressShimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .animate-shimmer {
+      animation: ftProgressShimmer 1.4s infinite linear;
+    }
+    .htmx-request:not(form):not(body) {
+      position: relative;
+      opacity: 0.85;
+      transition: opacity 0.2s ease;
+    }
   </style>
 
   {{ head }}
@@ -180,6 +262,22 @@
         muted: localStorage.getItem('sound_muted') === 'true',
       }"
       @keydown.escape.window="$dispatch('close-modal'); $dispatch('close-drawer')">
+
+  {# ── Global Google-Style Live Loading Progress Bar & Indicator ────────────── #}
+  <div id="ft-global-loader" class="fixed top-0 left-0 right-0 z-[99999] h-[5px] pointer-events-none opacity-0 transition-opacity duration-300">
+    <div id="ft-global-loader-bar" class="h-full w-0 bg-gradient-to-r from-[#4285F4] via-[#34A853] via-[#FBBC05] to-[#EA4335] transition-all duration-300 ease-out shadow-[0_0_12px_rgba(66,133,244,0.8)] relative overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer"></div>
+    </div>
+  </div>
+
+  {# ── Minimal Live Pulse Badge Indicator (Shows on longer requests) ───────── #}
+  <div id="ft-global-loading-badge" class="fixed top-3 right-24 z-[9999] pointer-events-none opacity-0 transition-all duration-300 transform translate-y-[-8px] flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 shadow-md backdrop-blur-md">
+    <span class="relative flex h-2 w-2">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+    </span>
+    <span class="text-[11px] font-semibold text-gray-700 dark:text-gray-200 tracking-wide">Syncing…</span>
+  </div>
 
   {# ── Sidebar ────────────────────────────────────────────────────────── #}
   {% if sidebar %}{{ sidebar }}{% else %}
@@ -372,6 +470,7 @@
   </c-right-drawer>
 
   <c-workspace-lock-screen></c-workspace-lock-screen>
+  <c-command-palette></c-command-palette>
 
   {{ scripts }}
 </body>

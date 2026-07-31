@@ -10,7 +10,7 @@
 <c-vars group_id="" perm_id="" is_checked="false" label="" ></c-vars>
 
 <button type="button"
-        hx-post="{% url 'admin_panel:role_permission_toggle' group_id=group_id perm_id=perm_id %}"
+        hx-post="{% url 'admin_panel:role_perm_toggle' role_id=group_id perm_id=perm_id %}"
         hx-swap="outerHTML"
         class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-full transition-all focus:outline-none {% if is_checked %}bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30{% else %}bg-slate-500/10 text-slate-400 border border-slate-500/20 hover:border-slate-500/40{% endif %}">
   <span class="w-1.5 h-1.5 rounded-full {% if is_checked %}bg-emerald-500 animate-pulse{% else %}bg-slate-400{% endif %}"></span>
