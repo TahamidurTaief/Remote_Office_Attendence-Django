@@ -30,7 +30,7 @@
          if (p.includes('/attendance/')) return 'attendance';
          if (p.includes('/leave/')) return 'leave';
          if (p.includes('/schedule/')) return 'schedule';
-         if (p.includes('/expense/')) return 'payroll';
+         if (p.includes('/expense/') || p.includes('/payroll/')) return 'payroll';
          if (p.includes('/projects/') && !p.includes('/tasks/')) return 'projects';
          if (p.includes('/tasks/') || p.includes('/my-tasks/')) return 'tasks';
          if (p.includes('/reports/')) return 'reports';
@@ -484,6 +484,38 @@
       {# ════════════════════ SECTION: FINANCE ════════════════════ #}
       <div x-show="!collapsed" x-cloak>
         <div class="ft-group-header"><i data-lucide="wallet" class="w-3.5 h-3.5"></i><span>FINANCE</span></div>
+      </div>
+
+      {# Menu: Payroll #}
+      <div>
+        <button type="button"
+                @click="toggleSubmenu('payroll')"
+                class="ft-nav-item w-full flex items-center justify-between"
+                :title="collapsed ? 'Payroll' : ''"
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <div class="flex items-center gap-2 min-w-0">
+            <i data-lucide="calculator" class="ft-icon"></i>
+            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Payroll</span>
+          </div>
+          <i data-lucide="chevron-down"
+             x-show="!collapsed"
+             class="w-3.5 h-3.5 transition-transform duration-200"
+             :class="isSubmenuOpen('payroll') ? 'rotate-180' : ''"
+             x-cloak></i>
+        </button>
+        <div x-show="(isSubmenuOpen('payroll') || search) && !collapsed"
+             x-collapse.duration.200ms
+             class="pl-4 pr-1 py-0.5 space-y-0.5"
+             x-cloak>
+          <a href="{% url 'payroll:payroll_run_list' %}" class="ft-nav-item {% if '/payroll/' in path and '/my-payslips/' not in path %}active{% endif %}" x-show="matchSearch('Payroll Runs')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">Payroll Runs</span>
+          </a>
+          <a href="{% url 'payroll:my_payslips' %}" class="ft-nav-item {% if '/payroll/my-payslips/' in path %}active{% endif %}" x-show="matchSearch('My Payslips')">
+            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+            <span class="ft-nav-label">My Payslips</span>
+          </a>
+        </div>
       </div>
 
       {# Menu direct link: Expenses #}

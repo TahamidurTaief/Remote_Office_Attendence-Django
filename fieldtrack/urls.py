@@ -119,6 +119,7 @@ urlpatterns = [
     path('projects/', include('apps.projects.urls')),
     path('schedule/', include('apps.schedule.urls')),
     path('expense/', include('apps.expense.urls')),
+    path('payroll/', include('apps.payroll.urls')),
     
     # PWA URLs served from root
     path('manifest.json', manifest_view, name='manifest'),

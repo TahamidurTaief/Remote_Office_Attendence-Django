@@ -14,6 +14,8 @@ from apps.payroll.models import (
     PayrollRun,
     PayrollRunStatus,
     EmployeePayrollCalculation,
+    PayrollAdjustment,
+    PayrollWorkflowAudit,
     PaymentMode
 )
 from apps.payroll.services import PayrollCalculationEngine, PayrollService
@@ -644,4 +646,287 @@ class PayrollFoundationTests(TestCase):
         self.assertIsNotNone(reversal_audit.snapshot_data)
         self.assertTrue('calculations' in reversal_audit.snapshot_data)
         self.assertEqual(len(reversal_audit.snapshot_data['calculations']), 1)
+
+
+class PayrollPresentationLayerTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        self.admin_user = User.objects.create_user(
+            email="payroll_admin@example.com",
+            phone="01711000001",
+            password="adminpassword",
+            is_staff=True,
+            is_superuser=True
+        )
+
+        self.staff_user_1 = User.objects.create_user(
+            email="staff1@example.com",
+            phone="01711000002",
+            password="staffpassword",
+            is_staff=False
+        )
+
+        self.staff_user_2 = User.objects.create_user(
+            email="staff2@example.com",
+            phone="01711000003",
+            password="staffpassword",
+            is_staff=False
+        )
+
+        self.branch = Branch.objects.create(
+            name="Dhaka HQ",
+            address="Banani, Dhaka",
+            latitude=Decimal('23.7937'),
+            longitude=Decimal('90.4066')
+        )
+
+        self.employee_1 = Employee.objects.create(
+            user=self.staff_user_1,
+            employee_number="EMP101",
+            first_name="Alice",
+            last_name="Staff",
+            joined_date=datetime.date(2026, 1, 1),
+            status=EmployeeStatus.ACTIVE,
+            branch=self.branch,
+            bank_name="BRAC Bank Ltd",
+            bank_account="15012012345678",
+            payment_method="bank"
+        )
+
+        self.employee_2 = Employee.objects.create(
+            user=self.staff_user_2,
+            employee_number="EMP102",
+            first_name="Bob",
+            last_name="Cashier",
+            joined_date=datetime.date(2026, 1, 1),
+            status=EmployeeStatus.ACTIVE,
+            branch=self.branch,
+            payment_method="cash"
+        )
+
+        self.basic = SalaryComponent.objects.create(
+            name="Basic Salary",
+            code="BASIC",
+            type=SalaryComponentType.EARNING,
+            value_type=SalaryComponentValueType.PERCENTAGE,
+            value=Decimal('60.00')
+        )
+        self.hra = SalaryComponent.objects.create(
+            name="House Rent Allowance",
+            code="HRA",
+            type=SalaryComponentType.EARNING,
+            value_type=SalaryComponentValueType.PERCENTAGE,
+            value=Decimal('40.00')
+        )
+        self.bonus_comp = SalaryComponent.objects.create(
+            name="Performance Bonus",
+            code="BONUS",
+            type=SalaryComponentType.EARNING,
+            value_type=SalaryComponentValueType.FIXED,
+            value=Decimal('0.00')
+        )
+
+        self.structure = SalaryStructure.objects.create(name="HQ Structure")
+        SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.basic, value=Decimal('60.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+        SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.hra, value=Decimal('40.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+
+        EmployeeSalaryAssignment.objects.create(
+            employee=self.employee_1,
+            salary_structure=self.structure,
+            gross_salary=Decimal('50000.00'),
+            effective_from=datetime.date(2026, 1, 1),
+            payment_mode=PaymentMode.BANK
+        )
+
+        EmployeeSalaryAssignment.objects.create(
+            employee=self.employee_2,
+            salary_structure=self.structure,
+            gross_salary=Decimal('30000.00'),
+            effective_from=datetime.date(2026, 1, 1),
+            payment_mode=PaymentMode.CASH
+        )
+
+        self.payroll_run = PayrollRun.objects.create(
+            name="August 2026 Run",
+            period_start=datetime.date(2026, 8, 1),
+            period_end=datetime.date(2026, 8, 31),
+            status=PayrollRunStatus.DRAFT
+        )
+
+        self.calc_1 = PayrollService.run_payroll_for_employee(self.payroll_run, self.employee_1)
+        self.calc_2 = PayrollService.run_payroll_for_employee(self.payroll_run, self.employee_2)
+
+    def test_payroll_run_list_and_create_views(self):
+        from django.urls import reverse
+
+        # Unauthenticated user should be redirected to login
+        response = self.client.get(reverse('payroll:payroll_run_list'))
+        self.assertEqual(response.status_code, 302)
+
+        # Staff user should be redirected away from admin management
+        self.client.force_login(self.staff_user_1)
+        response = self.client.get(reverse('payroll:payroll_run_list'))
+        self.assertEqual(response.status_code, 302)
+
+        # Admin user should access list view
+        self.client.force_login(self.admin_user)
+        response = self.client.get(reverse('payroll:payroll_run_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "August 2026 Run")
+
+        # Create new payroll run
+        post_data = {'month': '9', 'year': '2026', 'name': 'September 2026 Run'}
+        response = self.client.post(reverse('payroll:payroll_run_create'), post_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(PayrollRun.objects.filter(name='September 2026 Run').exists())
+
+    def test_payroll_run_detail_and_grid_query_count(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin_user)
+
+        # Test detail page renders properly
+        url = reverse('payroll:payroll_run_detail', kwargs={'pk': self.payroll_run.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "August 2026 Run")
+        self.assertContains(response, "EMP101")
+        self.assertContains(response, "EMP102")
+
+        # Test partial grid for HTMX live search and check queries
+        grid_url = reverse('payroll:payroll_run_grid_partial', kwargs={'pk': self.payroll_run.pk})
+        with self.assertNumQueries(10):  # session, user, security policies, count, and 1 select_related query for calculations
+            response = self.client.get(grid_url)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "EMP101")
+
+        # Filter by search
+        response = self.client.get(f"{grid_url}?search=Alice")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "EMP101")
+        self.assertNotContains(response, "EMP102")
+
+    def test_payslip_access_permissions_and_security(self):
+        from django.urls import reverse
+
+        # Staff 1 can view own payslip HTML
+        self.client.force_login(self.staff_user_1)
+        url_own = reverse('payroll:payslip_detail', kwargs={'pk': self.calc_1.pk})
+        response = self.client.get(url_own)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "EMP101")
+        self.assertContains(response, "50000.00")
+
+        # Staff 1 can download own payslip PDF
+        url_pdf_own = reverse('payroll:payslip_pdf', kwargs={'pk': self.calc_1.pk})
+        response = self.client.get(url_pdf_own)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(len(response.content) > 100)
+
+        # Staff 1 CANNOT view Staff 2's payslip
+        url_other = reverse('payroll:payslip_detail', kwargs={'pk': self.calc_2.pk})
+        response = self.client.get(url_other)
+        self.assertEqual(response.status_code, 403)
+
+        # Staff 1 CANNOT download Staff 2's payslip PDF
+        url_pdf_other = reverse('payroll:payslip_pdf', kwargs={'pk': self.calc_2.pk})
+        response = self.client.get(url_pdf_other)
+        self.assertEqual(response.status_code, 403)
+
+        # Admin CAN view any employee's payslip
+        self.client.force_login(self.admin_user)
+        response = self.client.get(url_other)
+        self.assertEqual(response.status_code, 200)
+
+        # Staff 1 can view my-payslips list
+        self.client.force_login(self.staff_user_1)
+        my_payslips_url = reverse('payroll:my_payslips')
+        response = self.client.get(my_payslips_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "50000.00")
+
+    def test_adjustment_add_delete_and_locked_protection(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin_user)
+
+        add_adj_url = reverse('payroll:payroll_adjustment_add', kwargs={'pk': self.payroll_run.pk})
+
+        # Add BDT 5,000 bonus adjustment to Employee 1
+        post_data = {
+            'employee_id': self.employee_1.pk,
+            'component_id': self.bonus_comp.pk,
+            'type': 'earning',
+            'amount': '5000.00',
+            'reason': 'Great performance'
+        }
+        response = self.client.post(add_adj_url, post_data)
+        self.assertEqual(response.status_code, 302)
+
+        self.calc_1.refresh_from_db()
+        self.assertEqual(self.calc_1.net_payable, Decimal('55000.00'))
+
+        adj = PayrollAdjustment.objects.filter(employee=self.employee_1, payroll_run=self.payroll_run).first()
+        self.assertIsNotNone(adj)
+
+        # Delete adjustment
+        delete_adj_url = reverse('payroll:payroll_adjustment_delete', kwargs={'pk': self.payroll_run.pk, 'adj_pk': adj.pk})
+        response = self.client.post(delete_adj_url)
+        self.assertEqual(response.status_code, 302)
+
+        self.calc_1.refresh_from_db()
+        self.assertEqual(self.calc_1.net_payable, Decimal('50000.00'))
+
+        # Lock payroll run and verify subsequent adjustment additions are rejected
+        PayrollService.transition_payroll_status(self.payroll_run, PayrollRunStatus.REVIEW, self.admin_user, "Review")
+        PayrollService.transition_payroll_status(self.payroll_run, PayrollRunStatus.APPROVED_LOCKED, self.admin_user, "Locked")
+
+        response = self.client.post(add_adj_url, post_data)
+        self.assertEqual(response.status_code, 400)
+
+    def test_payroll_reports_and_export_formats(self):
+        from django.urls import reverse
+        self.client.force_login(self.admin_user)
+
+        # 1. Payroll Register (HTML, Excel, CSV, PDF)
+        reg_html_url = reverse('payroll:payroll_register', kwargs={'pk': self.payroll_run.pk})
+        response = self.client.get(reg_html_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "EMP101")
+        self.assertContains(response, "EMP102")
+
+        for fmt in ['excel', 'csv', 'pdf']:
+            reg_export_url = reverse('payroll:payroll_register_export', kwargs={'pk': self.payroll_run.pk, 'format': fmt})
+            response = self.client.get(reg_export_url)
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(len(response.content) > 0)
+
+        # 2. Bank Report (HTML, Excel, CSV, PDF)
+        bank_html_url = reverse('payroll:bank_report', kwargs={'pk': self.payroll_run.pk})
+        response = self.client.get(bank_html_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "BRAC Bank Ltd")
+        self.assertContains(response, "EMP101")
+        self.assertNotContains(response, "EMP102")  # EMP102 is 100% cash
+
+        for fmt in ['excel', 'csv', 'pdf']:
+            bank_export_url = reverse('payroll:bank_report_export', kwargs={'pk': self.payroll_run.pk, 'format': fmt})
+            response = self.client.get(bank_export_url)
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(len(response.content) > 0)
+
+        # 3. Cash Report (HTML, Excel, CSV, PDF)
+        cash_html_url = reverse('payroll:cash_report', kwargs={'pk': self.payroll_run.pk})
+        response = self.client.get(cash_html_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "EMP102")
+        self.assertNotContains(response, "EMP101")  # EMP101 is 100% bank
+
+        for fmt in ['excel', 'csv', 'pdf']:
+            cash_export_url = reverse('payroll:cash_report_export', kwargs={'pk': self.payroll_run.pk, 'format': fmt})
+            response = self.client.get(cash_export_url)
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(len(response.content) > 0)
+
 

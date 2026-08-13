@@ -1,0 +1,240 @@
+<c-app-shell page_title="{{ run.name|default:'Payroll Run' }} | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="{{ run.name|default:'Payroll Run' }}">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <!-- Export Menu Dropdown -->
+                    <div x-data="{ open: false }" class="relative">
+                        <button @click="open = !open" @click.outside="open = false" type="button" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                            <span>Export Reports</span>
+                            <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                        </button>
+                        <div x-show="open" x-cloak class="absolute right-0 mt-1 w-56 bg-white dark:bg-gray-800 border rounded-xl shadow-lg z-50 p-1 text-xs divide-y divide-gray-100 dark:divide-gray-700" style="border-color:var(--border)">
+                            <div class="py-1">
+                                <span class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Payroll Register</span>
+                                <a href="{% url 'payroll:payroll_register' run.pk %}" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="table" class="w-3.5 h-3.5 text-blue-500"></i>
+                                    <span>View Register (Web)</span>
+                                </a>
+                                <a href="{% url 'payroll:payroll_register_export' run.pk 'excel' %}" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-500"></i>
+                                    <span>Export Register (Excel)</span>
+                                </a>
+                                <a href="{% url 'payroll:payroll_register_export' run.pk 'pdf' %}" target="_blank" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-500"></i>
+                                    <span>Export Register (PDF)</span>
+                                </a>
+                                <a href="{% url 'payroll:payroll_register_export' run.pk 'csv' %}" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="file-code" class="w-3.5 h-3.5 text-amber-500"></i>
+                                    <span>Export Register (CSV)</span>
+                                </a>
+                            </div>
+
+                            <div class="py-1">
+                                <span class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Bank Transfer Sheet</span>
+                                <a href="{% url 'payroll:bank_report' run.pk %}" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="building" class="w-3.5 h-3.5 text-blue-500"></i>
+                                    <span>View Bank Sheet (Web)</span>
+                                </a>
+                                <a href="{% url 'payroll:bank_report_export' run.pk 'excel' %}" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-500"></i>
+                                    <span>Export Bank (Excel)</span>
+                                </a>
+                                <a href="{% url 'payroll:bank_report_export' run.pk 'pdf' %}" target="_blank" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-500"></i>
+                                    <span>Export Bank (PDF)</span>
+                                </a>
+                            </div>
+
+                            <div class="py-1">
+                                <span class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Cash / Cheque Sheet</span>
+                                <a href="{% url 'payroll:cash_report' run.pk %}" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="banknote" class="w-3.5 h-3.5 text-blue-500"></i>
+                                    <span>View Cash Sheet (Web)</span>
+                                </a>
+                                <a href="{% url 'payroll:cash_report_export' run.pk 'excel' %}" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-500"></i>
+                                    <span>Export Cash (Excel)</span>
+                                </a>
+                                <a href="{% url 'payroll:cash_report_export' run.pk 'pdf' %}" target="_blank" class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg" style="color:var(--text)">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-500"></i>
+                                    <span>Export Cash (PDF)</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sync Action (Draft only) -->
+                    {% if run.status == 'draft' %}
+                    <form method="post" action="{% url 'payroll:payroll_run_sync' run.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1.5">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-600"></i>
+                            <span>Sync Inputs</span>
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <!-- Workflow Transitions -->
+                    {% if run.status == 'draft' %}
+                    <form method="post" action="{% url 'payroll:payroll_run_transition' run.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="target_status" value="review">
+                        <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                            <span>Submit for Review</span>
+                        </button>
+                    </form>
+                    {% elif run.status == 'review' %}
+                    <form method="post" action="{% url 'payroll:payroll_run_transition' run.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="target_status" value="approved_locked">
+                        <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
+                            <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                            <span>Approve & Lock</span>
+                        </button>
+                    </form>
+                    {% elif run.status == 'approved_locked' %}
+                    <form method="post" action="{% url 'payroll:payroll_run_transition' run.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="target_status" value="disbursed">
+                        <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                            <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
+                            <span>Mark Disbursed</span>
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <!-- Admin Reversal Button -->
+                    {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'system_owner' %}
+                        {% if run.status != 'draft' %}
+                        <button type="button" @click="$dispatch('open-modal', {id: 'reverse-modal'})" class="ft-btn ft-btn-ghost ft-btn-sm text-rose-600 hover:bg-rose-50 flex items-center gap-1">
+                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                            <span>Admin Reversal</span>
+                        </button>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <!-- Run Status Banner & KPI Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <c-card padding="sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium" style="color:var(--text-muted)">Run Status</span>
+                    {% if run.status == 'draft' %}
+                        <c-badge variant="neutral" label="Draft"></c-badge>
+                    {% elif run.status == 'review' %}
+                        <c-badge variant="warning" label="In Review"></c-badge>
+                    {% elif run.status == 'approved_locked' %}
+                        <c-badge variant="info" label="Approved & Locked"></c-badge>
+                    {% elif run.status == 'disbursed' %}
+                        <c-badge variant="success" label="Disbursed"></c-badge>
+                    {% endif %}
+                </div>
+                <div class="mt-2 text-xs font-mono font-semibold" style="color:var(--text)">
+                    {{ run.period_start|date:"d M Y" }} - {{ run.period_end|date:"d M Y" }}
+                </div>
+            </c-card>
+
+            <c-card padding="sm">
+                <span class="text-xs font-medium" style="color:var(--text-muted)">Total Employees</span>
+                <div class="mt-1 text-xl font-bold" style="color:var(--text)">{{ totals.count }}</div>
+                <span class="text-[11px] text-gray-500">Calculated staff</span>
+            </c-card>
+
+            <c-card padding="sm">
+                <span class="text-xs font-medium" style="color:var(--text-muted)">Total Gross Salary</span>
+                <div class="mt-1 text-xl font-bold" style="color:var(--text)">BDT {{ totals.gross|floatformat:0 }}</div>
+                <span class="text-[11px] text-gray-500">Base total</span>
+            </c-card>
+
+            <c-card padding="sm">
+                <span class="text-xs font-medium" style="color:var(--text-muted)">Total Deductions</span>
+                <div class="mt-1 text-xl font-bold text-rose-600">BDT {{ totals.deductions|floatformat:0 }}</div>
+                <span class="text-[11px] text-gray-500">PF + Absences + Other</span>
+            </c-card>
+
+            <c-card padding="sm">
+                <span class="text-xs font-medium" style="color:var(--text-muted)">Total Net Payable</span>
+                <div class="mt-1 text-xl font-bold text-emerald-600">BDT {{ totals.net|floatformat:0 }}</div>
+                <div class="text-[11px] text-gray-500">Bank: {{ totals.bank|floatformat:0 }} | Cash: {{ totals.cash|floatformat:0 }}</div>
+            </c-card>
+        </div>
+
+        <!-- Filters -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'payroll:payroll_run_grid_partial' run.pk %}" hx-get="{% url 'payroll:payroll_run_grid_partial' run.pk %}" hx-target="#payroll-grid-container" hx-trigger="change, keyup delay:300ms from:input">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 flex-1 items-end">
+                    <c-input name="search" label="Search Employee" value="{{ search }}" placeholder="Name or ID..."></c-input>
+
+                    <c-select name="department" label="Department" value="{{ selected_dept }}">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.id }}" {% if selected_dept == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+                        {% endfor %}
+                    </c-select>
+
+                    <c-select name="branch" label="Branch" value="{{ selected_branch }}">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </c-select>
+
+                    <c-select name="payment_mode" label="Payment Mode" value="{{ selected_mode }}">
+                        <option value="">All Payment Modes</option>
+                        {% for code, label in payment_modes %}
+                        <option value="{{ code }}" {% if selected_mode == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </c-select>
+                </div>
+            </c-filter-bar>
+        </c-card>
+
+        <!-- Calculation Grid Card -->
+        <c-card padding="none">
+            {% include 'payroll/payroll_grid_partial.html' %}
+        </c-card>
+    </div>
+
+    <!-- Adjustments Modal -->
+    <c-modal id="adjustments-modal" title="Manage Employee Payroll Adjustments" size="lg">
+        <div id="adjustments-modal-content" class="py-8 flex justify-center items-center">
+            <c-loading-spinner text="Loading adjustments..."></c-loading-spinner>
+        </div>
+    </c-modal>
+
+    <!-- Admin Reversal Confirmation Modal -->
+    <c-modal id="reverse-modal" title="Confirm Payroll Reversal" size="md">
+        <form method="post" action="{% url 'payroll:payroll_run_reverse' run.pk %}" class="space-y-4">
+            {% csrf_token %}
+            <div class="space-y-2">
+                <p class="text-sm text-gray-600 dark:text-gray-300">
+                    Are you sure you want to reverse this payroll run back to <strong>Draft</strong>?
+                </p>
+                <div class="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-xs rounded-lg border border-amber-200 dark:border-amber-800">
+                    A complete snapshot of current calculations will be immutably recorded in the workflow audit trail before unlocking.
+                </div>
+                <c-textarea name="note" label="Reversal Reason / Note" placeholder="State the reason for unlocking this payroll run..." required="true"></c-textarea>
+            </div>
+
+            <c-slot name="footer">
+                <div class="flex items-center justify-end gap-2 w-full">
+                    <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                    <button type="submit" class="ft-btn ft-btn-primary bg-rose-600 hover:bg-rose-700">Confirm Reversal</button>
+                </div>
+            </c-slot>
+        </form>
+    </c-modal>
+</c-app-shell>

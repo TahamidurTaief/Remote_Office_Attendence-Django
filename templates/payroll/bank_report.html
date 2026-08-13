@@ -1,0 +1,93 @@
+<c-app-shell page_title="Bank Transfer Sheet - {{ run.name }} | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Bank Salary Transfer Sheet">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2">
+                    <a href="{% url 'payroll:bank_report_export' run.pk 'excel' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i>
+                        <span>Export Excel</span>
+                    </a>
+                    <a href="{% url 'payroll:bank_report_export' run.pk 'pdf' %}" target="_blank" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-600"></i>
+                        <span>Export PDF</span>
+                    </a>
+                    <a href="{% url 'payroll:bank_report_export' run.pk 'csv' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                        <i data-lucide="file-code" class="w-3.5 h-3.5 text-amber-600"></i>
+                        <span>Export CSV</span>
+                    </a>
+                    <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-primary ft-btn-sm">
+                        <span>Back to Run</span>
+                    </a>
+                </div>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-6xl mx-auto space-y-4">
+        <c-card padding="none">
+            <div class="p-4 border-b flex items-center justify-between" style="border-color:var(--border)">
+                <div>
+                    <h3 class="font-bold text-base" style="color:var(--text)">SIGNTECH COMMUNICATIONS</h3>
+                    <div class="text-xs text-gray-500">Bank Salary Transfer Sheet &bull; {{ run.period_start|date:"F Y" }}</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs font-mono">Total Transfers: <strong>{{ totals.tot_count|default:0 }}</strong></div>
+                    <div class="text-xs font-mono font-bold text-emerald-600">BDT {{ totals.tot_bank|default:0|floatformat:2 }}</div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="ft-table text-xs">
+                    <thead>
+                        <tr>
+                            <th>Sl</th>
+                            <th>Employee ID</th>
+                            <th>Employee Name</th>
+                            <th>Department</th>
+                            <th>Bank Name</th>
+                            <th>Account Number</th>
+                            <th class="text-right">Transfer Amount (BDT)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for calc in calculations %}
+                        <tr>
+                            <td class="font-mono text-center">{{ forloop.counter }}</td>
+                            <td class="font-mono font-semibold">{{ calc.employee.employee_number }}</td>
+                            <td>
+                                <span class="font-semibold" style="color:var(--text)">{{ calc.employee.get_full_name }}</span>
+                            </td>
+                            <td>{{ calc.employee.department.name|default:"General" }}</td>
+                            <td>{{ calc.employee.bank_name|default:"City Bank Ltd." }}</td>
+                            <td class="font-mono">{{ calc.employee.bank_account|default:"N/A" }}</td>
+                            <td class="text-right font-mono font-bold text-emerald-600">{{ calc.bank_payable|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="py-12 text-center">
+                                <c-empty-state icon="building" title="No Bank Transfers" description="No employees in this payroll run have bank disbursement amounts."></c-empty-state>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if calculations %}
+                    <tfoot class="bg-gray-50 dark:bg-gray-800 font-bold border-t" style="border-color:var(--border)">
+                        <tr>
+                            <td colspan="6" class="text-center font-bold">TOTAL BANK PAYABLE</td>
+                            <td class="text-right font-mono text-emerald-700 dark:text-emerald-300 font-bold text-sm">
+                                BDT {{ totals.tot_bank|default:0|floatformat:2 }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+        </c-card>
+    </div>
+</c-app-shell>

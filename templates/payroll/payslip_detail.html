@@ -1,0 +1,172 @@
+<c-app-shell page_title="Payslip - {{ employee.employee_number }} | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Employee Payslip">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2">
+                    <a href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>Download PDF</span>
+                    </a>
+                    <button type="button" onclick="window.print()" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1.5">
+                        <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                        <span>Print</span>
+                    </button>
+                    {% if is_manager %}
+                    <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm">
+                        <span>Back to Run</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-4xl mx-auto space-y-6">
+        <c-card padding="lg">
+            <!-- Company & Payslip Header -->
+            <div class="border-b pb-4 text-center space-y-1" style="border-color:var(--border)">
+                <h2 class="text-xl font-bold tracking-tight" style="color:var(--text)">SIGNTECH COMMUNICATIONS</h2>
+                <p class="text-xs text-gray-500">Smart Attendance & Field Workforce Management</p>
+                <div class="inline-block mt-2 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-xs font-semibold" style="color:var(--text)">
+                    PAYSLIP FOR {{ run.period_start|date:"F Y"|upper }}
+                </div>
+                <div class="text-[11px] text-gray-400 font-mono">Period: {{ run.period_start|date:"d M Y" }} to {{ run.period_end|date:"d M Y" }}</div>
+            </div>
+
+            <!-- Employee Info Table -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 border-b text-xs" style="border-color:var(--border)">
+                <div class="space-y-1.5">
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Employee ID:</span><span class="font-bold font-mono" style="color:var(--text)">{{ employee.employee_number }}</span></div>
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Full Name:</span><span class="font-semibold" style="color:var(--text)">{{ employee.get_full_name }}</span></div>
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Department:</span><span style="color:var(--text)">{{ employee.department.name|default:"General" }}</span></div>
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Designation:</span><span style="color:var(--text)">{{ employee.designation.name|default:"Staff" }}</span></div>
+                </div>
+                <div class="space-y-1.5">
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Branch:</span><span style="color:var(--text)">{{ employee.branch.name|default:"Head Office" }}</span></div>
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Joining Date:</span><span style="color:var(--text)">{{ employee.joined_date|date:"d M Y"|default:"N/A" }}</span></div>
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Payment Mode:</span><span class="capitalize font-semibold" style="color:var(--text)">{{ calc.get_payment_mode_display }}</span></div>
+                    <div class="flex"><span class="w-28 text-gray-400 font-medium">Bank Account:</span><span class="font-mono" style="color:var(--text)">{{ employee.bank_account|default:"N/A" }} ({{ employee.bank_name|default:"City Bank Ltd." }})</span></div>
+                </div>
+            </div>
+
+            <!-- Attendance Snapshot Metrics -->
+            <div class="py-3 px-4 bg-blue-50/50 dark:bg-blue-950/20 border rounded-xl my-4 text-xs" style="border-color:var(--border)">
+                <div class="font-bold text-gray-700 dark:text-gray-300 mb-2">Monthly Attendance Summary</div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                    <div class="p-2 bg-white dark:bg-gray-800 rounded-lg border" style="border-color:var(--border)">
+                        <div class="text-emerald-600 font-bold text-base">{{ calc.source_total_present_days }}</div>
+                        <div class="text-[11px] text-gray-500">Present Days</div>
+                    </div>
+                    <div class="p-2 bg-white dark:bg-gray-800 rounded-lg border" style="border-color:var(--border)">
+                        <div class="text-blue-600 font-bold text-base">{{ calc.source_total_approved_leave_days }}</div>
+                        <div class="text-[11px] text-gray-500">Paid Leaves</div>
+                    </div>
+                    <div class="p-2 bg-white dark:bg-gray-800 rounded-lg border" style="border-color:var(--border)">
+                        <div class="text-rose-600 font-bold text-base">{{ calc.unpaid_absent_days }}</div>
+                        <div class="text-[11px] text-gray-500">Unpaid Absences</div>
+                    </div>
+                    <div class="p-2 bg-white dark:bg-gray-800 rounded-lg border" style="border-color:var(--border)">
+                        <div class="text-indigo-600 font-bold text-base">{{ calc.ot_hours|floatformat:1 }} hrs</div>
+                        <div class="text-[11px] text-gray-500">Approved OT</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Earnings vs Deductions Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-4">
+                <!-- Earnings Column -->
+                <div class="border rounded-xl p-4 space-y-3" style="border-color:var(--border)">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-400 border-b pb-2" style="border-color:var(--border)">Earnings Breakdown</h4>
+                    <div class="space-y-2 text-xs">
+                        {% for comp in earnings %}
+                        <div class="flex justify-between items-center">
+                            <span style="color:var(--text)">{{ comp.name|default:comp.code }}</span>
+                            <span class="font-mono font-medium" style="color:var(--text)">BDT {{ comp.amount|floatformat:2 }}</span>
+                        </div>
+                        {% endfor %}
+
+                        {% if calc.ot_amount > 0 %}
+                        <div class="flex justify-between items-center text-emerald-600">
+                            <span>Overtime Pay ({{ calc.ot_hours|floatformat:1 }} hrs)</span>
+                            <span class="font-mono font-medium">+ BDT {{ calc.ot_amount|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="border-t pt-2 mt-4 flex justify-between items-center font-bold text-xs" style="border-color:var(--border)">
+                        <span style="color:var(--text)">Total Earnings</span>
+                        <span class="text-emerald-600 font-mono text-sm">BDT {{ calc.total_earnings|floatformat:2 }}</span>
+                    </div>
+                </div>
+
+                <!-- Deductions Column -->
+                <div class="border rounded-xl p-4 space-y-3" style="border-color:var(--border)">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-rose-700 dark:text-rose-400 border-b pb-2" style="border-color:var(--border)">Deductions Breakdown</h4>
+                    <div class="space-y-2 text-xs">
+                        {% for comp in deductions %}
+                        <div class="flex justify-between items-center">
+                            <span style="color:var(--text)">{{ comp.name|default:comp.code }}</span>
+                            <span class="font-mono font-medium text-rose-600">- BDT {{ comp.amount|floatformat:2 }}</span>
+                        </div>
+                        {% endfor %}
+
+                        {% if calc.absence_deduction > 0 %}
+                        <div class="flex justify-between items-center text-rose-600">
+                            <span>Absence Deduction ({{ calc.unpaid_absent_days }} days)</span>
+                            <span class="font-mono font-medium">- BDT {{ calc.absence_deduction|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+
+                        {% if calc.other_deduction > 0 %}
+                        <div class="flex justify-between items-center text-rose-600">
+                            <span>Other Deductions</span>
+                            <span class="font-mono font-medium">- BDT {{ calc.other_deduction|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="border-t pt-2 mt-4 flex justify-between items-center font-bold text-xs" style="border-color:var(--border)">
+                        <span style="color:var(--text)">Total Deductions</span>
+                        <span class="text-rose-600 font-mono text-sm">BDT {{ calc.total_deductions|floatformat:2 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Net Payable Summary -->
+            <div class="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div>
+                    <span class="text-xs font-bold text-emerald-800 dark:text-emerald-200 uppercase tracking-wider">Net Payable Amount</span>
+                    <div class="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                        {% if calc.payment_mode == 'split' %}
+                            Disbursed as Bank: BDT {{ calc.bank_payable|floatformat:2 }} | Cash: BDT {{ calc.cash_payable|floatformat:2 }}
+                        {% elif calc.payment_mode == 'bank' %}
+                            Disbursed via 100% Direct Bank Transfer
+                        {% else %}
+                            Disbursed via 100% Cash / Cheque
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                    BDT {{ calc.net_payable|floatformat:2 }}
+                </div>
+            </div>
+
+            <!-- Signatures Footer -->
+            <div class="grid grid-cols-3 gap-4 pt-16 text-center text-xs" style="color:var(--text-muted)">
+                <div>
+                    <div class="border-t pt-2 border-gray-300 dark:border-gray-700 font-semibold" style="color:var(--text)">Prepared By</div>
+                </div>
+                <div>
+                    <div class="border-t pt-2 border-gray-300 dark:border-gray-700 font-semibold" style="color:var(--text)">Verified By (HR)</div>
+                </div>
+                <div>
+                    <div class="border-t pt-2 border-gray-300 dark:border-gray-700 font-semibold" style="color:var(--text)">Employee Signature</div>
+                </div>
+            </div>
+        </c-card>
+    </div>
+</c-app-shell>

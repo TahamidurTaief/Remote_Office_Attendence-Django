@@ -1,0 +1,81 @@
+<c-app-shell page_title="My Payslips | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="My Payslips"></c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-5xl mx-auto space-y-4">
+        <c-card padding="none">
+            <c-table id="my-payslips-table">
+                <c-slot name="header">
+                    <th>Payroll Period</th>
+                    <th>Gross Salary</th>
+                    <th>Total Deductions</th>
+                    <th>Net Payable</th>
+                    <th>Payment Mode</th>
+                    <th>Status</th>
+                    <th class="text-right">Actions</th>
+                </c-slot>
+
+                <c-slot name="body">
+                    {% for p in payslips %}
+                    <tr>
+                        <td>
+                            <div class="font-semibold" style="color:var(--text)">
+                                {{ p.payroll_run.period_start|date:"F Y" }}
+                            </div>
+                            <div class="text-[11px] font-mono" style="color:var(--text-muted)">
+                                {{ p.payroll_run.period_start|date:"d M Y" }} - {{ p.payroll_run.period_end|date:"d M Y" }}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="font-mono font-medium" style="color:var(--text)">BDT {{ p.gross_salary|floatformat:2 }}</span>
+                        </td>
+                        <td>
+                            <span class="font-mono text-rose-600">- BDT {{ p.total_deductions|floatformat:2 }}</span>
+                        </td>
+                        <td>
+                            <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">BDT {{ p.net_payable|floatformat:2 }}</span>
+                        </td>
+                        <td>
+                            <span class="capitalize text-xs font-semibold" style="color:var(--text)">{{ p.get_payment_mode_display }}</span>
+                        </td>
+                        <td>
+                            {% if p.payroll_run.status == 'disbursed' %}
+                                <c-badge variant="success" label="Disbursed"></c-badge>
+                            {% elif p.payroll_run.status == 'approved_locked' %}
+                                <c-badge variant="info" label="Approved"></c-badge>
+                            {% else %}
+                                <c-badge variant="neutral" label="Processing"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <a href="{% url 'payroll:payslip_detail' p.pk %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                    <span>View</span>
+                                </a>
+                                <a href="{% url 'payroll:payslip_pdf' p.pk %}" target="_blank" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                    <span>PDF</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12">
+                            <c-empty-state icon="file-text" title="No Payslips Available" description="No monthly payslips have been generated for your account yet."></c-empty-state>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </c-slot>
+            </c-table>
+        </c-card>
+    </div>
+</c-app-shell>

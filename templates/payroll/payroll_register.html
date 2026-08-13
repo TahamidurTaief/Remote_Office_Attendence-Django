@@ -1,0 +1,112 @@
+<c-app-shell page_title="Payroll Register - {{ run.name }} | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Monthly Payroll Register">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2">
+                    <a href="{% url 'payroll:payroll_register_export' run.pk 'excel' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i>
+                        <span>Export Excel</span>
+                    </a>
+                    <a href="{% url 'payroll:payroll_register_export' run.pk 'pdf' %}" target="_blank" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-600"></i>
+                        <span>Export PDF</span>
+                    </a>
+                    <a href="{% url 'payroll:payroll_register_export' run.pk 'csv' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                        <i data-lucide="file-code" class="w-3.5 h-3.5 text-amber-600"></i>
+                        <span>Export CSV</span>
+                    </a>
+                    <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-primary ft-btn-sm">
+                        <span>Back to Run</span>
+                    </a>
+                </div>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-full mx-auto space-y-4">
+        <c-card padding="none">
+            <div class="p-4 border-b flex items-center justify-between" style="border-color:var(--border)">
+                <div>
+                    <h3 class="font-bold text-base" style="color:var(--text)">SIGNTECH COMMUNICATIONS</h3>
+                    <div class="text-xs text-gray-500">Monthly Payroll Register &bull; Period: {{ run.period_start|date:"d M Y" }} - {{ run.period_end|date:"d M Y" }}</div>
+                </div>
+                <div>
+                    <span class="text-xs font-mono font-semibold">Status: {{ run.get_status_display }}</span>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="ft-table text-xs">
+                    <thead>
+                        <tr>
+                            <th>Sl</th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Dept</th>
+                            <th class="text-right">Gross</th>
+                            <th class="text-right">OT (Tk)</th>
+                            <th class="text-right">Total Earn</th>
+                            <th class="text-right">Abs. Ded</th>
+                            <th class="text-right">Total Ded</th>
+                            <th class="text-right">Net Pay</th>
+                            <th>Mode</th>
+                            <th class="text-right">Bank Pay</th>
+                            <th class="text-right">Cash Pay</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for calc in calculations %}
+                        <tr>
+                            <td class="font-mono text-center">{{ forloop.counter }}</td>
+                            <td class="font-mono font-semibold">{{ calc.employee.employee_number }}</td>
+                            <td>
+                                <a href="{% url 'payroll:payslip_detail' calc.pk %}" class="font-semibold hover:underline" style="color:var(--text)">
+                                    {{ calc.employee.get_full_name }}
+                                </a>
+                            </td>
+                            <td>{{ calc.employee.department.name|default:"General" }}</td>
+                            <td class="text-right font-mono">{{ calc.gross_salary|floatformat:2 }}</td>
+                            <td class="text-right font-mono">{{ calc.ot_amount|floatformat:2 }}</td>
+                            <td class="text-right font-mono font-semibold text-emerald-600">{{ calc.total_earnings|floatformat:2 }}</td>
+                            <td class="text-right font-mono text-rose-600">{{ calc.absence_deduction|floatformat:2 }}</td>
+                            <td class="text-right font-mono font-semibold text-rose-600">{{ calc.total_deductions|floatformat:2 }}</td>
+                            <td class="text-right font-mono font-bold text-emerald-700 dark:text-emerald-300">{{ calc.net_payable|floatformat:2 }}</td>
+                            <td class="capitalize">{{ calc.payment_mode }}</td>
+                            <td class="text-right font-mono">{{ calc.bank_payable|floatformat:2 }}</td>
+                            <td class="text-right font-mono">{{ calc.cash_payable|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="13" class="py-12 text-center">
+                                <c-empty-state icon="table" title="No Data in Register" description="No calculated records exist in this payroll run yet."></c-empty-state>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if calculations %}
+                    <tfoot class="bg-gray-50 dark:bg-gray-800 font-bold border-t" style="border-color:var(--border)">
+                        <tr>
+                            <td colspan="4" class="text-center font-bold">TOTAL</td>
+                            <td class="text-right font-mono">{{ totals.tot_gross|default:0|floatformat:2 }}</td>
+                            <td class="text-right font-mono">{{ totals.tot_ot_amt|default:0|floatformat:2 }}</td>
+                            <td class="text-right font-mono text-emerald-600">{{ totals.tot_earnings|default:0|floatformat:2 }}</td>
+                            <td class="text-right font-mono text-rose-600">{{ totals.tot_abs_ded|default:0|floatformat:2 }}</td>
+                            <td class="text-right font-mono text-rose-600">{{ totals.tot_deductions|default:0|floatformat:2 }}</td>
+                            <td class="text-right font-mono text-emerald-700 dark:text-emerald-300">{{ totals.tot_net|default:0|floatformat:2 }}</td>
+                            <td></td>
+                            <td class="text-right font-mono">{{ totals.tot_bank|default:0|floatformat:2 }}</td>
+                            <td class="text-right font-mono">{{ totals.tot_cash|default:0|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+        </c-card>
+    </div>
+</c-app-shell>

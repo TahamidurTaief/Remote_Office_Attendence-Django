@@ -1,0 +1,148 @@
+<c-app-shell page_title="Payroll Management | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Payroll Management">
+            <c-slot name="actions">
+                <button type="button" @click="$dispatch('open-modal', {id: 'create-payroll-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Create Payroll Run</span>
+                </button>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <!-- Filter Card -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'payroll:payroll_run_list' %}">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-end">
+                    <c-select name="year" label="Filter Year" value="{{ selected_year }}">
+                        <option value="">All Years</option>
+                        {% for y in years %}
+                        <option value="{{ y }}" {% if selected_year == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </c-select>
+
+                    <c-select name="status" label="Filter Status" value="{{ selected_status }}">
+                        <option value="">All Statuses</option>
+                        {% for code, label in statuses %}
+                        <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </c-select>
+
+                    <div class="flex items-center gap-2">
+                        <button type="submit" class="ft-btn ft-btn-secondary w-full">Apply Filter</button>
+                    </div>
+                </div>
+            </c-filter-bar>
+        </c-card>
+
+        <!-- Payroll Runs Table -->
+        <c-card padding="none">
+            <c-table id="payroll-runs-table">
+                <c-slot name="header">
+                    <th>Period / Name</th>
+                    <th>Status</th>
+                    <th>Employees</th>
+                    <th>Total Gross (BDT)</th>
+                    <th>Total Net (BDT)</th>
+                    <th>Bank / Cash Split</th>
+                    <th class="text-right">Actions</th>
+                </c-slot>
+
+                <c-slot name="body">
+                    {% for run in runs %}
+                    <tr>
+                        <td>
+                            <div>
+                                <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="font-semibold hover:underline" style="color:var(--text)">
+                                    {{ run.name|default:"Monthly Payroll" }}
+                                </a>
+                                <div class="text-[11px] font-mono mt-0.5" style="color:var(--text-muted)">
+                                    {{ run.period_start|date:"d M Y" }} - {{ run.period_end|date:"d M Y" }}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if run.status == 'draft' %}
+                                <c-badge variant="neutral" label="Draft"></c-badge>
+                            {% elif run.status == 'review' %}
+                                <c-badge variant="warning" label="In Review"></c-badge>
+                            {% elif run.status == 'approved_locked' %}
+                                <c-badge variant="info" label="Approved & Locked"></c-badge>
+                            {% elif run.status == 'disbursed' %}
+                                <c-badge variant="success" label="Disbursed"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="font-medium" style="color:var(--text)">{{ run.total_calc_count|default:0 }}</span>
+                        </td>
+                        <td>
+                            <span class="font-medium" style="color:var(--text)">{{ run.agg_gross|default:0|floatformat:2 }}</span>
+                        </td>
+                        <td>
+                            <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ run.agg_net|default:0|floatformat:2 }}</span>
+                        </td>
+                        <td>
+                            <div class="text-[11px] space-y-0.5">
+                                <div><span style="color:var(--text-muted)">Bank:</span> <strong style="color:var(--text)">{{ run.agg_bank|default:0|floatformat:2 }}</strong></div>
+                                <div><span style="color:var(--text-muted)">Cash:</span> <strong style="color:var(--text)">{{ run.agg_cash|default:0|floatformat:2 }}</strong></div>
+                            </div>
+                        </td>
+                        <td class="text-right">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-primary ft-btn-sm" title="View Details">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                    <span>Manage</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-12">
+                            <c-empty-state icon="credit-card" title="No Payroll Runs Found" description="Create a new payroll run for the month to start calculation and review."></c-empty-state>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </c-slot>
+            </c-table>
+        </c-card>
+    </div>
+
+    <!-- Create Payroll Modal -->
+    <c-modal id="create-payroll-modal" title="Create Monthly Payroll Run" size="md">
+        <form method="post" action="{% url 'payroll:payroll_run_create' %}" class="space-y-4">
+            {% csrf_token %}
+            <div class="space-y-3">
+                <c-input name="name" label="Payroll Name (Optional)" placeholder="e.g. August 2026 Payroll"></c-input>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <c-select name="month" label="Month" required="true">
+                        {% for m_num, m_name in months %}
+                        <option value="{{ m_num }}" {% if m_num == current_month %}selected{% endif %}>{{ m_name }}</option>
+                        {% endfor %}
+                    </c-select>
+
+                    <c-select name="year" label="Year" required="true">
+                        {% for y in years %}
+                        <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </c-select>
+                </div>
+            </div>
+
+            <c-slot name="footer">
+                <div class="flex items-center justify-end gap-2 w-full">
+                    <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                    <button type="submit" class="ft-btn ft-btn-primary">Create Run</button>
+                </div>
+            </c-slot>
+        </form>
+    </c-modal>
+</c-app-shell>

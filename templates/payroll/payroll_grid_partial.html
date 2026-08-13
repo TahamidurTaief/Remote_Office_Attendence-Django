@@ -1,0 +1,116 @@
+<div id="payroll-grid-container" class="space-y-4">
+    <c-table id="payroll-grid-table">
+        <c-slot name="header">
+            <th>Employee</th>
+            <th>Department / Designation</th>
+            <th>Gross Salary</th>
+            <th>Attendance (P / L / A)</th>
+            <th>OT Hours / Amt</th>
+            <th>Total Earnings</th>
+            <th>Total Deductions</th>
+            <th>Net Payable</th>
+            <th>Disbursement</th>
+            <th class="text-right">Actions</th>
+        </c-slot>
+
+        <c-slot name="body">
+            {% for calc in page_obj %}
+            <tr>
+                <td>
+                    <div class="flex items-center gap-2.5">
+                        <c-avatar src="{% if calc.employee.profile_photo %}{{ calc.employee.profile_photo.url }}{% endif %}" initials="{{ calc.employee.first_name|make_list|first|upper }}" size="sm"></c-avatar>
+                        <div>
+                            <a href="{% url 'payroll:payslip_detail' calc.pk %}" class="font-semibold hover:underline" style="color:var(--text)">
+                                {{ calc.employee.get_full_name }}
+                            </a>
+                            <div class="text-[11px] font-mono" style="color:var(--text-muted)">{{ calc.employee.employee_number }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="font-medium" style="color:var(--text)">{{ calc.employee.department.name|default:"General" }}</div>
+                    <div class="text-[11px]" style="color:var(--text-muted)">{{ calc.employee.designation.name|default:"Staff" }}</div>
+                </td>
+                <td>
+                    <span class="font-medium" style="color:var(--text)">{{ calc.gross_salary|floatformat:2 }}</span>
+                </td>
+                <td>
+                    <div class="text-[11px] font-mono space-x-1">
+                        <span class="text-emerald-600 dark:text-emerald-400" title="Present Days">P:{{ calc.source_total_present_days }}</span>
+                        <span class="text-blue-600 dark:text-blue-400" title="Approved Paid Leave">L:{{ calc.source_total_approved_leave_days }}</span>
+                        <span class="text-rose-600 dark:text-rose-400" title="Unpaid Absence">A:{{ calc.unpaid_absent_days }}</span>
+                    </div>
+                </td>
+                <td>
+                    <div class="text-[11px]">
+                        <div>{{ calc.ot_hours|floatformat:1 }} hrs</div>
+                        <div class="text-emerald-600 font-medium">+{{ calc.ot_amount|floatformat:2 }}</div>
+                    </div>
+                </td>
+                <td>
+                    <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ calc.total_earnings|floatformat:2 }}</span>
+                </td>
+                <td>
+                    <span class="font-medium text-rose-600 dark:text-rose-400">-{{ calc.total_deductions|floatformat:2 }}</span>
+                </td>
+                <td>
+                    <div class="font-bold text-[13px] text-emerald-700 dark:text-emerald-300">
+                        {{ calc.net_payable|floatformat:2 }}
+                    </div>
+                </td>
+                <td>
+                    <div class="text-[11px]">
+                        <span class="capitalize font-semibold" style="color:var(--text)">{{ calc.payment_mode }}</span>
+                        {% if calc.payment_mode == 'split' %}
+                            <div style="color:var(--text-muted)">B: {{ calc.bank_payable|floatformat:0 }} | C: {{ calc.cash_payable|floatformat:0 }}</div>
+                        {% elif calc.payment_mode == 'bank' %}
+                            <div style="color:var(--text-muted)">{{ calc.bank_payable|floatformat:0 }}</div>
+                        {% else %}
+                            <div style="color:var(--text-muted)">{{ calc.cash_payable|floatformat:0 }}</div>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="text-right">
+                    <div class="flex items-center justify-end gap-1">
+                        <a href="{% url 'payroll:payslip_detail' calc.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1.5" title="View Payslip">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                        </a>
+                        <a href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" class="ft-btn ft-btn-ghost ft-btn-sm p-1.5" title="Download Payslip PDF">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        </a>
+                        {% if not is_locked %}
+                        <button type="button"
+                                hx-get="{% url 'payroll:payroll_adjustment_modal' run.pk %}?employee_id={{ calc.employee.pk }}"
+                                hx-target="#adjustments-modal-content"
+                                @click="$dispatch('open-modal', {id: 'adjustments-modal'})"
+                                class="ft-btn ft-btn-ghost ft-btn-sm p-1.5"
+                                title="Adjustments">
+                            <i data-lucide="sliders" class="w-3.5 h-3.5 text-indigo-600"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="10" class="py-12">
+                    <c-empty-state icon="users" title="No Employee Calculations" description="Synchronize attendance and leave to calculate payroll for eligible employees."></c-empty-state>
+                </td>
+            </tr>
+            {% endfor %}
+        </c-slot>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <c-slot name="pagination">
+            <c-pagination
+                current_page="{{ page_obj.number }}"
+                total_pages="{{ page_obj.paginator.num_pages }}"
+                page_obj="{{ page_obj }}"
+                base_url="{% url 'payroll:payroll_run_grid_partial' run.pk %}?search={{ search|urlencode }}&department={{ selected_dept|default:'' }}&branch={{ selected_branch|default:'' }}&payment_mode={{ selected_mode|default:'' }}&page="
+                hx_target="#payroll-grid-container"
+                hx_swap="outerHTML">
+            </c-pagination>
+        </c-slot>
+        {% endif %}
+    </c-table>
+</div>
