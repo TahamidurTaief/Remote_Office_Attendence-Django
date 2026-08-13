@@ -1850,6 +1850,78 @@ class SubordinateAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class HRMasterReadinessTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch
+        from apps.employees.models import Employee, EmployeeProfile, Department, Designation, EmployeeStatus
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        self.branch1 = Branch.objects.create(name='SSOT Branch 1', address='Addr 1', latitude=23.0, longitude=90.0, is_active=True)
+        self.branch2 = Branch.objects.create(name='SSOT Branch 2', address='Addr 2', latitude=23.0, longitude=90.0, is_active=True)
+        self.dept = Department.objects.create(name='SSOT Engineering', code='ENG-SSOT')
+        self.desig = Designation.objects.create(name='Senior SSOT Engineer')
+
+        self.user = User.objects.create_user(phone='+8801755556666', password='pass', role='staff')
+        
+        self.legacy_profile = EmployeeProfile.objects.create(
+            user=self.user,
+            employee_id='LEGACY-001',
+            full_name='Legacy Alice',
+            phone='+8801755556666',
+            joined_date='2026-01-01',
+            branch=self.branch1,
+            department='Legacy Eng',
+            designation='Legacy Dev',
+            is_active=True
+        )
+
+    def test_legacy_profile_fields(self):
+        self.assertEqual(self.legacy_profile.canonical_full_name, 'Legacy Alice')
+        self.assertEqual(self.legacy_profile.canonical_phone, '+8801755556666')
+        self.assertEqual(self.legacy_profile.canonical_branch, self.branch1)
+        self.assertEqual(self.legacy_profile.canonical_department, 'Legacy Eng')
+        self.assertEqual(self.legacy_profile.canonical_designation, 'Legacy Dev')
+        self.assertTrue(self.legacy_profile.canonical_is_active)
+
+    def test_linked_employee_delegation(self):
+        from apps.employees.models import Employee, EmployeeStatus
+        from apps.employees.hr_resolver import get_canonical_employee
+
+        master = Employee.objects.create(
+            employee_number='CANON-001',
+            first_name='Canonical',
+            last_name='Bob',
+            phone='+8801799999999',
+            joined_date='2026-02-02',
+            branch=self.branch2,
+            department=self.dept,
+            designation=self.desig,
+            status='active',
+            is_suspended=False
+        )
+        self.legacy_profile.master_employee = master
+        self.legacy_profile.save()
+
+        self.legacy_profile.refresh_from_db()
+
+        self.assertEqual(self.legacy_profile.canonical_full_name, 'Canonical Bob')
+        self.assertEqual(self.legacy_profile.canonical_phone, '+8801799999999')
+        self.assertEqual(self.legacy_profile.canonical_branch, self.branch2)
+        self.assertEqual(self.legacy_profile.canonical_department, 'SSOT Engineering')
+        self.assertEqual(self.legacy_profile.canonical_designation, 'Senior SSOT Engineer')
+        self.assertTrue(self.legacy_profile.canonical_is_active)
+
+        resolved = get_canonical_employee(self.user)
+        self.assertEqual(resolved, master)
+        self.assertEqual(resolved.canonical_full_name, 'Canonical Bob')
+
+        master.is_suspended = True
+        master.save()
+        self.legacy_profile.refresh_from_db()
+        self.assertFalse(self.legacy_profile.canonical_is_active)
+
+
 
 
 

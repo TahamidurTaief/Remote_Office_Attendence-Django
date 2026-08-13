@@ -63,6 +63,42 @@ class EmployeeProfile(models.Model):
             ('view_reports', 'Can view analytical reports'),
         ]
 
+    @property
+    def canonical_designation(self):
+        if self.master_employee_id and self.master_employee.designation:
+            return self.master_employee.designation.name
+        return self.designation
+
+    @property
+    def canonical_department(self):
+        if self.master_employee_id and self.master_employee.department:
+            return self.master_employee.department.name
+        return self.department
+
+    @property
+    def canonical_branch(self):
+        if self.master_employee_id and self.master_employee.branch:
+            return self.master_employee.branch
+        return self.branch
+
+    @property
+    def canonical_phone(self):
+        if self.master_employee_id and self.master_employee.phone:
+            return self.master_employee.phone
+        return self.phone
+
+    @property
+    def canonical_full_name(self):
+        if self.master_employee_id:
+            return f"{self.master_employee.first_name} {self.master_employee.last_name}".strip()
+        return self.full_name
+
+    @property
+    def canonical_is_active(self):
+        if self.master_employee_id:
+            return self.master_employee.status == 'active' and not self.master_employee.is_suspended
+        return self.is_active
+
     def __str__(self):
         return f"{self.employee_id} - {self.full_name}"
 
@@ -486,6 +522,30 @@ class Employee(models.Model):
 
     def is_login_allowed(self):
         return self.status in ALLOWED_LOGIN_STATUSES
+
+    @property
+    def canonical_designation(self):
+        return self.designation.name if self.designation else ''
+
+    @property
+    def canonical_department(self):
+        return self.department.name if self.department else ''
+
+    @property
+    def canonical_branch(self):
+        return self.branch
+
+    @property
+    def canonical_phone(self):
+        return self.phone
+
+    @property
+    def canonical_full_name(self):
+        return self.get_full_name()
+
+    @property
+    def canonical_is_active(self):
+        return self.status == 'active' and not self.is_suspended
 
     @property
     def business_status(self) -> str:
