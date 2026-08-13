@@ -36,6 +36,8 @@ class AttendanceTransactionService:
 
         with transaction.atomic():
             emp_locked = EmployeeProfile.objects.select_for_update().get(pk=employee.pk)
+            if not emp_locked.is_active:
+                raise AttendanceTransactionError('Employee profile is inactive.', 403)
 
             if sync_uuid:
                 existing = Attendance.objects.filter(sync_uuid=sync_uuid).first()
@@ -278,6 +280,8 @@ class AttendanceTransactionService:
 
         with transaction.atomic():
             emp_locked = EmployeeProfile.objects.select_for_update().get(pk=employee.pk)
+            if not emp_locked.is_active:
+                raise AttendanceTransactionError('Employee profile is inactive.', 403)
 
             if sync_uuid:
                 existing_loc = AttendanceLocation.objects.filter(sync_uuid=sync_uuid, event='check_out').first()
@@ -301,11 +305,10 @@ class AttendanceTransactionService:
 
             attendance = Attendance.objects.filter(
                 employee=emp_locked,
-                date=today,
                 attendance_type='check_in',
                 check_out_time__isnull=True,
                 is_expired=False
-            ).select_for_update().first()
+            ).order_by('-check_in_time').select_for_update().first()
 
             if not attendance:
                 if sync_uuid:

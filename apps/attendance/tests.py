@@ -1764,6 +1764,11 @@ class AttendanceLifecycleServiceTests(TestCase):
         self.emp.master_employee = self.emp_master
         self.emp.save()
 
+        from apps.attendance.models import AttendancePolicy
+        policy, _ = AttendancePolicy.objects.get_or_create(branch=self.branch)
+        policy.photo_required = False
+        policy.save()
+
     def test_correction_recalculates_late_status(self):
         from apps.attendance.models import Attendance, AttendanceCorrectionRequest
         from apps.attendance.lifecycle_service import AttendanceLifecycleService
@@ -1817,6 +1822,55 @@ class AttendanceLifecycleServiceTests(TestCase):
 
         res_mgr = AttendanceLifecycleService.process_forgot_checkout(self.manager_user, req.pk, 'approve')
         self.assertEqual(res_mgr['status'], 'pending_hr')
+
+    def test_inactive_employee_check_in_block(self):
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
+        self.emp.is_active = False
+        self.emp.save()
+
+        data = {
+            'latitude': 23.8759,
+            'longitude': 90.3795,
+            'accuracy': 10,
+            'type': 'office'
+        }
+        try:
+            with self.assertRaises(AttendanceTransactionError) as ctx:
+                AttendanceTransactionService.check_in(self.user, data)
+            self.assertEqual(ctx.exception.status_code, 403)
+            self.assertIn('inactive', str(ctx.exception).lower())
+        finally:
+            self.emp.is_active = True
+            self.emp.save()
+
+    def test_overnight_shift_checkout(self):
+        from apps.attendance.transaction_service import AttendanceTransactionService
+        import datetime
+        self.emp.is_active = True
+        self.emp.save()
+
+        # 15 hours ago and 7 hours ago are both in the past, < 24h old, and 8h apart
+        ci_time = timezone.now() - datetime.timedelta(hours=15)
+        data_in = {
+            'latitude': 23.8759,
+            'longitude': 90.3795,
+            'accuracy': 10,
+            'type': 'office',
+            'client_event_time': ci_time.isoformat()
+        }
+        res_in = AttendanceTransactionService.check_in(self.user, data_in)
+        self.assertTrue(res_in['success'])
+
+        co_time = timezone.now() - datetime.timedelta(hours=7)
+        data_out = {
+            'latitude': 23.8759,
+            'longitude': 90.3795,
+            'accuracy': 10,
+            'client_event_time': co_time.isoformat()
+        }
+        res_out = AttendanceTransactionService.check_out(self.user, data_out)
+        self.assertTrue(res_out['success'])
+        self.assertEqual(res_out['total_hours'], 8.0)
 
 
 

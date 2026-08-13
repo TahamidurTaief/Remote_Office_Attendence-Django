@@ -383,11 +383,10 @@ class AttendanceLifecycleService:
         # Lock checks for active attendance
         active_attendance = Attendance.objects.filter(
             employee=employee,
-            date=today,
             attendance_type='check_in',
             check_out_time__isnull=True,
             is_expired=False
-        ).first()
+        ).order_by('-check_in_time').first()
 
         if not active_attendance:
             return {
