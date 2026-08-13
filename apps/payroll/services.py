@@ -52,6 +52,18 @@ class PayrollCalculationEngine:
         if manual_adjustments is None:
             manual_adjustments = []
 
+        # Find Basic component amount first if it exists
+        basic_amount = Decimal('0.00')
+        for comp in structure_components_list:
+            if comp['code'].upper() == 'BASIC':
+                comp_value = Decimal(str(comp['value']))
+                if comp['value_type'] == SalaryComponentValueType.PERCENTAGE:
+                    basic_amount = (comp_value / Decimal('100.00')) * gross_salary
+                else:
+                    basic_amount = comp_value
+                basic_amount = basic_amount.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                break
+
         components_breakdown = []
         total_earnings = Decimal('0.00')
         total_deductions = Decimal('0.00')
@@ -59,7 +71,12 @@ class PayrollCalculationEngine:
         # 1. Process structured components (Earnings and Deductions)
         for comp in structure_components_list:
             comp_value = Decimal(str(comp['value']))
-            if comp['value_type'] == SalaryComponentValueType.PERCENTAGE:
+            if comp.get('is_pf', False):
+                if comp['value_type'] == SalaryComponentValueType.PERCENTAGE:
+                    amount = (comp_value / Decimal('100.00')) * basic_amount
+                else:
+                    amount = comp_value
+            elif comp['value_type'] == SalaryComponentValueType.PERCENTAGE:
                 amount = (comp_value / Decimal('100.00')) * gross_salary
             else:
                 amount = comp_value
@@ -240,6 +257,15 @@ class PayrollService:
                 'type': adj.type,
                 'reason': adj.reason
             })
+
+        # Resolve OT policy callback if None and employee has a configured policy
+        if ot_policy_callback is None:
+            ot_policy_name = employee.overtime_policy
+            if ot_policy_name and ot_policy_name.strip() and ot_policy_name.lower() != 'none':
+                if ot_policy_name == 'fixed_300':
+                    ot_policy_callback = lambda gross, hours: Decimal('300.00') * hours
+                else:
+                    ot_policy_callback = lambda gross, hours: (gross / Decimal('240.00')) * Decimal('1.5') * hours
 
         # Calculate using engine
         calc_result = PayrollCalculationEngine.calculate_employee_payroll(
