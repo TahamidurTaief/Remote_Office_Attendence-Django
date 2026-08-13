@@ -59,22 +59,7 @@ def get_attendance_policy(employee):
 @login_required
 @require_POST
 def check_in(request):
-    if not check_role(request.user):
-        return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
-
-    master = getattr(request.user, 'employee_master', None)
-    if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
-        master = request.user.employee_profile.master_employee
-    if master and (master.is_suspended or master.business_status == 'suspended'):
-        return JsonResponse({'success': False, 'error': 'Account is suspended.'}, status=403)
-
     try:
-        employee = get_employee(request.user)
-        if not employee:
-            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=403)
-
-        # For multipart/form-data (file uploads), request.body is already consumed
-        # by Django's parser, so we must use request.POST directly.
         content_type = request.content_type or ''
         if 'application/json' in content_type:
             try:
@@ -84,243 +69,13 @@ def check_in(request):
         else:
             data = request.POST
 
-        sync_uuid = data.get('sync_uuid')
-        if sync_uuid:
-            existing = Attendance.objects.filter(sync_uuid=sync_uuid).first()
-            if existing:
-                ci_loc = existing.locations.filter(event='check_in').first()
-                existing_address = ci_loc.address if ci_loc else (existing.site_address or '')
-                return JsonResponse({
-                    'success': True,
-                    'session_id': existing.id,
-                    'type': existing.type,
-                    'status': existing.status,
-                    'address': existing_address
-                })
-
-        client_event_time_str = data.get('client_event_time')
-        client_time = parse_and_validate_client_time(client_event_time_str)
-
-        if client_time:
-            event_time = client_time
-            synced_at = timezone.now()
-            today = timezone.localdate(client_time)
-        else:
-            event_time = timezone.localtime()
-            synced_at = None
-            today = timezone.localdate()
-
-        # Block new check-in if there is an ACTIVE (unclosed) session today
-        active_session = Attendance.objects.filter(
-            employee=employee,
-            date=today,
-            attendance_type='check_in',
-            check_out_time__isnull=True,
-            is_expired=False
-        ).first()
-        if active_session:
-            return JsonResponse({
-                'success': False,
-                'error': 'You are already checked in. Please check out first.'
-            }, status=400)
-
-        policy = get_attendance_policy(employee)
-        
-        from django.conf import settings
-        require_gps = getattr(settings, 'REQUIRE_GPS', True)
-
-        lat      = data.get('latitude')
-        lng      = data.get('longitude')
-        accuracy = data.get('accuracy', 0)
-        note     = data.get('note', '')
-        address  = data.get('address', '')
-
-        if lat is None or lat == '':
-            lat = 0.0
-        if lng is None or lng == '':
-            lng = 0.0
-
-        try:
-            lat = float(lat)
-            lng = float(lng)
-        except (TypeError, ValueError):
-            return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
-
-        # GPS Validation (based on policy)
-        is_exception = False
-        gps_quality = 'good'
-        is_gps_missing = (lat == 0.0 and lng == 0.0)
-        is_gps_poor = False
-        
-        try:
-            acc_val = float(accuracy) if accuracy else 0.0
-        except (TypeError, ValueError):
-            acc_val = 0.0
-
-        if not is_gps_missing and policy.max_gps_accuracy_meters and acc_val > policy.max_gps_accuracy_meters:
-            is_gps_poor = True
-
-        is_admin_or_hr = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'hr')
-
-        if is_gps_missing:
-            gps_quality = 'missing'
-            if policy.gps_required == 'required' and not is_admin_or_hr:
-                return JsonResponse({'success': False, 'error': 'GPS location is required for attendance.'}, status=400)
-            else:
-                is_exception = True
-                note = f"{note} [POLICY EXCEPTION: GPS location missing]".strip()
-        elif is_gps_poor:
-            gps_quality = 'poor'
-            if policy.gps_required == 'required' and not is_admin_or_hr:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'GPS accuracy ({int(acc_val)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).'
-                }, status=400)
-            else:
-                is_exception = True
-                note = f"{note} [POLICY EXCEPTION: Poor GPS accuracy {int(acc_val)}m]".strip()
-
-        # Validate Photo (dependent on policy)
         photo = request.FILES.get('photo')
-        if policy.photo_required and not photo:
-            return JsonResponse({'success': False, 'error': 'Photo is required for attendance.'}, status=400)
 
-        if photo:
-            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-            if photo.content_type not in allowed_types:
-                return JsonResponse({'success': False, 'error': 'Invalid file type. Only images allowed.'}, status=400)
-
-            if photo.size > 10 * 1024 * 1024:
-                return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
-
-        # Determine office/field — trust the frontend value; only auto-detect
-        # via geofence if the client did not send a recognised type.
-        attendance_type = data.get('type', '')
-        if attendance_type not in ('office', 'field'):
-            # Auto-detect: try geofence, default to 'field'
-            attendance_type = 'field'
-            branch = employee.branch
-            if branch and branch.latitude and branch.longitude:
-                within_geofence, _ = is_within_geofence(float(lat), float(lng), branch)
-                if within_geofence:
-                    attendance_type = 'office'
-        # Geofence Validation: warn or block based on policy
-        enforce_geofence = not policy.allow_outside_geofence or policy.geofencing_policy != 'disabled'
-        if enforce_geofence:
-            branch = employee.branch
-            if branch and branch.latitude and branch.longitude:
-                within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
-                if not within_geofence:
-                    should_block = (policy.geofencing_policy == 'block') or (not policy.allow_outside_geofence and policy.geofencing_policy == 'block')
-                    if should_block and not is_admin_or_hr:
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'Geofence validation failed. You are outside the office radius by {int(distance)} meters.'
-                        }, status=400)
-                    else:
-                        is_exception = True
-                        warning_msg = f" [POLICY EXCEPTION: Checked in {int(distance)}m outside geofence GEOFENCE WARNING]"
-                        note = f"{note}{warning_msg}".strip()
-
-        # Holiday validation
-        from .schedule_utils import is_employee_holiday
-        is_holiday = is_employee_holiday(employee, today)
-
-        if is_holiday:
-            status = 'holiday_attendance'
-            if not policy.allow_holiday_attendance:
-                is_exception = True
-                warning_msg = " [POLICY EXCEPTION: Holiday attendance not allowed]"
-                note = f"{note}{warning_msg}".strip()
-        else:
-            # Late check — only for the FIRST check-in of the day
-            first_checkin_today = Attendance.objects.filter(
-                employee=employee,
-                date=today,
-                attendance_type='check_in',
-                is_expired=False
-            ).order_by('check_in_time').first()
-
-            if first_checkin_today is None:
-                # This IS the first check-in → apply late logic
-                from .schedule_utils import get_branch_schedule, calculate_attendance_status
-                schedule = get_branch_schedule(employee)
-                status = calculate_attendance_status(event_time, schedule)
-            else:
-                status = 'on_time'  # subsequent sessions are never "late"
-
-        # Check if project was submitted or can be inferred
-        project = None
-        project_id = data.get('project') or data.get('project_id')
-        if project_id:
-            try:
-                from apps.projects.models import Project
-                project = Project.objects.get(pk=project_id)
-            except Exception:
-                pass
-        if not project:
-            try:
-                from apps.projects.models import Project, ProjectTask
-                from django.db.models import Q
-                project = Project.objects.filter(Q(project_manager=employee) | Q(site_engineer=employee)).first()
-                if not project:
-                    task = ProjectTask.objects.filter(responsible_person=employee, planned_start__lte=today, planned_finish__gte=today).first()
-                    if task:
-                        project = task.project
-                if not project and employee.branch:
-                    project = Project.objects.filter(branch=employee.branch).first()
-            except Exception:
-                pass
-
-        # Create new session
-        attendance = Attendance.objects.create(
-            employee=employee,
-            project=project,
-            date=today,
-            check_in_time=event_time,
-            type=attendance_type,
-            attendance_type='check_in',
-            status=status,
-            note=note,
-            photo=photo,
-            is_policy_exception=is_exception,
-            gps_quality=gps_quality,
-            sync_uuid=sync_uuid or uuid.uuid4(),
-            client_event_time=client_time,
-            synced_at=synced_at
-        )
-
-        AttendanceLocation.objects.create(
-            attendance=attendance,
-            event='check_in',
-            latitude=float(lat),
-            longitude=float(lng),
-            address=address,
-            accuracy=float(accuracy) if accuracy else 0.0,
-            timestamp=event_time,
-            sync_uuid=uuid.uuid4(),
-            client_event_time=client_time,
-            synced_at=synced_at
-        )
-
-        notif_type = 'late' if status == 'late' else 'check_in'
-        notify_admins(employee, notif_type, location=address)
-
-        from apps.attendance.models import AttendanceActivityLog
-        AttendanceActivityLog.objects.create(
-            employee=employee,
-            action='check_in',
-            description=f"Checked In at {event_time.strftime('%I:%M %p')}"
-        )
-
-        return JsonResponse({
-            'success': True,
-            'session_id': attendance.id,
-            'type': attendance_type,
-            'status': status,
-            'address': address
-        })
-
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
+        result = AttendanceTransactionService.check_in(request.user, data, photo)
+        return JsonResponse(result)
+    except AttendanceTransactionError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=e.status_code)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -331,22 +86,7 @@ def check_in(request):
 @login_required
 @require_POST
 def check_out(request):
-    if not check_role(request.user):
-        return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
-
-    master = getattr(request.user, 'employee_master', None)
-    if not master and hasattr(request.user, 'employee_profile') and request.user.employee_profile.master_employee:
-        master = request.user.employee_profile.master_employee
-    if master and (master.is_suspended or master.business_status == 'suspended'):
-        return JsonResponse({'success': False, 'error': 'Account is suspended.'}, status=403)
-
     try:
-        employee = get_employee(request.user)
-        if not employee:
-            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=403)
-
-        # For multipart/form-data (file uploads), request.body is already consumed
-        # by Django's parser, so we must use request.POST directly.
         content_type = request.content_type or ''
         if 'application/json' in content_type:
             try:
@@ -356,126 +96,13 @@ def check_out(request):
         else:
             data = request.POST
 
-        sync_uuid = data.get('sync_uuid')
-        if sync_uuid:
-            existing_loc = AttendanceLocation.objects.filter(sync_uuid=sync_uuid, event='check_out').first()
-            if existing_loc:
-                return JsonResponse({
-                    'success': True,
-                    'total_hours': float(existing_loc.attendance.total_hours)
-                })
-
-        client_event_time_str = data.get('client_event_time')
-        client_time = parse_and_validate_client_time(client_event_time_str)
-
-        if client_time:
-            event_time = client_time
-            synced_at = timezone.now()
-            today = timezone.localdate(client_time)
-        else:
-            event_time = timezone.localtime()
-            synced_at = None
-            today = timezone.localdate()
-
-        # Find the active (unclosed) session
-        attendance = Attendance.objects.filter(
-            employee=employee,
-            date=today,
-            attendance_type='check_in',
-            check_out_time__isnull=True,
-            is_expired=False
-        ).first()
-
-        if not attendance:
-            return JsonResponse({'success': False, 'error': 'No active check-in session found.'}, status=400)
-
-        policy = get_attendance_policy(employee)
-        
-        from django.conf import settings
-        require_gps = getattr(settings, 'REQUIRE_GPS', True)
-
-        lat      = data.get('latitude')
-        lng      = data.get('longitude')
-        accuracy = data.get('accuracy', 0)
-        address  = data.get('address', '') or 'Location unavailable at check-out'
-
-        if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
-            return JsonResponse({'success': False, 'error': 'Location is required for attendance.'}, status=400)
-
-        if lat is None or lat == '':
-            lat = 0.0
-        if lng is None or lng == '':
-            lng = 0.0
-
-        try:
-            lat = float(lat)
-            lng = float(lng)
-        except (TypeError, ValueError):
-            return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
-
-        # Validate Photo (dependent on policy)
         photo = request.FILES.get('photo')
-        if policy.photo_required and not photo:
-            return JsonResponse({'success': False, 'error': 'Photo is required for attendance.'}, status=400)
 
-        if photo:
-            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-            if photo.content_type not in allowed_types:
-                return JsonResponse({'success': False, 'error': 'Invalid file type. Only images allowed.'}, status=400)
-
-            if photo.size > 10 * 1024 * 1024:
-                return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
-
-        attendance.check_out_time = event_time
-        duration = event_time - attendance.check_in_time
-        attendance.total_hours = round(duration.total_seconds() / 3600.0, 2)
-
-        from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
-        schedule = get_branch_schedule(employee)
-        overtime_minutes = calculate_overtime(event_time, schedule, employee, attendance.date)
-        attendance.is_early_checkout = calculate_early_checkout(event_time, schedule, attendance.date)
-
-        if overtime_minutes > 0:
-            attendance.overtime_minutes = overtime_minutes
-            attendance.ot_status = 'pending'
-        else:
-            attendance.overtime_minutes = 0
-            attendance.ot_status = 'none'
-
-        if client_time:
-            attendance.client_event_time = client_time
-            attendance.synced_at = synced_at
-
-        attendance.save()
-
-        AttendanceLocation.objects.create(
-            attendance=attendance,
-            event='check_out',
-            latitude=float(lat),
-            longitude=float(lng),
-            address=address,
-            accuracy=float(accuracy) if accuracy else 0.0,
-            timestamp=event_time,
-            event_photo=photo,
-            sync_uuid=sync_uuid or uuid.uuid4(),
-            client_event_time=client_time,
-            synced_at=synced_at
-        )
-
-        notify_admins(employee, 'check_out', location=address)
-
-        from apps.attendance.models import AttendanceActivityLog
-        AttendanceActivityLog.objects.create(
-            employee=employee,
-            action='check_out',
-            description=f"Checked Out at {event_time.strftime('%I:%M %p')}"
-        )
-
-        return JsonResponse({
-            'success': True,
-            'total_hours': float(attendance.total_hours)
-        })
-
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
+        result = AttendanceTransactionService.check_out(request.user, data, photo)
+        return JsonResponse(result)
+    except AttendanceTransactionError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=e.status_code)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -1520,152 +1147,19 @@ def bulk_sync(request):
         actions = data.get('actions', [])
         synced_count = 0
         
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
         for act in actions:
             action_type = act.get('action')
-            lat = act.get('latitude')
-            lng = act.get('longitude')
-            accuracy = act.get('accuracy', 0.0)
-            note = act.get('note', '')
-            address = act.get('address', '')
-            sync_uuid = act.get('sync_uuid')
-            client_event_time_str = act.get('client_event_time')
-            
-            if sync_uuid:
+            try:
                 if action_type == 'check_in':
-                    if Attendance.objects.filter(sync_uuid=sync_uuid).exists():
-                        continue
+                    AttendanceTransactionService.check_in(request.user, act, validate_photo=False)
+                    synced_count += 1
                 elif action_type == 'check_out':
-                    from apps.attendance.models import AttendanceLocation
-                    if AttendanceLocation.objects.filter(sync_uuid=sync_uuid, event='check_out').exists():
-                        continue
-                        
-            client_time = parse_and_validate_client_time(client_event_time_str) or timezone.now()
-            today = timezone.localdate(client_time)
-            employee = get_employee(request.user)
-            if not employee:
-                continue
-            
-            if action_type == 'check_in':
-                active_session = Attendance.objects.filter(
-                    employee=employee,
-                    date=today,
-                    attendance_type='check_in',
-                    check_out_time__isnull=True,
-                    is_expired=False
-                ).first()
-                if active_session:
-                    continue
-                    
-                policy = get_attendance_policy(employee)
-                if policy.geofencing_policy != 'disabled':
-                    branch = employee.branch
-                    if branch and branch.latitude and branch.longitude:
-                        within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
-                        if not within_geofence:
-                            if policy.geofencing_policy == 'block':
-                                continue
-                            elif policy.geofencing_policy == 'warning':
-                                note = f"{note} [GEOFENCE WARNING: Checked in {int(distance)}m outside geofence]".strip()
-                                
-                first_checkin_today = Attendance.objects.filter(
-                    employee=employee,
-                    date=today,
-                    attendance_type='check_in',
-                    is_expired=False
-                ).order_by('check_in_time').first()
-                
-                if first_checkin_today is None:
-                    from .schedule_utils import get_branch_schedule, calculate_attendance_status
-                    schedule = get_branch_schedule(employee)
-                    status = calculate_attendance_status(client_time, schedule)
-                else:
-                    status = 'on_time'
-                    
-                attendance = Attendance.objects.create(
-                    employee=employee,
-                    date=today,
-                    check_in_time=client_time,
-                    type='office' if policy.geofencing_policy != 'disabled' else 'field',
-                    attendance_type='check_in',
-                    status=status,
-                    note=note,
-                    sync_uuid=sync_uuid or uuid.uuid4(),
-                    client_event_time=client_time,
-                    synced_at=timezone.now()
-                )
-                
-                from apps.attendance.models import AttendanceLocation, AttendanceActivityLog
-                AttendanceLocation.objects.create(
-                    attendance=attendance,
-                    event='check_in',
-                    latitude=float(lat),
-                    longitude=float(lng),
-                    address=address or 'Offline Check-in location',
-                    accuracy=float(accuracy),
-                    timestamp=client_time,
-                    sync_uuid=uuid.uuid4(),
-                    client_event_time=client_time,
-                    synced_at=timezone.now()
-                )
-                
-                AttendanceActivityLog.objects.create(
-                    employee=employee,
-                    action='check_in',
-                    description=f"Checked In (Offline Synced) at {client_time.strftime('%I:%M %p')}"
-                )
-                synced_count += 1
-                
-            elif action_type == 'check_out':
-                attendance = Attendance.objects.filter(
-                    employee=employee,
-                    date=today,
-                    attendance_type='check_in',
-                    check_out_time__isnull=True,
-                    is_expired=False
-                ).first()
-                if not attendance:
-                    continue
-                    
-                attendance.check_out_time = client_time
-                duration = client_time - attendance.check_in_time
-                attendance.total_hours = round(duration.total_seconds() / 3600.0, 2)
-                
-                from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
-                schedule = get_branch_schedule(employee)
-                overtime_minutes = calculate_overtime(client_time, schedule, employee, attendance.date)
-                attendance.is_early_checkout = calculate_early_checkout(client_time, schedule, attendance.date)
-                
-                if overtime_minutes > 0:
-                    attendance.overtime_minutes = overtime_minutes
-                    attendance.ot_status = 'pending'
-                else:
-                    attendance.overtime_minutes = 0
-                    attendance.ot_status = 'none'
-                    
-                attendance.client_event_time = client_time
-                attendance.synced_at = timezone.now()
-                attendance.save()
-                
-                from apps.attendance.models import AttendanceLocation, AttendanceActivityLog
-                AttendanceLocation.objects.create(
-                    attendance=attendance,
-                    event='check_out',
-                    latitude=float(lat),
-                    longitude=float(lng),
-                    address=address or 'Offline Check-out location',
-                    accuracy=float(accuracy),
-                    timestamp=client_time,
-                    sync_uuid=sync_uuid or uuid.uuid4(),
-                    client_event_time=client_time,
-                    synced_at=timezone.now()
-                )
-                
-                AttendanceActivityLog.objects.create(
-                    employee=employee,
-                    action='check_out',
-                    description=f"Checked Out (Offline Synced) at {client_time.strftime('%I:%M %p')}"
-                )
-                synced_count += 1
+                    AttendanceTransactionService.check_out(request.user, act, validate_photo=False)
+                    synced_count += 1
+            except AttendanceTransactionError:
+                # If an error happens (e.g. double check-in validation), skip in bulk sync
+                pass
                 
         return JsonResponse({'success': True, 'synced': synced_count})
     except Exception as e:

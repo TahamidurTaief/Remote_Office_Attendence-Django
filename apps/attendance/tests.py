@@ -1566,6 +1566,138 @@ class MonthlyAttendanceReportingServiceTests(TestCase):
         self.assertLessEqual(len(queries), 12)
 
 
+class AttendanceTransactionServiceTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch, OfficeSchedule
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        import datetime
+        User = get_user_model()
+
+        self.branch = Branch.objects.create(
+            name='Reliability Branch',
+            address='Reliability Road',
+            latitude=23.8759,
+            longitude=90.3795,
+            radius_meters=100,
+            is_active=True
+        )
+        self.schedule, _ = OfficeSchedule.objects.get_or_create(
+            branch=self.branch,
+            defaults={
+                'office_start_time': datetime.time(9, 0),
+                'office_end_time': datetime.time(18, 0),
+                'late_after_minutes': 15,
+                'early_checkout_before_minutes': 30,
+                'overtime_after_minutes': 30,
+                'working_days': ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+            }
+        )
+        self.user = User.objects.create_user(phone='+8801722223333', password='pass', role='staff')
+        self.emp = EmployeeProfile.objects.create(
+            user=self.user,
+            employee_id='EMP-TRAN-01',
+            full_name='Bob Reliability',
+            phone='+8801722223333',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        # Set branch policy: photo not required by default for testing
+        from apps.attendance.models import AttendancePolicy
+        policy, _ = AttendancePolicy.objects.get_or_create(branch=self.branch)
+        policy.photo_required = False
+        policy.save()
+
+    def test_idempotent_sync_uuid_check_in(self):
+        import uuid
+        from apps.attendance.transaction_service import AttendanceTransactionService
+        uid = uuid.uuid4()
+        data = {
+            'latitude': 23.8759,
+            'longitude': 90.3795,
+            'accuracy': 10,
+            'type': 'office',
+            'sync_uuid': str(uid)
+        }
+        res1 = AttendanceTransactionService.check_in(self.user, data)
+        self.assertTrue(res1['success'])
+        session_id = res1['session_id']
+
+        res2 = AttendanceTransactionService.check_in(self.user, data)
+        self.assertTrue(res2['success'])
+        self.assertEqual(res2['session_id'], session_id)
+
+    def test_check_in_while_checked_in(self):
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
+        data = {
+            'latitude': 23.8759,
+            'longitude': 90.3795,
+            'accuracy': 10,
+            'type': 'office'
+        }
+        AttendanceTransactionService.check_in(self.user, data)
+        
+        with self.assertRaises(AttendanceTransactionError) as ctx:
+            AttendanceTransactionService.check_in(self.user, data)
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn('already checked in', str(ctx.exception))
+
+    def test_idempotent_sync_uuid_check_out(self):
+        import uuid
+        from apps.attendance.transaction_service import AttendanceTransactionService
+        data_in = {
+            'latitude': 23.8759,
+            'longitude': 90.3795,
+            'accuracy': 10,
+            'type': 'office'
+        }
+        AttendanceTransactionService.check_in(self.user, data_in)
+
+        uid = uuid.uuid4()
+        data_out = {
+            'latitude': 23.8759,
+            'longitude': 90.3795,
+            'accuracy': 10,
+            'sync_uuid': str(uid)
+        }
+        res1 = AttendanceTransactionService.check_out(self.user, data_out)
+        self.assertTrue(res1['success'])
+
+        res2 = AttendanceTransactionService.check_out(self.user, data_out)
+        self.assertTrue(res2['success'])
+        self.assertEqual(res2['total_hours'], res1['total_hours'])
+
+    def test_invalid_gps_and_geofence(self):
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
+        from apps.attendance.models import AttendancePolicy
+        policy, _ = AttendancePolicy.objects.get_or_create(branch=self.branch)
+        policy.gps_required = 'required'
+        policy.geofencing_policy = 'block'
+        policy.allow_outside_geofence = False
+        policy.photo_required = False
+        policy.save()
+
+        data_missing_gps = {
+            'latitude': 0.0,
+            'longitude': 0.0,
+            'accuracy': 0,
+            'type': 'office'
+        }
+        with self.assertRaises(AttendanceTransactionError):
+            AttendanceTransactionService.check_in(self.user, data_missing_gps)
+
+        data_outside_geofence = {
+            'latitude': 24.0,
+            'longitude': 90.0,
+            'accuracy': 10,
+            'type': 'office'
+        }
+        with self.assertRaises(AttendanceTransactionError) as ctx:
+            AttendanceTransactionService.check_in(self.user, data_outside_geofence)
+        self.assertIn('outside the office radius', str(ctx.exception))
+
+
 
 
 
