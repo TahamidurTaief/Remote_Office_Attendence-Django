@@ -47,7 +47,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. NEVER cache business data or backend API calls
+  // 1. NEVER cache business data, API calls, or sensitive documents/media
   if (
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/attendance/') ||
@@ -58,9 +58,14 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/projects/') ||
     url.pathname.startsWith('/schedule/') ||
     url.pathname.startsWith('/notifications/') ||
+    url.pathname.startsWith('/employees/') ||
+    url.pathname.startsWith('/branches/') ||
+    url.pathname.startsWith('/reports/') ||
+    url.pathname.startsWith('/media/') ||     // Employee docs, NID, salary PDFs — never cache
+    url.pathname.startsWith('/backups/') ||
     event.request.method !== 'GET'
   ) {
-    // Network-only for all business logic & API data
+    // Network-only for all business logic & sensitive data
     return;
   }
 

@@ -75,9 +75,14 @@ def sw_view(request):
     try:
         with open(sw_path, 'r') as f:
             content = f.read()
-        return HttpResponse(content, content_type='application/javascript')
+        response = HttpResponse(content, content_type='application/javascript')
     except FileNotFoundError:
-        return HttpResponse('// Service worker', content_type='application/javascript')
+        response = HttpResponse('// Service worker', content_type='application/javascript')
+    # SW must never be cached by the browser — only the SW runtime manages its own updates.
+    # Without no-store, Chrome/WebView may hold the old worker for up to 24 h.
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    response['Service-Worker-Allowed'] = '/'
+    return response
 
 def assetlinks_view(request):
     """

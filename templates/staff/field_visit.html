@@ -191,15 +191,18 @@ function getLocation() {
       document.getElementById('gps-step-text').textContent = 
         'GPS Ready';
 
-      // Reverse geocode
+      // Reverse geocode — 5 s timeout to not stall on weak connections
       try {
+        const geocodeCtrl = new AbortController();
+        const geocodeTimeout = setTimeout(() => geocodeCtrl.abort(), 5000);
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse` +
           `?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'Accept-Language': 'en' } }
+          { headers: { 'Accept-Language': 'en' }, signal: geocodeCtrl.signal }
         );
+        clearTimeout(geocodeTimeout);
         const data = await res.json();
-        const address = data.display_name || 
+        const address = data.display_name ||
           `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
         document.getElementById('id_address').value = address;
         document.getElementById('gps-address').textContent = address;
@@ -245,7 +248,7 @@ function handlePhoto(input) {
 
     // Validate size (10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert('Photo too large. Maximum 10MB allowed.');
+      if (window.showToast) showToast('Photo too large. Maximum 10MB allowed.', 'error');
       input.value = '';
       return;
     }
@@ -322,45 +325,56 @@ function checkBothReady() {
 // ==================
 function submitFieldVisit() {
   if (!gpsReady || !photoReady) return;
-  
+
   const title = document.getElementById('id_visit_title').value.trim();
   if (!title) {
-    alert("Visit Title is required.");
+    if (window.showToast) showToast('Visit Title is required.', 'error');
     return;
   }
 
   const btn = document.getElementById('submit-visit-btn');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
-  
+
   const formData = new FormData();
   formData.append('latitude', document.getElementById('id_latitude').value);
   formData.append('longitude', document.getElementById('id_longitude').value);
   formData.append('accuracy', document.getElementById('id_accuracy').value);
   formData.append('address', document.getElementById('id_address').value);
-  formData.append('photo', document.getElementById('camera-input').files[0]);
+  const photoFile = document.getElementById('camera-input').files[0];
+  if (photoFile) formData.append('photo', photoFile);
   formData.append('visit_title', title);
   formData.append('client_name', document.getElementById('id_client_name').value || '');
   formData.append('site_address', document.getElementById('id_site_address').value || '');
   formData.append('note', document.getElementById('id_note').value || '');
   formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
 
+  // 30 s hard timeout so WebView doesn't hang on weak connections
+  const ctrl = new AbortController();
+  const hardTimeout = setTimeout(() => ctrl.abort(), 30000);
+
   fetch('/attendance/field-visit/', {
     method: 'POST',
-    body: formData
+    body: formData,
+    signal: ctrl.signal
   })
   .then(res => res.json())
   .then(data => {
+    clearTimeout(hardTimeout);
     if (data.success) {
       window.location.href = '/staff/home/';
     } else {
-      alert('Error: ' + data.error);
+      if (window.showToast) showToast('Error: ' + (data.error || 'Submission failed'), 'error');
       btn.disabled = false;
       btn.textContent = 'Submit Visit';
     }
   })
   .catch(err => {
-    alert('Something went wrong. Try again.');
+    clearTimeout(hardTimeout);
+    const msg = err.name === 'AbortError'
+      ? 'Request timed out. Check your connection and try again.'
+      : 'Something went wrong. Try again.';
+    if (window.showToast) showToast(msg, 'error');
     btn.disabled = false;
     btn.textContent = 'Submit Visit';
   });

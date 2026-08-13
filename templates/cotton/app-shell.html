@@ -27,7 +27,10 @@
   </script>
 
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>{{ page_title|default:"FieldTrack" }}</title>
 
   <link rel="manifest" href="/manifest.json">
@@ -338,7 +341,8 @@
          removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); }
        }"
        @new-toast.window="addToast($event.detail.message, $event.detail.type)"
-       class="fixed top-4 right-4 z-[80] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+       class="fixed right-4 z-[80] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
+       style="top: calc(1rem + env(safe-area-inset-top, 0px))">
     <template x-for="toast in toasts" :key="toast.id">
       <div x-show="true"
            x-transition:enter="transition ease-out duration-250"
@@ -423,35 +427,8 @@
 
   {# ── Init lucide icons after each htmx swap ──────────────────────── #}
   <script>
-    // Offline IndexedDB Queue globals
-    const dbName = "FieldTrackOfflineDB";
-    const storeName = "attendanceQueue";
-
-    function getDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(dbName, 1);
-            request.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(storeName)) {
-                    db.createObjectStore(storeName, { keyPath: "sync_uuid" });
-                }
-            };
-            request.onsuccess = (e) => resolve(e.target.result);
-            request.onerror = (e) => reject(e.target.error);
-        });
-    }
-
-    async function queueOfflineAction(action) {
-        const db = await getDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(storeName, "readwrite");
-            const store = transaction.objectStore(storeName);
-            const request = store.put(action);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    }
-
+    // NOTE: Offline IndexedDB logic is handled centrally in /static/js/offline/db.js (FieldTrackDB)
+    // and /static/js/offline/sync_engine.js (SyncEngine). Do NOT add duplicate IndexedDB code here.
     document.addEventListener('DOMContentLoaded', () => { if(window.lucide) lucide.createIcons(); });
     document.addEventListener('htmx:afterSwap', () => { if(window.lucide) lucide.createIcons(); });
     document.addEventListener('htmx:afterSettle', () => { if(window.lucide) lucide.createIcons(); });

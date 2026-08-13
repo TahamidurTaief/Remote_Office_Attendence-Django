@@ -209,15 +209,18 @@ function getLocation() {
       document.getElementById('gps-step-text').textContent = 
         'GPS Ready';
 
-      // Reverse geocode
+      // Reverse geocode — 5 s timeout to not stall on weak connections
       try {
+        const geocodeCtrl = new AbortController();
+        const geocodeTimeout = setTimeout(() => geocodeCtrl.abort(), 5000);
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse` +
           `?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'Accept-Language': 'en' } }
+          { headers: { 'Accept-Language': 'en' }, signal: geocodeCtrl.signal }
         );
+        clearTimeout(geocodeTimeout);
         const data = await res.json();
-        const address = data.display_name || 
+        const address = data.display_name ||
           `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
         document.getElementById('id_address').value = address;
         document.getElementById('gps-address').textContent = address;
@@ -334,47 +337,18 @@ function checkBothReady() {
     }
     hint.className = 'text-center text-xs text-gray-400 mt-2';
   }
-}// ==================
-// Offline IndexedDB Queue
-// ==================
-const dbName = "FieldTrackOfflineDB";
-const storeName = "attendanceQueue";
-
-function getDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName, 1);
-        request.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(storeName)) {
-                db.createObjectStore(storeName, { keyPath: "sync_uuid" });
-            }
-        };
-        request.onsuccess = (e) => resolve(e.target.result);
-        request.onerror = (e) => reject(e.target.error);
-    });
-}
-
-async function queueOfflineAction(action) {
-    const db = await getDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(storeName, "readwrite");
-        const store = transaction.objectStore(storeName);
-        const request = store.put(action);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-    });
-}
-
 // ==================
 // Form Submit
 // ==================
 function submitCheckIn() {
-  if (!gpsReady || !photoReady) return;
-  
+  const photoRequired = {% if policy.photo_required %}true{% else %}false{% endif %};
+  if (!gpsReady) return;
+  if (photoRequired && !photoReady) return;
+
   const btn = document.getElementById('check-in-btn');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
-  
+
   const lat = document.getElementById('id_latitude').value;
   const lng = document.getElementById('id_longitude').value;
   const acc = document.getElementById('id_accuracy').value;
@@ -383,26 +357,30 @@ function submitCheckIn() {
   const type = document.querySelector('input[name="attendance_type"]:checked')?.value || 'office';
 
   if (!navigator.onLine) {
-      const sync_uuid = (crypto.randomUUID && crypto.randomUUID()) || ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
-      queueOfflineAction({
-          action: 'check_in',
+    // Use canonical FieldTrackDB instead of duplicate local IndexedDB
+    if (window.FieldTrackDB) {
+      window.FieldTrackDB.enqueueSyncItem('attendance', 'check_in', {
           latitude: lat || 0,
           longitude: lng || 0,
           accuracy: acc || 0,
           address: address || 'Offline Check-in location',
           note: note,
           type: type,
-          sync_uuid: sync_uuid,
           client_event_time: new Date().toISOString()
-      }).then(() => {
-          alert('You are offline. Checked in successfully locally. Your attendance will sync automatically when your connection is restored.');
-          window.location.href = '/staff/home/';
+      }, 1).then(() => {
+          if (window.showToast) showToast('Offline check-in saved. Will sync when reconnected.', 'info');
+          setTimeout(() => { window.location.href = '/staff/home/'; }, 1500);
       }).catch(err => {
-          alert('Failed to save check-in offline: ' + err);
+          if (window.showToast) showToast('Failed to save offline: ' + err, 'error');
           btn.disabled = false;
           btn.textContent = 'Complete Check In';
       });
-      return;
+    } else {
+      if (window.showToast) showToast('You are offline and the local database is unavailable. Please reconnect.', 'warning');
+      btn.disabled = false;
+      btn.textContent = 'Complete Check In';
+    }
+    return;
   }
 
   const formData = new FormData();
@@ -410,30 +388,39 @@ function submitCheckIn() {
   formData.append('longitude', lng);
   formData.append('accuracy', acc);
   formData.append('address', address);
-  formData.append('photo', document.getElementById('camera-input').files[0]);
+  const photoFile = document.getElementById('camera-input').files[0];
+  if (photoFile) formData.append('photo', photoFile);
   formData.append('note', note);
   formData.append('type', type);
   formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
 
+  // Abort controller — 30 s hard timeout so WebView doesn't hang forever
+  const ctrl = new AbortController();
+  const hardTimeout = setTimeout(() => ctrl.abort(), 30000);
+
   fetch('/attendance/check-in/', {
     method: 'POST',
-    body: formData
+    body: formData,
+    signal: ctrl.signal
   })
   .then(res => res.json())
   .then(data => {
+    clearTimeout(hardTimeout);
     if (data.success) {
-      if (window.LocationTracker) {
-        window.LocationTracker.startTracking();
-      }
+      if (window.LocationTracker) window.LocationTracker.startTracking();
       window.location.href = '/staff/home/';
     } else {
-      alert('Error: ' + data.error);
+      if (window.showToast) showToast('Error: ' + (data.error || 'Check-in failed'), 'error');
       btn.disabled = false;
       btn.textContent = 'Complete Check In';
     }
   })
   .catch(err => {
-    alert('Something went wrong. Try again.');
+    clearTimeout(hardTimeout);
+    const msg = err.name === 'AbortError'
+      ? 'Request timed out. Check your connection and try again.'
+      : 'Something went wrong. Try again.';
+    if (window.showToast) showToast(msg, 'error');
     btn.disabled = false;
     btn.textContent = 'Complete Check In';
   });

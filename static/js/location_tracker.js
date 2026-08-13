@@ -135,57 +135,70 @@
             }
 
             this.isSending = true;
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    const accuracy = position.coords.accuracy;
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
 
-                    console.log(`[LocationTracker] Sending location: (${lat}, ${lng}) with accuracy ${accuracy}m`);
+                console.log(`[LocationTracker] Sending location: (${lat}, ${lng}) with accuracy ${accuracy}m`);
 
-                    const payload = {
-                        latitude: lat,
-                        longitude: lng,
-                        accuracy: accuracy,
-                        address: ''
-                    };
+                const payload = {
+                    latitude: lat,
+                    longitude: lng,
+                    accuracy: accuracy,
+                    address: ''
+                };
 
-                    try {
-                        const response = await fetch('/attendance/location-sync/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': this.getCsrf()
-                            },
-                            body: JSON.stringify(payload)
-                        });
+                // 15 s hard timeout — location sync must not stall WebView on weak connections
+                const ctrl = new AbortController();
+                const timeout = setTimeout(() => ctrl.abort(), 15000);
 
-                        const data = await response.json();
-                        if (response.ok && data.success) {
-                            console.log('[LocationTracker] Location sync successfully completed.');
-                            const indicator = document.getElementById('tracker-status');
-                            if (indicator) {
-                                indicator.textContent = 'Last sync: ' + new Date().toLocaleTimeString();
-                            }
-                        } else {
-                            console.warn('[LocationTracker] Server rejected location sync:', data.error || 'Unknown error');
+                try {
+                    const response = await fetch('/attendance/location-sync/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.getCsrf()
+                        },
+                        body: JSON.stringify(payload),
+                        signal: ctrl.signal
+                    });
+                    clearTimeout(timeout);
+
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        console.log('[LocationTracker] Location sync successfully completed.');
+                        localStorage.removeItem('ft_gps_error');  // Clear any previous error state
+                        const indicator = document.getElementById('tracker-status');
+                        if (indicator) {
+                            indicator.textContent = 'Last sync: ' + new Date().toLocaleTimeString();
                         }
-                    } catch (err) {
-                        console.warn('[LocationTracker] Failed to POST location sync:', err);
-                    } finally {
-                        this.isSending = false;
+                    } else {
+                        console.warn('[LocationTracker] Server rejected location sync:', data.error || 'Unknown error');
+                        localStorage.setItem('ft_gps_error', data.error || 'Server rejected location sync');
                     }
-                },
-                (error) => {
-                    console.warn('[LocationTracker] Geolocation error:', error.message);
+                } catch (err) {
+                    clearTimeout(timeout);
+                    const errMsg = err.name === 'AbortError' ? 'Location sync timed out' : err.message;
+                    console.warn('[LocationTracker] Failed to POST location sync:', errMsg);
+                    localStorage.setItem('ft_gps_error', errMsg);
+                } finally {
                     this.isSending = false;
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 60000
                 }
-            );
+            },
+            (error) => {
+                const errMsg = error.message || 'GPS permission denied';
+                console.warn('[LocationTracker] Geolocation error:', errMsg);
+                localStorage.setItem('ft_gps_error', errMsg);  // Surface to UI
+                this.isSending = false;
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+            }
+        );
         },
 
         startCountdown() {
