@@ -104,6 +104,25 @@ class LeaveReportsViewTestCase(TestCase):
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertIn('attachment; filename="leave_report_', response['Content-Disposition'])
 
+    def test_leave_export_csv_clamping(self):
+        # LeaveRequest spans 2026-07-10 to 2026-07-12 (3 days)
+        # Request a CSV filtered to 2026-07-11 to 2026-07-20
+        self.client.force_login(self.admin_user)
+        url = reverse('admin_panel:reports_leave_export_csv')
+        response = self.client.get(url, {
+            'employee': self.employee.pk,
+            'date_from': '2026-07-11',
+            'date_to': '2026-07-20'
+        })
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        # Row format: SN, Employee, Employee ID, Branch, Leave Type, Start Date, End Date, Days, Status...
+        # Let's inspect the days value in the row. Since the range is July 11-20, only July 11 and July 12 should be counted.
+        # July 10 is outside the range. July 11 & July 12 should yield 2 days.
+        lines = [line for line in content.split('\r\n') if line]
+        self.assertEqual(len(lines), 2)  # Header + 1 row
+        self.assertIn(',2,Approved', lines[1])
+
     def test_leave_export_xlsx(self):
         self.client.force_login(self.admin_user)
         url = reverse('admin_panel:reports_leave_export_xlsx')

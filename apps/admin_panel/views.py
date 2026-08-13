@@ -1797,6 +1797,9 @@ class LeaveEmployeeReportView(AdminRequiredMixin, View):
 class ExportLeaveReportCSVView(AdminRequiredMixin, View):
     def get(self, request):
         from apps.leave.models import LeaveRequest
+        from datetime import datetime, timedelta
+        from django.db.models import Q
+        from apps.branches.models import Holiday
 
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
@@ -1828,9 +1831,58 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
             'SN', 'Employee', 'Employee ID', 'Branch', 'Leave Type',
             'Start Date', 'End Date', 'Days', 'Status', 'Reason', 'Reviewed By'
         ])
+
+        # Clamping and parsing helper
+        d_from = None
+        d_to = None
+        if date_from:
+            try:
+                d_from = datetime.strptime(date_from, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                d_to = datetime.strptime(date_to, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
         for idx, req in enumerate(qs, 1):
             rev_by = req.reviewed_by.get_full_name() or req.reviewed_by.email if req.reviewed_by else '—'
             branch = req.employee.branch.name if req.employee.branch else '—'
+
+            # Clamp dates to selected range
+            s_date = max(req.start_date, d_from) if d_from else req.start_date
+            e_date = min(req.end_date, d_to) if d_to else req.end_date
+
+            # Calculate working leave days inside range
+            days_count = 0
+            if s_date <= e_date:
+                master = getattr(req.employee, 'master_employee', None)
+                branch_obj = master.branch if master else req.employee.branch
+                policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
+                policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
+                
+                curr = s_date
+                while curr <= e_date:
+                    day_name = curr.strftime('%A').lower()
+                    if day_name in policy:
+                        curr += timedelta(days=1)
+                        continue
+                    
+                    holiday_qs = Holiday.objects.filter(date=curr)
+                    if branch_obj:
+                        holiday_qs = holiday_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
+                    else:
+                        holiday_qs = holiday_qs.filter(branch__isnull=True)
+                    if holiday_qs.exists():
+                        curr += timedelta(days=1)
+                        continue
+                    
+                    days_count += 1
+                    curr += timedelta(days=1)
+            else:
+                days_count = 0
+
             writer.writerow([
                 idx,
                 req.employee.full_name,
@@ -1839,7 +1891,7 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
                 req.leave_type.name,
                 req.start_date,
                 req.end_date,
-                req.number_of_days,
+                days_count,
                 req.get_status_display(),
                 req.reason or '',
                 rev_by
@@ -1850,6 +1902,9 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
 class ExportLeaveReportPDFView(AdminRequiredMixin, View):
     def get(self, request):
         from apps.leave.models import LeaveRequest
+        from datetime import datetime, timedelta
+        from django.db.models import Q
+        from apps.branches.models import Holiday
 
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
@@ -1892,7 +1947,52 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
         header = ['SN', 'Employee', 'Emp ID', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Status']
         data = [header]
 
+        # Clamping and parsing helper
+        d_from = None
+        d_to = None
+        if date_from:
+            try:
+                d_from = datetime.strptime(date_from, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                d_to = datetime.strptime(date_to, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
         for idx, req in enumerate(qs, 1):
+            s_date = max(req.start_date, d_from) if d_from else req.start_date
+            e_date = min(req.end_date, d_to) if d_to else req.end_date
+
+            days_count = 0
+            if s_date <= e_date:
+                master = getattr(req.employee, 'master_employee', None)
+                branch_obj = master.branch if master else req.employee.branch
+                policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
+                policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
+                
+                curr = s_date
+                while curr <= e_date:
+                    day_name = curr.strftime('%A').lower()
+                    if day_name in policy:
+                        curr += timedelta(days=1)
+                        continue
+                    
+                    holiday_qs = Holiday.objects.filter(date=curr)
+                    if branch_obj:
+                        holiday_qs = holiday_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
+                    else:
+                        holiday_qs = holiday_qs.filter(branch__isnull=True)
+                    if holiday_qs.exists():
+                        curr += timedelta(days=1)
+                        continue
+                    
+                    days_count += 1
+                    curr += timedelta(days=1)
+            else:
+                days_count = 0
+
             data.append([
                 str(idx),
                 req.employee.full_name,
@@ -1900,7 +2000,7 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
                 req.leave_type.name,
                 str(req.start_date),
                 str(req.end_date),
-                str(req.number_of_days),
+                str(days_count),
                 req.get_status_display(),
             ])
 
