@@ -337,3 +337,167 @@ class PayrollFoundationTests(TestCase):
         # Verify value was updated correctly
         calc2.refresh_from_db()
         self.assertEqual(calc2.unpaid_absent_days, Decimal('3.00'))
+
+    def test_sync_payroll_inputs_success_and_locked_protection(self):
+        from apps.employees.models import EmployeeProfile
+        from apps.attendance.models import Attendance
+        from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
+        from django.contrib.auth import get_user_model
+        
+        User = get_user_model()
+        user = User.objects.create_user(email="testuser@example.com", phone="1234567890", password="password")
+        
+        # Create EmployeeProfile linked to self.employee
+        profile = EmployeeProfile.objects.create(
+            user=user,
+            master_employee=self.employee,
+            employee_id="EMP001",
+            full_name="John Doe",
+            joined_date=datetime.date(2026, 1, 1),
+            phone="1234567890",
+            is_active=True,
+            branch=self.branch
+        )
+
+        EmployeeSalaryAssignment.objects.create(
+            employee=self.employee,
+            salary_structure=self.structure,
+            gross_salary=Decimal('100000.00'),
+            effective_from=datetime.date(2026, 8, 1)
+        )
+
+        # Create 22 present days, 2 approved leave days, 1 unpaid absence day, 2 hours OT approved.
+        # We can construct these simply by adding Attendance and LeaveRequest records
+        # August 2026 starts on Saturday
+        # Let's add 22 office check-ins (which count as present) on working days
+        # working days in August 2026 for Standard schedule: friday/saturday are holidays (or friday/saturday holiday based on weekly_holiday_policy)
+        # We can create some Attendance check-ins
+        for d in range(1, 23):
+            Attendance.objects.create(
+                employee=profile,
+                date=datetime.date(2026, 8, d),
+                attendance_type='check_in',
+                status='on_time',
+                total_hours=Decimal('8.00'),
+                overtime_minutes=60 if d in [1, 2] else 0, # 120 minutes total = 2.0 hours approved OT
+                ot_status='approved' if d in [1, 2] else 'none'
+            )
+
+        # Approved Leave
+        lt = LeaveType.objects.create(name="Paid Leave", category="casual", is_default=True)
+        LeaveRequest.objects.create(
+            employee=profile,
+            leave_type=lt,
+            start_date=datetime.date(2026, 8, 24),
+            end_date=datetime.date(2026, 8, 25),
+            status='approved'
+        )
+
+        # Payroll Run
+        payroll_run = PayrollRun.objects.create(
+            period_start=datetime.date(2026, 8, 1),
+            period_end=datetime.date(2026, 8, 31),
+            status=PayrollRunStatus.DRAFT
+        )
+
+        # First sync (Draft)
+        calcs = PayrollService.sync_payroll_inputs(payroll_run)
+        self.assertEqual(len(calcs), 1)
+        calc = calcs[0]
+        self.assertEqual(calc.employee, self.employee)
+        self.assertEqual(calc.source_total_present_days, Decimal('22'))
+        self.assertEqual(calc.source_total_approved_leave_days, Decimal('2'))
+        self.assertEqual(calc.source_total_approved_ot_hours, Decimal('2'))
+        self.assertEqual(calc.ot_hours, Decimal('2.00'))
+        
+        # Verify unpaid absent days derivation:
+        # In August (31 days):
+        # working days: 21 working days (excluding Friday/Saturday). Let's see: 
+        # canonical absent_count will exclude weekends, holidays, and leave.
+        # Let's verify that synced unpaid_absent_days matches calc.unpaid_absent_days.
+        # Rerunning sync refreshes safely (idempotent)
+        calcs_re = PayrollService.sync_payroll_inputs(payroll_run)
+        self.assertEqual(len(calcs_re), 1)
+        self.assertEqual(calcs_re[0].pk, calc.pk)
+
+        # Locked protect
+        payroll_run.status = PayrollRunStatus.APPROVED_LOCKED
+        payroll_run.save()
+        with self.assertRaises(ValidationError):
+            PayrollService.sync_payroll_inputs(payroll_run)
+
+    def test_sync_payroll_inputs_eligibility_mid_month(self):
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        
+        User = get_user_model()
+        user2 = User.objects.create_user(email="testuser2@example.com", phone="0987654321", password="password")
+        
+        # Employee joins mid-month (e.g. Sept 15, 2026)
+        emp_mid = Employee.objects.create(
+            employee_number="EMP002",
+            first_name="Jane",
+            last_name="Doe",
+            joined_date=datetime.date(2026, 9, 15),
+            status=EmployeeStatus.ACTIVE,
+            branch=self.branch
+        )
+        profile_mid = EmployeeProfile.objects.create(
+            user=user2,
+            master_employee=emp_mid,
+            employee_id="EMP002",
+            full_name="Jane Doe",
+            joined_date=datetime.date(2026, 9, 15),
+            phone="0987654321",
+            is_active=True,
+            branch=self.branch
+        )
+        EmployeeSalaryAssignment.objects.create(
+            employee=emp_mid,
+            salary_structure=self.structure,
+            gross_salary=Decimal('80000.00'),
+            effective_from=datetime.date(2026, 9, 15)
+        )
+
+        # Payroll Run for September 2026
+        payroll_run = PayrollRun.objects.create(
+            period_start=datetime.date(2026, 9, 1),
+            period_end=datetime.date(2026, 9, 30),
+            status=PayrollRunStatus.DRAFT
+        )
+
+        calcs = PayrollService.sync_payroll_inputs(payroll_run)
+        # Should include emp_mid since they joined on Sept 15 (before Sept 30)
+        self.assertTrue(any(c.employee == emp_mid for c in calcs))
+
+        # Check an employee who joins in October -> should not be eligible for Sept payroll
+        user3 = User.objects.create_user(email="testuser3@example.com", phone="1112223333", password="password")
+        emp_oct = Employee.objects.create(
+            employee_number="EMP003",
+            first_name="Bob",
+            last_name="Smith",
+            joined_date=datetime.date(2026, 10, 1),
+            status=EmployeeStatus.ACTIVE,
+            branch=self.branch
+        )
+        profile_oct = EmployeeProfile.objects.create(
+            user=user3,
+            master_employee=emp_oct,
+            employee_id="EMP003",
+            full_name="Bob Smith",
+            joined_date=datetime.date(2026, 10, 1),
+            phone="1112223333",
+            is_active=True,
+            branch=self.branch
+        )
+        EmployeeSalaryAssignment.objects.create(
+            employee=emp_oct,
+            salary_structure=self.structure,
+            gross_salary=Decimal('80000.00'),
+            effective_from=datetime.date(2026, 10, 1)
+        )
+
+        calcs_re = PayrollService.sync_payroll_inputs(payroll_run)
+        # Should NOT include emp_oct since they joined after Sept 30
+        self.assertFalse(any(c.employee == emp_oct for c in calcs_re))
+

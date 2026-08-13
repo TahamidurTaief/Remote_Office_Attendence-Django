@@ -102,6 +102,12 @@ class EmployeePayrollCalculation(models.Model):
     ot_hours = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
     ot_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     
+    # Sync Info & Source Totals Snapshots
+    synced_at = models.DateTimeField(null=True, blank=True)
+    source_total_present_days = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    source_total_approved_leave_days = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
+    source_total_approved_ot_hours = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
+    
     # Final Calculated Fields
     total_earnings = models.DecimalField(max_digits=12, decimal_places=2)
     total_deductions = models.DecimalField(max_digits=12, decimal_places=2)

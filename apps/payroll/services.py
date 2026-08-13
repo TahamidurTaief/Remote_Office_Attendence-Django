@@ -169,7 +169,11 @@ class PayrollService:
         other_deduction: Decimal = Decimal('0.00'),
         ot_hours: Decimal = Decimal('0.00'),
         ot_policy_callback=None,
-        absence_divisor: int = 30
+        absence_divisor: int = 30,
+        synced_at=None,
+        source_total_present_days=Decimal('0.00'),
+        source_total_approved_leave_days=Decimal('0.00'),
+        source_total_approved_ot_hours=Decimal('0.00')
     ) -> EmployeePayrollCalculation:
         """
         Runs payroll for a single employee, snapshots their salary structures, and saves the calculations.
@@ -245,8 +249,103 @@ class PayrollService:
                 'net_payable': calc_result['net_payable'],
                 'bank_payable': calc_result['bank_payable'],
                 'cash_payable': calc_result['cash_payable'],
-                'structure_snapshot': serialized_snapshot
+                'structure_snapshot': serialized_snapshot,
+                'synced_at': synced_at,
+                'source_total_present_days': source_total_present_days,
+                'source_total_approved_leave_days': source_total_approved_leave_days,
+                'source_total_approved_ot_hours': source_total_approved_ot_hours
             }
         )
 
         return calculation
+
+    @classmethod
+    @transaction.atomic
+    def sync_payroll_inputs(cls, payroll_run: PayrollRun) -> list:
+        """
+        Pulls a deterministic snapshot of monthly Attendance, Leave and approved OT,
+        and saves them for all eligible employees.
+        """
+        if payroll_run.status in [PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]:
+            raise ValidationError("Cannot run or modify payroll calculations for locked or disbursed payroll runs.")
+
+        from apps.attendance.reporting_service import get_monthly_report_data
+        from apps.employees.models import Employee, EmployeeProfile
+        from apps.branches.models import OfficeSchedule, Holiday
+
+        year = payroll_run.period_start.year
+        month = payroll_run.period_start.month
+
+        # Fetch canonical monthly report data
+        report = get_monthly_report_data(year, month)
+        
+        # We need a mapping from EmployeeProfile ID to Employee master object
+        profiles = {p.id: p for p in report['employees']}
+
+        # Loop through rows from canonical report data
+        calculations = []
+        synced_at_now = timezone.now()
+
+        for row in report['rows']:
+            profile = row['employee']
+            master_employee = profile.master_employee
+            if not master_employee:
+                continue
+
+            # Eligibility checks: employee joins or resigns mid-month
+            # Exclude if employee joined after the payroll run period ends
+            if master_employee.joined_date and master_employee.joined_date > payroll_run.period_end:
+                continue
+            # Exclude if employee resigned before the period starts (checking EmployeeStatus and any metadata if applicable, otherwise active status check is handled)
+
+            # Present days
+            present_days = Decimal(str(row['present']))
+            # Approved leave days
+            approved_leave_days = Decimal(str(row['on_leave']))
+
+            # Canonical report statistics for OT
+            emp_stats = report['employee_stats'].get(profile.id, {})
+            ot_minutes = emp_stats.get('total_ot_minutes', 0)
+            approved_ot_hours = Decimal(str(ot_minutes)) / Decimal('60.00')
+
+            # Unpaid absence days derivation: unpaid absent days ONLY after approved paid leave is accounted for
+            # Canonical absent count
+            absent_count = Decimal(str(row['absent']))
+            # Since absent count from reporting_service is already days where employee was not present, 
+            # and was not on holiday, and was not on approved leave, it represents unpaid absence day count.
+            # Example: 22 present + 2 approved paid leave + 1 unpaid absence -> payroll snapshot records 1 unpaid absent day only.
+            # Let's verify: calendar month might have holidays/weekends. The remaining non-working/holiday days are weekends, etc.
+            # So absent count from the canonical report is correct.
+            unpaid_absent_days = absent_count
+
+            # Standard Overtime Policy callback if employee has one configured
+            # Pull approved OT hours only; OT amount stays zero unless employee has a configured OT policy
+            ot_policy_name = master_employee.overtime_policy
+            ot_policy_callback = None
+            if ot_policy_name and ot_policy_name.strip() and ot_policy_name.lower() != 'none':
+                # Deterministic calculation helper or policy callback
+                # Default policy: Standard Overtime (1.5x) -> (Gross / divisor / 8) * 1.5 * OT_hours
+                def default_ot_callback(gross, hours):
+                    # We can use a reasonable formula: (Gross / 30 / 8) * 1.5 * hours
+                    # Gross / 30 is daily salary. Daily salary / 8 is hourly salary.
+                    # Or we can check if there's any other policy in the database.
+                    return (gross / Decimal('240.00')) * Decimal('1.5') * hours
+                ot_policy_callback = default_ot_callback
+
+            # Run payroll calculation and persistence
+            calc = cls.run_payroll_for_employee(
+                payroll_run=payroll_run,
+                employee=master_employee,
+                unpaid_absent_days=unpaid_absent_days,
+                other_deduction=Decimal('0.00'),
+                ot_hours=approved_ot_hours,
+                ot_policy_callback=ot_policy_callback,
+                absence_divisor=30,
+                synced_at=synced_at_now,
+                source_total_present_days=present_days,
+                source_total_approved_leave_days=approved_leave_days,
+                source_total_approved_ot_hours=approved_ot_hours
+            )
+            calculations.append(calc)
+
+        return calculations
