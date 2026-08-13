@@ -63,6 +63,13 @@ urlpatterns = [
     path('<int:project_id>/request-signoff/', views.ProjectRequestSignOffView.as_view(), name='request_signoff'),
     path('<int:project_id>/export-pdf/', views.ProjectExportPDFView.as_view(), name='export_pdf'),
 
+    # Gantt Chart (G2)
+    path('<int:pk>/gantt/', views.ProjectGanttView.as_view(), name='project_gantt'),
+
+    # Task Dependencies (G1)
+    path('tasks/<int:pk>/dependencies/add/', views.TaskDependencyCreateView.as_view(), name='task_dep_add'),
+    path('dependencies/<int:pk>/delete/', views.TaskDependencyDeleteView.as_view(), name='task_dep_delete'),
+
     # CSV Exports
     path('<int:pk>/export-tasks/', views.ExportProjectTasksCSVView.as_view(), name='export_tasks_csv'),
     path('<int:pk>/export-manpower/', views.ExportProjectManpowerCSVView.as_view(), name='export_manpower_csv'),

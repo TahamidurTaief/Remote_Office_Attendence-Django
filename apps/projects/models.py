@@ -1,4 +1,5 @@
 import uuid
+from datetime import date as _date
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -120,16 +121,34 @@ class Project(models.Model):
         return self.name
 
     def recalculate_progress(self):
-        total_tasks = self.tasks.all()
-        if not total_tasks.exists():
-            return
-        total_points = sum(task.points for task in total_tasks)
-        if total_points == 0:
-            self.progress_percent = 0
-        else:
-            weighted_progress = sum(task.points * (task.progress_percent / 100.0) for task in total_tasks)
-            self.progress_percent = round((weighted_progress / total_points) * 100)
-        self.save(update_fields=['progress_percent'])
+        """
+        Recalculate weighted project progress using a single aggregation query
+        instead of a Python loop (fixes G7 N+1 issue).
+        """
+        from django.db.models import Sum, F, FloatField, ExpressionWrapper, Value
+        from django.db.models.functions import Coalesce
+
+        agg = self.tasks.aggregate(
+            total_pts=Coalesce(Sum('points'), Value(0)),
+            weighted=Coalesce(
+                Sum(
+                    ExpressionWrapper(
+                        F('points') * F('progress_percent'),
+                        output_field=FloatField()
+                    )
+                ),
+                Value(0.0)
+            )
+        )
+        total_pts = agg['total_pts']
+        weighted = agg['weighted']
+
+        if total_pts == 0:
+            return  # nothing to update if no tasks or all zero points
+
+        progress = round((weighted / total_pts))
+        Project.objects.filter(pk=self.pk).update(progress_percent=progress)
+        self.progress_percent = progress
 
 
 class TaskTemplate(models.Model):
@@ -181,6 +200,18 @@ class ProjectTask(models.Model):
     planned_start = models.DateField(null=True, blank=True)
     planned_finish = models.DateField(null=True, blank=True)
     duration_days = models.PositiveIntegerField(null=True, blank=True)
+
+    # --- Baseline dates (G4): snapshot of original plan for Gantt comparison ---
+    baseline_start = models.DateField(null=True, blank=True)
+    baseline_finish = models.DateField(null=True, blank=True)
+
+    # --- Actual dates (G6): recorded when work actually begins/ends ---
+    actual_start = models.DateField(null=True, blank=True)
+    actual_finish = models.DateField(null=True, blank=True)
+
+    # --- Milestone flag (G5) ---
+    is_milestone = models.BooleanField(default=False)
+
     status = models.CharField(
         max_length=50,
         choices=STATUS_CHOICES,
@@ -212,38 +243,58 @@ class ProjectTask(models.Model):
             ('assign_projecttask', 'Can assign project task'),
         ]
 
-    def save(self, *args, **kwargs):
-        is_completed_transition = False
+    # ── Computed properties ────────────────────────────────────────────────────
+
+    @property
+    def is_delayed(self):
+        """
+        Auto-detect delay (G3): True when planned_finish has passed and the
+        task is not yet Completed.  Does NOT require manual status editing.
+        """
         if self.status == 'Completed':
-            if self.pk:
-                try:
-                    old_status = ProjectTask.objects.get(pk=self.pk).status
-                    if old_status != 'Completed':
-                        is_completed_transition = True
-                except ProjectTask.DoesNotExist:
-                    is_completed_transition = True
-            else:
+            return False
+        if self.planned_finish and self.planned_finish < _date.today():
+            return True
+        return False
+
+    @property
+    def effective_status(self):
+        """Returns 'Delayed' if auto-detected, else the stored status."""
+        if self.is_delayed and self.status not in ('Delayed', 'Completed'):
+            return 'Delayed'
+        return self.status
+
+    # ── Save override ──────────────────────────────────────────────────────────
+
+    def save(self, *args, **kwargs):
+        # --- Fix G12: merge two `objects.get(pk)` calls into one read ---
+        is_completed_transition = False
+        is_delayed_transition = False
+
+        if self.pk:
+            try:
+                old = ProjectTask.objects.only('status').get(pk=self.pk)
+                old_status = old.status
+            except ProjectTask.DoesNotExist:
+                old_status = None
+
+            if self.status == 'Completed' and old_status != 'Completed':
                 is_completed_transition = True
+            if self.status == 'Delayed' and old_status != 'Delayed':
+                is_delayed_transition = True
+        else:
+            if self.status == 'Completed':
+                is_completed_transition = True
+            if self.status == 'Delayed':
+                is_delayed_transition = True
 
         if is_completed_transition and not self.completed_at:
             from django.utils import timezone
             self.completed_at = timezone.now()
 
-        is_delayed = False
-        if self.status == 'Delayed':
-            if self.pk:
-                try:
-                    old_status = ProjectTask.objects.get(pk=self.pk).status
-                    if old_status != 'Delayed':
-                        is_delayed = True
-                except ProjectTask.DoesNotExist:
-                    is_delayed = True
-            else:
-                is_delayed = True
-                
         super().save(*args, **kwargs)
-        
-        if is_delayed and self.project and self.project.project_managers.exists():
+
+        if is_delayed_transition and self.project and self.project.project_managers.exists():
             from apps.notifications.dispatch import log_activity
             pms = self.project.project_managers.filter(is_active=True)
             for pm in pms:
@@ -302,6 +353,93 @@ class ProjectTask(models.Model):
     def __str__(self):
         project_name = self.project.name if self.project_id else 'Standalone'
         return f"{project_name} - {self.order}. {self.activity}"
+
+
+class TaskDependency(models.Model):
+    """
+    Represents a scheduling dependency between two tasks (G1).
+
+    Dependency types follow standard CPM notation:
+      FS  Finish-to-Start   — successor starts after predecessor finishes
+      SS  Start-to-Start    — successor starts after predecessor starts
+      FF  Finish-to-Finish  — successor finishes after predecessor finishes
+      SF  Start-to-Finish   — successor finishes after predecessor starts
+
+    lag_days can be negative (lead time).
+    """
+
+    DEPENDENCY_TYPE_CHOICES = (
+        ('FS', 'Finish-to-Start'),
+        ('SS', 'Start-to-Start'),
+        ('FF', 'Finish-to-Finish'),
+        ('SF', 'Start-to-Finish'),
+    )
+
+    predecessor = models.ForeignKey(
+        ProjectTask,
+        on_delete=models.CASCADE,
+        related_name='successor_deps',   # deps where this task is the predecessor
+    )
+    successor = models.ForeignKey(
+        ProjectTask,
+        on_delete=models.CASCADE,
+        related_name='predecessor_deps',  # deps where this task is the successor
+    )
+    dep_type = models.CharField(
+        max_length=2,
+        choices=DEPENDENCY_TYPE_CHOICES,
+        default='FS'
+    )
+    lag_days = models.IntegerField(
+        default=0,
+        help_text="Positive = lag (delay), Negative = lead (overlap)"
+    )
+
+    class Meta:
+        unique_together = ('predecessor', 'successor')
+        verbose_name = 'Task Dependency'
+        verbose_name_plural = 'Task Dependencies'
+
+    def clean(self):
+        if self.predecessor_id == self.successor_id:
+            raise ValidationError('A task cannot depend on itself.')
+        if self.predecessor_id and self.successor_id:
+            if TaskDependency.has_circular(self.predecessor_id, self.successor_id):
+                raise ValidationError(
+                    f'Adding this dependency would create a circular dependency chain.'
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def has_circular(predecessor_id: int, successor_id: int) -> bool:
+        """
+        DFS check: would linking predecessor → successor create a cycle?
+        Traverses the successor's outgoing edges (things that depend on it).
+        Returns True if predecessor_id is reachable from successor_id.
+        """
+        visited = set()
+        stack = [successor_id]
+        while stack:
+            node = stack.pop()
+            if node == predecessor_id:
+                return True
+            if node in visited:
+                continue
+            visited.add(node)
+            # Expand: tasks that have `node` as their predecessor
+            for dep in TaskDependency.objects.filter(predecessor_id=node).values_list('successor_id', flat=True):
+                if dep not in visited:
+                    stack.append(dep)
+        return False
+
+    def __str__(self):
+        return (
+            f"Task {self.predecessor_id} → Task {self.successor_id} "
+            f"[{self.dep_type}, lag={self.lag_days}d]"
+        )
 
 
 class TaskAttachment(models.Model):
@@ -470,9 +608,3 @@ class ProjectTaskReply(models.Model):
 
     def __str__(self):
         return f"Reply by {self.user.email} on task #{self.task.id}"
-
-
-
-
-
-

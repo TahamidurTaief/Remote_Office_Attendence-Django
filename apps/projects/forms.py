@@ -1,5 +1,5 @@
 from django import forms
-from .models import Project, ProjectType, TaskTemplate
+from .models import Project, ProjectType, TaskTemplate, TaskDependency
 
 TEXT_INPUT = (
     "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 "
@@ -130,6 +130,9 @@ class ProjectTaskForm(forms.ModelForm):
         fields = [
             'order', 'activity', 'responsible_person',
             'planned_start', 'planned_finish', 'duration_days',
+            'baseline_start', 'baseline_finish',
+            'actual_start', 'actual_finish',
+            'is_milestone',
             'points', 'status', 'remarks', 'employee_note', 'assignment_attachment'
         ]
         widgets = {
@@ -139,6 +142,11 @@ class ProjectTaskForm(forms.ModelForm):
             'planned_start': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'planned_finish': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'duration_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
+            'baseline_start': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'baseline_finish': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'actual_start': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'actual_finish': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
+            'is_milestone': forms.CheckboxInput(attrs={'class': 'w-4 h-4 text-primary-600'}),
             'points': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'placeholder': 'Points (default 10)'}),
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'remarks': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2, 'placeholder': 'Remarks...'}),
@@ -150,6 +158,11 @@ class ProjectTaskForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['points'].required = False
         self.fields['employee_note'].required = False
+        self.fields['baseline_start'].required = False
+        self.fields['baseline_finish'].required = False
+        self.fields['actual_start'].required = False
+        self.fields['actual_finish'].required = False
+        self.fields['is_milestone'].required = False
 
     def clean(self):
         cleaned_data = super().clean()
@@ -159,6 +172,16 @@ class ProjectTaskForm(forms.ModelForm):
         # #4 — Task date ordering: planned_finish cannot be before planned_start
         if planned_start and planned_finish and planned_finish < planned_start:
             self.add_error('planned_finish', 'Planned finish date cannot be before the planned start date.')
+
+        baseline_start = cleaned_data.get('baseline_start')
+        baseline_finish = cleaned_data.get('baseline_finish')
+        if baseline_start and baseline_finish and baseline_finish < baseline_start:
+            self.add_error('baseline_finish', 'Baseline finish cannot be before baseline start.')
+
+        actual_start = cleaned_data.get('actual_start')
+        actual_finish = cleaned_data.get('actual_finish')
+        if actual_start and actual_finish and actual_finish < actual_start:
+            self.add_error('actual_finish', 'Actual finish cannot be before actual start.')
 
         return cleaned_data
 
@@ -287,3 +310,45 @@ class GlobalProjectTaskForm(forms.ModelForm):
 
         return cleaned_data
 
+
+class TaskDependencyForm(forms.ModelForm):
+    """Form to add a dependency between two tasks in the same project."""
+
+    class Meta:
+        model = TaskDependency
+        fields = ['predecessor', 'dep_type', 'lag_days']
+        widgets = {
+            'predecessor': forms.Select(attrs={'class': SELECT_INPUT}),
+            'dep_type': forms.Select(attrs={'class': SELECT_INPUT}),
+            'lag_days': forms.NumberInput(attrs={
+                'class': TEXT_INPUT,
+                'placeholder': '0 (positive=lag, negative=lead)',
+            }),
+        }
+
+    def __init__(self, *args, project=None, successor=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._successor = successor
+        if project is not None:
+            # Only allow tasks in the same project as predecessors
+            qs = ProjectTask.objects.filter(project=project)
+            if successor:
+                qs = qs.exclude(pk=successor.pk)
+            self.fields['predecessor'].queryset = qs
+            self.fields['predecessor'].label_from_instance = (
+                lambda obj: f"#{obj.order} \u2013 {obj.activity}"
+            )
+        self.fields['lag_days'].required = False
+        self.fields['lag_days'].initial = 0
+
+    def clean(self):
+        cleaned_data = super().clean()
+        predecessor = cleaned_data.get('predecessor')
+        if predecessor and self._successor:
+            if predecessor.pk == self._successor.pk:
+                raise forms.ValidationError('A task cannot depend on itself.')
+            if TaskDependency.has_circular(predecessor.pk, self._successor.pk):
+                raise forms.ValidationError(
+                    'This dependency would create a circular dependency chain.'
+                )
+        return cleaned_data

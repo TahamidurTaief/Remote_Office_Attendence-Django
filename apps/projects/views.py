@@ -15,8 +15,8 @@ from apps.branches.models import Branch
 from apps.employees.models import EmployeeProfile
 from apps.notifications.models import Notification
 from apps.notifications.dispatch import send_email_notification
-from .models import Project, ProjectType, TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff
-from .forms import ProjectForm, ProjectTypeForm, TaskTemplateForm, TaskTemplateItemForm, ProjectTaskForm, DailyProgressLogForm, ManpowerDeploymentForm, ProjectMaterialForm, GlobalProjectTaskForm
+from .models import Project, ProjectType, TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff, TaskDependency
+from .forms import ProjectForm, ProjectTypeForm, TaskTemplateForm, TaskTemplateItemForm, ProjectTaskForm, DailyProgressLogForm, ManpowerDeploymentForm, ProjectMaterialForm, GlobalProjectTaskForm, TaskDependencyForm
 
 
 
@@ -82,14 +82,21 @@ class ProjectDetailView(AdminRequiredMixin, DetailView):
         from django.db.models import Count
         context = super().get_context_data(**kwargs)
         tasks_qs = self.object.tasks.select_related('responsible_person').all().order_by('order')
-        
-        # Calculate unfiltered task status counts
-        unfiltered_tasks = self.object.tasks.all()
-        context['all_count'] = unfiltered_tasks.count()
-        context['not_started_count'] = unfiltered_tasks.filter(status='Not Started').count()
-        context['in_progress_count'] = unfiltered_tasks.filter(status='In Progress').count()
-        context['delayed_count'] = unfiltered_tasks.filter(status='Delayed').count()
-        context['completed_count'] = unfiltered_tasks.filter(status='Completed').count()
+
+        # G8 fix: single aggregation query for all status counts
+        from django.db.models import Q as Q_
+        status_counts = self.object.tasks.aggregate(
+            all_count=Count('id'),
+            not_started_count=Count('id', filter=Q_(status='Not Started')),
+            in_progress_count=Count('id', filter=Q_(status='In Progress')),
+            delayed_count=Count('id', filter=Q_(status='Delayed')),
+            completed_count=Count('id', filter=Q_(status='Completed')),
+        )
+        context['all_count'] = status_counts['all_count']
+        context['not_started_count'] = status_counts['not_started_count']
+        context['in_progress_count'] = status_counts['in_progress_count']
+        context['delayed_count'] = status_counts['delayed_count']
+        context['completed_count'] = status_counts['completed_count']
 
         member_id = self.request.GET.get('member')
         if member_id:
@@ -1472,7 +1479,9 @@ class GlobalTaskListView(RoleRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        tasks = self.get_queryset()
+        # G9 fix: use self.object_list (already evaluated by ListView) instead of
+        # calling self.get_queryset() a second time which fires another DB round-trip.
+        tasks = self.object_list
         
         # Standalone tasks (Individual Tasks)
         context['individual_tasks'] = tasks.filter(project__isnull=True).order_by('order')
@@ -1896,8 +1905,210 @@ def task_approve_api(request, pk):
     })
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Gantt View (G2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProjectGanttView(AdminRequiredMixin, View):
+    """
+    Renders an Alpine.js-driven Gantt chart for a single project.
+    Tasks are serialised to JSON and injected into the template; Alpine.js
+    computes bar widths and offsets from the date span so no external chart
+    library is required.
+    Desktop: horizontal bar Gantt with dependency lines (SVG overlay).
+    Mobile:  compact task timeline list (table rows with date pills).
+    """
+
+    def get(self, request, pk):
+        from django.db.models import Prefetch
+        import json
+        from datetime import timedelta
+
+        project = get_object_or_404(
+            Project.objects.select_related('branch', 'project_type')
+            .prefetch_related(
+                'project_managers', 'site_engineers',
+                Prefetch(
+                    'tasks',
+                    queryset=ProjectTask.objects.select_related('responsible_person')
+                    .prefetch_related('predecessor_deps', 'successor_deps')
+                    .order_by('order')
+                )
+            ),
+            pk=pk
+        )
+
+        tasks = list(project.tasks.all())
+
+        # Determine chart date range
+        dates = []
+        for t in tasks:
+            if t.planned_start:
+                dates.append(t.planned_start)
+            if t.planned_finish:
+                dates.append(t.planned_finish)
+            if t.baseline_start:
+                dates.append(t.baseline_start)
+            if t.baseline_finish:
+                dates.append(t.baseline_finish)
+            if t.actual_start:
+                dates.append(t.actual_start)
+            if t.actual_finish:
+                dates.append(t.actual_finish)
+
+        today = date.today()
+        if dates:
+            chart_start = min(dates)
+            chart_end = max(dates)
+        else:
+            chart_start = project.start_date or today
+            chart_end = (project.completion_date or today + timedelta(days=30))
+
+        # Ensure chart spans at least 1 day
+        if chart_end <= chart_start:
+            chart_end = chart_start + timedelta(days=1)
+
+        total_days = (chart_end - chart_start).days + 1
+
+        def to_pct(d):
+            """Convert a date to an offset percentage from chart_start."""
+            if not d:
+                return None
+            delta = (d - chart_start).days
+            return round((delta / total_days) * 100, 2)
+
+        def dur_pct(start, finish):
+            """Width percentage for a bar from start to finish inclusive."""
+            if not start or not finish:
+                return None
+            d = (finish - start).days + 1
+            return round((d / total_days) * 100, 2)
+
+        gantt_tasks = []
+        for t in tasks:
+            deps = []
+            for dep in t.predecessor_deps.all():
+                deps.append({
+                    'predecessor_id': dep.predecessor_id,
+                    'type': dep.dep_type,
+                    'lag': dep.lag_days,
+                })
+
+            gantt_tasks.append({
+                'id': t.id,
+                'order': t.order,
+                'activity': t.activity,
+                'responsible': t.responsible_person.full_name if t.responsible_person else None,
+                'planned_start': t.planned_start.isoformat() if t.planned_start else None,
+                'planned_finish': t.planned_finish.isoformat() if t.planned_finish else None,
+                'baseline_start': t.baseline_start.isoformat() if t.baseline_start else None,
+                'baseline_finish': t.baseline_finish.isoformat() if t.baseline_finish else None,
+                'actual_start': t.actual_start.isoformat() if t.actual_start else None,
+                'actual_finish': t.actual_finish.isoformat() if t.actual_finish else None,
+                'progress_percent': t.progress_percent,
+                'is_milestone': t.is_milestone,
+                'is_delayed': t.is_delayed,
+                'status': t.status,
+                'effective_status': t.effective_status,
+                'left_pct': to_pct(t.planned_start),
+                'width_pct': dur_pct(t.planned_start, t.planned_finish),
+                'baseline_left_pct': to_pct(t.baseline_start),
+                'baseline_width_pct': dur_pct(t.baseline_start, t.baseline_finish),
+                'actual_left_pct': to_pct(t.actual_start),
+                'actual_width_pct': dur_pct(t.actual_start, t.actual_finish),
+                'dependencies': deps,
+            })
+
+        # Build month/week headers for the chart ruler
+        ruler_months = []
+        cursor = chart_start.replace(day=1)
+        while cursor <= chart_end:
+            next_month = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+            month_end = min(next_month - timedelta(days=1), chart_end)
+            left = to_pct(max(cursor, chart_start))
+            width = dur_pct(max(cursor, chart_start), month_end)
+            ruler_months.append({
+                'label': cursor.strftime('%b %Y'),
+                'left_pct': left,
+                'width_pct': width,
+            })
+            cursor = next_month
+
+        today_pct = to_pct(today) if chart_start <= today <= chart_end else None
+
+        context = {
+            'project': project,
+            'gantt_tasks_json': json.dumps(gantt_tasks),
+            'ruler_months_json': json.dumps(ruler_months),
+            'chart_start': chart_start,
+            'chart_end': chart_end,
+            'today': today,
+            'today_pct': today_pct,
+            'total_days': total_days,
+        }
+        return render(request, 'projects/project_gantt.html', context)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Task Dependency CRUD (G1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TaskDependencyCreateView(AdminRequiredMixin, View):
+    """
+    HTMX-friendly endpoint: add a predecessor dependency for a given task (successor).
+    POST: predecessor, dep_type, lag_days
+    Validates same-project constraint, self-loop, and circular dependency.
+    """
+
+    def post(self, request, pk):
+        successor = get_object_or_404(ProjectTask, pk=pk)
+        project = successor.project
+
+        form = TaskDependencyForm(
+            request.POST,
+            project=project,
+            successor=successor
+        )
+
+        if form.is_valid():
+            dep = form.save(commit=False)
+            dep.successor = successor
+            try:
+                dep.save()
+                messages.success(
+                    request,
+                    f'Dependency added: #{dep.predecessor.order} {dep.predecessor.activity} '
+                    f'→ #{successor.order} {successor.activity} [{dep.dep_type}, lag={dep.lag_days}d]'
+                )
+            except Exception as e:
+                messages.error(request, f'Could not save dependency: {e}')
+        else:
+            for field, errors in form.errors.items():
+                for err in errors:
+                    messages.error(request, f'{err}')
+
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
+        if project:
+            return redirect('projects:project_detail', pk=project.pk)
+        return redirect('projects:global_task_list')
+
+
+class TaskDependencyDeleteView(AdminRequiredMixin, View):
+    """Remove a single task dependency record."""
+
+    def post(self, request, pk):
+        dep = get_object_or_404(TaskDependency, pk=pk)
+        project_pk = dep.successor.project.pk if dep.successor.project else None
+        dep.delete()
+        messages.success(request, 'Task dependency removed.')
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
+        if project_pk:
+            return redirect('projects:project_detail', pk=project_pk)
+        return redirect('projects:global_task_list')
 
 
 
