@@ -1698,6 +1698,127 @@ class AttendanceTransactionServiceTests(TestCase):
         self.assertIn('outside the office radius', str(ctx.exception))
 
 
+class AttendanceLifecycleServiceTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch, OfficeSchedule
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        import datetime
+        User = get_user_model()
+
+        self.branch = Branch.objects.create(
+            name='Lifecycle Branch',
+            address='Lifecycle Road',
+            latitude=23.8759,
+            longitude=90.3795,
+            radius_meters=100,
+            is_active=True
+        )
+        self.schedule, _ = OfficeSchedule.objects.get_or_create(
+            branch=self.branch,
+            defaults={
+                'office_start_time': datetime.time(9, 0),
+                'office_end_time': datetime.time(18, 0),
+                'late_after_minutes': 15,
+                'early_checkout_before_minutes': 30,
+                'overtime_after_minutes': 30,
+                'working_days': ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+            }
+        )
+        self.user = User.objects.create_user(phone='+8801733334444', password='pass', role='staff')
+        self.emp = EmployeeProfile.objects.create(
+            user=self.user,
+            employee_id='EMP-LIFE-01',
+            full_name='Alice Lifecycle',
+            phone='+8801733334444',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        self.manager_user = User.objects.create_user(phone='+8801733335555', password='pass', role='manager')
+        self.manager = EmployeeProfile.objects.create(
+            user=self.manager_user,
+            employee_id='MGR-LIFE-01',
+            full_name='Manager Bob',
+            phone='+8801733335555',
+            joined_date=datetime.date(2026, 1, 1),
+            is_active=True
+        )
+        from apps.employees.models import Employee
+        self.emp_master = Employee.objects.create(
+            employee_number='EMP-STF-LC01',
+            first_name='Alice',
+            last_name='Lifecycle',
+            phone='+8801733334444',
+            user=self.user,
+            reporting_manager=Employee.objects.create(
+                employee_number='EMP-MGR-LC01',
+                first_name='Bob',
+                last_name='Manager',
+                phone='+8801733335555',
+                user=self.manager_user,
+                joined_date=datetime.date(2026, 1, 1)
+            ),
+            joined_date=datetime.date(2026, 1, 1)
+        )
+        self.emp.master_employee = self.emp_master
+        self.emp.save()
+
+    def test_correction_recalculates_late_status(self):
+        from apps.attendance.models import Attendance, AttendanceCorrectionRequest
+        from apps.attendance.lifecycle_service import AttendanceLifecycleService
+        import datetime
+
+        att = Attendance.objects.create(
+            employee=self.emp,
+            date=datetime.date(2026, 8, 10),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 10, 10, 0)),
+            attendance_type='check_in',
+            status='late'
+        )
+
+        req = AttendanceCorrectionRequest.objects.create(
+            attendance=att,
+            reason='Correction to on time',
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 10, 8, 50)),
+            check_out_time=timezone.make_aware(datetime.datetime(2026, 8, 10, 18, 0))
+        )
+
+        res = AttendanceLifecycleService.process_attendance_correction(self.manager_user, req.pk, 'approve')
+        self.assertTrue(res['success'])
+
+        att.refresh_from_db()
+        self.assertEqual(att.status, 'on_time')
+        self.assertEqual(float(att.total_hours), 9.17)
+
+    def test_forgot_checkout_workflow(self):
+        from apps.attendance.models import Attendance, ForgotCheckoutRequest
+        from apps.attendance.lifecycle_service import AttendanceLifecycleService
+        import datetime
+
+        att = Attendance.objects.create(
+            employee=self.emp,
+            date=datetime.date(2026, 8, 11),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 11, 9, 0)),
+            attendance_type='check_in',
+            status='on_time'
+        )
+
+        data = {
+            'attendance_id': att.pk,
+            'reason': 'Forgot check-out',
+            'check_out_time': timezone.make_aware(datetime.datetime(2026, 8, 11, 18, 0)).isoformat()
+        }
+        res_sub = AttendanceLifecycleService.submit_forgot_checkout(self.user, data)
+        self.assertTrue(res_sub['success'])
+
+        req = ForgotCheckoutRequest.objects.get(attendance=att)
+        self.assertEqual(req.status, 'pending_manager')
+
+        res_mgr = AttendanceLifecycleService.process_forgot_checkout(self.manager_user, req.pk, 'approve')
+        self.assertEqual(res_mgr['status'], 'pending_hr')
+
+
 
 
 
