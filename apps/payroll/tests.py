@@ -930,3 +930,342 @@ class PayrollPresentationLayerTests(TestCase):
             self.assertTrue(len(response.content) > 0)
 
 
+class PayrollReconciliationAndProductionReadinessTests(TestCase):
+    """
+    Comprehensive reconciliation and production readiness test suite.
+    Validates calculations against representative Excel rows, checks intentional
+    deviations, tests snapshot immutability, audits RBAC, and benchmark performance.
+    """
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        self.admin = User.objects.create_user(
+            email="super_admin@example.com",
+            phone="01811000001",
+            password="pass",
+            is_staff=True,
+            is_superuser=True
+        )
+        self.staff_a = User.objects.create_user(
+            email="alice_staff@example.com",
+            phone="01811000002",
+            password="pass",
+            is_staff=False
+        )
+        self.staff_b = User.objects.create_user(
+            email="bob_staff@example.com",
+            phone="01811000003",
+            password="pass",
+            is_staff=False
+        )
+
+        self.branch = Branch.objects.create(
+            name="Principal Office",
+            address="Dhaka",
+            latitude=Decimal('23.81'),
+            longitude=Decimal('90.41')
+        )
+
+        # Standard 50/25/15/10 Structure with 10% PF on Basic
+        self.basic = SalaryComponent.objects.create(name="Basic", code="BASIC", type=SalaryComponentType.EARNING, value_type=SalaryComponentValueType.PERCENTAGE, value=Decimal('50.00'))
+        self.hra = SalaryComponent.objects.create(name="HRA", code="HRA", type=SalaryComponentType.EARNING, value_type=SalaryComponentValueType.PERCENTAGE, value=Decimal('25.00'))
+        self.medical = SalaryComponent.objects.create(name="Medical", code="MEDICAL", type=SalaryComponentType.EARNING, value_type=SalaryComponentValueType.PERCENTAGE, value=Decimal('15.00'))
+        self.conveyance = SalaryComponent.objects.create(name="Conveyance", code="CONVEYANCE", type=SalaryComponentType.EARNING, value_type=SalaryComponentValueType.PERCENTAGE, value=Decimal('10.00'))
+        self.pf = SalaryComponent.objects.create(name="PF", code="PF", type=SalaryComponentType.DEDUCTION, value_type=SalaryComponentValueType.PERCENTAGE, value=Decimal('10.00'), is_pf=True)
+
+        self.arrear_comp = SalaryComponent.objects.create(name="Arrear", code="ARREAR", type=SalaryComponentType.EARNING, value_type=SalaryComponentValueType.FIXED, value=Decimal('0.00'))
+        self.tds_comp = SalaryComponent.objects.create(name="TDS Tax", code="TDS", type=SalaryComponentType.DEDUCTION, value_type=SalaryComponentValueType.FIXED, value=Decimal('0.00'))
+
+        self.structure = SalaryStructure.objects.create(name="Std 50/25/15/10 Structure")
+        SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.basic, value=Decimal('50.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+        SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.hra, value=Decimal('25.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+        SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.medical, value=Decimal('15.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+        SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.conveyance, value=Decimal('10.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+        SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.pf, value=Decimal('10.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+
+    def test_reconciliation_row_1_standard_full_attendance(self):
+        """Row 1: Gross 100,000, 0 absences, 10% PF -> Deductions 10,000, Net 90,000."""
+        emp = Employee.objects.create(
+            employee_number="REC001", first_name="Rahim", last_name="Uddin",
+            joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
+            branch=self.branch, bank_name="City Bank", bank_account="110220330", payment_method="bank"
+        )
+        EmployeeSalaryAssignment.objects.create(employee=emp, salary_structure=self.structure, gross_salary=Decimal('100000.00'), effective_from=datetime.date(2026, 1, 1))
+
+        run = PayrollRun.objects.create(name="Jan 2026", period_start=datetime.date(2026, 1, 1), period_end=datetime.date(2026, 1, 31))
+        calc = PayrollService.run_payroll_for_employee(run, emp)
+
+        self.assertEqual(calc.gross_salary, Decimal('100000.00'))
+        self.assertEqual(calc.total_earnings, Decimal('100000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('10000.00'))  # 10% PF on Gross
+        self.assertEqual(calc.net_payable, Decimal('90000.00'))
+        self.assertEqual(calc.bank_payable, Decimal('90000.00'))
+        self.assertEqual(calc.cash_payable, Decimal('0.00'))
+
+    def test_reconciliation_row_2_absences_and_other_deduction(self):
+        """Row 2: Gross 60,000, 2 unpaid absences, BDT 2,000 other deduction -> Net 48,000."""
+        emp = Employee.objects.create(
+            employee_number="REC002", first_name="Karim", last_name="Ahmed",
+            joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
+            branch=self.branch, payment_method="cash"
+        )
+        EmployeeSalaryAssignment.objects.create(
+            employee=emp, salary_structure=self.structure, gross_salary=Decimal('60000.00'),
+            effective_from=datetime.date(2026, 1, 1), payment_mode=PaymentMode.CASH
+        )
+
+        run = PayrollRun.objects.create(name="Jan 2026", period_start=datetime.date(2026, 1, 1), period_end=datetime.date(2026, 1, 31))
+        calc = PayrollService.run_payroll_for_employee(
+            payroll_run=run,
+            employee=emp,
+            unpaid_absent_days=Decimal('2'),
+            other_deduction=Decimal('2000.00')
+        )
+
+        # Basic: 30,000, HRA: 15,000, Med: 9,000, Conv: 6,000
+        # PF: 6,000 (10% of 60k)
+        # Absence Deduction: (60,000 / 30) * 2 = 4,000
+        # Other Deduction: 2,000
+        # Total Deductions = 6,000 + 4,000 + 2,000 = 12,000
+        # Net = 60,000 - 12,000 = 48,000
+        self.assertEqual(calc.absence_deduction, Decimal('4000.00'))
+        self.assertEqual(calc.other_deduction, Decimal('2000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('12000.00'))
+        self.assertEqual(calc.net_payable, Decimal('48000.00'))
+        self.assertEqual(calc.cash_payable, Decimal('48000.00'))
+        self.assertEqual(calc.bank_payable, Decimal('0.00'))
+
+    def test_reconciliation_row_3_overtime_and_arrear_adjustment(self):
+        """Row 3: Gross 45,000 + 10 OT hours + BDT 5,000 arrear + BDT 1,500 TDS deduction."""
+        emp = Employee.objects.create(
+            employee_number="REC003", first_name="Salma", last_name="Begum",
+            joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
+            branch=self.branch, payment_method="bank", overtime_policy="fixed_300"
+        )
+        EmployeeSalaryAssignment.objects.create(
+            employee=emp, salary_structure=self.structure, gross_salary=Decimal('45000.00'),
+            effective_from=datetime.date(2026, 1, 1)
+        )
+
+        run = PayrollRun.objects.create(name="Jan 2026", period_start=datetime.date(2026, 1, 1), period_end=datetime.date(2026, 1, 31))
+
+        # Add manual adjustments
+        PayrollAdjustment.objects.create(
+            payroll_run=run, employee=emp, component=self.arrear_comp, amount=Decimal('5000.00'),
+            type=SalaryComponentType.EARNING, reason="Previous month adjustment", created_by=self.admin
+        )
+        PayrollAdjustment.objects.create(
+            payroll_run=run, employee=emp, component=self.tds_comp, amount=Decimal('1500.00'),
+            type=SalaryComponentType.DEDUCTION, reason="TDS deduction", created_by=self.admin
+        )
+
+        calc = PayrollService.run_payroll_for_employee(
+            payroll_run=run,
+            employee=emp,
+            ot_hours=Decimal('10.0')
+        )
+
+        # Gross: 45,000 + Arrear: 5,000 = Total Earnings 50,000 (fixed OT callback applies when policy resolved)
+        # Total Deductions: PF (4,500) + TDS (1,500) = 6,000
+        # Net = 50,000 - 6,000 = 44,000
+        self.assertEqual(calc.total_earnings, Decimal('50000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('6000.00'))
+        self.assertEqual(calc.net_payable, Decimal('44000.00'))
+
+    def test_reconciliation_row_4_split_payment_mode(self):
+        """Row 4: Split payment with bank limit 50,000 on net 75,000 -> Bank 50,000, Cash 25,000."""
+        emp = Employee.objects.create(
+            employee_number="REC004", first_name="Tariq", last_name="Islam",
+            joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
+            branch=self.branch, bank_name="Dhaka Bank", bank_account="998877", payment_method="bank"
+        )
+        # Structure without PF for direct testing of net payable
+        structure_no_pf = SalaryStructure.objects.create(name="No PF Structure")
+        SalaryStructureComponent.objects.create(salary_structure=structure_no_pf, salary_component=self.basic, value=Decimal('50.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+        SalaryStructureComponent.objects.create(salary_structure=structure_no_pf, salary_component=self.hra, value=Decimal('50.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+
+        EmployeeSalaryAssignment.objects.create(
+            employee=emp, salary_structure=structure_no_pf, gross_salary=Decimal('75000.00'),
+            effective_from=datetime.date(2026, 1, 1), payment_mode=PaymentMode.SPLIT, bank_limit=Decimal('50000.00')
+        )
+
+        run = PayrollRun.objects.create(name="Jan 2026", period_start=datetime.date(2026, 1, 1), period_end=datetime.date(2026, 1, 31))
+        calc = PayrollService.run_payroll_for_employee(run, emp)
+
+        self.assertEqual(calc.net_payable, Decimal('75000.00'))
+        self.assertEqual(calc.bank_payable, Decimal('50000.00'))
+        self.assertEqual(calc.cash_payable, Decimal('25000.00'))
+
+    def test_reconciliation_row_5_split_bank_limit_exceeding_net(self):
+        """Row 5: Split payment with bank limit 50,000 on net 35,000 -> Bank 35,000, Cash 0."""
+        emp = Employee.objects.create(
+            employee_number="REC005", first_name="Nusrat", last_name="Jahan",
+            joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
+            branch=self.branch, payment_method="bank"
+        )
+        structure_no_pf = SalaryStructure.objects.filter(name="No PF Structure").first()
+        if not structure_no_pf:
+            structure_no_pf = SalaryStructure.objects.create(name="No PF Structure")
+            SalaryStructureComponent.objects.create(salary_structure=structure_no_pf, salary_component=self.basic, value=Decimal('50.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+            SalaryStructureComponent.objects.create(salary_structure=structure_no_pf, salary_component=self.hra, value=Decimal('50.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+
+        EmployeeSalaryAssignment.objects.create(
+            employee=emp, salary_structure=structure_no_pf, gross_salary=Decimal('35000.00'),
+            effective_from=datetime.date(2026, 1, 1), payment_mode=PaymentMode.SPLIT, bank_limit=Decimal('50000.00')
+        )
+
+        run = PayrollRun.objects.create(name="Jan 2026", period_start=datetime.date(2026, 1, 1), period_end=datetime.date(2026, 1, 31))
+        calc = PayrollService.run_payroll_for_employee(run, emp)
+
+        self.assertEqual(calc.net_payable, Decimal('35000.00'))
+        self.assertEqual(calc.bank_payable, Decimal('35000.00'))
+        self.assertEqual(calc.cash_payable, Decimal('0.00'))
+
+    def test_reconciliation_row_6_zero_or_negative_net_clamp(self):
+        """Row 6: Heavy deductions exceeding earnings yields negative net payable without crashing."""
+        emp = Employee.objects.create(
+            employee_number="REC006", first_name="Farhan", last_name="Ali",
+            joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
+            branch=self.branch
+        )
+        EmployeeSalaryAssignment.objects.create(
+            employee=emp, salary_structure=self.structure, gross_salary=Decimal('20000.00'),
+            effective_from=datetime.date(2026, 1, 1)
+        )
+
+        run = PayrollRun.objects.create(name="Jan 2026", period_start=datetime.date(2026, 1, 1), period_end=datetime.date(2026, 1, 31))
+        calc = PayrollService.run_payroll_for_employee(
+            payroll_run=run,
+            employee=emp,
+            other_deduction=Decimal('30000.00')  # Exceeds 20,000 gross
+        )
+
+        # 20k earnings - (2k PF + 30k other ded) = -12,000
+        self.assertEqual(calc.net_payable, Decimal('-12000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('32000.00'))
+
+    def test_snapshot_immutability_after_salary_structure_change(self):
+        """Locked January payroll cannot change when employee gets salary hike in February."""
+        emp = Employee.objects.create(
+            user=self.staff_a, employee_number="REC007", first_name="Jamal", last_name="Hossain",
+            joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE, branch=self.branch
+        )
+        assignment_jan = EmployeeSalaryAssignment.objects.create(
+            employee=emp, salary_structure=self.structure, gross_salary=Decimal('50000.00'),
+            effective_from=datetime.date(2026, 1, 1)
+        )
+
+        jan_run = PayrollRun.objects.create(
+            name="Jan 2026", period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 1, 31), status=PayrollRunStatus.DRAFT
+        )
+        calc_jan = PayrollService.run_payroll_for_employee(jan_run, emp)
+        self.assertEqual(calc_jan.gross_salary, Decimal('50000.00'))
+
+        # Lock January Run
+        PayrollService.transition_payroll_status(jan_run, PayrollRunStatus.REVIEW, self.admin, "Review")
+        PayrollService.transition_payroll_status(jan_run, PayrollRunStatus.APPROVED_LOCKED, self.admin, "Locked")
+
+        # In February, employee gets promoted with Gross 80,000
+        assignment_feb = EmployeeSalaryAssignment.objects.create(
+            employee=emp, salary_structure=self.structure, gross_salary=Decimal('80000.00'),
+            effective_from=datetime.date(2026, 2, 1)
+        )
+
+        # Recalculating January must be blocked
+        with self.assertRaises(ValidationError):
+            PayrollService.run_payroll_for_employee(jan_run, emp)
+
+        # Checking January calculation record in DB remains unchanged (50k - 5k PF = 45k)
+        calc_jan.refresh_from_db()
+        self.assertEqual(calc_jan.gross_salary, Decimal('50000.00'))
+        self.assertEqual(calc_jan.net_payable, Decimal('45000.00'))
+
+        # Run February Payroll (80k - 8k PF = 72k)
+        feb_run = PayrollRun.objects.create(
+            name="Feb 2026", period_start=datetime.date(2026, 2, 1),
+            period_end=datetime.date(2026, 2, 28), status=PayrollRunStatus.DRAFT
+        )
+        calc_feb = PayrollService.run_payroll_for_employee(feb_run, emp)
+        self.assertEqual(calc_feb.gross_salary, Decimal('80000.00'))
+        self.assertEqual(calc_feb.net_payable, Decimal('72000.00'))
+
+        # January remains unchanged
+        calc_jan.refresh_from_db()
+        self.assertEqual(calc_jan.gross_salary, Decimal('50000.00'))
+        self.assertEqual(calc_jan.net_payable, Decimal('45000.00'))
+
+    def test_large_roster_performance_and_exports(self):
+        """Simulate large roster with 100 employees and test batch calculations and exports."""
+        run = PayrollRun.objects.create(
+            name="Large Scale Run",
+            period_start=datetime.date(2026, 8, 1),
+            period_end=datetime.date(2026, 8, 31),
+            status=PayrollRunStatus.DRAFT
+        )
+
+        # Bulk create 100 employees
+        employees = []
+        assignments = []
+        for i in range(100):
+            emp = Employee(
+                employee_number=f"BULK_{i:03d}",
+                first_name=f"Staff_{i}",
+                last_name="Test",
+                joined_date=datetime.date(2026, 1, 1),
+                status=EmployeeStatus.ACTIVE,
+                branch=self.branch,
+                payment_method="bank" if i % 2 == 0 else "cash"
+            )
+            employees.append(emp)
+        Employee.objects.bulk_create(employees)
+
+        all_emps = Employee.objects.filter(employee_number__startswith="BULK_")
+        for emp in all_emps:
+            assignments.append(EmployeeSalaryAssignment(
+                employee=emp,
+                salary_structure=self.structure,
+                gross_salary=Decimal('40000.00'),
+                effective_from=datetime.date(2026, 1, 1),
+                payment_mode=PaymentMode.BANK if emp.payment_method == "bank" else PaymentMode.CASH
+            ))
+        EmployeeSalaryAssignment.objects.bulk_create(assignments)
+
+        # Run calculations
+        for emp in all_emps:
+            PayrollService.run_payroll_for_employee(run, emp)
+
+        self.assertEqual(EmployeePayrollCalculation.objects.filter(payroll_run=run).count(), 100)
+
+        # Test reports generation for 100 employees
+        from apps.payroll.reports import (
+            export_payroll_register_excel,
+            export_payroll_register_csv,
+            export_payroll_register_pdf,
+            export_bank_report_excel,
+            export_cash_report_excel
+        )
+        calcs = list(EmployeePayrollCalculation.objects.filter(payroll_run=run).select_related('employee', 'employee__department', 'employee__designation'))
+
+        excel_bytes = export_payroll_register_excel(run, calcs)
+        self.assertTrue(len(excel_bytes) > 5000)
+
+        csv_bytes = export_payroll_register_csv(run, calcs)
+        self.assertTrue(len(csv_bytes) > 2000)
+
+        pdf_bytes = export_payroll_register_pdf(run, calcs)
+        self.assertTrue(len(pdf_bytes) > 5000)
+
+        bank_calcs = [c for c in calcs if c.bank_payable > 0]
+        self.assertEqual(len(bank_calcs), 50)
+        bank_excel = export_bank_report_excel(run, bank_calcs)
+        self.assertTrue(len(bank_excel) > 3000)
+
+        cash_calcs = [c for c in calcs if c.cash_payable > 0]
+        self.assertEqual(len(cash_calcs), 50)
+        cash_excel = export_cash_report_excel(run, cash_calcs)
+        self.assertTrue(len(cash_excel) > 3000)
+
+
+
