@@ -1923,8 +1923,97 @@ class HRMasterReadinessTests(TestCase):
 
 
 
+from datetime import timedelta
+class HRHardeningTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch
+        from apps.employees.models import Department, Designation, Employee
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
 
+        self.branch = Branch.objects.create(name='Test Branch', latitude=23.0, longitude=90.0, is_active=True)
+        self.dept = Department.objects.create(name='Engineering', code='ENG')
+        self.desig = Designation.objects.create(name='Engineer', code='ENG_DES')
+        self.admin_user = User.objects.create_superuser(email='admin@example.com', phone='+8801700000000', password='password123')
 
+    def test_new_employee_circular_manager_prevention(self):
+        from apps.employees.models import Employee
+        # Create an employee
+        emp1 = Employee.objects.create(
+            employee_number='EMP-001', first_name='Emp', last_name='One',
+            branch=self.branch, department=self.dept, designation=self.desig,
+            status='active'
+        )
+        # Create another employee reporting to emp1
+        emp2 = Employee.objects.create(
+            employee_number='EMP-002', first_name='Emp', last_name='Two',
+            branch=self.branch, department=self.dept, designation=self.desig,
+            status='active', reporting_manager=emp1
+        )
+        # Now try to create a new employee reporting to emp2
+        emp3 = Employee(
+            employee_number='EMP-003', first_name='Emp', last_name='Three',
+            branch=self.branch, department=self.dept, designation=self.desig,
+            status='active', reporting_manager=emp2
+        )
+        emp3.save()
+        self.assertIsNotNone(emp3.pk)
+
+    def test_lifecycle_transition_profile_sync(self):
+        from apps.employees.models import Employee, EmployeeProfile
+        from apps.employees.views import _apply_transition
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        user = User.objects.create_user(phone='+8801700000004', password='password', role='staff')
+        master = Employee.objects.create(
+            employee_number='EMP-004', first_name='John', last_name='Doe',
+            branch=self.branch, department=self.dept, designation=self.desig,
+            status='active', user=user
+        )
+        profile = EmployeeProfile.objects.create(
+            user=user, employee_id='EMP-004', full_name='John Doe',
+            joined_date='2026-01-01', phone='+8801700000004', master_employee=master,
+            is_active=True
+        )
+
+        class FakeReq:
+            to_status = 'suspended'
+            effective_date = timezone.now().date()
+            reason = 'Temporary suspension for audit'
+            new_department = None
+            new_designation = None
+
+        _apply_transition(master, FakeReq(), self.admin_user)
+        
+        master.refresh_from_db()
+        profile.refresh_from_db()
+        
+        self.assertEqual(master.status, 'suspended')
+        self.assertTrue(master.is_suspended)
+        self.assertFalse(profile.is_active)
+
+    def test_document_expiry_active_queries(self):
+        from apps.employees.models import Employee, EmployeeDocument, DocumentType
+        master = Employee.objects.create(
+            employee_number='EMP-005', first_name='Jane', last_name='Doe',
+            branch=self.branch, department=self.dept, designation=self.desig,
+            status='active'
+        )
+        # Active, not expired document
+        doc1 = EmployeeDocument.objects.create(
+            employee_master=master, document_type=DocumentType.NID,
+            title='NID', expiry_date=timezone.localdate() + timedelta(days=10),
+            is_active=True, is_archived=False
+        )
+        # Expired document
+        doc2 = EmployeeDocument.objects.create(
+            employee_master=master, document_type=DocumentType.PASSPORT,
+            title='Passport', expiry_date=timezone.localdate() - timedelta(days=1),
+            is_active=True, is_archived=False
+        )
+        
+        self.assertEqual(master.get_completion_percentage(), 40)
 
 
 

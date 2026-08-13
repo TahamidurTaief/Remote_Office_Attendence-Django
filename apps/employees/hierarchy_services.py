@@ -8,7 +8,7 @@ class OrgHierarchyService:
     def get_direct_reports(employee):
         """Returns direct reports of the employee."""
         return Employee.objects.filter(reporting_manager=employee).select_related(
-            'branch', 'department', 'designation', 'user'
+            'branch', 'department', 'designation', 'user', 'legacy_profile'
         )
 
     @staticmethod
@@ -30,7 +30,7 @@ class OrgHierarchyService:
             depth += 1
 
         return Employee.objects.filter(id__in=subordinate_ids).select_related(
-            'branch', 'department', 'designation', 'user'
+            'branch', 'department', 'designation', 'user', 'legacy_profile'
         )
 
     @staticmethod
@@ -83,7 +83,7 @@ class OrgHierarchyService:
         subordinate_ids = list(OrgHierarchyService.get_all_subordinates(manager_employee).values_list('id', flat=True))
         subordinate_ids.append(manager_employee.id)
         return Employee.objects.filter(id__in=subordinate_ids).select_related(
-            'branch', 'department', 'designation', 'user'
+            'branch', 'department', 'designation', 'user', 'legacy_profile'
         )
 
     @staticmethod
@@ -106,11 +106,28 @@ class OrgHierarchyService:
         total_reports = Employee.objects.filter(reporting_manager__isnull=False).count()
         avg_span = round(total_reports / total_managers, 2) if total_managers > 0 else 0.0
         
-        # Maximum org depth
-        all_emps = Employee.objects.all()
+        # Maximum org depth calculated in-memory (0 extra queries)
+        all_emps_data = dict(Employee.objects.values_list('id', 'reporting_manager_id'))
+        depths = {}
+        def compute_depth(emp_id, path=None):
+            if path is None:
+                path = set()
+            if emp_id in depths:
+                return depths[emp_id]
+            if emp_id in path:
+                return 1 # Cycle detected
+            parent_id = all_emps_data.get(emp_id)
+            if not parent_id:
+                depths[emp_id] = 1
+            else:
+                path.add(emp_id)
+                depths[emp_id] = 1 + compute_depth(parent_id, path)
+                path.remove(emp_id)
+            return depths[emp_id]
+
         max_depth = 0
-        for emp in all_emps:
-            d = OrgHierarchyService.get_reporting_depth(emp)
+        for emp_id in all_emps_data:
+            d = compute_depth(emp_id)
             if d > max_depth:
                 max_depth = d
                 

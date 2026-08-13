@@ -39,7 +39,9 @@ class EmployeeListView(AdminRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = super().get_queryset().select_related('branch', 'user')
+        queryset = super().get_queryset().select_related(
+            'branch', 'user', 'master_employee', 'master_employee__department', 'master_employee__designation'
+        )
         search_query = self.request.GET.get('search', '')
         department_filter = self.request.GET.get('department', '')
         branch_filter = self.request.GET.get('branch', '')
@@ -452,7 +454,7 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
 
     def get_queryset(self):
         queryset = Employee.objects.select_related(
-            'branch', 'department', 'designation', 'reporting_manager', 'user'
+            'branch', 'department', 'designation', 'reporting_manager', 'user', 'legacy_profile'
         ).prefetch_related('direct_reports', 'employment_history')
 
         search = self.request.GET.get('search', '').strip()
@@ -522,7 +524,11 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['active_tab'] = self.request.GET.get('tab', 'identity')
         context['documents'] = self.object.documents.all()
-        context['active_documents'] = self.object.documents.filter(is_active=True, is_archived=False)
+        context['active_documents'] = self.object.documents.filter(
+            is_active=True, is_archived=False
+        ).filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gte=timezone.localdate())
+        )
         context['archived_documents'] = self.object.documents.filter(is_active=True, is_archived=True)
         context['asset_assignments'] = self.object.asset_assignments.select_related('asset').all()
         context['active_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
@@ -840,7 +846,12 @@ class AssetAssignView(RoleRequiredMixin, View):
             assignment = form.save(commit=False)
             assignment.employee = employee
             assignment.assigned_by = request.user
-            assignment.save()
+            from django.core.exceptions import ValidationError
+            try:
+                assignment.save()
+            except ValidationError as e:
+                form.add_error(None, e)
+                return render(request, 'employees/partials/asset_assign_modal.html', {'employee': employee, 'form': form})
 
             log_audit(actor=request.user, action='asset_assigned', target=assignment, summary=f"Assigned asset {assignment.asset.asset_tag} to {employee.get_full_name()}")
             messages.success(request, f"Asset {assignment.asset.asset_tag} assigned to {employee.get_full_name()}.")
@@ -1011,13 +1022,10 @@ def _apply_transition(employee, req_obj, actor):
     if new_status in ('suspended', 'resigned', 'terminated', 'archived') and (not reason or reason == 'Direct lifecycle action'):
         raise ValidationError(f"A transition reason is mandatory for '{new_status}' status.")
 
-    Employee.objects.filter(pk=employee.pk).update(
-        status=new_status,
-        department=employee.department,
-        designation=employee.designation,
-        updated_at=tz.now(),
-    )
-    employee.refresh_from_db()
+    employee.status = new_status
+    employee._bypass_lifecycle_validation = True
+    employee.save()
+
 
     EmploymentHistory.objects.create(
         employee=employee,
@@ -1896,5 +1904,43 @@ class ManagerDelegationEndView(AdminRequiredMixin, View):
         )
         messages.success(request, "Delegation ended successfully.")
         return redirect('employees:delegation_list')
+
+
+class EmployeeReportsView(AdminRequiredMixin, TemplateView):
+    template_name = 'employees/reports.html'
+
+    def get_context_data(self, **kwargs):
+        from django.db.models import Count
+        from datetime import timedelta
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        
+        # 1. Lifecycle Status Report
+        status_counts = Employee.objects.exclude(status='archived').values('status').annotate(count=Count('id')).order_by('status')
+        status_list = []
+        for item in status_counts:
+            status_list.append({
+                'status': item['status'],
+                'status_display': dict(EmployeeStatus.choices).get(item['status'], item['status']).capitalize(),
+                'count': item['count']
+            })
+        context['status_reports'] = status_list
+        context['employees_by_status'] = Employee.objects.exclude(status='archived').select_related('branch', 'department', 'designation', 'user', 'legacy_profile').all().order_by('status', 'first_name')
+
+        # 2. Document Expiry Report
+        context['expiring_documents'] = EmployeeDocument.objects.filter(
+            is_active=True,
+            is_archived=False,
+            expiry_date__isnull=False
+        ).select_related('employee_master', 'employee').order_by('expiry_date')
+        
+        # 3. Asset Allocation Report
+        context['asset_assignments'] = AssetAssignment.objects.filter(
+            returned_date__isnull=True
+        ).select_related('asset', 'employee', 'assigned_by').order_by('assigned_date')
+        context['all_assets'] = Asset.objects.all().prefetch_related('assignments__employee')
+        
+        return context
+
 
 

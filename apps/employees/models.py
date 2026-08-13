@@ -212,15 +212,29 @@ class EmployeeDocument(models.Model):
         return self.document_type in SENSITIVE_DOCUMENT_TYPES
 
     def save(self, *args, **kwargs):
-        if not self.pk and self.employee_master:
-            previous_docs = EmployeeDocument.objects.filter(
-                employee_master=self.employee_master,
-                document_type=self.document_type
-            )
-            if previous_docs.exists():
-                max_ver = previous_docs.order_by('-version').first().version
-                self.version = max_ver + 1
-                previous_docs.update(is_active=False)
+        if not self.pk:
+            emp_master = self.employee_master
+            if not emp_master and self.employee and self.employee.master_employee:
+                emp_master = self.employee.master_employee
+            
+            if emp_master:
+                previous_docs = EmployeeDocument.objects.filter(
+                    employee_master=emp_master,
+                    document_type=self.document_type
+                )
+                if previous_docs.exists():
+                    max_ver = previous_docs.order_by('-version').first().version
+                    self.version = max_ver + 1
+                    previous_docs.update(is_active=False)
+            elif self.employee:
+                previous_docs = EmployeeDocument.objects.filter(
+                    employee=self.employee,
+                    document_type=self.document_type
+                )
+                if previous_docs.exists():
+                    max_ver = previous_docs.order_by('-version').first().version
+                    self.version = max_ver + 1
+                    previous_docs.update(is_active=False)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -478,7 +492,12 @@ class Employee(models.Model):
         if self.user_id:
             score += 20
         # Step 5-7: Documents/Emergency/Assets
-        has_docs = self.documents.filter(is_active=True).exists()
+        has_docs = self.documents.filter(
+            is_active=True,
+            is_archived=False
+        ).filter(
+            models.Q(expiry_date__isnull=True) | models.Q(expiry_date__gte=timezone.localdate())
+        ).exists()
         has_emergency = bool(self.emergency_contact_name and self.emergency_contact_phone)
         has_assets = self.asset_assignments.filter(returned_date__isnull=True).exists()
         if has_docs or has_emergency or has_assets:
@@ -494,7 +513,12 @@ class Employee(models.Model):
             return 3
         if not self.user_id:
             return 4
-        if not self.documents.filter(is_active=True).exists():
+        if not self.documents.filter(
+            is_active=True,
+            is_archived=False
+        ).filter(
+            models.Q(expiry_date__isnull=True) | models.Q(expiry_date__gte=timezone.localdate())
+        ).exists():
             return 5
         if not (self.emergency_contact_name and self.emergency_contact_phone):
             return 6
@@ -602,13 +626,22 @@ class Employee(models.Model):
             return
         if self.pk and self.reporting_manager_id == self.pk:
             raise ValidationError({'reporting_manager': "An employee cannot report to themselves."})
+        if not self.pk and self.reporting_manager_id:
+            curr = self.reporting_manager
+            visited = set()
+            while curr:
+                if curr.pk in visited:
+                    raise ValidationError({'reporting_manager': f"Circular reporting structure detected involving {curr.get_full_name()}."})
+                visited.add(curr.pk)
+                curr = curr.reporting_manager
+            return
+
         curr = self.reporting_manager
-        visited = {self.pk} if self.pk else set()
+        visited = {self.pk}
         while curr:
             if curr.pk in visited:
                 raise ValidationError({'reporting_manager': f"Circular reporting structure detected involving {curr.get_full_name()}."})            
-            if self.pk:
-                visited.add(curr.pk)
+            visited.add(curr.pk)
             curr = curr.reporting_manager
 
     def clean(self):
@@ -640,7 +673,7 @@ class Employee(models.Model):
                 elif db_status == EmployeeStatus.SUSPENDED:
                     self.is_suspended = False
 
-            if db_status and db_status != self.status:
+            if not getattr(self, '_bypass_lifecycle_validation', False) and db_status and db_status != self.status:
                 from apps.employees.lifecycle import is_valid_transition, describe_allowed
                 if not is_valid_transition(db_status, self.status):
                     allowed = describe_allowed(db_status)

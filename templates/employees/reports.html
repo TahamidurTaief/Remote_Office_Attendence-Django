@@ -1,0 +1,184 @@
+<c-app-shell page_title="HR Reports & Analytics | FieldTrack" active_href="{% url 'employees:employee_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'employees:employee_list' %}" ></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="HR Reports & Analytics">
+            <c-slot name="actions"></c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <div class="p-4 lg:p-6 w-full space-y-6" x-data="{ activeTab: 'lifecycle' }">
+        <!-- Navigation Tabs -->
+        <div class="border-b border-gray-200 dark:border-gray-700">
+            <nav class="flex space-x-6" aria-label="Tabs">
+                <button @click="activeTab = 'lifecycle'"
+                        :class="activeTab === 'lifecycle' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
+                    Employee Lifecycle Status
+                </button>
+                <button @click="activeTab = 'expiry'"
+                        :class="activeTab === 'expiry' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
+                    Document Expiry
+                </button>
+                <button @click="activeTab = 'assets'"
+                        :class="activeTab === 'assets' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
+                    Asset Allocation
+                </button>
+            </nav>
+        </div>
+
+        <!-- 1. Lifecycle Status Section -->
+        <div x-show="activeTab === 'lifecycle'" class="space-y-6" x-cloak>
+            <!-- KPI Widget Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {% for stat in status_reports %}
+                <c-card padding="sm" class="flex flex-col justify-between">
+                    <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">{{ stat.status_display }}</span>
+                    <span class="text-2xl font-bold text-gray-800 dark:text-white mt-1">{{ stat.count }}</span>
+                </c-card>
+                {% empty %}
+                <div class="col-span-full py-4 text-center text-sm text-gray-500">No lifecycle status data found.</div>
+                {% endfor %}
+            </div>
+
+            <!-- Detailed Status Table -->
+            <c-card padding="md" title="Lifecycle Directory">
+                <c-table id="lifecycle-table">
+                    <c-slot name="header">
+                        <th>Employee</th>
+                        <th>Department</th>
+                        <th>Designation</th>
+                        <th>Lifecycle Status</th>
+                        <th>Joined Date</th>
+                    </c-slot>
+                    <c-slot name="body">
+                        {% for emp in employees_by_status %}
+                        <tr>
+                            <td>
+                                <div class="font-semibold">{{ emp.get_full_name }}</div>
+                                <div class="text-xs text-gray-500">{{ emp.employee_number }}</div>
+                            </td>
+                            <td>{{ emp.canonical_department|default:"-" }}</td>
+                            <td>{{ emp.canonical_designation|default:"-" }}</td>
+                            <td>
+                                {% include 'employees/partials/status_badge.html' with employee=emp %}
+                            </td>
+                            <td>{{ emp.joined_date|date:"Y-m-d"|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-8">No employees in database.</td>
+                        </tr>
+                        {% endfor %}
+                    </c-slot>
+                </c-table>
+            </c-card>
+        </div>
+
+        <!-- 2. Document Expiry Section -->
+        <div x-show="activeTab === 'expiry'" class="space-y-6" x-cloak>
+            <c-card padding="md" title="Document Expiry & Expiration Schedule">
+                <c-table id="expiry-table">
+                    <c-slot name="header">
+                        <th>Employee</th>
+                        <th>Document Type</th>
+                        <th>Title / ID</th>
+                        <th>Expiry Date</th>
+                        <th>Status</th>
+                    </c-slot>
+                    <c-slot name="body">
+                        {% for doc in expiring_documents %}
+                        <tr>
+                            <td>
+                                <div class="font-semibold">
+                                    {% if doc.employee_master %}
+                                        {{ doc.employee_master.get_full_name }}
+                                    {% else %}
+                                        {{ doc.employee.full_name }}
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>{{ doc.get_document_type_display }}</td>
+                            <td>{{ doc.title|default:"-" }}</td>
+                            <td>{{ doc.expiry_date|date:"Y-m-d" }}</td>
+                            <td>
+                                {% if doc.is_expired %}
+                                <c-badge variant="danger" label="Expired" ></c-badge>
+                                {% elif doc.is_expiring_soon %}
+                                <c-badge variant="warning" label="Expiring Soon" ></c-badge>
+                                {% else %}
+                                <c-badge variant="success" label="Active" ></c-badge>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-8">No versioned active documents found with expiry dates.</td>
+                        </tr>
+                        {% endfor %}
+                    </c-slot>
+                </c-table>
+            </c-card>
+        </div>
+
+        <!-- 3. Asset Allocation Section -->
+        <div x-show="activeTab === 'assets'" class="space-y-6" x-cloak>
+            <c-card padding="md" title="Active Asset Allocations & Hardware Inventory">
+                <c-table id="assets-table">
+                    <c-slot name="header">
+                        <th>Asset Tag</th>
+                        <th>Asset Name</th>
+                        <th>Type</th>
+                        <th>Serial Number</th>
+                        <th>Current Assignment</th>
+                        <th>Assigned Date</th>
+                        <th>Condition</th>
+                    </c-slot>
+                    <c-slot name="body">
+                        {% for asset in all_assets %}
+                        <tr>
+                            <td><span class="font-mono text-xs font-semibold">{{ asset.asset_tag }}</span></td>
+                            <td>{{ asset.name }}</td>
+                            <td>{{ asset.get_asset_type_display }}</td>
+                            <td><span class="font-mono text-xs">{{ asset.serial_number|default:"-" }}</span></td>
+                            <td>
+                                {% if asset.current_assignment %}
+                                    <div class="font-semibold">{{ asset.current_assignment.employee.get_full_name }}</div>
+                                {% else %}
+                                    <span class="text-gray-400">Available</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if asset.current_assignment %}
+                                    {{ asset.current_assignment.assigned_date|date:"Y-m-d" }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if asset.condition == 'new' %}
+                                <c-badge variant="success" label="New" ></c-badge>
+                                {% elif asset.condition == 'good' %}
+                                <c-badge variant="info" label="Good" ></c-badge>
+                                {% elif asset.condition == 'fair' %}
+                                <c-badge variant="warning" label="Fair" ></c-badge>
+                                {% else %}
+                                <c-badge variant="danger" label="Damaged" ></c-badge>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-8">No assets logged in inventory.</td>
+                        </tr>
+                        {% endfor %}
+                    </c-slot>
+                </c-table>
+            </c-card>
+        </div>
+    </div>
+</c-app-shell>

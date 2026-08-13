@@ -30,6 +30,7 @@ urlpatterns = [
     path('delegations/', views.ManagerDelegationListView.as_view(), name='delegation_list'),
     path('delegations/create/', views.ManagerDelegationCreateView.as_view(), name='delegation_create'),
     path('delegations/<int:pk>/end/', views.ManagerDelegationEndView.as_view(), name='delegation_end'),
+    path('reports/', views.EmployeeReportsView.as_view(), name='reports'),
 
     # Document Management & Asset Assignment Routes (Phase 2 Step 3)
     path('master/<int:pk>/documents/upload/', views.EmployeeDocumentUploadView.as_view(), name='document_upload'),
