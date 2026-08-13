@@ -272,10 +272,10 @@ class PayrollFoundationTests(TestCase):
         )
         
         # 100,000 gross. 1 unpaid day deduction = 100,000 / 30 * 1 = 3333.3333.
-        # PF deduction = 10,000
-        # Total deduction = 13333.33
-        # Net payable: 100000 - 13333.33 = 86667 (rounded to nearest integer BDT)
-        self.assertEqual(calc_jan.net_payable, Decimal('86667'))
+        # PF deduction = 10% of Basic (50k) = 5,000
+        # Total deduction = 5,000 + 3,333.33 = 8,333.33
+        # Net payable: 100000 - 8333.33 = 91667 (rounded to nearest integer BDT)
+        self.assertEqual(calc_jan.net_payable, Decimal('91667'))
         self.assertEqual(calc_jan.gross_salary, Decimal('100000.00'))
 
         # Lock January payroll run
@@ -299,10 +299,10 @@ class PayrollFoundationTests(TestCase):
                 employee=self.employee
             )
 
-        # Verify January snapshot and calculation remains unchanged
+        # Verify January snapshot remains: 100k gross, 1 absent day, PF=5k on Basic -> Net 91,667
         calc_jan.refresh_from_db()
         self.assertEqual(calc_jan.gross_salary, Decimal('100000.00'))
-        self.assertEqual(calc_jan.net_payable, Decimal('86667'))
+        self.assertEqual(calc_jan.net_payable, Decimal('91667'))
 
     def test_duplicate_calculation_no_duplicates(self):
         EmployeeSalaryAssignment.objects.create(
@@ -558,11 +558,11 @@ class PayrollFoundationTests(TestCase):
 
         # Basic 50,000 + HRA 25,000 + Medical 15,000 + Conveyance 10,000 = 100,000 standard earnings.
         # Plus BDT 5,000 adjustment = 105,000 total earnings.
-        # PF 10,000 standard deduction + BDT 2,000 adjustment = 12,000 total deductions.
-        # Net: 105,000 - 12,000 = 93,000.
+        # PF = 10% of Basic (50k) = 5,000 + BDT 2,000 adjustment = 7,000 total deductions.
+        # Net: 105,000 - 7,000 = 98,000.
         self.assertEqual(calc.total_earnings, Decimal('105000.00'))
-        self.assertEqual(calc.total_deductions, Decimal('100000.00') * Decimal('10.00') / Decimal('100.00') + Decimal('2000.00'))  # PF + 2000
-        self.assertEqual(calc.net_payable, Decimal('93000'))
+        self.assertEqual(calc.total_deductions, Decimal('50000.00') * Decimal('10.00') / Decimal('100.00') + Decimal('2000.00'))  # PF (on Basic) + 2000
+        self.assertEqual(calc.net_payable, Decimal('98000'))
 
         # Test duplicate adjustment retry (using sync_uuid) -> Unique Constraint check
         import uuid
@@ -985,7 +985,7 @@ class PayrollReconciliationAndProductionReadinessTests(TestCase):
         SalaryStructureComponent.objects.create(salary_structure=self.structure, salary_component=self.pf, value=Decimal('10.00'), value_type=SalaryComponentValueType.PERCENTAGE)
 
     def test_reconciliation_row_1_standard_full_attendance(self):
-        """Row 1: Gross 100,000, 0 absences, 10% PF -> Deductions 10,000, Net 90,000."""
+        """Row 1: Gross 100,000, 0 absences, 10% PF on Basic -> Deductions 5,000, Net 95,000."""
         emp = Employee.objects.create(
             employee_number="REC001", first_name="Rahim", last_name="Uddin",
             joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
@@ -998,13 +998,13 @@ class PayrollReconciliationAndProductionReadinessTests(TestCase):
 
         self.assertEqual(calc.gross_salary, Decimal('100000.00'))
         self.assertEqual(calc.total_earnings, Decimal('100000.00'))
-        self.assertEqual(calc.total_deductions, Decimal('10000.00'))  # 10% PF on Gross
-        self.assertEqual(calc.net_payable, Decimal('90000.00'))
-        self.assertEqual(calc.bank_payable, Decimal('90000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('5000.00'))  # 10% PF on 50k Basic = 5,000
+        self.assertEqual(calc.net_payable, Decimal('95000.00'))
+        self.assertEqual(calc.bank_payable, Decimal('95000.00'))
         self.assertEqual(calc.cash_payable, Decimal('0.00'))
 
     def test_reconciliation_row_2_absences_and_other_deduction(self):
-        """Row 2: Gross 60,000, 2 unpaid absences, BDT 2,000 other deduction -> Net 48,000."""
+        """Row 2: Gross 60,000, 2 unpaid absences, BDT 2,000 other deduction -> Net 51,000."""
         emp = Employee.objects.create(
             employee_number="REC002", first_name="Karim", last_name="Ahmed",
             joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
@@ -1024,20 +1024,20 @@ class PayrollReconciliationAndProductionReadinessTests(TestCase):
         )
 
         # Basic: 30,000, HRA: 15,000, Med: 9,000, Conv: 6,000
-        # PF: 6,000 (10% of 60k)
+        # PF: 3,000 (10% of 30k Basic)
         # Absence Deduction: (60,000 / 30) * 2 = 4,000
         # Other Deduction: 2,000
-        # Total Deductions = 6,000 + 4,000 + 2,000 = 12,000
-        # Net = 60,000 - 12,000 = 48,000
+        # Total Deductions = 3,000 + 4,000 + 2,000 = 9,000
+        # Net = 60,000 - 9,000 = 51,000
         self.assertEqual(calc.absence_deduction, Decimal('4000.00'))
         self.assertEqual(calc.other_deduction, Decimal('2000.00'))
-        self.assertEqual(calc.total_deductions, Decimal('12000.00'))
-        self.assertEqual(calc.net_payable, Decimal('48000.00'))
-        self.assertEqual(calc.cash_payable, Decimal('48000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('9000.00'))
+        self.assertEqual(calc.net_payable, Decimal('51000.00'))
+        self.assertEqual(calc.cash_payable, Decimal('51000.00'))
         self.assertEqual(calc.bank_payable, Decimal('0.00'))
 
     def test_reconciliation_row_3_overtime_and_arrear_adjustment(self):
-        """Row 3: Gross 45,000 + 10 OT hours + BDT 5,000 arrear + BDT 1,500 TDS deduction."""
+        """Row 3: Gross 45,000 + 10 OT hours (fixed_300 policy) + BDT 5,000 arrear + BDT 1,500 TDS deduction."""
         emp = Employee.objects.create(
             employee_number="REC003", first_name="Salma", last_name="Begum",
             joined_date=datetime.date(2026, 1, 1), status=EmployeeStatus.ACTIVE,
@@ -1066,12 +1066,24 @@ class PayrollReconciliationAndProductionReadinessTests(TestCase):
             ot_hours=Decimal('10.0')
         )
 
-        # Gross: 45,000 + Arrear: 5,000 = Total Earnings 50,000 (fixed OT callback applies when policy resolved)
-        # Total Deductions: PF (4,500) + TDS (1,500) = 6,000
-        # Net = 50,000 - 6,000 = 44,000
-        self.assertEqual(calc.total_earnings, Decimal('50000.00'))
-        self.assertEqual(calc.total_deductions, Decimal('6000.00'))
-        self.assertEqual(calc.net_payable, Decimal('44000.00'))
+        # Gross: 45,000 + Arrear: 5,000 + OT: 3,000 (10 hrs * 300) = Total Earnings 53,000
+        # Total Deductions: PF (2,250 - 10% of 22.5k Basic) + TDS (1,500) = 3,750
+        # Net = 53,000 - 3,750 = 49,250
+        self.assertEqual(calc.ot_amount, Decimal('3000.00'))
+        self.assertEqual(calc.total_earnings, Decimal('53000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('3750.00'))
+        self.assertEqual(calc.net_payable, Decimal('49250.00'))
+
+        # Verification of OT amount = 0 when overtime_policy is 'none' / not configured
+        emp.overtime_policy = 'none'
+        emp.save()
+        calc_no_ot = PayrollService.run_payroll_for_employee(
+            payroll_run=run,
+            employee=emp,
+            ot_hours=Decimal('10.0')
+        )
+        self.assertEqual(calc_no_ot.ot_amount, Decimal('0.00'))
+        self.assertEqual(calc_no_ot.total_earnings, Decimal('50000.00'))
 
     def test_reconciliation_row_4_split_payment_mode(self):
         """Row 4: Split payment with bank limit 50,000 on net 75,000 -> Bank 50,000, Cash 25,000."""
@@ -1141,9 +1153,9 @@ class PayrollReconciliationAndProductionReadinessTests(TestCase):
             other_deduction=Decimal('30000.00')  # Exceeds 20,000 gross
         )
 
-        # 20k earnings - (2k PF + 30k other ded) = -12,000
-        self.assertEqual(calc.net_payable, Decimal('-12000.00'))
-        self.assertEqual(calc.total_deductions, Decimal('32000.00'))
+        # 20k earnings - (1k PF + 30k other ded) = -11,000
+        self.assertEqual(calc.net_payable, Decimal('-11000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('31000.00'))
 
     def test_snapshot_immutability_after_salary_structure_change(self):
         """Locked January payroll cannot change when employee gets salary hike in February."""
@@ -1177,24 +1189,25 @@ class PayrollReconciliationAndProductionReadinessTests(TestCase):
         with self.assertRaises(ValidationError):
             PayrollService.run_payroll_for_employee(jan_run, emp)
 
-        # Checking January calculation record in DB remains unchanged (50k - 5k PF = 45k)
+        # Checking January calculation record in DB remains unchanged
+        # Gross 50k, Basic 25k (50%), PF = 10% of Basic = 2,500 -> Net = 47,500
         calc_jan.refresh_from_db()
         self.assertEqual(calc_jan.gross_salary, Decimal('50000.00'))
-        self.assertEqual(calc_jan.net_payable, Decimal('45000.00'))
+        self.assertEqual(calc_jan.net_payable, Decimal('47500.00'))
 
-        # Run February Payroll (80k - 8k PF = 72k)
+        # Run February Payroll (80k Gross, Basic 40k, PF = 4k -> Net = 76k)
         feb_run = PayrollRun.objects.create(
             name="Feb 2026", period_start=datetime.date(2026, 2, 1),
             period_end=datetime.date(2026, 2, 28), status=PayrollRunStatus.DRAFT
         )
         calc_feb = PayrollService.run_payroll_for_employee(feb_run, emp)
         self.assertEqual(calc_feb.gross_salary, Decimal('80000.00'))
-        self.assertEqual(calc_feb.net_payable, Decimal('72000.00'))
+        self.assertEqual(calc_feb.net_payable, Decimal('76000.00'))
 
-        # January remains unchanged
+        # January remains unchanged: Gross 50k, Basic 25k, PF 2,500 -> Net 47,500
         calc_jan.refresh_from_db()
         self.assertEqual(calc_jan.gross_salary, Decimal('50000.00'))
-        self.assertEqual(calc_jan.net_payable, Decimal('45000.00'))
+        self.assertEqual(calc_jan.net_payable, Decimal('47500.00'))
 
     def test_large_roster_performance_and_exports(self):
         """Simulate large roster with 100 employees and test batch calculations and exports."""
