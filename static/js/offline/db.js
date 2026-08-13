@@ -76,14 +76,14 @@
     /**
      * Add a record to sync_queue
      */
-    enqueueSyncItem: async function (moduleName, action, payload, priority = 5) {
+    enqueueSyncItem: async function (moduleName, action, payload, priority = 5, forcedUuid = null) {
       const db = await openDB();
       return new Promise((resolve, reject) => {
         const tx = db.transaction('sync_queue', 'readwrite');
         const store = tx.objectStore('sync_queue');
 
         const record = {
-          uuid: generateUUID(),
+          uuid: forcedUuid || payload.sync_uuid || generateUUID(),
           module: moduleName,
           action: action,
           payload: payload || {},
@@ -223,6 +223,15 @@
   };
 
   window.FieldTrackDB = FieldTrackDB;
+
+  window.queueOfflineAction = async function (data) {
+    const action = data.action;
+    const priority = action === 'check_in' ? 1 : (action === 'check_out' ? 2 : (action === 'field_visit' ? 1 : 5));
+    const payload = { ...data };
+    const uuid = data.sync_uuid || generateUUID();
+    delete payload.sync_uuid;
+    return FieldTrackDB.enqueueSyncItem('attendance', action, payload, priority, uuid);
+  };
 
   // Auto-init database on load
   document.addEventListener('DOMContentLoaded', () => {

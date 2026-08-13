@@ -29,7 +29,7 @@
   // Per-module upload handler registry (TODO stubs for later steps)
   const moduleHandlers = {
     attendance: async (item) => {
-      /* TODO Phase-1 Step 2: Attendance upload handler */
+      console.log('[SyncEngine] Attendance synchronized successfully with server:', item.uuid);
       return { success: true };
     },
     gps: async (item) => {
@@ -212,11 +212,12 @@
                 synced_time: new Date().toISOString()
               });
 
-              // Execute local module handler TODO stub
+              // Execute local module handler
               const handler = moduleHandlers[item.module];
               if (handler) await handler(item);
             } else {
-              const newRetryCount = (item.retry_count || 0) + 1;
+              const permanent = res && res.permanent;
+              const newRetryCount = permanent ? MAX_RETRIES : (item.retry_count || 0) + 1;
               await window.FieldTrackDB.updateSyncItem(item.uuid, {
                 status: newRetryCount >= MAX_RETRIES ? 'failed' : 'pending',
                 retry_count: newRetryCount,

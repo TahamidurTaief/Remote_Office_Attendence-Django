@@ -263,26 +263,41 @@
             function doCheckout(lat, lng, acc, address) {
               if (!navigator.onLine) {
                 const sync_uuid = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (c === 'x' ? (Math.random() * 16) | 0 : ((Math.random() * 16) | 0 & 0x3) | 0x8).toString(16));
-                if (window.queueOfflineAction) {
-                  window.queueOfflineAction({
-                    action: 'check_out',
-                    latitude: lat || 0,
-                    longitude: lng || 0,
-                    accuracy: acc || 0,
-                    address: address || 'Offline Check-out location',
-                    sync_uuid: sync_uuid,
-                    client_event_time: new Date().toISOString()
-                  }).then(() => {
-                    if (window.LocationTracker) window.LocationTracker.stopTracking();
-                    alert('Offline mode: Checked out locally. Will sync when online.');
-                    location.reload();
-                  }).catch(err => {
-                    if (window.showToast) window.showToast('Offline save failed: ' + err, 'error');
+                
+                const enqueue = (photoBase64) => {
+                  if (window.queueOfflineAction) {
+                    window.queueOfflineAction({
+                      action: 'check_out',
+                      latitude: lat || 0,
+                      longitude: lng || 0,
+                      accuracy: acc || 0,
+                      address: address || 'Offline Check-out location',
+                      sync_uuid: sync_uuid,
+                      client_event_time: new Date().toISOString(),
+                      photo: photoBase64 || null
+                    }).then(() => {
+                      if (window.LocationTracker) window.LocationTracker.stopTracking();
+                      alert('Offline mode: Checked out locally. Will sync when online.');
+                      location.reload();
+                    }).catch(err => {
+                      if (window.showToast) window.showToast('Offline save failed: ' + err, 'error');
+                      resetBtn();
+                    });
+                  } else {
+                    alert('Offline queueing not ready. Network needed.');
                     resetBtn();
-                  });
+                  }
+                };
+
+                const photoFile = photoInput ? photoInput.files[0] : null;
+                if (photoFile) {
+                  const reader = new FileReader();
+                  reader.onload = function(e) {
+                    enqueue(e.target.result);
+                  };
+                  reader.readAsDataURL(photoFile);
                 } else {
-                  alert('Offline queueing not ready. Network needed.');
-                  resetBtn();
+                  enqueue(null);
                 }
                 return;
               }

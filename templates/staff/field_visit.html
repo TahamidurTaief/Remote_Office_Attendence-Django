@@ -336,6 +336,51 @@ function submitFieldVisit() {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
 
+  if (!navigator.onLine) {
+    const enqueue = (photoBase64) => {
+      if (window.queueOfflineAction) {
+        const sync_uuid = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (c === 'x' ? (Math.random() * 16) | 0 : ((Math.random() * 16) | 0 & 0x3) | 0x8).toString(16));
+        window.queueOfflineAction({
+          action: 'field_visit',
+          latitude: document.getElementById('id_latitude').value || 0,
+          longitude: document.getElementById('id_longitude').value || 0,
+          accuracy: document.getElementById('id_accuracy').value || 0,
+          address: document.getElementById('id_address').value || 'Offline Field-visit location',
+          visit_title: title,
+          client_name: document.getElementById('id_client_name').value || '',
+          site_address: document.getElementById('id_site_address').value || '',
+          note: document.getElementById('id_note').value || '',
+          sync_uuid: sync_uuid,
+          client_event_time: new Date().toISOString(),
+          photo: photoBase64 || null
+        }).then(() => {
+          if (window.showToast) showToast('Offline field visit saved. Will sync when reconnected.', 'info');
+          setTimeout(() => { window.location.href = '/staff/home/'; }, 1500);
+        }).catch(err => {
+          if (window.showToast) showToast('Failed to save offline: ' + err, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Submit Visit';
+        });
+      } else {
+        alert('Offline queueing not ready. Network needed.');
+        btn.disabled = false;
+        btn.textContent = 'Submit Visit';
+      }
+    };
+
+    const photoFile = document.getElementById('camera-input').files[0];
+    if (photoFile) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        enqueue(e.target.result);
+      };
+      reader.readAsDataURL(photoFile);
+    } else {
+      enqueue(null);
+    }
+    return;
+  }
+
   const formData = new FormData();
   formData.append('latitude', document.getElementById('id_latitude').value);
   formData.append('longitude', document.getElementById('id_longitude').value);

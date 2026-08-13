@@ -228,25 +228,40 @@
                 function doCheckout(lat, lng, acc, address) {
                     if (!navigator.onLine) {
                         const sync_uuid = (crypto.randomUUID && crypto.randomUUID()) || ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
-                        queueOfflineAction({
-                            action: 'check_out',
-                            latitude: lat || 0,
-                            longitude: lng || 0,
-                            accuracy: acc || 0,
-                            address: address || 'Offline Check-out location',
-                            sync_uuid: sync_uuid,
-                            client_event_time: new Date().toISOString()
-                        }).then(() => {
-                            if (window.LocationTracker) {
-                                window.LocationTracker.stopTracking();
-                            }
-                            alert('You are offline. Checked out successfully locally. Your attendance will sync automatically when your connection is restored.');
-                            location.reload();
-                        }).catch(err => {
-                            window.showToast('Failed to save offline check-out: ' + err, 'error');
-                            btn.innerHTML = 'Check Out';
-                            btn.disabled = false;
-                        });
+                        
+                        const enqueue = (photoBase64) => {
+                            queueOfflineAction({
+                                action: 'check_out',
+                                latitude: lat || 0,
+                                longitude: lng || 0,
+                                accuracy: acc || 0,
+                                address: address || 'Offline Check-out location',
+                                sync_uuid: sync_uuid,
+                                client_event_time: new Date().toISOString(),
+                                photo: photoBase64 || null
+                            }).then(() => {
+                                if (window.LocationTracker) {
+                                    window.LocationTracker.stopTracking();
+                                }
+                                alert('You are offline. Checked out successfully locally. Your attendance will sync automatically when your connection is restored.');
+                                location.reload();
+                            }).catch(err => {
+                                window.showToast('Failed to save offline check-out: ' + err, 'error');
+                                btn.innerHTML = 'Check Out';
+                                btn.disabled = false;
+                            });
+                        };
+
+                        const photoFile = photoInput ? photoInput.files[0] : null;
+                        if (photoFile) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                enqueue(e.target.result);
+                            };
+                            reader.readAsDataURL(photoFile);
+                        } else {
+                            enqueue(null);
+                        }
                         return;
                     }
 

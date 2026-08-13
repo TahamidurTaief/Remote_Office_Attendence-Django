@@ -1873,6 +1873,172 @@ class AttendanceLifecycleServiceTests(TestCase):
         self.assertEqual(res_out['total_hours'], 8.0)
 
 
+class OfflineSyncReplayTests(TestCase):
+    def setUp(self):
+        # Create Branch
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            address='Sector 3, Uttara',
+            latitude=23.8759,
+            longitude=90.3795,
+            radius_meters=1000,
+            is_active=True
+        )
+        
+        # Create User & Employee
+        self.user = User.objects.create_user(
+            phone='+8801700000003',
+            password='testpassword123',
+            role='staff'
+        )
+        self.employee = EmployeeProfile.objects.create(
+            user=self.user,
+            employee_id='EMP-SYNC-001',
+            full_name='Sync Tester',
+            phone='+8801700000003',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        # Login client
+        self.client.login(username='+8801700000003', password='testpassword123')
+
+    def test_ordered_replay_and_sequence(self):
+        import uuid
+        check_in_uuid = str(uuid.uuid4())
+        check_out_uuid = str(uuid.uuid4())
+        
+        # Enqueue check_out with an earlier timestamp than check_in to test server-side sorting (events should be reordered)
+        base_time = timezone.now() - datetime.timedelta(hours=2)
+        ci_time = base_time + datetime.timedelta(minutes=5)
+        co_time = base_time + datetime.timedelta(hours=1)
+        
+        sync_payload = {
+            'items': [
+                {
+                    'uuid': check_out_uuid,
+                    'module': 'attendance',
+                    'action': 'check_out',
+                    'payload': {
+                        'latitude': 23.8759,
+                        'longitude': 90.3795,
+                        'accuracy': 10.0,
+                        'address': 'Office exit',
+                        'client_event_time': co_time.isoformat()
+                    }
+                },
+                {
+                    'uuid': check_in_uuid,
+                    'module': 'attendance',
+                    'action': 'check_in',
+                    'payload': {
+                        'latitude': 23.8759,
+                        'longitude': 90.3795,
+                        'accuracy': 10.0,
+                        'address': 'Office entrance',
+                        'type': 'office',
+                        'client_event_time': ci_time.isoformat()
+                    }
+                }
+            ]
+        }
+        
+        response = self.client.post(
+            reverse('api_sync'),
+            data=json.dumps(sync_payload),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        res_data = response.json()
+        self.assertEqual(res_data['status'], 'success')
+        results = res_data['results']
+        
+        # Verify check-in succeeded
+        ci_res = next(r for r in results if r['uuid'] == check_in_uuid)
+        self.assertEqual(ci_res['status'], 'success')
+        
+        # Verify check-out succeeded (sorting put check-in before check-out, so check-out successfully attached to it)
+        co_res = next(r for r in results if r['uuid'] == check_out_uuid)
+        self.assertEqual(co_res['status'], 'success')
+        
+        # Check Attendance record in database
+        att = Attendance.objects.get(sync_uuid=check_in_uuid)
+        self.assertIsNotNone(att.check_out_time)
+        self.assertEqual(att.total_hours, 0.92) # 55 minutes = 0.92 hours
+
+    def test_duplicate_uuid_idempotency(self):
+        import uuid
+        sync_uuid = str(uuid.uuid4())
+        ci_time = timezone.now() - datetime.timedelta(minutes=30)
+        
+        sync_payload = {
+            'items': [
+                {
+                    'uuid': sync_uuid,
+                    'module': 'attendance',
+                    'action': 'check_in',
+                    'payload': {
+                        'latitude': 23.8759,
+                        'longitude': 90.3795,
+                        'accuracy': 10.0,
+                        'address': 'Office entrance',
+                        'type': 'office',
+                        'client_event_time': ci_time.isoformat()
+                    }
+                }
+            ]
+        }
+        
+        # Send once
+        response1 = self.client.post(reverse('api_sync'), data=json.dumps(sync_payload), content_type='application/json')
+        self.assertEqual(response1.status_code, 200)
+        
+        # Send twice
+        response2 = self.client.post(reverse('api_sync'), data=json.dumps(sync_payload), content_type='application/json')
+        self.assertEqual(response2.status_code, 200)
+        
+        # Verify we only have one attendance session
+        self.assertEqual(Attendance.objects.filter(employee=self.employee).count(), 1)
+
+    def test_permanent_vs_temporary_failures(self):
+        import uuid
+        sync_uuid_invalid = str(uuid.uuid4())
+        
+        # Force policy to require photo (makes check-in fail permanently without photo)
+        policy = get_attendance_policy(self.employee)
+        policy.photo_required = True
+        policy.save()
+        
+        sync_payload = {
+            'items': [
+                {
+                    'uuid': sync_uuid_invalid,
+                    'module': 'attendance',
+                    'action': 'check_in',
+                    'payload': {
+                        'latitude': 23.8759,
+                        'longitude': 90.3795,
+                        'accuracy': 10.0,
+                        'address': 'Office entrance',
+                        'type': 'office',
+                        'client_event_time': timezone.now().isoformat()
+                    }
+                }
+            ]
+        }
+        
+        response = self.client.post(reverse('api_sync'), data=json.dumps(sync_payload), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        res_data = response.json()
+        results = res_data['results']
+        
+        invalid_res = next(r for r in results if r['uuid'] == sync_uuid_invalid)
+        self.assertEqual(invalid_res['status'], 'failed')
+        self.assertTrue(invalid_res['permanent'])
+        self.assertIn('Photo is required', invalid_res['error'])
+
+
+
 
 
 

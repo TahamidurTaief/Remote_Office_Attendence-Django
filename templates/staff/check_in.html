@@ -359,22 +359,36 @@ function submitCheckIn() {
   if (!navigator.onLine) {
     // Use canonical FieldTrackDB instead of duplicate local IndexedDB
     if (window.FieldTrackDB) {
-      window.FieldTrackDB.enqueueSyncItem('attendance', 'check_in', {
-          latitude: lat || 0,
-          longitude: lng || 0,
-          accuracy: acc || 0,
-          address: address || 'Offline Check-in location',
-          note: note,
-          type: type,
-          client_event_time: new Date().toISOString()
-      }, 1).then(() => {
-          if (window.showToast) showToast('Offline check-in saved. Will sync when reconnected.', 'info');
-          setTimeout(() => { window.location.href = '/staff/home/'; }, 1500);
-      }).catch(err => {
-          if (window.showToast) showToast('Failed to save offline: ' + err, 'error');
-          btn.disabled = false;
-          btn.textContent = 'Complete Check In';
-      });
+      const enqueue = (photoBase64) => {
+        window.FieldTrackDB.enqueueSyncItem('attendance', 'check_in', {
+            latitude: lat || 0,
+            longitude: lng || 0,
+            accuracy: acc || 0,
+            address: address || 'Offline Check-in location',
+            note: note,
+            type: type,
+            client_event_time: new Date().toISOString(),
+            photo: photoBase64 || null
+        }, 1).then(() => {
+            if (window.showToast) showToast('Offline check-in saved. Will sync when reconnected.', 'info');
+            setTimeout(() => { window.location.href = '/staff/home/'; }, 1500);
+        }).catch(err => {
+            if (window.showToast) showToast('Failed to save offline: ' + err, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Complete Check In';
+        });
+      };
+
+      const photoFile = document.getElementById('camera-input').files[0];
+      if (photoFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          enqueue(e.target.result);
+        };
+        reader.readAsDataURL(photoFile);
+      } else {
+        enqueue(null);
+      }
     } else {
       if (window.showToast) showToast('You are offline and the local database is unavailable. Please reconnect.', 'warning');
       btn.disabled = false;
