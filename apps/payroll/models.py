@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.conf import settings
 from apps.employees.models import Employee
@@ -126,3 +127,35 @@ class EmployeePayrollCalculation(models.Model):
 
     def __str__(self):
         return f"{self.employee.employee_number} - Net: {self.net_payable} ({self.payroll_run.period_start})"
+
+class PayrollAdjustment(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='payroll_adjustments')
+    payroll_run = models.ForeignKey(PayrollRun, on_delete=models.CASCADE, related_name='adjustments')
+    component = models.ForeignKey(SalaryComponent, on_delete=models.PROTECT, related_name='adjustments')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    type = models.CharField(max_length=20, choices=SalaryComponentType.choices)
+    reason = models.TextField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.employee.employee_number} - {self.component.code}: {self.amount} ({self.type})"
+
+class PayrollWorkflowAudit(models.Model):
+    payroll_run = models.ForeignKey(PayrollRun, on_delete=models.CASCADE, related_name='workflow_audits')
+    from_status = models.CharField(max_length=50)
+    to_status = models.CharField(max_length=50)
+    action_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    action_at = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)
+    snapshot_data = models.JSONField(help_text="Complete calculation state snapshot at the time of this transition")
+
+    class Meta:
+        ordering = ['-action_at']
+
+    def __str__(self):
+        return f"Payroll {self.payroll_run.id} from {self.from_status} to {self.to_status} at {self.action_at}"

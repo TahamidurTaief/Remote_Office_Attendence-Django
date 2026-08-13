@@ -501,3 +501,147 @@ class PayrollFoundationTests(TestCase):
         # Should NOT include emp_oct since they joined after Sept 30
         self.assertFalse(any(c.employee == emp_oct for c in calcs_re))
 
+    def test_payroll_manual_adjustments_and_recalculations(self):
+        from apps.payroll.models import PayrollAdjustment
+        from django.contrib.auth import get_user_model
+        
+        User = get_user_model()
+        user = User.objects.create_user(email="testuser4@example.com", phone="9998887777", password="password")
+        
+        # Setup Assignment
+        EmployeeSalaryAssignment.objects.create(
+            employee=self.employee,
+            salary_structure=self.structure,
+            gross_salary=Decimal('100000.00'),
+            effective_from=datetime.date(2026, 1, 1)
+        )
+
+        payroll_run = PayrollRun.objects.create(
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 1, 31),
+            status=PayrollRunStatus.DRAFT
+        )
+
+        # Create Adjustment components (arrear salary / other deduction)
+        arrear_comp = SalaryComponent.objects.create(
+            name="Arrear Salary", code="ARREAR", type=SalaryComponentType.EARNING, value_type=SalaryComponentValueType.FIXED
+        )
+        other_ded_comp = SalaryComponent.objects.create(
+            name="Other Deduction", code="OTHER_DED", type=SalaryComponentType.DEDUCTION, value_type=SalaryComponentValueType.FIXED
+        )
+
+        # Create manual adjustments
+        # Employee gets BDT 5,000 arrear + BDT 2,000 other deduction
+        adj1 = PayrollAdjustment.objects.create(
+            employee=self.employee,
+            payroll_run=payroll_run,
+            component=arrear_comp,
+            amount=Decimal('5000.00'),
+            type=SalaryComponentType.EARNING,
+            reason="Arrear adjustment",
+            created_by=user
+        )
+        adj2 = PayrollAdjustment.objects.create(
+            employee=self.employee,
+            payroll_run=payroll_run,
+            component=other_ded_comp,
+            amount=Decimal('2000.00'),
+            type=SalaryComponentType.DEDUCTION,
+            reason="Other deduction adjustment",
+            created_by=user
+        )
+
+        # Calculate payroll for employee
+        calc = PayrollService.run_payroll_for_employee(payroll_run, self.employee)
+
+        # Basic 50,000 + HRA 25,000 + Medical 15,000 + Conveyance 10,000 = 100,000 standard earnings.
+        # Plus BDT 5,000 adjustment = 105,000 total earnings.
+        # PF 10,000 standard deduction + BDT 2,000 adjustment = 12,000 total deductions.
+        # Net: 105,000 - 12,000 = 93,000.
+        self.assertEqual(calc.total_earnings, Decimal('105000.00'))
+        self.assertEqual(calc.total_deductions, Decimal('100000.00') * Decimal('10.00') / Decimal('100.00') + Decimal('2000.00'))  # PF + 2000
+        self.assertEqual(calc.net_payable, Decimal('93000'))
+
+        # Test duplicate adjustment retry (using sync_uuid) -> Unique Constraint check
+        import uuid
+        custom_uuid = uuid.uuid4()
+        PayrollAdjustment.objects.create(
+            employee=self.employee,
+            payroll_run=payroll_run,
+            component=arrear_comp,
+            amount=Decimal('100.00'),
+            type=SalaryComponentType.EARNING,
+            reason="Unique uuid check",
+            created_by=user,
+            sync_uuid=custom_uuid
+        )
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            PayrollAdjustment.objects.create(
+                employee=self.employee,
+                payroll_run=payroll_run,
+                component=arrear_comp,
+                amount=Decimal('100.00'),
+                type=SalaryComponentType.EARNING,
+                reason="Retry uuid check",
+                created_by=user,
+                sync_uuid=custom_uuid
+            )
+
+    def test_payroll_workflow_transitions_and_reversals(self):
+        from apps.payroll.models import PayrollWorkflowAudit
+        from django.contrib.auth import get_user_model
+        
+        User = get_user_model()
+        user_admin = User.objects.create_user(email="admin@example.com", phone="5551112222", password="password", is_staff=True)
+        user_staff = User.objects.create_user(email="staff@example.com", phone="5552223333", password="password", is_staff=False)
+
+        EmployeeSalaryAssignment.objects.create(
+            employee=self.employee,
+            salary_structure=self.structure,
+            gross_salary=Decimal('100000.00'),
+            effective_from=datetime.date(2026, 1, 1)
+        )
+
+        payroll_run = PayrollRun.objects.create(
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 1, 31),
+            status=PayrollRunStatus.DRAFT
+        )
+
+        # Run calculations so we have calc instances to snapshot
+        PayrollService.run_payroll_for_employee(payroll_run, self.employee)
+
+        # Draft -> Review
+        PayrollService.transition_payroll_status(payroll_run, PayrollRunStatus.REVIEW, user_admin, "To Review")
+        self.assertEqual(payroll_run.status, PayrollRunStatus.REVIEW)
+
+        # Review -> Approved/Locked
+        PayrollService.transition_payroll_status(payroll_run, PayrollRunStatus.APPROVED_LOCKED, user_admin, "To Locked")
+        self.assertEqual(payroll_run.status, PayrollRunStatus.APPROVED_LOCKED)
+
+        # Ensure Approved/Locked run cannot run calculations directly (protected)
+        with self.assertRaises(ValidationError):
+            PayrollService.run_payroll_for_employee(payroll_run, self.employee)
+
+        # Transition Approved/Locked -> Disbursed
+        PayrollService.transition_payroll_status(payroll_run, PayrollRunStatus.DISBURSED, user_admin, "To Disbursed")
+        self.assertEqual(payroll_run.status, PayrollRunStatus.DISBURSED)
+
+        # Reversal by unauthorized staff should be blocked
+        with self.assertRaises(ValidationError):
+            PayrollService.reverse_payroll_run(payroll_run, user_staff, "Invalid Reverse Attempt")
+
+        # Reversal by authorized admin should pass, status reset to Draft and snapshot preserved in audit
+        audits_count_before = PayrollWorkflowAudit.objects.filter(payroll_run=payroll_run).count()
+        PayrollService.reverse_payroll_run(payroll_run, user_admin, "Admin Reversal")
+        payroll_run.refresh_from_db()
+        self.assertEqual(payroll_run.status, PayrollRunStatus.DRAFT)
+        
+        # Verify reversal log exists
+        reversal_audit = PayrollWorkflowAudit.objects.filter(payroll_run=payroll_run).order_by('-action_at').first()
+        self.assertEqual(reversal_audit.to_status, PayrollRunStatus.DRAFT)
+        self.assertIsNotNone(reversal_audit.snapshot_data)
+        self.assertTrue('calculations' in reversal_audit.snapshot_data)
+        self.assertEqual(len(reversal_audit.snapshot_data['calculations']), 1)
+

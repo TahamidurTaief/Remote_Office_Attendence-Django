@@ -30,7 +30,8 @@ class PayrollCalculationEngine:
         ot_policy_callback=None,
         payment_mode: str = PaymentMode.BANK,
         bank_limit: Decimal = Decimal('0.00'),
-        absence_divisor: int = 30
+        absence_divisor: int = 30,
+        manual_adjustments: list = None  # List of dicts representing manual adjustments
     ) -> dict:
         """
         Calculates all payroll values deterministically.
@@ -48,6 +49,8 @@ class PayrollCalculationEngine:
         other_deduction = Decimal(str(other_deduction))
         ot_hours = Decimal(str(ot_hours))
         bank_limit = Decimal(str(bank_limit))
+        if manual_adjustments is None:
+            manual_adjustments = []
 
         components_breakdown = []
         total_earnings = Decimal('0.00')
@@ -71,7 +74,8 @@ class PayrollCalculationEngine:
                 'value_type': comp['value_type'],
                 'value': str(comp_value),
                 'amount': str(amount),
-                'is_pf': comp.get('is_pf', False)
+                'is_pf': comp.get('is_pf', False),
+                'is_adjustment': False
             }
             components_breakdown.append(comp_snapshot)
 
@@ -79,6 +83,26 @@ class PayrollCalculationEngine:
                 total_earnings += amount
             elif comp['type'] == SalaryComponentType.DEDUCTION:
                 total_deductions += amount
+
+        # 1b. Process manual adjustments (Earnings and Deductions) exactly once
+        for adj in manual_adjustments:
+            adj_amount = Decimal(str(adj['amount'])).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+            adj_snapshot = {
+                'code': adj['component_code'],
+                'name': adj['component_name'],
+                'type': adj['type'],
+                'value_type': 'fixed',
+                'value': str(adj_amount),
+                'amount': str(adj_amount),
+                'is_pf': False,
+                'is_adjustment': True,
+                'reason': adj.get('reason', '')
+            }
+            components_breakdown.append(adj_snapshot)
+            if adj['type'] == SalaryComponentType.EARNING:
+                total_earnings += adj_amount
+            elif adj['type'] == SalaryComponentType.DEDUCTION:
+                total_deductions += adj_amount
 
         # 2. Absence Deduction: Gross / Divisor * unpaid_absent_days
         absence_divisor_dec = Decimal(str(absence_divisor))
@@ -204,6 +228,19 @@ class PayrollService:
                 'is_pf': sc.salary_component.is_pf
             })
 
+        # Fetch manual adjustments for this employee in this payroll run
+        from apps.payroll.models import PayrollAdjustment
+        adjustments_qs = PayrollAdjustment.objects.filter(payroll_run=payroll_run, employee=employee)
+        manual_adjustments = []
+        for adj in adjustments_qs:
+            manual_adjustments.append({
+                'component_code': adj.component.code,
+                'component_name': adj.component.name,
+                'amount': adj.amount,
+                'type': adj.type,
+                'reason': adj.reason
+            })
+
         # Calculate using engine
         calc_result = PayrollCalculationEngine.calculate_employee_payroll(
             gross_salary=assignment.gross_salary,
@@ -214,7 +251,8 @@ class PayrollService:
             ot_policy_callback=ot_policy_callback,
             payment_mode=assignment.payment_mode,
             bank_limit=assignment.bank_limit,
-            absence_divisor=absence_divisor
+            absence_divisor=absence_divisor,
+            manual_adjustments=manual_adjustments
         )
 
         # Serialize the Decimal values to string to ensure JSON serialization succeeds.
@@ -349,3 +387,115 @@ class PayrollService:
             calculations.append(calc)
 
         return calculations
+
+    @classmethod
+    @transaction.atomic
+    def transition_payroll_status(cls, payroll_run: PayrollRun, target_status: PayrollRunStatus, user, note: str = '') -> PayrollRun:
+        """
+        Validates transition and updates status.
+        Transitions flow: Draft -> Review -> Approved/Locked -> Disbursed.
+        """
+        old_status = payroll_run.status
+        if old_status == target_status:
+            return payroll_run
+
+        # Validation logic for allowed flows
+        allowed = False
+        if old_status == PayrollRunStatus.DRAFT and target_status == PayrollRunStatus.REVIEW:
+            allowed = True
+        elif old_status == PayrollRunStatus.REVIEW and target_status == PayrollRunStatus.APPROVED_LOCKED:
+            allowed = True
+        elif old_status == PayrollRunStatus.APPROVED_LOCKED and target_status == PayrollRunStatus.DISBURSED:
+            allowed = True
+
+        if not allowed:
+            raise ValidationError(f"Invalid payroll transition from {old_status} to {target_status}.")
+
+        payroll_run.status = target_status
+        payroll_run.save()
+
+        # Audit transition
+        from apps.payroll.models import PayrollWorkflowAudit, EmployeePayrollCalculation
+        
+        # Capture current snapshot state of calculations
+        calcs = EmployeePayrollCalculation.objects.filter(payroll_run=payroll_run)
+        serialized_calcs = []
+        for calc in calcs:
+            serialized_calcs.append({
+                'employee_id': calc.employee.id,
+                'employee_number': calc.employee.employee_number,
+                'gross_salary': str(calc.gross_salary),
+                'net_payable': str(calc.net_payable),
+                'total_earnings': str(calc.total_earnings),
+                'total_deductions': str(calc.total_deductions),
+                'bank_payable': str(calc.bank_payable),
+                'cash_payable': str(calc.cash_payable),
+                'ot_hours': str(calc.ot_hours),
+                'ot_amount': str(calc.ot_amount),
+                'unpaid_absent_days': str(calc.unpaid_absent_days),
+                'absence_deduction': str(calc.absence_deduction),
+                'structure_snapshot': calc.structure_snapshot
+            })
+
+        PayrollWorkflowAudit.objects.create(
+            payroll_run=payroll_run,
+            from_status=old_status,
+            to_status=target_status,
+            action_by=user,
+            note=note,
+            snapshot_data={'calculations': serialized_calcs}
+        )
+
+        return payroll_run
+
+    @classmethod
+    @transaction.atomic
+    def reverse_payroll_run(cls, payroll_run: PayrollRun, user, note: str = '') -> PayrollRun:
+        """
+        Reverses a locked or disbursed payroll run back to Draft, preserving snapshot history.
+        Requires authorized admin action.
+        """
+        # We check if user is admin (checking is_staff or customized logic, since it's Django, we can check user.is_staff or role=='admin')
+        if not (user.is_staff or getattr(user, 'role', '') == 'admin' or user.is_superuser):
+            raise ValidationError("Only authorized administrators can reverse payroll runs.")
+
+        old_status = payroll_run.status
+        if old_status not in [PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]:
+            raise ValidationError("Only Approved/Locked or Disbursed payroll runs can be reversed.")
+
+        # Capture snapshot of calculations for historical preservation
+        from apps.payroll.models import PayrollWorkflowAudit, EmployeePayrollCalculation
+        calcs = EmployeePayrollCalculation.objects.filter(payroll_run=payroll_run)
+        serialized_calcs = []
+        for calc in calcs:
+            serialized_calcs.append({
+                'employee_id': calc.employee.id,
+                'employee_number': calc.employee.employee_number,
+                'gross_salary': str(calc.gross_salary),
+                'net_payable': str(calc.net_payable),
+                'total_earnings': str(calc.total_earnings),
+                'total_deductions': str(calc.total_deductions),
+                'bank_payable': str(calc.bank_payable),
+                'cash_payable': str(calc.cash_payable),
+                'ot_hours': str(calc.ot_hours),
+                'ot_amount': str(calc.ot_amount),
+                'unpaid_absent_days': str(calc.unpaid_absent_days),
+                'absence_deduction': str(calc.absence_deduction),
+                'structure_snapshot': calc.structure_snapshot
+            })
+
+        # Save workflow reversal record
+        PayrollWorkflowAudit.objects.create(
+            payroll_run=payroll_run,
+            from_status=old_status,
+            to_status=PayrollRunStatus.DRAFT,
+            action_by=user,
+            note=note,
+            snapshot_data={'calculations': serialized_calcs}
+        )
+
+        # Set status back to Draft
+        payroll_run.status = PayrollRunStatus.DRAFT
+        payroll_run.save()
+
+        return payroll_run
