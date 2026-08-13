@@ -75,6 +75,7 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
                 manager_branch = profile.branch
                 branch_id = str(manager_branch.id)
             else:
+                # Disallow selecting other branch_id via GET request
                 branch_id = None
                 from django.db.models import Q
                 from apps.projects.models import Project
@@ -83,6 +84,9 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
                     Q(site_engineer_projects__in=managed_projects) |
                     Q(assigned_tasks__project__in=managed_projects)
                 ).select_related('branch').distinct()
+        elif not can_view_all:
+            # For non-admin/non-manager roles, clear out branch_id filtering
+            branch_id = None
 
         # Determine allowed employees queryset
         if can_view_all:
@@ -306,6 +310,7 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
             'employees': allowed_employees.order_by('full_name'),
             'selected_date': today.strftime('%Y-%m-%d'),
             'selected_branch': branch_id or '',
+            'branch_id': branch_id or '',
             'selected_employee': employee_id or '',
             'present_today': present_count,
             'absent_today':  absent_count,
@@ -349,6 +354,19 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         att_type = self.request.GET.get('type')
         status = self.request.GET.get('status')
         
+        # Enforce Manager branch limits
+        role_name = self.request.user.role.name if hasattr(self.request.user.role, 'name') else self.request.user.role
+        can_view_all = (role_name == 'admin')
+        profile = getattr(self.request.user, 'employee_profile', None)
+        
+        if not can_view_all and role_name == 'manager':
+            if profile and profile.branch:
+                branch_id = str(profile.branch.id)
+            else:
+                branch_id = None
+        elif not can_view_all:
+            branch_id = None
+            
         if status == 'absent':
             return [r for r in get_absent_records(
                 date_from=date_from,
@@ -394,6 +412,19 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         att_type = self.request.GET.get('type')
         status = self.request.GET.get('status')
         
+        # Enforce Manager branch limits
+        role_name = self.request.user.role.name if hasattr(self.request.user.role, 'name') else self.request.user.role
+        can_view_all = (role_name == 'admin')
+        profile = getattr(self.request.user, 'employee_profile', None)
+        
+        if not can_view_all and role_name == 'manager':
+            if profile and profile.branch:
+                branch_id = str(profile.branch.id)
+            else:
+                branch_id = None
+        elif not can_view_all:
+            branch_id = None
+
         # Build base queryset for counting (excluding status filter)
         base_qs = Attendance.objects.filter(is_expired=False).select_related('employee', 'employee__branch')
         if date_from:
@@ -994,6 +1025,19 @@ def _filter_qs_by_request(qs, request):
     date_to     = request.GET.get('date_to', '')
     emp         = request.GET.get('employee', '')
     branch      = request.GET.get('branch', '')
+
+    # Enforce Manager branch limits
+    role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
+    can_view_all = (role_name == 'admin')
+    profile = getattr(request.user, 'employee_profile', None)
+    
+    if not can_view_all and role_name == 'manager':
+        if profile and profile.branch:
+            branch = str(profile.branch.id)
+        else:
+            branch = None
+    elif not can_view_all:
+        branch = None
 
     if date_single:
         qs = qs.filter(date=date_single)
@@ -2115,6 +2159,19 @@ class ExportReportCSVView(AdminRequiredMixin, View):
         att_type = request.GET.get('type')
         status = request.GET.get('status')
         
+        # Enforce Manager branch limits
+        role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
+        can_view_all = (role_name == 'admin')
+        profile = getattr(request.user, 'employee_profile', None)
+        
+        if not can_view_all and role_name == 'manager':
+            if profile and profile.branch:
+                branch_id = str(profile.branch.id)
+            else:
+                branch_id = None
+        elif not can_view_all:
+            branch_id = None
+
         if status == 'absent':
             records = get_absent_records(
                 date_from=date_from,
@@ -2178,6 +2235,19 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         att_type = request.GET.get('type')
         status = request.GET.get('status')
         
+        # Enforce Manager branch limits
+        role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
+        can_view_all = (role_name == 'admin')
+        profile = getattr(request.user, 'employee_profile', None)
+        
+        if not can_view_all and role_name == 'manager':
+            if profile and profile.branch:
+                branch_id = str(profile.branch.id)
+            else:
+                branch_id = None
+        elif not can_view_all:
+            branch_id = None
+
         if status == 'absent':
             attendances = get_absent_records(
                 date_from=date_from,
@@ -2451,6 +2521,19 @@ def get_monthly_grid_data(request):
     
     branch_id = request.GET.get('branch') or request.GET.get('branch_id')
     employee_id = request.GET.get('employee')
+
+    # Enforce Manager branch limits
+    role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
+    can_view_all = (role_name == 'admin')
+    profile = getattr(request.user, 'employee_profile', None)
+    
+    if not can_view_all and role_name == 'manager':
+        if profile and profile.branch:
+            branch_id = str(profile.branch.id)
+        else:
+            branch_id = None
+    elif not can_view_all:
+        branch_id = None
 
     return reporting_service.get_monthly_report_data(
         year=year,
