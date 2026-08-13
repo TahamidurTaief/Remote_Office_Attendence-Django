@@ -29,3 +29,10 @@ class ExpenseForm(forms.ModelForm):
             if ext not in allowed:
                 raise ValidationError("Only PDF and Image files (JPG, PNG, WEBP) are allowed.")
         return attachment
+
+    def clean(self):
+        cleaned_data = super().clean()
+        project = cleaned_data.get('project')
+        if project and project.status == 'Completed':
+            raise ValidationError("Cannot link expenses to a completed project.")
+        return cleaned_data

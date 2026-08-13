@@ -12,9 +12,19 @@ from .models import LeaveType, LeaveBalance, LeaveRequest
 from .forms import LeaveRequestForm, LeaveTypeForm
 
 def _get_profile(user):
+    if not user or not user.is_authenticated:
+        return None
+    if hasattr(user, 'employee_profile') and user.employee_profile:
+        return user.employee_profile
     from apps.employees.hr_resolver import get_canonical_employee
     canonical_emp = get_canonical_employee(user)
-    return getattr(canonical_emp, 'legacy_profile', None) if canonical_emp and hasattr(canonical_emp, 'legacy_profile') else canonical_emp
+    if canonical_emp:
+        if hasattr(canonical_emp, 'employee_profile'):
+            return canonical_emp.employee_profile
+        from apps.employees.models import EmployeeProfile
+        if isinstance(canonical_emp, EmployeeProfile):
+            return canonical_emp
+    return None
 
 
 class StaffOrManagerMixin(RoleRequiredMixin):

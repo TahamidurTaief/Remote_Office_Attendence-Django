@@ -15,6 +15,21 @@ from apps.attendance.sync_utils import parse_and_validate_client_time
 from .models import Expense
 from .forms import ExpenseForm
 
+def _get_profile(user):
+    if not user or not user.is_authenticated:
+        return None
+    if hasattr(user, 'employee_profile') and user.employee_profile:
+        return user.employee_profile
+    from apps.employees.hr_resolver import get_canonical_employee
+    canonical_emp = get_canonical_employee(user)
+    if canonical_emp:
+        if hasattr(canonical_emp, 'employee_profile'):
+            return canonical_emp.employee_profile
+        from apps.employees.models import EmployeeProfile
+        if isinstance(canonical_emp, EmployeeProfile):
+            return canonical_emp
+    return None
+
 class StaffOrManagerMixin(RoleRequiredMixin):
     allowed_roles = ['staff', 'manager', 'admin']
 
@@ -24,7 +39,7 @@ class StaffExpenseListView(StaffOrManagerMixin, ListView):
     context_object_name = 'expenses'
 
     def get_queryset(self):
-        employee = getattr(self.request.user, 'employee_profile', None)
+        employee = _get_profile(self.request.user)
         if not employee:
             return Expense.objects.none()
         return Expense.objects.filter(employee=employee)
@@ -36,7 +51,7 @@ class ExpenseDetailView(StaffOrManagerMixin, DetailView):
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
-        employee = getattr(self.request.user, 'employee_profile', None)
+        employee = _get_profile(self.request.user)
         from apps.accounts.engine import PermissionEngine
         can_manage = self.request.user.is_superuser or PermissionEngine.evaluate(self.request.user, 'expense.approve').allowed or getattr(self.request.user, 'role', '') == 'admin'
         if not can_manage and obj.employee != employee:
@@ -51,7 +66,7 @@ class StaffExpenseCreateView(StaffOrManagerMixin, CreateView):
     success_url = reverse_lazy('expense:staff_expense_list')
 
     def dispatch(self, request, *args, **kwargs):
-        employee = getattr(request.user, 'employee_profile', None)
+        employee = _get_profile(request.user)
         if employee:
             master = getattr(employee, 'master_employee', None)
             if master and (master.is_suspended or master.business_status == 'suspended'):
@@ -91,7 +106,7 @@ class StaffExpenseCreateView(StaffOrManagerMixin, CreateView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
-        employee = getattr(self.request.user, 'employee_profile', None)
+        employee = _get_profile(self.request.user)
         if not employee:
             messages.error(self.request, "You do not have an active Employee Profile.")
             return redirect('expense:staff_expense_list')
@@ -157,85 +172,88 @@ class BaseProcessExpenseView(View):
         if not request.user.is_authenticated:
             return redirect('/login/')
         
+        from django.db import transaction
         from apps.expense.models import Expense
-        expense = get_object_or_404(Expense, pk=kwargs.get('pk'))
-        user = request.user
         
-        # Self-approval restriction
-        if expense.employee.user == user:
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden("You cannot approve or process your own expense claim.")
-        
-        # Superuser / Admin bypass
-        if user.is_superuser or getattr(user, 'role', '') == 'admin':
+        with transaction.atomic():
+            expense = get_object_or_404(Expense.objects.select_for_update(), pk=kwargs.get('pk'))
+            user = request.user
+            
+            # Self-approval restriction
+            if expense.employee.user == user:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You cannot approve or process your own expense claim.")
+            
+            # Superuser / Admin bypass
+            if user.is_superuser or getattr(user, 'role', '') == 'admin':
+                return super().dispatch(request, *args, **kwargs)
+                
+            if expense.status == 'pending_manager':
+                # Needs to be reporting manager of the employee or their delegate
+                emp_master = getattr(expense.employee, 'master_employee', None)
+                if not emp_master:
+                    if getattr(user, 'role', '') == 'manager':
+                        return super().dispatch(request, *args, **kwargs)
+                    from django.http import HttpResponseForbidden
+                    return HttpResponseForbidden("No manager link or profile found to evaluate.")
+                
+                reporting_manager = emp_master.reporting_manager
+                if not reporting_manager:
+                    if getattr(user, 'role', '') == 'manager':
+                        return super().dispatch(request, *args, **kwargs)
+                    from django.http import HttpResponseForbidden
+                    return HttpResponseForbidden("This employee has no reporting manager assigned.")
+                
+                # Check direct manager
+                is_allowed = False
+                if reporting_manager.user == user:
+                    is_allowed = True
+                
+                # Check hierarchy manager (any level)
+                from apps.employees.hierarchy_services import OrgHierarchyService
+                reviewer_emp = getattr(user, 'employee_master', None)
+                if not is_allowed and reviewer_emp:
+                    if OrgHierarchyService.is_manager_of(reviewer_emp, emp_master):
+                        is_allowed = True
+                
+                # Check manager delegation
+                if not is_allowed and reviewer_emp:
+                    from apps.employees.models import ManagerDelegation
+                    from django.utils import timezone
+                    today = timezone.localdate()
+                    managers = [reporting_manager]
+                    managers.extend(OrgHierarchyService.get_management_chain(emp_master))
+                    active_delegations = ManagerDelegation.objects.filter(
+                        manager__in=managers,
+                        delegate_to=reviewer_emp,
+                        is_active=True,
+                        start_date__lte=today,
+                        end_date__gte=today
+                    )
+                    if active_delegations.exists():
+                        is_allowed = True
+                
+                if not is_allowed:
+                    from django.http import HttpResponseForbidden
+                    return HttpResponseForbidden("You are not authorized to approve this expense at the Manager stage.")
+                    
+            elif expense.status == 'pending_finance':
+                from apps.accounts.engine import PermissionEngine
+                res = PermissionEngine.evaluate(user, 'expense.approve')
+                if getattr(user, 'role', '') != 'finance' and not res.allowed:
+                    from django.http import HttpResponseForbidden
+                    return HttpResponseForbidden("You do not have Finance permissions to process this expense.")
+                    
+            elif expense.status == 'pending_accounts':
+                if getattr(user, 'role', '') != 'accounts':
+                    from django.http import HttpResponseForbidden
+                    return HttpResponseForbidden("You do not have Accounts permissions to process this expense.")
+                    
+            else:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("This expense is already processed or in an invalid state.")
+                
             return super().dispatch(request, *args, **kwargs)
-            
-        if expense.status == 'pending_manager':
-            # Needs to be reporting manager of the employee or their delegate
-            emp_master = getattr(expense.employee, 'master_employee', None)
-            if not emp_master:
-                if getattr(user, 'role', '') == 'manager':
-                    return super().dispatch(request, *args, **kwargs)
-                from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("No manager link or profile found to evaluate.")
-            
-            reporting_manager = emp_master.reporting_manager
-            if not reporting_manager:
-                if getattr(user, 'role', '') == 'manager':
-                    return super().dispatch(request, *args, **kwargs)
-                from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("This employee has no reporting manager assigned.")
-            
-            # Check direct manager
-            is_allowed = False
-            if reporting_manager.user == user:
-                is_allowed = True
-            
-            # Check hierarchy manager (any level)
-            from apps.employees.hierarchy_services import OrgHierarchyService
-            reviewer_emp = getattr(user, 'employee_master', None)
-            if not is_allowed and reviewer_emp:
-                if OrgHierarchyService.is_manager_of(reviewer_emp, emp_master):
-                    is_allowed = True
-            
-            # Check manager delegation
-            if not is_allowed and reviewer_emp:
-                from apps.employees.models import ManagerDelegation
-                from django.utils import timezone
-                today = timezone.localdate()
-                managers = [reporting_manager]
-                managers.extend(OrgHierarchyService.get_management_chain(emp_master))
-                active_delegations = ManagerDelegation.objects.filter(
-                    manager__in=managers,
-                    delegate_to=reviewer_emp,
-                    is_active=True,
-                    start_date__lte=today,
-                    end_date__gte=today
-                )
-                if active_delegations.exists():
-                    is_allowed = True
-            
-            if not is_allowed:
-                from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("You are not authorized to approve this expense at the Manager stage.")
-                
-        elif expense.status == 'pending_finance':
-            from apps.accounts.engine import PermissionEngine
-            res = PermissionEngine.evaluate(user, 'expense.approve')
-            if getattr(user, 'role', '') != 'finance' and not res.allowed:
-                from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("You do not have Finance permissions to process this expense.")
-                
-        elif expense.status == 'pending_accounts':
-            if getattr(user, 'role', '') != 'accounts':
-                from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("You do not have Accounts permissions to process this expense.")
-                
-        else:
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden("This expense is already processed or in an invalid state.")
-            
-        return super().dispatch(request, *args, **kwargs)
 
 class ApproveExpenseView(BaseProcessExpenseView, View):
     def post(self, request, pk):
@@ -492,7 +510,7 @@ class ReturnExpenseView(BaseProcessExpenseView, View):
 class SubmitExpenseDraftView(StaffOrManagerMixin, View):
     def post(self, request, pk):
         expense = get_object_or_404(Expense, pk=pk)
-        employee = getattr(request.user, 'employee_profile', None)
+        employee = _get_profile(request.user)
         if expense.employee != employee:
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to submit this draft.")
@@ -517,7 +535,7 @@ class StaffExpenseUpdateView(StaffOrManagerMixin, UpdateView):
 
     def dispatch(self, request, *args, **kwargs):
         expense = self.get_object()
-        employee = getattr(request.user, 'employee_profile', None)
+        employee = _get_profile(request.user)
         if expense.employee != employee:
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to edit this expense.")

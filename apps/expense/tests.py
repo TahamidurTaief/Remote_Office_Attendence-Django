@@ -530,3 +530,129 @@ class ExpenseWorkflowIntegrationTests(TestCase):
         self.assertEqual(wf_instance.current_status, 'returned')
 
 
+class ExpenseHardeningTests(TestCase):
+    def setUp(self):
+        from django.core.management import call_command
+        call_command('seed_workflow_definitions')
+        
+        from django.contrib.auth import get_user_model
+        from apps.branches.models import Branch
+        from apps.employees.models import Employee, EmployeeProfile
+        from apps.projects.models import Project, ProjectType
+        from apps.expense.models import ExpenseCategory
+        
+        User = get_user_model()
+        self.branch = Branch.objects.create(name='Test Branch', latitude=23.0, longitude=90.0)
+        
+        self.staff_user = User.objects.create_user(phone='+8801700000010', email='staff@example.com', password='password123', role='staff')
+        self.manager_user = User.objects.create_user(phone='+8801700000011', email='manager@example.com', password='password123', role='manager')
+        
+        self.manager_master = Employee.objects.create(
+            employee_number='MGR-E-01', first_name='Manager', last_name='One', branch=self.branch, status='active', user=self.manager_user
+        )
+        self.staff_master = Employee.objects.create(
+            employee_number='EMP-E-01', first_name='Staff', last_name='One', branch=self.branch, status='active', reporting_manager=self.manager_master, user=self.staff_user
+        )
+        
+        self.profile = EmployeeProfile.objects.create(
+            user=self.staff_user, employee_id='EMP-E-01', full_name='Staff One', phone='+8801700000010', branch=self.branch, master_employee=self.staff_master, joined_date='2026-01-01', is_active=True
+        )
+        self.manager_profile = EmployeeProfile.objects.create(
+            user=self.manager_user, employee_id='MGR-E-01', full_name='Manager One', phone='+8801700000011', branch=self.branch, master_employee=self.manager_master, joined_date='2026-01-01', is_active=True
+        )
+        
+        self.category = ExpenseCategory.objects.create(name='Travel', code='TRV', is_active=True)
+        self.proj_type = ProjectType.objects.create(name='HVAC Install')
+        self.project = Project.objects.create(name='HVAC Project 1', client_name='Client A', location='Dhaka', project_type=self.proj_type, start_date=timezone.localdate(), status='In Progress')
+
+    def test_completed_project_validation(self):
+        from apps.expense.forms import ExpenseForm
+        
+        # Mark project as completed
+        self.project.status = 'Completed'
+        self.project.save()
+        
+        data = {
+            'project': self.project.pk,
+            'amount': '150.00',
+            'category': self.category.pk,
+            'description': 'Completed project expense test'
+        }
+        form = ExpenseForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('Cannot link expenses to a completed project', str(form.errors))
+
+    def test_idempotent_approval_with_locks(self):
+        from django.urls import reverse
+        from apps.expense.models import Expense
+        from apps.workflow.services import record_action
+        
+        expense = Expense.objects.create(
+            employee=self.profile,
+            amount=200.00,
+            category=self.category,
+            description='Travel allowance',
+            status='pending_manager',
+            project=self.project
+        )
+        
+        self.client.force_login(self.manager_user)
+        approve_url = reverse('expense:approve_expense', kwargs={'pk': expense.pk})
+        
+        # First post - approves expense to next stage
+        response1 = self.client.post(approve_url)
+        self.assertEqual(response1.status_code, 302)
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'pending_finance')
+        
+        # Second post - attempt to approve same stage again (should return forbidden status)
+        response2 = self.client.post(approve_url)
+        self.assertEqual(response2.status_code, 403)
+
+    def test_edit_return_history_logging(self):
+        from django.urls import reverse
+        from apps.expense.models import Expense, ExpenseHistory
+        
+        from apps.workflow.services import record_action
+        expense = Expense.objects.create(
+            employee=self.profile,
+            amount=300.00,
+            category=self.category,
+            description='Old description',
+            status='pending_manager',
+            project=self.project
+        )
+        wf_instance = expense.workflow_instance
+        record_action(wf_instance, self.manager_user, 'return', return_to_initiator=True)
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'returned_by_manager')
+        
+        self.client.force_login(self.staff_user)
+        update_url = reverse('expense:staff_expense_edit', kwargs={'pk': expense.pk})
+        
+        # Perform form update POST
+        data = {
+            'project': self.project.pk,
+            'amount': '350.00',
+            'category': self.category.pk,
+            'description': 'New description'
+        }
+        response = self.client.post(update_url, data=data)
+        self.assertEqual(response.status_code, 302)
+        
+        # Verify old values saved in history
+        history = ExpenseHistory.objects.filter(expense=expense).first()
+        self.assertIsNotNone(history)
+        self.assertEqual(history.amount, 300.00)
+        self.assertEqual(history.description, 'Old description')
+        
+        # Verify current values updated
+        expense.refresh_from_db()
+        self.assertEqual(expense.amount, 350.00)
+        self.assertEqual(expense.description, 'New description')
+        self.assertEqual(expense.status, 'pending_manager')
+        
+        # Verify workflow reset completed_at to None
+        self.assertIsNone(expense.workflow_instance.completed_at)
+
+

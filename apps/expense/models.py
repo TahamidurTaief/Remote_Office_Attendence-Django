@@ -144,10 +144,12 @@ def create_expense_workflow_instance(sender, instance, created, **kwargs):
                     if instance.status == 'pending_manager' and wf_instance.current_status != 'pending_manager':
                         wf_instance.current_step = 1
                         wf_instance.current_status = 'pending_manager'
+                        wf_instance.completed_at = None
                         wf_instance.save()
                     elif instance.status == 'pending_finance' and wf_instance.current_status != 'pending_finance':
                         wf_instance.current_step = 2
                         wf_instance.current_status = 'pending_finance'
+                        wf_instance.completed_at = None
                         wf_instance.save()
 
 @receiver(post_save, sender=WorkflowInstance)
