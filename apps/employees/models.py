@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from apps.branches.models import Branch
 from imagekit.models import ProcessedImageField
 from imagekit.processors import ResizeToFit, Transpose
@@ -324,7 +325,6 @@ class AssetAssignment(models.Model):
         return f"{self.asset.asset_tag} -> {self.employee.get_full_name()} ({status})"
 
 
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 

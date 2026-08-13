@@ -1849,7 +1849,6 @@ class SubordinateAPITests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
 
-
 class HRMasterReadinessTests(TestCase):
     def setUp(self):
         from apps.branches.models import Branch
@@ -1920,6 +1919,72 @@ class HRMasterReadinessTests(TestCase):
         master.save()
         self.legacy_profile.refresh_from_db()
         self.assertFalse(self.legacy_profile.canonical_is_active)
+
+
+class HRHardeningRegressionTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from apps.branches.models import Branch
+        User = get_user_model()
+        self.branch = Branch.objects.create(name='Test Branch', latitude=23.0, longitude=90.0)
+        self.user = User.objects.create_user(email='test_hard@test.com', phone='+8801999999991', password='Password123!')
+
+    def test_asset_assignment_clean_validation(self):
+        from apps.employees.models import Employee, Asset, AssetAssignment, AssetType, AssetCondition, EmployeeStatus
+        from django.core.exceptions import ValidationError
+        
+        emp1 = Employee.objects.create(
+            employee_number='EMP-H-01', first_name='Test', last_name='One', branch=self.branch, status=EmployeeStatus.ACTIVE
+        )
+        emp2 = Employee.objects.create(
+            employee_number='EMP-H-02', first_name='Test', last_name='Two', branch=self.branch, status=EmployeeStatus.ACTIVE
+        )
+        
+        asset = Asset.objects.create(
+            asset_type=AssetType.LAPTOP, asset_tag='TAG-H-01', name='H Laptop', condition=AssetCondition.GOOD
+        )
+        
+        # First assignment
+        AssetAssignment.objects.create(asset=asset, employee=emp1, assigned_date=timezone.localdate())
+        
+        # Second active assignment should fail clean/save
+        assign2 = AssetAssignment(asset=asset, employee=emp2, assigned_date=timezone.localdate())
+        with self.assertRaises(ValidationError):
+            assign2.full_clean()
+
+    def test_form_auto_creates_profile(self):
+        from apps.employees.models import Employee, EmployeeProfile, EmployeeStatus
+        from apps.employees.forms import EmployeeMasterForm
+        
+        master = Employee.objects.create(
+            employee_number='EMP-H-03',
+            first_name='Auto',
+            last_name='Profile',
+            phone='+8801999999992',
+            branch=self.branch,
+            status=EmployeeStatus.ACTIVE
+        )
+        
+        self.assertFalse(EmployeeProfile.objects.filter(master_employee=master).exists())
+        
+        # Save via form which simulates the admin panel edit flow
+        data = {
+            'employee_number': master.employee_number,
+            'first_name': master.first_name,
+            'last_name': master.last_name,
+            'branch': self.branch.pk,
+            'status': master.status,
+            'user': self.user.pk,
+            'phone': '+8801999999992',
+        }
+        form = EmployeeMasterForm(data=data, instance=master)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        
+        self.assertTrue(EmployeeProfile.objects.filter(master_employee=master).exists())
+        prof = EmployeeProfile.objects.get(master_employee=master)
+        self.assertEqual(prof.user, self.user)
+        self.assertEqual(prof.full_name, 'Auto Profile')
 
 
 

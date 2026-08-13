@@ -275,16 +275,6 @@ class EmployeeEditForm(forms.ModelForm):
         return profile
 
 
-class EmployeeDocumentForm(forms.ModelForm):
-    class Meta:
-        model = EmployeeDocument
-        fields = ['document_type', 'expiry_date', 'file']
-        widgets = {
-            'document_type': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Visa, Trade License'}),
-            'expiry_date': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
-            'file': forms.ClearableFileInput(attrs={'class': FILE_INPUT}),
-        }
-
 
 from apps.employees.models import Employee, Department, Designation, EmployeeStatus, EmploymentHistory
 
@@ -357,6 +347,26 @@ class EmployeeMasterForm(forms.ModelForm):
                     visited.add(curr.pk)
                     curr = curr.reporting_manager
         return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit and instance.user:
+            from django.utils import timezone
+            from apps.employees.models import EmployeeProfile
+            profile = getattr(instance, 'legacy_profile', None)
+            if not profile:
+                profile = getattr(instance.user, 'employee_profile', None)
+            if not profile:
+                EmployeeProfile.objects.create(
+                    user=instance.user,
+                    master_employee=instance,
+                    employee_id=instance.employee_number,
+                    full_name=instance.get_full_name(),
+                    phone=instance.phone or instance.user.phone or f"+8801000000{instance.pk}",
+                    joined_date=instance.joined_date or timezone.localdate(),
+                    branch=instance.branch
+                )
+        return instance
 
 
 class DepartmentForm(forms.ModelForm):
@@ -752,12 +762,28 @@ class WizardStep4Form(forms.Form):
         elif p1:
             user.set_password(p1)
             user.save()
-
         # Update Employee fields
         self.employee.user = user
         self.employee.data_scope = data_scope
         self.employee.mfa_required = mfa_required
         self.employee.save()
+
+        # Auto-create or sync EmployeeProfile legacy bridge
+        from apps.employees.models import EmployeeProfile
+        from django.utils import timezone
+        profile = getattr(self.employee, 'legacy_profile', None)
+        if not profile:
+            profile = getattr(user, 'employee_profile', None)
+        if not profile:
+            EmployeeProfile.objects.create(
+                user=user,
+                master_employee=self.employee,
+                employee_id=self.employee.employee_number,
+                full_name=self.employee.get_full_name(),
+                phone=self.employee.phone or user.phone or f"+8801000000{self.employee.pk}",
+                joined_date=self.employee.joined_date or timezone.localdate(),
+                branch=self.employee.branch
+            )
 
         # Sync UserRoleAssignment — zero direct CustomUser.role write
         UserRoleAssignment.objects.filter(user=user).delete()
