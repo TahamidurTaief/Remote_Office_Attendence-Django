@@ -22,12 +22,43 @@ class ScheduleEvent(models.Model):
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='schedule_events')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_schedule_events')
     created_at = models.DateTimeField(auto_now_add=True)
+    version = models.IntegerField(default=1)
+
 
     class Meta:
         ordering = ['date', 'start_time', 'title']
 
     def __str__(self):
         return f"{self.title} ({self.date})"
+
+    @property
+    def is_overnight(self):
+        """Returns True if the event start and end time imply it spans into the next day."""
+        if self.start_time and self.end_time:
+            return self.end_time <= self.start_time
+        return False
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        # Time boundary logic: if end_time is set, start_time must also be set
+        if self.end_time and not self.start_time:
+            raise ValidationError("Start time must be provided if end time is specified.")
+
+
+        # Project completion validation
+        if self.project and self.project.status == 'Completed':
+            raise ValidationError("Cannot schedule events for a completed project.")
+
+        # Self clean is called during form validation, assigned_to checks are handled there or in save
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        # Optimistic concurrency increment:
+        if self.pk:
+            # We don't increment here directly if we do it in views, but let's increment on successful update.
+            # However, view handles the optimistic locking comparison. Let's increment here.
+            self.version += 1
+        super().save(*args, **kwargs)
 
     @property
     def color_tag(self):
@@ -61,3 +92,4 @@ class ScheduleEvent(models.Model):
             'Other': 'bg-gray-500',
         }
         return mapping.get(self.event_type, 'bg-gray-500')
+

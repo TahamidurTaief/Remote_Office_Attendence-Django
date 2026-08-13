@@ -217,3 +217,122 @@ class ScheduleCalendarTests(TestCase):
         self.assertEqual(len(all_events), 1)
         self.assertEqual(all_events[0]['title'], 'Staff Duty Event')
         self.assertEqual(all_events[0]['id'], f"event_{event_assigned.pk}")
+
+
+class ScheduleEventValidationAndConcurrencyTests(TestCase):
+    def setUp(self):
+        self.password = 'supersecure123'
+        self.user = User.objects.create_user(
+            email='manager_gantt@test.com',
+            password=self.password,
+            role='manager'
+        )
+        self.client.login(email='manager_gantt@test.com', password=self.password)
+
+        self.branch = Branch.objects.create(
+            name='Gantt Branch',
+            latitude=23.8,
+            longitude=90.4,
+            radius_meters=100
+        )
+        self.employee_user = User.objects.create_user(
+            email='emp_gantt@test.com',
+            password=self.password,
+            role='staff'
+        )
+        self.employee = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            branch=self.branch,
+            employee_id='EMP-GANTT-01',
+            full_name='Gantt Emp',
+            phone='+8801700000009',
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
+        self.proj_type = ProjectType.objects.create(name='HVAC Design')
+        self.project = Project.objects.create(
+            name='Active Project',
+            client_name='Test Client',
+            location='Dhaka',
+            project_type=self.proj_type,
+            branch=self.branch,
+            start_date=date(2026, 1, 1),
+            progress_percent=0,
+            status='In Progress'
+        )
+        self.completed_project = Project.objects.create(
+            name='Completed Project',
+            client_name='Test Client',
+            location='Dhaka',
+            project_type=self.proj_type,
+            branch=self.branch,
+            start_date=date(2026, 1, 1),
+            progress_percent=100,
+            status='Completed'
+        )
+
+    def test_overnight_event_property(self):
+        event = ScheduleEvent(
+            title='Night shift',
+            date=date(2026, 7, 15),
+            start_time=time(22, 0),
+            end_time=time(2, 0),
+            created_by=self.user
+        )
+        self.assertTrue(event.is_overnight)
+
+    def test_completed_project_assignment_rejected(self):
+        from django.core.exceptions import ValidationError
+        event = ScheduleEvent(
+            title='Site visit completed proj',
+            date=date(2026, 7, 15),
+            project=self.completed_project,
+            created_by=self.user
+        )
+        with self.assertRaises(ValidationError):
+            event.full_clean()
+
+    def test_overlapping_schedule_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+        # Create first event
+        e1 = ScheduleEvent.objects.create(
+            title='First meeting',
+            date=date(2026, 7, 15),
+            start_time=time(10, 0),
+            end_time=time(12, 0),
+            created_by=self.user
+        )
+        e1.assigned_to.add(self.employee)
+
+        # Build duplicate/overlapping event form data
+        from apps.schedule.forms import ScheduleEventForm
+        form_data = {
+            'title': 'Overlapping meeting',
+            'date': '2026-07-15',
+            'start_time': '10:30',
+            'end_time': '11:30',
+            'event_type': 'Meeting',
+            'assigned_to': [self.employee.pk],
+        }
+        form = ScheduleEventForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn("Scheduling conflict", form.errors.as_text())
+
+    def test_optimistic_concurrency_collision_detection(self):
+        event = ScheduleEvent.objects.create(
+            title='Concurrent meeting',
+            date=date(2026, 7, 15),
+            created_by=self.user
+        )
+        # Attempt edit with mismatching version parameter
+        edit_url = reverse('schedule:edit', args=[event.pk])
+        form_data = {
+            'title': 'Updated by User A',
+            'date': '2026-07-15',
+            'event_type': 'Meeting',
+            'version': event.version - 1, # outdated version
+        }
+        response = self.client.post(edit_url, data=form_data)
+        self.assertEqual(response.status_code, 200) # Form re-rendered due to error
+        self.assertIn("The event was modified by another user concurrently", response.content.decode())
+

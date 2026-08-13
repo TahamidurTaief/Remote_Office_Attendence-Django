@@ -52,16 +52,25 @@ class CalendarMonthView(RoleRequiredMixin, View):
         end_date = weeks[-1][-1]
 
         # Get employee profile for scoping
-        profile = getattr(request.user, 'employee_profile', None)
+        # S4: Canonical Employee resolver instead of legacy profile:
+        profile = None
+        if request.user.is_authenticated:
+            # First look up Employee Master
+            master_emp = getattr(request.user, 'employee_master', None)
+            if master_emp:
+                profile = getattr(master_emp, 'legacy_profile', None)
+            if not profile:
+                profile = getattr(request.user, 'employee_profile', None)
+
         from apps.accounts.engine import PermissionEngine
         res = PermissionEngine.evaluate(request.user, 'schedule.manage')
         is_staff_user = not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') == 'staff'
 
-        # Fetch manual events
+        # Fetch manual events (optimized: prefetch assigned_to and project, prefetch users)
         events_qs = ScheduleEvent.objects.filter(date__range=(start_date, end_date))
         if is_staff_user:
             events_qs = events_qs.filter(assigned_to=profile)
-        events = events_qs.prefetch_related('assigned_to', 'project')
+        events = events_qs.prefetch_related('assigned_to', 'assigned_to__user', 'project')
 
         # Fetch external sources
         # 1. Project Tasks
@@ -71,9 +80,9 @@ class CalendarMonthView(RoleRequiredMixin, View):
         )
         if is_staff_user:
             tasks_qs = tasks_qs.filter(responsible_person=profile)
-        tasks = tasks_qs.select_related('project')
+        tasks = tasks_qs.select_related('project', 'responsible_person')
 
-        # 2. Approved Leaves
+        # 2. Approved Leaves (optimized select_related to include employee__user and leave_type)
         leaves_qs = LeaveRequest.objects.filter(
             status='approved',
             start_date__lte=end_date,
@@ -81,13 +90,14 @@ class CalendarMonthView(RoleRequiredMixin, View):
         )
         if is_staff_user:
             leaves_qs = leaves_qs.filter(employee=profile)
-        leaves = leaves_qs.select_related('employee', 'leave_type')
+        leaves = leaves_qs.select_related('employee', 'employee__user', 'leave_type')
 
         # 3. Daily Progress Logs
         logs_qs = DailyProgressLog.objects.filter(date__range=(start_date, end_date))
         if is_staff_user:
             logs_qs = logs_qs.filter(logged_by=request.user)
         logs = logs_qs.select_related('project')
+
 
         # Group all items by date
         events_by_date = defaultdict(list)
@@ -316,6 +326,31 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
     form_class = ScheduleEventForm
     template_name = 'schedule/event_form.html'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        return kwargs
+
+    def form_valid(self, form):
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
+        
+        # Concurrency/retry implementation S6:
+        original_version = self.get_object().version
+        form_version = self.request.POST.get('version')
+        
+        if form_version and int(form_version) != original_version:
+            form.add_error(None, "The event was modified by another user concurrently. Please reload and try again.")
+            return self.form_invalid(form)
+
+        try:
+            with transaction.atomic():
+                # Perform version verification and update
+                response = super().form_valid(form)
+                return response
+        except ValidationError as e:
+            form.add_error(None, e)
+            return self.form_invalid(form)
+
     def get_success_url(self):
         return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
 
@@ -324,6 +359,16 @@ class ScheduleEventDeleteView(RoleRequiredMixin, DeleteView):
     allowed_roles = ['admin', 'manager']
     model = ScheduleEvent
 
+    def delete(self, request, *args, **kwargs):
+        # Optimistic concurrency check for delete
+        self.object = self.get_object()
+        form_version = request.POST.get('version')
+        if form_version and int(form_version) != self.object.version:
+            from django.contrib import messages
+            messages.error(request, "The event was modified by another user concurrently. Delete cancelled.")
+            return redirect(self.get_success_url())
+        return super().delete(request, *args, **kwargs)
+
     def get_success_url(self):
-        # Redirect to the calendar page of the deleted event's date
         return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
+

@@ -34,7 +34,57 @@ class ScheduleEventForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filter profiles to active ones
+        # S4: Use canonical Employee resolution by filtering querysets appropriately.
+        # Filter assigned_to to active employee profiles.
         self.fields['assigned_to'].queryset = EmployeeProfile.objects.filter(is_active=True)
-        self.fields['assigned_to'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.employee_id})"
-        self.fields['project'].queryset = Project.objects.all()
+        self.fields['assigned_to'].label_from_instance = lambda obj: f"{obj.canonical_full_name} ({obj.employee_id})"
+        self.fields['project'].queryset = Project.objects.exclude(status='Completed')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        event_date = cleaned_data.get('date')
+        start_time = cleaned_data.get('start_time')
+        end_time = cleaned_data.get('end_time')
+        assigned_employees = cleaned_data.get('assigned_to')
+        project = cleaned_data.get('project')
+
+        # Project validation
+        if project and project.status == 'Completed':
+            raise forms.ValidationError("Cannot schedule events for a completed project.")
+
+        # S2: Conflict/overlap checks for assigned employees
+        if event_date and assigned_employees:
+            for emp in assigned_employees:
+                # Find all conflicting events on the same day for this employee
+                conflicts = ScheduleEvent.objects.filter(
+                    date=event_date,
+                    assigned_to=emp
+                )
+                if self.instance.pk:
+                    conflicts = conflicts.exclude(pk=self.instance.pk)
+
+                # Overlap calculation (only if not all-day event)
+                if start_time and end_time:
+                    for conf in conflicts:
+                        if conf.start_time and conf.end_time:
+                            # Standard interval overlap checks
+                            # Either:
+                            # 1. New event starts during existing
+                            # 2. New event ends during existing
+                            # 3. New event completely wraps existing
+                            # 4. Same start/end times
+                            if (conf.start_time <= start_time < conf.end_time) or \
+                               (conf.start_time < end_time <= conf.end_time) or \
+                               (start_time <= conf.start_time and end_time >= conf.end_time):
+                                raise forms.ValidationError(
+                                    f"Scheduling conflict: {emp.canonical_full_name} is already assigned to the event '{conf.title}' at this time."
+                                )
+                else:
+                    # If it's an all-day event, conflict with any other event on the same day
+                    if conflicts.exists():
+                        raise forms.ValidationError(
+                            f"Scheduling conflict: {emp.canonical_full_name} is already assigned to an event on {event_date}."
+                        )
+
+        return cleaned_data
+
