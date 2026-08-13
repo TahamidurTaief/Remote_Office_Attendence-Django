@@ -659,3 +659,130 @@ class LeaveWorkflowIntegrationTests(TestCase):
         self.assertEqual(leave_request.status, 'approved')
 
 
+class LeaveHardeningTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from apps.branches.models import Branch, Holiday
+        from apps.employees.models import Employee, EmployeeProfile, Department, Designation
+        from apps.leave.models import LeaveType, LeaveBalance
+        User = get_user_model()
+        
+        self.branch = Branch.objects.create(name='Leave Branch', latitude=23.0, longitude=90.0)
+        self.dept = Department.objects.create(name='IT', code='IT-L')
+        self.desig = Designation.objects.create(name='Dev', code='DEV-L')
+        
+        self.user = User.objects.create_user(phone='+8801555555551', password='password123', role='staff')
+        
+        self.master = Employee.objects.create(
+            employee_number='EMP-L-01',
+            first_name='Leave',
+            last_name='Tester',
+            phone='+8801555555551',
+            branch=self.branch,
+            department=self.dept,
+            designation=self.desig,
+            weekly_holiday_policy='Saturday, Sunday',
+            status='active',
+            user=self.user
+        )
+        self.profile = EmployeeProfile.objects.create(
+            user=self.user,
+            employee_id='EMP-L-01',
+            full_name='Leave Tester',
+            phone='+8801555555551',
+            branch=self.branch,
+            master_employee=self.master,
+            joined_date='2026-01-01',
+            is_active=True
+        )
+        
+        self.leave_type = LeaveType.objects.create(
+            name='Annual Hardening Leave',
+            default_days_per_year=12,
+            category='casual'
+        )
+
+    def test_overlap_validation_form(self):
+        from apps.leave.models import LeaveRequest
+        from apps.leave.forms import LeaveRequestForm
+        
+        # Create an existing approved leave request
+        LeaveRequest.objects.create(
+            employee=self.profile,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 8, 17),  # Monday
+            end_date=datetime.date(2026, 8, 19),    # Wednesday
+            reason='Trip',
+            status='approved'
+        )
+        
+        # Test overlapping request clean validation
+        data = {
+            'leave_type': self.leave_type.pk,
+            'start_date': '2026-08-18',
+            'end_date': '2026-08-20',
+            'reason': 'Overlap'
+        }
+        form = LeaveRequestForm(data=data, employee=self.profile)
+        self.assertFalse(form.is_valid())
+        self.assertIn('overlaps with these dates', str(form.errors))
+
+    def test_deductible_days_spanning_weekend_and_holiday(self):
+        from apps.branches.models import Holiday
+        from apps.leave.models import LeaveRequest, LeaveBalance
+        
+        # Monday (Aug 17) to Friday (Aug 21). Aug 22 (Saturday) & Aug 23 (Sunday) are weekends.
+        # Create a holiday on Tuesday Aug 18
+        Holiday.objects.create(name='National Day', date=datetime.date(2026, 8, 18), branch=self.branch)
+        
+        req = LeaveRequest.objects.create(
+            employee=self.profile,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 8, 17), # Monday
+            end_date=datetime.date(2026, 8, 23),   # Sunday (7 calendar days)
+            reason='Test holidays & weekends',
+            status='approved'
+        )
+        
+        # Deductible days should be:
+        # Aug 17 (Mon) - Work day (1)
+        # Aug 18 (Tue) - Holiday (skip)
+        # Aug 19 (Wed) - Work day (2)
+        # Aug 20 (Thu) - Work day (3)
+        # Aug 21 (Fri) - Work day (4)
+        # Aug 22 (Sat) - Weekend (skip)
+        # Aug 23 (Sun) - Weekend (skip)
+        # Total deductible: 4 days!
+        
+        self.assertEqual(req.number_of_days, 4)
+        balance = LeaveBalance.objects.get(employee=self.profile, leave_type=self.leave_type, year=2026)
+        self.assertEqual(balance.used_days, 4)
+
+    def test_attendance_interaction_skips_worked_days(self):
+        from apps.attendance.models import Attendance
+        from apps.leave.models import LeaveRequest
+        
+        # Create attendance for Aug 17 (Monday)
+        Attendance.objects.create(
+            employee=self.profile,
+            date=datetime.date(2026, 8, 17),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 17, 9, 0))
+        )
+        
+        req = LeaveRequest.objects.create(
+            employee=self.profile,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 8, 17), # Monday (worked)
+            end_date=datetime.date(2026, 8, 19),   # Wednesday (not worked)
+            reason='Test attendance interaction',
+            status='approved'
+        )
+        
+        # Deductible days should be:
+        # Aug 17 (Mon) - Has attendance (skip)
+        # Aug 18 (Tue) - Work day (1)
+        # Aug 19 (Wed) - Work day (2)
+        # Total: 2 days!
+        self.assertEqual(req.number_of_days, 2)
+
+

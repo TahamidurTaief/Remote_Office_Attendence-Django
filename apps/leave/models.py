@@ -88,10 +88,47 @@ class LeaveRequest(models.Model):
             ('approve_leaverequest', 'Can approve or reject leave requests'),
         ]
 
+    def calculate_deductible_days(self):
+        from datetime import timedelta
+        from django.db.models import Q
+        from apps.branches.models import Holiday
+        from apps.attendance.models import Attendance
+        
+        master = getattr(self.employee, 'master_employee', None)
+        branch = master.branch if master else self.employee.branch
+        policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
+        policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
+        
+        deductible_days = 0
+        curr = self.start_date
+        while curr <= self.end_date:
+            day_name = curr.strftime('%A').lower()
+            if day_name in policy:
+                curr += timedelta(days=1)
+                continue
+            
+            holiday_qs = Holiday.objects.filter(date=curr)
+            if branch:
+                holiday_qs = holiday_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+            else:
+                holiday_qs = holiday_qs.filter(branch__isnull=True)
+            if holiday_qs.exists():
+                curr += timedelta(days=1)
+                continue
+                
+            if Attendance.objects.filter(employee=self.employee, date=curr, is_expired=False).exists():
+                curr += timedelta(days=1)
+                continue
+                
+            deductible_days += 1
+            curr += timedelta(days=1)
+            
+        return deductible_days
+
     def save(self, *args, **kwargs):
-        # Autocalculate number of days inclusive of start and end date
+        # Autocalculate number of days excluding weekends, holidays, and active attendance days
         if self.start_date and self.end_date:
-            self.number_of_days = (self.end_date - self.start_date).days + 1
+            self.number_of_days = self.calculate_deductible_days()
             
         is_new = self.pk is None
         old_status = None

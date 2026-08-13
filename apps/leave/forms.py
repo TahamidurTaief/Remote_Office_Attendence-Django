@@ -46,6 +46,18 @@ class LeaveRequestForm(forms.ModelForm):
             if start_date.year != end_date.year:
                 raise forms.ValidationError("Leave request cannot span across multiple calendar years. Please submit separate requests for each year.")
 
+            # Overlap check
+            if self.employee:
+                overlap_qs = LeaveRequest.objects.filter(
+                    employee=self.employee,
+                    start_date__lte=end_date,
+                    end_date__gte=start_date
+                ).exclude(status__in=['rejected', 'cancelled'])
+                if self.instance and self.instance.pk:
+                    overlap_qs = overlap_qs.exclude(pk=self.instance.pk)
+                if overlap_qs.exists():
+                    raise forms.ValidationError("You have an existing leave request that overlaps with these dates.")
+
             number_of_days = (end_date - start_date).days + 1
             year = start_date.year
 
@@ -104,12 +116,24 @@ class AdminAddLeaveForm(forms.ModelForm):
         cleaned_data = super().clean()
         start_date = cleaned_data.get('start_date')
         end_date = cleaned_data.get('end_date')
+        employee = cleaned_data.get('employee')
 
         if start_date and end_date:
             if end_date < start_date:
                 raise forms.ValidationError("End date cannot be before start date.")
             if start_date.year != end_date.year:
                 raise forms.ValidationError("Leave request cannot span across multiple calendar years. Please submit separate requests for each year.")
+            
+            if employee:
+                overlap_qs = LeaveRequest.objects.filter(
+                    employee=employee,
+                    start_date__lte=end_date,
+                    end_date__gte=start_date
+                ).exclude(status__in=['rejected', 'cancelled'])
+                if self.instance and self.instance.pk:
+                    overlap_qs = overlap_qs.exclude(pk=self.instance.pk)
+                if overlap_qs.exists():
+                    raise forms.ValidationError("This employee has an existing leave request that overlaps with these dates.")
         return cleaned_data
 
 

@@ -11,6 +11,11 @@ from apps.employees.models import EmployeeProfile
 from .models import LeaveType, LeaveBalance, LeaveRequest
 from .forms import LeaveRequestForm, LeaveTypeForm
 
+def _get_profile(user):
+    from apps.employees.hr_resolver import get_canonical_employee
+    canonical_emp = get_canonical_employee(user)
+    return getattr(canonical_emp, 'legacy_profile', None) if canonical_emp and hasattr(canonical_emp, 'legacy_profile') else canonical_emp
+
 
 class StaffOrManagerMixin(RoleRequiredMixin):
     """Allows staff role to access employee-facing views."""
@@ -64,7 +69,7 @@ class BaseProcessLeaveRequestView(View):
         # Scoping check for manager/team scope
         if res.allowed and res.data_scope != 'global' and not request.user.is_superuser:
             leave_request = get_object_or_404(LeaveRequest, pk=kwargs.get('pk'))
-            profile = getattr(request.user, 'employee_profile', None)
+            profile = _get_profile(request.user)
             
             is_reporting_manager = False
             emp_master = getattr(leave_request.employee, 'master_employee', None)
@@ -311,7 +316,7 @@ class StaffLeaveDashboardView(StaffOrManagerMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        employee = getattr(self.request.user, 'employee_profile', None)
+        employee = _get_profile(self.request.user)
         year = timezone.localdate().year
 
         if employee:
@@ -372,7 +377,7 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['employee'] = getattr(self.request.user, 'employee_profile', None)
+        kwargs['employee'] = _get_profile(self.request.user)
         
         content_type = self.request.content_type or ''
         if 'application/json' in content_type and self.request.method in ('POST', 'PUT'):
@@ -404,7 +409,7 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
-        employee = getattr(self.request.user, 'employee_profile', None)
+        employee = _get_profile(self.request.user)
         if not employee:
             messages.error(self.request, "You do not have an active Employee Profile.")
             return redirect('leave:staff_dashboard')

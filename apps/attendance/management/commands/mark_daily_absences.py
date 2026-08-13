@@ -91,7 +91,7 @@ class Command(BaseCommand):
             # Check if approved or pending leave request covers target_date
             if LeaveRequest.objects.filter(
                 employee=emp,
-                status__in=['approved', 'pending'],
+                status__in=['approved', 'pending', 'manager_approved', 'returned'],
                 start_date__lte=target_date,
                 end_date__gte=target_date
             ).exists():
