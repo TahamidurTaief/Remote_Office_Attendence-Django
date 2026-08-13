@@ -1270,162 +1270,39 @@ class MonthlyReportView(AdminRequiredMixin, View):
         emp_id    = request.GET.get('employee', '')
         branch_id = request.GET.get('branch', '')
 
-        summary_schedule = None
-        if emp_id:
-            try:
-                summary_schedule = _get_employee_schedule(
-                    EmployeeProfile.objects.select_related('branch').get(id=emp_id)
-                )
-            except EmployeeProfile.DoesNotExist:
-                summary_schedule = None
-        elif branch_id:
-            try:
-                summary_schedule = Branch.objects.get(id=branch_id).schedule
-            except (Branch.DoesNotExist, OfficeSchedule.DoesNotExist):
-                summary_schedule = None
+        from apps.attendance import reporting_service
+        from datetime import date
+        import calendar as cal_mod
 
-        working_days         = _get_working_days(year, month, summary_schedule)
-        _, last_day          = cal_mod.monthrange(year, month)
-        month_start          = _date(year, month, 1)
-        month_end            = _date(year, month, last_day)
-
-        employees = (
-            EmployeeProfile.objects.filter(is_active=True)
-            .select_related('branch').order_by('full_name')
+        data = reporting_service.get_monthly_report_data(
+            year=year,
+            month=month,
+            employee_id=emp_id or None,
+            branch_id=branch_id or None
         )
-        if emp_id:
-            employees = employees.filter(id=emp_id)
-        if branch_id:
-            employees = employees.filter(branch_id=branch_id)
-
-        attendances = Attendance.objects.filter(
-            date__gte=month_start, date__lte=month_end, is_expired=False
-        ).select_related('employee')
-        if emp_id:
-            attendances = attendances.filter(employee_id=emp_id)
-        if branch_id:
-            attendances = attendances.filter(employee__branch_id=branch_id)
-
-        emp_att_map = defaultdict(list)
-        for a in attendances:
-            emp_att_map[a.employee_id].append(a)
-
-        # Fetch approved leave requests in the month
-        leave_requests = LeaveRequest.objects.filter(
-            status='approved',
-            start_date__lte=month_end,
-            end_date__gte=month_start
-        )
-        if emp_id:
-            leave_requests = leave_requests.filter(employee_id=emp_id)
-        if branch_id:
-            leave_requests = leave_requests.filter(employee__branch_id=branch_id)
-        leave_requests = list(leave_requests.select_related('leave_type'))
-
-        # Fetch leave balances for matching employees in year
-        leave_types = list(LeaveType.objects.all())
-        employee_ids = [emp.id for emp in employees]
-        balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year)
-        balances_by_emp = defaultdict(list)
-        for bal in balances_qs:
-            balances_by_emp[bal.employee_id].append({
-                'type': bal.leave_type,
-                'remaining': bal.remaining_days,
-                'total': bal.total_days
-            })
-        for e_id in employee_ids:
-            emp_bals = balances_by_emp[e_id]
-            existing_types = {b['type'].id for b in emp_bals}
-            for lt in leave_types:
-                if lt.id not in existing_types:
-                    emp_bals.append({
-                        'type': lt,
-                        'remaining': lt.default_days_per_year,
-                        'total': lt.default_days_per_year
-                    })
-
-        rows = []
-        total_present = total_absent = total_on_leave = total_late = total_field = 0
-        for emp in employees:
-            atts    = emp_att_map.get(emp.id, [])
-            cis     = [a for a in atts if a.attendance_type == 'check_in']
-            fvs     = [a for a in atts if a.attendance_type == 'field_visit']
-            
-            check_in_dates = set(a.date for a in cis)
-            field_dates = set(a.date for a in fvs)
-            
-            present_days = len(check_in_dates)
-            field_only_days = len(field_dates - check_in_dates)
-            
-            present = present_days
-            late    = sum(1 for a in cis if a.status == 'late')
-            
-            # Calculate leave days on working days with no attendance
-            schedule = _get_employee_schedule(emp)
-            emp_working_days = _get_working_days(year, month, schedule)
-            emp_leaves = [req for req in leave_requests if req.employee_id == emp.id]
-            att_dates = set(a.date for a in atts if a.attendance_type in ['check_in', 'field_visit'])
-            
-            on_leave_count = 0
-            curr_date = month_start
-            while curr_date <= month_end:
-                if _is_working_day(curr_date, schedule):
-                    if curr_date not in att_dates:
-                        is_on_leave = False
-                        for req in emp_leaves:
-                            if req.start_date <= curr_date <= req.end_date:
-                                is_on_leave = True
-                                break
-                        if is_on_leave:
-                            on_leave_count += 1
-                curr_date += timedelta(days=1)
-            
-            absent  = max(0, emp_working_days - (present_days + field_only_days) - on_leave_count)
-            hours   = round(sum(float(a.total_hours or 0) for a in cis), 2)
-            att_pct = round((present / emp_working_days * 100) if emp_working_days else 0, 1)
-            
-            rows.append({
-                'employee':     emp,
-                'present':      present,
-                'absent':       absent,
-                'on_leave':     on_leave_count,
-                'late':         late,
-                'field_visits': len(fvs),
-                'total_hours':  hours,
-                'att_pct':      att_pct,
-                'leave_balances': balances_by_emp[emp.id]
-            })
-            total_present += present
-            total_absent  += absent
-            total_on_leave += on_leave_count
-            total_late    += late
-            total_field   += len(fvs)
-
-        avg_att_pct = round(
-            sum(r['att_pct'] for r in rows) / len(rows) if rows else 0, 1
-        )
-        prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
-        next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
 
         from django.core.paginator import Paginator
         page = request.GET.get('page', 1)
-        paginator = Paginator(rows, 30)
+        paginator = Paginator(data['rows'], 30)
         page_obj = paginator.get_page(page)
+
+        prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
+        next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
 
         return render(request, self.template_name, {
             'year': year, 'month': month,
             'month_name':        cal_mod.month_name[month],
-            'working_days':      working_days,
-            'month_start':       month_start,
-            'month_end':         month_end,
+            'working_days':      data['working_days'],
+            'month_start':       date(year, month, 1),
+            'month_end':         date(year, month, data['days_in_month']),
             'page_obj':          page_obj,
             'rows':              page_obj.object_list,
-            'total_present':     total_present,
-            'total_absent':      total_absent,
-            'total_on_leave':    total_on_leave,
-            'total_late':        total_late,
-            'total_field':       total_field,
-            'avg_att_pct':       avg_att_pct,
+            'total_present':     data['total_present'],
+            'total_absent':      data['total_absent'],
+            'total_on_leave':    data['total_on_leave'],
+            'total_late':        data['total_late'],
+            'total_field':       data['total_field'],
+            'avg_att_pct':       data['avg_att_pct'],
             'employees':         EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
             'branches':          Branch.objects.all(),
             'selected_employee': emp_id,
@@ -2466,140 +2343,21 @@ def export_attendance(request):
             return export_monthly_xlsx(request)
 
 def get_monthly_grid_data(request):
-    import calendar
-    from datetime import date, timedelta
-    from collections import defaultdict
-    from django.utils import timezone
-    from apps.employees.models import EmployeeProfile
-    from apps.branches.models import Branch, OfficeSchedule
-    from apps.attendance.models import Attendance
-    from apps.leave.models import LeaveRequest
-    
+    from datetime import date
+    from apps.attendance import reporting_service
+
     year = int(request.GET.get('year', date.today().year))
     month = int(request.GET.get('month', date.today().month))
     
     branch_id = request.GET.get('branch') or request.GET.get('branch_id')
     employee_id = request.GET.get('employee')
-    
-    # Get all days in month
-    days_in_month = calendar.monthrange(year, month)[1]
-    all_days = [date(year, month, d) for d in range(1, days_in_month + 1)]
-    
-    # Get employees
-    employees = EmployeeProfile.objects.filter(is_active=True)
-    if branch_id:
-        employees = employees.filter(branch_id=branch_id)
-    if employee_id:
-        employees = employees.filter(id=employee_id)
-    employees = employees.select_related('branch', 'branch__schedule').order_by('full_name')
-    
-    # Get all attendances for this month
-    attendances = Attendance.objects.filter(
-        date__year=year,
-        date__month=month,
-        employee__in=employees,
-        is_expired=False
-    ).select_related('employee')
-    
-    # Group attendance by employee and date
-    att_by_emp_date = defaultdict(list)
-    for att in attendances:
-        att_by_emp_date[(att.employee_id, att.date)].append(att)
-        
-    # Get approved leave requests
-    leave_requests = LeaveRequest.objects.filter(
-        status='approved',
-        start_date__lte=date(year, month, days_in_month),
-        end_date__gte=date(year, month, 1),
-        employee__in=employees
-    ).select_related('leave_type')
-    
-    approved_leaves_map = defaultdict(dict)
-    for req in leave_requests:
-        s_date = max(req.start_date, date(year, month, 1))
-        e_date = min(req.end_date, date(year, month, days_in_month))
-        curr = s_date
-        while curr <= e_date:
-            approved_leaves_map[req.employee_id][curr] = req
-            curr += timedelta(days=1)
-            
-    # Build employee stats and display lookups
-    display_att_lookup = defaultdict(dict)  # {emp_id: {date: primary_attendance_for_display}}
-    employee_stats = {}
-    
-    for emp in employees:
-        schedule = _get_employee_schedule(emp)
-        present_count = 0
-        late_count = 0
-        total_ot_minutes = 0
-        absent_count = 0
-        holiday_work_count = 0
-        
-        for d in all_days:
-            day_atts = att_by_emp_date[(emp.id, d)]
-            
-            # Select the primary attendance record for display in In/Out columns
-            # Prefer check_in session
-            main_att = next((a for a in day_atts if a.attendance_type == 'check_in'), None)
-            if not main_att and day_atts:
-                main_att = day_atts[0]
-            
-            if main_att:
-                display_att_lookup[emp.id][d] = main_att
-                
-            has_check_in = any(a.attendance_type == 'check_in' for a in day_atts)
-            if has_check_in:
-                present_count += 1
-                
-            has_field_visit = any(a.attendance_type == 'field_visit' for a in day_atts)
-            has_any_attendance = has_check_in or has_field_visit
-            
-            # Count late and overtime from check_in sessions (using the main check-in for parity)
-            if main_att and main_att.attendance_type == 'check_in':
-                if main_att.status == 'late':
-                    late_count += 1
-                if getattr(main_att, 'overtime_minutes', 0) > 0:
-                    total_ot_minutes += main_att.overtime_minutes
-            
-            is_work_day = _is_working_day(d, schedule)
-            if is_work_day:
-                if not has_any_attendance:
-                    # Check if on approved leave
-                    is_on_leave = d in approved_leaves_map[emp.id]
-                    if not is_on_leave:
-                        absent_count += 1
-            else:
-                # Holiday Work: check_in record on a date outside working days
-                if has_check_in:
-                    holiday_work_count += 1
-                    
-        # Overtime display format
-        if getattr(emp, 'overtime_enabled', False) and total_ot_minutes > 0:
-            ot_hours = total_ot_minutes / 60
-            ot_display = f"{int(ot_hours)}h {int(total_ot_minutes % 60)}m"
-        else:
-            ot_display = '-'
-            
-        employee_stats[emp.id] = {
-            'present_count': present_count,
-            'late_count': late_count,
-            'total_ot_minutes': total_ot_minutes,
-            'absent_count': absent_count,
-            'holiday_work_count': holiday_work_count,
-            'overtime_display': ot_display,
-            'is_overtime_enabled': getattr(emp, 'overtime_enabled', False)
-        }
-        
-    return {
-        'year': year,
-        'month': month,
-        'days_in_month': days_in_month,
-        'all_days': all_days,
-        'employees': employees,
-        'att_lookup': display_att_lookup,
-        'employee_stats': employee_stats,
-        'approved_leaves': approved_leaves_map
-    }
+
+    return reporting_service.get_monthly_report_data(
+        year=year,
+        month=month,
+        employee_id=employee_id or None,
+        branch_id=branch_id or None
+    )
     
 @admin_required
 def export_monthly_xlsx(request):
@@ -2726,7 +2484,13 @@ def export_monthly_xlsx(request):
         cell.alignment = center
         
         # Weekend styling
-        if d.weekday() == 4:  # Friday
+        is_weekend = False
+        if employees:
+            from apps.attendance.schedule_utils import is_employee_holiday
+            is_weekend = is_employee_holiday(employees[0], d)
+        else:
+            is_weekend = (d.weekday() == 4)
+        if is_weekend:
             cell.fill = PatternFill(
                 'solid', fgColor='F2DCDB')
         
@@ -2858,7 +2622,8 @@ def export_monthly_xlsx(request):
                         color='0070C0')
             
             # Weekend styling
-            if d.weekday() == 4:  # Friday
+            from apps.attendance.schedule_utils import is_employee_holiday
+            if is_employee_holiday(emp, d):
                 in_cell.fill = PatternFill(
                     'solid', fgColor='F2DCDB')
                 out_cell.fill = PatternFill(

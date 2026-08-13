@@ -1350,6 +1350,222 @@ class AttendancePolicyTestCase(TestCase):
         self.assertTrue(att.is_policy_exception)
 
 
+class MonthlyAttendanceReportingServiceTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch, OfficeSchedule
+        from apps.employees.models import EmployeeProfile
+        from apps.leave.models import LeaveType
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            address='Test Road',
+            latitude=23.0,
+            longitude=90.0,
+            radius_meters=100,
+            is_active=True
+        )
+        self.schedule, created = OfficeSchedule.objects.get_or_create(
+            branch=self.branch,
+            defaults={
+                'office_start_time': datetime.time(9, 0),
+                'office_end_time': datetime.time(18, 0),
+                'late_after_minutes': 15,
+                'early_checkout_before_minutes': 30,
+                'overtime_after_minutes': 30,
+                'working_days': ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+            }
+        )
+        if not created:
+            self.schedule.office_start_time = datetime.time(9, 0)
+            self.schedule.office_end_time = datetime.time(18, 0)
+            self.schedule.late_after_minutes = 15
+            self.schedule.early_checkout_before_minutes = 30
+            self.schedule.overtime_after_minutes = 30
+            self.schedule.working_days = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+            self.schedule.save()
+
+        self.user1 = User.objects.create_user(phone='+8801700000001', password='pass', role='staff')
+        self.emp1 = EmployeeProfile.objects.create(
+            user=self.user1,
+            employee_id='EMP-REG-01',
+            full_name='Alice Smith',
+            phone='+8801700000001',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True,
+            overtime_enabled=True
+        )
+
+        self.user2 = User.objects.create_user(phone='+8801700000002', password='pass', role='staff')
+        self.emp2 = EmployeeProfile.objects.create(
+            user=self.user2,
+            employee_id='EMP-REG-02',
+            full_name='Bob Jones',
+            phone='+8801700000002',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True,
+            overtime_enabled=False
+        )
+
+        self.leave_type = LeaveType.objects.create(name='Casual Leave', category='casual')
+
+    def test_reporting_service_scenarios(self):
+        from apps.attendance.models import Attendance
+        from apps.leave.models import LeaveRequest
+        from apps.attendance.reporting_service import get_monthly_report_data
+        from django.test import RequestFactory
+        from apps.admin_panel.views import get_monthly_grid_data
+
+        # 1. Normal present day (Alice, 2026-08-01: Sat - working day)
+        Attendance.objects.create(
+            employee=self.emp1,
+            date=datetime.date(2026, 8, 1),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 1, 8, 55)),
+            check_out_time=timezone.make_aware(datetime.datetime(2026, 8, 1, 18, 5)),
+            attendance_type='check_in',
+            status='on_time',
+            total_hours=9.00
+        )
+
+        # 2. Late day (Alice, 2026-08-02: Sun - working day)
+        Attendance.objects.create(
+            employee=self.emp1,
+            date=datetime.date(2026, 8, 2),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 2, 9, 20)),
+            check_out_time=timezone.make_aware(datetime.datetime(2026, 8, 2, 18, 0)),
+            attendance_type='check_in',
+            status='late',
+            total_hours=8.50
+        )
+
+        # 3. Approved Leave on a working day (Alice, 2026-08-03: Mon)
+        LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 8, 3),
+            end_date=datetime.date(2026, 8, 3),
+            status='approved',
+            reason='Personal'
+        )
+
+        # 4. Non-working day work (Alice, 2026-08-07: Fri)
+        Attendance.objects.create(
+            employee=self.emp1,
+            date=datetime.date(2026, 8, 7),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 7, 10, 0)),
+            check_out_time=timezone.make_aware(datetime.datetime(2026, 8, 7, 15, 0)),
+            attendance_type='check_in',
+            status='holiday_attendance',
+            total_hours=5.00
+        )
+
+        # 5. Field visit on a working day (Alice, 2026-08-04: Tue)
+        Attendance.objects.create(
+            employee=self.emp1,
+            date=datetime.date(2026, 8, 4),
+            attendance_type='field_visit',
+            status='on_time'
+        )
+
+        # 6. Multiple sessions in one day (Alice, 2026-08-05: Wed)
+        Attendance.objects.create(
+            employee=self.emp1,
+            date=datetime.date(2026, 8, 5),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 5, 9, 0)),
+            check_out_time=timezone.make_aware(datetime.datetime(2026, 8, 5, 13, 0)),
+            attendance_type='check_in',
+            status='on_time',
+            total_hours=4.00
+        )
+        
+        from apps.attendance.schedule_utils import calculate_overtime, get_branch_schedule
+        sched = get_branch_schedule(self.emp1)
+        co_time = timezone.make_aware(datetime.datetime(2026, 8, 5, 19, 30))
+        ot_mins = calculate_overtime(co_time, sched, self.emp1, datetime.date(2026, 8, 5))
+        
+        Attendance.objects.create(
+            employee=self.emp1,
+            date=datetime.date(2026, 8, 5),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 5, 14, 0)),
+            check_out_time=co_time,
+            attendance_type='check_in',
+            status='on_time',
+            total_hours=5.50,
+            overtime_minutes=ot_mins
+        )
+
+        # 7. Expired attendance exclusion (Alice, 2026-08-06: Thu)
+        Attendance.objects.create(
+            employee=self.emp1,
+            date=datetime.date(2026, 8, 6),
+            check_in_time=timezone.make_aware(datetime.datetime(2026, 8, 6, 9, 0)),
+            attendance_type='check_in',
+            status='on_time',
+            is_expired=True
+        )
+
+        res = get_monthly_report_data(2026, 8)
+        
+        emp1_row = next(r for r in res['rows'] if r['employee'].id == self.emp1.id)
+        self.assertEqual(emp1_row['present'], 4)
+        self.assertEqual(emp1_row['absent'], 22)
+        self.assertEqual(emp1_row['on_leave'], 1)
+        self.assertEqual(emp1_row['late'], 1)
+        self.assertEqual(emp1_row['field_visits'], 1)
+        self.assertEqual(emp1_row['total_hours'], 32.0)
+
+        emp1_stats = res['employee_stats'][self.emp1.id]
+        self.assertEqual(emp1_stats['total_ot_minutes'], ot_mins)
+        expected_ot_display = f"{int(ot_mins / 60)}h {int(ot_mins % 60)}m" if ot_mins > 0 else "-"
+        self.assertEqual(emp1_stats['overtime_display'], expected_ot_display)
+
+        rf = RequestFactory()
+        req = rf.get('/admin-panel/reports/monthly/', {'year': 2026, 'month': 8})
+        grid_data = get_monthly_grid_data(req)
+        self.assertEqual(grid_data['total_present'], res['total_present'])
+        self.assertEqual(grid_data['total_absent'], res['total_absent'])
+
+    def test_query_count_performance(self):
+        from apps.attendance.models import Attendance
+        from apps.attendance.reporting_service import get_monthly_report_data
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from apps.employees.models import EmployeeProfile
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        for idx in range(10):
+            phone = f"+88017999999{idx:02d}"
+            u = User.objects.create_user(phone=phone, password='pass', role='staff')
+            EmployeeProfile.objects.create(
+                user=u,
+                employee_id=f'EMP-PERF-{idx:02d}',
+                full_name=f'Employee {idx}',
+                phone=phone,
+                joined_date=datetime.date(2026, 1, 1),
+                branch=self.branch,
+                is_active=True
+            )
+
+        for d in range(1, 29):
+            Attendance.objects.create(
+                employee=self.emp1,
+                date=datetime.date(2026, 8, d),
+                check_in_time=timezone.make_aware(datetime.datetime(2026, 8, d, 9, 0)),
+                attendance_type='check_in',
+                status='on_time'
+            )
+
+        with CaptureQueriesContext(connection) as queries:
+            get_monthly_report_data(2026, 8)
+        
+        self.assertLessEqual(len(queries), 12)
+
+
 
 
 
