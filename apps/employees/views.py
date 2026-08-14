@@ -589,7 +589,6 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
         return reverse_lazy('employees:employee_detail', kwargs={'pk': self.object.pk})
 
 
-@method_decorator(require_reauth, name='dispatch')
 class EmployeeMasterArchiveView(AdminRequiredMixin, View):
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
@@ -1028,7 +1027,6 @@ def _apply_transition(employee, req_obj, actor):
     )
 
 
-@method_decorator(require_reauth, name='dispatch')
 class LifecycleActionView(AdminRequiredMixin, View):
     """
     POST: Initiate a lifecycle transition from master_detail page.
@@ -1685,7 +1683,6 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
         return context
 
 
-@method_decorator(require_reauth, name='dispatch')
 class EmployeeSuspendToggleView(AdminRequiredMixin, View):
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)

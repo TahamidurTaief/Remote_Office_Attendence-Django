@@ -1,79 +1,39 @@
-{% load cotton %}
-<div id="delete-confirm-modal"
-     class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-     x-data
-     x-init="$el.addEventListener('click', e => { if (e.target === $el) $el.remove() })">
-
-    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md mx-4 overflow-hidden">
-
-        <!-- Danger header -->
-        <div class="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-950/30">
-            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center">
-                <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                </svg>
-            </div>
-            <div>
-                <h2 class="text-base font-bold text-red-700 dark:text-red-400">{% if is_soft_delete %}Move Employee To Trash{% else %}Permanently Delete Employee{% endif %}</h2>
-                <p class="text-xs text-red-500 dark:text-red-500">{% if is_soft_delete %}The employee can be restored later from Trash{% else %}This action cannot be undone{% endif %}</p>
-            </div>
-        </div>
-
-        <!-- Body -->
-        <div class="px-6 py-5">
+<c-modal id="delete-confirm-modal" title="{% if is_soft_delete %}Move Employee To Trash{% else %}Permanently Delete Employee{% endif %}" size="md">
+    <form method="post" action="{{ delete_url }}" class="space-y-4">
+        {% csrf_token %}
+        <div class="space-y-3">
             <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                 You are about to {% if is_soft_delete %}move{% else %}permanently delete{% endif %}
                 <span class="font-semibold text-slate-900 dark:text-white">{{ employee.get_full_name }}</span>
                 (<span class="font-mono text-xs text-slate-500">{{ employee.employee_number }}</span>).
             </p>
-            <ul class="mt-3 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+            
+            <ul class="space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
                 <li class="flex items-center gap-2">
-                    <svg class="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-3.5 h-3.5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                     {% if is_soft_delete %}The employee will disappear from normal directories by default{% else %}All employee data and records will be removed{% endif %}
                 </li>
                 <li class="flex items-center gap-2">
-                    <svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                     </svg>
-                    {% if is_soft_delete %}Attendance, payroll, leave, and project history remain intact{% else %}The linked user account (login) will be <strong>preserved</strong>{% endif %}
-                </li>
-                <li class="flex items-center gap-2">
-                    <svg class="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                    {% if is_soft_delete %}You can optionally record a delete reason before trashing{% else %}Documents, attendance, and payroll history will be deleted{% endif %}
+                    {% if is_soft_delete %}Attendance, payroll, leave, and project history remain intact{% else %}The linked user account (login) will be preserved{% endif %}
                 </li>
             </ul>
 
-            <div class="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
-                <strong>Tip:</strong> {% if is_soft_delete %}Trash is separate from the employee lifecycle Archive state.{% else %}Permanent delete is blocked when protected history dependencies exist.{% endif %}
+            {% if is_soft_delete %}
+            <div class="space-y-1">
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Delete Reason</label>
+                <c-textarea name="reason" rows="3" placeholder="Optional delete reason"></c-textarea>
             </div>
+            {% endif %}
         </div>
 
-        <!-- Footer buttons -->
-        <div class="px-6 pb-5 flex items-center justify-end gap-3">
-            <button type="button"
-                    onclick="document.getElementById('delete-confirm-modal').remove()"
-                    class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
-                Cancel
-            </button>
-            <form method="post" action="{{ delete_url }}" class="space-y-3">
-                {% csrf_token %}
-                {% if is_soft_delete %}
-                <textarea name="reason" rows="3" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Optional delete reason"></textarea>
-                {% endif %}
-                <button type="submit"
-                        class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-sm flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                    {% if is_soft_delete %}Move To Trash{% else %}Delete Permanently{% endif %}
-                </button>
-            </form>
+        <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <c-button type="button" onclick="document.getElementById('delete-confirm-modal').remove()" variant="secondary" label="Cancel"></c-button>
+            <c-button type="submit" variant="danger" icon="trash-2" label="{% if is_soft_delete %}Move To Trash{% else %}Delete Permanently{% endif %}"></c-button>
         </div>
-    </div>
-</div>
+    </form>
+</c-modal>
