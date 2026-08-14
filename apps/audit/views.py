@@ -186,19 +186,30 @@ class AuditEventDetailView(LoginRequiredMixin, View):
     def get(self, request, uuid):
         event = get_object_or_404(AuditService.get_scoped_events(request.user), uuid=uuid)
         if not has_audit_unlock(request):
-            response = render(request, "accounts/partials/reauth_modal.html", {
-                "target_url": request.path,
-                "reauth_scope": "audit_detail",
-                "reauth_title": "Audit Detail Unlock",
-                "reauth_help_text": "Confirm your current password or MFA code to view detailed before and after data.",
+            # Store the target so reauth can redirect back
+            request.session['pending_reauth_target'] = request.path
+            request.session.modified = True
+            if request.headers.get('HX-Request'):
+                # HTMX: return the modal partial with a trigger to open it
+                response = render(request, 'accounts/partials/reauth_modal.html', {
+                    'target_url': request.path,
+                    'reauth_scope': 'audit_detail',
+                    'reauth_title': 'Audit Detail Unlock',
+                    'reauth_help_text': 'Confirm your current password or MFA code to view detailed before and after data.',
+                })
+                response['HX-Trigger'] = 'open-reauth-modal'
+                return response
+            # Full-page: render the proper styled reauth page
+            return render(request, 'audit/reauth_gate.html', {
+                'target_url': request.path,
+                'reauth_scope': 'audit_detail',
+                'reauth_title': 'Audit Detail Unlock',
+                'reauth_help_text': 'Confirm your current password or MFA code to view this detailed audit record.',
             })
-            response["HX-Trigger"] = "open-reauth-modal"
-            return response
-        AuditService.log_access(request.user, event, reason="audit_detail_opened", request=request)
-        # HTMX requests get the modal partial; full page requests get the full template
-        if request.headers.get("HX-Request"):
-            return render(request, self.partial_template_name, {"event": event})
-        return render(request, self.template_name, {"event": event})
+        AuditService.log_access(request.user, event, reason='audit_detail_opened', request=request)
+        if request.headers.get('HX-Request'):
+            return render(request, self.partial_template_name, {'event': event})
+        return render(request, self.template_name, {'event': event})
 
 
 class PinMenuView(LoginRequiredMixin, View):

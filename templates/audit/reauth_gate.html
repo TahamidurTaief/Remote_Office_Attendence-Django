@@ -1,0 +1,67 @@
+<c-app-shell page_title="Audit Detail Unlock | FieldTrack" active_href="{% url 'audit:activity_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'audit:activity_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Security Verification" subtitle="Confirm your identity to continue">
+            <c-slot name="actions">
+                <c-button href="{% url 'audit:activity_list' %}" variant="secondary" icon="arrow-left" label="Back to Logs"></c-button>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 lg:p-6 w-full flex items-start justify-center min-h-[60vh] pt-12">
+        <div class="w-full max-w-md">
+
+            {# Shield Icon + Header #}
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center mb-4">
+                    <i data-lucide="shield-alert" class="w-8 h-8 text-amber-600 dark:text-amber-400"></i>
+                </div>
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-1">{{ reauth_title }}</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ reauth_help_text }}</p>
+            </div>
+
+            {# Reauth Form Card #}
+            <c-card padding="none">
+                <div class="p-6">
+                    <form method="post" action="{% url 'accounts:security_reauth' %}" class="space-y-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="target_url" value="{{ target_url }}">
+                        <input type="hidden" name="reauth_scope" value="{{ reauth_scope }}">
+
+                        {% if reauth_error %}
+                        <div class="flex items-center gap-2 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 text-sm">
+                            <i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0"></i>
+                            {{ reauth_error }}
+                        </div>
+                        {% endif %}
+
+                        <c-input
+                            type="password"
+                            name="reauth_credential"
+                            label="Password or MFA Code"
+                            placeholder="Enter your password or 6-digit code"
+                            icon="lock"
+                            autofocus="true"
+                            required="true">
+                        </c-input>
+
+                        <c-button type="submit" variant="primary" label="Confirm & View Audit Record" extra_class="w-full justify-center"></c-button>
+                    </form>
+                </div>
+
+                <c-slot name="footer">
+                    <div class="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 py-1">
+                        <i data-lucide="lock" class="w-3 h-3"></i>
+                        This access is logged for compliance purposes.
+                    </div>
+                </c-slot>
+            </c-card>
+
+        </div>
+    </div>
+</c-app-shell>

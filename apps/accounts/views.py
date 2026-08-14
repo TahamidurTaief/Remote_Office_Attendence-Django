@@ -1387,11 +1387,20 @@ class SecurityReauthView(LoginRequiredMixin, View):
             return redirect(target_url)
 
         log_audit(request.user, 'sensitive_action_reauth_fail', summary="Failed sensitive action re-authentication", ip=get_client_ip(request))
-        return render(request, 'accounts/partials/reauth_modal.html', {
+        ctx = {
             'reauth_error': 'Authentication failed. Please check your password or 6-digit code.',
-            'target_url': target_url
-        })
-
+            'target_url': target_url,
+            'reauth_scope': reauth_scope,
+        }
+        if request.headers.get('HX-Request') == 'true':
+            return render(request, 'accounts/partials/reauth_modal.html', ctx)
+        if reauth_scope == 'audit_detail':
+            ctx.update({
+                'reauth_title': 'Audit Detail Unlock',
+                'reauth_help_text': 'Confirm your current password or MFA code to view this detailed audit record.',
+            })
+            return render(request, 'audit/reauth_gate.html', ctx)
+        return render(request, 'accounts/reauth.html', ctx)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
