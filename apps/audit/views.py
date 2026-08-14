@@ -213,7 +213,13 @@ class PinMenuView(LoginRequiredMixin, View):
         PinnedMenuItem.objects.get_or_create(user=request.user, menu_key=menu_key)
         
         if request.headers.get("HX-Request"):
-            response = render(request, "cotton/sidebar.html", {"active_href": request.META.get("HTTP_REFERER", "")})
+            from urllib.parse import urlparse
+            referer = request.META.get("HTTP_REFERER", "")
+            ref_path = urlparse(referer).path if referer else "/"
+            response = render(request, "cotton/sidebar.html", {
+                "active_href": ref_path,
+                "path": ref_path,
+            })
             response["HX-Trigger"] = "pinned-updated"
             return response
             
@@ -232,7 +238,13 @@ class UnpinMenuView(LoginRequiredMixin, View):
         PinnedMenuItem.objects.filter(user=request.user, menu_key=menu_key).delete()
         
         if request.headers.get("HX-Request"):
-            response = render(request, "cotton/sidebar.html", {"active_href": request.META.get("HTTP_REFERER", "")})
+            from urllib.parse import urlparse
+            referer = request.META.get("HTTP_REFERER", "")
+            ref_path = urlparse(referer).path if referer else "/"
+            response = render(request, "cotton/sidebar.html", {
+                "active_href": ref_path,
+                "path": ref_path,
+            })
             response["HX-Trigger"] = "pinned-updated"
             return response
             
@@ -241,7 +253,13 @@ class UnpinMenuView(LoginRequiredMixin, View):
 
 class SidebarPartialView(LoginRequiredMixin, View):
     def get(self, request):
-        return render(request, "cotton/sidebar.html", {"active_href": request.GET.get("active_href", "")})
+        from urllib.parse import urlparse
+        referer = request.META.get("HTTP_REFERER", "")
+        ref_path = urlparse(referer).path if referer else "/"
+        return render(request, "cotton/sidebar.html", {
+            "active_href": ref_path,
+            "path": ref_path,
+        })
 
 
 class SecureMediaView(LoginRequiredMixin, View):

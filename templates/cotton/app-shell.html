@@ -354,6 +354,9 @@
       }
 
       // HTMX Event Lifecycle
+      document.addEventListener('htmx:configRequest', (event) => {
+        event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+      });
       document.addEventListener('htmx:configRequest', startLoader);
       document.addEventListener('htmx:afterRequest', stopLoader);
       document.addEventListener('htmx:responseError', stopLoader);

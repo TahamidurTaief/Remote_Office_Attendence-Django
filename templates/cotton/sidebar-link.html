@@ -1,0 +1,27 @@
+<c-vars href="" label="" key="" pinned_keys="" search_match="" is_active="false"></c-vars>
+
+<div class="flex items-center justify-between group/menu-item w-full pr-1.5" x-show="matchSearch('{{ search_match|default:label }}')">
+  <a href="{{ href }}"
+     class="ft-nav-item flex-1 {% if is_active %}active{% endif %}">
+    <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+    <span class="ft-nav-label">{{ label }}</span>
+  </a>
+  
+  {% if key and request.user.is_authenticated %}
+    {% if key in pinned_keys %}
+      <button type="button"
+              class="p-1 text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-60 hover:opacity-100 transition-opacity"
+              title="Unpin {{ label }}"
+              onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin {{ label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
+        <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
+      </button>
+    {% else %}
+      <button type="button"
+              class="p-1 text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-40 hover:opacity-100 transition-opacity"
+              title="Pin {{ label }}"
+              onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin {{ label }}? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
+        <i data-lucide="pin" class="w-3.5 h-3.5"></i>
+      </button>
+    {% endif %}
+  {% endif %}
+</div>
