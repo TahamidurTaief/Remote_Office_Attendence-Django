@@ -196,3 +196,71 @@ class AuditEventDetailView(LoginRequiredMixin, View):
         AuditService.log_access(request.user, event, reason="audit_detail_opened", request=request)
         return render(request, self.template_name, {"event": event})
 
+
+class PinMenuView(LoginRequiredMixin, View):
+    def post(self, request):
+        from django.http import HttpResponse
+        from apps.audit.models import PinnedMenuItem
+        from apps.audit.menu_registry import PINNABLE_MENUS, can_view_menu
+
+        menu_key = request.POST.get("menu_key")
+        if not menu_key or menu_key not in PINNABLE_MENUS:
+            return HttpResponse("Invalid menu key.", status=400)
+        
+        if not can_view_menu(request.user, menu_key):
+            return HttpResponse("Unauthorized.", status=403)
+            
+        PinnedMenuItem.objects.get_or_create(user=request.user, menu_key=menu_key)
+        
+        if request.headers.get("HX-Request"):
+            response = render(request, "cotton/sidebar.html", {"active_href": request.META.get("HTTP_REFERER", "")})
+            response["HX-Trigger"] = "pinned-updated"
+            return response
+            
+        return redirect(request.META.get("HTTP_REFERER", "/"))
+
+
+class UnpinMenuView(LoginRequiredMixin, View):
+    def post(self, request):
+        from django.http import HttpResponse
+        from apps.audit.models import PinnedMenuItem
+
+        menu_key = request.POST.get("menu_key")
+        if not menu_key:
+            return HttpResponse("Invalid menu key.", status=400)
+            
+        PinnedMenuItem.objects.filter(user=request.user, menu_key=menu_key).delete()
+        
+        if request.headers.get("HX-Request"):
+            response = render(request, "cotton/sidebar.html", {"active_href": request.META.get("HTTP_REFERER", "")})
+            response["HX-Trigger"] = "pinned-updated"
+            return response
+            
+        return redirect(request.META.get("HTTP_REFERER", "/"))
+
+
+class SidebarPartialView(LoginRequiredMixin, View):
+    def get(self, request):
+        return render(request, "cotton/sidebar.html", {"active_href": request.GET.get("active_href", "")})
+
+
+class SecureMediaView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        from django.http import FileResponse, Http404
+        from django.shortcuts import get_object_or_404
+        from django.core.files.storage import default_storage
+        from apps.audit.models import MediaAsset
+        from apps.audit.media_service import MediaService
+        
+        asset = get_object_or_404(MediaAsset, pk=pk)
+        try:
+            MediaService.get_secure_url(asset, request.user)
+        except PermissionError:
+            return HttpResponse("Unauthorized.", status=403)
+            
+        if asset.provider == "local":
+            if default_storage.exists(asset.provider_file_id):
+                return FileResponse(default_storage.open(asset.provider_file_id), content_type=asset.mime_type)
+        raise Http404("File not found.")
+
+

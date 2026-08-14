@@ -162,3 +162,56 @@ class AuditAccessLog(models.Model):
     class Meta:
         ordering = ["-accessed_at"]
 
+
+class PinnedMenuItem(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="pinned_menus"
+    )
+    menu_key = models.CharField(max_length=100)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        unique_together = [("user", "menu_key")]
+
+    def __str__(self):
+        return f"{self.user.email or self.user.phone} - {self.menu_key}"
+
+
+class MediaAsset(models.Model):
+    provider = models.CharField(max_length=50, default="local")
+    provider_file_id = models.CharField(max_length=255, blank=True)
+    original_name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=100)
+    original_size = models.PositiveIntegerField()
+    optimized_size = models.PositiveIntegerField(null=True, blank=True)
+    checksum = models.CharField(max_length=64, db_index=True)
+    url_path = models.CharField(max_length=1024)
+    module = models.CharField(max_length=100, blank=True)
+    object_type = models.CharField(max_length=100, blank=True)
+    object_id = models.CharField(max_length=100, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_assets"
+    )
+    is_private = models.BooleanField(default=False)
+    status = models.CharField(max_length=50, default="active")
+    created_at = models.DateTimeField(default=timezone.now)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["checksum"]),
+            models.Index(fields=["module", "object_type", "object_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.original_name} ({self.provider})"
+

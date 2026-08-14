@@ -152,6 +152,56 @@
       {% firstof request.GET.urlencode '' as req_get_urlencode %}
       {% firstof request.user.email user.email 'User' as user_email %}
 
+       {# ════════════════════ SECTION: PINNED ════════════════════ #}
+      <div x-show="!collapsed" x-cloak>
+        <div class="ft-group-header"><i data-lucide="pin" class="w-3.5 h-3.5"></i><span>PINNED</span></div>
+      </div>
+      <div>
+        <button type="button"
+                @click="toggleSubmenu('pinned_submenu')"
+                class="ft-nav-item w-full flex items-center justify-between"
+                :title="collapsed ? 'Pinned' : ''"
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <div class="flex items-center gap-2 min-w-0">
+            <i data-lucide="pin" class="ft-icon text-indigo-500"></i>
+            <span class="ft-nav-label font-bold" x-show="!collapsed" x-cloak>Pinned</span>
+          </div>
+          <i data-lucide="chevron-down"
+             x-show="!collapsed"
+             class="w-3.5 h-3.5 transition-transform duration-200"
+             :class="isSubmenuOpen('pinned_submenu') ? 'rotate-180' : ''"
+             x-cloak></i>
+        </button>
+        <div x-show="(isSubmenuOpen('pinned_submenu') || search) && !collapsed"
+             x-collapse.duration.200ms
+             class="pl-4 pr-1 py-0.5 space-y-0.5"
+             x-cloak>
+          {% for item in pinned_items %}
+          <div class="flex items-center justify-between group/pinned-item">
+            <a href="{{ item.url }}" class="ft-nav-item flex-1">
+              <i data-lucide="{{ item.icon }}" class="w-3.5 h-3.5 shrink-0 opacity-60"></i>
+              <span class="ft-nav-label">{{ item.label }}</span>
+            </a>
+            <!-- Unpin Button -->
+            <button type="button"
+                    hx-post="{% url 'audit:unpin_menu' %}"
+                    hx-vals='{"menu_key": "{{ item.key }}"}'
+                    hx-target="#ft-sidebar"
+                    hx-swap="outerHTML"
+                    class="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-0 group-hover/pinned-item:opacity-100 transition-opacity"
+                    title="Unpin {{ item.label }}"
+                    aria-label="Unpin {{ item.label }}"
+                    onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin {{ item.label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ item.key }}'}, target: '#ft-sidebar', swap: 'outerHTML'}) })">
+              <i data-lucide="pin-off" class="w-3 h-3"></i>
+            </button>
+          </div>
+          {% empty %}
+          <div class="px-3 py-2 text-xs text-slate-400 dark:text-slate-500 italic">No pinned items</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+
       {# ════════════════════ SECTION: DASHBOARD ════════════════════ #}
       <div x-show="!collapsed && (matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity'))" x-cloak>
         <div class="ft-group-header"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i><span>DASHBOARD</span></div>

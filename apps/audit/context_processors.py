@@ -87,9 +87,28 @@ def audit_context(request):
     except Exception:
         audit_url = "/audit/activity/"
         
+    pinned_items = []
+    pinned_keys = []
+    if request.user and getattr(request.user, "is_authenticated", False):
+        from apps.audit.models import PinnedMenuItem
+        from apps.audit.menu_registry import PINNABLE_MENUS, can_view_menu, get_menu_url
+        user_pins = PinnedMenuItem.objects.filter(user=request.user)
+        for pin in user_pins:
+            if can_view_menu(request.user, pin.menu_key):
+                cfg = PINNABLE_MENUS[pin.menu_key]
+                pinned_items.append({
+                    "key": pin.menu_key,
+                    "label": cfg["label"],
+                    "icon": cfg["icon"],
+                    "url": get_menu_url(pin.menu_key),
+                })
+        pinned_keys = [item["key"] for item in pinned_items]
+
     return {
         "current_module": module,
         "current_object_type": object_type,
         "current_object_id": object_id,
         "current_audit_url": audit_url,
+        "pinned_items": pinned_items,
+        "pinned_keys": pinned_keys,
     }
