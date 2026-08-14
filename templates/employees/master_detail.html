@@ -15,7 +15,7 @@
                               label="{% if employee.is_suspended %}Un-suspend Profile{% else %}Suspend Profile{% endif %}"
                               extra_class="rounded-xl {% if employee.is_suspended %}!bg-emerald-50 dark:!bg-emerald-950/40 !text-emerald-700 dark:!text-emerald-300 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/60{% endif %}"></c-button>
                     {% endif %}
-                    <c-button href="{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}"
+                    <c-button href="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=1 %}"
                               variant="secondary"
                               size="sm"
                               icon="edit"

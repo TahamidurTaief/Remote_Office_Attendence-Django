@@ -64,10 +64,10 @@
                 <td class="px-4 py-3 text-right">
                     <div class="flex items-center justify-end gap-1.5">
                         {% if emp.get_completion_percentage < 100 %}
-                        <c-button href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" variant="accent" size="sm" label="Resume Wizard" extra_class="!bg-emerald-600 hover:!bg-emerald-700 !text-white" ></c-button>
+                        <c-button href="{% url 'employees:employee_wizard_step' uuid=emp.uuid step=emp.get_next_wizard_step %}" variant="accent" size="sm" label="Resume Wizard" extra_class="!bg-emerald-600 hover:!bg-emerald-700 !text-white" ></c-button>
                         {% endif %}
                         <c-button href="{% url 'employees:employee_detail' emp.pk %}" variant="secondary" size="sm" icon="eye" label="View" ></c-button>
-                        <c-button href="{% url 'employees:employee_wizard_step' pk=emp.pk step=1 %}" variant="ghost" size="sm" icon="edit" label="Edit" ></c-button>
+                        <c-button href="{% url 'employees:employee_wizard_step' uuid=emp.uuid step=1 %}" variant="ghost" size="sm" icon="edit" label="Edit" ></c-button>
                     </div>
                 </td>
             </tr>

@@ -13,7 +13,7 @@
   <!-- Assign Asset Form Card -->
   <c-card padding="lg">
     <form 
-      hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=7 %}"
+      hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}"
       hx-target="#wizard-root"
       hx-swap="outerHTML"
       class="space-y-4"
@@ -108,9 +108,9 @@
 
   <!-- Step Navigation Footer -->
   <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=6 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 6"></c-button>
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 6"></c-button>
 
-    <form hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=7 %}" hx-target="#wizard-root" hx-swap="outerHTML">
+    <form hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}" hx-target="#wizard-root" hx-swap="outerHTML">
       {% csrf_token %}
       <input type="hidden" name="action_type" value="next">
       <c-button type="submit" variant="primary" icon_right="arrow-right" label="Proceed to Step 8 (Review)"></c-button>

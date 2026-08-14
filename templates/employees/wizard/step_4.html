@@ -1,5 +1,5 @@
 <form 
-  hx-post="{% url 'employees:employee_wizard_step' pk=employee.pk step=4 %}"
+  hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}"
   hx-target="#wizard-root"
   hx-swap="outerHTML"
   class="space-y-6"
@@ -114,7 +114,7 @@
   </div>
 
   <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=3 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 3"></c-button>
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 3"></c-button>
     <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 5"></c-button>
   </div>
 </form>

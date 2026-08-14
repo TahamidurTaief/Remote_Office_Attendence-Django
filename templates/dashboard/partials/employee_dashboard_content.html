@@ -23,7 +23,7 @@
           <span class="text-xs">Please complete the remaining steps to fully setup your profile.</span>
         </div>
       </div>
-      <a href="{% url 'employees:employee_wizard_step' pk=user_employee.pk step=my_next_wizard_step %}" class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors text-decoration-none whitespace-nowrap self-start sm:self-auto">
+      <a href="{% url 'employees:employee_wizard_step' uuid=user_employee.uuid step=my_next_wizard_step %}" class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors text-decoration-none whitespace-nowrap self-start sm:self-auto">
         Resume Profile Setup
       </a>
     </div>

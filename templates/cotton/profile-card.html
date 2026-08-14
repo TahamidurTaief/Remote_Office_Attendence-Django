@@ -38,7 +38,7 @@
             
             {% if pct < 100 %}
             <div class="mt-3">
-                <c-button href="{% url 'employees:employee_wizard_step' pk=employee.pk step=employee.get_next_wizard_step %}" 
+                <c-button href="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=employee.get_next_wizard_step %}" 
                           variant="accent"
                           size="sm"
                           label="Resume Wizard"

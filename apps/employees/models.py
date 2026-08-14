@@ -415,6 +415,7 @@ class Employee(models.Model):
     )
 
     employee_number = models.CharField(max_length=50, unique=True, db_index=True)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     dob = models.DateField(null=True, blank=True)

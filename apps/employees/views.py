@@ -1178,9 +1178,9 @@ class EmployeeWizardView(AdminRequiredMixin, View):
         }
         return mapping.get(step)
 
-    def get_context_data(self, request, pk=None, step=1, form=None):
+    def get_context_data(self, request, uuid=None, step=1, form=None):
         step = int(step)
-        employee = get_object_or_404(Employee, pk=pk) if pk else None
+        employee = get_object_or_404(Employee, uuid=uuid) if uuid else None
 
         ctx = {
             'step': step,
@@ -1218,16 +1218,16 @@ class EmployeeWizardView(AdminRequiredMixin, View):
 
         return ctx
 
-    def get(self, request, pk=None, step=1):
+    def get(self, request, uuid=None, step=1):
         step = int(step)
-        ctx = self.get_context_data(request, pk, step)
+        ctx = self.get_context_data(request, uuid, step)
         if request.headers.get('HX-Request'):
             return render(request, 'employees/wizard/wizard_content.html', ctx)
         return render(request, 'employees/employee_wizard.html', ctx)
 
-    def post(self, request, pk=None, step=1):
+    def post(self, request, uuid=None, step=1):
         step = int(step)
-        employee = get_object_or_404(Employee, pk=pk) if pk else None
+        employee = get_object_or_404(Employee, uuid=uuid) if uuid else None
 
         if step == 1:
             form = WizardStep1Form(request.POST, request.FILES, instance=employee)
@@ -1239,13 +1239,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 messages.success(request, f"Step 1 saved. Employee ID {emp.employee_number} created in Draft status.")
                 next_step = int(request.POST.get('next_step', 2))
                 if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, pk=emp.pk, step=next_step)
+                    ctx = self.get_context_data(request, uuid=emp.uuid, step=next_step)
                     response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{emp.pk}/step/{next_step}/"
+                    response['HX-Push-Url'] = f"/employees/wizard/{emp.uuid}/step/{next_step}/"
                     return response
-                return redirect('employees:employee_wizard_step', pk=emp.pk, step=next_step)
+                return redirect('employees:employee_wizard_step', uuid=emp.uuid, step=next_step)
             else:
-                ctx = self.get_context_data(request, pk=pk, step=1, form=form)
+                ctx = self.get_context_data(request, uuid=uuid, step=1, form=form)
                 return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 2:
@@ -1255,13 +1255,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 messages.success(request, "Step 2 (Organization Info) saved successfully.")
                 next_step = int(request.POST.get('next_step', 3))
                 if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
                     response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
                     return response
-                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
             else:
-                ctx = self.get_context_data(request, pk=employee.pk, step=2, form=form)
+                ctx = self.get_context_data(request, uuid=employee.uuid, step=2, form=form)
                 return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 3:
@@ -1271,13 +1271,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 messages.success(request, "Step 3 (Payroll Info) saved successfully.")
                 next_step = int(request.POST.get('next_step', 4))
                 if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
                     response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
                     return response
-                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
             else:
-                ctx = self.get_context_data(request, pk=employee.pk, step=3, form=form)
+                ctx = self.get_context_data(request, uuid=employee.uuid, step=3, form=form)
                 return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 4:
@@ -1287,13 +1287,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 messages.success(request, "Step 4 (Security Account & Role Assignment) saved successfully.")
                 next_step = int(request.POST.get('next_step', 5))
                 if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
                     response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
                     return response
-                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
             else:
-                ctx = self.get_context_data(request, pk=employee.pk, step=4, form=form)
+                ctx = self.get_context_data(request, uuid=employee.uuid, step=4, form=form)
                 return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 5:
@@ -1313,12 +1313,12 @@ class EmployeeWizardView(AdminRequiredMixin, View):
             else:
                 next_step = 6
 
-            ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+            ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
             if request.headers.get('HX-Request'):
                 response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
                 return response
-            return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+            return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
 
         elif step == 6:
             form = WizardStep6Form(request.POST, instance=employee)
@@ -1327,13 +1327,13 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 messages.success(request, "Step 6 (Emergency Contact) saved successfully.")
                 next_step = int(request.POST.get('next_step', 7))
                 if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
                     response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
                     return response
-                return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
             else:
-                ctx = self.get_context_data(request, pk=employee.pk, step=6, form=form)
+                ctx = self.get_context_data(request, uuid=employee.uuid, step=6, form=form)
                 return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 7:
@@ -1353,12 +1353,12 @@ class EmployeeWizardView(AdminRequiredMixin, View):
             else:
                 next_step = 8
 
-            ctx = self.get_context_data(request, pk=employee.pk, step=next_step)
+            ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
             if request.headers.get('HX-Request'):
                 response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                response['HX-Push-Url'] = f"/employees/wizard/{employee.pk}/step/{next_step}/"
+                response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
                 return response
-            return redirect('employees:employee_wizard_step', pk=employee.pk, step=next_step)
+            return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
 
         elif step == 8:
             # Final Approval step

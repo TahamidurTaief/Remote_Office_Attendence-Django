@@ -1,5 +1,5 @@
 <form 
-  hx-post="{% if employee %}{% url 'employees:employee_wizard_step' pk=employee.pk step=1 %}{% else %}{% url 'employees:employee_wizard' %}{% endif %}"
+  hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=1 %}{% else %}{% url 'employees:employee_wizard' %}{% endif %}"
   hx-target="#wizard-root"
   hx-swap="outerHTML"
   class="space-y-6"

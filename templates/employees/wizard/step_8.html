@@ -106,9 +106,9 @@
   </div>
 
   <!-- Approval Action Form Footer -->
-  <form action="{% url 'employees:employee_wizard_step' pk=employee.pk step=8 %}" method="post" class="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-800">
+  <form action="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=8 %}" method="post" class="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-800">
     {% csrf_token %}
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' pk=employee.pk step=7 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 7"></c-button>
+    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 7"></c-button>
 
     <div class="flex items-center space-x-3">
       <c-button type="submit" name="action" value="save_draft" variant="secondary" label="Keep in Draft Status"></c-button>

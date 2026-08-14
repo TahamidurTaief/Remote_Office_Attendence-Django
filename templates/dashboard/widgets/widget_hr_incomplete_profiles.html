@@ -33,7 +33,7 @@
               <span class="text-xs font-semibold text-slate-600 font-mono">{{ pct }}%</span>
             </div>
             {% endwith %}
-            <a href="{% url 'employees:employee_wizard_step' pk=emp.pk step=emp.get_next_wizard_step %}" 
+            <a href="{% url 'employees:employee_wizard_step' uuid=emp.uuid step=emp.get_next_wizard_step %}" 
                class="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded-lg shadow-2xs transition-colors text-decoration-none">
               Resume
             </a>

@@ -882,7 +882,7 @@ class EmployeeWizardTests(TestCase):
             last_name='User',
             status=EmployeeStatus.DRAFT
         )
-        url = reverse('employees:employee_wizard_step', kwargs={'pk': emp.pk, 'step': 4})
+        url = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 4})
         data = {
             'login_email': 'secuser@test.com',
             'password1': 'secpassword123',
@@ -907,7 +907,7 @@ class EmployeeWizardTests(TestCase):
             last_name='Emp',
             status=EmployeeStatus.DRAFT
         )
-        url = reverse('employees:employee_wizard_step', kwargs={'pk': emp.pk, 'step': 8})
+        url = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 8})
         response = self.client.post(url, {'action': 'approve'})
         self.assertEqual(response.status_code, 302)
         emp.refresh_from_db()
