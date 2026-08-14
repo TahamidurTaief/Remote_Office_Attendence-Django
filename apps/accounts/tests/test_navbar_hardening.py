@@ -14,8 +14,8 @@ class NavbarHardeningTests(TestCase):
         self.client = Client()
         
         # Create Branches
-        self.branch_a = Branch.objects.create(name="Branch A", code="BRA", latitude=0.0, longitude=0.0, radius_meters=100)
-        self.branch_b = Branch.objects.create(name="Branch B", code="BRB", latitude=0.0, longitude=0.0, radius_meters=100)
+        self.branch_a = Branch.objects.create(name="Branch A", latitude=0.0, longitude=0.0, radius_meters=100)
+        self.branch_b = Branch.objects.create(name="Branch B", latitude=0.0, longitude=0.0, radius_meters=100)
 
         # Create Dept & Desig
         self.dept = Department.objects.create(name="Engineering", code="ENG")
