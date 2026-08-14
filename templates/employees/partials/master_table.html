@@ -68,6 +68,47 @@
                         {% endif %}
                         <c-button href="{% url 'employees:employee_detail' emp.pk %}" variant="secondary" size="sm" icon="eye" label="View" ></c-button>
                         <c-button href="{% url 'employees:employee_wizard_step' uuid=emp.uuid step=1 %}" variant="ghost" size="sm" icon="edit" label="Edit" ></c-button>
+
+                        <!-- Danger actions dropdown -->
+                        <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                            <button @click="open = !open"
+                                    class="inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                    title="More actions">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M12 5v.01M12 12v.01M12 19v.01"/>
+                                </svg>
+                            </button>
+                            <div x-show="open" x-transition
+                                 class="absolute right-0 mt-1 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-1 text-sm">
+                                <!-- Archive -->
+                                <form method="post" action="{% url 'employees:master_archive' emp.pk %}"
+                                      onsubmit="return confirm('Archive {{ emp.get_full_name }}? This will set status to Archived.')">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="w-full flex items-center gap-2.5 px-3 py-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors">
+                                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8"/>
+                                        </svg>
+                                        Archive
+                                    </button>
+                                </form>
+                                <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+                                <!-- Hard Delete -->
+                                <button type="button"
+                                        hx-get="{% url 'employees:master_delete' emp.pk %}"
+                                        hx-target="body"
+                                        hx-swap="beforeend"
+                                        class="w-full flex items-center gap-2.5 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    Delete Permanently
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </td>
             </tr>

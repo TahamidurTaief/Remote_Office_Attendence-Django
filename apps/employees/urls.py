@@ -24,6 +24,7 @@ urlpatterns = [
     path('master/<int:pk>/', views.EmployeeMasterDetailView.as_view(), name='master_detail'),
     path('master/<int:pk>/edit/', views.EmployeeMasterEditView.as_view(), name='master_edit'),
     path('master/<int:pk>/archive/', views.EmployeeMasterArchiveView.as_view(), name='master_archive'),
+    path('master/<int:pk>/delete/', views.EmployeeMasterDeleteView.as_view(), name='master_delete'),
     path('master/<int:pk>/audit/', views.EmployeeAuditLogView.as_view(), name='master_audit'),
     path('org-chart/', views.OrgChartView.as_view(), name='org_chart'),
     path('org-chart/node/<int:pk>/', views.OrgChartNodeView.as_view(), name='org_chart_node'),

@@ -647,6 +647,49 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
         return redirect('employees:master_list')
 
 
+class EmployeeMasterDeleteView(AdminRequiredMixin, View):
+    """
+    Hard delete an Employee record. Requires an explicit POST with confirm=yes.
+    GET returns a confirmation modal fragment for HTMX.
+    """
+
+    def get(self, request, pk):
+        """Return the confirmation modal (HTMX partial)."""
+        employee = get_object_or_404(Employee, pk=pk)
+        return render(request, 'employees/partials/delete_confirm_modal.html', {
+            'employee': employee,
+            'delete_url': reverse_lazy('employees:master_delete', kwargs={'pk': pk}),
+        })
+
+    def post(self, request, pk):
+        employee = get_object_or_404(Employee, pk=pk)
+        name = employee.get_full_name()
+        emp_number = employee.employee_number
+
+        log_audit(
+            actor=request.user,
+            action='employee_deleted',
+            target=None,
+            summary=f"Permanently deleted employee {emp_number} ({name})"
+        )
+
+        # Dissociate the linked user account (don't delete the login)
+        if employee.user:
+            employee.user = None
+            employee.save(update_fields=['user'])
+
+        employee.delete()
+
+        messages.success(request, f"Employee {name} ({emp_number}) has been permanently deleted.")
+
+        if request.headers.get('HX-Request'):
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = reverse_lazy('employees:master_list')
+            return response
+
+        return redirect('employees:master_list')
+
+
 # Document Management & Asset Assignment Views (Phase 2 Step 3)
 from apps.employees.models import Asset, AssetAssignment, DocumentDownloadLog, DocumentType, SENSITIVE_DOCUMENT_TYPES
 from apps.employees.forms import EmployeeDocumentForm, AssetForm, AssetAssignmentForm, AssetReturnForm
