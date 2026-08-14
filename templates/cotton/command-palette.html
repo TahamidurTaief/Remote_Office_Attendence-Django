@@ -8,7 +8,7 @@
        query: '',
        selectedIndex: 0,
        get results() {
-         return Array.from(document.querySelectorAll('#search-results-list a.search-result-item'));
+         return Array.from(this.$el.querySelectorAll('#search-results-list a.search-result-item'));
        },
        init() {
          window.addEventListener('open-command-palette', () => this.openPalette());
@@ -121,7 +121,7 @@
                x-model="query"
                hx-get="{% url 'accounts:global_search' %}"
                hx-trigger="keyup changed delay:250ms"
-               hx-target="#search-results-list"
+               hx-target="next #search-results-list"
                placeholder="Search menus, submenus, fields, modules, employees, tasks, payroll..."
                class="flex-1 bg-transparent outline-none text-[13px] border-0 p-0 ring-0 shadow-none font-normal"
                style="color: var(--text)">
