@@ -1,0 +1,64 @@
+<c-modal id="desig-form" title="{% if object %}Edit Designation{% else %}New Designation{% endif %}" size="md">
+    <form id="desig-form-el"
+          method="post"
+          {% if object %}
+          hx-post="{% url 'employees:designation_edit' object.pk %}"
+          {% else %}
+          hx-post="{% url 'employees:designation_create' %}"
+          {% endif %}
+          hx-target="#modal-container"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+        <div class="space-y-4">
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Department <span class="text-red-500">*</span></label>
+                {{ form.department }}
+                {% if form.department.errors %}<p class="mt-1 text-xs text-red-600">{{ form.department.errors|join:", " }}</p>{% endif %}
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<p class="mt-1 text-xs text-red-600">{{ form.name.errors|join:", " }}</p>{% endif %}
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Code</label>
+                    {{ form.code }}
+                    {% if form.code.errors %}<p class="mt-1 text-xs text-red-600">{{ form.code.errors|join:", " }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                {{ form.description }}
+            </div>
+
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+                {{ form.is_active }}
+                <span class="text-sm font-medium text-gray-700">Active</span>
+            </label>
+        </div>
+    </form>
+
+    <c-slot name="footer">
+        <c-button type="button" variant="ghost" label="Cancel"
+                  @click="$dispatch('close-modal', {id: 'desig-form'})">
+        </c-button>
+        <c-button type="submit" form="desig-form-el" variant="primary" label="Save Designation" icon="save">
+        </c-button>
+    </c-slot>
+</c-modal>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'desig-form' } }));
+    if (window.lucide) lucide.createIcons();
+  });
+</script>

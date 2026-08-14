@@ -1,0 +1,49 @@
+<c-app-shell page_title="Departments | FieldTrack" active_href="{% url 'employees:department_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'employees:department_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Departments">
+            <c-slot name="actions">
+                <c-button hx-get="{% url 'employees:department_create' %}"
+                          hx-target="#modal-container"
+                          hx-swap="innerHTML"
+                          hx-headers='{"HX-Target": "modal-container"}'
+                          variant="primary" icon="plus" label="New Department">
+                </c-button>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 lg:p-6 w-full space-y-4">
+        <!-- Filter Bar -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'employees:department_list' %}"
+                          hx-get="{% url 'employees:department_list' %}"
+                          hx-target="#dept-table-container"
+                          hx-trigger="keyup changed delay:300ms from:input[name='q'], change from:select">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 flex-1 items-end">
+                    <c-input type="text" name="q" label="Search" value="{{ search }}"
+                             placeholder="Name or code…" icon="search"></c-input>
+                    <c-select name="branch" label="Branch" value="{{ branch_filter }}">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}">{{ b.name }}</option>
+                        {% endfor %}
+                    </c-select>
+                </div>
+                <c-slot name="actions"></c-slot>
+            </c-filter-bar>
+        </c-card>
+
+        <!-- Table -->
+        <div id="dept-table-container">
+            {% include "employees/partials/department_table.html" %}
+        </div>
+    </div>
+
+    <div id="modal-container"></div>
+</c-app-shell>

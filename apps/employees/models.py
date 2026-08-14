@@ -343,9 +343,11 @@ from django.utils import timezone
 
 
 class Department(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20, blank=True)
     description = models.TextField(blank=True)
+    is_global = models.BooleanField(default=True, db_index=True)
+    branches = models.ManyToManyField(Branch, blank=True, related_name='departments')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -354,22 +356,44 @@ class Department(models.Model):
         ordering = ['name']
 
     def __str__(self):
-        return f"{self.name} ({self.code})"
+        return f"{self.name} ({self.code})" if self.code else self.name
+
+    @classmethod
+    def available_for_branch(cls, branch):
+        if not branch:
+            return cls.objects.filter(is_active=True, is_global=True)
+        return cls.objects.filter(is_active=True).filter(
+            models.Q(is_global=True) | models.Q(branches=branch)
+        ).distinct()
 
 
 class Designation(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=20, unique=True)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, null=True, blank=True, related_name='designations')
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20, blank=True)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+
     class Meta:
         ordering = ['name']
 
     def __str__(self):
-        return f"{self.name} ({self.code})"
+        return f"{self.name} ({self.code})" if self.code else self.name
+
+    @classmethod
+    def available_for_department(cls, department):
+        if not department:
+            return cls.objects.filter(is_active=True)
+        # Include designations belonging to this department OR those with no department assigned
+        from django.db.models import Q as DQ
+        return cls.objects.filter(is_active=True).filter(
+            DQ(department=department) | DQ(department__isnull=True)
+        )
+
+
 
 
 class EmployeeStatus(models.TextChoices):

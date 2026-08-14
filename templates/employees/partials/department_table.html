@@ -1,0 +1,77 @@
+{% load i18n %}
+<c-card padding="none">
+    <div class="overflow-x-auto">
+        <table class="ft-table w-full text-sm">
+            <thead>
+                <tr>
+                    <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wide text-xs">Name</th>
+                    <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wide text-xs">Code</th>
+                    <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wide text-xs">Availability</th>
+                    <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wide text-xs">Branches</th>
+                    <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wide text-xs">Designations</th>
+                    <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wide text-xs">Status</th>
+                    <th class="px-4 py-3 text-right font-semibold text-gray-500 uppercase tracking-wide text-xs">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for dept in departments %}
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 font-medium text-gray-900">{{ dept.name }}</td>
+                    <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ dept.code|default:"—" }}</td>
+                    <td class="px-4 py-3">
+                        {% if dept.is_global %}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                            <i data-lucide="globe" class="w-3 h-3"></i> Global
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                            <i data-lucide="building-2" class="w-3 h-3"></i> Branch-specific
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-500 text-xs">
+                        {% if dept.is_global %}
+                        <span class="text-gray-400 italic">All branches</span>
+                        {% else %}
+                            {% for b in dept.branches.all %}
+                            <span class="inline-block bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded mr-1 mb-0.5">{{ b.name }}</span>
+                            {% empty %}
+                            <span class="text-red-400">None assigned</span>
+                            {% endfor %}
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-500">{{ dept.designations.count }}</td>
+                    <td class="px-4 py-3">
+                        {% if dept.is_active %}
+                        <c-badge variant="success" label="Active"></c-badge>
+                        {% else %}
+                        <c-badge variant="neutral" label="Inactive"></c-badge>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        <c-button hx-get="{% url 'employees:department_edit' dept.pk %}"
+                                  hx-target="#modal-container"
+                                  hx-swap="innerHTML"
+                                  hx-headers='{"HX-Target": "modal-container"}'
+                                  variant="ghost" icon="pencil" size="sm" label="Edit">
+                        </c-button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-4 py-12 text-center">
+                        <c-empty-state icon="building-2" title="No departments found"
+                                       description="Add your first department to get started.">
+                        </c-empty-state>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="px-4 py-3 border-t border-gray-100">
+        <c-pagination page_obj="{{ page_obj }}"></c-pagination>
+    </div>
+    {% endif %}
+</c-card>

@@ -1,0 +1,35 @@
+<c-modal id="employee-confirm-modal" title="{{ title|default:'Confirm Action' }}" size="md">
+    <form hx-post="{{ endpoint }}" hx-target="#modal-container" hx-swap="innerHTML" class="space-y-4">
+        {% csrf_token %}
+        {% if to_status %}
+        <input type="hidden" name="to_status" value="{{ to_status }}">
+        {% endif %}
+        
+        <p class="text-sm text-slate-700 dark:text-slate-300">
+            {{ message|default:'Are you sure you want to perform this action?' }}
+        </p>
+
+        {% if suspension_dates %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <c-input type="date" name="suspension_start_date" label="Suspension Start Date" required="true" value="{{ today_str }}"></c-input>
+            <c-input type="date" name="suspension_end_date" label="Suspension End Date / Expiry Date"></c-input>
+        </div>
+        <div class="flex items-center gap-2">
+            <input type="checkbox" name="auto_reactivate" id="auto_reactivate" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+            <label for="auto_reactivate" class="text-xs font-medium text-slate-700 dark:text-slate-300">Auto-reactivate when expired</label>
+        </div>
+        {% endif %}
+
+        <div class="space-y-1">
+            <c-textarea name="reason" rows="3" label="Reason" placeholder="Enter reason here..." required="{{ reason_required|yesno:'true,false' }}" error="{{ reason_error }}"></c-textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <c-button type="button" onclick="document.getElementById('employee-confirm-modal').remove()" variant="secondary" label="Cancel"></c-button>
+            <c-button type="submit" variant="{% if action == 'delete' or action == 'suspend' %}danger{% else %}primary{% endif %}" label="{{ action_label|default:'Confirm' }}"></c-button>
+        </div>
+    </form>
+</c-modal>
+<script>
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'employee-confirm-modal' } }));
+</script>

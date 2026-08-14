@@ -331,6 +331,32 @@ class EmployeeMasterForm(forms.ModelForm):
         else:
             self.fields['reporting_manager'].queryset = Employee.objects.all()
 
+        # Populate department queryset scoped to selected branch
+        branch = None
+        if self.instance and self.instance.pk and self.instance.branch_id:
+            branch = self.instance.branch
+        elif self.data.get('branch'):
+            from apps.branches.models import Branch as BranchModel
+            try:
+                branch = BranchModel.objects.get(pk=self.data['branch'])
+            except BranchModel.DoesNotExist:
+                pass
+        self.fields['department'].queryset = Department.available_for_branch(branch)
+
+        # Populate designation queryset scoped to selected department
+        dept = None
+        if self.instance and self.instance.pk and self.instance.department_id:
+            dept = self.instance.department
+        elif self.data.get('department'):
+            try:
+                dept = Department.objects.get(pk=self.data['department'])
+            except Department.DoesNotExist:
+                pass
+        if dept:
+            self.fields['designation'].queryset = Designation.available_for_department(dept)
+        else:
+            self.fields['designation'].queryset = Designation.objects.filter(is_active=True)
+
     def clean(self):
         cleaned_data = super().clean()
         manager = cleaned_data.get('reporting_manager')
@@ -346,6 +372,20 @@ class EmployeeMasterForm(forms.ModelForm):
                         break
                     visited.add(curr.pk)
                     curr = curr.reporting_manager
+
+        # Cross-hierarchy validation: branch ↔ department ↔ designation
+        branch = cleaned_data.get('branch')
+        department = cleaned_data.get('department')
+        designation = cleaned_data.get('designation')
+
+        if department and branch:
+            if not department.is_global and not department.branches.filter(pk=branch.pk).exists():
+                self.add_error('department', f'Department "{department.name}" is not available for branch "{branch.name}".')
+
+        if designation and department:
+            if designation.department_id and designation.department_id != department.pk:
+                self.add_error('designation', f'Designation "{designation.name}" does not belong to department "{department.name}".')
+
         return cleaned_data
 
     def save(self, commit=True):
@@ -370,27 +410,49 @@ class EmployeeMasterForm(forms.ModelForm):
 
 
 class DepartmentForm(forms.ModelForm):
+    branches = forms.ModelMultipleChoiceField(
+        queryset=Branch.objects.all(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT}),
+        label='Branch-Specific Branches',
+        help_text='Only set when Department is NOT global. Leave empty for global departments.',
+    )
+
     class Meta:
         model = Department
-        fields = ['name', 'code', 'description', 'is_active']
+        fields = ['name', 'code', 'description', 'is_global', 'branches', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'code': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'description': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
+            'is_global': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
             'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        is_global = cleaned_data.get('is_global', True)
+        branches = cleaned_data.get('branches', [])
+        if not is_global and not branches:
+            raise forms.ValidationError('A branch-specific department must have at least one branch assigned.')
+        return cleaned_data
 
 
 class DesignationForm(forms.ModelForm):
     class Meta:
         model = Designation
-        fields = ['name', 'code', 'description', 'is_active']
+        fields = ['department', 'name', 'code', 'description', 'is_active']
         widgets = {
+            'department': forms.Select(attrs={'class': SELECT_INPUT}),
             'name': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'code': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'description': forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
             'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['department'].queryset = Department.objects.filter(is_active=True).order_by('name')
 
 
 # ── Lifecycle forms ───────────────────────────────────────────────────────────

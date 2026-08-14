@@ -1982,4 +1982,227 @@ class EmployeeReportsView(AdminRequiredMixin, TemplateView):
         return context
 
 
+# ==========================================
+# DEPARTMENT MANAGEMENT VIEWS
+# ==========================================
 
+class DepartmentListView(AdminRequiredMixin, ListView):
+    model = Department
+    template_name = 'employees/department_list.html'
+    context_object_name = 'departments'
+    paginate_by = 20
+
+    def get_queryset(self):
+        qs = Department.objects.prefetch_related('branches', 'designations')
+        search = self.request.GET.get('q', '').strip()
+        branch_filter = self.request.GET.get('branch', '').strip()
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(code__icontains=search))
+        if branch_filter:
+            qs = qs.filter(Q(is_global=True) | Q(branches__id=branch_filter)).distinct()
+        return qs.order_by('name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from apps.branches.utils import get_cached_branches
+        context['branches'] = get_cached_branches()
+        context['search'] = self.request.GET.get('q', '')
+        context['branch_filter'] = self.request.GET.get('branch', '')
+        return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.headers.get('HX-Request') and self.request.headers.get('HX-Target') != 'modal-container':
+            return render(self.request, 'employees/partials/department_table.html', context)
+        return super().render_to_response(context, **response_kwargs)
+
+
+class DepartmentCreateView(AdminRequiredMixin, CreateView):
+    model = Department
+    template_name = 'employees/partials/department_form_modal.html'
+
+    def get_form_class(self):
+        from apps.employees.forms import DepartmentForm
+        return DepartmentForm
+
+    def form_valid(self, form):
+        dept = form.save(commit=False)
+        dept.save()
+        form.save_m2m()
+        log_audit(
+            actor=self.request.user,
+            action='department_created',
+            target=dept,
+            summary=f"Created Department {dept.name}"
+        )
+        if self.request.headers.get('HX-Request'):
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = reverse_lazy('employees:department_list')
+            return response
+        messages.success(self.request, f'Department "{dept.name}" created.')
+        return redirect('employees:department_list')
+
+    def form_invalid(self, form):
+        if self.request.headers.get('HX-Request'):
+            return render(self.request, self.template_name, {'form': form})
+        return super().form_invalid(form)
+
+
+class DepartmentEditView(AdminRequiredMixin, UpdateView):
+    model = Department
+    template_name = 'employees/partials/department_form_modal.html'
+
+    def get_form_class(self):
+        from apps.employees.forms import DepartmentForm
+        return DepartmentForm
+
+    def form_valid(self, form):
+        dept = form.save(commit=False)
+        dept.save()
+        form.save_m2m()
+        log_audit(
+            actor=self.request.user,
+            action='department_updated',
+            target=dept,
+            summary=f"Updated Department {dept.name}"
+        )
+        if self.request.headers.get('HX-Request'):
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = reverse_lazy('employees:department_list')
+            return response
+        messages.success(self.request, f'Department "{dept.name}" updated.')
+        return redirect('employees:department_list')
+
+    def form_invalid(self, form):
+        if self.request.headers.get('HX-Request'):
+            return render(self.request, self.template_name, {'form': form, 'object': self.object})
+        return super().form_invalid(form)
+
+
+# ==========================================
+# DESIGNATION MANAGEMENT VIEWS
+# ==========================================
+
+class DesignationListView(AdminRequiredMixin, ListView):
+    model = Designation
+    template_name = 'employees/designation_list.html'
+    context_object_name = 'designations'
+    paginate_by = 20
+
+    def get_queryset(self):
+        qs = Designation.objects.select_related('department')
+        search = self.request.GET.get('q', '').strip()
+        dept_filter = self.request.GET.get('department', '').strip()
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(code__icontains=search))
+        if dept_filter:
+            qs = qs.filter(department_id=dept_filter)
+        return qs.order_by('department__name', 'name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['departments'] = Department.objects.filter(is_active=True).order_by('name')
+        context['search'] = self.request.GET.get('q', '')
+        context['dept_filter'] = self.request.GET.get('department', '')
+        return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.headers.get('HX-Request') and self.request.headers.get('HX-Target') != 'modal-container':
+            return render(self.request, 'employees/partials/designation_table.html', context)
+        return super().render_to_response(context, **response_kwargs)
+
+
+class DesignationCreateView(AdminRequiredMixin, CreateView):
+    model = Designation
+    template_name = 'employees/partials/designation_form_modal.html'
+
+    def get_form_class(self):
+        from apps.employees.forms import DesignationForm
+        return DesignationForm
+
+    def form_valid(self, form):
+        desig = form.save()
+        log_audit(
+            actor=self.request.user,
+            action='designation_created',
+            target=desig,
+            summary=f"Created Designation {desig.name}"
+        )
+        if self.request.headers.get('HX-Request'):
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = reverse_lazy('employees:designation_list')
+            return response
+        messages.success(self.request, f'Designation "{desig.name}" created.')
+        return redirect('employees:designation_list')
+
+    def form_invalid(self, form):
+        if self.request.headers.get('HX-Request'):
+            return render(self.request, self.template_name, {'form': form})
+        return super().form_invalid(form)
+
+
+class DesignationEditView(AdminRequiredMixin, UpdateView):
+    model = Designation
+    template_name = 'employees/partials/designation_form_modal.html'
+
+    def get_form_class(self):
+        from apps.employees.forms import DesignationForm
+        return DesignationForm
+
+    def form_valid(self, form):
+        desig = form.save()
+        log_audit(
+            actor=self.request.user,
+            action='designation_updated',
+            target=desig,
+            summary=f"Updated Designation {desig.name}"
+        )
+        if self.request.headers.get('HX-Request'):
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = reverse_lazy('employees:designation_list')
+            return response
+        messages.success(self.request, f'Designation "{desig.name}" updated.')
+        return redirect('employees:designation_list')
+
+    def form_invalid(self, form):
+        if self.request.headers.get('HX-Request'):
+            return render(self.request, self.template_name, {'form': form, 'object': self.object})
+        return super().form_invalid(form)
+
+
+# ==========================================
+# HTMX CASCADE API ENDPOINTS
+# ==========================================
+
+import json
+
+
+class DepartmentsForBranchAPIView(AdminRequiredMixin, View):
+    """JSON endpoint: departments available for a given branch."""
+
+    def get(self, request):
+        branch_id = request.GET.get('branch', '')
+        branch = None
+        if branch_id:
+            try:
+                branch = Branch.objects.get(pk=branch_id)
+            except Branch.DoesNotExist:
+                pass
+        departments = Department.available_for_branch(branch)
+        data = [{'id': d.pk, 'name': str(d)} for d in departments]
+        return HttpResponse(json.dumps(data), content_type='application/json')
+
+
+class DesignationsForDepartmentAPIView(AdminRequiredMixin, View):
+    """JSON endpoint: designations under a given department."""
+
+    def get(self, request):
+        dept_id = request.GET.get('department', '')
+        if not dept_id:
+            return HttpResponse(json.dumps([]), content_type='application/json')
+        try:
+            dept = Department.objects.get(pk=dept_id)
+        except Department.DoesNotExist:
+            return HttpResponse(json.dumps([]), content_type='application/json')
+        designations = Designation.available_for_department(dept)
+        data = [{'id': d.pk, 'name': str(d)} for d in designations]
+        return HttpResponse(json.dumps(data), content_type='application/json')

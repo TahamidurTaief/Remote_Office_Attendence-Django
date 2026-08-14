@@ -1,0 +1,78 @@
+{% load i18n %}
+<c-modal id="dept-form" title="{% if object %}Edit Department{% else %}New Department{% endif %}" size="md">
+
+    <form id="dept-form-el"
+          method="post"
+          {% if object %}
+          hx-post="{% url 'employees:department_edit' object.pk %}"
+          {% else %}
+          hx-post="{% url 'employees:department_create' %}"
+          {% endif %}
+          hx-target="#modal-container"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+        <div class="space-y-4">
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<p class="mt-1 text-xs text-red-600">{{ form.name.errors|join:", " }}</p>{% endif %}
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Code</label>
+                    {{ form.code }}
+                    {% if form.code.errors %}<p class="mt-1 text-xs text-red-600">{{ form.code.errors|join:", " }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                {{ form.description }}
+            </div>
+
+            <!-- Global toggle with Alpine -->
+            <div x-data="{ isGlobal: {{ form.is_global.value|yesno:'true,false' }} }">
+                <label class="flex items-center gap-2 cursor-pointer select-none mb-3">
+                    {{ form.is_global }}
+                    <span class="text-sm font-medium text-gray-700">Global (available to all branches)</span>
+                </label>
+                {% if form.is_global.errors %}<p class="mt-1 text-xs text-red-600">{{ form.is_global.errors|join:", " }}</p>{% endif %}
+
+                <div x-show="!isGlobal"
+                     x-transition
+                     class="mt-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Branches <span class="text-red-500">*</span></label>
+                    {{ form.branches }}
+                    <p class="mt-1 text-xs text-gray-400">Hold Ctrl / Cmd to select multiple branches.</p>
+                    {% if form.branches.errors %}<p class="mt-1 text-xs text-red-600">{{ form.branches.errors|join:", " }}</p>{% endif %}
+                </div>
+            </div>
+
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+                {{ form.is_active }}
+                <span class="text-sm font-medium text-gray-700">Active</span>
+            </label>
+        </div>
+    </form>
+
+    <c-slot name="footer">
+        <c-button type="button" variant="ghost" label="Cancel"
+                  @click="$dispatch('close-modal', {id: 'dept-form'})">
+        </c-button>
+        <c-button type="submit" form="dept-form-el" variant="primary" label="Save Department" icon="save">
+        </c-button>
+    </c-slot>
+</c-modal>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'dept-form' } }));
+    if (window.lucide) lucide.createIcons();
+  });
+</script>

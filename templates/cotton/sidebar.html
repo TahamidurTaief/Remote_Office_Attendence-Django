@@ -291,14 +291,14 @@
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">New Employee</span>
           </a>
-          <a href="{% url 'branches:branch_list' %}?type=department"
-             class="ft-nav-item {% if '/branches/' in path and req_get_type == 'department' %}active{% endif %}"
+          <a href="{% url 'employees:department_list' %}"
+             class="ft-nav-item {% if '/employees/departments' in path %}active{% endif %}"
              x-show="matchSearch('Departments')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Departments</span>
           </a>
-          <a href="{% url 'admin_panel:role_list' %}?type=designation"
-             class="ft-nav-item {% if '/admin-panel/roles/' in path and req_get_type == 'designation' %}active{% endif %}"
+          <a href="{% url 'employees:designation_list' %}"
+             class="ft-nav-item {% if '/employees/designations' in path %}active{% endif %}"
              x-show="matchSearch('Designations')">
             <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
             <span class="ft-nav-label">Designations</span>

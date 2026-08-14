@@ -54,18 +54,56 @@
                 </div>
 
                 <!-- Section 3: Organization & Status -->
-                <div class="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
-                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">3. Organization & Status</h4>
+                <div class="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3"
+                     x-data="cascadeDropdowns({
+                       branchVal: '{{ form.instance.branch_id|default:'' }}',
+                       deptVal:   '{{ form.instance.department_id|default:'' }}',
+                       desigVal:  '{{ form.instance.designation_id|default:'' }}'
+                     })">
+                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">3. Organization &amp; Status</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <c-select label="BRANCH" name="branch" value="{{ form.branch.value|default:'' }}" is_django_form="true" error="{{ form.branch.errors.0 }}">
-                            {{ form.branch }}
-                        </c-select>
-                        <c-select label="DEPARTMENT" name="department" value="{{ form.department.value|default:'' }}" is_django_form="true" error="{{ form.department.errors.0 }}">
-                            {{ form.department }}
-                        </c-select>
-                        <c-select label="DESIGNATION" name="designation" value="{{ form.designation.value|default:'' }}" is_django_form="true" error="{{ form.designation.errors.0 }}">
-                            {{ form.designation }}
-                        </c-select>
+
+                        <!-- Branch -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Branch</label>
+                            <select name="branch"
+                                    class="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    @change="onBranchChange($event.target.value)">
+                                <option value="">— Select Branch —</option>
+                                {% for b in form.branch.field.queryset %}
+                                <option value="{{ b.pk }}" {% if form.instance.branch_id == b.pk %}selected{% endif %}>{{ b.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if form.branch.errors %}<p class="mt-1 text-xs text-red-600">{{ form.branch.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <!-- Department (cascade) -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Department</label>
+                            <select name="department"
+                                    class="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    @change="onDeptChange($event.target.value)">
+                                <option value="">— Select Department —</option>
+                                <template x-for="d in departments" :key="d.id">
+                                    <option :value="d.id" :selected="String(deptVal) == String(d.id)" x-text="d.name"></option>
+                                </template>
+                            </select>
+                            {% if form.department.errors %}<p class="mt-1 text-xs text-red-600">{{ form.department.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <!-- Designation (cascade) -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Designation</label>
+                            <select name="designation"
+                                    class="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="">— Select Designation —</option>
+                                <template x-for="d in designations" :key="d.id">
+                                    <option :value="d.id" :selected="String(desigVal) == String(d.id)" x-text="d.name"></option>
+                                </template>
+                            </select>
+                            {% if form.designation.errors %}<p class="mt-1 text-xs text-red-600">{{ form.designation.errors.0 }}</p>{% endif %}
+                        </div>
+
                         <c-select label="REPORTING MANAGER" name="reporting_manager" value="{{ form.reporting_manager.value|default:'' }}" is_django_form="true" error="{{ form.reporting_manager.errors.0 }}">
                             {{ form.reporting_manager }}
                         </c-select>
@@ -92,4 +130,48 @@
             </form>
         </c-card>
     </div>
+
+    <script>
+    function cascadeDropdowns({ branchVal, deptVal, desigVal }) {
+        return {
+            branchVal, deptVal, desigVal,
+            departments: [],
+            designations: [],
+
+            async init() {
+                if (branchVal) await this.loadDepartments(branchVal);
+                else await this.loadDepartments('');
+                if (deptVal) await this.loadDesignations(deptVal);
+            },
+
+            async onBranchChange(branchId) {
+                this.branchVal = branchId;
+                this.deptVal = '';
+                this.desigVal = '';
+                this.designations = [];
+                await this.loadDepartments(branchId);
+            },
+
+            async onDeptChange(deptId) {
+                this.deptVal = deptId;
+                this.desigVal = '';
+                await this.loadDesignations(deptId);
+            },
+
+            async loadDepartments(branchId) {
+                const base = '{% url "employees:api_departments_for_branch" %}';
+                const url = branchId ? base + '?branch=' + branchId : base;
+                const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                this.departments = await res.json();
+            },
+
+            async loadDesignations(deptId) {
+                if (!deptId) { this.designations = []; return; }
+                const url = '{% url "employees:api_designations_for_department" %}?department=' + deptId;
+                const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                this.designations = await res.json();
+            }
+        };
+    }
+    </script>
 </c-app-shell>

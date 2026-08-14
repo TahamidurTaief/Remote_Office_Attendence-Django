@@ -59,5 +59,19 @@ urlpatterns = [
     path('api/employees/<int:pk>/org-chain/', api_views.OrgChainAPIView.as_view(), name='api_org_chain'),
     path('api/employees/org-analytics/', api_views.OrgAnalyticsAPIView.as_view(), name='api_org_analytics'),
     path('api/employees/<int:pk>/is-manager/<int:target_pk>/', api_views.IsManagerAPIView.as_view(), name='api_is_manager'),
+
+    # Department management
+    path('departments/', views.DepartmentListView.as_view(), name='department_list'),
+    path('departments/create/', views.DepartmentCreateView.as_view(), name='department_create'),
+    path('departments/<int:pk>/edit/', views.DepartmentEditView.as_view(), name='department_edit'),
+
+    # Designation management
+    path('designations/', views.DesignationListView.as_view(), name='designation_list'),
+    path('designations/create/', views.DesignationCreateView.as_view(), name='designation_create'),
+    path('designations/<int:pk>/edit/', views.DesignationEditView.as_view(), name='designation_edit'),
+
+    # HTMX cascade APIs
+    path('api/departments-for-branch/', views.DepartmentsForBranchAPIView.as_view(), name='api_departments_for_branch'),
+    path('api/designations-for-department/', views.DesignationsForDepartmentAPIView.as_view(), name='api_designations_for_department'),
 ]
 
