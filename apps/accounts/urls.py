@@ -53,5 +53,6 @@ urlpatterns = [
     path('account/security/backup-codes/regenerate/', views.BackupCodesRegenerateView.as_view(), name='backup_codes_regenerate'),
     path('account/security/pin/setup/', views.SetupPINView.as_view(), name='setup_pin'),
     path('account/security/workspace-password/setup/', views.SetupWorkspacePasswordView.as_view(), name='setup_workspace_password'),
+    path('search/', views.GlobalSearchView.as_view(), name='global_search'),
 ]
 

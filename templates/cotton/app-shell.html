@@ -61,20 +61,37 @@
   <script>
     const SoundFX = {
       ctx: null,
-      isMuted: localStorage.getItem('sound_muted') === 'true',
-      init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+      get isMuted() {
+        return localStorage.getItem('sound_muted') === 'true';
+      },
+      set isMuted(val) {
+        localStorage.setItem('sound_muted', val ? 'true' : 'false');
+      },
+      init() {
+        try {
+          if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          this.ctx = null;
+        }
+      },
       toggleMute() {
-        this.isMuted = !this.isMuted;
-        localStorage.setItem('sound_muted', this.isMuted ? 'true' : 'false');
-        return this.isMuted;
+        const val = !this.isMuted;
+        this.isMuted = val;
+        if (window.Alpine && Alpine.store('sound')) {
+          Alpine.store('sound').muted = val;
+        }
+        return val;
       },
       runAudio(cb) {
         if (this.isMuted) return;
         this.init();
         const ctx = this.ctx;
         if (!ctx) return;
-        if (ctx.state === 'suspended') ctx.resume().then(() => { try { cb(ctx); } catch(e){} });
-        else { try { cb(ctx); } catch(e){} }
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(() => { try { cb(ctx); } catch(e){} }).catch(() => {});
+        } else {
+          try { cb(ctx); } catch(e){}
+        }
       },
       playClick() {
         this.runAudio(ctx => {
@@ -139,6 +156,118 @@
       }
     };
     window.SoundFX = SoundFX;
+
+    document.addEventListener('alpine:init', () => {
+      Alpine.store('sound', {
+        muted: localStorage.getItem('sound_muted') === 'true',
+        toggle() {
+          this.muted = !this.muted;
+          localStorage.setItem('sound_muted', this.muted ? 'true' : 'false');
+          if (window.SoundFX) {
+            window.SoundFX.isMuted = this.muted;
+          }
+        }
+      });
+
+      Alpine.store('navHistory', {
+        backStack: JSON.parse(sessionStorage.getItem('auth_back_stack') || '[]'),
+        forwardStack: JSON.parse(sessionStorage.getItem('auth_forward_stack') || '[]'),
+        canGoBack() {
+          return this.backStack.length > 1;
+        },
+        canGoForward() {
+          return this.forwardStack.length > 0;
+        },
+        goBack() {
+          if (this.canGoBack()) {
+            const current = this.backStack.pop();
+            this.forwardStack.unshift(current);
+            sessionStorage.setItem('auth_back_stack', JSON.stringify(this.backStack));
+            sessionStorage.setItem('auth_forward_stack', JSON.stringify(this.forwardStack));
+            window.location.href = this.backStack[this.backStack.length - 1];
+          } else {
+            window.history.back();
+          }
+        },
+        goForward() {
+          if (this.canGoForward()) {
+            const next = this.forwardStack.shift();
+            this.backStack.push(next);
+            sessionStorage.setItem('auth_back_stack', JSON.stringify(this.backStack));
+            sessionStorage.setItem('auth_forward_stack', JSON.stringify(this.forwardStack));
+            window.location.href = next;
+          } else {
+            window.history.forward();
+          }
+        }
+      });
+
+      Alpine.store('zoom', {
+        level: parseInt(localStorage.getItem('app_zoom_level') || '100'),
+        levels: [80, 90, 100, 110, 120],
+        init() {
+          this.apply();
+        },
+        zoomIn() {
+          const idx = this.levels.indexOf(this.level);
+          if (idx !== -1 && idx < this.levels.length - 1) {
+            this.level = this.levels[idx + 1];
+            this.save();
+          }
+        },
+        zoomOut() {
+          const idx = this.levels.indexOf(this.level);
+          if (idx !== -1 && idx > 0) {
+            this.level = this.levels[idx - 1];
+            this.save();
+          }
+        },
+        reset() {
+          this.level = 100;
+          this.save();
+        },
+        save() {
+          localStorage.setItem('app_zoom_level', this.level.toString());
+          this.apply();
+        },
+        apply() {
+          document.documentElement.style.fontSize = this.level + '%';
+        }
+      });
+    });
+
+    (function() {
+      const authPathsToSkip = ['/accounts/login/', '/accounts/logout/', '/login/', '/logout/', '/verify/', '/mfa/', '/search/'];
+      function isAuthPage(url) {
+        return authPathsToSkip.some(path => url.includes(path));
+      }
+
+      const currentUrl = window.location.pathname + window.location.search;
+      if (isAuthPage(currentUrl)) return;
+
+      let backStack = JSON.parse(sessionStorage.getItem('auth_back_stack') || '[]');
+      let forwardStack = JSON.parse(sessionStorage.getItem('auth_forward_stack') || '[]');
+
+      if (backStack.length === 0) {
+        backStack.push(currentUrl);
+      } else {
+        const lastPage = backStack[backStack.length - 1];
+        if (lastPage !== currentUrl) {
+          const fwdIndex = forwardStack.indexOf(currentUrl);
+          if (fwdIndex !== -1) {
+            const itemsToMove = forwardStack.slice(0, fwdIndex + 1);
+            backStack.push(...itemsToMove);
+            forwardStack = forwardStack.slice(fwdIndex + 1);
+          } else {
+            backStack.push(currentUrl);
+            forwardStack = [];
+          }
+        }
+      }
+
+      sessionStorage.setItem('auth_back_stack', JSON.stringify(backStack));
+      sessionStorage.setItem('auth_forward_stack', JSON.stringify(forwardStack));
+    })();
 
     window.confirmAction = (message, onConfirm) =>
       window.dispatchEvent(new CustomEvent('open-confirm-modal', { detail: { message, onConfirm } }));

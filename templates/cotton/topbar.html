@@ -36,6 +36,35 @@
     </div>
   </div>
 
+  {# Desktop View: Compact Navigation Controls #}
+  <div class="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-btn border text-[11px] select-none"
+       style="background:var(--surface-2); border-color:var(--border); color:var(--text-secondary)">
+    <button type="button" @click="$store.navHistory.goBack()" :disabled="!$store.navHistory.canGoBack()"
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+      Back
+    </button>
+    <span class="opacity-30">|</span>
+    <button type="button" @click="$store.navHistory.goForward()" :disabled="!$store.navHistory.canGoForward()"
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+      Forward
+    </button>
+    <span class="opacity-30">|</span>
+    <button type="button" @click="$store.zoom.zoomOut()" :disabled="$store.zoom.level === 80"
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+      Zoom Out
+    </button>
+    <span class="opacity-30">|</span>
+    <button type="button" @click="$store.zoom.reset()" :disabled="$store.zoom.level === 100"
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+      Reset Zoom
+    </button>
+    <span class="opacity-30">|</span>
+    <button type="button" @click="$store.zoom.zoomIn()" :disabled="$store.zoom.level === 120"
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+      Zoom In
+    </button>
+  </div>
+
   {# Right: clock + utils + actions #}
   <div class="flex items-center gap-2 flex-shrink-0">
     {# Live date + clock #}
@@ -54,12 +83,11 @@
 
     {# Mute toggle #}
     <button type="button"
-            x-data
-            @click="$el.closest('body').__x && ($el.closest('body').__x.muted = window.SoundFX.toggleMute())"
+            @click="$store.sound.toggle()"
             class="ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center"
             title="Toggle sound">
-      <i data-lucide="volume-2" class="w-4 h-4" x-show="!$el.closest('body').__x?.muted"></i>
-      <i data-lucide="volume-x" class="w-4 h-4" x-show="$el.closest('body').__x?.muted" x-cloak></i>
+      <i data-lucide="volume-2" class="w-4 h-4" x-show="!$store.sound.muted"></i>
+      <i data-lucide="volume-x" class="w-4 h-4" x-show="$store.sound.muted" x-cloak></i>
     </button>
 
     {# Notifications bell #}
@@ -101,10 +129,10 @@
               class="flex items-center gap-1.5 px-2 py-1 rounded-btn hover:bg-opacity-10 transition-colors"
               style="background:transparent">
         <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-[11px] font-semibold">
-          {{ request.user.email|default:"User"|make_list|first|upper }}
+          {{ request.user.display_name|default:"User"|make_list|first|upper }}
         </div>
         <span class="hidden md:block text-[12px] font-medium max-w-[120px] truncate" style="color:var(--text-secondary)">
-          {{ request.user.email|default:"User" }}
+          {{ request.user.display_name|default:"User" }}
         </span>
         <i data-lucide="chevron-down" class="w-3.5 h-3.5" style="color:var(--text-muted)"></i>
       </button>
@@ -122,9 +150,29 @@
            x-cloak>
         <div class="px-3 py-1.5 border-b mb-1" style="border-color:var(--border)">
           <p class="text-[12px] font-semibold truncate" style="color:var(--text)">
-            {{ request.user.email|default:"User" }}
+            {{ request.user.display_name|default:"User" }}
           </p>
-          <p class="text-[10px]" style="color:var(--text-muted)">Administrator</p>
+          <p class="text-[10px]" style="color:var(--text-muted)">{{ request.user.role|title }}</p>
+        </div>
+        {# Mobile nav history/zoom items inside the user dropdown #}
+        <div class="block lg:hidden border-b pb-1.5 mb-1.5 px-3 space-y-1.5" style="border-color:var(--border)">
+          <p class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">Navigation</p>
+          <div class="grid grid-cols-2 gap-1.5 text-[11px]">
+            <button type="button" @click="$store.navHistory.goBack()" :disabled="!$store.navHistory.canGoBack()"
+                    class="text-left py-0.5 hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              ← Back
+            </button>
+            <button type="button" @click="$store.navHistory.goForward()" :disabled="!$store.navHistory.canGoForward()"
+                    class="text-left py-0.5 hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              Forward →
+            </button>
+          </div>
+          <p class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mt-1.5 mb-0.5">Zoom</p>
+          <div class="flex items-center justify-between text-[11px] select-none">
+            <button type="button" @click="$store.zoom.zoomOut()" :disabled="$store.zoom.level === 80" class="hover:text-primary transition-colors disabled:opacity-40">- Zoom</button>
+            <button type="button" @click="$store.zoom.reset()" class="hover:text-primary transition-colors font-medium"><span x-text="$store.zoom.level"></span>%</button>
+            <button type="button" @click="$store.zoom.zoomIn()" :disabled="$store.zoom.level === 120" class="hover:text-primary transition-colors disabled:opacity-40">+ Zoom</button>
+          </div>
         </div>
         <a href="{% url 'accounts:change_password' %}"
            class="flex items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-opacity-10"

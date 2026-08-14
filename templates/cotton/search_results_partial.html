@@ -1,0 +1,20 @@
+{% if not results %}
+  <div class="px-4 py-10 text-center text-[12px]" style="color: var(--text-muted)">
+    No results for "<span>{{ query }}</span>"
+  </div>
+{% else %}
+  {% for item in results %}
+    <a href="{{ item.href }}"
+       @click="closePalette()"
+       class="search-result-item flex items-center gap-3 px-3 py-2 mx-1.5 rounded-md transition-all cursor-pointer text-slate-600 dark:text-slate-300"
+       style="text-decoration: none">
+      <div class="search-icon-box w-6 h-6 rounded flex items-center justify-center flex-shrink-0 bg-slate-100 text-primary dark:bg-slate-700">
+        <i data-lucide="{{ item.icon }}" class="w-3.5 h-3.5"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-[12px] font-medium truncate">{{ item.label }}</p>
+      </div>
+      <span class="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-400">{{ item.group }}</span>
+    </a>
+  {% endfor %}
+{% endif %}

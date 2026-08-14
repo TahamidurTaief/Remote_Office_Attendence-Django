@@ -1169,7 +1169,7 @@ class LoginMFAVerifyView(View):
             return redirect('accounts:login')
 
         code = request.POST.get('mfa_code', '').strip()
-        remember_device = request.POST.get('remember_device') == 'true'
+        remember_device = request.POST.get('remember_device') in ['true', 'on']
         sec_prof = getattr(user, 'security_profile', None)
 
         is_valid = False
@@ -1805,5 +1805,169 @@ class SetupWorkspacePasswordView(LoginRequiredMixin, View):
             'success': True,
             'ws_password_exists': True
         })
+
+
+class GlobalSearchView(LoginRequiredMixin, View):
+    """
+    GET /search/
+    Scoped backend global search endpoint returning perm-aware HTML partial.
+    """
+    def get(self, request):
+        from django.db.models import Q
+        from apps.employees.models import Employee
+        from apps.projects.models import Project, ProjectTask
+        from apps.payroll.models import PayrollRun, EmployeePayrollCalculation
+        from apps.leave.models import LeaveRequest
+        from apps.expense.models import Expense
+
+        query = request.GET.get('query', '').strip()
+        user = request.user
+        role = user.role
+        emp = getattr(user, 'employee_master', None)
+        user_branch = emp.branch if emp else None
+        data_scope = emp.data_scope if emp else 'branch'
+
+        # Helper to restrict by branch if user is branch-scoped
+        def filter_branch(qs, branch_field='branch'):
+            if not user.is_superuser and data_scope == 'branch' and user_branch:
+                return qs.filter(**{f"{branch_field}": user_branch})
+            return qs
+
+        results = []
+
+        if not query:
+            # Return initial available routes based on role/permissions
+            if role in ['admin', 'system_owner', 'hr']:
+                results.append({'label': 'Dashboard', 'href': '/admin-panel/dashboard/', 'icon': 'layout-dashboard', 'group': 'Overview'})
+                results.append({'label': 'Employee Directory', 'href': '/employees/', 'icon': 'users', 'group': 'People'})
+                results.append({'label': 'Add New Employee', 'href': '/employees/add/', 'icon': 'user-plus', 'group': 'People'})
+                results.append({'label': 'Leave Requests (Admin)', 'href': '/leave/admin/', 'icon': 'clipboard-check', 'group': 'Leave'})
+                results.append({'label': 'Expense Claims (Admin)', 'href': '/expense/admin/', 'icon': 'receipt', 'group': 'Expense'})
+                results.append({'label': 'Payroll Runs', 'href': '/payroll/runs/', 'icon': 'database', 'group': 'Payroll'})
+            else:
+                results.append({'label': 'Staff Home / Check In', 'href': '/staff/home/', 'icon': 'user-check', 'group': 'Overview'})
+                results.append({'label': 'My Leave Requests', 'href': '/leave/my-leave/', 'icon': 'calendar-heart', 'group': 'Leave'})
+                results.append({'label': 'My Expenses', 'href': '/expense/my-expenses/', 'icon': 'wallet', 'group': 'Expense'})
+                results.append({'label': 'My Tasks', 'href': '/staff/my-tasks/', 'icon': 'list-todo', 'group': 'Work'})
+
+            results.append({'label': 'Projects', 'href': '/projects/', 'icon': 'briefcase', 'group': 'Work'})
+            results.append({'label': 'Roster / Calendar', 'href': '/schedule/', 'icon': 'calendar', 'group': 'Operations'})
+            results.append({'label': 'Security & MFA Settings', 'href': '/account/security/', 'icon': 'shield-check', 'group': 'Account'})
+            results.append({'label': 'Change Password', 'href': '/accounts/change-password/', 'icon': 'lock', 'group': 'Account'})
+
+            return render(request, 'cotton/search_results_partial.html', {'results': results, 'query': ''})
+
+        # 1. Employees / HR (Only admin, system_owner, hr, manager)
+        if role in ['admin', 'system_owner', 'hr', 'manager']:
+            employees = Employee.objects.select_related('branch', 'department', 'designation')
+            employees = filter_branch(employees, 'branch')
+            employees = employees.filter(
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(employee_number__icontains=query)
+            ).order_by('first_name', 'last_name')[:5]
+            for e in employees:
+                results.append({
+                    'label': f"Employee: {e.first_name} {e.last_name} ({e.employee_number})",
+                    'href': f"/employees/{e.pk}/",
+                    'icon': 'user',
+                    'group': 'People'
+                })
+
+        # 2. Projects (All authenticated users can search matching projects in scope)
+        projects = Project.objects.select_related('branch')
+        projects = filter_branch(projects, 'branch')
+        projects = projects.filter(
+            Q(name__icontains=query) |
+            Q(client_name__icontains=query)
+        ).order_by('name')[:5]
+        for p in projects:
+            results.append({
+                'label': f"Project: {p.name} ({p.client_name})",
+                'href': f"/projects/{p.pk}/",
+                'icon': 'briefcase',
+                'group': 'Work'
+            })
+
+        # 3. Project Tasks
+        tasks = ProjectTask.objects.select_related('project', 'project__branch')
+        tasks = filter_branch(tasks, 'project__branch')
+        tasks = tasks.filter(activity__icontains=query).order_by('activity')[:5]
+        for t in tasks:
+            results.append({
+                'label': f"Task: {t.activity} (Project: {t.project.name})",
+                'href': f"/projects/{t.project.pk}/",
+                'icon': 'check-square',
+                'group': 'Work'
+            })
+
+        # 4. Payroll Runs & calculations (Only admin, system_owner, finance, accounts)
+        if role in ['admin', 'system_owner', 'finance', 'accounts']:
+            # Runs
+            runs = PayrollRun.objects.filter(
+                Q(status__icontains=query)
+            ).order_by('-period_start')[:5]
+            for r in runs:
+                results.append({
+                    'label': f"Payroll Run: {r.period_start} to {r.period_end} ({r.status})",
+                    'href': f"/payroll/runs/{r.pk}/",
+                    'icon': 'database',
+                    'group': 'Payroll'
+                })
+
+            # Payslips
+            calcs = EmployeePayrollCalculation.objects.select_related('employee', 'employee__branch', 'payroll_run')
+            calcs = filter_branch(calcs, 'employee__branch')
+            calcs = calcs.filter(
+                Q(employee__first_name__icontains=query) |
+                Q(employee__last_name__icontains=query) |
+                Q(employee__employee_number__icontains=query)
+            ).order_by('-payroll_run__period_start')[:5]
+            for c in calcs:
+                results.append({
+                    'label': f"Payslip: {c.employee.first_name} {c.employee.last_name} ({c.payroll_run.period_start})",
+                    'href': f"/payroll/payslips/{c.pk}/",
+                    'icon': 'file-text',
+                    'group': 'Payroll'
+                })
+
+        # 5. Leave Requests
+        leaves = LeaveRequest.objects.select_related('employee', 'employee__branch')
+        if role not in ['admin', 'system_owner', 'hr', 'manager']:
+            leaves = leaves.filter(employee__user=user)
+        else:
+            leaves = filter_branch(leaves, 'employee__branch')
+        leaves = leaves.filter(
+            Q(employee__first_name__icontains=query) |
+            Q(employee__last_name__icontains=query) |
+            Q(leave_type__icontains=query)
+        ).order_by('-start_date')[:5]
+        for l in leaves:
+            results.append({
+                'label': f"Leave: {l.employee.first_name} ({l.leave_type} - {l.status})",
+                'href': "/leave/admin/" if role in ['admin', 'system_owner', 'hr', 'manager'] else "/leave/my-leave/",
+                'icon': 'calendar-heart',
+                'group': 'Leave'
+            })
+
+        # 6. Expenses
+        expenses = Expense.objects.select_related('employee', 'employee__branch')
+        if role not in ['admin', 'system_owner', 'hr', 'manager']:
+            expenses = expenses.filter(employee__user=user)
+        else:
+            expenses = filter_branch(expenses, 'employee__branch')
+        expenses = expenses.filter(
+            Q(employee__full_name__icontains=query) |
+            Q(description__icontains=query)
+        ).order_by('-requested_at')[:5]
+        for ex in expenses:
+            results.append({
+                'label': f"Expense: {ex.employee.full_name} (${ex.amount} - {ex.status})",
+                'href': "/expense/admin/" if role in ['admin', 'system_owner', 'hr', 'manager'] else "/expense/my-expenses/",
+                'icon': 'receipt',
+                'group': 'Expense'
+            })
+
+        return render(request, 'cotton/search_results_partial.html', {'results': results, 'query': query})
 
 

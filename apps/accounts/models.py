@@ -85,6 +85,20 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         policy = self.security_policy
         return policy.idle_timeout_minutes if policy else 30
 
+    @property
+    def display_name(self):
+        emp = getattr(self, 'employee_master', None)
+        if emp:
+            full_name = f"{emp.first_name} {emp.last_name}".strip()
+            if full_name:
+                return full_name
+        first_name = getattr(self, 'first_name', '')
+        last_name = getattr(self, 'last_name', '')
+        full_name = f"{first_name} {last_name}".strip()
+        if full_name:
+            return full_name
+        return self.phone or self.email or "User"
+
 
 
 class UserLoginActivity(models.Model):

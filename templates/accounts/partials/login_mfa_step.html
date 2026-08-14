@@ -1,7 +1,7 @@
 {% comment %}
   Partial template rendered during login when user has MFA enabled.
 {% endcomment %}
-<div id="login-form-container" class="space-y-5">
+<div id="login-form-container" class="space-y-5" x-data="{ deviceId: localStorage.getItem('ft_device_id') || '' }">
   <div class="text-center space-y-1">
     <div class="w-12 h-12 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-primary mb-2">
       <i data-lucide="shield-check" class="w-6 h-6"></i>
@@ -17,6 +17,7 @@
         hx-swap="outerHTML"
         class="space-y-4">
     {% csrf_token %}
+    <input type="hidden" name="device_id" :value="deviceId">
 
     {% if mfa_error %}
       <div class="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-center gap-2">

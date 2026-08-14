@@ -7,82 +7,22 @@
        open: false,
        query: '',
        selectedIndex: 0,
-       items: [
-         // ── Overview & Navigation ──
-         { label: 'Dashboard',               href: '/admin-panel/dashboard/',        icon: 'layout-dashboard', group: 'Overview', keywords: 'home overview stats main executive dashboard' },
-         { label: 'Staff Home / Check In',    href: '/staff/home/',                   icon: 'user-check',       group: 'Overview', keywords: 'staff home checkin checkout live timer selfie location' },
-         
-         // ── Operations & Attendance ──
-         { label: 'Attendance Records',      href: '/admin-panel/attendance/',       icon: 'clock',            group: 'Operations', keywords: 'attendance log daily records checkin checkout status type' },
-         { label: 'Daily Attendance Report',  href: '/admin-panel/reports/daily/',    icon: 'file-text',        group: 'Operations', keywords: 'daily report attendance summary date filter branch employee' },
-         { label: 'Monthly Attendance Report',href: '/admin-panel/reports/monthly/',  icon: 'calendar-days',    group: 'Operations', keywords: 'monthly report summary hours total hours overtime' },
-         { label: 'Absence Report',          href: '/admin-panel/reports/absent/',   icon: 'user-x',           group: 'Operations', keywords: 'absence report absent missing attendance leave type filter' },
-         { label: 'Manual Attendance Entry', href: '/admin-panel/attendance/manual-entry/', icon: 'edit-3', group: 'Operations', keywords: 'manual entry add attendance checkin checkout time entry date form' },
-         { label: 'Schedule Settings',        href: '/admin-panel/settings/',         icon: 'settings',         group: 'Operations', keywords: 'office start time office end time late after minutes early checkout overtime start auto location tracking interval shift settings' },
-         { label: 'Roster / Calendar',        href: '/schedule/',                     icon: 'calendar',         group: 'Operations', keywords: 'roster calendar shift month view schedule calendar' },
-
-         // ── People & Employee Management ──
-         { label: 'Employee Directory',      href: '/employees/',                    icon: 'users',            group: 'People', keywords: 'employees staff list directory employee id full name phone search' },
-         { label: 'Add New Employee',        href: '/employees/add/',                icon: 'user-plus',        group: 'People', keywords: 'add employee new staff email system role employee id full name department designation assigned branch phone emergency contact join date profile photo welcome email tracking interval overtime tracking project manager password leave override rules' },
-         { label: 'Departments',             href: '/employees/departments/',        icon: 'building',         group: 'People', keywords: 'department list add department dept' },
-         { label: 'Designations',            href: '/employees/designations/',       icon: 'award',            group: 'People', keywords: 'designation job title position rank' },
-         { label: 'Leave Requests (Admin)',  href: '/leave/admin/',                  icon: 'clipboard-check',  group: 'People', keywords: 'leave admin approve leave reject leave requests pending' },
-         { label: 'My Leave Requests',       href: '/leave/my-leave/',               icon: 'calendar-heart',   group: 'People', keywords: 'my leave apply leave leave balance leave status' },
-         { label: 'Leave Balances & Overrides', href: '/admin-panel/leave/balances/', icon: 'sliders',          group: 'People', keywords: 'leave balance yearly allowance leave override rules year filter' },
-         { label: 'Expense Claims (Admin)',  href: '/expense/admin/',                icon: 'receipt',          group: 'People', keywords: 'expense admin claims approve expense receipt' },
-         { label: 'My Expenses',             href: '/expense/my-expenses/',          icon: 'wallet',           group: 'People', keywords: 'my expense submit claim upload receipt amount' },
-
-         // ── Projects & Work ──
-         { label: 'Projects',                href: '/projects/',                     icon: 'briefcase',        group: 'Work', keywords: 'projects list project budget client status branch' },
-         { label: 'Add New Project',         href: '/projects/create/',              icon: 'folder-plus',      group: 'Work', keywords: 'add project create project project name responsible person planned start planned finish hvac settings' },
-         { label: 'Global Task List',        href: '/projects/tasks/',               icon: 'check-square',     group: 'Work', keywords: 'tasks global tasks task list filter status filter employee' },
-         { label: 'My Tasks',                href: '/staff/my-tasks/',               icon: 'list-todo',        group: 'Work', keywords: 'my tasks assigned tasks task status proof upload' },
-         { label: 'Project Types',           href: '/projects/types/',               icon: 'tag',              group: 'Work', keywords: 'project types category type list' },
-         { label: 'Task Templates',          href: '/projects/templates/',           icon: 'clipboard-list',   group: 'Work', keywords: 'task templates checklist predefined tasks' },
-
-         // ── Organization & Admin ──
-         { label: 'Branches',                href: '/branches/',                     icon: 'building-2',       group: 'Organization', keywords: 'branches office locations branch name code address coordinates' },
-         { label: 'Add Branch',              href: '/branches/create/',              icon: 'map-pin',          group: 'Organization', keywords: 'add branch new branch name address latitude longitude geofence radius' },
-         { label: 'Holidays',                href: '/branches/holidays/',            icon: 'sun',              group: 'Organization', keywords: 'holidays public holiday list date branch' },
-         { label: 'Notifications',           href: '/notifications/',               icon: 'bell',             group: 'Organization', keywords: 'notifications alerts unread' },
-
-         // ── System & Administration ──
-         { label: 'System Roles & Access',   href: '/admin-panel/roles/',            icon: 'shield',           group: 'Admin', keywords: 'roles access control system role user roles groups permissions' },
-         { label: 'User Permissions Matrix', href: '/admin-panel/roles/permissions/', icon: 'key',             group: 'Admin', keywords: 'user permissions matrix assign permissions roles' },
-         { label: 'Database Backups',         href: '/backups/',                      icon: 'database',         group: 'Admin', keywords: 'backups create backup restore sql download' },
-         { label: 'Expired Data Cleanup',    href: '/admin-panel/expired-data/',     icon: 'trash-2',          group: 'Admin', keywords: 'expired data cleanup archive clear old records' },
-         { label: 'System Settings',        href: '/admin-panel/settings/',         icon: 'sliders-horizontal', group: 'Admin', keywords: 'system settings schedule settings auto location tracking interval office start time' },
-
-         // ── Input Fields & Labels Shortcuts ──
-         { label: 'Field: Auto Location Tracking Interval', href: '/admin-panel/settings/', icon: 'navigation', group: 'Input Fields & Labels', keywords: 'auto location tracking interval gps sync frequency disabled input label field' },
-         { label: 'Field: Office Start Time & End Time', href: '/admin-panel/settings/', icon: 'clock', group: 'Input Fields & Labels', keywords: 'office start time end time shift timing input label field' },
-         { label: 'Field: Late After & Overtime Mins', href: '/admin-panel/settings/', icon: 'alert-circle', group: 'Input Fields & Labels', keywords: 'late after minutes early checkout overtime starts after input label field' },
-         { label: 'Field: System Role & Employee ID', href: '/employees/add/', icon: 'user-cog', group: 'Input Fields & Labels', keywords: 'system role employee id department designation email input label field' },
-         { label: 'Field: Emergency Contact & Phone', href: '/employees/add/', icon: 'phone', group: 'Input Fields & Labels', keywords: 'emergency contact phone number login id input label field' },
-         { label: 'Field: Leave Allowance Overrides', href: '/admin-panel/leave/balances/', icon: 'calendar-x', group: 'Input Fields & Labels', keywords: 'leave allowance override yearly leave days input label field' },
-
-         // ── Account ──
-         { label: 'Security & MFA Settings', href: '/account/security/',             icon: 'shield-check',     group: 'Account', keywords: 'security settings mfa totp 2fa backup codes trusted devices workspace pin' },
-         { label: 'Change Password',         href: '/accounts/change-password/',     icon: 'lock',             group: 'Account', keywords: 'change password new password security credentials' },
-         { label: 'Logout',                  href: '/accounts/logout/',              icon: 'log-out',          group: 'Account', keywords: 'logout sign out exit' }
-       ],
-
-       get filtered() {
-         if (!this.query) return this.items.slice(0, 8);
-         const q = this.query.toLowerCase().trim();
-         return this.items.filter(i =>
-           i.label.toLowerCase().includes(q) ||
-           i.group.toLowerCase().includes(q) ||
-           (i.keywords && i.keywords.toLowerCase().includes(q))
-         ).slice(0, 12);
+       get results() {
+         return Array.from(document.querySelectorAll('#search-results-list a.search-result-item'));
        },
-
        init() {
          window.addEventListener('open-command-palette', () => this.openPalette());
          window.addEventListener('keydown', (e) => {
            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
              e.preventDefault();
              this.openPalette();
+           }
+         });
+         document.addEventListener('htmx:afterSwap', (e) => {
+           if (e.target.id === 'search-results-list') {
+             this.selectedIndex = 0;
+             this.updateActiveItem();
+             if (window.lucide) lucide.createIcons();
            }
          });
        },
@@ -92,7 +32,11 @@
          this.selectedIndex = 0;
          this.$nextTick(() => {
            const inp = this.$el.querySelector('#ft-cmd-input');
-           if (inp) inp.focus();
+           if (inp) {
+             inp.focus();
+             // Trigger initial search load via HTMX
+             htmx.trigger(inp, 'keyup');
+           }
            if (window.lucide) lucide.createIcons();
          });
        },
@@ -101,14 +45,39 @@
          this.query = '';
        },
        navigate() {
-         const item = this.filtered[this.selectedIndex];
-         if (item) { window.location.href = item.href; this.closePalette(); }
+         const items = this.results;
+         const activeItem = items[this.selectedIndex];
+         if (activeItem) {
+           window.location.href = activeItem.getAttribute('href');
+           this.closePalette();
+         }
        },
        moveDown() {
-         this.selectedIndex = Math.min(this.selectedIndex + 1, this.filtered.length - 1);
+         const items = this.results;
+         if (items.length > 0) {
+           this.selectedIndex = Math.min(this.selectedIndex + 1, items.length - 1);
+           this.updateActiveItem();
+         }
        },
        moveUp() {
-         this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+         const items = this.results;
+         if (items.length > 0) {
+           this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+           this.updateActiveItem();
+         }
+       },
+       updateActiveItem() {
+         const items = this.results;
+         items.forEach((item, idx) => {
+           if (idx === this.selectedIndex) {
+             item.classList.add('bg-primary-light', 'text-primary');
+             item.classList.remove('text-slate-600', 'dark:text-slate-300');
+             item.scrollIntoView({ block: 'nearest' });
+           } else {
+             item.classList.remove('bg-primary-light', 'text-primary');
+             item.classList.add('text-slate-600', 'dark:text-slate-300');
+           }
+         });
        }
      }"
      @keydown.window.cmd.k.prevent="openPalette()"
@@ -147,10 +116,13 @@
            style="border-color: var(--border)">
         <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: var(--text-muted)"></i>
         <input id="ft-cmd-input"
+               name="query"
                type="text"
-               x-model.debounce.80="query"
-               @input="selectedIndex = 0"
-               placeholder="Search menus, submenus, fields, labels, modules…"
+               x-model="query"
+               hx-get="{% url 'accounts:global_search' %}"
+               hx-trigger="keyup changed delay:250ms"
+               hx-target="#search-results-list"
+               placeholder="Search menus, submenus, fields, modules, employees, tasks, payroll..."
                class="flex-1 bg-transparent outline-none text-[13px] border-0 p-0 ring-0 shadow-none font-normal"
                style="color: var(--text)">
         <button type="button" @click="closePalette()"
@@ -161,40 +133,10 @@
       </div>
 
       {# Results list #}
-      <div class="py-1.5 max-h-72 overflow-y-auto scrollbar-hide">
-        <template x-if="filtered.length === 0">
-          <div class="px-4 py-10 text-center text-[12px]" style="color: var(--text-muted)">
-            No results for "<span x-text="query"></span>"
-          </div>
-        </template>
-
-        <template x-for="(item, idx) in filtered" :key="item.label + '_' + idx">
-          <a :href="item.href"
-             @click="closePalette()"
-             @mouseover="selectedIndex = idx"
-             class="flex items-center gap-3 px-3 py-2 mx-1.5 rounded-md transition-all cursor-pointer"
-             :style="selectedIndex === idx
-               ? 'background: var(--primary-light); color: var(--primary)'
-               : 'color: var(--text-secondary)'"
-             style="text-decoration: none"
-             x-data>
-            <div class="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors"
-                 :style="selectedIndex === idx
-                   ? 'background: var(--primary); color: white'
-                   : 'background: var(--surface-2); color: var(--primary)'">
-              <i :data-lucide="item.icon" class="w-3.5 h-3.5"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-[12px] font-medium truncate" x-text="item.label"></p>
-            </div>
-            <span class="text-[10px] px-1.5 py-0.5 rounded-sm font-medium"
-                  style="background: var(--surface-2); color: var(--text-muted)"
-                  x-text="item.group"></span>
-            <template x-if="selectedIndex === idx">
-              <i data-lucide="corner-down-left" class="w-3 h-3 flex-shrink-0" style="color: var(--primary); opacity: 0.8"></i>
-            </template>
-          </a>
-        </template>
+      <div id="search-results-list" class="py-1.5 max-h-72 overflow-y-auto scrollbar-hide">
+        <div class="px-4 py-10 text-center text-[12px]" style="color: var(--text-muted)">
+          Start typing to search...
+        </div>
       </div>
 
       {# Footer hint — borderless, minimal #}
