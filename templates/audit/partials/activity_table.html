@@ -19,12 +19,18 @@
             <div class="text-xs text-slate-400 font-mono">{{ event.module }} / {{ event.object_id }}</div>
         </td>
         <td class="py-3 px-4 text-right">
-            <button hx-get="{% url 'audit:event_detail' event.pk %}"
-                    hx-target="#modal-container"
-                    hx-swap="innerHTML"
-                    class="ft-btn ft-btn-ghost ft-btn-sm text-xs font-bold text-indigo-600 hover:text-indigo-700">
-                View Details
-            </button>
+            <div class="flex items-center justify-end gap-1.5">
+                <button hx-get="{% url 'audit:event_detail' event.uuid %}"
+                        hx-target="#modal-container"
+                        hx-swap="innerHTML"
+                        class="ft-btn ft-btn-ghost ft-btn-sm text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
+                        title="Quick preview">
+                    Quick View
+                </button>
+                <a href="{% url 'audit:event_detail' event.uuid %}" class="ft-btn ft-btn-secondary ft-btn-sm text-xs" title="Open full detail page">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                </a>
+            </div>
         </td>
     </tr>
     {% empty %}

@@ -180,10 +180,11 @@ class ActivityListView(LoginRequiredMixin, View):
 
 
 class AuditEventDetailView(LoginRequiredMixin, View):
-    template_name = "audit/partials/event_detail.html"
+    template_name = "audit/event_detail.html"
+    partial_template_name = "audit/partials/event_detail.html"
 
-    def get(self, request, pk):
-        event = get_object_or_404(AuditService.get_scoped_events(request.user), pk=pk)
+    def get(self, request, uuid):
+        event = get_object_or_404(AuditService.get_scoped_events(request.user), uuid=uuid)
         if not has_audit_unlock(request):
             response = render(request, "accounts/partials/reauth_modal.html", {
                 "target_url": request.path,
@@ -194,6 +195,9 @@ class AuditEventDetailView(LoginRequiredMixin, View):
             response["HX-Trigger"] = "open-reauth-modal"
             return response
         AuditService.log_access(request.user, event, reason="audit_detail_opened", request=request)
+        # HTMX requests get the modal partial; full page requests get the full template
+        if request.headers.get("HX-Request"):
+            return render(request, self.partial_template_name, {"event": event})
         return render(request, self.template_name, {"event": event})
 
 
