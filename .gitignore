@@ -7,11 +7,60 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
-staticfiles
+.venv/
+venv/
+env/
+
+# Django static (compiled output)
+staticfiles/
 
 # Allow compiled tailwind css to be committed
 !theme/static/css/dist/
 
+# Tailwind CLI
 .django_tailwind_cli
 ./.django_tailwind_cli
+
+# ── DATABASE FILES (NEVER COMMIT) ────────────────────────────────────────────
+db.sqlite3
+db.sqlite3-shm
+db.sqlite3-wal
+db.sqlite3.*
+*.sqlite3
+*.sqlite3.bak
+*.sqlite3.bak*
+*.db
+
+# ── MEDIA / USER UPLOADS (NEVER COMMIT) ──────────────────────────────────────
+media/
+
+# ── ENVIRONMENT / SECRETS ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.env
+
+# ── LOGS ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── CACHE / GENERATED ────────────────────────────────────────────────────────
+.cache/
+*.cache
+celerybeat-schedule
+celerybeat.pid
+
+# ── NODE / FRONTEND ──────────────────────────────────────────────────────────
+node_modules/
+
+# ── OS / EDITOR ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# ── BACKUP FILES ─────────────────────────────────────────────────────────────
+*.bak
+*.backup
