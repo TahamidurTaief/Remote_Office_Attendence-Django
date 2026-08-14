@@ -1,15 +1,32 @@
-{% extends "cotton/app-shell.html" %}
-{% block content %}
-<div class="space-y-6">
-    <c-topbar title="Audit & Activity" subtitle="Scoped activity feed with re-authenticated detail access." ></c-topbar>
-    <form method="get" hx-get="{% url 'audit:activity_list' %}" hx-target="#activity-table" class="grid gap-3 md:grid-cols-3">
-        <input type="text" name="q" value="{{ search_query }}" placeholder="Search" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-        <input type="text" name="module" value="{{ module_filter }}" placeholder="Module" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-        <input type="text" name="action" value="{{ action_filter }}" placeholder="Action" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-    </form>
-    <div id="activity-table">
-        {% include "audit/partials/activity_table.html" %}
-    </div>
-</div>
-{% endblock %}
+<c-app-shell page_title="Audit Activity Logs | FieldTrack" active_href="{% url 'audit:activity_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'audit:activity_list' %}"></c-sidebar>
+    </c-slot>
 
+    <c-slot name="topbar">
+        <c-topbar title="Audit & Activity Logs" subtitle="Scoped database modification event details"></c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 lg:p-6 w-full space-y-4">
+        <!-- Filter Bar -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'audit:activity_list' %}" hx-get="{% url 'audit:activity_list' %}" hx-target="#activity-table-container" hx-trigger="keyup changed delay:300ms from:input, change from:select">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-end">
+                    <c-input type="text" name="q" label="Search" value="{{ search_query }}" placeholder="Search actor, reason, label..." icon="search"></c-input>
+                    <c-input type="text" name="module" label="Module" value="{{ module_filter }}" placeholder="e.g. employees, payroll"></c-input>
+                    <c-input type="text" name="action" label="Action" value="{{ action_filter }}" placeholder="e.g. created, updated, deleted"></c-input>
+                </div>
+            </c-filter-bar>
+        </c-card>
+
+        <!-- Table Container -->
+        <div id="activity-table-container">
+            {% include "audit/partials/activity_table.html" %}
+        </div>
+    </div>
+
+    <!-- Container for HTMX loaded modals -->
+    <div id="modal-container"></div>
+</c-app-shell>

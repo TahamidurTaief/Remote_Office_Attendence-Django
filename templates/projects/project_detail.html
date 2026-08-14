@@ -20,6 +20,10 @@
                 <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 mr-1.5"></i>
                 Gantt Chart
             </a>
+            <a href="{% url 'audit:activity_list' %}?module=projects&object_id={{ project.pk }}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <i data-lucide="history" class="w-3.5 h-3.5 mr-1.5 text-gray-500"></i>
+                History
+            </a>
             <a href="{% url 'projects:project_edit' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
                 <i data-lucide="edit" class="w-3.5 h-3.5 mr-1.5"></i>
                 Edit Project

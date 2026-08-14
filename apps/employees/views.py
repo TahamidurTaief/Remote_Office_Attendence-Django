@@ -351,7 +351,7 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        queryset = Employee.objects.select_related(
+        queryset = Employee.objects.filter(is_trashed=False).select_related(
             'branch', 'department', 'designation', 'reporting_manager', 'user', 'legacy_profile'
         ).prefetch_related('direct_reports', 'employment_history')
 

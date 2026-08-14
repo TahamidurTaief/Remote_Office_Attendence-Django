@@ -6,10 +6,16 @@
             <h1 class="text-2xl font-bold text-gray-900">Expense Claim Details</h1>
             <p class="text-sm text-gray-500 mt-1">Detailed status and info of claim #{{ expense.id }}</p>
         </div>
-        <a href="{% url 'expense:staff_expense_list' %}" class="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors bg-white shadow-soft">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            Back
-        </a>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'audit:activity_list' %}?module=expense&object_id={{ expense.pk }}" class="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors bg-white shadow-soft">
+                <i data-lucide="history" class="w-4 h-4"></i>
+                History
+            </a>
+            <a href="{% url 'expense:staff_expense_list' %}" class="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors bg-white shadow-soft">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                Back
+            </a>
+        </div>
     </div>
 
     <!-- Main Details Card -->

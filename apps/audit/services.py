@@ -377,6 +377,8 @@ class TrashService:
         before = serialize_instance(obj)
         obj._audit_skip_signal = True
         obj._allow_trashed_write = True
+        obj._allow_archived_write = True
+        obj._bypass_lifecycle_validation = True
         obj.is_trashed = False
         obj.trashed_at = None
         obj.status = entry.metadata.get("previous_status") or "active"
@@ -423,6 +425,8 @@ class TrashService:
         before = serialize_instance(obj)
         if getattr(obj, "user_id", None):
             obj._allow_trashed_write = True
+            obj._allow_archived_write = True
+            obj._bypass_lifecycle_validation = True
             obj.user = None
             obj.save(update_fields=["user"])
         obj.delete(hard=True)

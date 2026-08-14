@@ -125,7 +125,14 @@
       <i data-lucide="search" class="w-4 h-4"></i>
     </button>
 
-
+    {# Global Page Audit Log Button #}
+    {% if request.user.is_authenticated %}
+    <a href="{{ current_audit_url }}"
+       class="ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center"
+       title="View Page Activity Logs">
+      <i data-lucide="history" class="w-4 h-4"></i>
+    </a>
+    {% endif %}
 
     {# User avatar menu #}
     <div class="relative" x-data="{ open: false }">

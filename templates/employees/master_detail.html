@@ -21,6 +21,14 @@
                               icon="edit"
                               label="Edit Profile"
                               extra_class="rounded-xl"></c-button>
+                    <c-button hx-get="{% url 'employees:master_delete' employee.pk %}"
+                              hx-target="#modal-container"
+                              hx-swap="innerHTML"
+                              variant="danger"
+                              size="sm"
+                              icon="trash-2"
+                              label="Delete"
+                              extra_class="rounded-xl"></c-button>
                     {% include "employees/partials/lifecycle_action_buttons.html" %}
                     {% if employee.status != 'archived' %}
                     <c-button href="{% url 'employees:lifecycle_requests' %}"
@@ -29,6 +37,12 @@
                               label="Pending requests"
                               extra_class="rounded-xl text-xs"></c-button>
                     {% endif %}
+                    <c-button href="{% url 'audit:activity_list' %}?module=employees&object_id={{ employee.pk }}"
+                              variant="ghost"
+                              size="sm"
+                              icon="history"
+                              label="History"
+                              extra_class="rounded-xl text-xs"></c-button>
                 </div>
             </c-slot>
         </c-topbar>

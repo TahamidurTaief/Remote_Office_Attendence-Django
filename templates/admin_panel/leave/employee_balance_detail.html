@@ -9,8 +9,10 @@
                 <c-breadcrumb page1_href="{{ balances_url }}" page1_label="Leave Balances" current="{{ employee.full_name }}" ></c-breadcrumb>
                 <h1 class="text-[14px] font-semibold text-gray-900 mt-1">{{ employee.full_name }} — Leave Profile</h1>
             </div>
-            {% url 'leave:admin_balances' as back_url %}
-            <c-button href="{{ back_url }}?year={{ year }}" variant="secondary" size="md" icon="arrow-left" label="Back to Balances" ></c-button>
+            <div class="flex items-center gap-2">
+                <c-button href="{% url 'audit:activity_list' %}?module=leave&object_id={{ employee.pk }}" variant="ghost" size="md" icon="history" label="History" ></c-button>
+                <c-button href="{{ back_url }}?year={{ year }}" variant="secondary" size="md" icon="arrow-left" label="Back to Balances" ></c-button>
+            </div>
         </div>
 
         <!-- Profile Header Card -->

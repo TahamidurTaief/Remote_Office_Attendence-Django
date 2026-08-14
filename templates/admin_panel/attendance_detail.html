@@ -6,7 +6,10 @@
             <h1 class="text-[14px] font-semibold text-gray-900">Attendance Detail Overview</h1>
             <p class="text-xs text-gray-500 mt-1">Detailed check-in logs and tracking history for {{ attendance.employee.full_name }} on {{ attendance.date }}.</p>
         </div>
-        <c-button href="{% url 'admin_panel:attendance_list' %}" variant="secondary" size="md" icon="arrow-left" label="Back to List" ></c-button>
+        <div class="flex items-center gap-2">
+            <c-button href="{% url 'audit:activity_list' %}?module=attendance&object_id={{ attendance.pk }}" variant="ghost" size="md" icon="history" label="History" ></c-button>
+            <c-button href="{% url 'admin_panel:attendance_list' %}" variant="secondary" size="md" icon="arrow-left" label="Back to List" ></c-button>
+        </div>
     </div>
 
     <!-- Stats & Meta Panel Card -->

@@ -1,20 +1,47 @@
-{% extends "cotton/app-shell.html" %}
-{% block content %}
-<div class="space-y-6" x-data="{ selected: [] }">
-    <c-topbar title="Trash" subtitle="Soft-deleted records with restore and permanent-delete controls." ></c-topbar>
-    <form method="get" hx-get="{% url 'audit:trash_list' %}" hx-target="#trash-table" class="grid gap-3 md:grid-cols-4">
-        <input type="text" name="q" value="{{ search_query }}" placeholder="Search record" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-        <input type="text" name="module" value="{{ module_filter }}" placeholder="Module" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-        <input type="text" name="deleted_by" value="{{ deleted_by_filter }}" placeholder="Deleted by email" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-        <select name="status" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
-            <option value="restored" {% if status_filter == 'restored' %}selected{% endif %}>Restored</option>
-            <option value="permanently_deleted" {% if status_filter == 'permanently_deleted' %}selected{% endif %}>Permanently Deleted</option>
-        </select>
-    </form>
-    <div id="trash-table">
-        {% include "audit/partials/trash_table.html" %}
-    </div>
-</div>
-{% endblock %}
+<c-app-shell page_title="Trash | FieldTrack" active_href="{% url 'audit:trash_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'audit:trash_list' %}"></c-sidebar>
+    </c-slot>
 
+    <c-slot name="topbar">
+        <c-topbar title="Recycle Bin / Trash" subtitle="Soft-deleted database records and restoration repository">
+            {% if request.user.is_superuser %}
+            <c-slot name="actions">
+                <form method="post" action="{% url 'audit:trash_bulk' %}" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to completely empty the trash? This action cannot be undone.', () => $el.submit())">
+                    {% csrf_token %}
+                    <input type="hidden" name="bulk_action" value="empty_trash">
+                    <c-button type="submit" variant="danger" icon="trash" label="Empty Trash" size="sm" extra_class="!bg-red-600 hover:!bg-red-700 !text-white"></c-button>
+                </form>
+            </c-slot>
+            {% endif %}
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 lg:p-6 w-full space-y-4">
+        <!-- Filter Bar -->
+        <c-card padding="sm">
+            <c-filter-bar method="get" action="{% url 'audit:trash_list' %}" hx-get="{% url 'audit:trash_list' %}" hx-target="#trash-table-container" hx-trigger="keyup changed delay:300ms from:input, change from:select">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 flex-1 items-end">
+                    <c-input type="text" name="q" label="Search" value="{{ search_query }}" placeholder="Search record..." icon="search"></c-input>
+                    <c-input type="text" name="module" label="Module" value="{{ module_filter }}" placeholder="e.g. employees"></c-input>
+                    <c-input type="text" name="deleted_by" label="Deleted By" value="{{ deleted_by_filter }}" placeholder="Email..."></c-input>
+                    <c-select name="status" label="Status" value="{{ status_filter }}">
+                        <option value="active">Active (Deleted)</option>
+                        <option value="restored">Restored</option>
+                        <option value="purged">Permanently Deleted</option>
+                    </c-select>
+                </div>
+            </c-filter-bar>
+        </c-card>
+
+        <!-- Table Container -->
+        <div id="trash-table-container">
+            {% include "audit/partials/trash_table.html" %}
+        </div>
+    </div>
+
+    <!-- Container for HTMX loaded modals -->
+    <div id="modal-container"></div>
+</c-app-shell>

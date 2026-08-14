@@ -7,6 +7,10 @@
         <c-topbar title="{{ run.name|default:'Payroll Run' }}">
             <c-slot name="actions">
                 <div class="flex items-center gap-2 flex-wrap">
+                    <a href="{% url 'audit:activity_list' %}?module=payroll&object_id={{ run.pk }}" class="ft-btn ft-btn-ghost ft-btn-sm flex items-center gap-1">
+                        <i data-lucide="history" class="w-3.5 h-3.5"></i>
+                        <span>History</span>
+                    </a>
                     <!-- Export Menu Dropdown -->
                     <div x-data="{ open: false }" class="relative">
                         <button @click="open = !open" @click.outside="open = false" type="button" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
