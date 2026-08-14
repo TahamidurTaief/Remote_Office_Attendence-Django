@@ -1,4 +1,4 @@
-<c-app-shell page_title="My Tasks | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
+<c-app-shell page_title="My Tasks | FieldTrack" shell_type="{% if request.user.role == 'admin' or request.user.role == 'manager' %}admin{% else %}staff{% endif %}" active_href="{{ request.path }}">
 <div class="space-y-6" x-data="{
     showModal: false,
     loadingDetail: false,

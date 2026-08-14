@@ -899,15 +899,15 @@ def my_tasks(request):
         return redirect('accounts:login')
 
     employee = getattr(request.user, 'employee_profile', None)
-    if not employee:
-        from django.contrib import messages
-        messages.error(request, 'Employee profile not found.')
-        return redirect('staff:home')
-
     from apps.projects.models import ProjectTask
 
-    # Query tasks assigned to this employee
-    tasks = ProjectTask.objects.filter(responsible_person=employee).select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
+    if employee:
+        tasks = ProjectTask.objects.filter(responsible_person=employee).select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
+    elif request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'manager'):
+        # Admins, superusers, and managers without a profile see all tasks
+        tasks = ProjectTask.objects.all().select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
+    else:
+        tasks = ProjectTask.objects.none()
 
     status_filter = request.GET.get('status', 'pending')
 
