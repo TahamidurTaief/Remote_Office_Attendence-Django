@@ -7,30 +7,84 @@
         <c-topbar title="Departments"></c-topbar>
     </c-slot>
 
-    <c-slot name="topbar_actions">
-        <div class="flex items-center gap-2">
-            <form id="import-dept-form" action="{% url 'employees:department_import_csv' %}" method="post" enctype="multipart/form-data" style="display:none">
-                {% csrf_token %}
-                <input type="file" name="file" id="import-dept-file-input" accept=".csv" onchange="document.getElementById('import-dept-form').submit()">
-            </form>
-            <c-button type="button" onclick="document.getElementById('import-dept-file-input').click()"
-                      variant="secondary" icon="upload" label="Import CSV">
-            </c-button>
-            <c-button href="{% url 'employees:department_export_csv' %}"
-                      variant="secondary" icon="download" label="Export CSV">
-            </c-button>
-            <c-button hx-get="{% url 'employees:department_create' %}"
-                      hx-target="#modal-container"
-                      hx-swap="innerHTML"
-                      hx-headers='{"HX-Target": "modal-container"}'
-                      variant="primary" icon="plus" label="New Department">
-            </c-button>
-        </div>
-    </c-slot>
-
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 lg:p-6 w-full space-y-4">
+    <div class="p-4 lg:p-6 w-full space-y-4" x-data="{ showImport: false, exportDropdown: false, format: 'csv' }">
+        <!-- Action Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800/80">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center">
+                    <i data-lucide="database" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+                </div>
+                <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-200">Data Actions</h2>
+            </div>
+            <div class="flex items-center gap-2">
+                <c-button hx-get="{% url 'employees:department_create' %}"
+                          hx-target="#modal-container"
+                          hx-swap="innerHTML"
+                          hx-headers='{"HX-Target": "modal-container"}'
+                          variant="primary" icon="plus" label="New Department">
+                </c-button>
+                <c-button type="button" @click="showImport = !showImport" variant="secondary" icon="upload" label="Import" ></c-button>
+                
+                <div class="relative">
+                    <c-button type="button" @click="exportDropdown = !exportDropdown" variant="secondary" icon="download" label="Export" icon_right="chevron-down" ></c-button>
+                    <div x-show="exportDropdown" @click.away="exportDropdown = false" x-transition
+                         class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-lg z-50 py-1 text-xs" x-cloak>
+                        <a href="{% url 'employees:department_export_csv' %}" class="flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-400"></i> Export CSV
+                        </a>
+                        <a href="#" onclick="alert('JSON format export ready soon')" class="flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                            <i data-lucide="code" class="w-3.5 h-3.5 text-slate-400"></i> Export JSON
+                        </a>
+                        <a href="#" onclick="alert('Excel format export ready soon')" class="flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-slate-400"></i> Export Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expandable Import Panel -->
+        <div x-show="showImport" x-transition class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4" x-cloak>
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Import Departments</h3>
+                <button type="button" @click="showImport = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <form action="{% url 'employees:department_import_csv' %}" method="post" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Select File Format</label>
+                        <c-select name="import_format" x-model="format">
+                            <option value="csv">CSV (Comma Separated Values)</option>
+                            <option value="json">JSON (JavaScript Object Notation)</option>
+                            <option value="xlsx">Excel (XLSX / Spreadsheet)</option>
+                        </c-select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Choose File</label>
+                        <div class="relative border-2 border-dashed border-slate-200 dark:border-slate-700/80 rounded-xl p-4 text-center hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors cursor-pointer"
+                             onclick="document.getElementById('dept-import-file').click()">
+                            <div class="space-y-1 text-xs">
+                                <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto text-slate-400"></i>
+                                <p class="text-slate-550 dark:text-slate-400">Drag & drop your file here, or <span class="text-indigo-600 dark:text-indigo-400 font-semibold">Browse</span></p>
+                                <p class="text-[10px] text-slate-400" x-text="'Accepts .' + format"></p>
+                            </div>
+                            <input type="file" name="file" id="dept-import-file" class="hidden" required :accept="'.' + format" onchange="document.getElementById('dept-import-file-name').textContent = this.files[0] ? this.files[0].name : ''">
+                        </div>
+                        <p id="dept-import-file-name" class="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1"></p>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <c-button type="button" @click="showImport = false" variant="secondary" label="Cancel" ></c-button>
+                    <c-button type="submit" variant="primary" label="Process Import" ></c-button>
+                </div>
+            </form>
+        </div>
         <!-- Filter Bar -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'employees:department_list' %}"

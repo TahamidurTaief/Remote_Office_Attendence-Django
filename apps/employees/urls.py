@@ -72,6 +72,12 @@ urlpatterns = [
     path('designations/', views.DesignationListView.as_view(), name='designation_list'),
     path('designations/create/', views.DesignationCreateView.as_view(), name='designation_create'),
     path('designations/<int:pk>/edit/', views.DesignationEditView.as_view(), name='designation_edit'),
+    path('designations/export/', views.DesignationExportCSVView.as_view(), name='designation_export_csv'),
+    path('designations/import/', views.DesignationImportCSVView.as_view(), name='designation_import_csv'),
+
+    # Employee import/export
+    path('master/export/', views.EmployeeExportCSVView.as_view(), name='employee_export_csv'),
+    path('master/import/', views.EmployeeImportCSVView.as_view(), name='employee_import_csv'),
 
     # HTMX cascade APIs
     path('api/departments-for-branch/', views.DepartmentsForBranchAPIView.as_view(), name='api_departments_for_branch'),

@@ -10,7 +10,7 @@
    - empty: custom empty state (overrides default)
 {% endcomment %}
 
-<div {% if id %}id="{{ id }}"{% endif %} class="w-full {{ extra_class }}">
+<div {% if id %}id="{{ id }}"{% endif %} class="w-full ft-card overflow-hidden {{ extra_class }}">
   {# Optional toolbar #}
   {% if toolbar %}
   <div class="py-2 mb-2 border-b" style="border-color:var(--border)">

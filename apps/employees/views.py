@@ -2329,3 +2329,216 @@ class DesignationsForDepartmentAPIView(AdminRequiredMixin, View):
         designations = Designation.available_for_department(dept)
         data = [{'id': d.pk, 'name': str(d)} for d in designations]
         return HttpResponse(json.dumps(data), content_type='application/json')
+
+
+class DesignationExportCSVView(AdminRequiredMixin, View):
+    def get(self, request):
+        import csv
+        designations = Designation.objects.select_related('department').all().order_by('name')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="designations.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Name', 'Code', 'Department'])
+        
+        for des in designations:
+            writer.writerow([
+                des.name,
+                des.code or '',
+                des.department.name if des.department else ''
+            ])
+            
+        return response
+
+
+class DesignationImportCSVView(AdminRequiredMixin, View):
+    def post(self, request):
+        import csv
+        import io
+        csv_file = request.FILES.get('file')
+        if not csv_file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('employees:designation_list')
+        
+        if not csv_file.name.endswith('.csv'):
+            messages.error(request, 'Please upload a CSV file.')
+            return redirect('employees:designation_list')
+        
+        try:
+            file_data = csv_file.read().decode('utf-8')
+            csv_reader = csv.reader(io.StringIO(file_data))
+            header = next(csv_reader) # Skip header
+            
+            created_count = 0
+            updated_count = 0
+            
+            for row in csv_reader:
+                if not row or len(row) < 1:
+                    continue
+                name = row[0].strip()
+                if not name:
+                    continue
+                
+                code = row[1].strip() if len(row) > 1 else ''
+                dept_name = row[2].strip() if len(row) > 2 else ''
+                
+                dept = None
+                if dept_name:
+                    dept = Department.objects.filter(name__iexact=dept_name).first()
+                
+                desig, created = Designation.objects.get_or_create(
+                    name=name,
+                    defaults={
+                        'code': code,
+                        'department': dept
+                    }
+                )
+                
+                if not created:
+                    desig.code = code
+                    desig.department = dept
+                    desig.save()
+                    updated_count += 1
+                else:
+                    created_count += 1
+                            
+            messages.success(request, f'Successfully imported designations. Created: {created_count}, Updated: {updated_count}')
+            log_audit(
+                actor=request.user,
+                action='designations_imported',
+                target=None,
+                summary=f"Imported designations via CSV. Created: {created_count}, Updated: {updated_count}"
+            )
+        except Exception as e:
+            messages.error(request, f'Failed to parse CSV file: {str(e)}')
+            
+        return redirect('employees:designation_list')
+
+
+class EmployeeExportCSVView(AdminRequiredMixin, View):
+    def get(self, request):
+        import csv
+        employees = Employee.objects.select_related('branch', 'department', 'designation', 'user').all().order_by('first_name', 'last_name')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="employees.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['First Name', 'Last Name', 'Email', 'Phone', 'Employee Number', 'Branch', 'Department', 'Designation', 'Status', 'Joined Date'])
+        
+        for emp in employees:
+            writer.writerow([
+                emp.first_name,
+                emp.last_name,
+                emp.user.email if emp.user else '',
+                emp.phone or '',
+                emp.employee_number or '',
+                emp.branch.name if emp.branch else '',
+                emp.department.name if emp.department else '',
+                emp.designation.name if emp.designation else '',
+                emp.status,
+                emp.joined_date.isoformat() if emp.joined_date else ''
+            ])
+            
+        return response
+
+
+class EmployeeImportCSVView(AdminRequiredMixin, View):
+    def post(self, request):
+        import csv
+        import io
+        from apps.branches.models import Branch
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        csv_file = request.FILES.get('file')
+        if not csv_file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('employees:master_list')
+        
+        if not csv_file.name.endswith('.csv'):
+            messages.error(request, 'Please upload a CSV file.')
+            return redirect('employees:master_list')
+        
+        try:
+            file_data = csv_file.read().decode('utf-8')
+            csv_reader = csv.reader(io.StringIO(file_data))
+            header = next(csv_reader) # Skip header
+            
+            created_count = 0
+            updated_count = 0
+            
+            for row in csv_reader:
+                if not row or len(row) < 5:
+                    continue
+                first_name = row[0].strip()
+                last_name = row[1].strip()
+                email = row[2].strip()
+                phone = row[3].strip()
+                emp_number = row[4].strip()
+                branch_name = row[5].strip() if len(row) > 5 else ''
+                dept_name = row[6].strip() if len(row) > 6 else ''
+                desig_name = row[7].strip() if len(row) > 7 else ''
+                status = row[8].strip().lower() if len(row) > 8 else 'active'
+                joined_date_str = row[9].strip() if len(row) > 9 else ''
+                
+                if not first_name or not last_name or not emp_number:
+                    continue
+                
+                branch = Branch.objects.filter(name__iexact=branch_name).first() if branch_name else None
+                dept = Department.objects.filter(name__iexact=dept_name).first() if dept_name else None
+                desig = Designation.objects.filter(name__iexact=desig_name).first() if desig_name else None
+                
+                user = None
+                if email:
+                    user = User.objects.filter(email__iexact=email).first()
+                    if not user:
+                        user = User.objects.create_user(
+                            email=email,
+                            password='TempPassword123!',
+                            role='staff',
+                            is_active=True
+                        )
+                
+                emp, created = Employee.objects.get_or_create(
+                    employee_number=emp_number,
+                    defaults={
+                        'first_name': first_name,
+                        'last_name': last_name,
+                        'user': user,
+                        'phone': phone,
+                        'branch': branch,
+                        'department': dept,
+                        'designation': desig,
+                        'status': status,
+                    }
+                )
+                
+                if not created:
+                    emp.first_name = first_name
+                    emp.last_name = last_name
+                    if user:
+                        emp.user = user
+                    emp.phone = phone
+                    emp.branch = branch
+                    emp.department = dept
+                    emp.designation = desig
+                    emp.status = status
+                    emp.save()
+                    updated_count += 1
+                else:
+                    created_count += 1
+                            
+            messages.success(request, f'Successfully imported employees. Created: {created_count}, Updated: {updated_count}')
+            log_audit(
+                actor=request.user,
+                action='employees_imported',
+                target=None,
+                summary=f"Imported employees via CSV. Created: {created_count}, Updated: {updated_count}"
+            )
+        except Exception as e:
+            messages.error(request, f'Failed to parse CSV file: {str(e)}')
+            
+        return redirect('employees:master_list')
+
