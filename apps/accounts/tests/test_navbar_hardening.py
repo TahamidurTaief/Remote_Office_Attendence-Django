@@ -2,12 +2,10 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from apps.accounts.models import CustomUser
-from apps.employees.models import Employee, EmployeeProfile
+from apps.employees.models import Employee, EmployeeProfile, Department, Designation
 from apps.projects.models import Project, ProjectTask, ProjectType
 from apps.payroll.models import PayrollRun, EmployeePayrollCalculation
 from apps.branches.models import Branch
-from apps.departments.models import Department
-from apps.designations.models import Designation
 from decimal import Decimal
 import json
 
