@@ -74,13 +74,13 @@ class ScheduleEvent(models.Model):
     @property
     def color_classes(self):
         mapping = {
-            'Meeting': 'bg-green-50 text-green-700 border-green-200/50 hover:bg-green-200',
-            'Task Deadline': 'bg-blue-50 text-blue-700 border-blue-200/50 hover:bg-blue-200',
-            'Site Visit': 'bg-amber-50 text-amber-700 border-amber-200/50 hover:bg-amber-200',
-            'Reminder': 'bg-red-50 text-red-700 border-red-200/50 hover:bg-red-200',
-            'Other': 'bg-gray-50 text-gray-700 border-gray-200/50 hover:bg-gray-200',
+            'Meeting': 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200/50 dark:border-green-800/40 hover:bg-green-200 dark:hover:bg-green-900/40',
+            'Task Deadline': 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200/50 dark:border-blue-800/40 hover:bg-blue-200 dark:hover:bg-blue-900/40',
+            'Site Visit': 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-900/40',
+            'Reminder': 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200/50 dark:border-red-800/40 hover:bg-red-200 dark:hover:bg-red-900/40',
+            'Other': 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200/50 dark:border-slate-700/50 hover:bg-gray-200 dark:hover:bg-slate-700',
         }
-        return mapping.get(self.event_type, 'bg-gray-50 text-gray-700 border-gray-200/50')
+        return mapping.get(self.event_type, 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200/50 dark:border-slate-700/50')
 
     @property
     def dot_color_class(self):

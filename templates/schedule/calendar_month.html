@@ -49,24 +49,24 @@
 
             <!-- Header Controls -->
             <div
-                class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-white p-3 border border-gray-150 rounded shadow-sm">
+                class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-white dark:bg-slate-900 p-3 border border-gray-150 dark:border-slate-800 rounded shadow-sm">
                 <div class="flex flex-wrap items-center gap-4">
-                    <h2 class="text-[16px] font-bold text-gray-800 leading-none">
+                    <h2 class="text-[16px] font-bold text-gray-800 dark:text-slate-100 leading-none">
                         {{ month_name }} {{ current_year }}
                     </h2>
-                    <div class="flex items-center border border-gray-200 rounded overflow-hidden">
+                    <div class="flex items-center border border-gray-200 dark:border-slate-800 rounded overflow-hidden">
                         <a href="?year={{ prev_year }}&month={{ prev_month }}"
-                            class="p-1.5 bg-white hover:bg-gray-50 text-gray-600 transition-colors border-r border-gray-200 flex items-center"
+                            class="p-1.5 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300 transition-colors border-r border-gray-200 dark:border-slate-800 flex items-center"
                             title="Previous Month">
                             <i data-lucide="chevron-left" class="w-4 h-4"></i>
                         </a>
                         <a href="?year={{ today.year }}&month={{ today.month }}"
-                            class="px-2.5 py-1.5 bg-white hover:bg-gray-50 text-[11px] font-semibold text-gray-700 transition-colors border-r border-gray-200"
+                            class="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 text-[11px] font-semibold text-gray-700 dark:text-slate-200 transition-colors border-r border-gray-200 dark:border-slate-800"
                             title="Go to Today">
                             Today
                         </a>
                         <a href="?year={{ next_year }}&month={{ next_month }}"
-                            class="p-1.5 bg-white hover:bg-gray-50 text-gray-600 transition-colors flex items-center"
+                            class="p-1.5 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300 transition-colors flex items-center"
                             title="Next Month">
                             <i data-lucide="chevron-right" class="w-4 h-4"></i>
                         </a>
@@ -75,29 +75,29 @@
 
                 <!-- Legend / Filter Controls -->
                 <div class="flex flex-wrap items-center gap-3.5">
-                    <div class="flex flex-wrap items-center gap-3 text-[11px] text-gray-600">
-                        <span class="text-gray-400 font-medium">Toggle:</span>
-                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 transition-colors">
+                    <div class="flex flex-wrap items-center gap-3 text-[11px] text-gray-600 dark:text-slate-300">
+                        <span class="text-gray-400 dark:text-slate-500 font-medium">Toggle:</span>
+                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 dark:hover:text-slate-100 transition-colors">
                             <input type="checkbox" x-model="visibleSources" value="manual_event"
-                                class="rounded border-gray-300 text-green-600 focus:ring-green-500 h-3.5 w-3.5">
+                                class="rounded border-gray-300 dark:border-slate-750 dark:bg-slate-800 text-green-600 focus:ring-green-500 h-3.5 w-3.5">
                             <span class="flex items-center gap-1"><span
                                     class="w-2 h-2 rounded-full bg-green-500"></span> Events</span>
                         </label>
-                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 transition-colors">
+                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 dark:hover:text-slate-100 transition-colors">
                             <input type="checkbox" x-model="visibleSources" value="task_deadline"
-                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5">
+                                class="rounded border-gray-300 dark:border-slate-755 dark:bg-slate-800 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5">
                             <span class="flex items-center gap-1"><span
                                     class="w-2 h-2 rounded-full bg-indigo-500"></span> Tasks</span>
                         </label>
-                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 transition-colors">
+                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 dark:hover:text-slate-100 transition-colors">
                             <input type="checkbox" x-model="visibleSources" value="leave"
-                                class="rounded border-gray-300 text-purple-600 focus:ring-purple-500 h-3.5 w-3.5">
+                                class="rounded border-gray-300 dark:border-slate-756 dark:bg-slate-800 text-purple-600 focus:ring-purple-500 h-3.5 w-3.5">
                             <span class="flex items-center gap-1"><span
                                     class="w-2 h-2 rounded-full bg-purple-500"></span> Leave</span>
                         </label>
-                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 transition-colors">
+                        <label class="flex items-center gap-1.5 cursor-pointer hover:text-gray-900 dark:hover:text-slate-100 transition-colors">
                             <input type="checkbox" x-model="visibleSources" value="progress_log"
-                                class="rounded border-gray-300 text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
+                                class="rounded border-gray-300 dark:border-slate-757 dark:bg-slate-800 text-teal-600 focus:ring-teal-500 h-3.5 w-3.5">
                             <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-teal-500"></span>
                                 Progress Logs</span>
                         </label>
@@ -114,25 +114,25 @@
 
             <!-- Desktop/Tablet Calendar Grid Container -->
             <div
-                class="hidden sm:flex bg-white border border-gray-150 rounded shadow-sm overflow-hidden flex-col flex-1 min-h-[500px]">
+                class="hidden sm:flex bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded shadow-sm overflow-hidden flex-col flex-1 min-h-[500px]">
                 <!-- Days of Week Headers -->
-                <div class="grid grid-cols-7 bg-gray-50 border-b border-gray-150">
-                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500">Sun</div>
-                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500">Mon</div>
-                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500">Tue</div>
-                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500">Wed</div>
-                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500">Thu</div>
-                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500">Fri</div>
-                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500">Sat</div>
+                <div class="grid grid-cols-7 bg-gray-50 dark:bg-slate-950 border-b border-gray-150 dark:border-slate-800">
+                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500 dark:text-slate-400">Sun</div>
+                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500 dark:text-slate-400">Mon</div>
+                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500 dark:text-slate-400">Tue</div>
+                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500 dark:text-slate-400">Wed</div>
+                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500 dark:text-slate-400">Thu</div>
+                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500 dark:text-slate-400">Fri</div>
+                    <div class="py-2 text-center text-[11px] font-semibold text-gray-500 dark:text-slate-400">Sat</div>
                 </div>
 
                 <!-- Month Grid Rows -->
-                <div class="grid grid-cols-7 grid-rows-5 flex-1 divide-y divide-gray-150 bg-gray-150 gap-px">
+                <div class="grid grid-cols-7 grid-rows-5 flex-1 divide-y divide-gray-150 dark:divide-slate-800 bg-gray-150 dark:bg-slate-800 gap-px">
                     {% for week in weeks_data %}
                     {% for day in week %}
                     <div class="relative min-h-[90px] md:min-h-[110px] p-1 flex flex-col justify-between transition-colors group 
-                                {% if day.is_current_month %}bg-white text-gray-800{% else %}bg-gray-50/70 text-gray-400{% endif %} 
-                                {% if day.is_today %}bg-blue-50/20{% endif %}" x-data="{
+                                {% if day.is_current_month %}bg-white dark:bg-slate-900 text-gray-800 dark:text-slate-100{% else %}bg-gray-50/70 dark:bg-slate-950/40 text-gray-400 dark:text-slate-500{% endif %} 
+                                {% if day.is_today %}bg-blue-50/20 dark:bg-blue-950/20{% endif %}" x-data="{
                             dayData: {
                                 date_str: '{{ day.date_str }}',
                                 date_formatted: '{{ day.date_formatted|escapejs }}',
@@ -172,7 +172,7 @@
 
                         <!-- Clickable background for date creation/view -->
                         <div @click.prevent="{% if is_admin_or_manager %}openDayList(dayData){% else %}if(dayData.all_events.length > 0) openDayList(dayData){% endif %}"
-                            class="absolute inset-0 z-0 hover:bg-blue-50/10 cursor-pointer transition-colors"
+                            class="absolute inset-0 z-0 hover:bg-blue-50/10 dark:hover:bg-blue-950/10 cursor-pointer transition-colors"
                             title="Click to view schedule"></div>
 
                         <!-- Top header of cell -->
@@ -196,7 +196,7 @@
                                         :class="event.dot_color_class"></span>
                                     <span class="truncate flex-1 font-medium">
                                         <template x-if="event.time_str && event.time_str !== 'All Day'">
-                                            <span class="text-gray-500 font-normal mr-0.5"
+                                            <span class="text-gray-500 dark:text-slate-400 font-normal mr-0.5"
                                                 x-text="event.time_str"></span>
                                         </template>
                                         <span x-text="event.title"></span>
@@ -207,7 +207,7 @@
                             <!-- More events indicator -->
                             <template x-if="filteredEvents.length > 3">
                                 <button @click.stop.prevent="openDayList(dayData)"
-                                    class="text-[10px] font-bold text-primary-600 hover:text-primary-800 hover:underline px-1 py-0.5 block transition-colors relative z-10">
+                                    class="text-[10px] font-bold text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 px-1 py-0.5 block transition-colors relative z-10">
                                     +<span x-text="filteredEvents.length - 3"></span> more
                                 </button>
                             </template>
@@ -223,7 +223,7 @@
                 {% for week in weeks_data %}
                 {% for day in week %}
                 {% if day.is_current_month %}
-                <div class="bg-white border border-gray-150 rounded p-3 space-y-2" x-data="{
+                <div class="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded p-3 space-y-2" x-data="{
                             dayData: {
                                 date_str: '{{ day.date_str }}',
                                 date_formatted: '{{ day.date_formatted|escapejs }}',
@@ -262,14 +262,14 @@
                          }" x-show="filteredEvents.length > 0">
 
                     <!-- Day Header -->
-                    <div class="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                    <div class="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-1.5">
                         <span
-                            class="font-bold text-gray-800 text-[12px] {% if day.is_today %}text-primary-600{% endif %}">
+                            class="font-bold text-gray-800 dark:text-slate-100 text-[12px] {% if day.is_today %}text-primary-600 dark:text-primary-400{% endif %}">
                             {{ day.date|date:"l, F j" }} {% if day.is_today %}(Today){% endif %}
                         </span>
                         {% if is_admin_or_manager %}
                         <a href="{% url 'schedule:create' %}?date={{ day.date_str }}"
-                            class="text-[10px] text-primary-600 font-semibold hover:underline">
+                            class="text-[10px] text-primary-600 dark:text-primary-400 font-semibold hover:underline">
                             + Add Event
                         </a>
                         {% endif %}
@@ -284,10 +284,10 @@
                                 <div class="flex items-center gap-2 min-w-0">
                                     <span class="w-1.5 h-1.5 rounded-full shrink-0"
                                         :class="event.dot_color_class"></span>
-                                    <span class="font-semibold text-gray-800 text-[11px] truncate"
+                                    <span class="font-semibold text-gray-800 dark:text-slate-100 text-[11px] truncate"
                                         x-text="event.title"></span>
                                 </div>
-                                <span class="text-[10px] font-semibold text-gray-500 shrink-0 ml-2"
+                                <span class="text-[10px] font-semibold text-gray-500 dark:text-slate-400 shrink-0 ml-2"
                                     x-text="event.time_str && event.time_str !== 'All Day' ? event.time_str : 'All Day'"></span>
                             </div>
                         </template>
@@ -310,7 +310,7 @@
                     @click="modalOpen = false"></div>
 
                 <!-- Centered card -->
-                <div class="bg-white rounded border border-gray-150 max-w-md w-full overflow-hidden transform transition-all z-10 flex flex-col max-h-[90vh]"
+                <div class="bg-white dark:bg-slate-900 rounded border border-gray-150 dark:border-slate-800 max-w-md w-full overflow-hidden transform transition-all z-10 flex flex-col max-h-[90vh]"
                     x-show="modalOpen" x-transition:enter="ease-out duration-300"
                     x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                     x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
@@ -319,10 +319,10 @@
                     x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
 
                     <!-- Header -->
-                    <div class="px-3.5 py-2.5 border-b border-gray-150 flex items-center justify-between bg-gray-50">
-                        <h3 class="text-[12px] font-bold text-gray-800" x-text="modalTitle"></h3>
+                    <div class="px-3.5 py-2.5 border-b border-gray-150 dark:border-slate-800 flex items-center justify-between bg-gray-50 dark:bg-slate-950">
+                        <h3 class="text-[12px] font-bold text-gray-800 dark:text-slate-100" x-text="modalTitle"></h3>
                         <button @click="modalOpen = false"
-                            class="text-gray-400 hover:text-gray-600 focus:outline-none p-1 rounded hover:bg-gray-100 flex items-center justify-center">
+                            class="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 focus:outline-none p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center">
                             <i data-lucide="x" class="w-3.5 h-3.5"></i>
                         </button>
                     </div>
@@ -334,17 +334,17 @@
                             <div class="space-y-2">
                                 <template x-for="event in filteredEvents(modalDayEvents)" :key="event.id">
                                     <div x-data="{ expanded: false }"
-                                        class="border border-gray-150 rounded overflow-hidden bg-white">
+                                        class="border border-gray-150 dark:border-slate-800 rounded overflow-hidden bg-white dark:bg-slate-900">
                                         <!-- Accordion Header -->
                                         <div @click="expanded = !expanded; $nextTick(() => { if (window.lucide) window.lucide.createIcons(); })"
-                                            class="flex items-center justify-between p-2 hover:bg-gray-50 cursor-pointer transition-colors select-none">
+                                            class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors select-none">
                                             <div class="flex items-center gap-2">
                                                 <span class="w-2 h-2 rounded-full shrink-0"
                                                     :class="event.dot_color_class"></span>
-                                                <span class="font-semibold text-gray-800 text-[11px]"
+                                                <span class="font-semibold text-gray-800 dark:text-slate-100 text-[11px]"
                                                     x-text="event.title"></span>
                                             </div>
-                                            <div class="flex items-center gap-1.5 text-gray-400 shrink-0">
+                                            <div class="flex items-center gap-1.5 text-gray-400 dark:text-slate-500 shrink-0">
                                                 <span class="text-[10px] font-medium"
                                                     x-text="event.time_str && event.time_str !== 'All Day' ? event.time_str : ''"></span>
                                                 <i data-lucide="chevron-down"
@@ -355,23 +355,23 @@
 
                                         <!-- Accordion Body (Inline Detail) -->
                                         <div x-show="expanded" x-cloak
-                                            class="p-2.5 bg-gray-50/30 border-t border-gray-100 text-[11px] text-gray-600 space-y-2">
+                                            class="p-2.5 bg-gray-50/30 dark:bg-slate-950/30 border-t border-gray-100 dark:border-slate-800 text-[11px] text-gray-600 dark:text-slate-350 space-y-2">
                                             <!-- Detail by Type -->
                                             <template x-if="event.source_type === 'manual_event'">
                                                 <div class="space-y-1.5">
                                                     <p><strong>Description:</strong> <span
-                                                            class="whitespace-pre-line text-gray-700 text-[11px]"
+                                                            class="whitespace-pre-line text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.description"></span></p>
-                                                    <p><strong>Project:</strong> <span class="text-gray-700 text-[11px]"
+                                                    <p><strong>Project:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.project_name"></span></p>
                                                     <p><strong>Assigned:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.assigned_employees"></span></p>
                                                     <div
-                                                        class="flex items-center gap-2 pt-1.5 border-t border-gray-100">
+                                                        class="flex items-center gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-800">
                                                         {% if is_admin_or_manager %}
                                                         <a :href="event.edit_url"
-                                                            class="text-primary-600 hover:underline font-semibold text-[11px]">Edit
+                                                            class="text-primary-600 dark:text-primary-400 hover:underline font-semibold text-[11px]">Edit
                                                             Event</a>
                                                         {% endif %}
                                                     </div>
@@ -380,18 +380,18 @@
                                             <template x-if="event.source_type === 'task_deadline'">
                                                 <div class="space-y-1.5">
                                                     <p><strong>Project:</strong> <a :href="event.project_url"
-                                                            class="text-primary-600 hover:underline font-semibold text-[11px]"
+                                                            class="text-primary-600 dark:text-primary-400 hover:underline font-semibold text-[11px]"
                                                             x-text="event.project_name"></a></p>
                                                     <p><strong>Responsible:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.responsible_person"></span></p>
-                                                    <p><strong>Status:</strong> <span class="text-gray-700 text-[11px]"
+                                                    <p><strong>Status:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.status"></span></p>
-                                                    <p><span class="text-gray-700 text-[11px]"
+                                                    <p><span class="text-gray-700 dark:text-slate-350 text-[11px]"
                                                             x-text="event.planned_dates"></span></p>
-                                                    <div class="pt-1.5 border-t border-gray-100">
+                                                    <div class="pt-1.5 border-t border-gray-100 dark:border-slate-800">
                                                         <a :href="event.project_url"
-                                                            class="text-primary-600 hover:underline font-semibold text-[11px]">View
+                                                            class="text-primary-600 dark:text-primary-400 hover:underline font-semibold text-[11px]">View
                                                             in Project</a>
                                                     </div>
                                                 </div>
@@ -399,33 +399,33 @@
                                             <template x-if="event.source_type === 'leave'">
                                                 <div class="space-y-1.5">
                                                     <p><strong>Employee:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.employee_name"></span></p>
                                                     <p><strong>Leave Type:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.leave_type"></span></p>
                                                     <p><strong>Duration:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.date_range"></span></p>
-                                                    <p><strong>Status:</strong> <span class="text-gray-700 text-[11px]"
+                                                    <p><strong>Status:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.status"></span></p>
                                                 </div>
                                             </template>
                                             <template x-if="event.source_type === 'progress_log'">
                                                 <div class="space-y-1.5">
-                                                    <p><strong>Project:</strong> <span class="text-gray-700 text-[11px]"
+                                                    <p><strong>Project:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.project_name"></span></p>
                                                     <p><strong>Supervisor:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.supervisor_name"></span></p>
                                                     <p><strong>Planned Work:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.planned_work"></span></p>
                                                     <p><strong>Completed Work:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.completed_work"></span></p>
                                                     <p><strong>Manpower:</strong> <span
-                                                            class="text-gray-700 text-[11px]"
+                                                            class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                             x-text="event.manpower_count"></span></p>
                                                 </div>
                                             </template>
@@ -441,81 +441,81 @@
 
                         <!-- Mode: Single Item Detail -->
                         <template x-if="modalMode === 'item_detail' && modalSelectedEvent">
-                            <div class="p-1 text-[11px] text-gray-600 space-y-3">
+                            <div class="p-1 text-[11px] text-gray-600 dark:text-slate-350 space-y-3">
                                 <template x-if="modalSelectedEvent.source_type === 'manual_event'">
                                     <div class="space-y-2">
                                         <div
-                                            class="flex items-center gap-2 bg-green-50/50 p-2 border border-green-200/40 rounded">
+                                            class="flex items-center gap-2 bg-green-50/50 dark:bg-green-950/20 p-2 border border-green-200/40 dark:border-green-900/30 rounded">
                                             <span class="w-2 h-2 rounded-full shrink-0 bg-green-500"></span>
-                                            <span class="font-bold text-gray-800 text-[11px]"
+                                            <span class="font-bold text-gray-800 dark:text-slate-100 text-[11px]"
                                                 x-text="modalSelectedEvent.title"></span>
                                         </div>
                                         <p><strong>Description:</strong> <span
-                                                class="whitespace-pre-line text-gray-700 text-[11px]"
+                                                class="whitespace-pre-line text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.description"></span></p>
-                                        <p><strong>Date/Time:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Date/Time:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.date_str + ' ' + modalSelectedEvent.time_str"></span>
                                         </p>
-                                        <p><strong>Project:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Project:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.project_name"></span></p>
-                                        <p><strong>Assigned:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Assigned:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.assigned_employees"></span></p>
                                     </div>
                                 </template>
                                 <template x-if="modalSelectedEvent.source_type === 'task_deadline'">
                                     <div class="space-y-2">
                                         <div
-                                            class="flex items-center gap-2 bg-indigo-50/50 p-2 border border-indigo-200/40 rounded">
+                                            class="flex items-center gap-2 bg-indigo-50/50 dark:bg-indigo-950/20 p-2 border border-indigo-200/40 dark:border-indigo-900/30 rounded">
                                             <span class="w-2 h-2 rounded-full shrink-0 bg-indigo-500"></span>
-                                            <span class="font-bold text-gray-800 text-[11px]"
+                                            <span class="font-bold text-gray-800 dark:text-slate-100 text-[11px]"
                                                 x-text="modalSelectedEvent.title"></span>
                                         </div>
                                         <p><strong>Project:</strong> <a :href="modalSelectedEvent.project_url"
-                                                class="text-primary-600 hover:underline font-semibold text-[11px]"
+                                                class="text-primary-600 dark:text-primary-400 hover:underline font-semibold text-[11px]"
                                                 x-text="modalSelectedEvent.project_name"></a></p>
-                                        <p><strong>Responsible:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Responsible:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.responsible_person"></span></p>
-                                        <p><strong>Status:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Status:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.status"></span></p>
-                                        <p><span class="text-gray-700" x-text="modalSelectedEvent.planned_dates"></span>
+                                        <p><span class="text-gray-700 dark:text-slate-350" x-text="modalSelectedEvent.planned_dates"></span>
                                         </p>
                                     </div>
                                 </template>
                                 <template x-if="modalSelectedEvent.source_type === 'leave'">
                                     <div class="space-y-2">
                                         <div
-                                            class="flex items-center gap-2 bg-purple-50/50 p-2 border border-purple-200/40 rounded">
+                                            class="flex items-center gap-2 bg-purple-50/50 dark:bg-purple-950/20 p-2 border border-purple-200/40 dark:border-purple-900/30 rounded">
                                             <span class="w-2 h-2 rounded-full shrink-0 bg-purple-500"></span>
-                                            <span class="font-bold text-gray-800 text-[11px]"
+                                            <span class="font-bold text-gray-800 dark:text-slate-100 text-[11px]"
                                                 x-text="modalSelectedEvent.title"></span>
                                         </div>
-                                        <p><strong>Employee:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Employee:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.employee_name"></span></p>
-                                        <p><strong>Leave Type:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Leave Type:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.leave_type"></span></p>
-                                        <p><strong>Duration:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Duration:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.date_range"></span></p>
-                                        <p><strong>Status:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Status:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.status"></span></p>
                                     </div>
                                 </template>
                                 <template x-if="modalSelectedEvent.source_type === 'progress_log'">
                                     <div class="space-y-2">
                                         <div
-                                            class="flex items-center gap-2 bg-teal-50/50 p-2 border border-teal-200/40 rounded">
+                                            class="flex items-center gap-2 bg-teal-50/50 dark:bg-teal-950/20 p-2 border border-teal-200/40 dark:border-teal-900/30 rounded">
                                             <span class="w-2 h-2 rounded-full shrink-0 bg-teal-500"></span>
-                                            <span class="font-bold text-gray-800 text-[11px]"
+                                            <span class="font-bold text-gray-800 dark:text-slate-100 text-[11px]"
                                                 x-text="modalSelectedEvent.title"></span>
                                         </div>
-                                        <p><strong>Project:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Project:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.project_name"></span></p>
-                                        <p><strong>Supervisor:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Supervisor:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.supervisor_name"></span></p>
-                                        <p><strong>Planned Work:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Planned Work:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.planned_work"></span></p>
-                                        <p><strong>Completed Work:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Completed Work:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.completed_work"></span></p>
-                                        <p><strong>Manpower:</strong> <span class="text-gray-700 text-[11px]"
+                                        <p><strong>Manpower:</strong> <span class="text-gray-700 dark:text-slate-200 text-[11px]"
                                                 x-text="modalSelectedEvent.manpower_count"></span></p>
                                     </div>
                                 </template>
@@ -525,14 +525,14 @@
 
                     <!-- Footer -->
                     <div
-                        class="px-3.5 py-2.5 border-t border-gray-150 flex items-center justify-between bg-gray-50 text-[11px]">
+                        class="px-3.5 py-2.5 border-t border-gray-150 dark:border-slate-800 flex items-center justify-between bg-gray-50 dark:bg-slate-950 text-[11px]">
                         <div>
                             <!-- Day List Mode: Add Event shortcut -->
                             <template x-if="modalMode === 'day_list'">
                                 <div>
                                     {% if is_admin_or_manager %}
                                     <a :href="'/schedule/create/?date=' + modalDateStr"
-                                        class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-800 font-semibold hover:underline">
+                                        class="inline-flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-semibold hover:underline">
                                         <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Event here
                                     </a>
                                     {% endif %}
@@ -545,7 +545,7 @@
                                 <div class="flex items-center gap-3">
                                     {% if is_admin_or_manager %}
                                     <a :href="modalSelectedEvent.edit_url"
-                                        class="text-primary-600 hover:text-primary-800 font-semibold hover:underline">
+                                        class="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-semibold hover:underline">
                                         Edit Event
                                     </a>
                                     {% endif %}
@@ -556,14 +556,14 @@
                             <template
                                 x-if="modalMode === 'item_detail' && modalSelectedEvent && modalSelectedEvent.source_type === 'task_deadline'">
                                 <a :href="modalSelectedEvent.project_url"
-                                    class="text-primary-600 hover:text-primary-800 font-semibold hover:underline">
+                                    class="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-semibold hover:underline">
                                     View in Project
                                 </a>
                             </template>
                         </div>
 
                         <button @click="modalOpen = false"
-                            class="px-3.5 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-[11px] text-gray-700 font-semibold rounded transition-colors font-medium">
+                            class="px-3.5 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-750 text-[11px] text-gray-700 dark:text-slate-200 font-semibold rounded transition-colors font-medium">
                             Close
                         </button>
                     </div>
