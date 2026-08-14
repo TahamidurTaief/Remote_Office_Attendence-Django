@@ -72,6 +72,7 @@ class AuditEvent(models.Model):
 
 
 class TrashEntry(models.Model):
+
     STATUS_ACTIVE = "active"
     STATUS_RESTORED = "restored"
     STATUS_PURGED = "permanently_deleted"

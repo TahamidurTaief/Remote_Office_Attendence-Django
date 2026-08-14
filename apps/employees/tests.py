@@ -2219,13 +2219,103 @@ class EmployeeLifecycleTests(TestCase):
         self.assertFalse(self.employee.is_login_allowed())
 
     def test_hard_delete_restrictions(self):
+        from apps.audit.services import TrashService
         self.client.defaults['HTTP_X_FORWARDED_PROTO'] = 'https'
         non_super_admin = User.objects.create_user(email='nonsuper_admin@example.com', phone='+8801700000003', password='password123', role='admin')
-        self.employee.delete()
+        TrashService.soft_delete(self.employee, actor=self.admin, reason='Soft delete for test')
         self.client.force_login(non_super_admin)
         url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
         response = self.client.post(url, secure=True)
         self.assertIn(response.status_code, [302, 403])
+
+
+    def test_delete_lifecycle_ui_and_rules(self):
+        from apps.audit.models import TrashEntry, AuditEvent
+        from apps.attendance.models import Attendance
+        from django.utils import timezone
+        
+        self.client.force_login(self.admin)
+        url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
+
+        # 1. Employee Delete button / GET opens confirmation modal
+        response = self.client.get(url, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'employee-confirm-modal')
+        self.assertContains(response, 'Move to Trash')
+
+        # 3. GET cannot delete (verify still active/not trashed)
+        self.employee.refresh_from_db()
+        self.assertFalse(self.employee.is_trashed)
+
+        # 4. POST without required confirmation/reason rejected (returns modal with error)
+        response = self.client.post(url, data={'reason': ''}, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Reason is required')
+        self.employee.refresh_from_db()
+        self.assertFalse(self.employee.is_trashed)
+
+        # 5. Confirmed delete sets is_trashed=True, 6. TrashEntry created once, 7. AuditEvent created
+        response = self.client.post(url, data={'reason': 'Employee resigned'}, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 204)
+        self.employee.refresh_from_db()
+        self.assertTrue(self.employee.is_trashed)
+        self.assertEqual(self.employee.status, 'archived')
+
+        self.assertEqual(TrashEntry.objects.filter(content_object_id=self.employee.pk, status='active').count(), 1)
+
+        self.assertTrue(AuditEvent.objects.filter(object_id=str(self.employee.pk), action='deleted').exists())
+
+        # 8. Duplicate POST is idempotent
+        response = self.client.post(url, data={'reason': 'Employee resigned again'}, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(TrashEntry.objects.filter(content_object_id=self.employee.pk, status='active').count(), 1)
+
+
+
+        # 9. Employee disappears from normal Employee list
+        list_url = reverse('employees:master_list')
+        response = self.client.get(list_url)
+        self.assertNotContains(response, self.employee.employee_number)
+
+        # 10. Employee appears in Trash
+        trash_list_url = reverse('audit:trash_list')
+        response = self.client.get(trash_list_url)
+        self.assertContains(response, self.employee.get_full_name())
+
+
+        # 12. Trashed employee cannot check in
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
+        with self.assertRaises(AttendanceTransactionError):
+            AttendanceTransactionService.check_in(self.staff_user, {'sync_uuid': 'test-uuid-sync-1', 'client_event_time': timezone.now().isoformat()})
+
+
+        # 18. Restore works
+        restore_url = reverse('audit:trash_restore', kwargs={'pk': TrashEntry.objects.get(content_object_id=self.employee.pk).pk})
+        response = self.client.post(restore_url)
+        self.employee.refresh_from_db()
+        self.assertFalse(self.employee.is_trashed)
+        self.assertEqual(self.employee.status, 'active')
+        self.assertTrue(AuditEvent.objects.filter(object_id=str(self.employee.pk), action='restored').exists())
+
+        # 20. Suspend requires confirmation + reason
+        suspend_modal_url = reverse('employees:employee_suspend_toggle_modal', kwargs={'pk': self.employee.pk})
+        response = self.client.get(suspend_modal_url)
+        self.assertContains(response, 'employee-confirm-modal')
+        self.assertContains(response, 'Suspend Profile')
+
+        suspend_url = reverse('employees:employee_suspend_toggle', kwargs={'pk': self.employee.pk})
+        response = self.client.post(suspend_url, data={'reason': ''}, HTTP_HX_REQUEST='true')
+        self.assertContains(response, 'Reason is required')
+        self.employee.refresh_from_db()
+        self.assertFalse(self.employee.is_suspended)
+
+        # 21. Confirmed suspend sets is_suspended=True and requires reason
+        response = self.client.post(suspend_url, data={'reason': 'Temporary suspend', 'suspension_start_date': timezone.localdate().isoformat()}, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 200)
+        self.employee.refresh_from_db()
+        self.assertTrue(self.employee.is_suspended)
+        self.assertTrue(AuditEvent.objects.filter(object_id=str(self.employee.pk), action='suspended').exists())
+
 
 
 

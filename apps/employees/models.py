@@ -8,7 +8,20 @@ from apps.branches.models import Branch
 from imagekit.models import ProcessedImageField
 from imagekit.processors import ResizeToFit, Transpose
 
+class EmployeeProfileQuerySet(models.QuerySet):
+    def active_operational(self):
+        return self.filter(master_employee__is_trashed=False, is_active=True).exclude(master_employee__status='archived')
+
+class EmployeeProfileManager(models.Manager):
+    def get_queryset(self):
+        return EmployeeProfileQuerySet(self.model, using=self._db)
+
+    def active_operational(self):
+        return self.get_queryset().active_operational()
+
 class EmployeeProfile(models.Model):
+    objects = EmployeeProfileManager()
+
     TRACKING_INTERVAL_CHOICES = (
         (0,  'Disabled'),
         (5,  'Every 5 minutes'),
@@ -97,8 +110,9 @@ class EmployeeProfile(models.Model):
     @property
     def canonical_is_active(self):
         if self.master_employee_id:
-            return self.master_employee.status == 'active' and not self.master_employee.is_suspended
+            return self.master_employee.status == 'active' and not self.master_employee.is_suspended and not self.master_employee.is_trashed
         return self.is_active
+
 
     def __str__(self):
         return f"{self.employee_id} - {self.full_name}"
@@ -388,7 +402,21 @@ ALLOWED_LOGIN_STATUSES = [
 
 
 
+class EmployeeQuerySet(models.QuerySet):
+    def active_operational(self):
+        return self.filter(is_trashed=False).exclude(status='archived')
+
+
+class EmployeeManager(models.Manager):
+    def get_queryset(self):
+        return EmployeeQuerySet(self.model, using=self._db)
+
+    def active_operational(self):
+        return self.get_queryset().active_operational()
+
 class Employee(models.Model):
+    objects = EmployeeManager()
+
     GENDER_CHOICES = (
         ('male', 'Male'),
         ('female', 'Female'),
@@ -701,11 +729,15 @@ class Employee(models.Model):
 
     def delete(self, *args, **kwargs):
         hard = kwargs.pop('hard', False)
-        if hard:
+        if hard or not self.pk:
             return super().delete(*args, **kwargs)
         from apps.audit.services import TrashService
         TrashService.soft_delete(self)
         self.refresh_from_db(fields=['is_trashed', 'trashed_at'])
+
+
+
+
 
 
 class EmploymentHistory(models.Model):

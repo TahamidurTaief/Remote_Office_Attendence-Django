@@ -628,21 +628,60 @@ class EmployeeMasterDeleteView(View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
+
         """Return the confirmation modal (HTMX partial)."""
         employee = get_object_or_404(Employee, pk=pk)
-        return render(request, 'employees/partials/delete_confirm_modal.html', {
-            'employee': employee,
-            'delete_url': reverse_lazy('employees:master_delete', kwargs={'pk': pk}),
-            'is_soft_delete': not employee.is_trashed,
+        if employee.is_trashed:
+            title = "Permanently Delete Employee?"
+            message = f"Are you sure you want to permanently delete {employee.get_full_name()} ({employee.employee_number})? This action is irreversible."
+            action_label = "Delete Permanently"
+            reason_required = False
+        else:
+            title = "Move employee to Trash?"
+            message = f"This employee will be removed from active operations but historical records will be preserved."
+            action_label = "Move to Trash"
+            reason_required = True
+
+        return render(request, 'employees/partials/confirmation_modal.html', {
+            'title': title,
+            'endpoint': reverse_lazy('employees:master_delete', kwargs={'pk': pk}),
+            'message': message,
+            'action': 'delete',
+            'action_label': action_label,
+            'reason_required': reason_required,
         })
+
 
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
         name = employee.get_full_name()
         emp_number = employee.employee_number
 
+        reason = request.POST.get('reason', '').strip()
+        if not employee.is_trashed and not reason:
+            if request.headers.get('HX-Request'):
+                return render(request, 'employees/partials/confirmation_modal.html', {
+                    'title': "Move employee to Trash?",
+                    'endpoint': reverse_lazy('employees:master_delete', kwargs={'pk': pk}),
+                    'message': "This employee will be removed from active operations but historical records will be preserved.",
+                    'action': 'delete',
+                    'action_label': "Move to Trash",
+                    'reason_required': True,
+                    'reason_error': "Reason is required to move employee to trash.",
+                })
+            messages.error(request, "Reason is required to move employee to trash.")
+            return redirect('employees:master_list')
+
         try:
             if employee.is_trashed:
+                # If reason is provided, this is a duplicate soft-delete request, handle idempotently
+                if reason:
+                    if request.headers.get('HX-Request'):
+                        response = HttpResponse(status=204)
+                        response['HX-Redirect'] = reverse_lazy('employees:master_list')
+                        return response
+                    return redirect('employees:master_list')
+
                 if not request.user.is_superuser:
                     from django.core.exceptions import PermissionDenied
                     raise PermissionDenied("Only super-admin can perform permanent delete.")
@@ -654,6 +693,7 @@ class EmployeeMasterDeleteView(View):
                         TrashService.permanent_delete(entry, actor=request.user, request=request)
                         messages.success(request, f"Employee {name} ({emp_number}) has been permanently deleted.")
                     except Exception as exc:
+
                         import logging
                         logger = logging.getLogger(__name__)
                         logger.error(f"Permanent delete failed for employee {pk}: {str(exc)}", exc_info=True)
@@ -662,7 +702,7 @@ class EmployeeMasterDeleteView(View):
                 TrashService.soft_delete(
                     employee,
                     actor=request.user,
-                    reason=request.POST.get('reason', '').strip(),
+                    reason=reason,
                     request=request
                 )
                 messages.success(request, f"Employee {name} ({emp_number}) has been moved to Trash.")
@@ -1016,8 +1056,16 @@ def _apply_transition(employee, req_obj, actor):
             effective_date=effective,
         )
 
-    # Activity Log
-
+    from apps.audit.services import AuditService
+    AuditService.log_event(
+        actor=actor,
+        action=new_status.lower(),
+        instance=employee,
+        before={'status': old_status, 'is_suspended': getattr(employee, '_old_is_suspended', employee.is_suspended)},
+        after={'status': new_status, 'is_suspended': employee.is_suspended},
+        changed_fields={'status': {'before': old_status, 'after': new_status}},
+        reason=reason,
+    )
 
     log_audit(
         actor=actor,
@@ -1025,6 +1073,7 @@ def _apply_transition(employee, req_obj, actor):
         target=employee,
         summary=f"Status: {old_status} → {new_status}"
     )
+
 
 
 class LifecycleActionView(AdminRequiredMixin, View):
@@ -1688,11 +1737,50 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
         employee = get_object_or_404(Employee, pk=pk)
         reason = request.POST.get('reason', '').strip()
         if not reason:
+            if request.headers.get('HX-Request'):
+                from django.urls import reverse
+                return render(request, 'employees/partials/confirmation_modal.html', {
+                    'title': "Un-suspend employee?" if employee.is_suspended else "Suspend employee?",
+                    'endpoint': reverse('employees:employee_suspend_toggle', kwargs={'pk': employee.pk}),
+                    'message': f"Are you sure you want to change the suspension status for {employee.get_full_name()}?",
+                    'action': 'suspend',
+                    'action_label': "Un-suspend Profile" if employee.is_suspended else "Suspend Profile",
+                    'reason_required': True,
+                    'reason_error': "Reason is required to suspend/unsuspend an employee.",
+                    'suspension_dates': not employee.is_suspended,
+                    'today_str': timezone.localdate().isoformat(),
+                })
             messages.error(request, "Reason is required to suspend/unsuspend an employee.")
             return redirect('employees:employee_detail', pk=employee.pk)
 
         is_suspended = not employee.is_suspended
+        before_state = {'is_suspended': not is_suspended}
+        after_state = {'is_suspended': is_suspended}
+
+        from apps.employees.models import EmployeeSuspension
+        if is_suspended:
+            start_date = request.POST.get('suspension_start_date') or timezone.localdate().isoformat()
+            end_date = request.POST.get('suspension_end_date') or None
+            auto_react = request.POST.get('auto_reactivate') == 'on'
+            EmployeeSuspension.objects.filter(employee=employee, is_active=True).update(is_active=False)
+            EmployeeSuspension.objects.create(
+                employee=employee,
+                suspension_start_date=start_date,
+                suspension_end_date=end_date,
+                suspension_reason=reason,
+                auto_reactivate=auto_react,
+                is_active=True,
+                changed_by=request.user,
+                previous_status=employee.status,
+            )
+            employee.status = 'suspended'
+        else:
+            EmployeeSuspension.objects.filter(employee=employee, is_active=True).update(is_active=False)
+            # Restore previous status or fallback to active
+            employee.status = 'active'
+
         employee.is_suspended = is_suspended
+        employee._bypass_lifecycle_validation = True
         employee.save()
 
         # Log change to EmploymentHistory
@@ -1706,8 +1794,18 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
             approved_by=request.user,
             effective_date=timezone.now().date()
         )
-        
 
+        from apps.audit.services import AuditService
+        AuditService.log_event(
+            actor=request.user,
+            action='suspended' if is_suspended else 'reactivated',
+            instance=employee,
+            before=before_state,
+            after=after_state,
+            changed_fields={'is_suspended': {'before': not is_suspended, 'after': is_suspended}},
+            reason=reason,
+            request=request
+        )
 
         messages.success(request, f"Employee has been successfully {action_str.lower()}ed.")
         
@@ -1725,7 +1823,22 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
 class EmployeeSuspendModalView(AdminRequiredMixin, View):
     def get(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
-        return render(request, 'employees/partials/suspend_modal.html', {'employee': employee})
+        from django.urls import reverse
+        title = "Un-suspend employee?" if employee.is_suspended else "Suspend employee?"
+        action_label = "Un-suspend Profile" if employee.is_suspended else "Suspend Profile"
+        message = f"Are you sure you want to change the suspension status for {employee.get_full_name()}?"
+        
+        return render(request, 'employees/partials/confirmation_modal.html', {
+            'title': title,
+            'endpoint': reverse('employees:employee_suspend_toggle', kwargs={'pk': employee.pk}),
+            'message': message,
+            'action': 'suspend',
+            'action_label': action_label,
+            'reason_required': True,
+            'suspension_dates': not employee.is_suspended,
+            'today_str': timezone.localdate().isoformat(),
+        })
+
 
 
 class EmployeeAuditLogView(AdminRequiredMixin, ListView):
