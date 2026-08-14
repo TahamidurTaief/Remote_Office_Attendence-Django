@@ -48,12 +48,16 @@
                         <c-badge variant="neutral" label="Inactive"></c-badge>
                         {% endif %}
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3 text-right space-x-1.5">
                         <c-button hx-get="{% url 'employees:department_edit' dept.pk %}"
                                   hx-target="#modal-container"
                                   hx-swap="innerHTML"
                                   hx-headers='{"HX-Target": "modal-container"}'
                                   variant="ghost" icon="pencil" size="sm" label="Edit">
+                        </c-button>
+                        <c-button type="button"
+                                  variant="ghost" extra_class="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-950/20" icon="trash" size="sm" label="Delete"
+                                  onclick="event.preventDefault(); window.confirmAction('Are you sure you want to delete this department?', () => { htmx.ajax('POST', '{% url \'employees:department_delete\' dept.pk %}', {target: '#modal-container', swap: 'innerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
                         </c-button>
                     </td>
                 </tr>

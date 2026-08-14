@@ -2317,6 +2317,105 @@ class EmployeeLifecycleTests(TestCase):
         self.assertTrue(AuditEvent.objects.filter(object_id=str(self.employee.pk), action='suspended').exists())
 
 
+class DepartmentCRUDTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.branch = Branch.objects.create(name='CRUD Branch', latitude=23.8, longitude=90.4, radius_meters=100)
+        self.admin = User.objects.create_superuser(email='crud_admin@example.com', phone='+8801700000003', password='password123', role='admin')
+        
+    def test_department_create_and_edit_drawer(self):
+        self.client.force_login(self.admin)
+        create_url = reverse('employees:department_create')
+        
+        # Get create form drawer
+        response = self.client.get(create_url, HTTP_HX_REQUEST='true')
+        self.assertContains(response, 'dept-drawer')
+        self.assertContains(response, 'New Department')
+        
+        # Post create
+        response = self.client.post(create_url, data={
+            'name': 'Test Dev',
+            'code': 'TDEV',
+            'description': 'Test dev department',
+            'is_global': 'on',
+            'is_active': 'on'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 204)
+        
+        dept = Department.objects.get(name='Test Dev')
+        self.assertTrue(dept.is_global)
+        self.assertTrue(dept.is_active)
+        
+        # Get edit form drawer
+        edit_url = reverse('employees:department_edit', kwargs={'pk': dept.pk})
+        response = self.client.get(edit_url, HTTP_HX_REQUEST='true')
+        self.assertContains(response, 'dept-drawer')
+        self.assertContains(response, 'Edit Department')
+        
+        # Post edit
+        response = self.client.post(edit_url, data={
+            'name': 'Test Dev Updated',
+            'code': 'TDEV2',
+            'description': 'Test dev updated',
+            'is_global': '',
+            'branches': [self.branch.pk],
+            'is_active': 'on'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 204)
+        
+        dept.refresh_from_db()
+        self.assertEqual(dept.name, 'Test Dev Updated')
+        self.assertFalse(dept.is_global)
+        self.assertIn(self.branch, dept.branches.all())
+
+    def test_department_delete(self):
+        self.client.force_login(self.admin)
+        dept = Department.objects.create(name='Delete Dept', code='DEL')
+        delete_url = reverse('employees:department_delete', kwargs={'pk': dept.pk})
+        
+        response = self.client.post(delete_url, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Department.objects.filter(pk=dept.pk).exists())
+
+    def test_department_export_and_import(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_login(self.admin)
+        dept1 = Department.objects.create(name='Export 1', code='EX1', is_global=True)
+        dept2 = Department.objects.create(name='Export 2', code='EX2', is_global=False)
+        dept2.branches.add(self.branch)
+        
+        # Test Export
+        export_url = reverse('employees:department_export_csv')
+        response = self.client.get(export_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        
+        content = response.content.decode('utf-8')
+        self.assertIn('Export 1', content)
+        self.assertIn('Export 2', content)
+        
+        # Test Import
+        import_url = reverse('employees:department_import_csv')
+        
+        import_csv_content = (
+            "Name,Code,Description,Is Global,Branches,Is Active\n"
+            "Imported Dept 1,IMP1,Description 1,True,All,True\n"
+            f"Imported Dept 2,IMP2,Description 2,False,{self.branch.name},True\n"
+        )
+        
+        import_file = SimpleUploadedFile("imported_depts.csv", import_csv_content.encode('utf-8'), content_type="text/csv")
+        response = self.client.post(import_url, {'file': import_file})
+        self.assertEqual(response.status_code, 302)
+        
+        self.assertTrue(Department.objects.filter(name='Imported Dept 1').exists())
+        imp_dept2 = Department.objects.get(name='Imported Dept 2')
+        self.assertFalse(imp_dept2.is_global)
+        self.assertIn(self.branch, imp_dept2.branches.all())
+
+
+
 
 
 

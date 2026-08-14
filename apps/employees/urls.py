@@ -64,6 +64,9 @@ urlpatterns = [
     path('departments/', views.DepartmentListView.as_view(), name='department_list'),
     path('departments/create/', views.DepartmentCreateView.as_view(), name='department_create'),
     path('departments/<int:pk>/edit/', views.DepartmentEditView.as_view(), name='department_edit'),
+    path('departments/<int:pk>/delete/', views.DepartmentDeleteView.as_view(), name='department_delete'),
+    path('departments/export/', views.DepartmentExportCSVView.as_view(), name='department_export_csv'),
+    path('departments/import/', views.DepartmentImportCSVView.as_view(), name='department_import_csv'),
 
     # Designation management
     path('designations/', views.DesignationListView.as_view(), name='designation_list'),

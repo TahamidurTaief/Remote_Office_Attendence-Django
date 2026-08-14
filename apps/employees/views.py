@@ -2078,6 +2078,129 @@ class DepartmentEditView(AdminRequiredMixin, UpdateView):
         return super().form_invalid(form)
 
 
+class DepartmentDeleteView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        dept = get_object_or_404(Department, pk=pk)
+        name = dept.name
+        dept.delete()
+        log_audit(
+            actor=request.user,
+            action='department_deleted',
+            target=None,
+            summary=f"Deleted Department {name}"
+        )
+        if request.headers.get('HX-Request'):
+            response = HttpResponse(status=204)
+            response['HX-Redirect'] = reverse_lazy('employees:department_list')
+            return response
+        messages.success(request, f'Department "{name}" deleted.')
+        return redirect('employees:department_list')
+
+
+class DepartmentExportCSVView(AdminRequiredMixin, View):
+    def get(self, request):
+        import csv
+        departments = Department.objects.prefetch_related('branches').all().order_by('name')
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="departments.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Name', 'Code', 'Description', 'Is Global', 'Branches', 'Is Active'])
+        
+        for dept in departments:
+            branches_str = ",".join([b.name for b in dept.branches.all()]) if not dept.is_global else 'All'
+            writer.writerow([
+                dept.name,
+                dept.code or '',
+                dept.description or '',
+                'True' if dept.is_global else 'False',
+                branches_str,
+                'True' if dept.is_active else 'False'
+            ])
+            
+        return response
+
+
+class DepartmentImportCSVView(AdminRequiredMixin, View):
+    def post(self, request):
+        import csv
+        import io
+        from apps.branches.models import Branch
+        csv_file = request.FILES.get('file')
+        if not csv_file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('employees:department_list')
+        
+        if not csv_file.name.endswith('.csv'):
+            messages.error(request, 'Please upload a CSV file.')
+            return redirect('employees:department_list')
+        
+        try:
+            file_data = csv_file.read().decode('utf-8')
+            csv_reader = csv.reader(io.StringIO(file_data))
+            header = next(csv_reader) # Skip header
+            
+            created_count = 0
+            updated_count = 0
+            
+            for row in csv_reader:
+                if not row or len(row) < 1:
+                    continue
+                name = row[0].strip()
+                if not name:
+                    continue
+                
+                code = row[1].strip() if len(row) > 1 else ''
+                description = row[2].strip() if len(row) > 2 else ''
+                is_global_str = row[3].strip().lower() if len(row) > 3 else 'true'
+                is_global = is_global_str in ['true', '1', 'yes']
+                
+                branches_str = row[4].strip() if len(row) > 4 else ''
+                is_active_str = row[5].strip().lower() if len(row) > 5 else 'true'
+                is_active = is_active_str in ['true', '1', 'yes']
+                
+                dept, created = Department.objects.get_or_create(
+                    name=name,
+                    defaults={
+                        'code': code,
+                        'description': description,
+                        'is_global': is_global,
+                        'is_active': is_active
+                    }
+                )
+                
+                if not created:
+                    dept.code = code
+                    dept.description = description
+                    dept.is_global = is_global
+                    dept.is_active = is_active
+                    dept.save()
+                    updated_count += 1
+                else:
+                    created_count += 1
+                
+                if not is_global and branches_str and branches_str.lower() != 'all':
+                    dept.branches.clear()
+                    branch_names = [b.strip() for b in branches_str.split(',') if b.strip()]
+                    for b_name in branch_names:
+                        branch = Branch.objects.filter(name__iexact=b_name).first()
+                        if branch:
+                            dept.branches.add(branch)
+                            
+            messages.success(request, f'Successfully imported departments. Created: {created_count}, Updated: {updated_count}')
+            log_audit(
+                actor=request.user,
+                action='departments_imported',
+                target=None,
+                summary=f"Imported departments via CSV. Created: {created_count}, Updated: {updated_count}"
+            )
+        except Exception as e:
+            messages.error(request, f'Failed to parse CSV file: {str(e)}')
+            
+        return redirect('employees:department_list')
+
+
 # ==========================================
 # DESIGNATION MANAGEMENT VIEWS
 # ==========================================

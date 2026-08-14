@@ -4,16 +4,28 @@
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Departments">
-            <c-slot name="actions">
-                <c-button hx-get="{% url 'employees:department_create' %}"
-                          hx-target="#modal-container"
-                          hx-swap="innerHTML"
-                          hx-headers='{"HX-Target": "modal-container"}'
-                          variant="primary" icon="plus" label="New Department">
-                </c-button>
-            </c-slot>
-        </c-topbar>
+        <c-topbar title="Departments"></c-topbar>
+    </c-slot>
+
+    <c-slot name="topbar_actions">
+        <div class="flex items-center gap-2">
+            <form id="import-dept-form" action="{% url 'employees:department_import_csv' %}" method="post" enctype="multipart/form-data" style="display:none">
+                {% csrf_token %}
+                <input type="file" name="file" id="import-dept-file-input" accept=".csv" onchange="document.getElementById('import-dept-form').submit()">
+            </form>
+            <c-button type="button" onclick="document.getElementById('import-dept-file-input').click()"
+                      variant="secondary" icon="upload" label="Import CSV">
+            </c-button>
+            <c-button href="{% url 'employees:department_export_csv' %}"
+                      variant="secondary" icon="download" label="Export CSV">
+            </c-button>
+            <c-button hx-get="{% url 'employees:department_create' %}"
+                      hx-target="#modal-container"
+                      hx-swap="innerHTML"
+                      hx-headers='{"HX-Target": "modal-container"}'
+                      variant="primary" icon="plus" label="New Department">
+            </c-button>
+        </div>
     </c-slot>
 
     <c-command-palette></c-command-palette>
