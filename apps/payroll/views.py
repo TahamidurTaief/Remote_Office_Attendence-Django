@@ -7,7 +7,7 @@ from django.views.generic import ListView, DetailView, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Sum, Count, Q
 from django.http import HttpResponse, JsonResponse, HttpResponseBadRequest
 from django.contrib import messages
@@ -21,7 +21,11 @@ from apps.payroll.models import (
     PayrollWorkflowAudit,
     SalaryComponent,
     SalaryComponentType,
-    PaymentMode
+    PaymentMode,
+    SalaryStructure,
+    SalaryStructureComponent,
+    EmployeeSalaryAssignment,
+    SalaryComponentValueType
 )
 from apps.payroll.services import PayrollService
 from apps.payroll.reports import (
@@ -169,6 +173,21 @@ class PayrollRunDetailView(PayrollManagerMixin, DetailView):
             'ot_hours': totals['total_ot_hours'] or Decimal('0.00'),
             'ot_amount': totals['total_ot_amount'] or Decimal('0.00'),
         }
+
+        # Unassigned employee warning check
+        from apps.employees.models import Employee
+        active_emps = Employee.objects.filter(status='active')
+        unassigned_emps = []
+        for emp in active_emps:
+            has_assign = False
+            for assign in emp.salary_assignments.all():
+                if assign.effective_from <= run.period_end and (assign.effective_to is None or assign.effective_to >= run.period_start):
+                    has_assign = True
+                    break
+            if not has_assign:
+                unassigned_emps.append(emp)
+        ctx['unassigned_count'] = len(unassigned_emps)
+        ctx['unassigned_employees'] = unassigned_emps
 
         ctx['departments'] = Department.objects.filter(is_active=True)
         ctx['branches'] = Branch.objects.all()
@@ -663,3 +682,418 @@ class CashReportExportView(PayrollManagerMixin, View):
             return response
 
         return HttpResponseBadRequest("Unsupported format")
+
+
+# --- SALARY COMPONENTS CRUD ---
+
+class SalaryComponentListView(PayrollManagerMixin, ListView):
+    model = SalaryComponent
+    template_name = 'payroll/salary_components.html'
+    context_object_name = 'components'
+    paginate_by = 50
+
+    def get_queryset(self):
+        qs = SalaryComponent.objects.all().order_by('type', 'code')
+        search = self.request.GET.get('search', '').strip()
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(code__icontains=search))
+        return qs
+
+
+class SalaryComponentCreateView(PayrollManagerMixin, View):
+    def post(self, request):
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper()
+        comp_type = request.POST.get('type')
+        val_type = request.POST.get('value_type')
+        val_str = request.POST.get('value', '0')
+        is_pf = request.POST.get('is_pf') == 'on'
+        is_active = request.POST.get('is_active', 'on') == 'on'
+
+        if not name or not code or not comp_type or not val_type:
+            messages.error(request, "All fields are required.")
+            return redirect('payroll:salary_components')
+
+        try:
+            val = Decimal(val_str)
+        except Exception:
+            messages.error(request, "Invalid value amount.")
+            return redirect('payroll:salary_components')
+
+        if SalaryComponent.objects.filter(code=code).exists():
+            messages.error(request, f"Component with code '{code}' already exists.")
+            return redirect('payroll:salary_components')
+
+        SalaryComponent.objects.create(
+            name=name,
+            code=code,
+            type=comp_type,
+            value_type=val_type,
+            value=val,
+            is_pf=is_pf,
+            is_active=is_active
+        )
+        messages.success(request, f"Component '{name}' created successfully.")
+        return redirect('payroll:salary_components')
+
+
+class SalaryComponentUpdateView(PayrollManagerMixin, View):
+    def post(self, request, pk):
+        comp = get_object_or_404(SalaryComponent, pk=pk)
+        
+        # Check if component is used in locked payroll runs
+        locked_exists = PayrollAdjustment.objects.filter(
+            component=comp, 
+            payroll_run__status__in=[PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]
+        ).exists()
+        
+        if not locked_exists:
+            locked_exists = EmployeePayrollCalculation.objects.filter(
+                payroll_run__status__in=[PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED],
+                employee__salary_assignments__salary_structure__structure_components__salary_component=comp
+            ).exists()
+
+        name = request.POST.get('name', '').strip()
+        comp_type = request.POST.get('type')
+        val_type = request.POST.get('value_type')
+        val_str = request.POST.get('value', '0')
+        is_pf = request.POST.get('is_pf') == 'on'
+        is_active = request.POST.get('is_active') == 'on'
+
+        if locked_exists:
+            messages.warning(request, "Component is used in locked payroll runs. Only non-critical fields updated.")
+            comp.name = name
+            comp.is_active = is_active
+            comp.save()
+        else:
+            try:
+                val = Decimal(val_str)
+            except Exception:
+                messages.error(request, "Invalid value amount.")
+                return redirect('payroll:salary_components')
+
+            comp.name = name
+            comp.type = comp_type
+            comp.value_type = val_type
+            comp.value = val
+            comp.is_pf = is_pf
+            comp.is_active = is_active
+            comp.save()
+
+        messages.success(request, f"Component '{comp.code}' updated successfully.")
+        return redirect('payroll:salary_components')
+
+
+class SalaryComponentDeleteView(PayrollManagerMixin, View):
+    def post(self, request, pk):
+        comp = get_object_or_404(SalaryComponent, pk=pk)
+        
+        # Check if used in locked payroll runs
+        locked_exists = PayrollAdjustment.objects.filter(
+            component=comp, 
+            payroll_run__status__in=[PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]
+        ).exists()
+        
+        if not locked_exists:
+            locked_exists = EmployeePayrollCalculation.objects.filter(
+                payroll_run__status__in=[PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED],
+                employee__salary_assignments__salary_structure__structure_components__salary_component=comp
+            ).exists()
+
+        if locked_exists:
+            messages.error(request, f"Cannot delete '{comp.code}': It is referenced in locked payroll history.")
+        else:
+            comp.delete()
+            messages.success(request, f"Component '{comp.code}' deleted successfully.")
+        
+        return redirect('payroll:salary_components')
+
+
+# --- SALARY STRUCTURES CRUD ---
+
+class SalaryStructureListView(PayrollManagerMixin, ListView):
+    model = SalaryStructure
+    template_name = 'payroll/salary_structures.html'
+    context_object_name = 'structures'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['components'] = SalaryComponent.objects.filter(is_active=True)
+        return ctx
+
+
+class SalaryStructureCreateView(PayrollManagerMixin, View):
+    def post(self, request):
+        name = request.POST.get('name', '').strip()
+        is_active = request.POST.get('is_active', 'on') == 'on'
+        
+        if not name:
+            messages.error(request, "Structure name is required.")
+            return redirect('payroll:salary_structures')
+
+        component_ids = request.POST.getlist('component_ids')
+        values = request.POST.getlist('component_values')
+        val_types = request.POST.getlist('component_value_types')
+
+        pct_earnings_total = Decimal('0.00')
+        has_pct_earnings = False
+        components_to_create = []
+
+        for cid, val_str, vt in zip(component_ids, values, val_types):
+            if not cid:
+                continue
+            comp = get_object_or_404(SalaryComponent, pk=cid)
+            try:
+                val = Decimal(val_str)
+            except Exception:
+                messages.error(request, f"Invalid value for component '{comp.code}'.")
+                return redirect('payroll:salary_structures')
+
+            if comp.type == SalaryComponentType.EARNING and vt == SalaryComponentValueType.PERCENTAGE:
+                pct_earnings_total += val
+                has_pct_earnings = True
+
+            components_to_create.append({
+                'component': comp,
+                'value': val,
+                'value_type': vt
+            })
+
+        if has_pct_earnings and pct_earnings_total != Decimal('100.00'):
+            messages.error(request, f"Validation failed: Earning percentage components must sum to exactly 100%. Current sum: {pct_earnings_total}%.")
+            return redirect('payroll:salary_structures')
+
+        with transaction.atomic():
+            struct = SalaryStructure.objects.create(name=name, is_active=is_active)
+            for item in components_to_create:
+                SalaryStructureComponent.objects.create(
+                    salary_structure=struct,
+                    salary_component=item['component'],
+                    value=item['value'],
+                    value_type=item['value_type']
+                )
+
+        messages.success(request, f"Salary structure '{name}' created successfully.")
+        return redirect('payroll:salary_structures')
+
+
+class SalaryStructureUpdateView(PayrollManagerMixin, View):
+    def post(self, request, pk):
+        struct = get_object_or_404(SalaryStructure, pk=pk)
+        name = request.POST.get('name', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+
+        if not name:
+            messages.error(request, "Structure name is required.")
+            return redirect('payroll:salary_structures')
+
+        component_ids = request.POST.getlist('component_ids')
+        values = request.POST.getlist('component_values')
+        val_types = request.POST.getlist('component_value_types')
+
+        pct_earnings_total = Decimal('0.00')
+        has_pct_earnings = False
+        components_to_save = []
+
+        for cid, val_str, vt in zip(component_ids, values, val_types):
+            if not cid:
+                continue
+            comp = get_object_or_404(SalaryComponent, pk=cid)
+            try:
+                val = Decimal(val_str)
+            except Exception:
+                messages.error(request, f"Invalid value for component '{comp.code}'.")
+                return redirect('payroll:salary_structures')
+
+            if comp.type == SalaryComponentType.EARNING and vt == SalaryComponentValueType.PERCENTAGE:
+                pct_earnings_total += val
+                has_pct_earnings = True
+
+            components_to_save.append({
+                'component': comp,
+                'value': val,
+                'value_type': vt
+            })
+
+        if has_pct_earnings and pct_earnings_total != Decimal('100.00'):
+            messages.error(request, f"Validation failed: Earning percentage components must sum to exactly 100%. Current sum: {pct_earnings_total}%.")
+            return redirect('payroll:salary_structures')
+
+        with transaction.atomic():
+            struct.name = name
+            struct.is_active = is_active
+            struct.save()
+            struct.structure_components.all().delete()
+            for item in components_to_save:
+                SalaryStructureComponent.objects.create(
+                    salary_structure=struct,
+                    salary_component=item['component'],
+                    value=item['value'],
+                    value_type=item['value_type']
+                )
+
+        messages.success(request, f"Salary structure '{name}' updated successfully.")
+        return redirect('payroll:salary_structures')
+
+
+class SalaryStructureDeleteView(PayrollManagerMixin, View):
+    def post(self, request, pk):
+        struct = get_object_or_404(SalaryStructure, pk=pk)
+        
+        if EmployeeSalaryAssignment.objects.filter(salary_structure=struct).exists():
+            messages.error(request, f"Cannot delete '{struct.name}': It is assigned to one or more employees.")
+        else:
+            struct.delete()
+            messages.success(request, f"Salary structure '{struct.name}' deleted successfully.")
+        return redirect('payroll:salary_structures')
+
+
+# --- EMPLOYEE SALARY SETUP ---
+
+class EmployeeSalarySetupView(PayrollManagerMixin, ListView):
+    model = Employee
+    template_name = 'payroll/employee_salary_setup.html'
+    context_object_name = 'employees'
+    paginate_by = 25
+
+    def get_queryset(self):
+        qs = Employee.objects.select_related('department', 'branch').prefetch_related('salary_assignments', 'salary_assignments__salary_structure')
+        search = self.request.GET.get('search', '').strip()
+        dept_id = self.request.GET.get('department')
+        branch_id = self.request.GET.get('branch')
+        status = self.request.GET.get('status', 'active')
+
+        if search:
+            qs = qs.filter(
+                Q(employee_number__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        if dept_id:
+            qs = qs.filter(department_id=dept_id)
+        if branch_id:
+            qs = qs.filter(branch_id=branch_id)
+        if status == 'active':
+            qs = qs.filter(status='active')
+        elif status == 'inactive':
+            qs = qs.exclude(status='active')
+
+        return qs.order_by('employee_number')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['departments'] = Department.objects.filter(is_active=True)
+        ctx['branches'] = Branch.objects.all()
+        ctx['structures'] = SalaryStructure.objects.filter(is_active=True)
+        ctx['payment_modes'] = PaymentMode.choices
+        ctx['selected_dept'] = self.request.GET.get('department', '')
+        ctx['selected_branch'] = self.request.GET.get('branch', '')
+        ctx['selected_status'] = self.request.GET.get('status', 'active')
+        ctx['search'] = self.request.GET.get('search', '')
+        
+        today = date.today()
+        for emp in ctx['employees']:
+            active_assign = None
+            for assign in emp.salary_assignments.all():
+                if assign.effective_from <= today and (assign.effective_to is None or assign.effective_to >= today):
+                    active_assign = assign
+                    break
+            emp.active_salary_assignment = active_assign
+            
+        return ctx
+
+
+class EmployeeSalaryAssignmentCreateView(PayrollManagerMixin, View):
+    def post(self, request):
+        employee_id = request.POST.get('employee_id')
+        structure_id = request.POST.get('salary_structure_id')
+        gross_salary_str = request.POST.get('gross_salary', '0')
+        effective_from_str = request.POST.get('effective_from')
+        effective_to_str = request.POST.get('effective_to') or None
+        payment_mode = request.POST.get('payment_mode')
+        bank_limit_str = request.POST.get('bank_limit', '0')
+
+        employee = get_object_or_404(Employee, pk=employee_id)
+        structure = get_object_or_404(SalaryStructure, pk=structure_id)
+
+        try:
+            gross_salary = Decimal(gross_salary_str)
+            bank_limit = Decimal(bank_limit_str)
+            effective_from = datetime.strptime(effective_from_str, '%Y-%m-%d').date()
+            effective_to = datetime.strptime(effective_to_str, '%Y-%m-%d').date() if effective_to_str else None
+        except Exception:
+            messages.error(request, "Invalid numeric or date formats.")
+            return redirect('payroll:employee_salary_setup')
+
+        overlaps = EmployeeSalaryAssignment.objects.filter(employee=employee)
+        for adj in overlaps:
+            start_overlap = (adj.effective_to is None or adj.effective_to >= effective_from)
+            end_overlap = (effective_to is None or adj.effective_from <= effective_to)
+            if start_overlap and end_overlap:
+                messages.error(request, f"Overlapping salary assignment exists for {employee.get_full_name()} during this period.")
+                return redirect('payroll:employee_salary_setup')
+
+        EmployeeSalaryAssignment.objects.create(
+            employee=employee,
+            salary_structure=structure,
+            gross_salary=gross_salary,
+            effective_from=effective_from,
+            effective_to=effective_to,
+            payment_mode=payment_mode,
+            bank_limit=bank_limit
+        )
+
+        messages.success(request, f"Salary setup successfully for {employee.get_full_name()}.")
+        return redirect('payroll:employee_salary_setup')
+
+
+class EmployeeSalaryAssignmentUpdateView(PayrollManagerMixin, View):
+    def post(self, request, pk):
+        assign = get_object_or_404(EmployeeSalaryAssignment, pk=pk)
+        structure_id = request.POST.get('salary_structure_id')
+        gross_salary_str = request.POST.get('gross_salary')
+        effective_from_str = request.POST.get('effective_from')
+        effective_to_str = request.POST.get('effective_to') or None
+        payment_mode = request.POST.get('payment_mode')
+        bank_limit_str = request.POST.get('bank_limit', '0')
+
+        structure = get_object_or_404(SalaryStructure, pk=structure_id)
+
+        try:
+            gross_salary = Decimal(gross_salary_str)
+            bank_limit = Decimal(bank_limit_str)
+            effective_from = datetime.strptime(effective_from_str, '%Y-%m-%d').date()
+            effective_to = datetime.strptime(effective_to_str, '%Y-%m-%d').date() if effective_to_str else None
+        except Exception:
+            messages.error(request, "Invalid numeric or date formats.")
+            return redirect('payroll:employee_salary_setup')
+
+        overlaps = EmployeeSalaryAssignment.objects.filter(employee=assign.employee).exclude(pk=assign.pk)
+        for adj in overlaps:
+            start_overlap = (adj.effective_to is None or adj.effective_to >= effective_from)
+            end_overlap = (effective_to is None or adj.effective_from <= effective_to)
+            if start_overlap and end_overlap:
+                messages.error(request, f"Overlapping salary assignment exists for {assign.employee.get_full_name()} during this period.")
+                return redirect('payroll:employee_salary_setup')
+
+        assign.salary_structure = structure
+        assign.gross_salary = gross_salary
+        assign.effective_from = effective_from
+        assign.effective_to = effective_to
+        assign.payment_mode = payment_mode
+        assign.bank_limit = bank_limit
+        assign.save()
+
+        messages.success(request, f"Salary setup updated successfully for {assign.employee.get_full_name()}.")
+        return redirect('payroll:employee_salary_setup')
+
+
+# --- PAYROLL REPORTS HUB ---
+
+class PayrollReportsHubView(PayrollManagerMixin, TemplateView):
+    template_name = 'payroll/reports_hub.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['runs'] = PayrollRun.objects.all().order_by('-period_start')
+        return ctx

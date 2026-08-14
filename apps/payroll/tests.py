@@ -1281,4 +1281,212 @@ class PayrollReconciliationAndProductionReadinessTests(TestCase):
         self.assertTrue(len(cash_excel) > 3000)
 
 
+from django.test import Client
+from apps.accounts.models import CustomUser
+
+class PayrollUITests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin_user = CustomUser.objects.create_superuser(
+            email="admin@test.com",
+            password="adminpassword"
+        )
+        self.employee_user = CustomUser.objects.create_user(
+            email="emp@test.com",
+            phone="01711111111",
+            password="emppassword",
+            role="staff"
+        )
+        self.branch = Branch.objects.create(
+            name="Test Branch",
+            latitude=Decimal("23.00"),
+            longitude=90.00
+        )
+        self.employee = Employee.objects.create(
+            employee_number="EMP-TEST-01",
+            first_name="Test",
+            last_name="Employee",
+            status=EmployeeStatus.ACTIVE,
+            branch=self.branch,
+            user=self.employee_user
+        )
+        self.basic_comp = SalaryComponent.objects.create(
+            name="Basic",
+            code="BASIC",
+            type=SalaryComponentType.EARNING,
+            value_type=SalaryComponentValueType.PERCENTAGE,
+            value=Decimal("50.00")
+        )
+        self.structure = SalaryStructure.objects.create(
+            name="Test Structure",
+            is_active=True
+        )
+        SalaryStructureComponent.objects.create(
+            salary_structure=self.structure,
+            salary_component=self.basic_comp,
+            value=Decimal("100.00"),
+            value_type=SalaryComponentValueType.PERCENTAGE
+        )
+
+    def test_create_payroll_run_view(self):
+        self.client.login(email="admin@test.com", password="adminpassword")
+        response = self.client.post("/payroll/runs/create/", {
+            "month": "8",
+            "year": "2026",
+            "name": "August 2026 Run"
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(PayrollRun.objects.filter(name="August 2026 Run").exists())
+
+    def test_salary_component_crud(self):
+        self.client.login(email="admin@test.com", password="adminpassword")
+        
+        # Create
+        response = self.client.post("/payroll/components/create/", {
+            "name": "House Rent",
+            "code": "HRA",
+            "type": "earning",
+            "value_type": "percentage",
+            "value": "25.00"
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(SalaryComponent.objects.filter(code="HRA").exists())
+
+        # Update
+        hra = SalaryComponent.objects.get(code="HRA")
+        response = self.client.post(f"/payroll/components/{hra.pk}/edit/", {
+            "name": "House Rent Updated",
+            "type": "earning",
+            "value_type": "percentage",
+            "value": "30.00"
+        })
+        self.assertEqual(response.status_code, 302)
+        hra.refresh_from_db()
+        self.assertEqual(hra.name, "House Rent Updated")
+
+        # Delete
+        response = self.client.post(f"/payroll/components/{hra.pk}/delete/")
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(SalaryComponent.objects.filter(code="HRA").exists())
+
+    def test_salary_structure_validation(self):
+        self.client.login(email="admin@test.com", password="adminpassword")
+        
+        # Invalid percentage total (not 100%)
+        response = self.client.post("/payroll/structures/create/", {
+            "name": "Invalid Structure",
+            "component_ids": [self.basic_comp.pk],
+            "component_values": ["90.00"],
+            "component_value_types": ["percentage"]
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(SalaryStructure.objects.filter(name="Invalid Structure").exists())
+
+        # Valid percentage total (100%)
+        response = self.client.post("/payroll/structures/create/", {
+            "name": "Valid Structure",
+            "component_ids": [self.basic_comp.pk],
+            "component_values": ["100.00"],
+            "component_value_types": ["percentage"]
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(SalaryStructure.objects.filter(name="Valid Structure").exists())
+
+    def test_employee_salary_assignment(self):
+        self.client.login(email="admin@test.com", password="adminpassword")
+        response = self.client.post("/payroll/setup/assign/", {
+            "employee_id": self.employee.pk,
+            "salary_structure_id": self.structure.pk,
+            "gross_salary": "60000.00",
+            "effective_from": "2026-08-01",
+            "effective_to": "2026-08-31",
+            "payment_mode": "bank",
+            "bank_limit": "0.00"
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(EmployeeSalaryAssignment.objects.filter(employee=self.employee).exists())
+
+        # Overlapping assignment should fail
+        response2 = self.client.post("/payroll/setup/assign/", {
+            "employee_id": self.employee.pk,
+            "salary_structure_id": self.structure.pk,
+            "gross_salary": "70000.00",
+            "effective_from": "2026-08-15",
+            "effective_to": "2026-09-15",
+            "payment_mode": "bank",
+            "bank_limit": "0.00"
+        })
+        self.assertEqual(response2.status_code, 302)
+        self.assertEqual(EmployeeSalaryAssignment.objects.filter(employee=self.employee).count(), 1)
+
+    def test_missing_salary_warning(self):
+        run = PayrollRun.objects.create(
+            name="August 2026 Warning Test",
+            period_start=datetime.date(2026, 8, 1),
+            period_end=datetime.date(2026, 8, 31)
+        )
+        self.client.login(email="admin@test.com", password="adminpassword")
+        response = self.client.get(f"/payroll/runs/{run.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "lack active Salary Assignments")
+
+    def test_locked_state_action_blocking(self):
+        run = PayrollRun.objects.create(
+            name="August 2026 Locked Test",
+            period_start=datetime.date(2026, 8, 1),
+            period_end=datetime.date(2026, 8, 31),
+            status=PayrollRunStatus.APPROVED_LOCKED
+        )
+        self.client.login(email="admin@test.com", password="adminpassword")
+        
+        # Syncing a locked run should fail or do nothing (service/view enforcement)
+        response = self.client.post(f"/payroll/runs/{run.pk}/sync/")
+        self.assertEqual(response.status_code, 302)
+        
+        # Adjustments should not allow edits in locked run (usually adjustment delete/add views fail)
+        response2 = self.client.post(f"/payroll/runs/{run.pk}/adjustments/add/", {
+            "employee_id": self.employee.pk,
+            "component_id": self.basic_comp.pk,
+            "amount": "1000.00",
+            "reason": "Test adjustment"
+        })
+        self.assertIn(response2.status_code, [400, 403])  # or equivalent error status
+
+    def test_payslip_access_rbac(self):
+        # Create calculation for employee
+        run = PayrollRun.objects.create(
+            name="August 2026 Lock Test",
+            period_start=datetime.date(2026, 8, 1),
+            period_end=datetime.date(2026, 8, 31),
+            status=PayrollRunStatus.APPROVED_LOCKED
+        )
+        calc = EmployeePayrollCalculation.objects.create(
+            payroll_run=run,
+            employee=self.employee,
+            gross_salary=Decimal("50000.00"),
+            payment_mode="bank",
+            total_earnings=Decimal("50000.00"),
+            total_deductions=Decimal("0.00"),
+            net_payable=Decimal("50000.00"),
+            bank_payable=Decimal("50000.00"),
+            cash_payable=Decimal("0.00"),
+            structure_snapshot={}
+        )
+
+        # Other employee user
+        other_employee_user = CustomUser.objects.create_user(
+            email="other@test.com",
+            phone="01711111112",
+            password="otherpassword",
+            role="staff"
+        )
+        
+        # Login other employee
+        self.client.login(email="other@test.com", password="otherpassword")
+        # Try to view calculation detail/payslip of the first employee
+        response = self.client.get(f"/payroll/payslips/{calc.pk}/")
+        self.assertEqual(response.status_code, 403)
+
+
+
 

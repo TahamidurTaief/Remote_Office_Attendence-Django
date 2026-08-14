@@ -127,6 +127,36 @@
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <!-- Visual Stepper Flow -->
+        <c-card padding="sm">
+            <c-stepper step_count="7" 
+                       current="{% if run.status == 'draft' %}{% if not run.calculations.exists %}1{% else %}3{% endif %}{% elif run.status == 'review' %}5{% elif run.status == 'approved_locked' %}6{% elif run.status == 'disbursed' %}7{% else %}1{% endif %}"
+                       step1="Draft"
+                       step2="Sync Inputs"
+                       step3="Calculate"
+                       step4="Adjust"
+                       step5="Review"
+                       step6="Approve & Lock"
+                       step7="Disburse"
+            ></c-stepper>
+        </c-card>
+
+        <!-- Unconfigured Salary Warning Banner -->
+        {% if unassigned_count > 0 %}
+        <div class="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-amber-800">
+            <div class="flex items-start gap-2.5">
+                <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0 mt-0.5"></i>
+                <div>
+                    <h4 class="font-bold text-sm">Warning: {{ unassigned_count }} Employees lack active Salary Assignments!</h4>
+                    <p class="text-xs mt-0.5">These staff will not be included in calculations. Set their structures before calculating or syncing.</p>
+                </div>
+            </div>
+            <a href="{% url 'payroll:employee_salary_setup' %}" class="ft-btn ft-btn-sm ft-btn-secondary border-amber-300 text-amber-900 bg-amber-100 hover:bg-amber-200 shrink-0">
+                Setup Salaries
+            </a>
+        </div>
+        {% endif %}
+
         <!-- Run Status Banner & KPI Row -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <c-card padding="sm">

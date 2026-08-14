@@ -35,6 +35,13 @@ class SalaryStructure(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def earning_percentage_sum(self):
+        return sum(
+            sc.value for sc in self.structure_components.select_related('salary_component').all()
+            if sc.salary_component.type == 'earning' and sc.value_type == 'percentage'
+        )
+
 class SalaryStructureComponent(models.Model):
     salary_structure = models.ForeignKey(SalaryStructure, on_delete=models.CASCADE, related_name='structure_components')
     salary_component = models.ForeignKey(SalaryComponent, on_delete=models.CASCADE)

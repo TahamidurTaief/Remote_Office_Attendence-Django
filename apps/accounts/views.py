@@ -1932,19 +1932,18 @@ class GlobalSearchView(LoginRequiredMixin, View):
                 })
 
         # 5. Leave Requests
-        leaves = LeaveRequest.objects.select_related('employee', 'employee__branch')
+        leaves = LeaveRequest.objects.select_related('employee', 'employee__branch', 'leave_type')
         if role not in ['admin', 'system_owner', 'hr', 'manager']:
             leaves = leaves.filter(employee__user=user)
         else:
             leaves = filter_branch(leaves, 'employee__branch')
         leaves = leaves.filter(
-            Q(employee__first_name__icontains=query) |
-            Q(employee__last_name__icontains=query) |
-            Q(leave_type__icontains=query)
+            Q(employee__full_name__icontains=query) |
+            Q(leave_type__name__icontains=query)
         ).order_by('-start_date')[:5]
         for l in leaves:
             results.append({
-                'label': f"Leave: {l.employee.first_name} ({l.leave_type} - {l.status})",
+                'label': f"Leave: {l.employee.full_name} ({l.leave_type.name} - {l.status})",
                 'href': "/leave/admin/" if role in ['admin', 'system_owner', 'hr', 'manager'] else "/leave/my-leave/",
                 'icon': 'calendar-heart',
                 'group': 'Leave'

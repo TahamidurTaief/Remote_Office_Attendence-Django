@@ -18,6 +18,27 @@ urlpatterns = [
     path('payslips/<int:pk>/', views.EmployeePayslipDetailView.as_view(), name='payslip_detail'),
     path('payslips/<int:pk>/pdf/', views.EmployeePayslipPDFView.as_view(), name='payslip_pdf'),
     path('my-payslips/', views.MyPayslipsView.as_view(), name='my_payslips'),
+    
+    # Salary Components CRUD
+    path('components/', views.SalaryComponentListView.as_view(), name='salary_components'),
+    path('components/create/', views.SalaryComponentCreateView.as_view(), name='salary_component_create'),
+    path('components/<int:pk>/edit/', views.SalaryComponentUpdateView.as_view(), name='salary_component_edit'),
+    path('components/<int:pk>/delete/', views.SalaryComponentDeleteView.as_view(), name='salary_component_delete'),
+
+    # Salary Structures CRUD
+    path('structures/', views.SalaryStructureListView.as_view(), name='salary_structures'),
+    path('structures/create/', views.SalaryStructureCreateView.as_view(), name='salary_structure_create'),
+    path('structures/<int:pk>/edit/', views.SalaryStructureUpdateView.as_view(), name='salary_structure_edit'),
+    path('structures/<int:pk>/delete/', views.SalaryStructureDeleteView.as_view(), name='salary_structure_delete'),
+
+    # Employee Salary Assignment
+    path('setup/', views.EmployeeSalarySetupView.as_view(), name='employee_salary_setup'),
+    path('setup/assign/', views.EmployeeSalaryAssignmentCreateView.as_view(), name='employee_salary_assign'),
+    path('setup/assign/<int:pk>/edit/', views.EmployeeSalaryAssignmentUpdateView.as_view(), name='employee_salary_assign_edit'),
+
+    # Reports Hub
+    path('reports-hub/', views.PayrollReportsHubView.as_view(), name='reports_hub'),
+
     path('runs/<int:pk>/register/', views.PayrollRegisterView.as_view(), name='payroll_register'),
     path('runs/<int:pk>/register/export/<str:format>/', views.PayrollRegisterExportView.as_view(), name='payroll_register_export'),
     path('runs/<int:pk>/bank-report/', views.BankReportView.as_view(), name='bank_report'),

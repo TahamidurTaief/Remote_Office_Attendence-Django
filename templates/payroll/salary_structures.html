@@ -1,0 +1,236 @@
+<c-app-shell page_title="Salary Structures | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Salary Structures">
+            <c-slot name="actions">
+                <button type="button" @click="$dispatch('open-modal', {id: 'create-structure-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Create Structure</span>
+                </button>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
+        editStructure(struct) {
+            $dispatch('open-modal', {
+                id: 'edit-structure-modal',
+                action: '/payroll/structures/' + struct.id + '/edit/',
+                name: struct.name,
+                is_active: struct.is_active,
+                components: struct.components
+            });
+        }
+    }">
+        <c-card padding="none">
+            <c-table>
+                <c-slot name="header">
+                    <th>Structure Name</th>
+                    <th>Components Breakdown</th>
+                    <th>Earning % Total</th>
+                    <th>Status</th>
+                    <th class="text-right">Actions</th>
+                </c-slot>
+
+                <c-slot name="body">
+                    {% for struct in structures %}
+                    <tr>
+                        <td class="font-semibold text-gray-900">{{ struct.name }}</td>
+                        <td>
+                            <div class="flex flex-wrap gap-1.5 py-1">
+                                {% for sc in struct.structure_components.all %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border">
+                                    {{ sc.salary_component.code }}: 
+                                    {% if sc.value_type == 'percentage' %}{{ sc.value|floatformat:1 }}%{% else %}{{ sc.value|floatformat:0 }} BDT{% endif %}
+                                </span>
+                                {% empty %}
+                                <span class="text-gray-400 text-xs">No components defined</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="font-bold {% if struct.earning_percentage_sum == 100 %}text-green-600{% else %}text-red-500{% endif %}">
+                                {{ struct.earning_percentage_sum|floatformat:1 }}%
+                            </span>
+                        </td>
+                        <td>
+                            {% if struct.is_active %}
+                            <c-badge variant="success" label="Active"></c-badge>
+                            {% else %}
+                            <c-badge variant="neutral" label="Inactive"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <button type="button" @click="editStructure({
+                                    id: '{{ struct.pk }}',
+                                    name: '{{ struct.name|escapejs }}',
+                                    is_active: {% if struct.is_active %}true{% else %}false{% endif %},
+                                    components: [
+                                        {% for sc in struct.structure_components.all %}
+                                        {
+                                            id: '{{ sc.salary_component.id }}',
+                                            code: '{{ sc.salary_component.code|escapejs }}',
+                                            type: '{{ sc.salary_component.type|escapejs }}',
+                                            value_type: '{{ sc.value_type|escapejs }}',
+                                            value: '{{ sc.value|floatformat:4 }}'
+                                        },
+                                        {% endfor %}
+                                    ]
+                                })" class="ft-btn ft-btn-ghost ft-btn-sm text-blue-600 hover:text-blue-800">
+                                    Edit
+                                </button>
+                                <form method="post" action="{% url 'payroll:salary_structure_delete' struct.pk %}" onsubmit="return confirm('Are you sure you want to delete this structure?');" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm text-red-600 hover:text-red-800">
+                                        Delete
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5">
+                            <c-empty-state icon="layout" title="No Salary Structures" description="Create a new salary structure and assign earning and deduction component ratios."></c-empty-state>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </c-slot>
+            </c-table>
+        </c-card>
+    </div>
+
+    <!-- Create Structure Modal -->
+    <c-modal id="create-structure-modal" title="Create Salary Structure" size="lg">
+        <form method="post" action="{% url 'payroll:salary_structure_create' %}" class="space-y-4" x-data="{
+            rows: [{ component_id: '', value_type: 'percentage', value: '0' }],
+            addRow() {
+                this.rows.push({ component_id: '', value_type: 'percentage', value: '0' });
+            },
+            removeRow(index) {
+                this.rows.splice(index, 1);
+            }
+        }">
+            {% csrf_token %}
+            <c-input name="name" label="Structure Name" required="true" placeholder="e.g. Standard Executive Structure"></c-input>
+
+            <div class="space-y-2 border-t pt-3">
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Salary Components</label>
+                
+                <template x-for="(row, index) in rows" :key="index">
+                    <div class="flex gap-2 items-center mb-2">
+                        <select name="component_ids" class="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-primary-500" required>
+                            <option value="">-- Select Component --</option>
+                            {% for c in components %}
+                            <option value="{{ c.pk }}">{{ c.name }} ({{ c.code }}) [{{ c.type|title }}]</option>
+                            {% endfor %}
+                        </select>
+
+                        <select name="component_value_types" x-model="row.value_type" class="w-40 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-primary-500">
+                            <option value="percentage">Percentage of Gross</option>
+                            <option value="fixed">Fixed Amount</option>
+                        </select>
+
+                        <input type="number" step="0.0001" name="component_values" x-model="row.value" class="w-32 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-primary-500" required placeholder="Value">
+
+                        <button type="button" @click="removeRow(index)" class="text-red-500 hover:text-red-700 p-2">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </template>
+
+                <button type="button" @click="addRow()" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1 mt-2">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    <span>Add Component Line</span>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4 pt-2">
+                <label class="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" name="is_active" checked class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                    <span>Active structure</span>
+                </label>
+            </div>
+
+            <c-slot name="footer">
+                <div class="flex items-center justify-end gap-2 w-full">
+                    <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                    <button type="submit" class="ft-btn ft-btn-primary">Save Structure</button>
+                </div>
+            </c-slot>
+        </form>
+    </c-modal>
+
+    <!-- Edit Structure Modal -->
+    <c-modal id="edit-structure-modal" title="Edit Salary Structure" size="lg">
+        <div x-data="{ 
+            action: '', name: '', is_active: true, rows: []
+        }" @open-modal.window="if($event.detail.id === 'edit-structure-modal') {
+            action = $event.detail.action;
+            name = $event.detail.name;
+            is_active = $event.detail.is_active;
+            rows = $event.detail.components.map(c => ({
+                component_id: c.id,
+                value_type: c.value_type,
+                value: c.value
+            }));
+            if (rows.length === 0) {
+                rows.push({ component_id: '', value_type: 'percentage', value: '0' });
+            }
+        }">
+            <form method="post" :action="action" class="space-y-4">
+                {% csrf_token %}
+                <c-input name="name" label="Structure Name" required="true" x-model="name"></c-input>
+
+                <div class="space-y-2 border-t pt-3">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Salary Components</label>
+                    
+                    <template x-for="(row, index) in rows" :key="index">
+                        <div class="flex gap-2 items-center mb-2">
+                            <select name="component_ids" x-model="row.component_id" class="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-primary-500" required>
+                                <option value="">-- Select Component --</option>
+                                {% for c in components %}
+                                <option value="{{ c.pk }}">{{ c.name }} ({{ c.code }}) [{{ c.type|title }}]</option>
+                                {% endfor %}
+                            </select>
+
+                            <select name="component_value_types" x-model="row.value_type" class="w-40 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-primary-500">
+                                <option value="percentage">Percentage of Gross</option>
+                                <option value="fixed">Fixed Amount</option>
+                            </select>
+
+                            <input type="number" step="0.0001" name="component_values" x-model="row.value" class="w-32 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-primary-500" required>
+
+                            <button type="button" @click="rows.splice(index, 1)" class="text-red-500 hover:text-red-700 p-2">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+
+                    <button type="button" @click="rows.push({ component_id: '', value_type: 'percentage', value: '0' })" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1 mt-2">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span>Add Component Line</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-4 pt-2">
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" name="is_active" :checked="is_active" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                        <span>Active structure</span>
+                    </label>
+                </div>
+
+                <c-slot name="footer">
+                    <div class="flex items-center justify-end gap-2 w-full">
+                        <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                        <button type="submit" class="ft-btn ft-btn-primary">Save Changes</button>
+                    </div>
+                </c-slot>
+            </form>
+        </div>
+    </c-modal>
+</c-app-shell>

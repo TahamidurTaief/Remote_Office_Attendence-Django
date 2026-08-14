@@ -1,0 +1,249 @@
+<c-app-shell page_title="Employee Salary Setup | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Employee Salary Setup"></c-topbar>
+    </c-slot>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
+        editAssignment(assign) {
+            $dispatch('open-modal', {
+                id: 'edit-assignment-modal',
+                action: '/payroll/setup/assign/' + assign.id + '/edit/',
+                employee_name: assign.employee_name,
+                structure_id: assign.structure_id,
+                gross_salary: assign.gross_salary,
+                effective_from: assign.effective_from,
+                effective_to: assign.effective_to,
+                payment_mode: assign.payment_mode,
+                bank_limit: assign.bank_limit
+            });
+        },
+        createAssignment(emp) {
+            $dispatch('open-modal', {
+                id: 'create-assignment-modal',
+                employee_id: emp.id,
+                employee_name: emp.name
+            });
+        }
+    }">
+        <!-- Search and Filters -->
+        <c-card padding="sm">
+            <form method="get" action="" class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                <c-input name="search" label="Search Employee" placeholder="ID or name..." value="{{ search }}"></c-input>
+
+                <c-select name="department" label="Department" value="{{ selected_dept }}">
+                    <option value="">All Departments</option>
+                    {% for d in departments %}
+                    <option value="{{ d.pk }}" {% if selected_dept == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <c-select name="branch" label="Branch" value="{{ selected_branch }}">
+                    <option value="">All Branches</option>
+                    {% for b in branches %}
+                    <option value="{{ b.pk }}" {% if selected_branch == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <div class="flex gap-2">
+                    <button type="submit" class="ft-btn ft-btn-primary flex-1">Apply</button>
+                    <a href="?" class="ft-btn ft-btn-secondary">Reset</a>
+                </div>
+            </form>
+        </c-card>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for emp in employees %}
+            <c-card padding="md" class="relative overflow-hidden border {% if not emp.active_salary_assignment %}border-red-200 bg-red-50/20{% endif %}">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <h3 class="font-bold text-gray-900 text-sm">{{ emp.get_full_name }}</h3>
+                        <p class="text-xs font-mono text-gray-500 mt-0.5">{{ emp.employee_number }}</p>
+                        <p class="text-xs text-gray-600 mt-1">{{ emp.department.name|default:"No Department" }} • {{ emp.branch.name|default:"No Branch" }}</p>
+                    </div>
+                    {% if not emp.active_salary_assignment %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                        Not Configured
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                        Configured
+                    </span>
+                    {% endif %}
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-gray-150 space-y-2 text-xs">
+                    {% if emp.active_salary_assignment %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Structure:</span>
+                        <span class="font-semibold text-gray-900">{{ emp.active_salary_assignment.salary_structure.name }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Gross Salary:</span>
+                        <span class="font-bold text-gray-900">{{ emp.active_salary_assignment.gross_salary|floatformat:2 }} BDT</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Payment Mode:</span>
+                        <span class="capitalize text-gray-800">{{ emp.active_salary_assignment.payment_mode }}</span>
+                    </div>
+                    {% if emp.active_salary_assignment.payment_mode == 'split' %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Bank Limit:</span>
+                        <span class="font-semibold text-gray-900">{{ emp.active_salary_assignment.bank_limit|floatformat:2 }} BDT</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Effective:</span>
+                        <span class="font-mono text-gray-800">
+                            {{ emp.active_salary_assignment.effective_from|date:"d/m/Y" }} 
+                            to 
+                            {% if emp.active_salary_assignment.effective_to %}{{ emp.active_salary_assignment.effective_to|date:"d/m/Y" }}{% else %}Present{% endif %}
+                        </span>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-2 text-gray-500">
+                        No active salary structure assigned.
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-gray-150 flex justify-end gap-2">
+                    {% if emp.active_salary_assignment %}
+                    <button type="button" @click="editAssignment({
+                        id: '{{ emp.active_salary_assignment.pk }}',
+                        employee_name: '{{ emp.get_full_name|escapejs }}',
+                        structure_id: '{{ emp.active_salary_assignment.salary_structure.pk }}',
+                        gross_salary: '{{ emp.active_salary_assignment.gross_salary }}',
+                        effective_from: '{{ emp.active_salary_assignment.effective_from|date:"Y-m-d" }}',
+                        effective_to: '{{ emp.active_salary_assignment.effective_to|date:"Y-m-d" }}',
+                        payment_mode: '{{ emp.active_salary_assignment.payment_mode }}',
+                        bank_limit: '{{ emp.active_salary_assignment.bank_limit }}'
+                    })" class="ft-btn ft-btn-secondary ft-btn-sm w-full">
+                        Update Assignment
+                    </button>
+                    {% else %}
+                    <button type="button" @click="createAssignment({
+                        id: '{{ emp.pk }}',
+                        name: '{{ emp.get_full_name|escapejs }}'
+                    })" class="ft-btn ft-btn-primary ft-btn-sm w-full">
+                        Set Salary
+                    </button>
+                    {% endif %}
+                </div>
+            </c-card>
+            {% empty %}
+            <div class="col-span-full">
+                <c-empty-state icon="users" title="No Employees Found" description="Try adjusting your filters or search keywords."></c-empty-state>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if is_paginated %}
+        <div class="mt-4">
+            <c-pagination current_page="{{ page_obj.number }}" total_pages="{{ page_obj.paginator.num_pages }}"></c-pagination>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Create Assignment Modal -->
+    <c-modal id="create-assignment-modal" title="Set Salary Structure" size="md">
+        <div x-data="{ employee_id: '', employee_name: '' }" @open-modal.window="if($event.detail.id === 'create-assignment-modal') {
+            employee_id = $event.detail.employee_id;
+            employee_name = $event.detail.employee_name;
+        }">
+            <form method="post" action="{% url 'payroll:employee_salary_assign' %}" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="employee_id" :value="employee_id">
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Employee</label>
+                    <input type="text" readonly :value="employee_name" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 font-bold">
+                </div>
+
+                <c-select name="salary_structure_id" label="Salary Structure" required="true">
+                    {% for s in structures %}
+                    <option value="{{ s.pk }}">{{ s.name }} (Earning: {{ s.earning_percentage_sum }}%)</option>
+                    {% endfor %}
+                </c-select>
+
+                <c-input type="number" step="0.01" name="gross_salary" label="Gross Monthly Salary (BDT)" required="true" placeholder="e.g. 50000.00"></c-input>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <c-input type="date" name="effective_from" label="Effective From" required="true"></c-input>
+                    <c-input type="date" name="effective_to" label="Effective To (Optional)"></c-input>
+                </div>
+
+                <c-select name="payment_mode" label="Payment Mode" required="true">
+                    {% for code, label in payment_modes %}
+                    <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <c-input type="number" step="0.01" name="bank_limit" label="Bank Limit Amount (For Split Mode only)" placeholder="e.g. 20000.00"></c-input>
+
+                <c-slot name="footer">
+                    <div class="flex items-center justify-end gap-2 w-full">
+                        <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                        <button type="submit" class="ft-btn ft-btn-primary">Assign Structure</button>
+                    </div>
+                </c-slot>
+            </form>
+        </div>
+    </c-modal>
+
+    <!-- Edit Assignment Modal -->
+    <c-modal id="edit-assignment-modal" title="Update Salary Structure Assignment" size="md">
+        <div x-data="{ 
+            action: '', employee_name: '', structure_id: '', gross_salary: '', effective_from: '', effective_to: '', payment_mode: '', bank_limit: '' 
+        }" @open-modal.window="if($event.detail.id === 'edit-assignment-modal') {
+            action = $event.detail.action;
+            employee_name = $event.detail.employee_name;
+            structure_id = $event.detail.structure_id;
+            gross_salary = $event.detail.gross_salary;
+            effective_from = $event.detail.effective_from;
+            effective_to = $event.detail.effective_to;
+            payment_mode = $event.detail.payment_mode;
+            bank_limit = $event.detail.bank_limit;
+        }">
+            <form method="post" :action="action" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Employee</label>
+                    <input type="text" readonly :value="employee_name" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 font-bold">
+                </div>
+
+                <c-select name="salary_structure_id" label="Salary Structure" required="true" x-model="structure_id">
+                    {% for s in structures %}
+                    <option value="{{ s.pk }}">{{ s.name }} (Earning: {{ s.earning_percentage_sum }}%)</option>
+                    {% endfor %}
+                </c-select>
+
+                <c-input type="number" step="0.01" name="gross_salary" label="Gross Monthly Salary (BDT)" required="true" x-model="gross_salary"></c-input>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <c-input type="date" name="effective_from" label="Effective From" required="true" x-model="effective_from"></c-input>
+                    <c-input type="date" name="effective_to" label="Effective To (Optional)" x-model="effective_to"></c-input>
+                </div>
+
+                <c-select name="payment_mode" label="Payment Mode" required="true" x-model="payment_mode">
+                    {% for code, label in payment_modes %}
+                    <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <c-input type="number" step="0.01" name="bank_limit" label="Bank Limit Amount (For Split Mode only)" x-model="bank_limit"></c-input>
+
+                <c-slot name="footer">
+                    <div class="flex items-center justify-end gap-2 w-full">
+                        <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                        <button type="submit" class="ft-btn ft-btn-primary">Save Assignment</button>
+                    </div>
+                </c-slot>
+            </form>
+        </div>
+    </c-modal>
+</c-app-shell>

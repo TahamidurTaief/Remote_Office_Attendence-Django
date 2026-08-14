@@ -1,0 +1,218 @@
+<c-app-shell page_title="Salary Components | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Salary Components">
+            <c-slot name="actions">
+                <button type="button" @click="$dispatch('open-modal', {id: 'create-component-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Add Component</span>
+                </button>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
+        editComponent(comp) {
+            $dispatch('open-modal', {
+                id: 'edit-component-modal',
+                action: '/payroll/components/' + comp.id + '/edit/',
+                name: comp.name,
+                code: comp.code,
+                type: comp.type,
+                value_type: comp.value_type,
+                value: comp.value,
+                is_pf: comp.is_pf,
+                is_active: comp.is_active
+            });
+        }
+    }">
+        <c-card padding="sm">
+            <form method="get" action="" class="flex gap-2">
+                <c-input name="search" placeholder="Search by name or code..." value="{{ request.GET.search }}" class="flex-1"></c-input>
+                <button type="submit" class="ft-btn ft-btn-secondary">Search</button>
+            </form>
+        </c-card>
+
+        <c-card padding="none">
+            <c-table>
+                <c-slot name="header">
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Value Mode</th>
+                    <th>Value</th>
+                    <th>PF Deductible</th>
+                    <th>Status</th>
+                    <th class="text-right">Actions</th>
+                </c-slot>
+
+                <c-slot name="body">
+                    {% for comp in components %}
+                    <tr>
+                        <td class="font-mono font-bold text-gray-900">{{ comp.code }}</td>
+                        <td>{{ comp.name }}</td>
+                        <td>
+                            {% if comp.type == 'earning' %}
+                            <c-badge variant="success" label="Earning"></c-badge>
+                            {% else %}
+                            <c-badge variant="danger" label="Deduction"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td class="capitalize">{{ comp.get_value_type_display }}</td>
+                        <td>
+                            {% if comp.value_type == 'percentage' %}
+                            {{ comp.value|floatformat:2 }}%
+                            {% else %}
+                            {{ comp.value|floatformat:2 }} BDT
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if comp.is_pf %}
+                            <c-badge variant="info" label="Yes"></c-badge>
+                            {% else %}
+                            <span class="text-gray-400">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if comp.is_active %}
+                            <c-badge variant="success" label="Active"></c-badge>
+                            {% else %}
+                            <c-badge variant="neutral" label="Inactive"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <button type="button" @click="editComponent({
+                                    id: '{{ comp.pk }}',
+                                    name: '{{ comp.name|escapejs }}',
+                                    code: '{{ comp.code|escapejs }}',
+                                    type: '{{ comp.type|escapejs }}',
+                                    value_type: '{{ comp.value_type|escapejs }}',
+                                    value: '{{ comp.value|floatformat:4 }}',
+                                    is_pf: {% if comp.is_pf %}true{% else %}false{% endif %},
+                                    is_active: {% if comp.is_active %}true{% else %}false{% endif %}
+                                })" class="ft-btn ft-btn-ghost ft-btn-sm text-blue-600 hover:text-blue-800">
+                                    Edit
+                                </button>
+                                <form method="post" action="{% url 'payroll:salary_component_delete' comp.pk %}" onsubmit="return confirm('Are you sure you want to delete this component?');" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm text-red-600 hover:text-red-800">
+                                        Delete
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8">
+                            <c-empty-state icon="database" title="No Salary Components" description="Get started by adding your first earning or deduction component."></c-empty-state>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </c-slot>
+            </c-table>
+        </c-card>
+    </div>
+
+    <!-- Create Component Modal -->
+    <c-modal id="create-component-modal" title="Create Salary Component" size="md">
+        <form method="post" action="{% url 'payroll:salary_component_create' %}" class="space-y-4">
+            {% csrf_token %}
+            <c-input name="name" label="Component Name" required="true" placeholder="e.g. Basic Salary"></c-input>
+            <c-input name="code" label="Component Code" required="true" placeholder="e.g. BASIC"></c-input>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <c-select name="type" label="Component Type" required="true">
+                    <option value="earning">Earning</option>
+                    <option value="deduction">Deduction</option>
+                </c-select>
+
+                <c-select name="value_type" label="Value Type" required="true">
+                    <option value="percentage">Percentage of Gross</option>
+                    <option value="fixed">Fixed Amount</option>
+                </c-select>
+            </div>
+
+            <c-input type="number" step="0.0001" name="value" label="Value / Percentage" required="true" placeholder="e.g. 50.00"></c-input>
+            
+            <div class="flex items-center gap-4 pt-2">
+                <label class="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" name="is_pf" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                    <span>Provident Fund (PF) Deduction flag</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" name="is_active" checked class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                    <span>Active status</span>
+                </label>
+            </div>
+
+            <c-slot name="footer">
+                <div class="flex items-center justify-end gap-2 w-full">
+                    <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                    <button type="submit" class="ft-btn ft-btn-primary">Save Component</button>
+                </div>
+            </c-slot>
+        </form>
+    </c-modal>
+
+    <!-- Edit Component Modal -->
+    <c-modal id="edit-component-modal" title="Edit Salary Component" size="md">
+        <div x-data="{ 
+            action: '', name: '', code: '', type: '', value_type: '', value: '', is_pf: false, is_active: true
+        }" @open-modal.window="if($event.detail.id === 'edit-component-modal') {
+            action = $event.detail.action;
+            name = $event.detail.name;
+            code = $event.detail.code;
+            type = $event.detail.type;
+            value_type = $event.detail.value_type;
+            value = $event.detail.value;
+            is_pf = $event.detail.is_pf;
+            is_active = $event.detail.is_active;
+        }">
+            <form method="post" :action="action" class="space-y-4">
+                {% csrf_token %}
+                <c-input name="name" label="Component Name" required="true" x-model="name"></c-input>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Component Code</label>
+                    <input type="text" disabled :value="code" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-500 font-mono">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <c-select name="type" label="Component Type" required="true" x-model="type">
+                        <option value="earning">Earning</option>
+                        <option value="deduction">Deduction</option>
+                    </c-select>
+
+                    <c-select name="value_type" label="Value Type" required="true" x-model="value_type">
+                        <option value="percentage">Percentage of Gross</option>
+                        <option value="fixed">Fixed Amount</option>
+                    </c-select>
+                </div>
+
+                <c-input type="number" step="0.0001" name="value" label="Value / Percentage" required="true" x-model="value"></c-input>
+                
+                <div class="flex items-center gap-4 pt-2">
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" name="is_pf" :checked="is_pf" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                        <span>Provident Fund (PF) Deduction flag</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" name="is_active" :checked="is_active" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                        <span>Active status</span>
+                    </label>
+                </div>
+
+                <c-slot name="footer">
+                    <div class="flex items-center justify-end gap-2 w-full">
+                        <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                        <button type="submit" class="ft-btn ft-btn-primary">Save Changes</button>
+                    </div>
+                </c-slot>
+            </form>
+        </div>
+    </c-modal>
+</c-app-shell>
