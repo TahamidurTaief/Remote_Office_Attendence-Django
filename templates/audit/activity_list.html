@@ -26,20 +26,4 @@
             {% include "audit/partials/activity_table.html" %}
         </div>
     </div>
-
-    <!-- Container for HTMX loaded modals -->
-    <div id="modal-container"></div>
-
-    <script>
-    document.body.addEventListener('htmx:afterSwap', function (evt) {
-        var container = document.getElementById('modal-container');
-        if (!container || !evt.target || !container.contains(evt.target)) return;
-        if (window.Alpine) Alpine.initTree(container);
-        var modal = container.querySelector('[id^="modal-"]');
-        if (modal) {
-            var modalId = modal.id.replace('modal-', '');
-            window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: modalId } }));
-        }
-    });
-    </script>
 </c-app-shell>
