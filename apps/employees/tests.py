@@ -2081,4 +2081,174 @@ class HRHardeningTests(TestCase):
         self.assertEqual(master.get_completion_percentage(), 40)
 
 
+class EmployeeLifecycleTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Branch
+        from apps.employees.models import Department, Designation
+        self.branch = Branch.objects.create(name='Test Branch', latitude=23.8103, longitude=90.4125, radius_meters=100)
+        self.dept = Department.objects.create(name='Engineering', code='ENG')
+        self.desig = Designation.objects.create(name='Engineer', code='ENG_DES')
+        self.admin = User.objects.create_superuser(email='lifecycle_admin@example.com', phone='+8801700000001', password='password123', role='admin')
+        self.staff_user = User.objects.create_user(email='lifecycle_staff@example.com', phone='+8801700000002', password='password123', role='staff')
+        
+        from apps.employees.models import Employee
+        self.employee = Employee.objects.create(
+            employee_number='EMP-LIFE-001',
+            first_name='Lifecycle',
+            last_name='User',
+            status='active',
+            user=self.staff_user,
+            branch=self.branch,
+            department=self.dept,
+            designation=self.desig
+        )
+
+    def test_active_to_inactive_with_reason(self):
+        from apps.employees.views import _apply_transition
+        class FakeReq:
+            to_status = 'inactive'
+            effective_date = timezone.now().date()
+            reason = 'Temporary inactive reason'
+        
+        _apply_transition(self.employee, FakeReq(), self.admin)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'inactive')
+        self.assertFalse(self.employee.is_login_allowed())
+
+    def test_active_to_inactive_requires_reason(self):
+        from apps.employees.views import _apply_transition
+        class FakeReq:
+            to_status = 'inactive'
+            effective_date = timezone.now().date()
+            reason = ''
+        
+        with self.assertRaises(ValidationError):
+            _apply_transition(self.employee, FakeReq(), self.admin)
+
+    def test_inactive_to_active(self):
+        from apps.employees.views import _apply_transition
+        self.employee.status = 'inactive'
+        self.employee.save()
+        
+        class FakeReq:
+            to_status = 'active'
+            effective_date = timezone.now().date()
+            reason = 'Reactivating employee'
+            
+        _apply_transition(self.employee, FakeReq(), self.admin)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'active')
+        self.assertTrue(self.employee.is_login_allowed())
+
+    def test_active_to_suspended(self):
+        from apps.employees.views import _apply_transition
+        class FakeReq:
+            to_status = 'suspended'
+            effective_date = timezone.now().date()
+            reason = 'Investigation'
+            suspension_start_date = timezone.now().date()
+            suspension_end_date = timezone.now().date() + timedelta(days=5)
+            auto_reactivate = True
+            
+        _apply_transition(self.employee, FakeReq(), self.admin)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'suspended')
+        self.assertTrue(self.employee.is_suspended)
+        self.assertFalse(self.employee.is_login_allowed())
+
+        # Check suspension record created
+        susp = self.employee.suspensions.filter(is_active=True).first()
+        self.assertIsNotNone(susp)
+        self.assertEqual(susp.suspension_reason, 'Investigation')
+        self.assertTrue(susp.auto_reactivate)
+
+    def test_invalid_suspension_dates(self):
+        from apps.employees.forms import LifecycleActionForm
+        form_data = {
+            'to_status': 'suspended',
+            'reason': 'Testing date range validation',
+            'effective_date': timezone.now().date(),
+            'suspension_start_date': timezone.now().date(),
+            'suspension_end_date': timezone.now().date() - timedelta(days=2),
+            'auto_reactivate': True
+        }
+        form = LifecycleActionForm(data=form_data, to_status='suspended')
+        self.assertFalse(form.is_valid())
+        self.assertIn('__all__', form.errors)
+
+    def test_suspension_expiry_auto_reactivation(self):
+        from apps.employees.models import EmployeeSuspension
+        from django.core.management import call_command
+        
+        # Suspend the employee with expiry yesterday
+        self.employee.status = 'suspended'
+        self.employee.is_suspended = True
+        self.employee.save()
+        
+        EmployeeSuspension.objects.create(
+            employee=self.employee,
+            suspension_start_date=timezone.now().date() - timedelta(days=5),
+            suspension_end_date=timezone.now().date() - timedelta(days=1),
+            suspension_reason='Past expiry suspension',
+            auto_reactivate=True,
+            is_active=True,
+            previous_status='active'
+        )
+
+        call_command('reactivate_suspended')
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'active')
+        self.assertFalse(self.employee.is_suspended)
+
+    def test_manual_reactivation_clears_suspension(self):
+        from apps.employees.models import EmployeeSuspension
+        from apps.employees.views import _apply_transition
+        
+        self.employee.status = 'suspended'
+        self.employee.is_suspended = True
+        self.employee.save()
+        
+        susp = EmployeeSuspension.objects.create(
+            employee=self.employee,
+            suspension_start_date=timezone.now().date(),
+            suspension_reason='Testing manual clear',
+            is_active=True,
+            previous_status='active'
+        )
+
+        class FakeReq:
+            to_status = 'active'
+            effective_date = timezone.now().date()
+            reason = 'Manual lift of suspension'
+
+        _apply_transition(self.employee, FakeReq(), self.admin)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'active')
+        self.assertFalse(self.employee.is_suspended)
+        
+        susp.refresh_from_db()
+        self.assertFalse(susp.is_active)
+
+    def test_archived_employee_rules(self):
+        from apps.employees.views import _apply_transition
+        class FakeReq:
+            to_status = 'archived'
+            effective_date = timezone.now().date()
+            reason = 'Archiving employee records'
+
+        _apply_transition(self.employee, FakeReq(), self.admin)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, 'archived')
+        self.assertFalse(self.employee.is_login_allowed())
+
+    def test_hard_delete_restrictions(self):
+        # Create non-superuser admin
+        non_super_admin = User.objects.create_user(email='nonsuper_admin@example.com', phone='+8801700000003', password='password123', role='admin')
+        self.client.force_login(non_super_admin)
+        url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 403)
+
+
+
 

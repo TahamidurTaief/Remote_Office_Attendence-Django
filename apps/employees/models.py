@@ -362,6 +362,7 @@ class EmployeeStatus(models.TextChoices):
     DRAFT = 'draft', 'Draft'
     PENDING_APPROVAL = 'pending_approval', 'Pending Approval'
     ACTIVE = 'active', 'Active'
+    INACTIVE = 'inactive', 'Inactive'
     PROBATION = 'probation', 'Probation'
     CONFIRMED = 'confirmed', 'Confirmed'
     TRANSFERRED = 'transferred', 'Transferred'
@@ -691,6 +692,25 @@ class Employee(models.Model):
 
     def delete(self, *args, **kwargs):
         if self.pk:
+            # Check related business records before allowing any deletion/archival
+            # Let's check if there's any Attendance, Leave, or Payroll records
+            profile = getattr(self, 'legacy_profile', None)
+            if profile:
+                from apps.attendance.models import Attendance
+                from apps.leave.models import LeaveRequest
+                from apps.payroll.models import EmployeePayrollCalculation
+                if Attendance.objects.filter(employee=profile).exists() or \
+                   LeaveRequest.objects.filter(employee=profile).exists() or \
+                   EmployeePayrollCalculation.objects.filter(employee=self).exists():
+                    raise ValidationError("Cannot delete or archive employee with related business records (Attendance, Leave, or Payroll).")
+
+                # Project/task warning/blocks
+                if profile.managed_projects.exclude(status='Completed').exists() or \
+                   profile.site_engineer_projects.exclude(status='Completed').exists() or \
+                   profile.member_projects.exclude(status='Completed').exists() or \
+                   profile.assigned_tasks.exclude(status='Completed').exists():
+                    raise ValidationError("Cannot delete or archive employee assigned to active projects or tasks.")
+
             db_status = Employee.objects.filter(pk=self.pk).values_list('status', flat=True).first()
             if db_status != EmployeeStatus.ARCHIVED:
                 Employee.objects.filter(pk=self.pk).update(status=EmployeeStatus.ARCHIVED, updated_at=timezone.now())
@@ -857,5 +877,34 @@ class ManagerDelegation(models.Model):
 
     def __str__(self):
         return f"{self.manager.get_full_name()} -> {self.delegate_to.get_full_name()} ({self.start_date} to {self.end_date})"
+
+
+class EmployeeSuspension(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='suspensions')
+    suspension_start_date = models.DateField()
+    suspension_end_date = models.DateField(null=True, blank=True)
+    suspension_reason = models.TextField()
+    auto_reactivate = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    previous_status = models.CharField(max_length=30)
+
+    class Meta:
+        ordering = ['-changed_at']
+
+    def clean(self):
+        super().clean()
+        if self.suspension_start_date and self.suspension_end_date:
+            if self.suspension_end_date < self.suspension_start_date:
+                raise ValidationError("End date must be greater than or equal to start date.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Suspension for {self.employee.get_full_name()} starting {self.suspension_start_date}"
+
 
 

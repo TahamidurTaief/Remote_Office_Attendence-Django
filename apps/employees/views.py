@@ -371,6 +371,9 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
 
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        else:
+            queryset = queryset.exclude(status=EmployeeStatus.ARCHIVED)
+            
         if dept_filter:
             queryset = queryset.filter(department_id=dept_filter)
         if branch_filter:
@@ -647,11 +650,19 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
         return redirect('employees:master_list')
 
 
-class EmployeeMasterDeleteView(AdminRequiredMixin, View):
+class EmployeeMasterDeleteView(View):
     """
     Hard delete an Employee record. Requires an explicit POST with confirm=yes.
     GET returns a confirmation modal fragment for HTMX.
     """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('login')
+        if not request.user.is_superuser:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Only super-admin can perform hard deletes.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
         """Return the confirmation modal (HTMX partial)."""
@@ -666,19 +677,28 @@ class EmployeeMasterDeleteView(AdminRequiredMixin, View):
         name = employee.get_full_name()
         emp_number = employee.employee_number
 
+        try:
+            # Dissociate the linked user account (don't delete the login)
+            if employee.user:
+                employee.user = None
+                employee.save(update_fields=['user'])
+
+            employee.delete()
+        except ValidationError as e:
+            messages.error(request, str(e.messages[0]) if hasattr(e, 'messages') else str(e))
+            if request.headers.get('HX-Request'):
+                # Redirect back to list
+                res = HttpResponse(status=200)
+                res['HX-Redirect'] = reverse_lazy('employees:master_list')
+                return res
+            return redirect('employees:master_list')
+
         log_audit(
             actor=request.user,
             action='employee_deleted',
             target=None,
             summary=f"Permanently deleted employee {emp_number} ({name})"
         )
-
-        # Dissociate the linked user account (don't delete the login)
-        if employee.user:
-            employee.user = None
-            employee.save(update_fields=['user'])
-
-        employee.delete()
 
         messages.success(request, f"Employee {name} ({emp_number}) has been permanently deleted.")
 
@@ -937,8 +957,19 @@ def _apply_transition(employee, req_obj, actor):
     - Creates EmploymentHistory entry
     - Logs audit
     """
+    from apps.employees.models import EmployeeSuspension, EmployeeStatus
     old_status = employee.status
     new_status = req_obj.to_status if req_obj else employee.status
+
+    # Warning / block rule on archiving
+    if new_status == EmployeeStatus.ARCHIVED:
+        profile = getattr(employee, 'legacy_profile', None)
+        if profile:
+            if profile.managed_projects.exclude(status='Completed').exists() or \
+               profile.site_engineer_projects.exclude(status='Completed').exists() or \
+               profile.member_projects.exclude(status='Completed').exists() or \
+               profile.assigned_tasks.exclude(status='Completed').exists():
+                raise ValidationError("Cannot archive employee assigned to active projects or tasks.")
 
     # Apply org changes if bundled
     changes_desc = []
@@ -958,9 +989,35 @@ def _apply_transition(employee, req_obj, actor):
     if not reason and req_obj:
         reason = 'Direct lifecycle action'
 
-    # Enforce mandatory reason for: suspended, resigned, terminated, archived
-    if new_status in ('suspended', 'resigned', 'terminated', 'archived') and (not reason or reason == 'Direct lifecycle action'):
+    # Enforce mandatory reason for: inactive, suspended, resigned, terminated, archived
+    if new_status in ('inactive', 'suspended', 'resigned', 'terminated', 'archived') and (not reason or reason == 'Direct lifecycle action'):
         raise ValidationError(f"A transition reason is mandatory for '{new_status}' status.")
+
+    # Handle suspension records
+    if new_status == EmployeeStatus.SUSPENDED:
+        # Create EmployeeSuspension record
+        start_date = getattr(req_obj, 'suspension_start_date', None) or tz.now().date()
+        end_date = getattr(req_obj, 'suspension_end_date', None)
+        auto_react = getattr(req_obj, 'auto_reactivate', False)
+        
+        # Deactivate existing active suspensions just in case
+        EmployeeSuspension.objects.filter(employee=employee, is_active=True).update(is_active=False)
+        
+        EmployeeSuspension.objects.create(
+            employee=employee,
+            suspension_start_date=start_date,
+            suspension_end_date=end_date,
+            suspension_reason=reason,
+            auto_reactivate=auto_react,
+            is_active=True,
+            changed_by=actor,
+            previous_status=old_status,
+        )
+        employee.is_suspended = True
+    elif old_status == EmployeeStatus.SUSPENDED:
+        # Reactivating: clear active suspension state but preserve history
+        EmployeeSuspension.objects.filter(employee=employee, is_active=True).update(is_active=False)
+        employee.is_suspended = False
 
     employee.status = new_status
     employee._bypass_lifecycle_validation = True
@@ -1072,6 +1129,9 @@ class LifecycleActionView(AdminRequiredMixin, View):
             fake.effective_date = cd['effective_date']
             fake.new_department = cd.get('new_department')
             fake.new_designation = cd.get('new_designation')
+            fake.suspension_start_date = cd.get('suspension_start_date')
+            fake.suspension_end_date = cd.get('suspension_end_date')
+            fake.auto_reactivate = cd.get('auto_reactivate', False)
             _apply_transition(employee, fake, request.user)
             log_audit(
                 actor=request.user,

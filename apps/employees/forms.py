@@ -428,6 +428,23 @@ class LifecycleActionForm(forms.Form):
         widget=forms.Select(attrs={'class': SELECT_INPUT}),
     )
 
+    # Optional: for Suspension
+    suspension_start_date = forms.DateField(
+        label='Suspension Start Date',
+        widget=forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+        required=False,
+    )
+    suspension_end_date = forms.DateField(
+        label='Suspension End Date / Expiry Date',
+        widget=forms.DateInput(attrs={'class': TEXT_INPUT, 'type': 'date'}),
+        required=False,
+    )
+    auto_reactivate = forms.BooleanField(
+        label='Auto-reactivate when expired',
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
+    )
+
     def __init__(self, *args, to_status=None, **kwargs):
         super().__init__(*args, **kwargs)
         if to_status:
@@ -436,6 +453,28 @@ class LifecycleActionForm(forms.Form):
             if to_status not in ('promoted', 'transferred', 'demoted'):
                 del self.fields['new_department']
                 del self.fields['new_designation']
+            if to_status != 'suspended':
+                del self.fields['suspension_start_date']
+                del self.fields['suspension_end_date']
+                del self.fields['auto_reactivate']
+            else:
+                self.fields['suspension_start_date'].required = True
+
+    def clean(self):
+        cleaned_data = super().clean()
+        to_status = cleaned_data.get('to_status')
+        reason = cleaned_data.get('reason')
+        
+        # Enforce reason requirement for inactive, suspended, archived
+        if to_status in ('inactive', 'suspended', 'archived') and not reason:
+            self.add_error('reason', 'A reason is mandatory for this status change.')
+
+        if to_status == 'suspended':
+            start_date = cleaned_data.get('suspension_start_date')
+            end_date = cleaned_data.get('suspension_end_date')
+            if start_date and end_date and end_date < start_date:
+                raise forms.ValidationError("Suspension end date must be greater than or equal to start date.")
+        return cleaned_data
 
 
 class ReviewTransitionForm(forms.Form):

@@ -9,17 +9,18 @@ to avoid circular imports.
 TRANSITION_MAP: dict[str, set[str]] = {
     'draft':            {'pending_approval', 'active'},
     'pending_approval': {'active', 'draft'},
-    'active':           {'probation', 'suspended', 'resigned', 'terminated', 'archived', 'promoted', 'demoted', 'transferred', 'notice_period'},
+    'active':           {'inactive', 'probation', 'suspended', 'resigned', 'terminated', 'archived', 'promoted', 'demoted', 'transferred', 'notice_period'},
+    'inactive':         {'active', 'suspended', 'archived'},
     'probation':        {'confirmed', 'suspended', 'resigned', 'terminated', 'archived', 'promoted', 'demoted', 'transferred', 'notice_period'},
     'confirmed':        {'suspended', 'resigned', 'terminated', 'archived', 'promoted', 'demoted', 'transferred', 'notice_period'},
-    'suspended':        {'active', 'probation', 'confirmed', 'archived', 'promoted', 'demoted', 'transferred', 'notice_period'},
+    'suspended':        {'active', 'inactive', 'probation', 'confirmed', 'archived', 'promoted', 'demoted', 'transferred', 'notice_period'},
     'promoted':         {'promoted', 'demoted', 'transferred', 'suspended', 'resigned', 'terminated', 'archived', 'notice_period'},
     'demoted':          {'promoted', 'demoted', 'transferred', 'suspended', 'resigned', 'terminated', 'archived', 'notice_period'},
     'transferred':      {'promoted', 'demoted', 'transferred', 'suspended', 'resigned', 'terminated', 'archived', 'notice_period'},
     'notice_period':    {'resigned', 'terminated', 'archived'},
     'resigned':         {'archived'},
     'terminated':       {'archived'},
-    'archived':         set(),
+    'archived':         {'active'},  # Restore archived employee if business rules support it
 }
 
 # ── Two-tier classification ───────────────────────────────────────────────────
@@ -34,6 +35,16 @@ LOW_RISK_TRANSITIONS: set[tuple[str, str]] = {
     ('notice_period', 'resigned'),
     ('resigned',      'archived'),
     ('terminated',    'archived'),
+    ('active',        'inactive'),
+    ('inactive',      'active'),
+    ('active',        'suspended'),
+    ('inactive',      'suspended'),
+    ('suspended',     'active'),
+    ('suspended',     'inactive'),
+    ('active',        'archived'),
+    ('inactive',      'archived'),
+    ('suspended',     'archived'),
+    ('archived',      'active'),
 }
 
 

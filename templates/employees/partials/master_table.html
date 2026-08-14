@@ -39,7 +39,22 @@
                     {% endif %}
                 </td>
                 <td class="px-4 py-3">
-                    <c-status-pill status="{{ emp.business_status }}" label="{{ emp.business_status_display }}"></c-status-pill>
+                    <div class="space-y-1">
+                        <c-status-pill status="{{ emp.business_status }}" label="{{ emp.business_status_display }}"></c-status-pill>
+                        {% if emp.status == 'suspended' %}
+                            {% with active_susp=emp.suspensions.all|dictsortreversed:"changed_at"|first %}
+                                {% if active_susp and active_susp.is_active %}
+                                    <div class="text-[10px] text-red-500 font-semibold">
+                                        {% if active_susp.suspension_end_date %}
+                                            Until {{ active_susp.suspension_end_date|date:"d M Y" }}
+                                        {% else %}
+                                            No expiry
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            {% endwith %}
+                        {% endif %}
+                    </div>
                 </td>
                 <td class="px-4 py-3">
                     {% with pct=emp.get_completion_percentage %}
@@ -80,33 +95,120 @@
                                 </svg>
                             </button>
                             <div x-show="open" x-transition
-                                 class="absolute right-0 mt-1 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-1 text-sm">
-                                <!-- Archive -->
-                                <form method="post" action="{% url 'employees:master_archive' emp.pk %}"
-                                      onsubmit="return confirm('Archive {{ emp.get_full_name }}? This will set status to Archived.')">
-                                    {% csrf_token %}
-                                    <button type="submit"
-                                            class="w-full flex items-center gap-2.5 px-3 py-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors">
-                                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8"/>
-                                        </svg>
+                                 class="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-1 text-sm">
+                                
+                                {% if emp.status == 'active' %}
+                                    <!-- Inactivate -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=inactive"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        <i data-lucide="user-x" class="w-4 h-4 text-slate-500"></i>
+                                        Inactivate
+                                    </button>
+                                    <!-- Suspend -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=suspended"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        <i data-lucide="pause-circle" class="w-4 h-4 text-slate-500"></i>
+                                        Suspend
+                                    </button>
+                                    <!-- Archive -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors">
+                                        <i data-lucide="archive" class="w-4 h-4 text-amber-500"></i>
                                         Archive
                                     </button>
-                                </form>
-                                <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
-                                <!-- Hard Delete -->
-                                <button type="button"
-                                        hx-get="{% url 'employees:master_delete' emp.pk %}"
-                                        hx-target="body"
-                                        hx-swap="beforeend"
-                                        class="w-full flex items-center gap-2.5 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
-                                    Delete Permanently
-                                </button>
+                                {% elif emp.status == 'inactive' %}
+                                    <!-- Activate -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors">
+                                        <i data-lucide="user-check" class="w-4 h-4 text-emerald-500"></i>
+                                        Activate
+                                    </button>
+                                    <!-- Suspend -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=suspended"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        <i data-lucide="pause-circle" class="w-4 h-4 text-slate-500"></i>
+                                        Suspend
+                                    </button>
+                                    <!-- Archive -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors">
+                                        <i data-lucide="archive" class="w-4 h-4 text-amber-500"></i>
+                                        Archive
+                                    </button>
+                                {% elif emp.status == 'suspended' %}
+                                    <!-- Reactivate -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors">
+                                        <i data-lucide="play-circle" class="w-4 h-4 text-emerald-500"></i>
+                                        Reactivate
+                                    </button>
+                                    <!-- Archive -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors">
+                                        <i data-lucide="archive" class="w-4 h-4 text-amber-500"></i>
+                                        Archive
+                                    </button>
+                                {% elif emp.status == 'archived' %}
+                                    <!-- Restore (Activate) -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors">
+                                        <i data-lucide="rotate-ccw" class="w-4 h-4 text-emerald-500"></i>
+                                        Restore (Activate)
+                                    </button>
+                                {% endif %}
+
+                                {% if request.user.is_superuser %}
+                                    <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+                                    <!-- Hard Delete (Super-admin only) -->
+                                    <button type="button"
+                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
+                                            hx-target="body"
+                                            hx-swap="beforeend"
+                                            @click="open = false"
+                                            class="w-full flex items-center gap-2.5 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
+                                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                        Delete Permanently
+                                    </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
