@@ -65,7 +65,7 @@ class NavbarHardeningTests(TestCase):
         )
 
         # Project Type
-        self.proj_type = ProjectType.objects.create(name="HVAC Implementation", code="HVAC")
+        self.proj_type = ProjectType.objects.create(name="HVAC Implementation")
 
     def test_name_display_fallback(self):
         """Test canonical employee name -> user full name -> fallback email/phone"""
