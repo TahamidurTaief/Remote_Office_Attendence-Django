@@ -40,28 +40,33 @@
   <div class="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-btn border text-[11px] select-none"
        style="background:var(--surface-2); border-color:var(--border); color:var(--text-secondary)">
     <button type="button" @click="$store.navHistory.goBack()" :disabled="!$store.navHistory.canGoBack()"
-            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-      Back
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+      <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+      <span>Back</span>
     </button>
     <span class="opacity-30">|</span>
     <button type="button" @click="$store.navHistory.goForward()" :disabled="!$store.navHistory.canGoForward()"
-            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-      Forward
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+      <span>Forward</span>
+      <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
     </button>
     <span class="opacity-30">|</span>
     <button type="button" @click="$store.zoom.zoomOut()" :disabled="$store.zoom.level === 80"
-            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-      Zoom Out
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+      <i data-lucide="zoom-out" class="w-3.5 h-3.5"></i>
+      <span>Zoom Out</span>
     </button>
     <span class="opacity-30">|</span>
     <button type="button" @click="$store.zoom.reset()" :disabled="$store.zoom.level === 100"
-            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-      Reset Zoom
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+      <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+      <span>Reset</span>
     </button>
     <span class="opacity-30">|</span>
     <button type="button" @click="$store.zoom.zoomIn()" :disabled="$store.zoom.level === 120"
-            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-      Zoom In
+            class="hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+      <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
+      <span>Zoom In</span>
     </button>
   </div>
 
