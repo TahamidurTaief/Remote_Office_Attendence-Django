@@ -72,7 +72,9 @@
         // Dispatch open-modal for the first c-modal found inside the container
         var modal = container.querySelector('[id^="modal-"]');
         if (modal) {
-            var modalId = modal.id.replace('modal-', '');
+            // Use slice to strip the 'modal-' prefix only from the start,
+            // preventing corruption of IDs like 'modal-lifecycle-action-modal'
+            var modalId = modal.id.slice('modal-'.length);
             window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: modalId } }));
         }
     });
