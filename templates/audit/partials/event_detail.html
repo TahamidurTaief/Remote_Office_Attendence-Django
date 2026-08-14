@@ -1,0 +1,19 @@
+<c-modal id="audit-detail-modal" title="Audit Details">
+    <div class="space-y-4">
+        <div class="rounded-xl border border-slate-200 p-3">
+            <div class="font-semibold">{{ event.object_label }}</div>
+            <div class="text-xs text-slate-500">{{ event.module }} / {{ event.action }} / {{ event.created_at|date:"d/m/Y g:i A" }}</div>
+            <div class="text-xs text-slate-500 mt-1">By {{ event.actor_user.email|default:event.actor_role|default:"System" }}</div>
+        </div>
+        <div class="grid gap-4 md:grid-cols-2">
+            <div>
+                <h3 class="mb-2 text-sm font-semibold">Before</h3>
+                <pre class="overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-100">{{ event.before_data|pprint }}</pre>
+            </div>
+            <div>
+                <h3 class="mb-2 text-sm font-semibold">After</h3>
+                <pre class="overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-100">{{ event.after_data|pprint }}</pre>
+            </div>
+        </div>
+    </div>
+</c-modal>

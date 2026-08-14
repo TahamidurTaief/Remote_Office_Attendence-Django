@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     
     # Local apps
     'apps.accounts',
+    'apps.audit',
     'apps.employees',
     'apps.attendance',
     'apps.branches',
@@ -81,6 +82,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.audit.middleware.AuditRequestContextMiddleware',
     'apps.accounts.middleware.SuspendedEmployeeMiddleware',
     'apps.accounts.middleware.SessionDeviceMiddleware',
     'apps.accounts.middleware.MFARequiredMiddleware',

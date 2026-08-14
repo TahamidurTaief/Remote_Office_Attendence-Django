@@ -107,6 +107,7 @@ def assetlinks_view(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.accounts.urls')),
+    path('audit/', include('apps.audit.urls')),
     path('branches/', include('apps.branches.urls')),
     path('employees/', include('apps.employees.urls')),
     path('attendance/', include('apps.attendance.urls')),

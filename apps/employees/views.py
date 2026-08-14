@@ -9,6 +9,7 @@ from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from apps.notifications.models import log_audit
 from django.utils.decorators import method_decorator
 from apps.accounts.decorators import require_reauth
+from apps.audit.services import TrashService
 from .models import EmployeeProfile, EmployeeLocationSync, EmployeeDocument, Employee, EmployeeAuditLog, EmployeeActivityLog, AssetAssignment
 from .forms import EmployeeCreateForm, EmployeeEditForm, EmployeeDocumentForm, AssetAssignmentForm, AssetReturnForm, AssetReassignForm
 from apps.branches.models import Branch
@@ -523,13 +524,7 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                 target=employee,
                 summary=f"Changed status from {old_status} to {employee.status}"
             )
-            from apps.employees.models import EmployeeActivityLog
-            EmployeeActivityLog.objects.create(
-                employee=employee,
-                actor=self.request.user,
-                action_description=f"Changed Employment Status from '{old_status}' to '{employee.status}'",
-                field_changed='status'
-            )
+
 
         # Track other field changes
         fields_to_track = [
@@ -574,24 +569,9 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                     target=employee,
                     summary=f"Changed {field} from '{old_str}' to '{new_str}'"
                 )
-                field_label = field.replace('_', ' ').capitalize()
-                EmployeeActivityLog.objects.create(
-                    employee=employee,
-                    actor=self.request.user,
-                    action_description=f"Updated {field_label} from '{old_str}' to '{new_str}'",
-                    field_changed=field
-                )
 
-        if old_values:
-            from apps.employees.models import EmployeeAuditLog
-            EmployeeAuditLog.objects.create(
-                employee=employee,
-                old_value=old_values,
-                new_value=new_values,
-                changed_by=self.request.user,
-                ip_address=get_client_ip(self.request),
-                user_agent=self.request.META.get('HTTP_USER_AGENT', '')
-            )
+
+
 
         if self.request.headers.get('HX-Request'):
             messages.success(self.request, f"Employee {employee.get_full_name()} updated.")
@@ -614,7 +594,7 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
         old_status = employee.status
-        employee.delete()  # soft delete -> sets status to archived
+        TrashService.soft_delete(employee, actor=request.user, reason='Archived via Admin Action', request=request)
         
         EmploymentHistory.objects.create(
             employee=employee,
@@ -624,19 +604,6 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
             reason='Archived via Admin Action',
             approved_by=request.user,
             effective_date=timezone.now().date()
-        )
-        log_audit(
-            actor=request.user,
-            action='employee_status_changed',
-            target=employee,
-            summary=f"Archived employee {employee.employee_number}"
-        )
-        from apps.employees.models import EmployeeActivityLog
-        EmployeeActivityLog.objects.create(
-            employee=employee,
-            actor=request.user,
-            action_description=f"Archived employee (soft deleted from status '{old_status}')",
-            field_changed='status'
         )
 
         messages.success(request, f"Employee {employee.get_full_name()} has been archived.")
@@ -652,16 +619,13 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
 
 class EmployeeMasterDeleteView(View):
     """
-    Hard delete an Employee record. Requires an explicit POST with confirm=yes.
-    GET returns a confirmation modal fragment for HTMX.
+    Delete an Employee record. Soft-deletes to Trash by default.
+    Super-admin can permanently delete if already trashed.
     """
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect('login')
-        if not request.user.is_superuser:
-            from django.core.exceptions import PermissionDenied
-            raise PermissionDenied("Only super-admin can perform hard deletes.")
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
@@ -670,6 +634,7 @@ class EmployeeMasterDeleteView(View):
         return render(request, 'employees/partials/delete_confirm_modal.html', {
             'employee': employee,
             'delete_url': reverse_lazy('employees:master_delete', kwargs={'pk': pk}),
+            'is_soft_delete': not employee.is_trashed,
         })
 
     def post(self, request, pk):
@@ -678,29 +643,37 @@ class EmployeeMasterDeleteView(View):
         emp_number = employee.employee_number
 
         try:
-            # Dissociate the linked user account (don't delete the login)
-            if employee.user:
-                employee.user = None
-                employee.save(update_fields=['user'])
-
-            employee.delete()
+            if employee.is_trashed:
+                if not request.user.is_superuser:
+                    from django.core.exceptions import PermissionDenied
+                    raise PermissionDenied("Only super-admin can perform permanent delete.")
+                entry = TrashService.get_active_entry(employee)
+                if not entry:
+                    messages.error(request, "No active trash entry exists for this employee.")
+                else:
+                    try:
+                        TrashService.permanent_delete(entry, actor=request.user, request=request)
+                        messages.success(request, f"Employee {name} ({emp_number}) has been permanently deleted.")
+                    except Exception as exc:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Permanent delete failed for employee {pk}: {str(exc)}", exc_info=True)
+                        messages.error(request, "Unable to permanently delete this employee due to active historical or business dependencies.")
+            else:
+                TrashService.soft_delete(
+                    employee,
+                    actor=request.user,
+                    reason=request.POST.get('reason', '').strip(),
+                    request=request
+                )
+                messages.success(request, f"Employee {name} ({emp_number}) has been moved to Trash.")
         except ValidationError as e:
             messages.error(request, str(e.messages[0]) if hasattr(e, 'messages') else str(e))
             if request.headers.get('HX-Request'):
-                # Redirect back to list
                 res = HttpResponse(status=200)
                 res['HX-Redirect'] = reverse_lazy('employees:master_list')
                 return res
             return redirect('employees:master_list')
-
-        log_audit(
-            actor=request.user,
-            action='employee_deleted',
-            target=None,
-            summary=f"Permanently deleted employee {emp_number} ({name})"
-        )
-
-        messages.success(request, f"Employee {name} ({emp_number}) has been permanently deleted.")
 
         if request.headers.get('HX-Request'):
             response = HttpResponse(status=204)
@@ -1045,20 +1018,7 @@ def _apply_transition(employee, req_obj, actor):
         )
 
     # Activity Log
-    EmployeeActivityLog.objects.create(
-        employee=employee,
-        actor=actor,
-        action_description=f"Transitioned status from '{old_status}' to '{new_status}'",
-        field_changed='status'
-    )
 
-    # Audit Log
-    EmployeeAuditLog.objects.create(
-        employee=employee,
-        old_value={'status': old_status},
-        new_value={'status': new_status},
-        changed_by=actor
-    )
 
     log_audit(
         actor=actor,
@@ -1750,38 +1710,7 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
             effective_date=timezone.now().date()
         )
         
-        # Log to Activity Log (if model exists)
-        try:
-            from apps.employees.models import EmployeeActivityLog
-            EmployeeActivityLog.objects.create(
-                employee=employee,
-                actor=request.user,
-                action_description=f"{action_str} employee. Reason: {reason}",
-                field_changed='is_suspended'
-            )
-        except ImportError:
-            pass
 
-        log_audit(
-            actor=request.user,
-            action=f"employee_{action_str.lower()}",
-            target=employee,
-            summary=f"{action_str} employee: {reason}"
-        )
-
-        # Audit log (Scope 3)
-        try:
-            from apps.employees.models import EmployeeAuditLog
-            EmployeeAuditLog.objects.create(
-                employee=employee,
-                old_value={"is_suspended": not is_suspended},
-                new_value={"is_suspended": is_suspended},
-                changed_by=request.user,
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
-            )
-        except ImportError:
-            pass
 
         messages.success(request, f"Employee has been successfully {action_str.lower()}ed.")
         

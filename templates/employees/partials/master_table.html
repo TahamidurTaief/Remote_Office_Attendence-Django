@@ -98,6 +98,15 @@
                                  class="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-1 text-sm">
                                 
                                 {% if emp.status == 'active' %}
+                                    <button type="button"
+                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">
+                                        <i data-lucide="trash-2" class="w-4 h-4 text-rose-500"></i>
+                                        Delete
+                                    </button>
                                     <!-- Inactivate -->
                                     <button type="button"
                                             hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=inactive"
@@ -129,6 +138,15 @@
                                         Archive
                                     </button>
                                 {% elif emp.status == 'inactive' %}
+                                    <button type="button"
+                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">
+                                        <i data-lucide="trash-2" class="w-4 h-4 text-rose-500"></i>
+                                        Delete
+                                    </button>
                                     <!-- Activate -->
                                     <button type="button"
                                             hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
@@ -160,6 +178,15 @@
                                         Archive
                                     </button>
                                 {% elif emp.status == 'suspended' %}
+                                    <button type="button"
+                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
+                                            hx-target="#modal-container"
+                                            hx-swap="innerHTML"
+                                            @click="open = false"
+                                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">
+                                        <i data-lucide="trash-2" class="w-4 h-4 text-rose-500"></i>
+                                        Delete
+                                    </button>
                                     <!-- Reactivate -->
                                     <button type="button"
                                             hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
@@ -193,7 +220,7 @@
                                     </button>
                                 {% endif %}
 
-                                {% if request.user.is_superuser %}
+                                {% if request.user.is_superuser and emp.is_trashed %}
                                     <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
                                     <!-- Hard Delete (Super-admin only) -->
                                     <button type="button"

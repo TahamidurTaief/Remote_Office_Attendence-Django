@@ -476,6 +476,8 @@ class Employee(models.Model):
     )
 
     is_suspended = models.BooleanField(default=False)
+    is_trashed = models.BooleanField(default=False, db_index=True)
+    trashed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -547,7 +549,7 @@ class Employee(models.Model):
         return f"{self.employee_number} - {self.get_full_name()}"
 
     def is_login_allowed(self):
-        return self.status in ALLOWED_LOGIN_STATUSES
+        return (not self.is_trashed) and self.status in ALLOWED_LOGIN_STATUSES
 
     @property
     def canonical_designation(self):
@@ -571,10 +573,12 @@ class Employee(models.Model):
 
     @property
     def canonical_is_active(self):
-        return self.status == 'active' and not self.is_suspended
+        return self.status == 'active' and not self.is_suspended and not self.is_trashed
 
     @property
     def business_status(self) -> str:
+        if self.is_trashed:
+            return 'archived'
         if self.status == EmployeeStatus.ARCHIVED:
             return 'archived'
         if self.status == EmployeeStatus.TERMINATED:
@@ -653,14 +657,19 @@ class Employee(models.Model):
         # Skip on new records (pk is None) — initial status is always allowed.
         if self.pk:
             try:
-                db_record = Employee.objects.filter(pk=self.pk).values('status', 'is_suspended').first()
+                db_record = Employee.objects.filter(pk=self.pk).values('status', 'is_suspended', 'is_trashed').first()
                 db_status = db_record['status']
                 db_is_suspended = db_record['is_suspended']
+                db_is_trashed = db_record['is_trashed']
             except Exception:
                 db_status = None
                 db_is_suspended = False
+                db_is_trashed = False
 
-            if db_status == EmployeeStatus.ARCHIVED:
+            if db_is_trashed and not getattr(self, '_allow_trashed_write', False):
+                raise ValidationError("Trashed employees are read-only until restored.")
+
+            if db_status == EmployeeStatus.ARCHIVED and not getattr(self, '_allow_archived_write', False):
                 raise ValidationError("Archived employees are read-only and cannot be modified.")
 
             # Bidirectional sync based on which field changed
@@ -691,40 +700,12 @@ class Employee(models.Model):
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if self.pk:
-            # Check related business records before allowing any deletion/archival
-            # Let's check if there's any Attendance, Leave, or Payroll records
-            profile = getattr(self, 'legacy_profile', None)
-            if profile:
-                from apps.attendance.models import Attendance
-                from apps.leave.models import LeaveRequest
-                from apps.payroll.models import EmployeePayrollCalculation
-                if Attendance.objects.filter(employee=profile).exists() or \
-                   LeaveRequest.objects.filter(employee=profile).exists() or \
-                   EmployeePayrollCalculation.objects.filter(employee=self).exists():
-                    raise ValidationError("Cannot delete or archive employee with related business records (Attendance, Leave, or Payroll).")
-
-                # Project/task warning/blocks
-                if profile.managed_projects.exclude(status='Completed').exists() or \
-                   profile.site_engineer_projects.exclude(status='Completed').exists() or \
-                   profile.member_projects.exclude(status='Completed').exists() or \
-                   profile.assigned_tasks.exclude(status='Completed').exists():
-                    raise ValidationError("Cannot delete or archive employee assigned to active projects or tasks.")
-
-            db_status = Employee.objects.filter(pk=self.pk).values_list('status', flat=True).first()
-            if db_status != EmployeeStatus.ARCHIVED:
-                Employee.objects.filter(pk=self.pk).update(status=EmployeeStatus.ARCHIVED, updated_at=timezone.now())
-                EmployeeActivityLog.objects.create(
-                    employee=self,
-                    action_description=f"Transitioned status from '{db_status}' to 'archived' via delete",
-                    field_changed='status'
-                )
-                EmployeeAuditLog.objects.create(
-                    employee=self,
-                    old_value={'status': db_status},
-                    new_value={'status': EmployeeStatus.ARCHIVED}
-                )
-            self.status = EmployeeStatus.ARCHIVED
+        hard = kwargs.pop('hard', False)
+        if hard:
+            return super().delete(*args, **kwargs)
+        from apps.audit.services import TrashService
+        TrashService.soft_delete(self)
+        self.refresh_from_db(fields=['is_trashed', 'trashed_at'])
 
 
 class EmploymentHistory(models.Model):

@@ -19,6 +19,7 @@ from apps.accounts.models import UserSession, TrustedDevice, CustomUser, Passwor
 from apps.notifications.models import log_audit, AuditLog
 from django.utils.decorators import method_decorator
 from apps.accounts.decorators import require_reauth
+from apps.audit.auth import grant_audit_unlock
 from apps.accounts.login_protection import (
     check_3layer_lock,
     record_failed_attempt,
@@ -1361,6 +1362,7 @@ class SecurityReauthView(LoginRequiredMixin, View):
     def post(self, request):
         credential = request.POST.get('reauth_credential', '').strip()
         target_url = request.POST.get('target_url') or request.session.get('pending_reauth_target') or '/'
+        reauth_scope = request.POST.get('reauth_scope', '').strip()
         sec_prof = getattr(request.user, 'security_profile', None)
 
         is_valid = request.user.check_password(credential)
@@ -1373,6 +1375,8 @@ class SecurityReauthView(LoginRequiredMixin, View):
             if user_sess:
                 user_sess.last_reauth_at = timezone.now()
                 user_sess.save(update_fields=['last_reauth_at'])
+            if reauth_scope == 'audit_detail':
+                grant_audit_unlock(request)
 
             log_audit(request.user, 'sensitive_action_reauth_success', summary=f"Re-authenticated for sensitive action at {target_url}", ip=get_client_ip(request))
 

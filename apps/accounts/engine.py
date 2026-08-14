@@ -134,6 +134,8 @@ class PermissionEngine:
 
         if emp_master:
             emp_status = getattr(emp_master, 'status', None)
+            if getattr(emp_master, 'is_trashed', False):
+                return PermissionResolutionResult(allowed=False, reason="Trashed employee accounts are blocked from system access.")
         elif emp_profile:
             emp_status = 'active' if emp_profile.is_active else 'suspended'
 

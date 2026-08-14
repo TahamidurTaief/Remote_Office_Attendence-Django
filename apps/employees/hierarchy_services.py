@@ -23,7 +23,7 @@ class OrgHierarchyService:
             # Query the next level of direct reports
             next_level_ids = list(Employee.objects.filter(
                 reporting_manager_id__in=current_level_ids
-            ).exclude(status='archived').values_list('id', flat=True))
+            ).exclude(status='archived').filter(is_trashed=False).values_list('id', flat=True))
             
             subordinate_ids.extend(next_level_ids)
             current_level_ids = next_level_ids
@@ -136,5 +136,5 @@ class OrgHierarchyService:
             'branch_headcounts': branch_counts,
             'avg_span_of_control': avg_span,
             'max_depth': max_depth,
-            'total_headcount': Employee.objects.exclude(status='archived').count()
+            'total_headcount': Employee.objects.exclude(status='archived').filter(is_trashed=False).count()
         }

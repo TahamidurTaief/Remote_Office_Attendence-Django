@@ -1,0 +1,15 @@
+{% extends "cotton/app-shell.html" %}
+{% block content %}
+<div class="space-y-6">
+    <c-topbar title="Audit & Activity" subtitle="Scoped activity feed with re-authenticated detail access." ></c-topbar>
+    <form method="get" hx-get="{% url 'audit:activity_list' %}" hx-target="#activity-table" class="grid gap-3 md:grid-cols-3">
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Search" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+        <input type="text" name="module" value="{{ module_filter }}" placeholder="Module" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+        <input type="text" name="action" value="{{ action_filter }}" placeholder="Action" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+    </form>
+    <div id="activity-table">
+        {% include "audit/partials/activity_table.html" %}
+    </div>
+</div>
+{% endblock %}
+

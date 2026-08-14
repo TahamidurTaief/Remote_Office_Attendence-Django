@@ -1,0 +1,30 @@
+<c-table>
+    <c-slot name="header">
+        <th>When</th>
+        <th>Actor</th>
+        <th>Activity</th>
+        <th>Record</th>
+        <th class="text-right">Details</th>
+    </c-slot>
+    {% for event in events %}
+    <tr>
+        <td>{{ event.created_at|date:"d/m/Y g:i A" }}</td>
+        <td>{{ event.actor_user.email|default:event.actor_role|default:"System" }}</td>
+        <td>{{ event.actor_role|default:"User" }} {{ event.action }} {{ event.object_type }}</td>
+        <td>
+            <div class="font-medium">{{ event.object_label|default:"-" }}</div>
+            <div class="text-xs text-slate-500">{{ event.module }} / {{ event.object_id }}</div>
+        </td>
+        <td class="text-right">
+            <button hx-get="{% url 'audit:event_detail' event.pk %}" hx-target="#modal-container" hx-swap="innerHTML" class="text-sm font-semibold text-slate-700">View Details</button>
+        </td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="5" class="px-4 py-8">
+            <c-empty-state icon="activity" title="No activity found" description="No audit events matched this scope or filter." ></c-empty-state>
+        </td>
+    </tr>
+    {% endfor %}
+</c-table>
+

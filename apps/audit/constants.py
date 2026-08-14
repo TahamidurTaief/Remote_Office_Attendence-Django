@@ -1,0 +1,3 @@
+AUDIT_UNLOCK_SESSION_KEY = "audit_unlock_until"
+AUDIT_UNLOCK_TTL_SECONDS = 15 * 60
+

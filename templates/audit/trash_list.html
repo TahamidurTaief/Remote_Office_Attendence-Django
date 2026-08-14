@@ -1,0 +1,20 @@
+{% extends "cotton/app-shell.html" %}
+{% block content %}
+<div class="space-y-6" x-data="{ selected: [] }">
+    <c-topbar title="Trash" subtitle="Soft-deleted records with restore and permanent-delete controls." ></c-topbar>
+    <form method="get" hx-get="{% url 'audit:trash_list' %}" hx-target="#trash-table" class="grid gap-3 md:grid-cols-4">
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Search record" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+        <input type="text" name="module" value="{{ module_filter }}" placeholder="Module" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+        <input type="text" name="deleted_by" value="{{ deleted_by_filter }}" placeholder="Deleted by email" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+        <select name="status" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+            <option value="restored" {% if status_filter == 'restored' %}selected{% endif %}>Restored</option>
+            <option value="permanently_deleted" {% if status_filter == 'permanently_deleted' %}selected{% endif %}>Permanently Deleted</option>
+        </select>
+    </form>
+    <div id="trash-table">
+        {% include "audit/partials/trash_table.html" %}
+    </div>
+</div>
+{% endblock %}
+
