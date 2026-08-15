@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'django_browser_reload',
     
     # Local apps
+    'apps.tenants',
     'apps.accounts',
     'apps.audit',
     'apps.employees',
@@ -82,6 +83,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.tenants.middleware.TenantMiddleware',
     'apps.audit.middleware.AuditRequestContextMiddleware',
     'apps.accounts.middleware.SuspendedEmployeeMiddleware',
     'apps.accounts.middleware.SessionDeviceMiddleware',
@@ -239,5 +241,9 @@ DEFAULT_FROM_EMAIL = 'noreply@fieldtrack.com'
 
 # Django Cotton configuration (preserves hyphenated component filenames)
 COTTON_SNAKE_CASED_NAMES = False
+
+# Multi-tenancy configurations
+TENANCY_ENABLED = True
+DEFAULT_TENANT_SLUG = 'signtech'
 
 
