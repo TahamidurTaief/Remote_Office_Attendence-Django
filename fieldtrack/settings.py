@@ -174,25 +174,39 @@ TEMPLATES = [
 WSGI_APPLICATION = 'fieldtrack.wsgi.application'
 
 
-# ── DATABASE CONFIGURATION ───────────────────────────────────────────────────
-# Default: SQLite with WAL/busy_timeout support for local dev & current phase.
-# Compatible with future PostgreSQL migration via DATABASE_URL if configured.
+# ── DATABASE CONFIGURATION (SQLITE RUNTIME LOCK) ──────────────────────────────
+# Architecture Rule: SQLite is permanently locked as the active database engine
+# for this delivery phase. Any injected DATABASE_URL is ignored to prevent
+# accidental engine switching or runtime desynchronization.
+#
+# FUTURE POSTGRESQL MIGRATION GATE (INACTIVE):
+# A future transition to PostgreSQL must follow the strict 4-stage gate:
+#   1. Backup: Full offline snapshot of production SQLite data & media.
+#   2. Staging Restore: Restore snapshot into staging PostgreSQL environment.
+#   3. Consistency Validation: Run data integrity & end-to-end regression tests.
+#   4. Production Rollout: Update engine setting, run verified migrations, and deploy.
 
-_database_url = env.str('DATABASE_URL', default='')
-if _database_url:
-    DATABASES = {
-        'default': env.db('DATABASE_URL')
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {
-                'timeout': 5.0,
-            }
+_raw_sqlite_path = env.str('SQLITE_PATH', default='')
+_sqlite_path = Path(_raw_sqlite_path) if _raw_sqlite_path else BASE_DIR / 'db.sqlite3'
+
+_DEFAULT_SQLITE_TIMEOUT = 5.0
+try:
+    _sqlite_timeout = float(env.str('SQLITE_TIMEOUT', default=str(_DEFAULT_SQLITE_TIMEOUT)))
+    if _sqlite_timeout <= 0:
+        _sqlite_timeout = _DEFAULT_SQLITE_TIMEOUT
+except (ValueError, TypeError):
+    _sqlite_timeout = _DEFAULT_SQLITE_TIMEOUT
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': _sqlite_path,
+        'OPTIONS': {
+            'timeout': _sqlite_timeout,
         }
     }
+}
+
 
 
 # ── PASSWORD VALIDATION ──────────────────────────────────────────────────────

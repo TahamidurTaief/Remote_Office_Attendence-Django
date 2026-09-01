@@ -1,5 +1,6 @@
 import importlib
 import os
+from pathlib import Path
 from unittest import mock
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
@@ -8,6 +9,19 @@ from django.conf import settings
 
 class SettingsSecurityTests(SimpleTestCase):
     """Focused tests for environment parsing, security defaults, and production guardrails."""
+
+    def tearDown(self):
+        # Guarantee development settings state is cleanly restored after every test
+        from fieldtrack import settings as fieldtrack_settings
+        os.environ['DJANGO_IGNORE_ENV_FILE'] = '1'
+        os.environ['DEBUG'] = 'True'
+        os.environ['DJANGO_SECRET_KEY'] = 'dev-secret-key-placeholder-32-characters-long'
+        os.environ['ALLOWED_HOSTS'] = 'localhost,127.0.0.1'
+        os.environ.pop('SQLITE_PATH', None)
+        os.environ.pop('SQLITE_TIMEOUT', None)
+        os.environ.pop('DATABASE_URL', None)
+        importlib.reload(fieldtrack_settings)
+        super().tearDown()
 
     def test_current_settings_sqlite_database(self):
         """Verify default active database is SQLite with timeout configured."""
@@ -92,27 +106,95 @@ class SettingsSecurityTests(SimpleTestCase):
     def test_production_valid_configuration_loads(self):
         """Verify valid production settings parse correctly without error."""
         from fieldtrack import settings as fieldtrack_settings
-        try:
-            reloaded = importlib.reload(fieldtrack_settings)
-            self.assertFalse(reloaded.DEBUG)
-            self.assertEqual(
-                reloaded.ALLOWED_HOSTS,
-                ['trackme.signtechlimited.com', 'app.example.com'],
-            )
-            self.assertEqual(
-                reloaded.CSRF_TRUSTED_ORIGINS,
-                ['https://trackme.signtechlimited.com', 'https://app.example.com'],
-            )
-            self.assertTrue(reloaded.SECURE_SSL_REDIRECT)
-            self.assertTrue(reloaded.SESSION_COOKIE_SECURE)
-            self.assertTrue(reloaded.CSRF_COOKIE_SECURE)
-            self.assertEqual(reloaded.SECURE_HSTS_SECONDS, 31536000)
-            self.assertTrue(reloaded.SECURE_HSTS_INCLUDE_SUBDOMAINS)
-            self.assertTrue(reloaded.SECURE_HSTS_PRELOAD)
-            self.assertEqual(reloaded.SECURE_PROXY_SSL_HEADER, ('HTTP_X_FORWARDED_PROTO', 'https'))
-        finally:
-            # Restore development settings module
-            os.environ['DEBUG'] = 'True'
-            os.environ['DJANGO_SECRET_KEY'] = 'dev-secret-key-placeholder-32-characters-long'
-            os.environ['ALLOWED_HOSTS'] = 'localhost,127.0.0.1'
-            importlib.reload(fieldtrack_settings)
+        reloaded = importlib.reload(fieldtrack_settings)
+        self.assertFalse(reloaded.DEBUG)
+        self.assertEqual(
+            reloaded.ALLOWED_HOSTS,
+            ['trackme.signtechlimited.com', 'app.example.com'],
+        )
+        self.assertEqual(
+            reloaded.CSRF_TRUSTED_ORIGINS,
+            ['https://trackme.signtechlimited.com', 'https://app.example.com'],
+        )
+        self.assertTrue(reloaded.SECURE_SSL_REDIRECT)
+        self.assertTrue(reloaded.SESSION_COOKIE_SECURE)
+        self.assertTrue(reloaded.CSRF_COOKIE_SECURE)
+        self.assertEqual(reloaded.SECURE_HSTS_SECONDS, 31536000)
+        self.assertTrue(reloaded.SECURE_HSTS_INCLUDE_SUBDOMAINS)
+        self.assertTrue(reloaded.SECURE_HSTS_PRELOAD)
+        self.assertEqual(reloaded.SECURE_PROXY_SSL_HEADER, ('HTTP_X_FORWARDED_PROTO', 'https'))
+
+    @mock.patch.dict(
+        os.environ,
+        {
+            'DJANGO_IGNORE_ENV_FILE': '1',
+            'DEBUG': 'True',
+            'DATABASE_URL': 'postgres://postgres_user:secret_pass@127.0.0.1:5432/postgres_db',
+        },
+        clear=True,
+    )
+    def test_injected_database_url_cannot_switch_engine(self):
+        """Verify injected DATABASE_URL is ignored and engine remains locked to SQLite."""
+        from fieldtrack import settings as fieldtrack_settings
+        reloaded = importlib.reload(fieldtrack_settings)
+        self.assertEqual(reloaded.DATABASES['default']['ENGINE'], 'django.db.backends.sqlite3')
+
+    @mock.patch.dict(
+        os.environ,
+        {
+            'DJANGO_IGNORE_ENV_FILE': '1',
+            'DEBUG': 'True',
+            'SQLITE_PATH': 'custom_storage/test_custom.sqlite3',
+        },
+        clear=True,
+    )
+    def test_sqlite_custom_path_parsing(self):
+        """Verify SQLITE_PATH environment override parses safely into Path."""
+        from fieldtrack import settings as fieldtrack_settings
+        reloaded = importlib.reload(fieldtrack_settings)
+        self.assertEqual(reloaded.DATABASES['default']['NAME'], Path('custom_storage/test_custom.sqlite3'))
+
+    @mock.patch.dict(
+        os.environ,
+        {
+            'DJANGO_IGNORE_ENV_FILE': '1',
+            'DEBUG': 'True',
+            'SQLITE_TIMEOUT': '12.5',
+        },
+        clear=True,
+    )
+    def test_sqlite_custom_timeout_parsing(self):
+        """Verify SQLITE_TIMEOUT environment override parses as a valid float."""
+        from fieldtrack import settings as fieldtrack_settings
+        reloaded = importlib.reload(fieldtrack_settings)
+        self.assertEqual(reloaded.DATABASES['default']['OPTIONS']['timeout'], 12.5)
+
+    @mock.patch.dict(
+        os.environ,
+        {
+            'DJANGO_IGNORE_ENV_FILE': '1',
+            'DEBUG': 'True',
+            'SQLITE_TIMEOUT': '-10.0',
+        },
+        clear=True,
+    )
+    def test_sqlite_negative_timeout_falls_back_to_safe_default(self):
+        """Verify non-positive SQLITE_TIMEOUT safely falls back to default 5.0."""
+        from fieldtrack import settings as fieldtrack_settings
+        reloaded = importlib.reload(fieldtrack_settings)
+        self.assertEqual(reloaded.DATABASES['default']['OPTIONS']['timeout'], 5.0)
+
+    @mock.patch.dict(
+        os.environ,
+        {
+            'DJANGO_IGNORE_ENV_FILE': '1',
+            'DEBUG': 'True',
+            'SQLITE_TIMEOUT': 'invalid_non_numeric',
+        },
+        clear=True,
+    )
+    def test_sqlite_invalid_timeout_falls_back_to_safe_default(self):
+        """Verify malformed SQLITE_TIMEOUT safely falls back to default 5.0."""
+        from fieldtrack import settings as fieldtrack_settings
+        reloaded = importlib.reload(fieldtrack_settings)
+        self.assertEqual(reloaded.DATABASES['default']['OPTIONS']['timeout'], 5.0)
