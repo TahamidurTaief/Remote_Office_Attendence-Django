@@ -21,12 +21,11 @@ staticfiles/
 .django_tailwind_cli
 ./.django_tailwind_cli
 
-# ── DATABASE FILES (NEVER COMMIT) ────────────────────────────────────────────
-db.sqlite3
+# ── DATABASE FILES ────────────────────────────────────────────────────────────
+# db.sqlite3 tracked as requested
 db.sqlite3-shm
 db.sqlite3-wal
 db.sqlite3.*
-*.sqlite3
 *.sqlite3.bak
 *.sqlite3.bak*
 *.db
