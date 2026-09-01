@@ -186,8 +186,15 @@ WSGI_APPLICATION = 'fieldtrack.wsgi.application'
 #   3. Consistency Validation: Run data integrity & end-to-end regression tests.
 #   4. Production Rollout: Update engine setting, run verified migrations, and deploy.
 
-_raw_sqlite_path = env.str('SQLITE_PATH', default='')
-_sqlite_path = Path(_raw_sqlite_path) if _raw_sqlite_path else BASE_DIR / 'db.sqlite3'
+_raw_sqlite_path = env.str('SQLITE_PATH', default='').strip()
+if not _raw_sqlite_path:
+    _sqlite_path = (BASE_DIR / 'db.sqlite3').resolve()
+else:
+    _path_obj = Path(_raw_sqlite_path)
+    if _path_obj.is_absolute():
+        _sqlite_path = _path_obj.resolve()
+    else:
+        _sqlite_path = (BASE_DIR / _path_obj).resolve()
 
 _DEFAULT_SQLITE_TIMEOUT = 5.0
 try:

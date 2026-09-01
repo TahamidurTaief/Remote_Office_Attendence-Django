@@ -1,5 +1,6 @@
 import importlib
 import os
+import tempfile
 from pathlib import Path
 from unittest import mock
 from django.core.exceptions import ImproperlyConfigured
@@ -8,20 +9,22 @@ from django.conf import settings
 
 
 class SettingsSecurityTests(SimpleTestCase):
-    """Focused tests for environment parsing, security defaults, and production guardrails."""
+    """Focused tests for environment parsing, security defaults, SQLite path resolution, and test isolation."""
+
+    def setUp(self):
+        super().setUp()
+        # Take an exact snapshot of os.environ prior to any test mutation
+        self._orig_environ = os.environ.copy()
 
     def tearDown(self):
-        # Guarantee development settings state is cleanly restored after every test
-        from fieldtrack import settings as fieldtrack_settings
-        os.environ['DJANGO_IGNORE_ENV_FILE'] = '1'
-        os.environ['DEBUG'] = 'True'
-        os.environ['DJANGO_SECRET_KEY'] = 'dev-secret-key-placeholder-32-characters-long'
-        os.environ['ALLOWED_HOSTS'] = 'localhost,127.0.0.1'
-        os.environ.pop('SQLITE_PATH', None)
-        os.environ.pop('SQLITE_TIMEOUT', None)
-        os.environ.pop('DATABASE_URL', None)
-        importlib.reload(fieldtrack_settings)
-        super().tearDown()
+        # Guarantee exact original environment and settings module state are restored
+        try:
+            os.environ.clear()
+            os.environ.update(self._orig_environ)
+            from fieldtrack import settings as fieldtrack_settings
+            importlib.reload(fieldtrack_settings)
+        finally:
+            super().tearDown()
 
     def test_current_settings_sqlite_database(self):
         """Verify default active database is SQLite with timeout configured."""
@@ -144,15 +147,50 @@ class SettingsSecurityTests(SimpleTestCase):
         {
             'DJANGO_IGNORE_ENV_FILE': '1',
             'DEBUG': 'True',
+            'SQLITE_PATH': '',
+        },
+        clear=True,
+    )
+    def test_sqlite_empty_path_resolves_to_base_dir_default(self):
+        """Verify empty SQLITE_PATH resolves deterministically to BASE_DIR / 'db.sqlite3'."""
+        from fieldtrack import settings as fieldtrack_settings
+        reloaded = importlib.reload(fieldtrack_settings)
+        expected = (fieldtrack_settings.BASE_DIR / 'db.sqlite3').resolve()
+        self.assertEqual(reloaded.DATABASES['default']['NAME'], expected)
+
+    @mock.patch.dict(
+        os.environ,
+        {
+            'DJANGO_IGNORE_ENV_FILE': '1',
+            'DEBUG': 'True',
             'SQLITE_PATH': 'custom_storage/test_custom.sqlite3',
         },
         clear=True,
     )
-    def test_sqlite_custom_path_parsing(self):
-        """Verify SQLITE_PATH environment override parses safely into Path."""
+    def test_sqlite_relative_path_resolves_under_base_dir(self):
+        """Verify relative SQLITE_PATH resolves deterministically underneath BASE_DIR."""
         from fieldtrack import settings as fieldtrack_settings
         reloaded = importlib.reload(fieldtrack_settings)
-        self.assertEqual(reloaded.DATABASES['default']['NAME'], Path('custom_storage/test_custom.sqlite3'))
+        expected = (fieldtrack_settings.BASE_DIR / 'custom_storage' / 'test_custom.sqlite3').resolve()
+        self.assertEqual(reloaded.DATABASES['default']['NAME'], expected)
+
+    def test_sqlite_absolute_path_preserved_without_base_dir_prefix(self):
+        """Verify absolute SQLITE_PATH is preserved as an absolute path."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            abs_target = (Path(tmp_dir) / 'runtime_storage' / 'external.sqlite3').resolve()
+            with mock.patch.dict(
+                os.environ,
+                {
+                    'DJANGO_IGNORE_ENV_FILE': '1',
+                    'DEBUG': 'True',
+                    'SQLITE_PATH': str(abs_target),
+                },
+                clear=True,
+            ):
+                from fieldtrack import settings as fieldtrack_settings
+                reloaded = importlib.reload(fieldtrack_settings)
+                self.assertEqual(reloaded.DATABASES['default']['NAME'], abs_target)
+                self.assertTrue(reloaded.DATABASES['default']['NAME'].is_absolute())
 
     @mock.patch.dict(
         os.environ,
@@ -198,3 +236,13 @@ class SettingsSecurityTests(SimpleTestCase):
         from fieldtrack import settings as fieldtrack_settings
         reloaded = importlib.reload(fieldtrack_settings)
         self.assertEqual(reloaded.DATABASES['default']['OPTIONS']['timeout'], 5.0)
+
+    def test_environment_and_settings_isolation_restoration(self):
+        """Verify environment variables and settings reload are restored exactly after test execution."""
+        sentinel_key = 'TEST_ISOLATION_SENTINEL_VAR'
+        os.environ[sentinel_key] = 'temporary_val'
+        try:
+            self.assertIn(sentinel_key, os.environ)
+        finally:
+            del os.environ[sentinel_key]
+        self.assertNotIn(sentinel_key, os.environ)
