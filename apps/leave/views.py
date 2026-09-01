@@ -313,8 +313,9 @@ class AdminLeaveTypeDeleteView(AdminRequiredMixin, View):
     def post(self, request, pk):
         leave_type = get_object_or_404(LeaveType, pk=pk)
         name = leave_type.name
-        leave_type.delete()
-        messages.success(request, f"Leave type '{name}' deleted successfully.")
+        leave_type.is_active = False
+        leave_type.save()
+        messages.success(request, f"Leave type '{name}' deactivated successfully.")
         return redirect('leave:admin_leave_types')
 
 # ==============================================================================

@@ -34,9 +34,9 @@
                     </td>
                     <td class="text-right flex items-center justify-end gap-1">
                         <c-button hx-get="{% url 'leave:admin_leave_type_edit' lt.pk %}" hx-target="#edit-drawer-container" hx-swap="innerHTML" variant="ghost" size="sm" icon="edit-3" label="Edit" ></c-button>
-                        <form action="{% url 'leave:admin_leave_type_delete' lt.pk %}" method="POST" onsubmit="return confirm('Are you sure you want to delete the leave type &quot;{{ lt.name|escapejs }}&quot;?');" class="inline">
+                        <form action="{% url 'leave:admin_leave_type_delete' lt.pk %}" method="POST" onsubmit="return confirm('Are you sure you want to deactivate the leave type &quot;{{ lt.name|escapejs }}&quot;?');" class="inline">
                             {% csrf_token %}
-                            <c-button type="submit" variant="ghost" size="sm" icon="trash-2" extra_class="text-red-500 hover:text-red-700" title="Delete" ></c-button>
+                            <c-button type="submit" variant="ghost" size="sm" icon="trash-2" extra_class="text-red-500 hover:text-red-700" title="Deactivate" ></c-button>
                         </form>
                     </td>
                 </tr>

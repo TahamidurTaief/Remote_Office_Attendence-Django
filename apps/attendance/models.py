@@ -82,6 +82,11 @@ class Attendance(models.Model):
     )
     
     is_policy_exception = models.BooleanField(default=False)
+    is_outside_geofence = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Flagged when check-in occurred outside permitted geofence radius'
+    )
     gps_quality = models.CharField(
         max_length=10,
         choices=[('good', 'Good'), ('poor', 'Poor'), ('missing', 'Missing')],
@@ -95,6 +100,11 @@ class Attendance(models.Model):
 
     class Meta:
         ordering = ['-date', '-check_in_time']
+
+    def save(self, *args, **kwargs):
+        if self.note and "outside geofence" in self.note.lower():
+            self.is_outside_geofence = True
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.employee.full_name} - {self.date} ({self.attendance_type})"
@@ -119,23 +129,6 @@ class Attendance(models.Model):
             if s.total_hours:
                 total += s.total_hours
         return total
-
-    @property
-    def is_outside_geofence(self):
-        """
-        Returns True if the check-in was outside the office geofence.
-        """
-        if "outside geofence" in self.note.lower():
-            return True
-        try:
-            from apps.branches.utils import is_within_geofence
-            ci_loc = self.locations.filter(event='check_in').first()
-            if ci_loc and self.employee.branch:
-                within, _ = is_within_geofence(ci_loc.latitude, ci_loc.longitude, self.employee.branch)
-                return not within
-        except Exception:
-            pass
-        return False
 
 
 

@@ -73,8 +73,9 @@ class AttendanceLifecycleService:
             raise AttendanceLifecycleError('This request has already been processed.', 400)
 
         if action == 'reject':
+            orig_status = req.status
             req.status = 'rejected'
-            if req.status == 'pending_manager':
+            if orig_status == 'pending_manager':
                 req.reviewed_by_manager = user
             else:
                 req.reviewed_by_hr = user
@@ -402,6 +403,17 @@ class AttendanceLifecycleService:
 
         if not lat or not lng:
             raise AttendanceLifecycleError('Location required.', 400)
+
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except (TypeError, ValueError):
+            raise AttendanceLifecycleError('Invalid coordinates.', 400)
+
+        try:
+            accuracy = float(accuracy) if accuracy else 0.0
+        except (TypeError, ValueError):
+            accuracy = 0.0
 
         if not client_time:
             from datetime import timedelta

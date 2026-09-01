@@ -114,8 +114,13 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
     month_start = date(year, month, 1)
     month_end = date(year, month, days_in_month)
 
-    # 1. Fetch active employees
-    employees_qs = EmployeeProfile.objects.filter(is_active=True).select_related(
+    # 1. Fetch active employees and employees active during reporting period
+    from django.db.models import Q
+    employees_qs = EmployeeProfile.objects.filter(
+        Q(is_active=True) |
+        Q(master_employee__employment_history__field_changed='status', master_employee__employment_history__effective_date__gte=month_start) |
+        Q(attendances__date__gte=month_start, attendances__date__lte=month_end)
+    ).distinct().select_related(
         'branch',
         'branch__schedule',
     ).order_by('full_name')
@@ -172,6 +177,10 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
 
     # 5. Fetch leave balances for matching employees in year
     leave_types = list(LeaveType.objects.all())
+    from apps.employees.models import EmployeeLeaveRule
+    rules_qs = EmployeeLeaveRule.objects.filter(employee_id__in=employee_ids)
+    rules_map = {(r.employee_id, r.leave_type_id): r.days_per_year for r in rules_qs}
+
     balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year)
     balances_by_emp = defaultdict(list)
     for bal in balances_qs:
@@ -185,10 +194,11 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
         existing_types = {b['type'].id for b in emp_bals}
         for lt in leave_types:
             if lt.id not in existing_types:
+                limit = rules_map.get((e_id, lt.id), lt.default_days_per_year)
                 emp_bals.append({
                     'type': lt,
-                    'remaining': lt.default_days_per_year,
-                    'total': lt.default_days_per_year
+                    'remaining': limit,
+                    'total': limit
                 })
 
     # Determine summary schedule for the working days KPI card
@@ -240,7 +250,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
             has_field_visit = any(a.attendance_type == 'field_visit' for a in day_atts)
             has_any_attendance = has_check_in or has_field_visit
             
-            if has_check_in:
+            if has_check_in or has_field_visit:
                 present_count += 1
             if has_field_visit:
                 field_visit_count += sum(1 for a in day_atts if a.attendance_type == 'field_visit')

@@ -14,6 +14,7 @@ class LeaveType(models.Model):
     default_days_per_year = models.IntegerField(default=0)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     is_default = models.BooleanField(default=False, help_text="Set as default leave type for automated absence deductions")
+    is_active = models.BooleanField(default=True)
 
     def save(self, *args, **kwargs):
         if self.is_default:
@@ -64,7 +65,7 @@ class LeaveRequest(models.Model):
     leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE)
     start_date = models.DateField()
     end_date = models.DateField()
-    number_of_days = models.IntegerField()
+    number_of_days = models.DecimalField(max_digits=4, decimal_places=1)
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     requested_at = models.DateTimeField(auto_now_add=True)
@@ -89,6 +90,7 @@ class LeaveRequest(models.Model):
         ]
 
     def calculate_deductible_days(self):
+        from decimal import Decimal
         from datetime import timedelta
         from django.db.models import Q
         from apps.branches.models import Holiday
@@ -103,7 +105,7 @@ class LeaveRequest(models.Model):
         schedule = get_branch_schedule(self.employee)
         working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
         
-        deductible_days = 0
+        deductible_days = Decimal('0.0')
         curr = self.start_date
         while curr <= self.end_date:
             day_name = curr.strftime('%A').lower()
@@ -145,7 +147,7 @@ class LeaveRequest(models.Model):
                 curr += timedelta(days=1)
                 continue
 
-            deductible_days += 1
+            deductible_days += Decimal('1.0')
             curr += timedelta(days=1)
             
         return deductible_days
@@ -155,9 +157,10 @@ class LeaveRequest(models.Model):
         if self.start_date and self.end_date:
             self.number_of_days = self.calculate_deductible_days()
             
+        from decimal import Decimal
         is_new = self.pk is None
         old_status = None
-        old_days = 0
+        old_days = Decimal('0.0')
         old_type = None
         old_year = None
         

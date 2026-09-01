@@ -255,8 +255,8 @@ class EmployeeLeaveRuleTests(TestCase):
         # 3. YearLeaveHelper should now yield 15
         self.assertEqual(self.employee.total_leave_left_by_year[2026], 15)
 
-        # 4. Request approved leave - should instantiate LeaveBalance with 15 total days
-        target_date = datetime.date(2026, 7, 10)
+        # 4. Request approved leave - should instantiate LeaveBalance with 15 total days (on working day Monday 2026-07-06)
+        target_date = datetime.date(2026, 7, 6)
         leave_request = LeaveRequest.objects.create(
             employee=self.employee,
             leave_type=self.casual_leave,

@@ -51,6 +51,11 @@ class LeaveRequestForm(forms.ModelForm):
         self.employee = kwargs.pop('employee', None)
         super().__init__(*args, **kwargs)
         self.projected_remaining = None
+        if self.instance and self.instance.pk and self.instance.leave_type_id:
+            from django.db.models import Q
+            self.fields['leave_type'].queryset = LeaveType.objects.filter(Q(is_active=True) | Q(pk=self.instance.leave_type_id))
+        else:
+            self.fields['leave_type'].queryset = LeaveType.objects.filter(is_active=True)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -121,6 +126,14 @@ class AdminAddLeaveForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.leave_type_id:
+            from django.db.models import Q
+            self.fields['leave_type'].queryset = LeaveType.objects.filter(Q(is_active=True) | Q(pk=self.instance.leave_type_id))
+        else:
+            self.fields['leave_type'].queryset = LeaveType.objects.filter(is_active=True)
+
     def clean(self):
         cleaned_data = super().clean()
         start_date = cleaned_data.get('start_date')
@@ -147,6 +160,14 @@ class AdminLeaveRequestRescheduleForm(forms.ModelForm):
             'end_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
             'reason': forms.Textarea(attrs={'rows': 3, 'class': TEXTAREA_INPUT, 'placeholder': 'Reason for reschedule...'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.leave_type_id:
+            from django.db.models import Q
+            self.fields['leave_type'].queryset = LeaveType.objects.filter(Q(is_active=True) | Q(pk=self.instance.leave_type_id))
+        else:
+            self.fields['leave_type'].queryset = LeaveType.objects.filter(is_active=True)
 
     def clean(self):
         cleaned_data = super().clean()
