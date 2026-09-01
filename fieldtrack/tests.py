@@ -21,10 +21,12 @@ class SettingsSecurityTests(SimpleTestCase):
         try:
             os.environ.clear()
             os.environ.update(self._orig_environ)
-            from fieldtrack import settings as fieldtrack_settings
-            importlib.reload(fieldtrack_settings)
         finally:
-            super().tearDown()
+            try:
+                from fieldtrack import settings as fieldtrack_settings
+                importlib.reload(fieldtrack_settings)
+            finally:
+                super().tearDown()
 
     def test_current_settings_sqlite_database(self):
         """Verify default active database is SQLite with timeout configured."""
@@ -237,12 +239,38 @@ class SettingsSecurityTests(SimpleTestCase):
         reloaded = importlib.reload(fieldtrack_settings)
         self.assertEqual(reloaded.DATABASES['default']['OPTIONS']['timeout'], 5.0)
 
-    def test_environment_and_settings_isolation_restoration(self):
-        """Verify environment variables and settings reload are restored exactly after test execution."""
-        sentinel_key = 'TEST_ISOLATION_SENTINEL_VAR'
-        os.environ[sentinel_key] = 'temporary_val'
-        try:
-            self.assertIn(sentinel_key, os.environ)
-        finally:
-            del os.environ[sentinel_key]
-        self.assertNotIn(sentinel_key, os.environ)
+    def test_environment_values_restored_exactly_after_mutation(self):
+        """Verify environment values are restored exactly and settings cleanly reloaded after mutation."""
+        snapshot_before = os.environ.copy()
+
+        # Mutate environment with multiple variables (add, modify)
+        os.environ['TEST_ISOLATION_SENTINEL_VAR'] = 'temporary_val'
+        os.environ['DEBUG'] = 'False'
+
+        # Invoke tearDown directly
+        self.tearDown()
+
+        # Verify exact environment equality
+        self.assertEqual(os.environ, snapshot_before)
+        self.assertNotIn('TEST_ISOLATION_SENTINEL_VAR', os.environ)
+        self.assertEqual(os.environ.get('DEBUG'), snapshot_before.get('DEBUG'))
+
+    def test_environment_and_settings_restored_even_on_reload_failure(self):
+        """Verify original environment is restored even when settings reload fails."""
+        snapshot_before = os.environ.copy()
+
+        # Inject invalid configuration that triggers ImproperlyConfigured
+        os.environ['DEBUG'] = 'False'
+        os.environ['DJANGO_SECRET_KEY'] = 'insecure'
+        from fieldtrack import settings as fieldtrack_settings
+        with self.assertRaises(ImproperlyConfigured):
+            importlib.reload(fieldtrack_settings)
+
+        # Invoke tearDown
+        self.tearDown()
+
+        # Verify exact environment equality
+        self.assertEqual(os.environ, snapshot_before)
+        # Verify settings module can now be reloaded without error
+        reloaded = importlib.reload(fieldtrack_settings)
+        self.assertIsNotNone(reloaded)
