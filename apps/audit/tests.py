@@ -184,7 +184,7 @@ class AuditTrashFoundationTests(TestCase):
             after_data={"branch": "Chattogram"},
         )
         self._login(self.staff)
-        resp = self.client.get(reverse("audit:event_detail", kwargs={"pk": event.pk}), HTTP_HX_REQUEST="true")
+        resp = self.client.get(reverse("audit:event_detail", kwargs={"uuid": event.uuid}), HTTP_HX_REQUEST="true")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Audit Detail Unlock")
 
@@ -204,11 +204,11 @@ class AuditTrashFoundationTests(TestCase):
         self._login(self.staff)
         unlock_resp = self.client.post(reverse("accounts:security_reauth"), {
             "reauth_credential": self.staff_password,
-            "target_url": reverse("audit:event_detail", kwargs={"pk": event.pk}),
+            "target_url": reverse("audit:event_detail", kwargs={"uuid": event.uuid}),
             "reauth_scope": "audit_detail",
         })
         self.assertEqual(unlock_resp.status_code, 302)
-        detail_resp = self.client.get(reverse("audit:event_detail", kwargs={"pk": event.pk}), HTTP_HX_REQUEST="true")
+        detail_resp = self.client.get(reverse("audit:event_detail", kwargs={"uuid": event.uuid}), HTTP_HX_REQUEST="true")
         self.assertEqual(detail_resp.status_code, 200)
         self.assertContains(detail_resp, "Chattogram")
         self.assertTrue(AuditAccessLog.objects.filter(user=self.staff, audit_event=event).exists())
@@ -227,12 +227,12 @@ class AuditTrashFoundationTests(TestCase):
         self._login(self.staff)
         resp = self.client.post(reverse("accounts:security_reauth"), {
             "reauth_credential": "wrong-password",
-            "target_url": reverse("audit:event_detail", kwargs={"pk": event.pk}),
+            "target_url": reverse("audit:event_detail", kwargs={"uuid": event.uuid}),
             "reauth_scope": "audit_detail",
         })
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Authentication failed")
-        detail_resp = self.client.get(reverse("audit:event_detail", kwargs={"pk": event.pk}), HTTP_HX_REQUEST="true")
+        detail_resp = self.client.get(reverse("audit:event_detail", kwargs={"uuid": event.uuid}), HTTP_HX_REQUEST="true")
         self.assertContains(detail_resp, "Audit Detail Unlock")
 
     def test_status_history_preservation_after_restore(self):

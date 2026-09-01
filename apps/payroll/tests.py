@@ -375,7 +375,7 @@ class PayrollFoundationTests(TestCase):
         # working days in August 2026 for Standard schedule: friday/saturday are holidays (or friday/saturday holiday based on weekly_holiday_policy)
         # We can create some Attendance check-ins
         for d in range(1, 23):
-            Attendance.objects.create(
+            att = Attendance.objects.create(
                 employee=profile,
                 date=datetime.date(2026, 8, d),
                 attendance_type='check_in',
@@ -384,6 +384,15 @@ class PayrollFoundationTests(TestCase):
                 overtime_minutes=60 if d in [1, 2] else 0, # 120 minutes total = 2.0 hours approved OT
                 ot_status='approved' if d in [1, 2] else 'none'
             )
+            if d in [1, 2]:
+                from apps.attendance.models import OvertimeRequest
+                OvertimeRequest.objects.create(
+                    employee=profile,
+                    date=datetime.date(2026, 8, d),
+                    attendance=att,
+                    ot_minutes=60,
+                    status='approved'
+                )
 
         # Approved Leave
         lt = LeaveType.objects.create(name="Paid Leave", category="casual", is_default=True)

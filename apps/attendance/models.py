@@ -102,8 +102,6 @@ class Attendance(models.Model):
         ordering = ['-date', '-check_in_time']
 
     def save(self, *args, **kwargs):
-        if self.note and "outside geofence" in self.note.lower():
-            self.is_outside_geofence = True
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -183,23 +181,23 @@ def get_default_deduction_leave_type(employee=None):
     from apps.leave.models import LeaveType
     if employee:
         from apps.employees.models import EmployeeLeaveRule
-        rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__is_default=True).select_related('leave_type').first()
+        rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__is_active=True, leave_type__is_default=True).select_related('leave_type').first()
         if not rule:
-            rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__category='casual').select_related('leave_type').first()
+            rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__is_active=True, leave_type__category='casual').select_related('leave_type').first()
         if not rule:
-            rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__category='sick').select_related('leave_type').first()
+            rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__is_active=True, leave_type__category='sick').select_related('leave_type').first()
         if not rule:
-            rule = EmployeeLeaveRule.objects.filter(employee=employee).select_related('leave_type').order_by('leave_type__id').first()
+            rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__is_active=True).select_related('leave_type').order_by('leave_type__id').first()
         if rule:
             return rule.leave_type
 
-    leave_type = LeaveType.objects.filter(is_default=True).first()
+    leave_type = LeaveType.objects.filter(is_active=True, is_default=True).first()
     if not leave_type:
-        leave_type = LeaveType.objects.filter(category='casual').first()
+        leave_type = LeaveType.objects.filter(is_active=True, category='casual').first()
     if not leave_type:
-        leave_type = LeaveType.objects.filter(category='sick').first()
+        leave_type = LeaveType.objects.filter(is_active=True, category='sick').first()
     if not leave_type:
-        leave_type = LeaveType.objects.order_by('id').first()
+        leave_type = LeaveType.objects.filter(is_active=True).order_by('id').first()
     return leave_type
 
 
@@ -387,4 +385,68 @@ class AttendanceActivityLog(models.Model):
         return f"{self.employee.full_name} - {self.description} ({self.timestamp})"
 
 
+class OvertimeRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('manager_approved', 'Manager Approved'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
 
+    employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name='overtime_requests')
+    date = models.DateField()
+    attendance = models.ForeignKey(Attendance, on_delete=models.CASCADE, null=True, blank=True, related_name='overtime_requests')
+    ot_minutes = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('employee', 'date')
+
+    def __str__(self):
+        return f"Overtime Request - {self.employee.full_name} - {self.date} ({self.status})"
+
+    @property
+    def workflow_instance(self):
+        from apps.workflow.models import WorkflowInstance
+        return WorkflowInstance.objects.filter(object_type='overtime_request', object_id=str(self.id)).first()
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from apps.workflow.models import WorkflowInstance
+
+@receiver(post_save, sender=OvertimeRequest)
+def create_overtime_workflow_instance(sender, instance, created, **kwargs):
+    if created:
+        from apps.workflow.models import WorkflowDefinition, WorkflowInstance
+        definition = WorkflowDefinition.objects.filter(code='ot_approval').first()
+        if definition:
+            if not WorkflowInstance.objects.filter(object_type='overtime_request', object_id=str(instance.id)).exists():
+                user = getattr(instance.employee, 'user', None)
+                wf_instance = WorkflowInstance.objects.create(
+                    definition=definition,
+                    object_type='overtime_request',
+                    object_id=str(instance.id),
+                    initiated_by=user
+                )
+                wf_instance.start_workflow()
+
+
+@receiver(post_save, sender=WorkflowInstance)
+def sync_overtime_request_status(sender, instance, **kwargs):
+    if instance.object_type == 'overtime_request':
+        try:
+            ot_req = OvertimeRequest.objects.get(pk=instance.object_id)
+            if ot_req.status != instance.current_status:
+                ot_req.status = instance.current_status
+                last_action = instance.actions.order_by('-timestamp').first()
+                if last_action:
+                    ot_req.reviewed_by = last_action.actor
+                    ot_req.reviewed_at = last_action.timestamp
+                ot_req.save()
+        except OvertimeRequest.DoesNotExist:
+            pass

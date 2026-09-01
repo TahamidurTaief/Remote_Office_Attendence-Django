@@ -81,6 +81,11 @@ class AttendanceModelAndHelperTests(TestCase):
         other_leave.save()
         self.assertEqual(get_default_deduction_leave_type(), other_leave)
 
+        # Scenario F: Deactivated LeaveType should be skipped
+        other_leave.is_active = False
+        other_leave.save()
+        self.assertEqual(get_default_deduction_leave_type(), casual_leave)
+
     def test_multi_session_total_hours(self):
         # Create first session (closed, 4 hours worked)
         att1 = Attendance.objects.create(
@@ -996,27 +1001,35 @@ class AttendancePhase2Tests(TestCase):
             attendance_type='check_in',
             status='on_time'
         )
+        from apps.attendance.models import OvertimeRequest
+        ot_req = OvertimeRequest.objects.create(
+            employee=self.employee,
+            date=timezone.localdate(),
+            attendance=att,
+            ot_minutes=120,
+            status='pending'
+        )
         
         # Manager rejects OT
         self.client.login(username='+8801700000001', password='password123')
-        response = self.client.post(reverse('attendance:process_overtime', args=[att.pk]), data={
+        response = self.client.post(reverse('attendance:process_overtime', args=[ot_req.pk]), data={
             'action': 'reject'
         })
         self.assertEqual(response.status_code, 200)
-        att.refresh_from_db()
-        self.assertEqual(att.ot_status, 'rejected')
+        ot_req.refresh_from_db()
+        self.assertEqual(ot_req.status, 'rejected')
         
         # Reset OT to pending for approve test
-        att.ot_status = 'pending'
-        att.save()
+        ot_req.status = 'pending'
+        ot_req.save()
         
         # Manager approves OT
-        response = self.client.post(reverse('attendance:process_overtime', args=[att.pk]), data={
+        response = self.client.post(reverse('attendance:process_overtime', args=[ot_req.pk]), data={
             'action': 'approve'
         })
         self.assertEqual(response.status_code, 200)
-        att.refresh_from_db()
-        self.assertEqual(att.ot_status, 'approved')
+        ot_req.refresh_from_db()
+        self.assertIn(ot_req.status, ['manager_approved', 'approved'])
 
     def test_bulk_sync_view(self):
         import uuid

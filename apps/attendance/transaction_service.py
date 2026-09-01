@@ -148,12 +148,14 @@ class AttendanceTransactionService:
                     if within_geofence:
                         attendance_type = 'office'
 
+            is_outside_geofence = False
             enforce_geofence = not policy.allow_outside_geofence or policy.geofencing_policy != 'disabled'
             if enforce_geofence:
                 branch = emp_locked.branch
                 if branch and branch.latitude and branch.longitude:
                     within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
                     if not within_geofence:
+                        is_outside_geofence = True
                         should_block = (policy.geofencing_policy == 'block') or (not policy.allow_outside_geofence and policy.geofencing_policy == 'block')
                         if should_block and not is_admin_or_hr:
                             raise AttendanceTransactionError(
@@ -222,6 +224,7 @@ class AttendanceTransactionService:
                 note=note,
                 photo=photo,
                 is_policy_exception=is_exception,
+                is_outside_geofence=is_outside_geofence,
                 gps_quality=gps_quality,
                 sync_uuid=sync_uuid or uuid.uuid4(),
                 client_event_time=client_time,

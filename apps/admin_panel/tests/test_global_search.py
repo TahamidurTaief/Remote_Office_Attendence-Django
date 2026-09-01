@@ -6,12 +6,11 @@ class GlobalSearchTest(TestCase):
     """Test suite for the Global Search component (cotton/command-palette.html)."""
 
     def test_global_search_template_renders(self):
-        """Verify command-palette contains employee and project navigation items."""
+        """Verify command-palette contains input and search placeholder."""
         rendered = render_to_string('cotton/command-palette.html', {})
-        self.assertIn('Employee', rendered)
-        self.assertIn('Project', rendered)
-        self.assertIn('Dashboard', rendered)
-        self.assertIn('Attendance', rendered)
+        self.assertIn('ft-cmd-input', rendered)
+        self.assertIn('search-results-list', rendered)
+        self.assertIn('employees', rendered)
 
 
 from django.contrib.auth import get_user_model

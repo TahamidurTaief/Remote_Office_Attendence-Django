@@ -721,23 +721,41 @@ def process_attendance_correction(request, pk):
 @require_POST
 def process_overtime(request, pk):
     try:
-        from apps.attendance.lifecycle_service import AttendanceLifecycleService, AttendanceLifecycleError
+        from apps.attendance.models import OvertimeRequest
+        from apps.workflow.services import record_action
         action = request.POST.get('action')
-        result = AttendanceLifecycleService.process_overtime(request.user, pk, action)
-        
+        if action not in ['approve', 'reject', 'return']:
+            return JsonResponse({'success': False, 'error': 'Invalid action.'}, status=400)
+
+        ot_req = get_object_or_404(OvertimeRequest, pk=pk)
+        wf_instance = ot_req.workflow_instance
+
+        if wf_instance and not wf_instance.completed_at:
+            record_action(wf_instance, request.user, action, f"{action.capitalize()}d via admin requests view")
+        else:
+            if action == 'approve' and ot_req.status in ['pending', 'manager_approved']:
+                ot_req.status = 'approved'
+                ot_req.reviewed_by = request.user
+                ot_req.reviewed_at = timezone.now()
+                ot_req.save()
+            elif action == 'reject' and ot_req.status in ['pending', 'manager_approved']:
+                ot_req.status = 'rejected'
+                ot_req.reviewed_by = request.user
+                ot_req.reviewed_at = timezone.now()
+                ot_req.save()
+            elif action == 'return':
+                ot_req.status = 'pending'
+                ot_req.save()
+            else:
+                return JsonResponse({'success': False, 'error': 'Request already processed.'}, status=400)
+
+        ot_req.refresh_from_db()
+        status_label = ot_req.get_status_display() if hasattr(ot_req, 'get_status_display') else ot_req.status
         if request.headers.get('hx-request'):
-            label = 'Approved' if result['status'] == 'approved' else 'Rejected'
-            return render_htmx_status_badge(result['status'], label)
-        return JsonResponse(result)
-    except AttendanceLifecycleError as e:
-        if request.headers.get('hx-request') and e.status_code in (403, 400):
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden(str(e))
-        return JsonResponse({'success': False, 'error': str(e)}, status=e.status_code)
+            return render_htmx_status_badge(ot_req.status, status_label)
+        return JsonResponse({'success': True, 'status': ot_req.status, 'message': f'Overtime {action}d successfully.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-    return JsonResponse({'success': False, 'error': 'Invalid action.'}, status=400)
 
 
 from django.views.generic import ListView
@@ -761,7 +779,7 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        from apps.attendance.models import AttendanceCorrectionRequest, Attendance
+        from apps.attendance.models import AttendanceCorrectionRequest, OvertimeRequest
         
         # Corrections
         corr_qs = AttendanceCorrectionRequest.objects.filter(status='pending').select_related('attendance__employee')
@@ -769,8 +787,8 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
             corr_qs = corr_qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
         context['corrections'] = corr_qs
         
-        # Overtime
-        ot_qs = Attendance.objects.filter(ot_status='pending').select_related('employee')
+        # Overtime Requests (Workflow-backed)
+        ot_qs = OvertimeRequest.objects.filter(status__in=['pending', 'manager_approved']).select_related('employee', 'attendance')
         if getattr(user, 'role', '') == 'manager' and not user.is_superuser:
             ot_qs = ot_qs.filter(employee__master_employee__reporting_manager__user=user)
         context['overtimes'] = ot_qs

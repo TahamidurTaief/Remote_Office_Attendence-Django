@@ -135,3 +135,59 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("Created WorkflowStep 3: Accounts Review (Expense)"))
         else:
             self.stdout.write(self.style.SUCCESS("Updated WorkflowStep 3: Accounts Review (Expense)"))
+
+        # Overtime Approval Workflow
+        ot_def, created_ot = WorkflowDefinition.objects.update_or_create(
+            code='ot_approval',
+            defaults={
+                'module': 'attendance',
+                'name': 'Overtime Approval',
+                'description': 'Two-step approval flow for detected overtime (Manager -> HR)',
+                'is_active': True,
+            }
+        )
+        if created_ot:
+            self.stdout.write(self.style.SUCCESS("Created WorkflowDefinition: ot_approval"))
+        else:
+            self.stdout.write(self.style.SUCCESS("Updated WorkflowDefinition: ot_approval"))
+
+        # Step 1: Manager Review
+        ot_step1, created_os1 = WorkflowStep.objects.update_or_create(
+            workflow=ot_def,
+            step_number=1,
+            defaults={
+                'name': 'Manager Review',
+                'from_status': 'pending',
+                'to_status': 'manager_approved',
+                'approver_role': 'manager',
+                'approver_resolution_type': 'reporting_manager',
+                'sla_hours': 24,
+                'escalation_role': 'admin',
+                'allow_return': True,
+                'allow_rejection': True,
+            }
+        )
+        if created_os1:
+            self.stdout.write(self.style.SUCCESS("Created WorkflowStep 1: Manager Review (OT)"))
+        else:
+            self.stdout.write(self.style.SUCCESS("Updated WorkflowStep 1: Manager Review (OT)"))
+
+        # Step 2: HR Final Approval
+        ot_step2, created_os2 = WorkflowStep.objects.update_or_create(
+            workflow=ot_def,
+            step_number=2,
+            defaults={
+                'name': 'HR Final Approval',
+                'from_status': 'manager_approved',
+                'to_status': 'approved',
+                'approver_role': 'hr',
+                'sla_hours': 48,
+                'escalation_role': 'admin',
+                'allow_return': True,
+                'allow_rejection': True,
+            }
+        )
+        if created_os2:
+            self.stdout.write(self.style.SUCCESS("Created WorkflowStep 2: HR Final Approval (OT)"))
+        else:
+            self.stdout.write(self.style.SUCCESS("Updated WorkflowStep 2: HR Final Approval (OT)"))

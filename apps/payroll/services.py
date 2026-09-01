@@ -367,10 +367,15 @@ class PayrollService:
             # Approved leave days
             approved_leave_days = Decimal(str(row['on_leave']))
 
-            # Canonical report statistics for OT
-            emp_stats = report['employee_stats'].get(profile.id, {})
-            ot_minutes = emp_stats.get('total_ot_minutes', 0)
-            approved_ot_hours = Decimal(str(ot_minutes)) / Decimal('60.00')
+            # Approved OT hours derived strictly from approved OvertimeRequest records
+            from apps.attendance.models import OvertimeRequest
+            approved_ot_minutes = OvertimeRequest.objects.filter(
+                employee=profile,
+                status='approved',
+                date__gte=payroll_run.period_start,
+                date__lte=payroll_run.period_end
+            ).aggregate(total=models.Sum('ot_minutes'))['total'] or 0
+            approved_ot_hours = Decimal(str(approved_ot_minutes)) / Decimal('60.00')
 
             # Unpaid absence days derivation with dynamic leave deductions
             absent_count = Decimal(str(row['absent']))
