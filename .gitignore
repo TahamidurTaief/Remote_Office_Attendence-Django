@@ -66,12 +66,13 @@ Thumbs.db
 .idea/
 .vscode/
 
-# ── BACKUP FILES ─────────────────────────────────────────────────────────────
+# ── BACKUP / RUNTIME DUMP FILES ──────────────────────────────────────────────
 *.bak
 *.backup
 backups/files/
 backups.zip
-*.zip
-*.tar
-*.tar.gz
+backups/*.zip
+backups/*.tar
+backups/*.tar.gz
+backups/*.dump
 *.dump

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -8,42 +9,91 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, False)
 )
-_env_file = BASE_DIR / '.env'
-if _env_file.exists():
-    environ.Env.read_env(str(_env_file))
+_env_file_path = os.environ.get('DJANGO_ENV_FILE', str(BASE_DIR / '.env'))
+if os.path.exists(_env_file_path) and not os.environ.get('DJANGO_IGNORE_ENV_FILE'):
+    environ.Env.read_env(_env_file_path, overwrite=False)
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Production must set the DJANGO_SECRET_KEY environment variable.
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-placehojkbkj-ssdfsadflder')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-# For Coolify/production deployment: set DEBUG=True in environment variables or .env for local/staging; default is False for production.
+
+def _parse_comma_separated(value, default=None):
+    if value is None:
+        return list(default) if default else []
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(',') if item.strip()]
+    return list(default) if default else []
+
+
+# ── ENVIRONMENT & RUNTIME FLAGS ──────────────────────────────────────────────
+
 DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = ['demotrackme.signtechlimited.com', 'trackme.signtechlimited.com', 'localhost', '127.0.0.1', 'testserver', '192.168.10.191']
+_INSECURE_DEV_SECRET = 'django-insecure-development-only-key-fieldtrack-attendance-2026'
+_raw_secret_key = env.str('DJANGO_SECRET_KEY', default=env.str('SECRET_KEY', default=''))
 
-CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://demotrackme.signtechlimited.com", "https://trackme.signtechlimited.com"]
+if not DEBUG:
+    if (
+        not _raw_secret_key
+        or _raw_secret_key.startswith('django-insecure')
+        or 'change_me' in _raw_secret_key.lower()
+        or len(_raw_secret_key) < 32
+    ):
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY must be set to a secure, random string (min 32 characters) "
+            "when running in production mode (DEBUG=False)."
+        )
+    SECRET_KEY = _raw_secret_key
+else:
+    SECRET_KEY = _raw_secret_key if _raw_secret_key else _INSECURE_DEV_SECRET
 
-# Security hardening defaults
+# Hosts Configuration
+_dev_allowed_hosts = ['localhost', '127.0.0.1', 'testserver', '[::1]']
+_raw_allowed_hosts = env.str('ALLOWED_HOSTS', default=','.join(_dev_allowed_hosts) if DEBUG else '')
+ALLOWED_HOSTS = _parse_comma_separated(_raw_allowed_hosts, default=_dev_allowed_hosts if DEBUG else [])
+
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        "ALLOWED_HOSTS must be configured as a comma-separated list of domain names "
+        "when running in production mode (DEBUG=False)."
+    )
+
+# CSRF Trusted Origins
+_dev_csrf_origins = ['http://localhost:8000', 'http://127.0.0.1:8000']
+_raw_csrf_origins = env.str('CSRF_TRUSTED_ORIGINS', default=','.join(_dev_csrf_origins) if DEBUG else '')
+CSRF_TRUSTED_ORIGINS = _parse_comma_separated(_raw_csrf_origins, default=_dev_csrf_origins if DEBUG else [])
+
+
+# ── SECURITY HARDENING & HEADERS ─────────────────────────────────────────────
+
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+X_FRAME_OPTIONS = env.str('X_FRAME_OPTIONS', default='DENY')
+SECURE_REFERRER_POLICY = env.str('SECURE_REFERRER_POLICY', default='same-origin')
 
-# Production security hardening (skipped in local DEBUG mode so `runserver`
-# over plain http still works during development).
 if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
+    CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
+    SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31536000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True)
+    SECURE_HSTS_PRELOAD = env.bool('SECURE_HSTS_PRELOAD', default=True)
+    if env.bool('SECURE_PROXY_SSL_HEADER_ENABLED', default=True):
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+else:
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False)
+    SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)
+    CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)
+    SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=0)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
-# Application definition
+
+# ── APPLICATION DEFINITION ───────────────────────────────────────────────────
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -121,24 +171,32 @@ TEMPLATES = [
     },
 ]
 
-
 WSGI_APPLICATION = 'fieldtrack.wsgi.application'
 
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# Intentionally SQLite — see WAL/busy_timeout config below. Do not migrate to Postgres/MySQL without explicit sign-off.
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {
-            'timeout': 5.0,
+# ── DATABASE CONFIGURATION ───────────────────────────────────────────────────
+# Default: SQLite with WAL/busy_timeout support for local dev & current phase.
+# Compatible with future PostgreSQL migration via DATABASE_URL if configured.
+
+_database_url = env.str('DATABASE_URL', default='')
+if _database_url:
+    DATABASES = {
+        'default': env.db('DATABASE_URL')
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 5.0,
+            }
         }
     }
-}
 
-# Password validation
+
+# ── PASSWORD VALIDATION ──────────────────────────────────────────────────────
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -154,7 +212,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
+
+# ── INTERNATIONALIZATION ─────────────────────────────────────────────────────
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Dhaka'  # Bangladesh Standard Time (UTC+6)
 USE_I18N = True
@@ -167,10 +227,11 @@ SHORT_DATE_FORMAT = 'd/m/Y'
 DATETIME_FORMAT = 'd/m/Y g:i A'
 SHORT_DATETIME_FORMAT = 'd/m/Y g:i A'
 
-# URL Configuration
 APPEND_SLASH = True
 
-# Static files (CSS, JavaScript, Images)
+
+# ── STATIC & MEDIA STORAGE ───────────────────────────────────────────────────
+
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -194,26 +255,19 @@ else:
         },
     }
 
-# Media files
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Authentication URLs
+
+# ── AUTHENTICATION & SESSIONS ────────────────────────────────────────────────
+
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 SESSION_COOKIE_AGE = 86400  # 1 day
 
-# Tailwind CLI Configuration
-_cli_bin = 'tailwindcss-3.4.13.exe' if os.name == 'nt' else 'tailwindcss-3.4.13'
-TAILWIND_CLI_PATH = BASE_DIR / '.django_tailwind_cli' / _cli_bin
-TAILWIND_CLI_SRC_CSS = 'static/css/source.css'
-TAILWIND_CLI_DIST_CSS = 'css/dist/styles.css'
-
-# Custom user model
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 AUTHENTICATION_BACKENDS = [
@@ -221,7 +275,17 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# ImageKit settings
+
+# ── TAILWIND & ASSET COMPILATION ─────────────────────────────────────────────
+
+_cli_bin = 'tailwindcss-3.4.13.exe' if os.name == 'nt' else 'tailwindcss-3.4.13'
+TAILWIND_CLI_PATH = BASE_DIR / '.django_tailwind_cli' / _cli_bin
+TAILWIND_CLI_SRC_CSS = 'static/css/source.css'
+TAILWIND_CLI_DIST_CSS = 'css/dist/styles.css'
+
+
+# ── IMAGE PROCESSING & WORKING SCHEDULE ──────────────────────────────────────
+
 IMAGEKIT_CACHEFILE_DIR = 'cache'
 IMAGEKIT_HASH_FILENAMES = True
 IMAGEKIT_CACHEFILE_NAMER = 'imagekit.cachefiles.namers.hash'
@@ -230,20 +294,26 @@ IMAGEKIT_CACHEFILE_NAMER = 'imagekit.cachefiles.namers.hash'
 WORKING_DAYS = [0, 1, 2, 3, 5, 6]
 
 
-# Email Settings
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = ''
-EMAIL_HOST_PASSWORD = ''
-DEFAULT_FROM_EMAIL = 'noreply@fieldtrack.com'
+# ── EMAIL CONFIGURATION ──────────────────────────────────────────────────────
 
-# Django Cotton configuration (preserves hyphenated component filenames)
+EMAIL_BACKEND = env.str(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = env.str('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
+EMAIL_HOST_USER = env.str('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env.str('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env.str('DEFAULT_FROM_EMAIL', default='noreply@fieldtrack.com')
+
+
+# ── DJANGO COTTON & MULTI-TENANCY ────────────────────────────────────────────
+
 COTTON_SNAKE_CASED_NAMES = False
 
-# Multi-tenancy configurations
-TENANCY_ENABLED = True
-DEFAULT_TENANT_SLUG = 'signtech'
-
-
+# Multi-tenancy foundation enabled; tenant UI hidden by default for Signtech single-tenant deployment
+TENANCY_ENABLED = env.bool('TENANCY_ENABLED', default=True)
+TENANT_UI_ENABLED = env.bool('TENANT_UI_ENABLED', default=False)
+DEFAULT_TENANT_SLUG = env.str('DEFAULT_TENANT_SLUG', default='signtech')
