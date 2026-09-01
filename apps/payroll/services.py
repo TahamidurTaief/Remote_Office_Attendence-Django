@@ -265,7 +265,7 @@ class PayrollService:
                 if ot_policy_name == 'fixed_300':
                     ot_policy_callback = lambda gross, hours: Decimal('300.00') * hours
                 else:
-                    ot_policy_callback = lambda gross, hours: (gross / Decimal('240.00')) * Decimal('1.5') * hours
+                    ot_policy_callback = lambda gross, hours: (gross / (Decimal(str(absence_divisor)) * Decimal('8.00'))) * Decimal('1.50') * hours
 
         # Calculate using engine
         calc_result = PayrollCalculationEngine.calculate_employee_payroll(
@@ -372,39 +372,97 @@ class PayrollService:
             ot_minutes = emp_stats.get('total_ot_minutes', 0)
             approved_ot_hours = Decimal(str(ot_minutes)) / Decimal('60.00')
 
-            # Unpaid absence days derivation: unpaid absent days ONLY after approved paid leave is accounted for
-            # Canonical absent count
+            # Unpaid absence days derivation with dynamic leave deductions
             absent_count = Decimal(str(row['absent']))
-            # Since absent count from reporting_service is already days where employee was not present, 
-            # and was not on holiday, and was not on approved leave, it represents unpaid absence day count.
-            # Example: 22 present + 2 approved paid leave + 1 unpaid absence -> payroll snapshot records 1 unpaid absent day only.
-            # Let's verify: calendar month might have holidays/weekends. The remaining non-working/holiday days are weekends, etc.
-            # So absent count from the canonical report is correct.
-            unpaid_absent_days = absent_count
+
+            from apps.leave.models import LeaveRequest
+            overlapping_leaves = LeaveRequest.objects.filter(
+                employee=profile,
+                status='approved',
+                start_date__lte=payroll_run.period_end,
+                end_date__gte=payroll_run.period_start
+            ).select_related('leave_type')
+
+            leave_deduction_days = Decimal('0.00')
+            for lr in overlapping_leaves:
+                days_in_period = lr.overlapping_days_in(payroll_run.period_start, payroll_run.period_end)
+                ded_pct = lr.leave_type.deduction_percent or Decimal('0.00')
+                leave_deduction_days += (days_in_period * ded_pct) / Decimal('100.00')
+
+            deduction_days = (absent_count + leave_deduction_days).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            # Resolve PayrollPolicy for employee's branch (or company-wide default)
+            from apps.payroll.models import PayrollPolicy
+            branch = master_employee.branch if master_employee else profile.branch
+            policy = None
+            if branch:
+                policy = PayrollPolicy.objects.filter(branch=branch).first()
+            if not policy:
+                policy = PayrollPolicy.objects.filter(branch__isnull=True).first()
+
+            divisor_mode = policy.absence_divisor_mode if policy else 'fixed_30'
+            if divisor_mode == 'calendar_days':
+                absence_divisor = (payroll_run.period_end - payroll_run.period_start).days + 1
+            elif divisor_mode == 'working_days':
+                from apps.attendance.schedule_utils import get_branch_schedule
+                from apps.branches.models import Holiday
+                from datetime import timedelta
+                from django.conf import settings
+                schedule = get_branch_schedule(profile)
+                working_days_set = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
+                policy_str = master_employee.weekly_holiday_policy if master_employee.weekly_holiday_policy else ''
+                w_policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
+
+                w_days = 0
+                curr = payroll_run.period_start
+                while curr <= payroll_run.period_end:
+                    day_name = curr.strftime('%A').lower()
+                    is_off = False
+                    if w_policy:
+                        if day_name in w_policy:
+                            is_off = True
+                    elif schedule:
+                        if day_name not in schedule.working_days:
+                            is_off = True
+                    else:
+                        if curr.weekday() not in working_days_set:
+                            is_off = True
+
+                    if not is_off:
+                        h_qs = Holiday.objects.filter(date=curr)
+                        if branch:
+                            h_qs = h_qs.filter(models.Q(branch=branch) | models.Q(branch__isnull=True))
+                        else:
+                            h_qs = h_qs.filter(branch__isnull=True)
+                        if not h_qs.exists():
+                            w_days += 1
+                    curr += timedelta(days=1)
+                absence_divisor = max(w_days, 1)
+            else:
+                absence_divisor = 30
+
+            ot_multiplier = policy.default_ot_multiplier if policy else Decimal('1.50')
 
             # Standard Overtime Policy callback if employee has one configured
-            # Pull approved OT hours only; OT amount stays zero unless employee has a configured OT policy
             ot_policy_name = master_employee.overtime_policy
             ot_policy_callback = None
             if ot_policy_name and ot_policy_name.strip() and ot_policy_name.lower() != 'none':
-                # Deterministic calculation helper or policy callback
-                # Default policy: Standard Overtime (1.5x) -> (Gross / divisor / 8) * 1.5 * OT_hours
-                def default_ot_callback(gross, hours):
-                    # We can use a reasonable formula: (Gross / 30 / 8) * 1.5 * hours
-                    # Gross / 30 is daily salary. Daily salary / 8 is hourly salary.
-                    # Or we can check if there's any other policy in the database.
-                    return (gross / Decimal('240.00')) * Decimal('1.5') * hours
-                ot_policy_callback = default_ot_callback
+                if ot_policy_name == 'fixed_300':
+                    ot_policy_callback = lambda gross, hours: Decimal('300.00') * hours
+                else:
+                    def default_ot_callback(gross, hours, div=absence_divisor, mult=ot_multiplier):
+                        return (gross / (Decimal(str(div)) * Decimal('8.00'))) * mult * hours
+                    ot_policy_callback = default_ot_callback
 
             # Run payroll calculation and persistence
             calc = cls.run_payroll_for_employee(
                 payroll_run=payroll_run,
                 employee=master_employee,
-                unpaid_absent_days=unpaid_absent_days,
+                unpaid_absent_days=deduction_days,
                 other_deduction=Decimal('0.00'),
                 ot_hours=approved_ot_hours,
                 ot_policy_callback=ot_policy_callback,
-                absence_divisor=30,
+                absence_divisor=absence_divisor,
                 synced_at=synced_at_now,
                 source_total_present_days=present_days,
                 source_total_approved_leave_days=approved_leave_days,

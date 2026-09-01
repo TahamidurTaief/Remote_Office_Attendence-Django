@@ -796,7 +796,7 @@ class PayrollPresentationLayerTests(TestCase):
 
         # Test partial grid for HTMX live search and check queries
         grid_url = reverse('payroll:payroll_run_grid_partial', kwargs={'pk': self.payroll_run.pk})
-        with self.assertNumQueries(11):  # session, user, security policies, count, pinned menu, and 1 select_related query for calculations
+        with self.assertNumQueries(13):  # session, user, security policies, count, pinned menu, and 1 select_related query for calculations
             response = self.client.get(grid_url)
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, "EMP101")

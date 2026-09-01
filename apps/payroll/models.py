@@ -166,3 +166,37 @@ class PayrollWorkflowAudit(models.Model):
 
     def __str__(self):
         return f"Payroll {self.payroll_run.id} from {self.from_status} to {self.to_status} at {self.action_at}"
+
+
+class AbsenceDivisorMode(models.TextChoices):
+    FIXED_30 = 'fixed_30', 'Fixed 30'
+    CALENDAR_DAYS = 'calendar_days', 'Calendar Days'
+    WORKING_DAYS = 'working_days', 'Working Days'
+
+
+class PayrollPolicy(models.Model):
+    branch = models.OneToOneField(
+        'branches.Branch',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='payroll_policy',
+        help_text="Branch for this policy. Null represents company-wide default."
+    )
+    absence_divisor_mode = models.CharField(
+        max_length=20,
+        choices=AbsenceDivisorMode.choices,
+        default=AbsenceDivisorMode.FIXED_30
+    )
+    default_ot_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.50')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        branch_name = self.branch.name if self.branch else "Company-wide Default"
+        return f"Payroll Policy ({branch_name}): {self.get_absence_divisor_mode_display()}, OT: {self.default_ot_multiplier}x"
+
