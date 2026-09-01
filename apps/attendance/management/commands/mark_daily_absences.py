@@ -53,13 +53,11 @@ class Command(BaseCommand):
         skipped_no_leavetype = 0
         deducted_count = 0
 
-        # Pre-fetch deduction leave type
         from apps.attendance.models import get_default_deduction_leave_type
-        leave_type = get_default_deduction_leave_type()
-
         from apps.attendance.schedule_utils import get_branch_schedule
 
         for emp in active_employees:
+            leave_type = get_default_deduction_leave_type(emp)
             # Check if working day for this employee's branch schedule
             schedule = get_branch_schedule(emp)
             if schedule:
@@ -131,9 +129,6 @@ class Command(BaseCommand):
                             year=target_date.year,
                             defaults={'total_days': limit}
                         )
-                        if not created and rule:
-                            balance.total_days = limit
-                            balance.save()
                         balance.used_days = F('used_days') + 1
                         balance.save()
 

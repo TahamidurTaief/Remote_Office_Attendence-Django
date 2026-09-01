@@ -146,8 +146,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
     attendances_qs = Attendance.objects.filter(
         date__gte=month_start,
         date__lte=month_end,
-        employee_id__in=employee_ids,
-        is_expired=False
+        employee_id__in=employee_ids
     ).order_by('date', 'check_in_time')
 
     att_by_emp_date = defaultdict(list)

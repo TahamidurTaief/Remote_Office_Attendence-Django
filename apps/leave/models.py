@@ -99,13 +99,26 @@ class LeaveRequest(models.Model):
         policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
         policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
         
+        from apps.attendance.schedule_utils import get_branch_schedule
+        schedule = get_branch_schedule(self.employee)
+        working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
+        
         deductible_days = 0
         curr = self.start_date
         while curr <= self.end_date:
             day_name = curr.strftime('%A').lower()
-            if day_name in policy:
-                curr += timedelta(days=1)
-                continue
+            if policy:
+                if day_name in policy:
+                    curr += timedelta(days=1)
+                    continue
+            elif schedule:
+                if day_name not in schedule.working_days:
+                    curr += timedelta(days=1)
+                    continue
+            else:
+                if curr.weekday() not in working_days:
+                    curr += timedelta(days=1)
+                    continue
             
             holiday_qs = Holiday.objects.filter(date=curr)
             if branch:
@@ -116,10 +129,22 @@ class LeaveRequest(models.Model):
                 curr += timedelta(days=1)
                 continue
                 
-            if Attendance.objects.filter(employee=self.employee, date=curr, is_expired=False).exists():
+            if Attendance.objects.filter(employee=self.employee, date=curr).exists():
                 curr += timedelta(days=1)
                 continue
                 
+            approved_leaves = LeaveRequest.objects.filter(
+                employee=self.employee,
+                status='approved',
+                start_date__lte=curr,
+                end_date__gte=curr
+            )
+            if self.pk:
+                approved_leaves = approved_leaves.exclude(pk=self.pk)
+            if approved_leaves.exists():
+                curr += timedelta(days=1)
+                continue
+
             deductible_days += 1
             curr += timedelta(days=1)
             
@@ -161,9 +186,6 @@ class LeaveRequest(models.Model):
                 year=year,
                 defaults={'total_days': limit}
             )
-            if not created and rule:
-                balance.total_days = limit
-                balance.save()
             balance.used_days = F('used_days') + self.number_of_days
             balance.save()
 
@@ -226,9 +248,6 @@ class LeaveRequest(models.Model):
                     year=year,
                     defaults={'total_days': limit}
                 )
-                if not created and rule:
-                    new_balance.total_days = limit
-                    new_balance.save()
                 new_balance.used_days = F('used_days') + self.number_of_days
                 new_balance.save()
 
@@ -268,7 +287,7 @@ class LeaveRequest(models.Model):
             if self.start_date <= end_limit:
                 from apps.attendance.schedule_utils import get_branch_schedule
                 schedule = get_branch_schedule(self.employee)
-                deduct_type = get_default_deduction_leave_type()
+                deduct_type = get_default_deduction_leave_type(self.employee)
 
                 current_date = self.start_date
                 while current_date <= end_limit:
@@ -297,9 +316,6 @@ class LeaveRequest(models.Model):
                                             year=current_date.year,
                                             defaults={'total_days': limit}
                                         )
-                                        if not created and rule:
-                                            balance.total_days = limit
-                                            balance.save()
                                         balance.used_days = F('used_days') + 1
                                         balance.save()
 

@@ -186,8 +186,20 @@ class AttendanceAbsentLog(models.Model):
         return f"{self.employee.full_name} - Absent on {self.date}"
 
 
-def get_default_deduction_leave_type():
+def get_default_deduction_leave_type(employee=None):
     from apps.leave.models import LeaveType
+    if employee:
+        from apps.employees.models import EmployeeLeaveRule
+        rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__is_default=True).select_related('leave_type').first()
+        if not rule:
+            rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__category='casual').select_related('leave_type').first()
+        if not rule:
+            rule = EmployeeLeaveRule.objects.filter(employee=employee, leave_type__category='sick').select_related('leave_type').first()
+        if not rule:
+            rule = EmployeeLeaveRule.objects.filter(employee=employee).select_related('leave_type').order_by('leave_type__id').first()
+        if rule:
+            return rule.leave_type
+
     leave_type = LeaveType.objects.filter(is_default=True).first()
     if not leave_type:
         leave_type = LeaveType.objects.filter(category='casual').first()
