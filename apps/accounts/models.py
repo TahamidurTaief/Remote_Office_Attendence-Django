@@ -330,12 +330,13 @@ class UserSecurityProfile(models.Model):
         return totp.verify(str(code).strip(), valid_window=2)
 
     def generate_backup_codes(self):
+        from django.contrib.auth.hashers import make_password
         raw_codes = []
         hashed_codes = []
         for _ in range(8):
             raw = secrets.token_hex(4).upper()
             raw_codes.append(raw)
-            hashed_codes.append(hashlib.sha256(raw.encode('utf-8')).hexdigest())
+            hashed_codes.append(make_password(raw))
 
         self.backup_codes = hashed_codes
         self.save(update_fields=['backup_codes'])
@@ -344,12 +345,14 @@ class UserSecurityProfile(models.Model):
     def verify_backup_code(self, raw_code):
         if not self.backup_codes or not raw_code:
             return False
+        from django.contrib.auth.hashers import check_password
         raw_clean = str(raw_code).strip().upper()
-        h = hashlib.sha256(raw_clean.encode('utf-8')).hexdigest()
-        if h in self.backup_codes:
-            self.backup_codes.remove(h)
-            self.save(update_fields=['backup_codes'])
-            return True
+        legacy_hash = hashlib.sha256(raw_clean.encode('utf-8')).hexdigest()
+        for idx, stored in enumerate(self.backup_codes):
+            if stored == legacy_hash or check_password(raw_clean, stored):
+                self.backup_codes.pop(idx)
+                self.save(update_fields=['backup_codes'])
+                return True
         return False
 
     def __str__(self):

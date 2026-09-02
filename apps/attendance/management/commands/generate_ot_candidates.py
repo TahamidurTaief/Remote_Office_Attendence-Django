@@ -65,16 +65,18 @@ class Command(BaseCommand):
                 self.stdout.write(f'OvertimeRequest already exists for {emp.full_name} on {target_date}. Skipping.')
                 continue
 
+            total_ot_minutes = sum(a.overtime_minutes for a in attendances)
+
             if not dry_run:
                 OvertimeRequest.objects.create(
                     employee=emp,
                     date=target_date,
                     attendance=attendance,
-                    ot_minutes=attendance.overtime_minutes,
+                    ot_minutes=total_ot_minutes,
                     status='pending'
                 )
             created_count += 1
-            self.stdout.write(f'{"[DRY-RUN] Would create" if dry_run else "Created"} OvertimeRequest for {emp.full_name}: {attendance.overtime_minutes} mins.')
+            self.stdout.write(f'{"[DRY-RUN] Would create" if dry_run else "Created"} OvertimeRequest for {emp.full_name}: {total_ot_minutes} mins.')
 
         self.stdout.write(
             self.style.SUCCESS(

@@ -406,18 +406,6 @@ class LeaveRequest(models.Model):
                     current_date += datetime.timedelta(days=1)
 
     def delete(self, *args, **kwargs):
-        if self.status == 'approved':
-            year = self.start_date.year
-            try:
-                balance = LeaveBalance.objects.get(
-                    employee=self.employee,
-                    leave_type=self.leave_type,
-                    year=year
-                )
-                balance.used_days = F('used_days') - self.number_of_days
-                balance.save()
-            except LeaveBalance.DoesNotExist:
-                pass
         super().delete(*args, **kwargs)
 
     def __str__(self):
@@ -540,3 +528,17 @@ def sync_leave_request_status(sender, instance, **kwargs):
             pass
 
 
+@receiver(post_delete, sender=LeaveRequest)
+def refund_leave_balance_on_delete(sender, instance, **kwargs):
+    if instance.status == 'approved' and getattr(instance, 'employee_id', None) and getattr(instance, 'start_date', None):
+        year = instance.start_date.year
+        try:
+            balance = LeaveBalance.objects.get(
+                employee_id=instance.employee_id,
+                leave_type_id=instance.leave_type_id,
+                year=year
+            )
+            balance.used_days = F('used_days') - instance.number_of_days
+            balance.save()
+        except LeaveBalance.DoesNotExist:
+            pass

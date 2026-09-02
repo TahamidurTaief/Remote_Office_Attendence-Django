@@ -300,3 +300,33 @@ class MFALoginSessionIntegrityTests(TestCase):
         self.assertEqual(resp.status_code, 302,
                          "Trusted device should bypass MFA and redirect directly to dashboard")
         self.assertNotIn('pending_mfa_user_id', self.client.session)
+
+
+class BackupCodeSaltedTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="backup@example.com", password="Password123!", role="staff")
+        self.sec_prof = UserSecurityProfile.objects.create(user=self.user, mfa_enabled=True)
+
+    def test_generate_and_verify_salted_backup_codes(self):
+        raw_codes = self.sec_prof.generate_backup_codes()
+        self.assertEqual(len(raw_codes), 8)
+        self.assertEqual(len(self.sec_prof.backup_codes), 8)
+
+        first_hash = self.sec_prof.backup_codes[0]
+        self.assertTrue(first_hash.startswith("pbkdf2_sha256$") or "$" in first_hash)
+
+        first_code = raw_codes[0]
+        self.assertTrue(self.sec_prof.verify_backup_code(first_code))
+        self.assertEqual(len(self.sec_prof.backup_codes), 7)
+        self.assertFalse(self.sec_prof.verify_backup_code(first_code))
+
+    def test_legacy_unsalted_sha256_backward_compatibility(self):
+        import hashlib
+        legacy_raw = "ABCD1234"
+        legacy_hash = hashlib.sha256(legacy_raw.encode("utf-8")).hexdigest()
+        self.sec_prof.backup_codes = [legacy_hash]
+        self.sec_prof.save()
+
+        self.assertTrue(self.sec_prof.verify_backup_code(legacy_raw))
+        self.assertEqual(len(self.sec_prof.backup_codes), 0)
+        self.assertFalse(self.sec_prof.verify_backup_code(legacy_raw))

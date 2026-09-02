@@ -1496,6 +1496,19 @@ class PayrollUITests(TestCase):
         response = self.client.get(f"/payroll/payslips/{calc.pk}/")
         self.assertEqual(response.status_code, 403)
 
-
-
-
+    def test_absence_divisor_zero_division_guard(self):
+        result = PayrollCalculationEngine.calculate_employee_payroll(
+            gross_salary=Decimal("60000.00"),
+            structure_components_list=[{
+                'code': 'BASIC',
+                'name': 'Basic Salary',
+                'type': SalaryComponentType.EARNING,
+                'value_type': SalaryComponentValueType.PERCENTAGE,
+                'value': Decimal('100.00'),
+                'is_pf': False,
+            }],
+            unpaid_absent_days=Decimal("2.00"),
+            absence_divisor=0,
+        )
+        self.assertEqual(result["total_deductions"], Decimal("4000.0000"))
+        self.assertEqual(result["net_payable"], Decimal("56000.0000"))

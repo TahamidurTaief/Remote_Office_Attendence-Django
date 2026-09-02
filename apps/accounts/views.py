@@ -784,7 +784,7 @@ class SyncApiView(View):
                                 try:
                                     from apps.projects.models import Project, ProjectTask
                                     from django.db.models import Q
-                                    project = Project.objects.filter(Q(project_manager=employee) | Q(site_engineer=employee)).first()
+                                    project = Project.objects.filter(Q(project_managers=employee) | Q(site_engineers=employee)).first()
                                     if not project:
                                         task = ProjectTask.objects.filter(responsible_person=employee, planned_start__lte=today, planned_finish__gte=today).first()
                                         if task:

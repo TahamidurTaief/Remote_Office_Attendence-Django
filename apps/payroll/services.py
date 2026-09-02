@@ -122,7 +122,8 @@ class PayrollCalculationEngine:
                 total_deductions += adj_amount
 
         # 2. Absence Deduction: Gross / Divisor * unpaid_absent_days
-        absence_divisor_dec = Decimal(str(absence_divisor))
+        absence_divisor_val = max(int(absence_divisor or 30), 1)
+        absence_divisor_dec = Decimal(str(absence_divisor_val))
         if unpaid_absent_days > Decimal('0.00'):
             absence_deduction = (gross_salary / absence_divisor_dec) * unpaid_absent_days
             absence_deduction = absence_deduction.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)

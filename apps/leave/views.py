@@ -94,7 +94,7 @@ class BaseProcessLeaveRequestView(View):
                 elif not profile.branch:
                     from django.db.models import Q
                     from apps.projects.models import Project
-                    managed_projects = Project.objects.filter(project_manager=profile)
+                    managed_projects = Project.objects.filter(project_managers=profile)
                     project_employees = EmployeeProfile.objects.filter(
                         Q(site_engineer_projects__in=managed_projects) |
                         Q(assigned_tasks__project__in=managed_projects)

@@ -1,19 +1,18 @@
-import threading
+import contextvars
 from django.conf import settings
 
 
-_tenant_state = threading.local()
+_tenant_context = contextvars.ContextVar('current_tenant', default=None)
 
 
 def set_current_tenant(tenant):
-    """Sets the current tenant for the active thread."""
-    _tenant_state.tenant = tenant
+    """Sets the current tenant for the active context/thread."""
+    _tenant_context.set(tenant)
 
 
 def clear_current_tenant():
-    """Clears the current tenant from the active thread."""
-    if hasattr(_tenant_state, 'tenant'):
-        delattr(_tenant_state, 'tenant')
+    """Clears the current tenant from the active context/thread."""
+    _tenant_context.set(None)
 
 
 def get_default_tenant():
@@ -47,9 +46,9 @@ def get_user_tenant(user):
 
 def get_current_tenant():
     """
-    Returns the thread-local tenant, or fallback to the resolved user/default tenant.
+    Returns the context-local tenant, or fallback to the resolved user/default tenant.
     """
-    tenant = getattr(_tenant_state, 'tenant', None)
+    tenant = _tenant_context.get()
     if tenant:
         return tenant
     return get_default_tenant()

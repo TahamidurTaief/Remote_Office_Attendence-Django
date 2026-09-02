@@ -786,3 +786,90 @@ class LeaveHardeningTests(TestCase):
         self.assertEqual(req.number_of_days, 2)
 
 
+class LeaveBulkDeleteAndScopingTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(name="Scoping Branch", latitude=23.8, longitude=90.4)
+        self.leave_type = LeaveType.objects.create(name="Earned Leave", category="other", default_days_per_year=15)
+
+        self.pm_user = User.objects.create_user(phone="+8801799999001", password="Password123!", role="manager")
+        self.pm_profile = EmployeeProfile.objects.create(
+            user=self.pm_user,
+            employee_id="PM-001",
+            full_name="Project Manager",
+            phone="+8801799999001",
+            joined_date=datetime.date(2026, 1, 1),
+            is_active=True
+        )
+
+        self.emp_user = User.objects.create_user(phone="+8801799999002", password="Password123!", role="staff")
+        self.emp_profile = EmployeeProfile.objects.create(
+            user=self.emp_user,
+            employee_id="EMP-999",
+            full_name="Subordinate Employee",
+            phone="+8801799999002",
+            joined_date=datetime.date(2026, 1, 1),
+            is_active=True
+        )
+
+        from apps.projects.models import Project, ProjectType
+        self.proj_type = ProjectType.objects.create(name="Commercial")
+        self.project = Project.objects.create(
+            name="Apex Towers",
+            client_name="Apex Group",
+            location="Dhaka",
+            project_type=self.proj_type,
+            start_date=datetime.date(2026, 1, 1),
+        )
+        self.project.project_managers.add(self.pm_profile)
+        self.project.project_members.add(self.emp_profile)
+
+        self.balance = LeaveBalance.objects.create(
+            employee=self.emp_profile,
+            leave_type=self.leave_type,
+            year=2026,
+            total_days=15,
+            used_days=0
+        )
+
+    def test_bulk_delete_refunds_leave_balance_via_post_delete(self):
+        req = LeaveRequest.objects.create(
+            employee=self.emp_profile,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 8, 3),
+            end_date=datetime.date(2026, 8, 4),
+            status='approved'
+        )
+        self.balance.refresh_from_db()
+        self.assertEqual(self.balance.used_days, 2)
+
+        LeaveRequest.objects.filter(pk=req.pk).delete()
+        self.balance.refresh_from_db()
+        self.assertEqual(self.balance.used_days, 0)
+
+    def test_single_delete_refunds_leave_balance(self):
+        req = LeaveRequest.objects.create(
+            employee=self.emp_profile,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 8, 3),
+            end_date=datetime.date(2026, 8, 4),
+            status='approved'
+        )
+        self.balance.refresh_from_db()
+        self.assertEqual(self.balance.used_days, 2)
+
+        req.delete()
+        self.balance.refresh_from_db()
+        self.assertEqual(self.balance.used_days, 0)
+
+    def test_manager_scoping_with_project_managers_relationship(self):
+        req = LeaveRequest.objects.create(
+            employee=self.emp_profile,
+            leave_type=self.leave_type,
+            start_date=datetime.date(2026, 8, 10),
+            end_date=datetime.date(2026, 8, 11),
+            status='pending'
+        )
+        self.client.force_login(self.pm_user)
+        url = reverse('leave:approve_request', kwargs={'pk': req.pk})
+        resp = self.client.post(url)
+        self.assertNotEqual(resp.status_code, 500)
