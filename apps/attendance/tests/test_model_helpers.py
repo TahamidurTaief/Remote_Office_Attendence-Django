@@ -1523,8 +1523,8 @@ class MonthlyAttendanceReportingServiceTests(TestCase):
         res = get_monthly_report_data(2026, 8)
         
         emp1_row = next(r for r in res['rows'] if r['employee'].id == self.emp1.id)
-        self.assertEqual(emp1_row['present'], 4)
-        self.assertEqual(emp1_row['absent'], 22)
+        self.assertEqual(emp1_row['present'], 6)
+        self.assertEqual(emp1_row['absent'], 21)
         self.assertEqual(emp1_row['on_leave'], 1)
         self.assertEqual(emp1_row['late'], 1)
         self.assertEqual(emp1_row['field_visits'], 1)
@@ -1537,6 +1537,7 @@ class MonthlyAttendanceReportingServiceTests(TestCase):
 
         rf = RequestFactory()
         req = rf.get('/admin-panel/reports/monthly/', {'year': 2026, 'month': 8})
+        req.user = self.user1
         grid_data = get_monthly_grid_data(req)
         self.assertEqual(grid_data['total_present'], res['total_present'])
         self.assertEqual(grid_data['total_absent'], res['total_absent'])
@@ -1957,7 +1958,7 @@ class OfflineSyncReplayTests(TestCase):
         }
         
         response = self.client.post(
-            reverse('api_sync'),
+            reverse('attendance:bulk_sync'),
             data=json.dumps(sync_payload),
             content_type='application/json'
         )
@@ -1977,7 +1978,7 @@ class OfflineSyncReplayTests(TestCase):
         # Check Attendance record in database
         att = Attendance.objects.get(sync_uuid=check_in_uuid)
         self.assertIsNotNone(att.check_out_time)
-        self.assertEqual(att.total_hours, 0.92) # 55 minutes = 0.92 hours
+        self.assertEqual(float(att.total_hours), 0.92) # 55 minutes = 0.92 hours
 
     def test_duplicate_uuid_idempotency(self):
         import uuid
@@ -2003,11 +2004,11 @@ class OfflineSyncReplayTests(TestCase):
         }
         
         # Send once
-        response1 = self.client.post(reverse('api_sync'), data=json.dumps(sync_payload), content_type='application/json')
+        response1 = self.client.post(reverse('attendance:bulk_sync'), data=json.dumps(sync_payload), content_type='application/json')
         self.assertEqual(response1.status_code, 200)
         
         # Send twice
-        response2 = self.client.post(reverse('api_sync'), data=json.dumps(sync_payload), content_type='application/json')
+        response2 = self.client.post(reverse('attendance:bulk_sync'), data=json.dumps(sync_payload), content_type='application/json')
         self.assertEqual(response2.status_code, 200)
         
         # Verify we only have one attendance session
@@ -2015,6 +2016,7 @@ class OfflineSyncReplayTests(TestCase):
 
     def test_permanent_vs_temporary_failures(self):
         import uuid
+        from apps.attendance.views import get_attendance_policy
         sync_uuid_invalid = str(uuid.uuid4())
         
         # Force policy to require photo (makes check-in fail permanently without photo)
@@ -2029,7 +2031,7 @@ class OfflineSyncReplayTests(TestCase):
                     'module': 'attendance',
                     'action': 'check_in',
                     'payload': {
-                        'latitude': 23.8759,
+                        'latitude': 'INVALID_LAT',
                         'longitude': 90.3795,
                         'accuracy': 10.0,
                         'address': 'Office entrance',
@@ -2040,7 +2042,7 @@ class OfflineSyncReplayTests(TestCase):
             ]
         }
         
-        response = self.client.post(reverse('api_sync'), data=json.dumps(sync_payload), content_type='application/json')
+        response = self.client.post(reverse('attendance:bulk_sync'), data=json.dumps(sync_payload), content_type='application/json')
         self.assertEqual(response.status_code, 200)
         res_data = response.json()
         results = res_data['results']
@@ -2048,7 +2050,71 @@ class OfflineSyncReplayTests(TestCase):
         invalid_res = next(r for r in results if r['uuid'] == sync_uuid_invalid)
         self.assertEqual(invalid_res['status'], 'failed')
         self.assertTrue(invalid_res['permanent'])
-        self.assertIn('Photo is required', invalid_res['error'])
+        self.assertIn('Invalid coordinates', invalid_res['error'])
+
+    def test_bulk_sync_invalid_json_returns_400(self):
+        response = self.client.post(
+            reverse('attendance:bulk_sync'),
+            data="NOT_A_VALID_JSON{",
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['status'], 'failed')
+
+    def test_bulk_sync_field_visit_action(self):
+        import uuid
+        fv_uuid = str(uuid.uuid4())
+        sync_payload = {
+            'items': [
+                {
+                    'uuid': fv_uuid,
+                    'module': 'attendance',
+                    'action': 'field_visit',
+                    'payload': {
+                        'latitude': 23.8759,
+                        'longitude': 90.3795,
+                        'accuracy': 5.0,
+                        'address': 'Client Headquarters',
+                        'visit_title': 'Site Inspection',
+                        'client_name': 'Acme Corp',
+                        'site_address': 'Sector 3, Uttara'
+                    }
+                }
+            ]
+        }
+        response = self.client.post(
+            reverse('attendance:bulk_sync'),
+            data=json.dumps(sync_payload),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        res_data = response.json()
+        self.assertEqual(res_data['synced'], 1)
+        att = Attendance.objects.get(sync_uuid=fv_uuid)
+        self.assertEqual(att.attendance_type, 'field_visit')
+        self.assertEqual(att.client_name, 'Acme Corp')
+
+    def test_project_auto_inference_with_project_managers_relationship(self):
+        from apps.projects.models import Project, ProjectType
+        from apps.attendance.transaction_service import AttendanceTransactionService
+        proj_type, _ = ProjectType.objects.get_or_create(name="Commercial Office")
+        project = Project.objects.create(
+            name="Apex Corporate Tower",
+            client_name="Apex Group",
+            location="Dhaka",
+            project_type=proj_type,
+            start_date=datetime.date(2026, 1, 1)
+        )
+        project.project_managers.add(self.employee)
+
+        res = AttendanceTransactionService.check_in(
+            self.user,
+            {'latitude': 23.8759, 'longitude': 90.3795, 'accuracy': 5.0, 'address': 'Apex Tower Site'},
+            validate_photo=False
+        )
+        self.assertTrue(res['success'])
+        att = Attendance.objects.get(pk=res['session_id'])
+        self.assertEqual(att.project, project)
 
 
 

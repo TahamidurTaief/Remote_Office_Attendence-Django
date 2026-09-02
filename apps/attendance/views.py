@@ -156,7 +156,6 @@ def attendance_status(request):
         # Active session (checked-in, not yet checked out)
         active = Attendance.objects.filter(
             employee=employee,
-            date=today,
             attendance_type='check_in',
             check_out_time__isnull=True,
             is_expired=False
@@ -390,18 +389,7 @@ def live_locations(request):
 @login_required
 @require_POST
 def field_visit_submit(request):
-    if not check_role(request.user):
-        return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
-
     try:
-        employee = get_employee(request.user)
-        if not employee:
-            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=404)
-        if not employee.is_active:
-            return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
-
-        # For multipart/form-data (file uploads), request.body is already consumed
-        # by Django's parser, so we must use request.POST directly.
         content_type = request.content_type or ''
         if 'application/json' in content_type:
             try:
@@ -411,123 +399,12 @@ def field_visit_submit(request):
         else:
             data = request.POST
 
-        sync_uuid = data.get('sync_uuid')
-        if sync_uuid:
-            existing = Attendance.objects.filter(sync_uuid=sync_uuid, attendance_type='field_visit').first()
-            if existing:
-                return JsonResponse({'success': True})
-
-        client_event_time_str = data.get('client_event_time')
-        client_time = parse_and_validate_client_time(client_event_time_str)
-
-        if client_time:
-            event_time = client_time
-            synced_at = timezone.now()
-            today = timezone.localdate(client_time)
-        else:
-            event_time = timezone.localtime()
-            synced_at = None
-            today = timezone.localdate()
-
-        lat          = data.get('latitude')
-        lng          = data.get('longitude')
-        accuracy     = data.get('accuracy', 0)
-        address      = data.get('address', '')
-        visit_title  = data.get('visit_title', '')
-        client_name  = data.get('client_name', '')
-        site_address = data.get('site_address', '')
-        note         = data.get('note', '')
-
-        policy = get_attendance_policy(employee)
-        
-        from django.conf import settings
-        require_gps = getattr(settings, 'REQUIRE_GPS', True)
-
-        if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
-            return JsonResponse({'success': False, 'error': 'Location is required.'}, status=400)
-
-        if lat is None or lat == '':
-            lat = 0.0
-        if lng is None or lng == '':
-            lng = 0.0
-
-        try:
-            lat = float(lat)
-            lng = float(lng)
-        except (TypeError, ValueError):
-            return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
-
-        # Validate Photo (dependent on policy)
         photo = request.FILES.get('photo')
-        if policy.photo_required and not photo:
-            return JsonResponse({'success': False, 'error': 'Photo is required.'}, status=400)
-
-        if photo:
-            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-            if photo.content_type not in allowed_types:
-                return JsonResponse({'success': False, 'error': 'Invalid file type.'}, status=400)
-
-            if photo.size > 10 * 1024 * 1024:
-                return JsonResponse({'success': False, 'error': 'Photo too large. Max 10MB allowed.'}, status=400)
-
-        # Check if project was submitted or can be inferred
-        project = None
-        project_id = data.get('project') or data.get('project_id')
-        if project_id:
-            try:
-                from apps.projects.models import Project
-                project = Project.objects.get(pk=project_id)
-            except Exception:
-                pass
-        if not project:
-            try:
-                from apps.projects.models import Project, ProjectTask
-                from django.db.models import Q
-                project = Project.objects.filter(Q(project_manager=employee) | Q(site_engineer=employee)).first()
-                if not project:
-                    task = ProjectTask.objects.filter(responsible_person=employee, planned_start__lte=today, planned_finish__gte=today).first()
-                    if task:
-                        project = task.project
-                if not project and employee.branch:
-                    project = Project.objects.filter(branch=employee.branch).first()
-            except Exception:
-                pass
-
-        attendance = Attendance.objects.create(
-            employee=employee,
-            project=project,
-            date=today,
-            check_in_time=event_time,
-            type='field',
-            attendance_type='field_visit',
-            status='on_time',
-            visit_title=visit_title,
-            client_name=client_name,
-            site_address=site_address,
-            note=note,
-            photo=photo,
-            sync_uuid=sync_uuid or uuid.uuid4(),
-            client_event_time=client_time,
-            synced_at=synced_at
-        )
-
-        AttendanceLocation.objects.create(
-            attendance=attendance,
-            event='check_in',
-            latitude=float(lat),
-            longitude=float(lng),
-            address=address,
-            accuracy=float(accuracy) if accuracy else 0.0,
-            timestamp=event_time,
-            sync_uuid=uuid.uuid4(),
-            client_event_time=client_time,
-            synced_at=synced_at
-        )
-
-        notify_admins(employee, 'field_visit', location=site_address or address)
-
-        return JsonResponse({'success': True})
-
+        from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
+        res = AttendanceTransactionService.field_visit(request.user, data, photo=photo, validate_photo=True)
+        return JsonResponse(res)
+    except AttendanceTransactionError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=e.status_code)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -836,26 +713,74 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
 def bulk_sync(request):
     try:
         data = json.loads(request.body)
-        actions = data.get('actions', [])
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'success': False, 'status': 'failed', 'error': 'Invalid JSON body.'}, status=400)
+
+    try:
+        raw_items = data.get('items') or data.get('actions') or []
+        results = []
         synced_count = 0
-        
+
         from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
-        for act in actions:
-            action_type = act.get('action')
+
+        def get_action_order(item):
+            action = item.get('action') or item.get('action_type')
+            if action == 'check_in':
+                return 0
+            if action == 'field_visit':
+                return 1
+            return 2
+
+        items = sorted(raw_items, key=get_action_order)
+
+        for item in items:
+            action_type = item.get('action') or item.get('action_type')
+            item_uuid = item.get('uuid') or item.get('sync_uuid')
+            payload = item.get('payload')
+            if not isinstance(payload, dict):
+                payload = dict(item)
+
+            if item_uuid and 'sync_uuid' not in payload:
+                payload['sync_uuid'] = item_uuid
+
             try:
                 if action_type == 'check_in':
-                    AttendanceTransactionService.check_in(request.user, act, validate_photo=False)
+                    res = AttendanceTransactionService.check_in(request.user, payload, validate_photo=False)
                     synced_count += 1
+                    results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 elif action_type == 'check_out':
-                    AttendanceTransactionService.check_out(request.user, act, validate_photo=False)
+                    res = AttendanceTransactionService.check_out(request.user, payload, validate_photo=False)
                     synced_count += 1
-            except AttendanceTransactionError:
-                # If an error happens (e.g. double check-in validation), skip in bulk sync
-                pass
-                
-        return JsonResponse({'success': True, 'synced': synced_count})
+                    results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
+                elif action_type == 'field_visit':
+                    res = AttendanceTransactionService.field_visit(request.user, payload, validate_photo=False)
+                    synced_count += 1
+                    results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
+                else:
+                    results.append({'uuid': item_uuid, 'status': 'skipped', 'error': 'Unknown action'})
+            except AttendanceTransactionError as e:
+                results.append({
+                    'uuid': item_uuid,
+                    'status': 'failed',
+                    'permanent': e.status_code != 500,
+                    'error': str(e)
+                })
+            except Exception as e:
+                results.append({
+                    'uuid': item_uuid,
+                    'status': 'failed',
+                    'permanent': False,
+                    'error': str(e)
+                })
+
+        return JsonResponse({
+            'success': True,
+            'status': 'success',
+            'synced': synced_count,
+            'results': results
+        })
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'status': 'failed', 'error': str(e)}, status=500)
 
 
 @login_required

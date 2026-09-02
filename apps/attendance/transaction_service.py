@@ -66,12 +66,21 @@ class AttendanceTransactionService:
 
             active_session = Attendance.objects.filter(
                 employee=emp_locked,
-                date=today,
                 attendance_type='check_in',
                 check_out_time__isnull=True,
                 is_expired=False
             ).first()
             if active_session:
+                if sync_uuid and str(active_session.sync_uuid) == str(sync_uuid):
+                    ci_loc = active_session.locations.filter(event='check_in').first()
+                    existing_address = ci_loc.address if ci_loc else (active_session.site_address or '')
+                    return {
+                        'success': True,
+                        'session_id': active_session.id,
+                        'type': active_session.type,
+                        'status': active_session.status,
+                        'address': existing_address
+                    }
                 raise AttendanceTransactionError('You are already checked in. Please check out first.', 400)
 
             policy = get_attendance_policy(emp_locked)
@@ -203,7 +212,7 @@ class AttendanceTransactionService:
                 try:
                     from apps.projects.models import Project, ProjectTask
                     from django.db.models import Q
-                    project = Project.objects.filter(Q(project_manager=emp_locked) | Q(site_engineer=emp_locked)).first()
+                    project = Project.objects.filter(Q(project_managers=emp_locked) | Q(site_engineers=emp_locked)).first()
                     if not project:
                         task = ProjectTask.objects.filter(responsible_person=emp_locked, planned_start__lte=today, planned_finish__gte=today).first()
                         if task:
@@ -405,4 +414,149 @@ class AttendanceTransactionService:
             return {
                 'success': True,
                 'total_hours': float(attendance.total_hours)
+            }
+
+    @staticmethod
+    def field_visit(user, data, photo=None, validate_photo=True):
+        from apps.attendance.views import check_role, get_employee, get_attendance_policy
+
+        if not check_role(user):
+            raise AttendanceTransactionError('Unauthorized role.', 403)
+
+        master = getattr(user, 'employee_master', None)
+        if not master and hasattr(user, 'employee_profile') and user.employee_profile.master_employee:
+            master = user.employee_profile.master_employee
+        if master and (master.is_suspended or master.business_status == 'suspended'):
+            raise AttendanceTransactionError('Account is suspended.', 403)
+
+        employee = get_employee(user)
+        if not employee:
+            raise AttendanceTransactionError('Employee profile not found.', 403)
+
+        sync_uuid = data.get('sync_uuid')
+
+        with transaction.atomic():
+            emp_locked = EmployeeProfile.objects.select_for_update().get(pk=employee.pk)
+            if not emp_locked.is_active:
+                raise AttendanceTransactionError('Employee profile is inactive.', 403)
+
+            if sync_uuid:
+                existing = Attendance.objects.filter(sync_uuid=sync_uuid, attendance_type='field_visit').first()
+                if existing:
+                    return {'success': True, 'session_id': existing.id}
+
+            client_event_time_str = data.get('client_event_time')
+            client_time = parse_and_validate_client_time(client_event_time_str)
+
+            if client_time:
+                event_time = client_time
+                synced_at = timezone.now()
+                today = timezone.localdate(client_time)
+            else:
+                event_time = timezone.localtime()
+                synced_at = None
+                today = timezone.localdate()
+
+            lat          = data.get('latitude')
+            lng          = data.get('longitude')
+            accuracy     = data.get('accuracy', 0)
+            address      = data.get('address', '')
+            visit_title  = data.get('visit_title', '')
+            client_name  = data.get('client_name', '')
+            site_address = data.get('site_address', '')
+            note         = data.get('note', '')
+
+            policy = get_attendance_policy(emp_locked)
+            from django.conf import settings
+            require_gps = getattr(settings, 'REQUIRE_GPS', True)
+
+            if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
+                raise AttendanceTransactionError('Location is required.', 400)
+
+            if lat is None or lat == '':
+                lat = 0.0
+            if lng is None or lng == '':
+                lng = 0.0
+
+            try:
+                lat = float(lat)
+                lng = float(lng)
+            except (TypeError, ValueError):
+                raise AttendanceTransactionError('Invalid coordinates.', 400)
+
+            if validate_photo and policy.photo_required and not photo:
+                raise AttendanceTransactionError('Photo is required.', 400)
+
+            if photo:
+                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+                if photo.content_type not in allowed_types:
+                    raise AttendanceTransactionError('Invalid file type.', 400)
+                if photo.size > 10 * 1024 * 1024:
+                    raise AttendanceTransactionError('Photo too large. Max 10MB allowed.', 400)
+
+            project = None
+            project_id = data.get('project') or data.get('project_id')
+            if project_id:
+                try:
+                    from apps.projects.models import Project
+                    project = Project.objects.get(pk=project_id)
+                except Exception:
+                    pass
+            if not project:
+                try:
+                    from apps.projects.models import Project, ProjectTask
+                    from django.db.models import Q
+                    project = Project.objects.filter(Q(project_managers=emp_locked) | Q(site_engineers=emp_locked)).first()
+                    if not project:
+                        task = ProjectTask.objects.filter(responsible_person=emp_locked, planned_start__lte=today, planned_finish__gte=today).first()
+                        if task:
+                            project = task.project
+                    if not project and emp_locked.branch:
+                        project = Project.objects.filter(branch=emp_locked.branch).first()
+                except Exception:
+                    pass
+
+            attendance = Attendance.objects.create(
+                employee=emp_locked,
+                project=project,
+                date=today,
+                check_in_time=event_time,
+                type='field',
+                attendance_type='field_visit',
+                status='on_time',
+                visit_title=visit_title,
+                client_name=client_name,
+                site_address=site_address,
+                note=note,
+                photo=photo,
+                sync_uuid=sync_uuid or uuid.uuid4(),
+                client_event_time=client_time,
+                synced_at=synced_at
+            )
+
+            AttendanceLocation.objects.create(
+                attendance=attendance,
+                event='check_in',
+                latitude=float(lat),
+                longitude=float(lng),
+                address=address,
+                accuracy=float(accuracy) if accuracy else 0.0,
+                timestamp=event_time,
+                sync_uuid=uuid.uuid4(),
+                client_event_time=client_time,
+                synced_at=synced_at
+            )
+
+            notify_admins(emp_locked, 'field_visit', location=site_address or address)
+
+            from apps.attendance.models import AttendanceActivityLog
+            AttendanceActivityLog.objects.create(
+                employee=emp_locked,
+                action='field_visit',
+                description=f"Field visit recorded: {visit_title or client_name or 'Visit'}"
+            )
+
+            return {
+                'success': True,
+                'session_id': attendance.id
             }
