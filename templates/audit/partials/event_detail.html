@@ -1,73 +1,78 @@
-<c-modal id="audit-detail-modal" title="Audit Details" size="lg">
+<c-modal id="audit-detail-modal" title="Audit Event Details" size="lg">
     <div class="space-y-4">
         <!-- Event Header Card -->
-        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 space-y-2">
-            <div class="flex items-center justify-between flex-wrap gap-2">
-                <div class="font-bold text-slate-900 dark:text-white text-base">{{ event.object_label|default:"-" }}</div>
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 uppercase">{{ event.action }}</span>
+        <c-card padding="sm">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <div class="font-bold text-slate-900 dark:text-white text-base">{{ event.object_label|default:"—" }}</div>
+                <c-badge
+                    variant="{% if event.action == 'created' %}success{% elif event.action == 'deleted' or event.action == 'trashed' %}danger{% elif event.action == 'updated' %}info{% elif event.action == 'restored' %}primary{% else %}neutral{% endif %}"
+                    dot="true"
+                    label="{{ event.action|upper }}">
+                </c-badge>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs text-slate-500 dark:text-slate-400">
-                <div>
-                    <span class="block font-semibold uppercase tracking-wider text-[10px] text-slate-400">Module / Type</span>
-                    <span class="font-mono">{{ event.module }} / {{ event.object_type }}</span>
-                </div>
-                <div>
-                    <span class="block font-semibold uppercase tracking-wider text-[10px] text-slate-400">Object ID</span>
-                    <span class="font-mono">{{ event.object_id }}</span>
-                </div>
-                <div>
-                    <span class="block font-semibold uppercase tracking-wider text-[10px] text-slate-400">Date & Time</span>
-                    <span>{{ event.created_at|date:"d/m/Y g:i A" }}</span>
-                </div>
-                <div>
-                    <span class="block font-semibold uppercase tracking-wider text-[10px] text-slate-400">Actor</span>
-                    <span>{{ event.actor_user.email|default:event.actor_role|default:"System" }}</span>
-                </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <c-info-field label="Module / Type">
+                    <span class="font-mono text-xs font-semibold uppercase text-indigo-600 dark:text-indigo-400">{{ event.module }} / {{ event.object_type }}</span>
+                </c-info-field>
+                <c-info-field label="Object ID" value="{{ event.object_id }}"></c-info-field>
+                <c-info-field label="Date &amp; Time" value="{{ event.created_at|date:'d/m/Y g:i A' }}"></c-info-field>
+                <c-info-field label="Actor" value="{{ event.actor_user.email|default:event.actor_role|default:'System' }}"></c-info-field>
             </div>
-        </div>
+        </c-card>
 
         <!-- Meta Details (IP/Session, Reason) -->
         <div class="grid gap-4 md:grid-cols-2">
-            <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-2.5">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">IP & Device Context</h4>
-                <div class="space-y-1 text-xs text-slate-600 dark:text-slate-300">
-                    <p><strong>IP Address:</strong> <span class="font-mono">{{ event.ip_address|default:"-" }}</span></p>
-                    <p><strong>Device Info:</strong> <span>{{ event.session_device|default:"-" }}</span></p>
-                    <p><strong>HTTP Request:</strong> <span class="font-mono">{{ event.request_method }} {{ event.request_path }}</span></p>
+            <c-card padding="sm">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Network &amp; Device Context</h4>
+                <div class="space-y-2 text-xs">
+                    <c-info-field label="IP Address">
+                        <span class="font-mono font-semibold">{{ event.ip_address|default:"—" }}</span>
+                    </c-info-field>
+                    <c-info-field label="Device Info" value="{{ event.session_device|default:'—' }}"></c-info-field>
+                    <c-info-field label="HTTP Request">
+                        <span class="font-mono"><strong class="text-indigo-600 dark:text-indigo-400">{{ event.request_method }}</strong> {{ event.request_path }}</span>
+                    </c-info-field>
                 </div>
-            </div>
-            <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-2.5">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Reason / Note</h4>
+            </c-card>
+            <c-card padding="sm">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Reason / Note</h4>
                 <p class="text-xs text-slate-600 dark:text-slate-300 italic">
-                    "{{ event.reason_note|default:"No reason specified." }}"
+                    "{{ event.reason_note|default:'No reason specified.' }}"
                 </p>
-            </div>
+            </c-card>
         </div>
 
         <!-- Changed Fields (Summary) -->
         {% if event.changed_fields %}
-        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-2">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Changed Fields</h4>
+        <c-card padding="sm">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Changed Fields</h4>
             <div class="flex flex-wrap gap-1.5">
                 {% for field, change in event.changed_fields.items %}
-                <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                    <strong>{{ field }}:</strong> {{ change.0|default:"-" }} &rarr; {{ change.1|default:"-" }}
-                </span>
+                <c-badge variant="warning" dot="true">
+                    <strong>{{ field }}:</strong> {{ change.before|default:"—" }} &rarr; {{ change.after|default:"—" }}
+                </c-badge>
                 {% endfor %}
             </div>
-        </div>
+        </c-card>
         {% endif %}
 
         <!-- Raw Snapshot Payloads -->
         <div class="grid gap-4 md:grid-cols-2">
             <div>
                 <h3 class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Before Snapshot</h3>
-                <pre class="overflow-auto max-h-60 rounded-xl bg-slate-900 dark:bg-slate-950 p-3 text-xs text-slate-200 font-mono">{{ event.before_data|pprint }}</pre>
+                <pre class="overflow-auto max-h-56 rounded-xl bg-slate-900 dark:bg-slate-950 p-3 text-xs text-slate-200 font-mono">{{ event.before_data|pprint }}</pre>
             </div>
             <div>
                 <h3 class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">After Snapshot</h3>
-                <pre class="overflow-auto max-h-60 rounded-xl bg-slate-900 dark:bg-slate-950 p-3 text-xs text-slate-200 font-mono">{{ event.after_data|pprint }}</pre>
+                <pre class="overflow-auto max-h-56 rounded-xl bg-slate-900 dark:bg-slate-950 p-3 text-xs text-slate-200 font-mono">{{ event.after_data|pprint }}</pre>
             </div>
         </div>
     </div>
+
+    <c-slot name="footer">
+        <div class="flex items-center justify-end gap-2 w-full">
+            <c-button type="button" variant="secondary" size="sm" label="Close" @click="open = false"></c-button>
+            <c-button href="{% url 'audit:event_detail' event.uuid %}" variant="primary" size="sm" icon="external-link" label="Full Page View"></c-button>
+        </div>
+    </c-slot>
 </c-modal>

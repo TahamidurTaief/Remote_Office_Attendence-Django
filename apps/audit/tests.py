@@ -10,6 +10,7 @@ from apps.audit.models import AuditAccessLog, AuditEvent, TrashEntry
 from apps.audit.services import AuditService, TrashService
 from apps.branches.models import Branch
 from apps.employees.models import Department, Designation, Employee, EmployeeStatus
+from apps.projects.models import Project, ProjectTask
 
 User = get_user_model()
 
@@ -325,3 +326,269 @@ class AuditTrashFoundationTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "suspended")
 
+
+class ActivityTrackingAndCottonTests(TestCase):
+    def setUp(self):
+        from datetime import date, time
+        from apps.audit.auth import grant_audit_unlock
+        from apps.employees.models import EmployeeProfile
+        from apps.projects.models import Project, ProjectTask, ProjectType
+        from apps.schedule.models import ScheduleEvent
+
+        self.client = Client()
+        self.admin = User.objects.create_superuser(
+            email="audit-tracker-admin@example.com",
+            password="AdminPassword123!",
+            role="admin",
+        )
+        self.staff = User.objects.create_user(
+            email="audit-tracker-staff@example.com",
+            password="StaffPassword123!",
+            role="staff",
+        )
+        self.branch = Branch.objects.create(name="Gulshan HQ", latitude=23.79, longitude=90.41)
+        self.emp_profile = EmployeeProfile.objects.create(
+            user=self.admin,
+            employee_id="EMP-AUD-099",
+            full_name="Audit Super Admin",
+            branch=self.branch,
+            joined_date=date(2026, 1, 1),
+            is_active=True,
+        )
+        self.project_type, _ = ProjectType.objects.get_or_create(name="Commercial Fitout")
+        self.project = Project.objects.create(
+            name="Mega Mall Project",
+            project_type=self.project_type,
+            client_name="Apex Group",
+            location="Dhaka",
+            start_date=date(2026, 9, 1),
+            branch=self.branch,
+        )
+        self.task = ProjectTask.objects.create(
+            project=self.project,
+            activity="Electrical Cable Pulling",
+            order=1,
+            responsible_person=self.emp_profile,
+            status="Not Started",
+        )
+        self.schedule_event = ScheduleEvent.objects.create(
+            title="Sprint Planning Meeting",
+            date=date(2026, 9, 10),
+            event_type="Meeting",
+            project=self.project,
+            created_by=self.admin,
+        )
+
+    def _login(self, user):
+        self.client.force_login(user)
+        UserSession.objects.update_or_create(
+            user=user,
+            session_key=self.client.session.session_key,
+            defaults={"device_id": f"device-{user.pk}", "is_active": True},
+        )
+
+    def test_project_task_and_schedule_creation_tracked_in_audit_event(self):
+        task_event = AuditEvent.objects.filter(
+            object_type="ProjectTask",
+            object_id=str(self.task.pk),
+            action="created",
+        ).first()
+        self.assertIsNotNone(task_event)
+        self.assertEqual(task_event.module, "projects")
+        self.assertEqual(task_event.related_project, self.project)
+
+        schedule_event_audit = AuditEvent.objects.filter(
+            object_type="ScheduleEvent",
+            object_id=str(self.schedule_event.pk),
+            action="created",
+        ).first()
+        self.assertIsNotNone(schedule_event_audit)
+        self.assertEqual(schedule_event_audit.module, "schedule")
+        self.assertEqual(schedule_event_audit.related_project, self.project)
+
+    def test_project_task_update_tracked_in_audit_event(self):
+        self.task.status = "In Progress"
+        self.task.save()
+
+        update_event = AuditEvent.objects.filter(
+            object_type="ProjectTask",
+            object_id=str(self.task.pk),
+            action="updated",
+        ).first()
+        self.assertIsNotNone(update_event)
+        self.assertIn("status", update_event.changed_fields)
+
+    def test_activity_list_page_and_filtering(self):
+        self._login(self.admin)
+
+        # All events list
+        resp = self.client.get(reverse("audit:activity_list"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Audit Activity Logs")
+        self.assertContains(resp, "Electrical Cable Pulling")
+        self.assertContains(resp, "Sprint Planning Meeting")
+
+        # Filter by tasks
+        resp_tasks = self.client.get(reverse("audit:activity_list"), {"module": "tasks"})
+        self.assertEqual(resp_tasks.status_code, 200)
+        self.assertContains(resp_tasks, "Electrical Cable Pulling")
+
+        # Filter by schedule
+        resp_schedule = self.client.get(reverse("audit:activity_list"), {"module": "schedule"})
+        self.assertEqual(resp_schedule.status_code, 200)
+        self.assertContains(resp_schedule, "Sprint Planning Meeting")
+
+        # HTMX partial table request
+        resp_htmx = self.client.get(reverse("audit:activity_list"), {"q": "Cable"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(resp_htmx.status_code, 200)
+        self.assertTemplateUsed(resp_htmx, "audit/partials/activity_table.html")
+        self.assertContains(resp_htmx, "Electrical Cable Pulling")
+
+    def test_activity_detail_page_and_htmx_modal(self):
+        from django.utils import timezone
+        from apps.audit.constants import AUDIT_UNLOCK_SESSION_KEY
+        self._login(self.admin)
+
+        session = self.client.session
+        session[AUDIT_UNLOCK_SESSION_KEY] = (timezone.now() + timezone.timedelta(hours=1)).isoformat()
+        session.save()
+
+        task_event = AuditEvent.objects.filter(object_type="ProjectTask", object_id=str(self.task.pk)).first()
+        self.assertIsNotNone(task_event)
+
+        # Detail full page
+        detail_url = reverse("audit:event_detail", kwargs={"uuid": task_event.uuid})
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "audit/event_detail.html")
+        self.assertContains(resp, "Audit Event Detail")
+        self.assertContains(resp, "Data Snapshot")
+        self.assertContains(resp, "Electrical Cable Pulling")
+
+        # Detail HTMX modal partial
+        resp_modal = self.client.get(detail_url, HTTP_HX_REQUEST="true")
+        self.assertEqual(resp_modal.status_code, 200)
+        self.assertTemplateUsed(resp_modal, "audit/partials/event_detail.html")
+        self.assertContains(resp_modal, "audit-detail-modal")
+
+    def test_create_update_delete_tracked_safely(self):
+        task = ProjectTask.objects.create(
+            project=self.project,
+            activity="Plumbing Run",
+            order=2,
+            responsible_person=self.emp_profile,
+            status="Not Started",
+        )
+        task_id = str(task.pk)
+        self.assertTrue(AuditEvent.objects.filter(object_type="ProjectTask", object_id=task_id, action="created").exists())
+
+        task.status = "In Progress"
+        task.save()
+        self.assertTrue(AuditEvent.objects.filter(object_type="ProjectTask", object_id=task_id, action="updated").exists())
+
+        task.delete()
+        self.assertTrue(AuditEvent.objects.filter(object_type="ProjectTask", object_id=task_id, action="deleted").exists())
+
+    def test_duplicate_prevention_via_skip_flag(self):
+        initial_count = AuditEvent.objects.count()
+        task = ProjectTask(
+            project=self.project,
+            activity="HVAC Ductwork",
+            order=3,
+            responsible_person=self.emp_profile,
+            status="Not Started",
+        )
+        task._audit_skip_signal = True
+        task.save()
+        self.assertEqual(AuditEvent.objects.count(), initial_count)
+
+    def test_recursion_prevention_auditevent_not_auditing_itself(self):
+        initial_count = AuditEvent.objects.count()
+        event = AuditEvent.objects.create(
+            actor_user=self.admin,
+            actor_role="admin",
+            module="system",
+            object_type="SystemConfig",
+            object_id="cfg-1",
+            object_label="Config",
+            action="updated",
+        )
+        # Verify no secondary AuditEvent was generated for creating event
+        self.assertEqual(AuditEvent.objects.filter(object_type="AuditEvent").count(), 0)
+        self.assertEqual(AuditEvent.objects.count(), initial_count + 1)
+
+    def test_raw_fixture_save_ignored(self):
+        from apps.audit.signals import _capture_before_save, _create_post_save_audit
+        task = ProjectTask(
+            project=self.project,
+            activity="Fixture Test Task",
+            order=99,
+            responsible_person=self.emp_profile,
+            status="Not Started",
+        )
+        initial_count = AuditEvent.objects.count()
+        _capture_before_save(ProjectTask, task, raw=True)
+        self.assertIsNone(getattr(task, "_audit_before_snapshot", None))
+        _create_post_save_audit(ProjectTask, task, created=True, raw=True)
+        self.assertEqual(AuditEvent.objects.count(), initial_count)
+
+    def test_deletion_with_missing_relations_does_not_crash(self):
+        # Create a task and delete it when parent is also being deleted
+        task = ProjectTask.objects.create(
+            project=self.project,
+            activity="Cascade Target",
+            order=4,
+            responsible_person=self.emp_profile,
+            status="Not Started",
+        )
+        # Simulate orphaned or cascading deletion
+        task_id = str(task.pk)
+        task.delete()
+        del_event = AuditEvent.objects.filter(object_type="ProjectTask", object_id=task_id, action="deleted").first()
+        self.assertIsNotNone(del_event)
+        # Foreign key must be None on delete to prevent cascade constraint violations
+        self.assertIsNone(del_event.related_project)
+
+    def test_sensitive_field_redaction(self):
+        from apps.audit.services import mask_sensitive_data
+        payload = {
+            "username": "johndoe",
+            "password": "SuperSecretPassword123!",
+            "token": "bearer-token-12345",
+            "session_key": "sess-xyz",
+            "bank_account": "1234567890",
+            "nested": {
+                "secret_key": "my-secret",
+                "normal": "value",
+            }
+        }
+        masked = mask_sensitive_data(payload)
+        self.assertEqual(masked["password"], "********")
+        self.assertEqual(masked["token"], "********")
+        self.assertEqual(masked["session_key"], "********")
+        self.assertEqual(masked["bank_account"], "********")
+        self.assertEqual(masked["nested"]["secret_key"], "********")
+        self.assertEqual(masked["nested"]["normal"], "value")
+
+    def test_primary_operation_success_when_audit_fails(self):
+        with mock.patch("apps.audit.services.AuditService.log_event", side_effect=Exception("DB Down")):
+            # Primary model operation must succeed without raising exception
+            task = ProjectTask.objects.create(
+                project=self.project,
+                activity="Resilient Task",
+                order=5,
+                responsible_person=self.emp_profile,
+                status="Not Started",
+            )
+            self.assertIsNotNone(task.pk)
+            task.status = "In Progress"
+            task.save()
+            task.delete()
+
+    def test_role_permission_isolation(self):
+        # Staff user should not see events of other users/projects outside their scope
+        self._login(self.staff)
+        resp = self.client.get(reverse("audit:activity_list"))
+        self.assertEqual(resp.status_code, 200)
+        # Admin activity should not be visible to staff
+        self.assertNotContains(resp, "Sprint Planning Meeting")

@@ -4,19 +4,31 @@
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Audit & Activity Logs" subtitle="Scoped database modification event details"></c-topbar>
+        <c-topbar title="Audit & Activity Logs" subtitle="Scoped database modification event details">
+            <c-slot name="actions">
+                <c-button href="{% url 'audit:trash_list' %}" variant="secondary" size="sm" icon="trash-2" label="Trash & Recovery"></c-button>
+            </c-slot>
+        </c-topbar>
     </c-slot>
 
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 lg:p-6 w-full space-y-4">
-        <!-- Filter Bar -->
+    <div class="p-4 lg:p-6 w-full space-y-4 max-w-7xl mx-auto">
+        <!-- Filter Bar Card -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'audit:activity_list' %}" hx-get="{% url 'audit:activity_list' %}" hx-target="#activity-table-container" hx-trigger="keyup changed delay:300ms from:input, change from:select">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-end">
-                    <c-input type="text" name="q" label="Search" value="{{ search_query }}" placeholder="Search actor, reason, label..." icon="search"></c-input>
-                    <c-input type="text" name="module" label="Module" value="{{ module_filter }}" placeholder="e.g. employees, payroll"></c-input>
-                    <c-input type="text" name="action" label="Action" value="{{ action_filter }}" placeholder="e.g. created, updated, deleted"></c-input>
+                    <c-input type="text" name="q" label="Search" value="{{ search_query }}" placeholder="Search actor, object, reason..." icon="search"></c-input>
+                    <c-select name="module" label="Module" value="{{ module_filter }}">
+                        {% for val, label in module_choices %}
+                        <option value="{{ val }}" {% if module_filter == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </c-select>
+                    <c-select name="action" label="Action" value="{{ action_filter }}">
+                        {% for val, label in action_choices %}
+                        <option value="{{ val }}" {% if action_filter == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </c-select>
                 </div>
             </c-filter-bar>
         </c-card>

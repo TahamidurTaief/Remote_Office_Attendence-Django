@@ -6,7 +6,7 @@
     <c-slot name="topbar">
         <c-topbar title="Audit Event Detail" subtitle="Immutable event record — read-only">
             <c-slot name="actions">
-                <c-button href="{% url 'audit:activity_list' %}" variant="secondary" icon="arrow-left" label="Back to Logs"></c-button>
+                <c-button href="{% url 'audit:activity_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Logs"></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
@@ -39,16 +39,14 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex flex-wrap items-center gap-2 mb-1">
                         <h1 class="text-lg font-bold text-slate-900 dark:text-white truncate">{{ event.object_label|default:"—" }}</h1>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide
-                            {% if event.action == 'deleted' or event.action == 'trashed' %}bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60
-                            {% elif event.action == 'created' %}bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60
-                            {% elif event.action == 'updated' %}bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60
-                            {% elif event.action == 'restored' %}bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60
-                            {% else %}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700{% endif %}">
-                            {{ event.action|upper }}
-                        </span>
+                        <c-badge
+                            variant="{% if event.action == 'created' %}success{% elif event.action == 'deleted' or event.action == 'trashed' %}danger{% elif event.action == 'updated' %}info{% elif event.action == 'restored' %}primary{% else %}neutral{% endif %}"
+                            dot="true"
+                            size="md"
+                            label="{{ event.action|upper }}">
+                        </c-badge>
                     </div>
-                    <p class="text-xs text-slate-400 dark:text-slate-500 font-mono">{{ event.uuid }}</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 font-mono">UUID: {{ event.uuid }}</p>
                 </div>
                 <div class="flex-shrink-0 text-right">
                     <div class="text-xs text-slate-400 dark:text-slate-500 mb-0.5">Recorded</div>
@@ -61,14 +59,14 @@
         {# ── Summary Row ────────────────────────────────────────────────── #}
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <c-info-field label="Module">
-                <span class="font-mono uppercase text-xs tracking-widest text-indigo-600 dark:text-indigo-400">{{ event.module }}</span>
+                <span class="font-mono uppercase text-xs tracking-widest text-indigo-600 dark:text-indigo-400 font-semibold">{{ event.module }}</span>
             </c-info-field>
             <c-info-field label="Object Type">
-                <span class="font-mono text-xs">{{ event.object_type }}</span>
+                <span class="font-mono text-xs font-semibold">{{ event.object_type }}</span>
             </c-info-field>
             <c-info-field label="Object ID" value="{{ event.object_id|default:'—' }}"></c-info-field>
             <c-info-field label="Actor">
-                {{ event.actor_user.email|default:event.actor_role|default:"System" }}
+                <span class="font-semibold">{{ event.actor_user.email|default:event.actor_role|default:"System" }}</span>
             </c-info-field>
         </div>
 
@@ -88,19 +86,31 @@
                         </div>
                         <div>
                             <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ event.actor_user.email|default:"System / Automated" }}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">Role: <span class="font-mono">{{ event.actor_role|default:"—" }}</span></div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">Role: <span class="font-mono font-medium">{{ event.actor_role|default:"—" }}</span></div>
                         </div>
                     </div>
                     {% if event.related_employee %}
                     <div class="border-t border-slate-100 dark:border-slate-700/50 pt-3">
-                        <span class="text-xs text-slate-400 block mb-1">Related Employee</span>
-                        <a href="{% url 'employees:employee_detail' event.related_employee.pk %}" class="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">{{ event.related_employee }}</a>
+                        <span class="text-xs text-slate-400 block mb-1 font-medium">Related Employee</span>
+                        <a href="{% url 'employees:employee_detail' event.related_employee.pk %}" class="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1.5">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                            {{ event.related_employee }}
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if event.related_project %}
+                    <div class="border-t border-slate-100 dark:border-slate-700/50 pt-3">
+                        <span class="text-xs text-slate-400 block mb-1 font-medium">Related Project</span>
+                        <a href="{% url 'projects:project_detail' event.related_project.pk %}" class="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1.5">
+                            <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
+                            {{ event.related_project.name }}
+                        </a>
                     </div>
                     {% endif %}
                     {% if event.related_branch %}
                     <div class="border-t border-slate-100 dark:border-slate-700/50 pt-3">
-                        <span class="text-xs text-slate-400 block mb-1">Branch</span>
-                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ event.related_branch }}</span>
+                        <span class="text-xs text-slate-400 block mb-1 font-medium">Branch</span>
+                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ event.related_branch.name }}</span>
                     </div>
                     {% endif %}
                 </div>
@@ -111,11 +121,11 @@
                     <div class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="shield" class="w-3.5 h-3.5 text-slate-600 dark:text-slate-400"></i>
                     </div>
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Network & Device</h3>
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Network &amp; Device Context</h3>
                 </div>
                 <div class="p-4 space-y-3">
                     <c-info-field label="IP Address">
-                        <code class="text-xs font-mono">{{ event.ip_address|default:"—" }}</code>
+                        <code class="text-xs font-mono font-semibold">{{ event.ip_address|default:"—" }}</code>
                     </c-info-field>
                     <c-info-field label="Device / Browser">{{ event.session_device|default:"—" }}</c-info-field>
                     <c-info-field label="HTTP Request">
@@ -154,9 +164,9 @@
                         Data Snapshot — Before &amp; After
                     </h3>
                     {% if event.changed_fields %}
-                    <span class="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">
-                        {{ event.changed_fields|length }} field{{ event.changed_fields|length|pluralize }} changed
-                    </span>
+                    <div class="ml-auto">
+                        <c-badge variant="warning" dot="true" label="{{ event.changed_fields|length }} field{{ event.changed_fields|length|pluralize }} changed"></c-badge>
+                    </div>
                     {% endif %}
                 </div>
 
@@ -191,7 +201,7 @@
 
                             {# Before value #}
                             <div class="px-3 py-2.5 border-r border-slate-100 dark:border-slate-700/60 {% if event.changed_fields and key in event.changed_fields %}bg-rose-50/60 dark:bg-rose-950/20{% endif %}">
-                                <span class="text-xs font-mono break-all leading-tight {% if event.changed_fields and key in event.changed_fields %}text-rose-700 dark:text-rose-300{% else %}text-slate-600 dark:text-slate-400{% endif %}">
+                                <span class="text-xs font-mono break-all leading-tight {% if event.changed_fields and key in event.changed_fields %}text-rose-700 dark:text-rose-300 font-semibold{% else %}text-slate-600 dark:text-slate-400{% endif %}">
                                     {% if before_val is None %}<em class="not-italic text-slate-400">null</em>{% elif before_val == "" %}<em class="not-italic text-slate-400">empty</em>{% elif before_val == True %}True{% elif before_val == False %}False{% else %}{{ before_val }}{% endif %}
                                 </span>
                             </div>
@@ -199,7 +209,7 @@
                             {# After value #}
                             <div class="px-3 py-2.5 {% if event.changed_fields and key in event.changed_fields %}bg-emerald-50/60 dark:bg-emerald-950/20{% endif %}">
                                 {% if event.after_data and key in event.after_data %}
-                                    {% for ak, av in event.after_data.items %}{% if ak == key %}<span class="text-xs font-mono break-all leading-tight {% if event.changed_fields and key in event.changed_fields %}text-emerald-700 dark:text-emerald-300{% else %}text-slate-600 dark:text-slate-400{% endif %}">{% if av is None %}<em class="not-italic text-slate-400">null</em>{% elif av == "" %}<em class="not-italic text-slate-400">empty</em>{% elif av == True %}True{% elif av == False %}False{% else %}{{ av }}{% endif %}</span>{% endif %}{% endfor %}
+                                    {% for ak, av in event.after_data.items %}{% if ak == key %}<span class="text-xs font-mono break-all leading-tight {% if event.changed_fields and key in event.changed_fields %}text-emerald-700 dark:text-emerald-300 font-semibold{% else %}text-slate-600 dark:text-slate-400{% endif %}">{% if av is None %}<em class="not-italic text-slate-400">null</em>{% elif av == "" %}<em class="not-italic text-slate-400">empty</em>{% elif av == True %}True{% elif av == False %}False{% else %}{{ av }}{% endif %}</span>{% endif %}{% endfor %}
                                 {% else %}
                                     <span class="text-xs text-slate-300 dark:text-slate-600 italic">—</span>
                                 {% endif %}
@@ -220,7 +230,7 @@
                                 <span class="text-xs text-slate-300 dark:text-slate-600 italic">—</span>
                             </div>
                             <div class="px-3 py-2.5 bg-emerald-50/70 dark:bg-emerald-950/20">
-                                <span class="text-xs font-mono break-all text-emerald-700 dark:text-emerald-300">{% if av is None %}<em class="not-italic text-slate-400">null</em>{% elif av == "" %}<em class="not-italic text-slate-400">empty</em>{% elif av == True %}True{% elif av == False %}False{% else %}{{ av }}{% endif %}</span>
+                                <span class="text-xs font-mono break-all text-emerald-700 dark:text-emerald-300 font-semibold">{% if av is None %}<em class="not-italic text-slate-400">null</em>{% elif av == "" %}<em class="not-italic text-slate-400">empty</em>{% elif av == True %}True{% elif av == False %}False{% else %}{{ av }}{% endif %}</span>
                             </div>
                         </div>
                         {% endif %}
@@ -268,31 +278,27 @@
                     </div>
                     <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                         Access Log
-                        <span class="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">{{ access_logs|length }} view{{ access_logs|length|pluralize }}</span>
                     </h3>
+                    <div class="ml-auto">
+                        <c-badge variant="neutral" label="{{ access_logs|length }} view{{ access_logs|length|pluralize }}"></c-badge>
+                    </div>
                 </div>
-                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                    <table class="w-full text-xs">
-                        <thead>
-                            <tr class="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
-                                <th class="text-left px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider">Viewer</th>
-                                <th class="text-left px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider">When</th>
-                                <th class="text-left px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider">IP</th>
-                                <th class="text-left px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider">Reason</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
-                            {% for log in access_logs %}
-                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                <td class="px-3 py-2.5 font-medium text-slate-700 dark:text-slate-300">{{ log.user.email }}</td>
-                                <td class="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400">{{ log.accessed_at|date:"d/m/Y g:i A" }}</td>
-                                <td class="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400">{{ log.ip_address|default:"—" }}</td>
-                                <td class="px-3 py-2.5 text-slate-500 dark:text-slate-400 italic">{{ log.reason|default:"—" }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <c-table>
+                    <c-slot name="header">
+                        <th class="text-left px-3 py-2.5 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Viewer</th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Timestamp</th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">IP Address</th>
+                        <th class="text-left px-3 py-2.5 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Reason</th>
+                    </c-slot>
+                    {% for log in access_logs %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-3 py-2.5 font-medium text-slate-700 dark:text-slate-300 text-xs">{{ log.user.email }}</td>
+                        <td class="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400 text-xs">{{ log.accessed_at|date:"d/m/Y g:i A" }}</td>
+                        <td class="px-3 py-2.5 font-mono text-slate-500 dark:text-slate-400 text-xs">{{ log.ip_address|default:"—" }}</td>
+                        <td class="px-3 py-2.5 text-slate-500 dark:text-slate-400 italic text-xs">{{ log.reason|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </c-table>
             </div>
         </c-card>
         {% endif %}

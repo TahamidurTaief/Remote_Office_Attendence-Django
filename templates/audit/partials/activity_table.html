@@ -1,36 +1,61 @@
 <c-table>
     <c-slot name="header">
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">When</th>
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actor</th>
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity</th>
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Record</th>
-        <th class="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Details</th>
+        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
+        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actor</th>
+        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action &amp; Target</th>
+        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Record Details</th>
+        <th class="text-right py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
     </c-slot>
     {% for event in events %}
     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-        <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300 font-mono">{{ event.created_at|date:"d/m/Y g:i A" }}</td>
-        <td class="py-3 px-4 text-sm text-slate-900 dark:text-white font-medium">{{ event.actor_user.email|default:event.actor_role|default:"System" }}</td>
+        <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300 font-mono whitespace-nowrap">
+            {{ event.created_at|date:"d/m/Y g:i A" }}
+        </td>
+        <td class="py-3 px-4 text-sm text-slate-900 dark:text-white font-medium">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
+                    {{ event.actor_user.email|first|upper|default:"S" }}
+                </div>
+                <div>
+                    <div>{{ event.actor_user.email|default:event.actor_role|default:"System" }}</div>
+                    {% if event.actor_role %}
+                    <div class="text-[10px] text-slate-400 font-mono">{{ event.actor_role }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </td>
         <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 mr-1.5 uppercase">{{ event.action }}</span>
-            <span class="text-xs text-slate-400 font-mono">{{ event.object_type }}</span>
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <c-badge
+                    variant="{% if event.action == 'created' %}success{% elif event.action == 'deleted' or event.action == 'trashed' %}danger{% elif event.action == 'updated' %}info{% elif event.action == 'restored' %}primary{% else %}neutral{% endif %}"
+                    dot="true"
+                    label="{{ event.action|upper }}">
+                </c-badge>
+                <span class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.object_type }}</span>
+            </div>
         </td>
         <td class="py-3 px-4 text-sm text-slate-900 dark:text-white">
-            <div class="font-semibold">{{ event.object_label|default:"-" }}</div>
-            <div class="text-xs text-slate-400 font-mono">{{ event.module }} / {{ event.object_id }}</div>
+            <div class="font-semibold text-slate-800 dark:text-slate-100">{{ event.object_label|default:"—" }}</div>
+            <div class="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                <span class="uppercase tracking-wider font-semibold text-indigo-600 dark:text-indigo-400">{{ event.module }}</span>
+                <span>/</span>
+                <span>ID: {{ event.object_id }}</span>
+            </div>
         </td>
-        <td class="py-3 px-4 text-right">
-            <a href="{% url 'audit:event_detail' event.uuid %}"
-               class="ft-btn ft-btn-secondary ft-btn-sm text-xs font-semibold"
-               title="View full audit detail">
-                <i data-lucide="file-search" class="w-3.5 h-3.5"></i>
-                View Details
-            </a>
+        <td class="py-3 px-4 text-right whitespace-nowrap">
+            <c-button
+                href="{% url 'audit:event_detail' event.uuid %}"
+                variant="secondary"
+                size="sm"
+                icon="file-search"
+                label="View Details">
+            </c-button>
         </td>
     </tr>
     {% empty %}
     <tr>
         <td colspan="5" class="py-8 px-4 text-center">
-            <c-empty-state icon="activity" title="No activity found" description="No audit events matched this scope or filter."></c-empty-state>
+            <c-empty-state icon="activity" title="No activity found" description="No audit events matched this filter or permission scope."></c-empty-state>
         </td>
     </tr>
     {% endfor %}

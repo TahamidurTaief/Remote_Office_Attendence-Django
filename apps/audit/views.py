@@ -143,21 +143,58 @@ class ActivityListView(LoginRequiredMixin, View):
     template_name = "audit/activity_list.html"
     partial_template_name = "audit/partials/activity_table.html"
 
+    MODULE_CHOICES = [
+        ("", "All Modules"),
+        ("projects", "Projects"),
+        ("tasks", "Tasks"),
+        ("schedule", "Schedule"),
+        ("employees", "Employees"),
+        ("attendance", "Attendance"),
+        ("leave", "Leave"),
+        ("expense", "Expense"),
+        ("payroll", "Payroll"),
+        ("branches", "Branches"),
+        ("accounts", "Accounts & Auth"),
+        ("workflow", "Workflow"),
+    ]
+
+    ACTION_CHOICES = [
+        ("", "All Actions"),
+        ("created", "Created"),
+        ("updated", "Updated"),
+        ("deleted", "Deleted"),
+        ("trashed", "Moved to Trash"),
+        ("restored", "Restored"),
+        ("access", "Accessed"),
+    ]
+
     def get_queryset(self, request):
         qs = AuditService.get_scoped_events(request.user)
-        module = request.GET.get("module", "").strip()
-        action = request.GET.get("action", "").strip()
+        module = request.GET.get("module", "").strip().lower()
+        action = request.GET.get("action", "").strip().lower()
         search = request.GET.get("q", "").strip()
+
         if module:
-            qs = qs.filter(module=module)
+            if module == "tasks":
+                qs = qs.filter(Q(module__iexact="tasks") | Q(object_type__iexact="ProjectTask") | Q(object_type__icontains="task"))
+            elif module == "projects":
+                qs = qs.filter(Q(module__iexact="projects") & ~Q(object_type__iexact="ProjectTask"))
+            else:
+                qs = qs.filter(module__iexact=module)
+
         if action:
-            qs = qs.filter(action=action)
+            qs = qs.filter(action__iexact=action)
+
         if search:
             qs = qs.filter(
                 Q(object_label__icontains=search) |
                 Q(object_id__icontains=search) |
+                Q(object_type__icontains=search) |
                 Q(actor_user__email__icontains=search) |
-                Q(reason_note__icontains=search)
+                Q(actor_user__phone__icontains=search) |
+                Q(actor_role__icontains=search) |
+                Q(reason_note__icontains=search) |
+                Q(module__icontains=search)
             )
         return qs
 
@@ -171,9 +208,11 @@ class ActivityListView(LoginRequiredMixin, View):
         context = {
             "page_obj": page_obj,
             "events": page_obj.object_list,
-            "module_filter": request.GET.get("module", ""),
-            "action_filter": request.GET.get("action", ""),
-            "search_query": request.GET.get("q", ""),
+            "module_filter": request.GET.get("module", "").strip(),
+            "action_filter": request.GET.get("action", "").strip(),
+            "search_query": request.GET.get("q", "").strip(),
+            "module_choices": self.MODULE_CHOICES,
+            "action_choices": self.ACTION_CHOICES,
         }
         template = self.partial_template_name if request.headers.get("HX-Request") == "true" else self.template_name
         return render(request, template, context)

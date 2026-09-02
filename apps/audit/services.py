@@ -17,8 +17,8 @@ def mask_sensitive_data(data):
     if isinstance(data, dict):
         masked = {}
         for k, v in data.items():
-            k_lower = k.lower()
-            if any(term in k_lower for term in ["password", "token", "secret", "pin", "nid", "national_id", "bank_account", "bank_routing", "card_number", "routing_number", "account_number"]):
+            k_lower = str(k).lower()
+            if any(term in k_lower for term in ["password", "token", "secret", "pin", "nid", "national_id", "bank_account", "bank_routing", "card_number", "routing_number", "account_number", "session_key", "trusted_device", "backup_code"]):
                 masked[k] = "********"
             else:
                 masked[k] = mask_sensitive_data(v)
@@ -41,77 +41,130 @@ def _resolve_related(instance):
     related_employee = None
     related_project = None
     related_branch = None
-    if instance.__class__.__name__ == "Employee":
+
+    if not instance:
+        return None, None, None
+
+    model_name = instance.__class__.__name__
+
+    if model_name == "Employee":
         related_employee = instance
-        related_branch = instance.branch
+        related_branch = getattr(instance, "branch", None)
+    elif model_name == "EmployeeProfile":
+        if hasattr(instance, "master_employee") and instance.master_employee:
+            related_employee = instance.master_employee
+        related_branch = getattr(instance, "branch", None)
+    elif model_name == "Project":
+        related_project = instance
+        related_branch = getattr(instance, "branch", None)
+    elif model_name == "Branch":
+        related_branch = instance
+
     if hasattr(instance, "employee_master") and getattr(instance, "employee_master_id", None):
         related_employee = instance.employee_master
+
+    if hasattr(instance, "responsible_person") and getattr(instance, "responsible_person_id", None):
+        rp = instance.responsible_person
+        if rp:
+            if hasattr(rp, "master_employee") and rp.master_employee:
+                related_employee = rp.master_employee
+            elif rp.__class__.__name__ == "Employee":
+                related_employee = rp
+            if not related_branch:
+                related_branch = getattr(rp, "branch", None)
+
     if hasattr(instance, "employee") and getattr(instance, "employee_id", None):
         employee_rel = instance.employee
-        if hasattr(employee_rel, "master_employee") and employee_rel.master_employee_id:
-            related_employee = employee_rel.master_employee
+        if employee_rel:
+            if hasattr(employee_rel, "master_employee") and employee_rel.master_employee_id:
+                related_employee = employee_rel.master_employee
+            elif employee_rel.__class__.__name__ == "Employee":
+                related_employee = employee_rel
+            if not related_branch:
+                related_branch = getattr(employee_rel, "branch", None)
+
     if hasattr(instance, "project") and getattr(instance, "project_id", None):
         related_project = instance.project
+        if not related_branch and related_project:
+            related_branch = getattr(related_project, "branch", None)
+
     if hasattr(instance, "branch") and getattr(instance, "branch_id", None):
         related_branch = instance.branch
+
     if related_employee and not related_branch:
-        related_branch = related_employee.branch
+        related_branch = getattr(related_employee, "branch", None)
+
     return related_employee, related_project, related_branch
 
 
 class AuditService:
     @classmethod
     def log_event(cls, *, actor=None, action, instance=None, module="", object_type="", object_id="", object_label="", before=None, after=None, changed_fields=None, reason="", request=None):
-        request = request or get_current_request()
-        if instance is not None:
-            module = module or instance._meta.app_label
-            object_type = object_type or instance.__class__.__name__
-            object_id = object_id or str(instance.pk or "")
-            object_label = object_label or str(instance)
-            content_type = ContentType.objects.get_for_model(instance.__class__)
-            content_object_id = instance.pk
-            related_employee, related_project, related_branch = _resolve_related(instance)
-        else:
-            content_type = None
-            content_object_id = None
-            related_employee = related_project = related_branch = None
+        try:
+            if instance is not None:
+                # Prevent recursive audit logging
+                if isinstance(instance, (AuditEvent, AuditAccessLog, TrashEntry)) or instance.__class__.__name__ in ("AuditEvent", "AuditAccessLog", "TrashEntry"):
+                    return None
 
-        before_masked = mask_sensitive_data(before or {})
-        after_masked = mask_sensitive_data(after or {})
-        changed_fields_masked = mask_sensitive_data(changed_fields or {})
+                module = module or instance._meta.app_label
+                object_type = object_type or instance.__class__.__name__
+                object_id = object_id or str(instance.pk or "")
+                object_label = object_label or str(instance)
+                content_type = ContentType.objects.get_for_model(instance.__class__)
+                content_object_id = instance.pk
+                related_employee, related_project, related_branch = _resolve_related(instance)
+                # Hard deletion cascade protection: when any object is deleted, avoid foreign keys to objects that may be cascade deleted
+                if action == "deleted":
+                    related_employee = None
+                    related_project = None
+                    related_branch = None
+            else:
+                content_type = None
+                content_object_id = None
+                related_employee = related_project = related_branch = None
 
-        event = AuditEvent.objects.create(
-            actor_user=actor if getattr(actor, "is_authenticated", False) else None,
-            actor_role=_role_for_user(actor),
-            module=module,
-            object_type=object_type,
-            object_id=object_id,
-            object_label=object_label,
-            action=action,
-            before_data=before_masked,
-            after_data=after_masked,
-            changed_fields=changed_fields_masked,
-            related_employee=related_employee,
-            related_project=related_project,
-            related_branch=related_branch,
-            request_path=getattr(request, "path", "")[:255],
-            request_method=getattr(request, "method", "")[:20],
-            ip_address=get_request_ip(request) or None,
-            session_device=get_request_device(request),
-            reason_note=reason,
-            content_type=content_type,
-            content_object_id=content_object_id,
-        )
-        if actor and action:
-            log_audit(
-                actor=actor,
-                action=f"platform_{action}",
-                target=instance,
-                summary=f"{action} {object_type or ''} {object_label or object_id}".strip(),
-                ip=get_request_ip(request),
-                metadata={"module": module, "changed_fields": list((changed_fields_masked or {}).keys())},
+            before_masked = mask_sensitive_data(before or {})
+            after_masked = mask_sensitive_data(after or {})
+            changed_fields_masked = mask_sensitive_data(changed_fields or {})
+
+            event = AuditEvent.objects.create(
+                actor_user=actor if getattr(actor, "is_authenticated", False) else None,
+                actor_role=_role_for_user(actor),
+                module=module,
+                object_type=object_type,
+                object_id=object_id,
+                object_label=object_label,
+                action=action,
+                before_data=before_masked,
+                after_data=after_masked,
+                changed_fields=changed_fields_masked,
+                related_employee=related_employee,
+                related_project=related_project,
+                related_branch=related_branch,
+                request_path=getattr(request, "path", "")[:255],
+                request_method=getattr(request, "method", "")[:20],
+                ip_address=get_request_ip(request) or None,
+                session_device=get_request_device(request),
+                reason_note=reason,
+                content_type=content_type,
+                content_object_id=content_object_id,
             )
-        return event
+            if actor and action:
+                try:
+                    log_audit(
+                        actor=actor,
+                        action=f"platform_{action}",
+                        target=instance,
+                        summary=f"{action} {object_type or ''} {object_label or object_id}".strip(),
+                        ip=get_request_ip(request),
+                        metadata={"module": module, "changed_fields": list((changed_fields_masked or {}).keys())},
+                    )
+                except Exception:
+                    pass
+            return event
+        except Exception:
+            # Audit failures must never roll back or block the primary business operation
+            return None
 
     @classmethod
     def log_model_change(cls, instance, *, action, before=None, after=None, actor=None, reason="", request=None):
