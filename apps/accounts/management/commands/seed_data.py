@@ -34,30 +34,36 @@ class Command(BaseCommand):
         for i in range(1, 4):
             email = f'staff{i}@fieldtrack.com'
             phone = f'+880170000000{i}'
-            user, u_created = CustomUser.objects.get_or_create(
-                email=email,
-                defaults={'role': 'staff', 'is_active': True, 'phone': phone}
-            )
-            if u_created:
+            user = CustomUser.objects.filter(phone=phone).first() or CustomUser.objects.filter(email=email).first()
+            if not user:
+                user = CustomUser.objects.create(
+                    email=email,
+                    phone=phone,
+                    role='staff',
+                    is_active=True
+                )
                 user.set_password('staff123')
                 user.save()
             elif not user.phone:
                 user.phone = phone
                 user.save()
 
-            emp, e_created = EmployeeProfile.objects.get_or_create(
-                user=user,
-                defaults={
-                    'branch': branch,
-                    'employee_id': f'EMP-2026-00{i}',
-                    'full_name': f'Staff Member {i}',
-                    'department': 'Sales',
-                    'designation': 'Field Agent',
-                    'phone': phone,
-                    'joined_date': timezone.localdate() - datetime.timedelta(days=30),
-                    'is_active': True
-                }
-            )
+            emp = EmployeeProfile.objects.filter(user=user).first()
+            if not emp:
+                emp_id = f'EMP-2026-00{i}'
+                if EmployeeProfile.objects.filter(employee_id=emp_id).exists():
+                    emp_id = f'EMP-2026-00{i}-{user.id}'
+                emp = EmployeeProfile.objects.create(
+                    user=user,
+                    branch=branch,
+                    employee_id=emp_id,
+                    full_name=f'Staff Member {i}',
+                    department='Sales',
+                    designation='Field Agent',
+                    phone=phone,
+                    joined_date=timezone.localdate() - datetime.timedelta(days=30),
+                    is_active=True
+                )
 
             # Create 5 days of attendance history
             today = timezone.localdate()
