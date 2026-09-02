@@ -122,8 +122,34 @@ def attendance_status(request):
     try:
         employee = get_employee(request.user)
         if not employee:
-            from apps.employees.models import EmployeeProfile
-            employee = EmployeeProfile.objects.filter(is_active=True).first()
+            if is_html_request:
+                from django.shortcuts import render
+                return render(request, 'attendance/status.html', {
+                    'error_message': 'Employee profile not found.',
+                    'employee': None,
+                    'active_session': None,
+                    'sessions_today': [],
+                    'tracking_interval': 0,
+                    'recent_locations': [],
+                    'branch': None,
+                    'total_hours_today': 0,
+                }, status=404)
+            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=404)
+
+        if not employee.is_active:
+            if is_html_request:
+                from django.shortcuts import render
+                return render(request, 'attendance/status.html', {
+                    'error_message': 'Employee profile is inactive.',
+                    'employee': None,
+                    'active_session': None,
+                    'sessions_today': [],
+                    'tracking_interval': 0,
+                    'recent_locations': [],
+                    'branch': None,
+                    'total_hours_today': 0,
+                }, status=403)
+            return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
 
         today = timezone.localdate()
 
@@ -219,7 +245,9 @@ def location_sync(request):
     try:
         employee = get_employee(request.user)
         if not employee:
-            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=404)
+        if not employee.is_active:
+            return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
 
         try:
             data = json.loads(request.body)
@@ -368,7 +396,9 @@ def field_visit_submit(request):
     try:
         employee = get_employee(request.user)
         if not employee:
-            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=404)
+        if not employee.is_active:
+            return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
 
         # For multipart/form-data (file uploads), request.body is already consumed
         # by Django's parser, so we must use request.POST directly.
@@ -505,15 +535,19 @@ def field_visit_submit(request):
 @require_GET
 def get_tracking_config(request):
     """Returns tracking config for logged-in employee"""
+    employee = get_employee(request.user)
+    if not employee:
+        return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=404)
+    if not employee.is_active:
+        return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
     try:
-        employee = request.user.employee_profile
         if employee.tracking_interval and employee.tracking_interval > 0:
             interval_minutes = employee.tracking_interval
         elif employee.branch and hasattr(employee.branch, 'schedule'):
             interval_minutes = employee.branch.schedule.tracking_interval_minutes
         else:
             interval_minutes = 10
-    except:
+    except Exception:
         interval_minutes = 10  # fallback default
     
     # If disabled (0), return large number
@@ -551,10 +585,11 @@ def save_location(request):
 @require_POST
 def save_mandatory_location(request):
     """Saves mandatory employee location when they access the dashboard"""
-    try:
-        employee = request.user.employee_profile
-    except Exception:
-        return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=400)
+    employee = get_employee(request.user)
+    if not employee:
+        return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=404)
+    if not employee.is_active:
+        return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
 
     try:
         data = json.loads(request.body)
