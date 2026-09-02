@@ -1,0 +1,42 @@
+{% comment %} c-file-input component
+   Props:
+   - name: input name (required)
+   - label: visible label (optional)
+   - required: boolean
+   - disabled: boolean
+   - multiple: boolean
+   - accept: accepted file types
+   - error: error message string
+   - help: help text below input
+   - extra_class: wrapper classes
+   - id: input id (defaults to name)
+{% endcomment %}
+<div class="flex flex-col gap-0.5 {{ extra_class }}">
+  {% if label %}
+    <label for="{{ id|default:name }}" class="ft-label">
+      {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+  {% endif %}
+
+  <div class="relative">
+    <input
+      type="file"
+      name="{{ name }}"
+      id="{{ id|default:name }}"
+      {% if multiple %}multiple{% endif %}
+      {% if accept %}accept="{{ accept }}"{% endif %}
+      {% if required %}required{% endif %}
+      {% if disabled %}disabled{% endif %}
+      {% if error %}aria-invalid="true" aria-describedby="{{ id|default:name }}-error"{% elif help %}aria-describedby="{{ id|default:name }}-help"{% endif %}
+      class="ft-input p-2 text-xs w-full cursor-pointer {% if error %}!border-red-500 border-red-500 focus:!box-shadow-[0_0_0_3px_rgba(239,68,68,0.15)]{% endif %} {{ input_class }}"
+      {{ attrs }}
+    >
+  </div>
+
+  {% if error %}
+    <p id="{{ id|default:name }}-error" class="ft-error-text">{{ error }}</p>
+  {% endif %}
+  {% if help and not error %}
+    <p id="{{ id|default:name }}-help" class="ft-help-text">{{ help }}</p>
+  {% endif %}
+</div>

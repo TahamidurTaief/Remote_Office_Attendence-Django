@@ -1532,6 +1532,18 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
     template_name = 'projects/global_task_form.html'
     success_url = reverse_lazy('projects:global_task_list')
 
+    def get(self, request, *args, **kwargs):
+        if request.headers.get('HX-Request') == 'true' and ('project' in request.GET or 'assignment_mode' in request.GET):
+            project_id = request.GET.get('project')
+            mode = request.GET.get('assignment_mode', 'project')
+            form = self.get_form_class()(initial={'project': project_id, 'assignment_mode': mode})
+            return render(request, 'projects/partials/responsible_person_select.html', {
+                'form': form,
+                'project_id': project_id,
+                'mode': mode,
+            })
+        return super().get(request, *args, **kwargs)
+
     def post(self, request, *args, **kwargs):
         attachments = request.FILES.getlist('assignment_attachments')
         from django.core.exceptions import ValidationError

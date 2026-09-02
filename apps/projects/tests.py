@@ -2788,3 +2788,342 @@ class ProjectGanttTests(TestCase):
         self.assertIn('Foundation Work', content)
         self.assertIn('Duct Installation', content)
         self.assertIn('Electrical Wiring', content)
+
+
+class GlobalTaskTwoModeFormTests(TestCase):
+    def setUp(self):
+        from apps.employees.models import EmployeeProfile
+        self.password = 'testpass123'
+        self.admin_user = User.objects.create_user(
+            email='admin_task_mode@example.com',
+            phone='+8801799000111',
+            password=self.password,
+            role='admin'
+        )
+        self.staff_user_1 = User.objects.create_user(
+            email='staff_task_1@example.com',
+            phone='+8801799000222',
+            password=self.password,
+            role='staff'
+        )
+        self.staff_user_2 = User.objects.create_user(
+            email='staff_task_2@example.com',
+            phone='+8801799000333',
+            password=self.password,
+            role='staff'
+        )
+        self.staff_user_inactive = User.objects.create_user(
+            email='staff_task_inact@example.com',
+            phone='+8801799000444',
+            password=self.password,
+            role='staff',
+            is_active=False
+        )
+
+        self.branch = Branch.objects.create(
+            name='Gulshan Branch',
+            address='Gulshan-2, Dhaka',
+            latitude=23.7925,
+            longitude=90.4078,
+            radius_meters=100
+        )
+
+        self.project_type, _ = ProjectType.objects.get_or_create(name='General Maintenance')
+
+        self.emp_assigned = EmployeeProfile.objects.create(
+            user=self.staff_user_1,
+            employee_id='EMP-TM-01',
+            full_name='Assigned Engineer',
+            phone='+8801799000222',
+            branch=self.branch,
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
+        self.emp_unassigned = EmployeeProfile.objects.create(
+            user=self.staff_user_2,
+            employee_id='EMP-TM-02',
+            full_name='Unassigned Staff',
+            phone='+8801799000333',
+            branch=self.branch,
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
+        self.emp_inactive = EmployeeProfile.objects.create(
+            user=self.staff_user_inactive,
+            employee_id='EMP-TM-03',
+            full_name='Inactive Employee',
+            phone='+8801799000444',
+            branch=self.branch,
+            joined_date=date(2026, 1, 1),
+            is_active=False
+        )
+
+        self.project = Project.objects.create(
+            name='Smart HVAC Project',
+            project_type=self.project_type,
+            client_name='Alpha Corp',
+            location='Dhaka',
+            start_date=date(2026, 9, 1),
+            branch=self.branch
+        )
+        self.project.project_members.add(self.emp_assigned)
+
+    def test_project_mode_task_creation_success(self):
+        """Project-based task creation should save with project and inclusive finish date."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'project',
+            'project': self.project.pk,
+            'order': 1,
+            'activity': 'Install Chillers',
+            'responsible_person': self.emp_assigned.pk,
+            'planned_start': '2026-09-25',
+            'duration_days': '7',
+            'status': 'Not Started',
+            'remarks': 'Priority task'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertRedirects(response, reverse('projects:global_task_list'))
+
+        task = ProjectTask.objects.get(activity='Install Chillers')
+        self.assertEqual(task.project, self.project)
+        self.assertEqual(task.responsible_person, self.emp_assigned)
+        self.assertEqual(task.planned_start, date(2026, 9, 25))
+        self.assertEqual(task.planned_finish, date(2026, 10, 1))
+        self.assertEqual(task.duration_days, 7)
+
+    def test_single_employee_mode_task_creation_success(self):
+        """Single employee task creation should save without project (None) and inclusive finish date."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'employee',
+            'project': '',
+            'order': 1,
+            'activity': 'Standalone Maintenance Check',
+            'responsible_person': self.emp_unassigned.pk,
+            'planned_start': '2026-09-25',
+            'duration_days': '7',
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertRedirects(response, reverse('projects:global_task_list'))
+
+        task = ProjectTask.objects.get(activity='Standalone Maintenance Check')
+        self.assertIsNone(task.project)
+        self.assertEqual(task.responsible_person, self.emp_unassigned)
+        self.assertEqual(task.planned_start, date(2026, 9, 25))
+        self.assertEqual(task.planned_finish, date(2026, 10, 1))
+        self.assertEqual(task.duration_days, 7)
+
+    def test_project_mode_requires_project(self):
+        """In project mode, omitting project must fail validation."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'project',
+            'project': '',
+            'order': 1,
+            'activity': 'Missing Project Task',
+            'responsible_person': self.emp_assigned.pk,
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('project', response.context['form'].errors)
+        self.assertIn('Project is required for project-based tasks.', response.context['form'].errors['project'])
+
+    def test_single_employee_mode_ignores_submitted_project(self):
+        """In single employee mode, even if a project ID is sent, project is set to None."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'employee',
+            'project': self.project.pk,
+            'order': 2,
+            'activity': 'Autonomous Field Task',
+            'responsible_person': self.emp_unassigned.pk,
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertRedirects(response, reverse('projects:global_task_list'))
+
+        task = ProjectTask.objects.get(activity='Autonomous Field Task')
+        self.assertIsNone(task.project)
+
+    def test_project_mode_rejects_unassigned_employee(self):
+        """Project mode should reject employees not assigned to that project."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'project',
+            'project': self.project.pk,
+            'order': 1,
+            'activity': 'Invalid Assignment',
+            'responsible_person': self.emp_unassigned.pk,
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('responsible_person', response.context['form'].errors)
+
+    def test_employee_mode_rejects_inactive_employee(self):
+        """Single employee mode should reject inactive employee."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'employee',
+            'project': '',
+            'order': 1,
+            'activity': 'Inactive Assignment',
+            'responsible_person': self.emp_inactive.pk,
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].errors)
+
+    def test_server_rejects_finish_date_before_start_date(self):
+        """Planned finish date before planned start date must be rejected."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'employee',
+            'order': 1,
+            'activity': 'Invalid Date Range',
+            'responsible_person': self.emp_unassigned.pk,
+            'planned_start': '2026-09-25',
+            'planned_finish': '2026-09-20',
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('planned_finish', response.context['form'].errors)
+        self.assertIn('Planned finish date cannot be before the planned start date.', response.context['form'].errors['planned_finish'])
+
+    def test_duration_must_be_at_least_one(self):
+        """Duration < 1 must be rejected by server validation."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'employee',
+            'order': 1,
+            'activity': 'Zero Duration Task',
+            'responsible_person': self.emp_unassigned.pk,
+            'duration_days': '0',
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('duration_days', response.context['form'].errors)
+        self.assertIn('Duration must be at least 1 day.', response.context['form'].errors['duration_days'])
+
+    def test_selected_mode_persists_after_validation_error(self):
+        """Submitted assignment mode and values must be preserved after validation errors."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'assignment_mode': 'employee',
+            'activity': '',  # missing required activity
+            'responsible_person': self.emp_unassigned.pk,
+            'planned_start': '2026-09-25',
+            'duration_days': '5',
+            'status': 'Not Started'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="employee"')
+
+    def test_post_without_assignment_mode_renders_gracefully(self):
+        """POST without assignment_mode key should render template with default mode without error."""
+        self.client.login(username='+8801799000111', password=self.password)
+        data = {
+            'project': '',
+            'order': '4',
+            'activity': 'Contract Award & Kick-off Meeting',
+            'responsible_person': self.emp_unassigned.pk,
+            'planned_start': '2026-09-25',
+            'planned_finish': '2026-09-16',
+            'duration_days': '7',
+            'status': 'Delayed',
+            'remarks': 'rfgdgsdgd'
+        }
+        response = self.client.post(reverse('projects:global_task_add'), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Planned finish date cannot be before the planned start date.')
+
+    def test_htmx_partial_returns_scoped_employees_when_project_provided(self):
+        """HTMX GET with project parameter should return partial with scoped responsible person select."""
+        self.client.login(username='+8801799000111', password=self.password)
+        response = self.client.get(
+            reverse('projects:global_task_add'),
+            {'project': self.project.pk, 'assignment_mode': 'project'},
+            HTTP_HX_REQUEST='true'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'projects/partials/responsible_person_select.html')
+        self.assertContains(response, 'responsible_person')
+        self.assertContains(response, self.emp_assigned.full_name)
+
+    def test_cotton_components_render_error_and_aria_attributes(self):
+        """Test rendering of Cotton components with error prop."""
+        from django.template.loader import render_to_string
+
+        input_html = render_to_string('cotton/input.html', {
+            'name': 'test_field',
+            'label': 'Test Field',
+            'error': 'Field error occurred',
+            'value': 'submitted_val'
+        })
+        self.assertIn('border-red-500', input_html)
+        self.assertIn('aria-invalid="true"', input_html)
+        self.assertIn('aria-describedby="test_field-error"', input_html)
+        self.assertIn('id="test_field-error"', input_html)
+        self.assertIn('Field error occurred', input_html)
+
+        select_html = render_to_string('cotton/select.html', {
+            'name': 'status',
+            'label': 'Status',
+            'error': 'Select error occurred'
+        })
+        self.assertIn('border-red-500', select_html)
+        self.assertIn('aria-invalid="true"', select_html)
+        self.assertIn('aria-describedby="status-error"', select_html)
+        self.assertIn('Select error occurred', select_html)
+
+        textarea_html = render_to_string('cotton/textarea.html', {
+            'name': 'remarks',
+            'label': 'Remarks',
+            'error': 'Textarea error',
+            'slot': 'Note'
+        })
+        self.assertIn('border-red-500', textarea_html)
+        self.assertIn('aria-invalid="true"', textarea_html)
+        self.assertIn('aria-describedby="remarks-error"', textarea_html)
+        self.assertIn('Textarea error', textarea_html)
+
+        datepicker_html = render_to_string('cotton/datepicker.html', {
+            'name': 'due_date',
+            'label': 'Due Date',
+            'error': 'Date error',
+            'value': '2026-09-25'
+        })
+        self.assertIn('border-red-500', datepicker_html)
+        self.assertIn('aria-invalid="true"', datepicker_html)
+        self.assertIn('aria-describedby="due_date-error"', datepicker_html)
+        self.assertIn('Date error', datepicker_html)
+
+        file_input_html = render_to_string('cotton/file-input.html', {
+            'name': 'attachment',
+            'label': 'Attachment',
+            'error': 'File error'
+        })
+        self.assertIn('border-red-500', file_input_html)
+        self.assertIn('aria-invalid="true"', file_input_html)
+        self.assertIn('aria-describedby="attachment-error"', file_input_html)
+        self.assertIn('File error', file_input_html)
+
+        error_summary_html = render_to_string('cotton/form-error-summary.html', {
+            'errors': ['Summary error 1', 'Summary error 2']
+        })
+        self.assertIn('Summary error 1', error_summary_html)
+        self.assertIn('Summary error 2', error_summary_html)
+
+        assignment_choice_html = render_to_string('cotton/assignment-choice.html', {
+            'name': 'assignment_mode',
+            'value': 'project'
+        })
+        self.assertIn('Project-based Task', assignment_choice_html)
+        self.assertIn('Single Employee Task', assignment_choice_html)

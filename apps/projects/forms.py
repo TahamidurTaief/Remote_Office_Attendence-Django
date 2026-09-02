@@ -271,17 +271,27 @@ class ProjectMaterialForm(forms.ModelForm):
 
         return cleaned_data
 class GlobalProjectTaskForm(forms.ModelForm):
+    assignment_mode = forms.ChoiceField(
+        choices=[
+            ('project', 'Project-based Task'),
+            ('employee', 'Single Employee Task'),
+        ],
+        initial='project',
+        required=False,
+        widget=forms.HiddenInput()
+    )
+
     class Meta:
         model = ProjectTask
         fields = [
-            'project', 'order', 'activity', 'responsible_person',
+            'assignment_mode', 'project', 'order', 'activity', 'responsible_person',
             'planned_start', 'planned_finish', 'duration_days',
             'points', 'status', 'remarks', 'employee_note', 'assignment_attachment'
         ]
         widgets = {
             'project': forms.Select(attrs={'class': SELECT_INPUT}),
             'order': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 1}),
-            'activity': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Duct Installation'}),
+            'activity': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Duct Installation & Insulation'}),
             'responsible_person': forms.Select(attrs={'class': SELECT_INPUT}),
             'planned_start': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
             'planned_finish': forms.DateInput(format='%Y-%m-%d', attrs={'class': TEXT_INPUT, 'type': 'date'}),
@@ -295,18 +305,94 @@ class GlobalProjectTaskForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from apps.employees.models import EmployeeProfile
+        from django.db.models import Q
+
         self.fields['project'].required = False
-        self.fields['project'].empty_label = '— Standalone Task (no project) —'
+        self.fields['project'].queryset = Project.objects.all().order_by('name')
+        self.fields['project'].empty_label = '-- Select Project --'
+        self.fields['responsible_person'].required = True
         self.fields['points'].required = False
         self.fields['employee_note'].required = False
 
+        mode = None
+        project_id = None
+        if self.data:
+            mode = self.data.get('assignment_mode')
+            project_id = self.data.get('project')
+        elif self.initial:
+            mode = self.initial.get('assignment_mode')
+            project_id = self.initial.get('project')
+
+        if mode is None:
+            mode = 'project'
+
+        if mode == 'project' and project_id:
+            try:
+                proj = Project.objects.get(pk=project_id)
+                scoped_employees = EmployeeProfile.objects.filter(
+                    Q(is_active=True) & (
+                        Q(managed_projects=proj) |
+                        Q(site_engineer_projects=proj) |
+                        Q(member_projects=proj)
+                    )
+                ).distinct().order_by('full_name')
+                self.fields['responsible_person'].queryset = scoped_employees
+            except (Project.DoesNotExist, ValueError, TypeError):
+                self.fields['responsible_person'].queryset = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        else:
+            self.fields['responsible_person'].queryset = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+
+        self.fields['responsible_person'].label_from_instance = lambda obj: f"{obj.full_name} ({obj.designation or 'No Designation'})"
+
     def clean(self):
         cleaned_data = super().clean()
+        mode = cleaned_data.get('assignment_mode') or self.data.get('assignment_mode') or 'project'
+        cleaned_data['assignment_mode'] = mode
+        project = cleaned_data.get('project')
+        responsible_person = cleaned_data.get('responsible_person')
+
+        if mode == 'project':
+            if not project:
+                self.add_error('project', 'Project is required for project-based tasks.')
+            elif responsible_person:
+                from django.db.models import Q
+                from apps.employees.models import EmployeeProfile
+                is_assigned = EmployeeProfile.objects.filter(
+                    Q(pk=responsible_person.pk) & Q(is_active=True) & (
+                        Q(managed_projects=project) |
+                        Q(site_engineer_projects=project) |
+                        Q(member_projects=project)
+                    )
+                ).exists()
+                if not is_assigned:
+                    self.add_error('responsible_person', f'Selected employee "{responsible_person.full_name}" is not assigned to project "{project.name}".')
+        elif mode == 'employee':
+            cleaned_data['project'] = None
+            if responsible_person and not responsible_person.is_active:
+                self.add_error('responsible_person', 'Selected employee is not active.')
+
+        if not responsible_person and 'responsible_person' not in self.errors:
+            self.add_error('responsible_person', 'Responsible employee is required.')
+
         planned_start = cleaned_data.get('planned_start')
         planned_finish = cleaned_data.get('planned_finish')
+        duration_days = cleaned_data.get('duration_days')
+        from datetime import timedelta
 
-        if planned_start and planned_finish and planned_finish < planned_start:
-            self.add_error('planned_finish', 'Planned finish date cannot be before the planned start date.')
+        if duration_days is not None and duration_days < 1:
+            self.add_error('duration_days', 'Duration must be at least 1 day.')
+
+        if planned_start and planned_finish:
+            if planned_finish < planned_start:
+                self.add_error('planned_finish', 'Planned finish date cannot be before the planned start date.')
+            else:
+                calculated_duration = (planned_finish - planned_start).days + 1
+                if not duration_days or duration_days != calculated_duration:
+                    cleaned_data['duration_days'] = calculated_duration
+        elif planned_start and duration_days and duration_days >= 1:
+            calculated_finish = planned_start + timedelta(days=duration_days - 1)
+            cleaned_data['planned_finish'] = calculated_finish
 
         return cleaned_data
 

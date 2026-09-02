@@ -1,10 +1,80 @@
 <c-app-shell page_title="Create Global Task | FieldTrack" active_href="{{ request.path }}">
-    <div class="p-4 max-w-3xl mx-auto space-y-4">
+    <div class="p-4 max-w-3xl mx-auto space-y-4"
+         x-data="{
+             mode: '{{ form.assignment_mode.value|default:'project' }}',
+             startDate: '{{ form.planned_start.value|date:'Y-m-d'|default:form.planned_start.value|default:'' }}',
+             finishDate: '{{ form.planned_finish.value|date:'Y-m-d'|default:form.planned_finish.value|default:'' }}',
+             duration: '{{ form.duration_days.value|default:'' }}',
+             isUpdating: false,
+
+             init() {
+                 this.$nextTick(() => {
+                     const firstInvalid = document.querySelector('[aria-invalid=\'true\'], .border-red-500, .ft-error-text');
+                     if (firstInvalid) {
+                         firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                         if (typeof firstInvalid.focus === 'function') firstInvalid.focus();
+                     }
+                 });
+             },
+
+             onStartChange(val) {
+                 this.startDate = val;
+                 if (this.isUpdating) return;
+                 this.isUpdating = true;
+                 const dur = parseInt(this.duration, 10);
+                 if (this.startDate && !isNaN(dur) && dur >= 1) {
+                     this.finishDate = this.addDays(this.startDate, dur - 1);
+                 } else if (this.startDate && this.finishDate) {
+                     this.recalcDuration();
+                 }
+                 this.isUpdating = false;
+             },
+
+             onDurationChange(val) {
+                 this.duration = val;
+                 if (this.isUpdating) return;
+                 this.isUpdating = true;
+                 const dur = parseInt(this.duration, 10);
+                 if (this.startDate && !isNaN(dur) && dur >= 1) {
+                     this.finishDate = this.addDays(this.startDate, dur - 1);
+                 }
+                 this.isUpdating = false;
+             },
+
+             onFinishChange(val) {
+                 this.finishDate = val;
+                 if (this.isUpdating) return;
+                 this.isUpdating = true;
+                 this.recalcDuration();
+                 this.isUpdating = false;
+             },
+
+             recalcDuration() {
+                 if (this.startDate && this.finishDate) {
+                     const start = new Date(this.startDate + 'T00:00:00');
+                     const finish = new Date(this.finishDate + 'T00:00:00');
+                     const diffTime = finish.getTime() - start.getTime();
+                     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                     if (diffDays >= 1) {
+                         this.duration = diffDays;
+                     }
+                 }
+             },
+
+             addDays(dateStr, days) {
+                 const d = new Date(dateStr + 'T00:00:00');
+                 d.setDate(d.getDate() + days);
+                 const year = d.getFullYear();
+                 const month = String(d.getMonth() + 1).padStart(2, '0');
+                 const day = String(d.getDate()).padStart(2, '0');
+                 return `${year}-${month}-${day}`;
+             }
+         }">
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h2 class="text-sm font-bold text-gray-900">Create Task</h2>
-                <p class="mt-0.5 text-xs text-gray-500">Create a project-linked task or a standalone task with no project. Standalone tasks appear in the global task list.</p>
+                <h2 class="text-sm font-bold text-gray-900 dark:text-gray-100">Create Task</h2>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Create a project-linked task or a standalone single employee task.</p>
             </div>
             <c-button href="{% url 'projects:global_task_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to List"></c-button>
         </div>
@@ -13,32 +83,34 @@
         <c-card padding="md">
             <form method="POST" enctype="multipart/form-data" class="space-y-4">
                 {% csrf_token %}
-                
-                {% if form.errors %}
-                <div class="rounded-xl bg-red-50 p-3 border border-red-200">
-                    <h3 class="text-xs font-semibold text-red-800">Please correct the errors below:</h3>
-                    <ul class="mt-1.5 list-disc list-inside text-xs text-red-700">
-                        {% for field in form %}
-                            {% for error in field.errors %}
-                                <li><strong>{{ field.label }}:</strong> {{ error }}</li>
-                            {% endfor %}
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endif %}
 
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-6">
-                    <!-- Select Project -->
-                    <div class="sm:col-span-6">
-                        <c-select name="project" label="Project (optional — leave blank for a standalone task)" is_django_form="true" error="{{ form.project.errors.0 }}">
-                            {{ form.project }}
+                <!-- Error Summary Component -->
+                <c-form-error-summary form="{{ form }}"></c-form-error-summary>
+
+                <!-- Assignment Choice Component -->
+                <c-assignment-choice name="assignment_mode" value="{{ form.assignment_mode.value|default:'project' }}"></c-assignment-choice>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-6 pt-1">
+                    <!-- Select Project (Project mode only) -->
+                    <div class="sm:col-span-6" x-show="mode === 'project'" x-cloak>
+                        <c-select name="project" label="Project" is_django_form="true" required="true" error="{{ form.project.errors.0 }}" help="Select the project this task belongs to.">
+                            <div hx-get="{% url 'projects:global_task_add' %}" hx-trigger="change from:find select" hx-target="#responsible-person-container" hx-swap="outerHTML" hx-include="[name='assignment_mode'], [name='project']">
+                                {{ form.project }}
+                            </div>
                         </c-select>
-                        <p class="mt-1 text-[10px] text-gray-400">If no project is selected, this will be a standalone personal task visible in the global task list.</p>
+                    </div>
+
+                    <!-- Single Employee Standalone Banner (Employee mode only) -->
+                    <div class="sm:col-span-6" x-show="mode === 'employee'" x-cloak>
+                        <div class="flex items-center gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                            <i data-lucide="info" class="w-4 h-4 text-primary-600 shrink-0"></i>
+                            <span>This task will be created as a <strong>Standalone Single Employee Task</strong> without a project.</span>
+                        </div>
                     </div>
 
                     <!-- Sequence Order -->
                     <div class="sm:col-span-2">
-                        <c-input type="number" name="order" label="Sequence Order" value="{{ form.order.value|default:'' }}" required="true" error="{{ form.order.errors.0 }}"></c-input>
+                        <c-input type="number" name="order" label="Sequence Order" value="{{ form.order.value|default:'1' }}" required="true" error="{{ form.order.errors.0 }}"></c-input>
                     </div>
 
                     <!-- Activity Description -->
@@ -46,26 +118,26 @@
                         <c-input type="text" name="activity" label="Activity" value="{{ form.activity.value|default:'' }}" required="true" placeholder="e.g. Duct Installation & Insulation" error="{{ form.activity.errors.0 }}"></c-input>
                     </div>
 
-                    <!-- Responsible Person -->
-                    <div class="sm:col-span-6">
-                        <c-select name="responsible_person" label="Responsible Person" is_django_form="true" error="{{ form.responsible_person.errors.0 }}">
+                    <!-- Responsible Person (Dynamic HTMX Container) -->
+                    <div id="responsible-person-container" class="sm:col-span-6">
+                        <c-select name="responsible_person" label="Responsible Employee" is_django_form="true" required="true" error="{{ form.responsible_person.errors.0 }}">
                             {{ form.responsible_person }}
                         </c-select>
                     </div>
 
                     <!-- Planned Start -->
                     <div class="sm:col-span-3">
-                        <c-input type="date" name="planned_start" label="Planned Start Date" value="{{ form.planned_start.value|date:'Y-m-d'|default:form.planned_start.value|default:'' }}" error="{{ form.planned_start.errors.0 }}"></c-input>
+                        <c-input type="date" name="planned_start" id="planned_start" label="Planned Start Date" value="{{ form.planned_start.value|date:'Y-m-d'|default:form.planned_start.value|default:'' }}" x-model="startDate" @input="onStartChange($event.target.value)" @change="onStartChange($event.target.value)" error="{{ form.planned_start.errors.0 }}"></c-input>
                     </div>
 
                     <!-- Planned Finish -->
                     <div class="sm:col-span-3">
-                        <c-input type="date" name="planned_finish" label="Planned Finish Date" value="{{ form.planned_finish.value|date:'Y-m-d'|default:form.planned_finish.value|default:'' }}" error="{{ form.planned_finish.errors.0 }}"></c-input>
+                        <c-input type="date" name="planned_finish" id="planned_finish" label="Planned Finish Date" value="{{ form.planned_finish.value|date:'Y-m-d'|default:form.planned_finish.value|default:'' }}" x-model="finishDate" :min="startDate || null" @input="onFinishChange($event.target.value)" @change="onFinishChange($event.target.value)" error="{{ form.planned_finish.errors.0 }}"></c-input>
                     </div>
 
                     <!-- Duration (Days) -->
                     <div class="sm:col-span-3">
-                        <c-input type="number" name="duration_days" label="Duration (Days)" value="{{ form.duration_days.value|default:'' }}" error="{{ form.duration_days.errors.0 }}"></c-input>
+                        <c-input type="number" name="duration_days" id="duration_days" label="Duration (Days)" value="{{ form.duration_days.value|default:'' }}" min="1" x-model="duration" @input="onDurationChange($event.target.value)" @change="onDurationChange($event.target.value)" error="{{ form.duration_days.errors.0 }}"></c-input>
                     </div>
 
                     <!-- Status -->
@@ -82,40 +154,12 @@
 
                     <!-- Attachment -->
                     <div class="sm:col-span-6">
-                        <label class="ft-label mb-1">Reference File(s) / Attachment(s)</label>
-                        <input type="file" name="assignment_attachments" multiple class="ft-input p-2 text-xs w-full cursor-pointer">
-                        <p class="mt-1 text-[11px] text-gray-500">Allowed types: JPG, JPEG, PNG, PDF. Max size: 10MB per file. You can select multiple files.</p>
-                        
-                        {% if object and object.attachments.exists %}
-                        <div class="mt-3 space-y-1.5">
-                            <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachments ({{ object.attachments.count }}):</p>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {% for att in object.attachments.all %}
-                                <div class="flex items-center justify-between text-xs bg-slate-50 border border-gray-150 rounded-lg p-2">
-                                    <a href="{{ att.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold truncate flex items-center gap-1.5 max-w-[85%]">
-                                        <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-slate-400"></i>
-                                        <span class="truncate">{{ att.filename }}</span>
-                                    </a>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% elif object and object.assignment_attachment %}
-                        <div class="mt-3">
-                            <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachment:</p>
-                            <div class="inline-flex items-center text-xs bg-slate-50 border border-gray-150 rounded-lg p-2 mt-1">
-                                <a href="{{ object.assignment_attachment.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold flex items-center gap-1.5">
-                                    <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-slate-400"></i>
-                                    <span>{{ object.assignment_attachment.name }}</span>
-                                </a>
-                            </div>
-                        </div>
-                        {% endif %}
+                        <c-file-input name="assignment_attachments" label="Reference File(s) / Attachment(s)" multiple="true" accept=".jpg,.jpeg,.png,.pdf" help="Allowed types: JPG, JPEG, PNG, PDF. Max size: 10MB per file. You can select multiple files." error="{{ form.assignment_attachments.errors.0 }}"></c-file-input>
                     </div>
                 </div>
 
                 <!-- Form Actions -->
-                <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-150 mt-4">
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-150 dark:border-gray-800 mt-4">
                     <c-button href="{% url 'projects:global_task_list' %}" variant="secondary" label="Cancel"></c-button>
                     <c-button type="submit" variant="primary" icon="check" label="Create Task"></c-button>
                 </div>

@@ -1,0 +1,11 @@
+<div id="responsible-person-container" class="sm:col-span-6">
+    <c-select 
+        name="responsible_person" 
+        label="Responsible Employee" 
+        is_django_form="true" 
+        required="true" 
+        error="{{ form.responsible_person.errors.0 }}"
+    >
+        {{ form.responsible_person }}
+    </c-select>
+</div>

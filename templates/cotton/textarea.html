@@ -26,13 +26,14 @@
     placeholder="{{ placeholder }}"
     {% if required %}required{% endif %}
     {% if disabled %}disabled{% endif %}
-    class="ft-input resize-y {% if error %}!border-red-500{% endif %}"
-  >{{ slot }}</textarea>
+    {% if error %}aria-invalid="true" aria-describedby="{{ id|default:name }}-error"{% elif help %}aria-describedby="{{ id|default:name }}-help"{% endif %}
+    class="ft-input resize-y {% if error %}!border-red-500 border-red-500 focus:!box-shadow-[0_0_0_3px_rgba(239,68,68,0.15)]{% endif %}"
+  >{{ value|default:slot }}</textarea>
 
   {% if error %}
-    <p class="ft-error-text">{{ error }}</p>
+    <p id="{{ id|default:name }}-error" class="ft-error-text">{{ error }}</p>
   {% endif %}
   {% if help and not error %}
-    <p class="ft-help-text">{{ help }}</p>
+    <p id="{{ id|default:name }}-help" class="ft-help-text">{{ help }}</p>
   {% endif %}
 </div>

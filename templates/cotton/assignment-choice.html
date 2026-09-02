@@ -1,0 +1,63 @@
+{% comment %} c-assignment-choice component
+   Props:
+   - name: form field name (default: "assignment_mode")
+   - value: current selected mode ("project" | "employee")
+   - extra_class: extra wrapper classes
+{% endcomment %}
+<div class="flex flex-col gap-1.5 {{ extra_class }}">
+    <label class="ft-label">Task Assignment Type <span class="text-red-500 ml-0.5">*</span></label>
+    
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Project-based Task Option Card -->
+        <label 
+            class="relative flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all select-none"
+            :class="mode === 'project' 
+                ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/20 ring-2 ring-primary-500/20 shadow-sm' 
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'"
+            @click="mode = 'project'"
+        >
+            <input 
+                type="radio" 
+                name="{{ name|default:'assignment_mode' }}" 
+                value="project" 
+                x-model="mode" 
+                class="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+            >
+            <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5 font-semibold text-xs text-slate-900 dark:text-slate-100">
+                    <i data-lucide="folder-kanban" class="w-4 h-4 text-primary-600"></i>
+                    <span>Project-based Task</span>
+                </div>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+                    Link task to an existing project and assign to a project team member.
+                </p>
+            </div>
+        </label>
+
+        <!-- Single Employee Task Option Card -->
+        <label 
+            class="relative flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all select-none"
+            :class="mode === 'employee' 
+                ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/20 ring-2 ring-primary-500/20 shadow-sm' 
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'"
+            @click="mode = 'employee'"
+        >
+            <input 
+                type="radio" 
+                name="{{ name|default:'assignment_mode' }}" 
+                value="employee" 
+                x-model="mode" 
+                class="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+            >
+            <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5 font-semibold text-xs text-slate-900 dark:text-slate-100">
+                    <i data-lucide="user-check" class="w-4 h-4 text-primary-600"></i>
+                    <span>Single Employee Task</span>
+                </div>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+                    Direct standalone assignment to an employee without linking to a project.
+                </p>
+            </div>
+        </label>
+    </div>
+</div>
