@@ -1,49 +1,53 @@
 import os
 from pathlib import Path
-import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-env = environ.Env(
-    DEBUG=(bool, False)
-)
-_env_file = BASE_DIR / '.env'
-if _env_file.exists():
-    environ.Env.read_env(str(_env_file))
+def _parse_comma_separated(value, default=None):
+    if value is None:
+        return list(default) if default else []
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(',') if item.strip()]
+    return list(default) if default else []
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Production must set the DJANGO_SECRET_KEY environment variable.
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-placehojkbkj-ssdfsadflder')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-# For Coolify/production deployment: set DEBUG=True in environment variables or .env for local/staging; default is False for production.
-DEBUG = env.bool('DEBUG', default=False)
+# ── ENVIRONMENT & RUNTIME FLAGS ──────────────────────────────────────────────
 
-ALLOWED_HOSTS = ['demotrackme.signtechlimited.com', 'trackme.signtechlimited.com', 'localhost', '127.0.0.1', 'testserver', '192.168.10.191']
+DEBUG = True
 
-CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://demotrackme.signtechlimited.com", "https://trackme.signtechlimited.com"]
+SECRET_KEY = 'django-insecure-development-only-key-fieldtrack-attendance-2026'
 
-# Security hardening defaults
+# Hosts Configuration
+_dev_allowed_hosts = ['localhost', '127.0.0.1', 'testserver', '[::1]', '*']
+ALLOWED_HOSTS = ['*']
+
+# CSRF Trusted Origins
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000', 'http://127.0.0.1', 'http://localhost']
+
+
+# ── SECURITY HARDENING & HEADERS ─────────────────────────────────────────────
+
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'same-origin'
 
-# Production security hardening (skipped in local DEBUG mode so `runserver`
-# over plain http still works during development).
-if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 
-# Application definition
+
+# ── APPLICATION DEFINITION ───────────────────────────────────────────────────
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -121,24 +125,27 @@ TEMPLATES = [
     },
 ]
 
-
 WSGI_APPLICATION = 'fieldtrack.wsgi.application'
 
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-# Intentionally SQLite — see WAL/busy_timeout config below. Do not migrate to Postgres/MySQL without explicit sign-off.
+# ── DATABASE CONFIGURATION (SQLITE RUNTIME LOCK) ──────────────────────────────
+
+_sqlite_path = (BASE_DIR / 'db.sqlite3').resolve()
+_sqlite_timeout = 5.0
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': _sqlite_path,
         'OPTIONS': {
-            'timeout': 5.0,
+            'timeout': _sqlite_timeout,
         }
     }
 }
 
-# Password validation
+
+# ── PASSWORD VALIDATION ──────────────────────────────────────────────────────
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -154,7 +161,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
+
+# ── INTERNATIONALIZATION ─────────────────────────────────────────────────────
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Dhaka'  # Bangladesh Standard Time (UTC+6)
 USE_I18N = True
@@ -167,53 +176,37 @@ SHORT_DATE_FORMAT = 'd/m/Y'
 DATETIME_FORMAT = 'd/m/Y g:i A'
 SHORT_DATETIME_FORMAT = 'd/m/Y g:i A'
 
-# URL Configuration
 APPEND_SLASH = True
 
-# Static files (CSS, JavaScript, Images)
+
+# ── STATIC & MEDIA STORAGE ───────────────────────────────────────────────────
+
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-if DEBUG:
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-        },
-    }
-else:
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
-        },
-    }
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
-# Media files
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Authentication URLs
+
+# ── AUTHENTICATION & SESSIONS ────────────────────────────────────────────────
+
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 SESSION_COOKIE_AGE = 86400  # 1 day
 
-# Tailwind CLI Configuration
-_cli_bin = 'tailwindcss-3.4.13.exe' if os.name == 'nt' else 'tailwindcss-3.4.13'
-TAILWIND_CLI_PATH = BASE_DIR / '.django_tailwind_cli' / _cli_bin
-TAILWIND_CLI_SRC_CSS = 'static/css/source.css'
-TAILWIND_CLI_DIST_CSS = 'css/dist/styles.css'
-
-# Custom user model
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 AUTHENTICATION_BACKENDS = [
@@ -221,7 +214,17 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# ImageKit settings
+
+# ── TAILWIND & ASSET COMPILATION ─────────────────────────────────────────────
+
+_cli_bin = 'tailwindcss-3.4.13.exe' if os.name == 'nt' else 'tailwindcss-3.4.13'
+TAILWIND_CLI_PATH = BASE_DIR / '.django_tailwind_cli' / _cli_bin
+TAILWIND_CLI_SRC_CSS = 'static/css/source.css'
+TAILWIND_CLI_DIST_CSS = 'css/dist/styles.css'
+
+
+# ── IMAGE PROCESSING & WORKING SCHEDULE ──────────────────────────────────────
+
 IMAGEKIT_CACHEFILE_DIR = 'cache'
 IMAGEKIT_HASH_FILENAMES = True
 IMAGEKIT_CACHEFILE_NAMER = 'imagekit.cachefiles.namers.hash'
@@ -230,20 +233,22 @@ IMAGEKIT_CACHEFILE_NAMER = 'imagekit.cachefiles.namers.hash'
 WORKING_DAYS = [0, 1, 2, 3, 5, 6]
 
 
-# Email Settings
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+# ── EMAIL CONFIGURATION ──────────────────────────────────────────────────────
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
 EMAIL_HOST_USER = ''
 EMAIL_HOST_PASSWORD = ''
 DEFAULT_FROM_EMAIL = 'noreply@fieldtrack.com'
 
-# Django Cotton configuration (preserves hyphenated component filenames)
+
+# ── DJANGO COTTON & MULTI-TENANCY ────────────────────────────────────────────
+
 COTTON_SNAKE_CASED_NAMES = False
 
-# Multi-tenancy configurations
 TENANCY_ENABLED = True
+TENANT_UI_ENABLED = False
 DEFAULT_TENANT_SLUG = 'signtech'
-
-

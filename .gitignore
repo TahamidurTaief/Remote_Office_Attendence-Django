@@ -21,21 +21,28 @@ staticfiles/
 .django_tailwind_cli
 ./.django_tailwind_cli
 
-# ── DATABASE FILES (NEVER COMMIT) ────────────────────────────────────────────
-
+# ── DATABASE FILES ────────────────────────────────────────────────────────────
+# db.sqlite3 tracked as requested
 db.sqlite3-shm
 db.sqlite3-wal
 db.sqlite3.*
-*.sqlite3
 *.sqlite3.bak
 *.sqlite3.bak*
 *.db
 
 # ── MEDIA / USER UPLOADS (NEVER COMMIT) ──────────────────────────────────────
-
+media/*
+!media/.gitkeep
 
 # ── ENVIRONMENT / SECRETS ────────────────────────────────────────────────────
-
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.keystore
+*.jks
+*.p12
 
 # ── LOGS ─────────────────────────────────────────────────────────────────────
 *.log
@@ -58,6 +65,13 @@ Thumbs.db
 .idea/
 .vscode/
 
-# ── BACKUP FILES ─────────────────────────────────────────────────────────────
+# ── BACKUP / RUNTIME DUMP FILES ──────────────────────────────────────────────
 *.bak
 *.backup
+backups/files/
+backups.zip
+backups/*.zip
+backups/*.tar
+backups/*.tar.gz
+backups/*.dump
+*.dump

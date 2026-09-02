@@ -18,7 +18,7 @@
   "monochromeIconUrl": "https://trackme.signtechlimited.com/static/icon_main.jpg",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
-    "path": "C:\\Users\\taham\\Desktop\\attendence\\fieldtrack\\android.keystore",
+    "path": "android.keystore",
     "alias": "android"
   },
   "appVersionName": "1",

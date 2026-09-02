@@ -180,8 +180,9 @@ def spot_check_raw_html_content():
     first_leave = LeaveRequest.objects.first()
     first_leave_emp_name = first_leave.employee.full_name if first_leave else "Leave Requests"
     
+    from django.utils.html import escape
     first_notif = Notification.objects.filter(recipient=admin_user).first()
-    first_notif_snippet = first_notif.message[:30] if first_notif else "Notifications"
+    first_notif_snippet = escape(first_notif.message[:30]) if first_notif else "Notifications"
 
     admin_urls = [
         ("/schedule/", ["visibleSources", "Add Event"]),
