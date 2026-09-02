@@ -1,140 +1,131 @@
 <c-app-shell page_title="{% if object %}Edit Task{% else %}Add Task{% endif %} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4 max-w-3xl mx-auto">
-    <!-- Header -->
-    <div class="mb-4 flex items-center justify-between">
-        <div>
-            <h2 class="text-[14px] font-semibold text-gray-900">
-                {% if object %}Edit Task: {{ object.activity }}{% else %}Add New Task{% endif %}
-            </h2>
-            <p class="mt-0.5 text-[12px] text-gray-500">Project: <span class="font-semibold text-gray-700">{{ project.name }}</span></p>
-        </div>
-        <a href="{% url 'projects:project_detail' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-            <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
-            Back to Project
-        </a>
-    </div>
-
-    <!-- Main Card -->
-    <div class="bg-white shadow-sm border border-gray-100 rounded-xl overflow-hidden">
-        <form method="POST" enctype="multipart/form-data" class="p-4 space-y-4">
-            {% csrf_token %}
-            
-            {% if form.errors %}
-            <div class="rounded-xl bg-red-50 p-3 border border-red-200">
-                <h3 class="text-[12px] font-medium text-red-800">Please correct the errors below:</h3>
-                <ul class="mt-1.5 list-disc list-inside text-[12px] text-red-700">
-                    {% for field in form %}
-                        {% for error in field.errors %}
-                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
-                        {% endfor %}
-                    {% endfor %}
-                </ul>
+    <div class="p-4 max-w-3xl mx-auto space-y-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-sm font-bold text-gray-900">
+                    {% if object %}Edit Task: {{ object.activity }}{% else %}Add New Task{% endif %}
+                </h2>
+                <p class="mt-0.5 text-xs text-gray-500">Project: <span class="font-semibold text-gray-700">{{ project.name }}</span></p>
             </div>
-            {% endif %}
+            <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Project"></c-button>
+        </div>
 
-            <div class="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
-                <!-- Sequence Order -->
-                <div class="sm:col-span-2">
-                    <label for="{{ form.order.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Sequence Order *</label>
-                    {{ form.order }}
+        <!-- Main Card Component -->
+        <c-card padding="md">
+            <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                <div class="rounded-xl bg-red-50 p-3 border border-red-200">
+                    <h3 class="text-xs font-semibold text-red-800">Please correct the errors below:</h3>
+                    <ul class="mt-1.5 list-disc list-inside text-xs text-red-700">
+                        {% for field in form %}
+                            {% for error in field.errors %}
+                                <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                    </ul>
                 </div>
+                {% endif %}
 
-                <!-- Activity Description -->
-                <div class="sm:col-span-4">
-                    <label for="{{ form.activity.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Activity *</label>
-                    {{ form.activity }}
-                </div>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-6">
+                    <!-- Sequence Order -->
+                    <div class="sm:col-span-2">
+                        <c-input type="number" name="order" label="Sequence Order" value="{{ form.order.value|default:'' }}" required="true" error="{{ form.order.errors.0 }}"></c-input>
+                    </div>
 
-                <!-- Responsible Person -->
-                <div class="sm:col-span-6">
-                    <label for="{{ form.responsible_person.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Responsible Person</label>
-                    {{ form.responsible_person }}
-                </div>
+                    <!-- Activity Description -->
+                    <div class="sm:col-span-4">
+                        <c-input type="text" name="activity" label="Activity" value="{{ form.activity.value|default:'' }}" required="true" placeholder="e.g. Duct Installation & Insulation" error="{{ form.activity.errors.0 }}"></c-input>
+                    </div>
 
-                <!-- Planned Start -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.planned_start.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Planned Start Date</label>
-                    {{ form.planned_start }}
-                </div>
+                    <!-- Responsible Person -->
+                    <div class="sm:col-span-6">
+                        <c-select name="responsible_person" label="Responsible Person" is_django_form="true" error="{{ form.responsible_person.errors.0 }}">
+                            {{ form.responsible_person }}
+                        </c-select>
+                    </div>
 
-                <!-- Planned Finish -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.planned_finish.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Planned Finish Date</label>
-                    {{ form.planned_finish }}
-                </div>
+                    <!-- Planned Start -->
+                    <div class="sm:col-span-3">
+                        <c-input type="date" name="planned_start" label="Planned Start Date" value="{{ form.planned_start.value|date:'Y-m-d'|default:form.planned_start.value|default:'' }}" error="{{ form.planned_start.errors.0 }}"></c-input>
+                    </div>
 
-                <!-- Duration (Days) -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.duration_days.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Duration (Days)</label>
-                    {{ form.duration_days }}
-                </div>
+                    <!-- Planned Finish -->
+                    <div class="sm:col-span-3">
+                        <c-input type="date" name="planned_finish" label="Planned Finish Date" value="{{ form.planned_finish.value|date:'Y-m-d'|default:form.planned_finish.value|default:'' }}" error="{{ form.planned_finish.errors.0 }}"></c-input>
+                    </div>
 
-                <!-- Status -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.status.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Status *</label>
-                    {{ form.status }}
-                </div>
+                    <!-- Duration (Days) -->
+                    <div class="sm:col-span-3">
+                        <c-input type="number" name="duration_days" label="Duration (Days)" value="{{ form.duration_days.value|default:'' }}" error="{{ form.duration_days.errors.0 }}"></c-input>
+                    </div>
 
-                <!-- Remarks -->
-                <div class="sm:col-span-6">
-                    <label for="{{ form.remarks.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Remarks</label>
-                    {{ form.remarks }}
-                </div>
+                    <!-- Status -->
+                    <div class="sm:col-span-3">
+                        <c-select name="status" label="Status" is_django_form="true" required="true" error="{{ form.status.errors.0 }}">
+                            {{ form.status }}
+                        </c-select>
+                    </div>
 
-                <!-- Attachment -->
-                <div class="sm:col-span-6">
-                    <label class="block text-[12px] font-medium text-gray-700 mb-1">Reference File(s) / Attachment(s)</label>
-                    <input type="file" name="assignment_attachments" multiple class="w-full text-xs text-gray-500 border border-gray-250 rounded p-2 focus:outline-none focus:ring-1 focus:ring-primary-500">
-                    <p class="mt-1 text-[11px] text-gray-500">Allowed types: JPG, JPEG, PNG, PDF. Max size: 10MB per file. You can select multiple files.</p>
-                    
-                    {% if object and object.attachments.exists %}
-                    <div class="mt-3 space-y-1.5">
-                        <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachments ({{ object.attachments.count }}):</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {% for att in object.attachments.all %}
-                            <div class="flex items-center justify-between text-xs bg-slate-50 border border-gray-150 rounded-lg p-2">
-                                <a href="{{ att.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold truncate flex items-center gap-1.5 max-w-[85%]">
+                    <!-- Remarks -->
+                    <div class="sm:col-span-6">
+                        <c-textarea name="remarks" label="Remarks" rows="3" placeholder="Additional notes or instructions..." error="{{ form.remarks.errors.0 }}">{{ form.remarks.value|default:'' }}</c-textarea>
+                    </div>
+
+                    <!-- Attachment -->
+                    <div class="sm:col-span-6">
+                        <label class="ft-label mb-1">Reference File(s) / Attachment(s)</label>
+                        <input type="file" name="assignment_attachments" multiple class="ft-input p-2 text-xs w-full cursor-pointer">
+                        <p class="mt-1 text-[11px] text-gray-500">Allowed types: JPG, JPEG, PNG, PDF. Max size: 10MB per file. You can select multiple files.</p>
+                        
+                        {% if object and object.attachments.exists %}
+                        <div class="mt-3 space-y-1.5">
+                            <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachments ({{ object.attachments.count }}):</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {% for att in object.attachments.all %}
+                                <div class="flex items-center justify-between text-xs bg-slate-50 border border-gray-150 rounded-lg p-2">
+                                    <a href="{{ att.file.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold truncate flex items-center gap-1.5 max-w-[85%]">
+                                        <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-slate-400"></i>
+                                        <span class="truncate">{{ att.filename }}</span>
+                                    </a>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% elif object and object.assignment_attachment %}
+                        <div class="mt-3">
+                            <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachment:</p>
+                            <div class="inline-flex items-center text-xs bg-slate-50 border border-gray-150 rounded-lg p-2 mt-1">
+                                <a href="{{ object.assignment_attachment.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold flex items-center gap-1.5">
                                     <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-slate-400"></i>
-                                    <span class="truncate">{{ att.filename }}</span>
+                                    <span>{{ object.assignment_attachment.name }}</span>
                                 </a>
                             </div>
-                            {% endfor %}
                         </div>
+                        {% endif %}
                     </div>
-                    {% elif object and object.assignment_attachment %}
-                    <div class="mt-3">
-                        <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current Attachment:</p>
-                        <div class="inline-flex items-center text-xs bg-slate-50 border border-gray-150 rounded-lg p-2 mt-1">
-                            <a href="{{ object.assignment_attachment.url }}" target="_blank" class="text-primary-600 hover:text-primary-700 font-bold flex items-center gap-1.5">
-                                <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-slate-400"></i>
-                                <span>{{ object.assignment_attachment.name }}</span>
-                            </a>
-                        </div>
+
+                    {% if object %}
+                    <!-- Shift subsequent checkbox -->
+                    <div class="sm:col-span-6 flex items-center gap-2 mt-2">
+                        <input type="checkbox" id="shift_subsequent_checkbox" name="confirm_shift" value="true" checked class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                        <label for="shift_subsequent_checkbox" class="text-[12px] font-medium text-gray-750 select-none cursor-pointer">
+                            Shift all subsequent tasks if this task is delayed
+                        </label>
                     </div>
                     {% endif %}
                 </div>
 
-                {% if object %}
-                <!-- Shift subsequent checkbox -->
-                <div class="sm:col-span-6 flex items-center gap-2 mt-2">
-                    <input type="checkbox" id="shift_subsequent_checkbox" name="confirm_shift" value="true" checked class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
-                    <label for="shift_subsequent_checkbox" class="text-[12px] font-medium text-gray-750 select-none cursor-pointer">
-                        Shift all subsequent tasks if this task is delayed
-                    </label>
+                <!-- Form Actions -->
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-150 mt-4">
+                    <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" label="Cancel"></c-button>
+                    <c-button type="submit" variant="primary" icon="check" label="{% if object %}Save Changes{% else %}Add Task{% endif %}"></c-button>
                 </div>
-                {% endif %}
-            </div>
-
-            <!-- Submit buttons -->
-            <div class="pt-3 flex justify-end gap-2.5 border-t border-gray-100 mt-4">
-                <a href="{% url 'projects:project_detail' project.pk %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 hover:bg-gray-50">
-                    Cancel
-                </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-sm text-[12px] font-medium rounded-lg text-white bg-primary hover:opacity-90">
-                    <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
-                    {% if object %}Save Changes{% else %}Add Task{% endif %}
-                </button>
-            </div>
+            </form>
+        </c-card>
+    </div>
 
 {% if object %}
 <script>
