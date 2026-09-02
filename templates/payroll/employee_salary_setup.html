@@ -9,8 +9,8 @@
 
     <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
         editAssignment(assign) {
-            $dispatch('open-modal', {
-                id: 'edit-assignment-modal',
+            $dispatch('open-drawer', {
+                id: 'edit-assignment-drawer',
                 action: '/payroll/setup/assign/' + assign.id + '/edit/',
                 employee_name: assign.employee_name,
                 structure_id: assign.structure_id,
@@ -22,8 +22,8 @@
             });
         },
         createAssignment(emp) {
-            $dispatch('open-modal', {
-                id: 'create-assignment-modal',
+            $dispatch('open-drawer', {
+                id: 'create-assignment-drawer',
                 employee_id: emp.id,
                 employee_name: emp.name
             });
@@ -130,7 +130,7 @@
                         id: '{{ emp.pk }}',
                         name: '{{ emp.get_full_name|escapejs }}'
                     })" class="ft-btn ft-btn-primary ft-btn-sm w-full">
-                        Set Salary
+                        Set Salary Structure
                     </button>
                     {% endif %}
                 </div>
@@ -149,9 +149,9 @@
         {% endif %}
     </div>
 
-    <!-- Create Assignment Modal -->
-    <c-modal id="create-assignment-modal" title="Set Salary Structure" size="md">
-        <div x-data="{ employee_id: '', employee_name: '' }" @open-modal.window="if($event.detail.id === 'create-assignment-modal') {
+    <!-- Create Assignment Drawer -->
+    <c-right-drawer id="create-assignment-drawer" title="Set Salary Structure" width="md">
+        <div x-data="{ employee_id: '', employee_name: '' }" @open-drawer.window="if($event.detail.id === 'create-assignment-drawer') {
             employee_id = $event.detail.employee_id;
             employee_name = $event.detail.employee_name;
         }">
@@ -187,19 +187,19 @@
 
                 <c-slot name="footer">
                     <div class="flex items-center justify-end gap-2 w-full">
-                        <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                        <button type="button" @click="$dispatch('close-drawer')" class="ft-btn ft-btn-secondary">Cancel</button>
                         <button type="submit" class="ft-btn ft-btn-primary">Assign Structure</button>
                     </div>
                 </c-slot>
             </form>
         </div>
-    </c-modal>
+    </c-right-drawer>
 
-    <!-- Edit Assignment Modal -->
-    <c-modal id="edit-assignment-modal" title="Update Salary Structure Assignment" size="md">
+    <!-- Edit Assignment Drawer -->
+    <c-right-drawer id="edit-assignment-drawer" title="Update Salary Structure Assignment" width="md">
         <div x-data="{ 
             action: '', employee_name: '', structure_id: '', gross_salary: '', effective_from: '', effective_to: '', payment_mode: '', bank_limit: '' 
-        }" @open-modal.window="if($event.detail.id === 'edit-assignment-modal') {
+        }" @open-drawer.window="if($event.detail.id === 'edit-assignment-drawer') {
             action = $event.detail.action;
             employee_name = $event.detail.employee_name;
             structure_id = $event.detail.structure_id;
@@ -239,11 +239,11 @@
 
                 <c-slot name="footer">
                     <div class="flex items-center justify-end gap-2 w-full">
-                        <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
+                        <button type="button" @click="$dispatch('close-drawer')" class="ft-btn ft-btn-secondary">Cancel</button>
                         <button type="submit" class="ft-btn ft-btn-primary">Save Assignment</button>
                     </div>
                 </c-slot>
             </form>
         </div>
-    </c-modal>
+    </c-right-drawer>
 </c-app-shell>

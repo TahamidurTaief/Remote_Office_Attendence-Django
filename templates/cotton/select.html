@@ -21,6 +21,17 @@
     selectedValue: '{{ value|default:''|escapejs }}',
     selectedLabel: '',
     activeIndex: -1,
+    dropUp: false,
+
+    checkPosition() {
+      this.$nextTick(() => {
+        if (!this.$refs.trigger) return;
+        const rect = this.$refs.trigger.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        this.dropUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+      });
+    },
 
     getSelect() {
       if (this.$refs.select) return this.$refs.select;
@@ -130,8 +141,9 @@
   <div class="relative w-full">
     <button
       type="button"
+      x-ref="trigger"
       {% if disabled %}disabled{% endif %}
-      @click="open = !open; if(open) { $nextTick(() => $refs.searchInput.focus()); activeIndex = -1; }"
+      @click="open = !open; if(open) { checkPosition(); $nextTick(() => $refs.searchInput.focus()); activeIndex = -1; }"
       class="ft-input w-full flex items-center justify-between text-[12px] rounded-[4px] focus:outline-none focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2]/10 disabled:opacity-50 cursor-pointer h-[34px] px-[10px]"
       style="background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left;"
     >
@@ -150,7 +162,8 @@
       x-transition:leave="transition ease-in duration-75"
       x-transition:leave-start="opacity-100 scale-100"
       x-transition:leave-end="opacity-0 scale-95"
-      class="absolute z-[100] w-full mt-1 rounded-[4px] overflow-hidden flex flex-col focus:outline-none"
+      :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
+      class="absolute z-[100] w-full rounded-[4px] overflow-hidden flex flex-col focus:outline-none shadow-xl"
       style="background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-md); display: none;"
     >
       <!-- Search Input -->

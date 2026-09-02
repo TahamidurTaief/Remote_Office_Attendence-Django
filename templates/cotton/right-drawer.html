@@ -5,6 +5,7 @@
    - width: sm (320px) | md (480px, default) | lg (640px)
    Slots:
    - body (default): drawer content
+   - footer: action buttons area (optional)
    Open via: $dispatch('open-drawer', {id: 'my-drawer'})
    Close via: $dispatch('close-drawer')
 {% endcomment %}
@@ -29,42 +30,51 @@
 
   {# Backdrop #}
   <div x-show="open"
-       x-transition:enter="transition-opacity duration-200"
+       x-transition:enter="transition-opacity duration-300 ease-out"
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100"
-       x-transition:leave="transition-opacity duration-150"
+       x-transition:leave="transition-opacity duration-200 ease-in"
        x-transition:leave-start="opacity-100"
        x-transition:leave-end="opacity-0"
        @click="open = false"
-       class="fixed inset-0 z-50"
-       style="background:rgba(0,0,0,0.35); backdrop-filter:blur(2px)"
+       class="fixed inset-0 z-[90]"
+       style="background:rgba(0,0,0,0.4); backdrop-filter:blur(3px)"
        x-cloak></div>
 
   {# Drawer panel #}
   <div x-show="open"
-       x-transition:enter="transition ease-out duration-220"
+       x-transition:enter="transition ease-out duration-300 transform"
        x-transition:enter-start="translate-x-full"
        x-transition:enter-end="translate-x-0"
-       x-transition:leave="transition ease-in duration-180"
+       x-transition:leave="transition ease-in duration-200 transform"
        x-transition:leave-start="translate-x-0"
        x-transition:leave-end="translate-x-full"
-       class="ft-drawer ft-drawer-{{ width|default:'md' }} z-[55]"
+       class="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-[95] flex flex-col justify-between"
+       style="background:var(--surface); border-left:1px solid var(--border);"
        x-cloak>
 
     {# Header #}
-    <div class="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0"
+    <div class="flex items-center justify-between px-5 py-4 border-b flex-shrink-0"
          style="border-color:var(--border)">
-      <h3 class="text-[13px] font-semibold" style="color:var(--text)">{{ title }}</h3>
+      <h3 class="text-sm font-bold text-gray-900" style="color:var(--text)">{{ title }}</h3>
       <button type="button"
               @click="open = false"
-              class="ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 flex items-center justify-center">
+              class="ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 flex items-center justify-center rounded-lg hover:bg-gray-100">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
 
     {# Body #}
-    <div class="flex-1 overflow-y-auto p-5">
+    <div class="flex-1 overflow-y-auto p-5 pb-24 space-y-4">
       {{ slot }}
     </div>
+
+    {# Footer #}
+    {% if footer %}
+    <div class="px-5 py-3.5 border-t flex items-center justify-end gap-2 flex-shrink-0"
+         style="border-color:var(--border); background:var(--surface-2);">
+      {{ footer }}
+    </div>
+    {% endif %}
   </div>
 </div>
