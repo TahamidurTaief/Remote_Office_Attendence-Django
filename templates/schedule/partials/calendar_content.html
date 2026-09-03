@@ -110,10 +110,11 @@
                     }
                  }">
 
-                {# Background click handler for cell #}
+                {# Background click and right-click handler for cell #}
                 <div @click.prevent="{% if is_admin_or_manager %}openDayList(dayData){% else %}if(dayData.all_events.length > 0) openDayList(dayData){% endif %}"
+                     @contextmenu.prevent="{% if is_admin_or_manager %}openDayList(dayData){% else %}if(dayData.all_events.length > 0) openDayList(dayData){% endif %}"
                      class="absolute inset-0 z-0 hover:bg-slate-100/40 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
-                     title="Click to view full day details"></div>
+                     title="Click or right-click to view full day details"></div>
 
                 {# Cell header #}
                 <div class="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
@@ -132,7 +133,8 @@
                 {# Chips container: full-width banner for holidays, compact chip for other events #}
                 <div class="relative z-10 flex-1 space-y-1 overflow-hidden pointer-events-auto">
                     <template x-for="event in visibleItems.slice(0, 3)" :key="event.id">
-                        <div @click.stop.prevent="openEventDetail(event)">
+                        <div @click.stop.prevent="openEventDetail(event)"
+                             @contextmenu.stop.prevent="openEventDetail(event)">
                             <template x-if="event.is_holiday">
                                 <c-calendar-holiday-banner
                                     ::title="event.title"
@@ -153,6 +155,7 @@
 
                     <template x-if="visibleItems.length > 3">
                         <div @click.stop.prevent="openDayList(dayData)"
+                             @contextmenu.stop.prevent="openDayList(dayData)"
                              class="text-[10px] font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 px-1 py-0.5 cursor-pointer select-none">
                             +<span x-text="visibleItems.length - 3"></span> more
                         </div>
@@ -164,46 +167,45 @@
         </div>
     </div>
 
-    {# 4. Mobile Agenda View Container (shown below 768px) #}
-    <div class="block md:hidden space-y-3">
+    {# 4. Mobile Agenda View (< 768px) #}
+    <div class="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
         {% for week in weeks_data %}
         {% for day in week %}
-        {% if day.is_current_month %}
-        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 space-y-2.5 shadow-sm {% if day.day_tint_class %}{{ day.day_tint_class }}{% endif %}"
+        {% if day.in_month %}
+        <div class="p-3.5 space-y-2 {% if day.day_tint_class %}{{ day.day_tint_class }}{% elif day.is_today %}bg-primary-50/20 dark:bg-primary-950/10{% endif %}"
              x-data="{
                 dayData: {
                     date_str: '{{ day.date_str }}',
-                    date_formatted: '{{ day.date_formatted|escapejs }}',
-                    has_holiday: {{ day.has_holiday|yesno:'true,false' }},
                     all_events: [
-                        {% for event in day.all_events %}
+                        {% for event in day.events %}
                         {
                             id: '{{ event.id }}',
                             title: '{{ event.title|escapejs }}',
                             raw_title: '{{ event.raw_title|escapejs }}',
                             source_type: '{{ event.source_type }}',
-                            is_holiday: {{ event.is_holiday|yesno:'true,false' }},
-                            is_gov_holiday: {{ event.is_gov_holiday|yesno:'true,false' }},
                             category_label: '{{ event.category_label|escapejs }}',
                             edit_url: '{{ event.edit_url }}',
-                            time_str: '{{ event.time_str|escapejs }}',
+                            delete_url: '{{ event.delete_url }}',
+                            time_str: '{{ event.time_str }}',
+                            is_holiday: {% if event.source_type == 'gov_holiday' or event.source_type == 'office_holiday' %}true{% else %}false{% endif %},
+                            is_gov_holiday: {% if event.source_type == 'gov_holiday' %}true{% else %}false{% endif %},
                             color_classes: '{{ event.color_classes }}',
                             dot_color_class: '{{ event.dot_color_class }}',
-                            description: '{{ event.description|escapejs }}',
-                            date_str: '{{ event.date_str }}',
-                            assigned_employees: '{{ event.assigned_employees|escapejs }}',
-                            project_name: '{{ event.project_name|escapejs }}',
-                            project_url: '{{ event.project_url }}',
-                            responsible_person: '{{ event.responsible_person|escapejs }}',
-                            status: '{{ event.status|escapejs }}',
-                            planned_dates: '{{ event.planned_dates|escapejs }}',
-                            employee_name: '{{ event.employee_name|escapejs }}',
-                            leave_type: '{{ event.leave_type|escapejs }}',
-                            date_range: '{{ event.date_range|escapejs }}',
-                            supervisor_name: '{{ event.supervisor_name|escapejs }}',
-                            planned_work: '{{ event.planned_work|escapejs }}',
-                            completed_work: '{{ event.completed_work|escapejs }}',
-                            manpower_count: '{{ event.manpower_count }}'
+                            description: '{{ event.description|default:""|escapejs }}',
+                            location: '{{ event.location|default:""|escapejs }}',
+                            assigned_to: '{{ event.assigned_to|default:""|escapejs }}',
+                            project_name: '{{ event.project_name|default:""|escapejs }}',
+                            project_url: '{{ event.project_url|default:"" }}',
+                            employee_name: '{{ event.employee_name|default:""|escapejs }}',
+                            leave_type: '{{ event.leave_type|default:""|escapejs }}',
+                            supervisor_name: '{{ event.supervisor_name|default:""|escapejs }}',
+                            planned_work: '{{ event.planned_work|default:""|escapejs }}',
+                            completed_work: '{{ event.completed_work|default:""|escapejs }}',
+                            manpower_count: '{{ event.manpower_count|default:"" }}',
+                            status: '{{ event.status|default:""|escapejs }}',
+                            planned_dates: '{{ event.planned_dates|default:""|escapejs }}',
+                            date_range: '{{ event.date_range|default:""|escapejs }}',
+                            is_all_day: {% if event.is_all_day %}true{% else %}false{% endif %}
                         }{% if not forloop.last %},{% endif %}
                         {% endfor %}
                     ]
@@ -211,22 +213,18 @@
                 get visibleItems() {
                     return this.dayData.all_events.filter(e => visibleSources.includes(e.source_type));
                 }
-             }"
-             x-show="visibleItems.length > 0">
+             }">
 
-            {# Day Header #}
-            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            {# Day Heading #}
+            <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                    <span class="text-[12px] {% if day.has_holiday %}font-extrabold text-slate-900 dark:text-white{% else %}font-bold text-slate-800 dark:text-slate-100{% endif %} {% if day.is_today %}text-primary-600 dark:text-primary-400{% endif %}">
-                        {{ day.date|date:"l, F j" }}
+                    <span class="text-xs font-bold {% if day.is_today %}text-primary-600 dark:text-primary-400{% else %}text-slate-800 dark:text-slate-200{% endif %}">
+                        {{ day.date|date:"D, M j" }}
                     </span>
-                    {% if day.has_gov_holiday %}
-                    <c-badge variant="danger" size="sm" label="Govt Holiday"></c-badge>
-                    {% elif day.has_office_holiday %}
-                    <c-badge variant="warning" size="sm" label="Office Holiday"></c-badge>
-                    {% endif %}
-                    {% if day.is_today %}
-                    <c-badge variant="primary" size="sm" label="Today"></c-badge>
+                    {% if day.day_badge_class %}
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold {{ day.day_badge_class }}">
+                        {{ day.badge_label }}
+                    </span>
                     {% endif %}
                 </div>
 
@@ -243,7 +241,8 @@
             {# Agenda Cards #}
             <div class="space-y-2">
                 <template x-for="event in visibleItems" :key="event.id">
-                    <div @click="openEventDetail(event)">
+                    <div @click="openEventDetail(event)"
+                         @contextmenu.stop.prevent="openEventDetail(event)">
                         <c-calendar-agenda-card
                             ::title="event.title"
                             ::time_str="event.time_str"
@@ -260,8 +259,8 @@
         {% endfor %}
     </div>
 
-    {# 5. Day Detail Modal #}
-    <c-modal id="calendar-detail-modal" ::title="modalTitle" size="md">
+    {# 5. Day Detail Modal (Drawer position: right) #}
+    <c-modal id="calendar-detail-modal" ::title="modalTitle" size="md" position="right">
         <div class="text-[12px] text-slate-600 dark:text-slate-300 space-y-3">
             {# Mode A: Day Events List #}
             <template x-if="modalMode === 'day_list'">

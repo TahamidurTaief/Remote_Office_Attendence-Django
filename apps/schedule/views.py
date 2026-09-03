@@ -68,14 +68,18 @@ class CalendarMonthView(RoleRequiredMixin, View):
         from apps.accounts.engine import PermissionEngine
         res = PermissionEngine.evaluate(request.user, 'schedule.manage')
         is_admin_or_manager = request.user.is_superuser or res.allowed or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'manager')
+        is_admin = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner')
 
         # Role-based scoping:
-        # Non-admin/manager roles: staff, employee
-        is_scoped_user = not is_admin_or_manager
+        # Admin / System Owner: global access across all active branches.
+        # Managers: manage schedule events and tasks, but MUST only access holidays and schedules of their assigned branch.
+        # Staff / Employees: strictly scoped to their own assignments, tasks, leaves, and branch holidays.
+        is_staff_or_employee = not is_admin_or_manager
 
         # 1. Holidays (Government Holiday where branch=None; Office Holiday where branch matches user's branch)
+        # Both managers and employees must only see their assigned branch office holidays.
         holidays_qs = Holiday.objects.filter(date__range=(start_date, end_date))
-        if is_scoped_user:
+        if not is_admin:
             if user_branch:
                 holidays_qs = holidays_qs.filter(Q(branch__isnull=True) | Q(branch=user_branch))
             else:
@@ -84,7 +88,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         # 2. Manual Schedule Events
         events_qs = ScheduleEvent.objects.filter(date__range=(start_date, end_date))
-        if is_scoped_user:
+        if is_staff_or_employee:
             if profile:
                 events_qs = events_qs.filter(assigned_to=profile)
             else:
@@ -96,7 +100,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
             Q(planned_start__range=(start_date, end_date)) |
             Q(planned_finish__range=(start_date, end_date))
         )
-        if is_scoped_user:
+        if is_staff_or_employee:
             if profile:
                 tasks_qs = tasks_qs.filter(responsible_person=profile)
             else:
@@ -109,7 +113,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
             start_date__lte=end_date,
             end_date__gte=start_date
         )
-        if is_scoped_user:
+        if is_staff_or_employee:
             if profile:
                 leaves_qs = leaves_qs.filter(employee=profile)
             else:
@@ -118,7 +122,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         # 5. Daily Progress Logs
         logs_qs = DailyProgressLog.objects.filter(date__range=(start_date, end_date))
-        if is_scoped_user:
+        if is_staff_or_employee:
             logs_qs = logs_qs.filter(logged_by=request.user)
         logs = logs_qs.select_related('project')
 
@@ -394,7 +398,7 @@ class ShiftScheduleView(RoleRequiredMixin, View):
         selected_branch = None
         selected_branch_id = request.GET.get('branch_id')
 
-        if is_admin_or_manager:
+        if is_admin:
             if selected_branch_id:
                 try:
                     selected_branch = branches_qs.filter(id=int(selected_branch_id)).first()
@@ -402,9 +406,11 @@ class ShiftScheduleView(RoleRequiredMixin, View):
                     selected_branch = None
             if not selected_branch:
                 selected_branch = user_branch or branches_qs.first()
+            selectable_branches = branches_qs
         else:
-            # Staff & Employee: strict isolation to their own branch
+            # Manager, Staff & Employee: strict isolation to their own branch
             selected_branch = user_branch
+            selectable_branches = [user_branch] if user_branch else []
 
         schedules_list = []
         if selected_branch:
@@ -429,7 +435,7 @@ class ShiftScheduleView(RoleRequiredMixin, View):
         manage_schedule_url = reverse('admin_panel:schedule_settings') if is_admin else ""
 
         context = {
-            'branches': branches_qs if is_admin_or_manager else [],
+            'branches': selectable_branches,
             'selected_branch': selected_branch,
             'schedules_list': schedules_list,
             'is_admin': is_admin,

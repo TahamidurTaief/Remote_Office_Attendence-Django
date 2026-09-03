@@ -398,6 +398,27 @@ class CalendarHolidayAndPermissionScopingTests(TestCase):
         # Employee 3 with NO profile / no branch assigned
         self.emp_no_profile = User.objects.create_user(email='no_profile@test.com', phone='+8801700000024', password=self.password, role='employee')
 
+        # Manager in Dhaka branch
+        self.mgr_user = User.objects.create_user(email='mgr_dhaka@test.com', phone='+8801700000025', password=self.password, role='manager')
+        self.mgr_master = Employee.objects.create(
+            user=self.mgr_user,
+            first_name='Dhaka',
+            last_name='Manager',
+            employee_number='EMP-MGR-001',
+            branch=self.branch_dhaka,
+            status=EmployeeStatus.ACTIVE
+        )
+        self.mgr_profile = EmployeeProfile.objects.create(
+            user=self.mgr_user,
+            master_employee=self.mgr_master,
+            branch=self.branch_dhaka,
+            employee_id='EMP-MGR-001',
+            full_name='Dhaka Manager',
+            phone='+8801700000025',
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
+
         # 1. Government Holiday: branch is None
         self.gov_holiday = Holiday.objects.create(name='Victory Day', date=date(2026, 12, 16), branch=None)
 
@@ -535,6 +556,59 @@ class CalendarHolidayAndPermissionScopingTests(TestCase):
         self.assertEqual(res_admin.context['selected_branch'], self.branch_ctg)
         self.assertTrue(res_admin.context['is_admin'])
         self.assertContains(res_admin, 'Manage Schedule')
+
+    def test_manager_holiday_and_branch_isolation(self):
+        """Manager must only see govt holidays and holidays of their own branch, never other branches."""
+        url = reverse('schedule:month_view') + '?year=2026&month=12'
+        self.client.force_login(self.mgr_user)
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+
+        day_events = self._get_day_events(res.context['weeks_data'], date(2026, 12, 16))
+        titles = [e['raw_title'] for e in day_events]
+        self.assertIn('Victory Day', titles)
+        self.assertIn('Dhaka Office Anniversary', titles)
+        self.assertNotIn('Ctg Port Day', titles)
+
+    def test_manager_shift_schedule_forbidden_from_browsing_other_branches(self):
+        """Manager accessing shift schedule with another branch_id query param must remain strictly scoped to their own branch."""
+        from apps.branches.models import OfficeSchedule
+        sched_dhaka, _ = OfficeSchedule.objects.get_or_create(
+            branch=self.branch_dhaka,
+            defaults={'office_start_time': '09:00', 'office_end_time': '17:00', 'working_days': ['sunday', 'monday']}
+        )
+        sched_ctg, _ = OfficeSchedule.objects.get_or_create(
+            branch=self.branch_ctg,
+            defaults={'office_start_time': '10:00', 'office_end_time': '18:00', 'working_days': ['saturday', 'sunday']}
+        )
+
+        shifts_url = reverse('schedule:shift_schedule')
+        self.client.force_login(self.mgr_user)
+
+        # Manager requests other branch via query parameter ?branch_id=...
+        res = self.client.get(shifts_url + f'?branch_id={self.branch_ctg.id}')
+        self.assertEqual(res.status_code, 200)
+        # Must be strictly isolated to Dhaka branch
+        self.assertEqual(res.context['selected_branch'], self.branch_dhaka)
+        self.assertContains(res, 'Dhaka Branch')
+        self.assertNotContains(res, 'Chittagong Branch')
+        # Manager selectable branches must only contain user's branch
+        self.assertEqual(list(res.context['branches']), [self.branch_dhaka])
+
+    def test_calendar_right_click_contextmenu_and_right_drawer_modal(self):
+        """Verify calendar content has @contextmenu handlers and the right-side drawer modal."""
+        url = reverse('schedule:month_view') + '?year=2026&month=12'
+        self.client.force_login(self.mgr_user)
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+
+        content = res.content.decode()
+        self.assertIn('@contextmenu.prevent="openDayList(dayData)"', content)
+        self.assertIn('@contextmenu.stop.prevent="openEventDetail(event)"', content)
+        self.assertIn('id="modal-calendar-detail-modal"', content)
+        # Rendered cotton modal with position="right" includes right-drawer placement classes
+        self.assertIn('justify-end', content)
+        self.assertIn('translate-x-full', content)
 
     def _get_day_events(self, weeks_data, target_date):
         for week in weeks_data:

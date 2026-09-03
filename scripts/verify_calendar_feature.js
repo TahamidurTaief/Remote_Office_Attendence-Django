@@ -23,6 +23,8 @@ assert.ok(calendarPartial.includes('<c-calendar-toolbar'), 'Must use <c-calendar
 assert.ok(calendarPartial.includes('<c-calendar-legend'), 'Must use <c-calendar-legend>');
 assert.ok(calendarPartial.includes('<c-calendar-holiday-banner'), 'Must use <c-calendar-holiday-banner>');
 assert.ok(calendarPartial.includes('<c-calendar-agenda-card'), 'Must use <c-calendar-agenda-card>');
+assert.ok(calendarPartial.includes('position="right"'), 'Calendar detail modal must use position="right" drawer');
+assert.ok(calendarPartial.includes('@contextmenu'), 'Calendar must support right-click (@contextmenu)');
 assert.ok(shiftPartial.includes('<c-shift-pattern-card'), 'Must use <c-shift-pattern-card>');
 assert.ok(shiftPartial.includes('<c-empty-state'), 'Must use <c-empty-state>');
 
