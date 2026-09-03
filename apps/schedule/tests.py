@@ -336,3 +336,141 @@ class ScheduleEventValidationAndConcurrencyTests(TestCase):
         self.assertEqual(response.status_code, 200) # Form re-rendered due to error
         self.assertIn("The event was modified by another user concurrently", response.content.decode())
 
+
+class CalendarHolidayAndPermissionScopingTests(TestCase):
+    def setUp(self):
+        from apps.branches.models import Holiday, Branch
+        from apps.employees.models import EmployeeProfile, Employee, EmployeeStatus
+
+        self.password = 'UserSecret123!'
+        self.admin = User.objects.create_superuser(
+            email='cal_admin@test.com',
+            phone='+8801700000021',
+            password=self.password,
+            role='admin'
+        )
+
+        self.branch_dhaka = Branch.objects.create(name='Dhaka Branch', latitude=23.8, longitude=90.4, radius_meters=100)
+        self.branch_ctg = Branch.objects.create(name='Chittagong Branch', latitude=22.3, longitude=91.8, radius_meters=100)
+
+        # Employee 1 in Dhaka
+        self.emp1_user = User.objects.create_user(email='emp_dhaka@test.com', phone='+8801700000022', password=self.password, role='employee')
+        self.emp1_master = Employee.objects.create(
+            user=self.emp1_user,
+            first_name='Dhaka',
+            last_name='Emp',
+            employee_number='EMP-DHK-001',
+            branch=self.branch_dhaka,
+            status=EmployeeStatus.ACTIVE
+        )
+        self.emp1_profile = EmployeeProfile.objects.create(
+            user=self.emp1_user,
+            master_employee=self.emp1_master,
+            branch=self.branch_dhaka,
+            employee_id='EMP-DHK-001',
+            full_name='Dhaka Emp',
+            phone='+8801700000022',
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
+
+        # Employee 2 in Chittagong
+        self.emp2_user = User.objects.create_user(email='emp_ctg@test.com', phone='+8801700000023', password=self.password, role='employee')
+        self.emp2_master = Employee.objects.create(
+            user=self.emp2_user,
+            first_name='Ctg',
+            last_name='Emp',
+            employee_number='EMP-CTG-001',
+            branch=self.branch_ctg,
+            status=EmployeeStatus.ACTIVE
+        )
+        self.emp2_profile = EmployeeProfile.objects.create(
+            user=self.emp2_user,
+            master_employee=self.emp2_master,
+            branch=self.branch_ctg,
+            employee_id='EMP-CTG-001',
+            full_name='Ctg Emp',
+            phone='+8801700000023',
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
+
+        # Employee 3 with NO profile / no branch assigned
+        self.emp_no_profile = User.objects.create_user(email='no_profile@test.com', phone='+8801700000024', password=self.password, role='employee')
+
+        # 1. Government Holiday: branch is None
+        self.gov_holiday = Holiday.objects.create(name='Victory Day', date=date(2026, 12, 16), branch=None)
+
+        # 2. Office Holiday: branch is Dhaka
+        self.dhaka_holiday = Holiday.objects.create(name='Dhaka Office Anniversary', date=date(2026, 12, 16), branch=self.branch_dhaka)
+
+        # 3. Office Holiday: branch is Chittagong
+        self.ctg_holiday = Holiday.objects.create(name='Ctg Port Day', date=date(2026, 12, 16), branch=self.branch_ctg)
+
+    def test_government_holiday_visible_to_all(self):
+        url = reverse('schedule:month_view') + '?year=2026&month=12'
+
+        # Admin sees govt holiday and both office holidays
+        self.client.force_login(self.admin)
+        res_admin = self.client.get(url)
+        self.assertEqual(res_admin.status_code, 200)
+        day_events = self._get_day_events(res_admin.context['weeks_data'], date(2026, 12, 16))
+        titles = [e['raw_title'] for e in day_events]
+        self.assertIn('Victory Day', titles)
+        self.assertIn('Dhaka Office Anniversary', titles)
+        self.assertIn('Ctg Port Day', titles)
+
+        # Dhaka employee sees govt holiday + Dhaka office holiday, but NOT Chittagong office holiday
+        self.client.force_login(self.emp1_user)
+        res_dhaka = self.client.get(url)
+        self.assertEqual(res_dhaka.status_code, 200)
+        day_events_dhk = self._get_day_events(res_dhaka.context['weeks_data'], date(2026, 12, 16))
+        titles_dhk = [e['raw_title'] for e in day_events_dhk]
+        self.assertIn('Victory Day', titles_dhk)
+        self.assertIn('Dhaka Office Anniversary', titles_dhk)
+        self.assertNotIn('Ctg Port Day', titles_dhk)
+
+        # Ctg employee sees govt holiday + Ctg office holiday, but NOT Dhaka office holiday
+        self.client.force_login(self.emp2_user)
+        res_ctg = self.client.get(url)
+        self.assertEqual(res_ctg.status_code, 200)
+        day_events_ctg = self._get_day_events(res_ctg.context['weeks_data'], date(2026, 12, 16))
+        titles_ctg = [e['raw_title'] for e in day_events_ctg]
+        self.assertIn('Victory Day', titles_ctg)
+        self.assertIn('Ctg Port Day', titles_ctg)
+        self.assertNotIn('Dhaka Office Anniversary', titles_ctg)
+
+    def test_missing_profile_safe_fallback_no_data_leak(self):
+        # User without profile should see ONLY government holiday, zero branch holidays
+        self.client.force_login(self.emp_no_profile)
+        url = reverse('schedule:month_view') + '?year=2026&month=12'
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+
+        day_events = self._get_day_events(res.context['weeks_data'], date(2026, 12, 16))
+        titles = [e['raw_title'] for e in day_events]
+        self.assertIn('Victory Day', titles)
+        self.assertNotIn('Dhaka Office Anniversary', titles)
+        self.assertNotIn('Ctg Port Day', titles)
+
+    def test_invalid_date_parameters_fall_back_gracefully(self):
+        self.client.force_login(self.emp1_user)
+        url = reverse('schedule:month_view') + '?year=notayear&month=99'
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('weeks_data', res.context)
+
+    def test_htmx_partial_request(self):
+        self.client.force_login(self.emp1_user)
+        url = reverse('schedule:month_view') + '?year=2026&month=12&partial=true'
+        res = self.client.get(url, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'Victory Day')
+
+    def _get_day_events(self, weeks_data, target_date):
+        for week in weeks_data:
+            for day in week:
+                if day['date'] == target_date:
+                    return day['all_events']
+        return []
+

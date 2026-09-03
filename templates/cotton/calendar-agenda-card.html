@@ -1,0 +1,33 @@
+{% comment %}
+c-calendar-agenda-card component
+Agenda card for mobile view (< 768px).
+Props:
+- title: string
+- time_str: string
+- category_label: string
+- color_classes: string
+- dot_color_class: string
+{% endcomment %}
+<c-vars title="" time_str="" category_label="" color_classes="" dot_color_class="" extra_class="" />
+
+<div class="p-3 rounded-xl border flex items-center justify-between gap-3 cursor-pointer hover:opacity-95 transition-all min-h-[44px] {{ color_classes }} {{ extra_class }}">
+  <div class="flex items-center gap-2.5 min-w-0">
+    <span class="w-2 h-2 rounded-full shrink-0 {{ dot_color_class }}"></span>
+    <div class="min-w-0">
+      <h4 class="text-[12px] font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">
+        {{ title }}
+      </h4>
+      {% if category_label %}
+      <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+        {{ category_label }}
+      </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="shrink-0 text-right">
+    <span class="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+      {{ time_str|default:'All Day' }}
+    </span>
+  </div>
+</div>

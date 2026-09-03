@@ -1,0 +1,80 @@
+{% comment %}
+c-calendar-toolbar component
+Reusable calendar navigation bar, title, Asia/Dhaka time indicator, and add event CTA.
+Props:
+- month_name: string (e.g. "September")
+- current_year: integer / string
+- prev_year: integer
+- prev_month: integer
+- next_year: integer
+- next_month: integer
+- today_year: integer
+- today_month: integer
+- is_admin_or_manager: boolean
+{% endcomment %}
+<c-vars month_name="" current_year="" prev_year="" prev_month="" next_year="" next_month="" today_year="" today_month="" is_admin_or_manager="false" extra_class="" />
+
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm {{ extra_class }}">
+  <div class="flex flex-wrap items-center justify-between sm:justify-start gap-2.5 sm:gap-4 min-w-0">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-7 h-7 rounded-lg bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center text-primary-600 dark:text-primary-400 shrink-0">
+        <i data-lucide="calendar" class="w-4 h-4"></i>
+      </div>
+      <h2 class="text-[14px] sm:text-[15px] font-bold text-slate-800 dark:text-slate-100 truncate tracking-tight">
+        {{ month_name }} {{ current_year }}
+      </h2>
+    </div>
+
+    {# Nav buttons #}
+    <div class="inline-flex items-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-0.5">
+      <c-button href="?year={{ prev_year }}&month={{ prev_month }}"
+                hx-get="?year={{ prev_year }}&month={{ prev_month }}"
+                hx-target="#calendar-view-container"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                variant="ghost"
+                size="sm"
+                icon="chevron-left"
+                extra_class="min-h-[36px] min-w-[36px] p-1.5"
+                title="Previous Month"></c-button>
+      <c-button href="?year={{ today_year }}&month={{ today_month }}"
+                hx-get="?year={{ today_year }}&month={{ today_month }}"
+                hx-target="#calendar-view-container"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                variant="ghost"
+                size="sm"
+                label="Today"
+                extra_class="min-h-[36px] px-2.5 text-[11px] font-semibold"
+                title="Go to Today"></c-button>
+      <c-button href="?year={{ next_year }}&month={{ next_month }}"
+                hx-get="?year={{ next_year }}&month={{ next_month }}"
+                hx-target="#calendar-view-container"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                variant="ghost"
+                size="sm"
+                icon="chevron-right"
+                extra_class="min-h-[36px] min-w-[36px] p-1.5"
+                title="Next Month"></c-button>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between sm:justify-end gap-2.5">
+    {# Asia/Dhaka live indicator pill #}
+    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-[11px] text-slate-500 dark:text-slate-400">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span class="font-medium text-slate-700 dark:text-slate-300">BST</span>
+      <span class="text-slate-400 dark:text-slate-500 font-mono text-[10px]">(UTC+6)</span>
+    </div>
+
+    {% if is_admin_or_manager %}
+    <c-button href="{% url 'schedule:create' %}"
+              variant="primary"
+              size="sm"
+              icon="plus"
+              label="Add Event"
+              extra_class="min-h-[38px]"></c-button>
+    {% endif %}
+  </div>
+</div>

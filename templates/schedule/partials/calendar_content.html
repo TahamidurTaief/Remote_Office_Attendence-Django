@@ -1,0 +1,342 @@
+<div class="space-y-4"
+     x-data="{
+        visibleSources: ['gov_holiday', 'office_holiday', 'manual_event', 'task_deadline', 'leave', 'progress_log'],
+        modalTitle: '',
+        modalMode: 'day_list',
+        modalDateStr: '',
+        modalDateFormatted: '',
+        modalDayEvents: [],
+        modalSelectedEvent: null,
+
+        filteredEvents(eventsList) {
+            if (!eventsList) return [];
+            return eventsList.filter(e => this.visibleSources.includes(e.source_type));
+        },
+        openEventDetail(event) {
+            this.modalMode = 'item_detail';
+            this.modalSelectedEvent = event;
+            this.modalTitle = event.title;
+            this.$dispatch('open-modal', {id: 'calendar-detail-modal'});
+            this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        },
+        openDayList(day) {
+            this.modalMode = 'day_list';
+            this.modalTitle = 'Schedule for ' + day.date_formatted;
+            this.modalDateFormatted = day.date_formatted;
+            this.modalDayEvents = day.all_events;
+            this.modalDateStr = day.date_str;
+            this.$dispatch('open-modal', {id: 'calendar-detail-modal'});
+            this.$nextTick(() => { if (window.lucide) window.lucide.createIcons(); });
+        }
+     }">
+
+    {# 1. Calendar Navigation Toolbar #}
+    <c-calendar-toolbar
+        month_name="{{ month_name }}"
+        current_year="{{ current_year }}"
+        prev_year="{{ prev_year }}"
+        prev_month="{{ prev_month }}"
+        next_year="{{ next_year }}"
+        next_month="{{ next_month }}"
+        today_year="{{ today.year }}"
+        today_month="{{ today.month }}"
+        is_admin_or_manager="{{ is_admin_or_manager|yesno:'true,false' }}"></c-calendar-toolbar>
+
+    {# 2. Filter Bar & Legend #}
+    <c-calendar-legend></c-calendar-legend>
+
+    {# 3. Desktop Month Grid (hidden on mobile < 768px) #}
+    <div class="hidden md:flex flex-col bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden min-h-[560px]">
+        {# Day of Week Headers #}
+        <div class="grid grid-cols-7 bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200/80 dark:border-slate-800">
+            <div class="py-2.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">Sun</div>
+            <div class="py-2.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">Mon</div>
+            <div class="py-2.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">Tue</div>
+            <div class="py-2.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">Wed</div>
+            <div class="py-2.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">Thu</div>
+            <div class="py-2.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">Fri</div>
+            <div class="py-2.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">Sat</div>
+        </div>
+
+        {# Days Grid #}
+        <div class="grid grid-cols-7 flex-1 bg-slate-200/60 dark:bg-slate-800/60 gap-px">
+            {% for week in weeks_data %}
+            {% for day in week %}
+            <div class="relative min-h-[105px] lg:min-h-[120px] p-1.5 flex flex-col justify-between transition-colors
+                        {% if day.is_current_month %}bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100{% else %}bg-slate-50/70 dark:bg-slate-950/70 text-slate-400 dark:text-slate-500{% endif %}
+                        {% if day.is_today %}ring-1 ring-inset ring-primary-500/30 bg-primary-50/15 dark:bg-primary-950/20{% endif %}"
+                 x-data="{
+                    dayData: {
+                        date_str: '{{ day.date_str }}',
+                        date_formatted: '{{ day.date_formatted|escapejs }}',
+                        all_events: [
+                            {% for event in day.all_events %}
+                            {
+                                id: '{{ event.id }}',
+                                title: '{{ event.title|escapejs }}',
+                                raw_title: '{{ event.raw_title|escapejs }}',
+                                source_type: '{{ event.source_type }}',
+                                category_label: '{{ event.category_label|escapejs }}',
+                                edit_url: '{{ event.edit_url }}',
+                                time_str: '{{ event.time_str|escapejs }}',
+                                color_classes: '{{ event.color_classes }}',
+                                dot_color_class: '{{ event.dot_color_class }}',
+                                description: '{{ event.description|escapejs }}',
+                                date_str: '{{ event.date_str }}',
+                                assigned_employees: '{{ event.assigned_employees|escapejs }}',
+                                project_name: '{{ event.project_name|escapejs }}',
+                                project_url: '{{ event.project_url }}',
+                                responsible_person: '{{ event.responsible_person|escapejs }}',
+                                status: '{{ event.status|escapejs }}',
+                                planned_dates: '{{ event.planned_dates|escapejs }}',
+                                employee_name: '{{ event.employee_name|escapejs }}',
+                                leave_type: '{{ event.leave_type|escapejs }}',
+                                date_range: '{{ event.date_range|escapejs }}',
+                                supervisor_name: '{{ event.supervisor_name|escapejs }}',
+                                planned_work: '{{ event.planned_work|escapejs }}',
+                                completed_work: '{{ event.completed_work|escapejs }}',
+                                manpower_count: '{{ event.manpower_count }}'
+                            }{% if not forloop.last %},{% endif %}
+                            {% endfor %}
+                        ]
+                    },
+                    get visibleItems() {
+                        return this.dayData.all_events.filter(e => visibleSources.includes(e.source_type));
+                    }
+                 }">
+
+                {# Background click handler for cell #}
+                <div @click.prevent="{% if is_admin_or_manager %}openDayList(dayData){% else %}if(dayData.all_events.length > 0) openDayList(dayData){% endif %}"
+                     class="absolute inset-0 z-0 hover:bg-slate-100/40 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
+                     title="Click to view full day details"></div>
+
+                {# Cell header #}
+                <div class="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
+                    <span class="text-[11px] font-semibold {% if day.is_today %}w-5 h-5 rounded-full bg-primary-600 text-white flex items-center justify-center font-bold text-[10px]{% else %}text-slate-700 dark:text-slate-300{% endif %}">
+                        {% if day.date.day == 1 %}
+                        <span class="font-normal opacity-70 mr-0.5">{{ day.date|date:"M" }}</span>
+                        {% endif %}
+                        {{ day.day_num }}
+                    </span>
+
+                    {% if day.events_count > 0 %}
+                    <span class="text-[10px] text-slate-400 dark:text-slate-500 font-mono" x-text="visibleItems.length > 0 ? visibleItems.length : ''"></span>
+                    {% endif %}
+                </div>
+
+                {# Chips container #}
+                <div class="relative z-10 flex-1 space-y-1 overflow-hidden pointer-events-auto">
+                    <template x-for="event in visibleItems.slice(0, 3)" :key="event.id">
+                        <div @click.stop.prevent="openEventDetail(event)">
+                            <c-calendar-event-chip
+                                ::title="event.title"
+                                ::time_str="event.time_str"
+                                ::color_classes="event.color_classes"
+                                ::dot_color_class="event.dot_color_class"></c-calendar-event-chip>
+                        </div>
+                    </template>
+
+                    <template x-if="visibleItems.length > 3">
+                        <div @click.stop.prevent="openDayList(dayData)"
+                             class="text-[10px] font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 px-1 py-0.5 cursor-pointer select-none">
+                            +<span x-text="visibleItems.length - 3"></span> more
+                        </div>
+                    </template>
+                </div>
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    {# 4. Mobile Agenda View Container (shown below 768px) #}
+    <div class="block md:hidden space-y-3">
+        {% for week in weeks_data %}
+        {% for day in week %}
+        {% if day.is_current_month %}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 space-y-2.5 shadow-sm"
+             x-data="{
+                dayData: {
+                    date_str: '{{ day.date_str }}',
+                    date_formatted: '{{ day.date_formatted|escapejs }}',
+                    all_events: [
+                        {% for event in day.all_events %}
+                        {
+                            id: '{{ event.id }}',
+                            title: '{{ event.title|escapejs }}',
+                            raw_title: '{{ event.raw_title|escapejs }}',
+                            source_type: '{{ event.source_type }}',
+                            category_label: '{{ event.category_label|escapejs }}',
+                            edit_url: '{{ event.edit_url }}',
+                            time_str: '{{ event.time_str|escapejs }}',
+                            color_classes: '{{ event.color_classes }}',
+                            dot_color_class: '{{ event.dot_color_class }}',
+                            description: '{{ event.description|escapejs }}',
+                            date_str: '{{ event.date_str }}',
+                            assigned_employees: '{{ event.assigned_employees|escapejs }}',
+                            project_name: '{{ event.project_name|escapejs }}',
+                            project_url: '{{ event.project_url }}',
+                            responsible_person: '{{ event.responsible_person|escapejs }}',
+                            status: '{{ event.status|escapejs }}',
+                            planned_dates: '{{ event.planned_dates|escapejs }}',
+                            employee_name: '{{ event.employee_name|escapejs }}',
+                            leave_type: '{{ event.leave_type|escapejs }}',
+                            date_range: '{{ event.date_range|escapejs }}',
+                            supervisor_name: '{{ event.supervisor_name|escapejs }}',
+                            planned_work: '{{ event.planned_work|escapejs }}',
+                            completed_work: '{{ event.completed_work|escapejs }}',
+                            manpower_count: '{{ event.manpower_count }}'
+                        }{% if not forloop.last %},{% endif %}
+                        {% endfor %}
+                    ]
+                },
+                get visibleItems() {
+                    return this.dayData.all_events.filter(e => visibleSources.includes(e.source_type));
+                }
+             }"
+             x-show="visibleItems.length > 0">
+
+            {# Day Header #}
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-[12px] font-bold text-slate-800 dark:text-slate-100 {% if day.is_today %}text-primary-600 dark:text-primary-400{% endif %}">
+                        {{ day.date|date:"l, F j" }}
+                    </span>
+                    {% if day.is_today %}
+                    <c-badge variant="primary" size="sm" label="Today"></c-badge>
+                    {% endif %}
+                </div>
+
+                {% if is_admin_or_manager %}
+                <c-button href="{% url 'schedule:create' %}?date={{ day.date_str }}"
+                          variant="ghost"
+                          size="sm"
+                          icon="plus"
+                          label="Add"
+                          extra_class="min-h-[36px] text-primary-600 dark:text-primary-400"></c-button>
+                {% endif %}
+            </div>
+
+            {# Agenda Cards #}
+            <div class="space-y-2">
+                <template x-for="event in visibleItems" :key="event.id">
+                    <div @click="openEventDetail(event)">
+                        <c-calendar-agenda-card
+                            ::title="event.title"
+                            ::time_str="event.time_str"
+                            ::category_label="event.category_label"
+                            ::color_classes="event.color_classes"
+                            ::dot_color_class="event.dot_color_class"></c-calendar-agenda-card>
+                    </div>
+                </template>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% endfor %}
+    </div>
+
+    {# 5. Day Detail Modal #}
+    <c-modal id="calendar-detail-modal" ::title="modalTitle" size="md">
+        <div class="text-[12px] text-slate-600 dark:text-slate-300 space-y-3">
+            {# Mode A: Day Events List #}
+            <template x-if="modalMode === 'day_list'">
+                <div class="space-y-2.5">
+                    <template x-for="event in filteredEvents(modalDayEvents)" :key="event.id">
+                        <div x-data="{ expanded: false }"
+                             class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                            <div @click="expanded = !expanded; $nextTick(() => { if (window.lucide) window.lucide.createIcons(); })"
+                                 class="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-colors select-none min-h-[44px]">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="w-2 h-2 rounded-full shrink-0" :class="event.dot_color_class"></span>
+                                    <div class="min-w-0">
+                                        <p class="font-semibold text-slate-800 dark:text-slate-100 text-[12px] truncate" x-text="event.title"></p>
+                                        <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate" x-text="event.category_label"></p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 text-slate-400 shrink-0">
+                                    <span class="text-[11px] font-medium" x-text="event.time_str"></span>
+                                    <i data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''"></i>
+                                </div>
+                            </div>
+
+                            {# Accordion detail body #}
+                            <div x-show="expanded" x-cloak class="p-3.5 bg-slate-50/60 dark:bg-slate-950/60 border-t border-slate-100 dark:border-slate-800 space-y-2 text-[11px]">
+                                <p><strong class="text-slate-700 dark:text-slate-300">Description:</strong> <span class="whitespace-pre-line text-slate-600 dark:text-slate-400" x-text="event.description"></span></p>
+                                <p><strong class="text-slate-700 dark:text-slate-300">Scope:</strong> <span class="text-slate-600 dark:text-slate-400" x-text="event.project_name"></span></p>
+                                <p><strong class="text-slate-700 dark:text-slate-300">Target / Assignees:</strong> <span class="text-slate-600 dark:text-slate-400" x-text="event.assigned_employees"></span></p>
+                                <template x-if="event.source_type === 'manual_event' && event.edit_url">
+                                    <div class="pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                                        <c-button href="" ::href="event.edit_url" variant="primary" size="sm" label="Edit Event" extra_class="min-h-[38px]"></c-button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="filteredEvents(modalDayEvents).length === 0">
+                        <c-empty-state
+                            icon="calendar-x"
+                            title="No active schedule items"
+                            description="There are no items matching the active filters for this date."></c-empty-state>
+                    </template>
+                </div>
+            </template>
+
+            {# Mode B: Single Item Detail #}
+            <template x-if="modalMode === 'item_detail' && modalSelectedEvent">
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2 p-2.5 rounded-xl border" :class="modalSelectedEvent.color_classes">
+                        <span class="w-2 h-2 rounded-full shrink-0" :class="modalSelectedEvent.dot_color_class"></span>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-[13px] truncate" x-text="modalSelectedEvent.title"></h4>
+                            <p class="text-[10px] opacity-75" x-text="modalSelectedEvent.category_label"></p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 p-3 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-800 text-[12px]">
+                        <p><strong class="text-slate-700 dark:text-slate-300">Details:</strong> <span class="text-slate-600 dark:text-slate-400 whitespace-pre-line" x-text="modalSelectedEvent.description"></span></p>
+                        <p><strong class="text-slate-700 dark:text-slate-300">Date & Time:</strong> <span class="text-slate-600 dark:text-slate-400" x-text="modalSelectedEvent.date_str + ' (' + modalSelectedEvent.time_str + ')'"></span></p>
+                        <p><strong class="text-slate-700 dark:text-slate-300">Project / Scope:</strong> <span class="text-slate-600 dark:text-slate-400" x-text="modalSelectedEvent.project_name"></span></p>
+                        <p><strong class="text-slate-700 dark:text-slate-300">Assignees / Target:</strong> <span class="text-slate-600 dark:text-slate-400" x-text="modalSelectedEvent.assigned_employees"></span></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        {# Modal Footer Slot #}
+        <c-slot name="footer">
+            <div class="flex items-center justify-between w-full gap-2">
+                <div>
+                    {% if is_admin_or_manager %}
+                    <template x-if="modalMode === 'day_list'">
+                        <c-button href=""
+                                  ::href="'/schedule/create/?date=' + modalDateStr"
+                                  variant="primary"
+                                  size="sm"
+                                  icon="plus"
+                                  label="Add Event"
+                                  extra_class="min-h-[44px]"></c-button>
+                    </template>
+                    <template x-if="modalMode === 'item_detail' && modalSelectedEvent && modalSelectedEvent.source_type === 'manual_event' && modalSelectedEvent.edit_url">
+                        <c-button href=""
+                                  ::href="modalSelectedEvent.edit_url"
+                                  variant="primary"
+                                  size="sm"
+                                  icon="edit-2"
+                                  label="Edit Event"
+                                  extra_class="min-h-[44px]"></c-button>
+                    </template>
+                    {% endif %}
+                </div>
+
+                <c-button type="button"
+                          variant="secondary"
+                          size="sm"
+                          label="Close"
+                          extra_class="min-h-[44px]"
+                          @click="$dispatch('close-modal', {id: 'calendar-detail-modal'})"></c-button>
+            </div>
+        </c-slot>
+    </c-modal>
+</div>

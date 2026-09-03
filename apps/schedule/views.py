@@ -14,11 +14,12 @@ from .forms import ScheduleEventForm
 # Aggregation imports
 from apps.projects.models import ProjectTask, DailyProgressLog
 from apps.leave.models import LeaveRequest
+from apps.branches.models import Holiday, Branch
 from apps.notifications.models import Notification
 from apps.notifications.dispatch import send_email_notification
 
 class CalendarMonthView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager', 'staff']
+    allowed_roles = ['admin', 'system_owner', 'manager', 'staff', 'employee']
 
     def get(self, request, *args, **kwargs):
         today = timezone.localdate()
@@ -35,7 +36,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
             if month < 1 or month > 12:
                 month = today.month
                 year = today.year
-        except ValueError:
+        except (ValueError, TypeError):
             year = today.year
             month = today.month
 
@@ -51,57 +52,109 @@ class CalendarMonthView(RoleRequiredMixin, View):
         start_date = weeks[0][0]
         end_date = weeks[-1][-1]
 
-        # Get employee profile for scoping
-        # S4: Canonical Employee resolver instead of legacy profile:
+        # Get employee profile and branch for scoping
         profile = None
+        user_branch = None
         if request.user.is_authenticated:
-            # First look up Employee Master
             master_emp = getattr(request.user, 'employee_master', None)
             if master_emp:
                 profile = getattr(master_emp, 'legacy_profile', None)
+                user_branch = getattr(master_emp, 'branch', None)
             if not profile:
                 profile = getattr(request.user, 'employee_profile', None)
+            if not user_branch and profile:
+                user_branch = getattr(profile, 'branch', None)
 
         from apps.accounts.engine import PermissionEngine
         res = PermissionEngine.evaluate(request.user, 'schedule.manage')
-        is_staff_user = not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') == 'staff'
+        is_admin_or_manager = request.user.is_superuser or res.allowed or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'manager')
 
-        # Fetch manual events (optimized: prefetch assigned_to and project, prefetch users)
+        # Role-based scoping:
+        # Non-admin/manager roles: staff, employee
+        is_scoped_user = not is_admin_or_manager
+
+        # 1. Holidays (Government Holiday where branch=None; Office Holiday where branch matches user's branch)
+        holidays_qs = Holiday.objects.filter(date__range=(start_date, end_date))
+        if is_scoped_user:
+            if user_branch:
+                holidays_qs = holidays_qs.filter(Q(branch__isnull=True) | Q(branch=user_branch))
+            else:
+                holidays_qs = holidays_qs.filter(branch__isnull=True)
+        holidays = holidays_qs.select_related('branch')
+
+        # 2. Manual Schedule Events
         events_qs = ScheduleEvent.objects.filter(date__range=(start_date, end_date))
-        if is_staff_user:
-            events_qs = events_qs.filter(assigned_to=profile)
+        if is_scoped_user:
+            if profile:
+                events_qs = events_qs.filter(assigned_to=profile)
+            else:
+                events_qs = events_qs.none()
         events = events_qs.prefetch_related('assigned_to', 'assigned_to__user', 'project')
 
-        # Fetch external sources
-        # 1. Project Tasks
+        # 3. Project Tasks
         tasks_qs = ProjectTask.objects.filter(
             Q(planned_start__range=(start_date, end_date)) |
             Q(planned_finish__range=(start_date, end_date))
         )
-        if is_staff_user:
-            tasks_qs = tasks_qs.filter(responsible_person=profile)
+        if is_scoped_user:
+            if profile:
+                tasks_qs = tasks_qs.filter(responsible_person=profile)
+            else:
+                tasks_qs = tasks_qs.none()
         tasks = tasks_qs.select_related('project', 'responsible_person')
 
-        # 2. Approved Leaves (optimized select_related to include employee__user and leave_type)
+        # 4. Approved Leaves
         leaves_qs = LeaveRequest.objects.filter(
             status='approved',
             start_date__lte=end_date,
             end_date__gte=start_date
         )
-        if is_staff_user:
-            leaves_qs = leaves_qs.filter(employee=profile)
+        if is_scoped_user:
+            if profile:
+                leaves_qs = leaves_qs.filter(employee=profile)
+            else:
+                leaves_qs = leaves_qs.none()
         leaves = leaves_qs.select_related('employee', 'employee__user', 'leave_type')
 
-        # 3. Daily Progress Logs
+        # 5. Daily Progress Logs
         logs_qs = DailyProgressLog.objects.filter(date__range=(start_date, end_date))
-        if is_staff_user:
+        if is_scoped_user:
             logs_qs = logs_qs.filter(logged_by=request.user)
         logs = logs_qs.select_related('project')
 
-
         # Group all items by date
         events_by_date = defaultdict(list)
-        
+
+        # Add holidays
+        for hol in holidays:
+            is_gov = hol.branch is None
+            source_type = 'gov_holiday' if is_gov else 'office_holiday'
+            title = f"{'Govt: ' if is_gov else 'Office: '}{hol.name}"
+            color_classes = (
+                'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200/50 dark:border-rose-800/40 hover:bg-rose-100 dark:hover:bg-rose-900/40'
+                if is_gov else
+                'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-800/40 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+            )
+            dot_color_class = 'bg-rose-500' if is_gov else 'bg-amber-500'
+            category_label = 'Government Holiday' if is_gov else f"Office Holiday ({hol.branch.name if hol.branch else 'All Branches'})"
+            events_by_date[hol.date].append({
+                'id': f"holiday_{hol.pk}",
+                'title': title,
+                'raw_title': hol.name,
+                'description': f"{category_label} scheduled on {hol.date.strftime('%B %d, %Y')}.",
+                'source_type': source_type,
+                'category_label': category_label,
+                'edit_url': '',
+                'time_str': 'All Day',
+                'date_str': hol.date.strftime('%Y-%m-%d'),
+                'project_name': hol.branch.name if hol.branch else 'Public / Nationwide',
+                'assigned_employees': 'All employees' if is_gov else f"Branch {hol.branch.name if hol.branch else ''}",
+                'color_classes': color_classes,
+                'dot_color_class': dot_color_class,
+                'is_all_day': True,
+                'time_obj': datetime.min.time(),
+            })
+
         # Add manual events
         for event in events:
             time_str = event.start_time.strftime('%I:%M %p') if event.start_time else ""
@@ -110,8 +163,10 @@ class CalendarMonthView(RoleRequiredMixin, View):
             events_by_date[event.date].append({
                 'id': f"event_{event.pk}",
                 'title': event.title,
+                'raw_title': event.title,
                 'description': event.description or "No description provided.",
                 'source_type': 'manual_event',
+                'category_label': f"Event: {event.event_type}",
                 'edit_url': reverse('schedule:edit', args=[event.pk]),
                 'time_str': time_str or "All Day",
                 'date_str': event.date.strftime('%Y-%m-%d'),
@@ -136,7 +191,9 @@ class CalendarMonthView(RoleRequiredMixin, View):
                 events_by_date[task.planned_start].append({
                     'id': f"task_start_{task.pk}",
                     'title': title,
+                    'raw_title': task.activity,
                     'source_type': 'task_deadline',
+                    'category_label': f"Task Start ({task.status})",
                     'edit_url': '',
                     'time_str': 'All Day',
                     'project_name': proj_name,
@@ -155,7 +212,9 @@ class CalendarMonthView(RoleRequiredMixin, View):
                     events_by_date[task.planned_finish].append({
                         'id': f"task_finish_{task.pk}",
                         'title': title,
+                        'raw_title': task.activity,
                         'source_type': 'task_deadline',
+                        'category_label': f"Task Finish ({task.status})",
                         'edit_url': '',
                         'time_str': 'All Day',
                         'project_name': proj_name,
@@ -178,7 +237,9 @@ class CalendarMonthView(RoleRequiredMixin, View):
                 events_by_date[curr_day].append({
                     'id': f"leave_{leave.pk}_{curr_day.strftime('%Y%m%d')}",
                     'title': title,
+                    'raw_title': f"{leave.employee.full_name} - {leave.leave_type.name}",
                     'source_type': 'leave',
+                    'category_label': f"Leave ({leave.status.capitalize()})",
                     'edit_url': '',
                     'time_str': 'All Day',
                     'employee_name': leave.employee.full_name,
@@ -198,7 +259,9 @@ class CalendarMonthView(RoleRequiredMixin, View):
             events_by_date[log.date].append({
                 'id': f"log_{log.pk}",
                 'title': title,
+                'raw_title': f"Log: {log.project.name}",
                 'source_type': 'progress_log',
+                'category_label': "Progress Log",
                 'edit_url': '',
                 'time_str': 'All Day',
                 'project_name': log.project.name,
@@ -212,11 +275,15 @@ class CalendarMonthView(RoleRequiredMixin, View):
                 'time_obj': datetime.min.time(),
             })
 
-        # Sort each day's events: all-day first, then by time, then by title
+        # Sort each day's events: all-day / holidays first, then by time, then by title
         for day in events_by_date:
             events_by_date[day] = sorted(
                 events_by_date[day],
-                key=lambda x: (not x['is_all_day'], x['time_obj'], x['title'])
+                key=lambda x: (
+                    0 if x['source_type'] in ('gov_holiday', 'office_holiday') else (1 if x['is_all_day'] else 2),
+                    x['time_obj'],
+                    x['title']
+                )
             )
 
         # Build day-by-day weeks structures
@@ -233,6 +300,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
                     'is_current_month': day.month == month,
                     'is_today': day == today,
                     'all_events': day_events,
+                    'events_count': len(day_events),
                 })
             weeks_data.append(week_data)
 
@@ -253,8 +321,6 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         month_name = pycal.month_name[month]
 
-        is_admin_or_manager = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'schedule.manage').allowed or getattr(request.user, 'role', '') in ('admin', 'manager')
-
         context = {
             'weeks_data': weeks_data,
             'current_year': year,
@@ -266,7 +332,12 @@ class CalendarMonthView(RoleRequiredMixin, View):
             'next_month': next_month,
             'today': today,
             'is_admin_or_manager': is_admin_or_manager,
+            'user_branch': user_branch,
         }
+
+        if request.headers.get('HX-Request') and request.GET.get('partial') == 'true':
+            return render(request, 'schedule/partials/calendar_content.html', context)
+
         return render(request, 'schedule/calendar_month.html', context)
 
 

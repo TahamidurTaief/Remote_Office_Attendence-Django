@@ -1,0 +1,75 @@
+{% comment %}
+c-calendar-legend component
+Filter chips and legend indicators for calendar event types using <c-checkbox>.
+Toggles Alpine.js visibleSources array.
+{% endcomment %}
+<c-vars extra_class="" />
+
+<div class="flex flex-wrap items-center justify-between gap-2.5 bg-white dark:bg-slate-900 p-2.5 sm:p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-[11px] {{ extra_class }}">
+  <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-medium">
+    <i data-lucide="filter" class="w-3.5 h-3.5"></i>
+    <span>Filters:</span>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+    {# Government Holiday #}
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 min-h-[36px]">
+      <span class="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+      <c-checkbox name="filter_gov_holiday"
+                  id="filter_gov_holiday"
+                  value="gov_holiday"
+                  label="Govt Holiday"
+                  attrs="x-model='visibleSources'"></c-checkbox>
+    </div>
+
+    {# Office Holiday #}
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 min-h-[36px]">
+      <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+      <c-checkbox name="filter_office_holiday"
+                  id="filter_office_holiday"
+                  value="office_holiday"
+                  label="Office Holiday"
+                  attrs="x-model='visibleSources'"></c-checkbox>
+    </div>
+
+    {# Events #}
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 min-h-[36px]">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+      <c-checkbox name="filter_manual_event"
+                  id="filter_manual_event"
+                  value="manual_event"
+                  label="Events"
+                  attrs="x-model='visibleSources'"></c-checkbox>
+    </div>
+
+    {# Tasks #}
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 min-h-[36px]">
+      <span class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+      <c-checkbox name="filter_task_deadline"
+                  id="filter_task_deadline"
+                  value="task_deadline"
+                  label="Tasks"
+                  attrs="x-model='visibleSources'"></c-checkbox>
+    </div>
+
+    {# Leave #}
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 min-h-[36px]">
+      <span class="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
+      <c-checkbox name="filter_leave"
+                  id="filter_leave"
+                  value="leave"
+                  label="Leave"
+                  attrs="x-model='visibleSources'"></c-checkbox>
+    </div>
+
+    {# Progress Logs #}
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 min-h-[36px]">
+      <span class="w-2 h-2 rounded-full bg-teal-500 shrink-0"></span>
+      <c-checkbox name="filter_progress_log"
+                  id="filter_progress_log"
+                  value="progress_log"
+                  label="Logs"
+                  attrs="x-model='visibleSources'"></c-checkbox>
+    </div>
+  </div>
+</div>

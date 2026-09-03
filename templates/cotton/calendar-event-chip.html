@@ -1,0 +1,21 @@
+{% comment %}
+c-calendar-event-chip component
+Compact chip for an event on the desktop calendar cell.
+Props:
+- title: string
+- time_str: string
+- color_classes: string
+- dot_color_class: string
+{% endcomment %}
+<c-vars title="" time_str="" color_classes="" dot_color_class="" extra_class="" />
+
+<div class="group/chip flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] border truncate transition-all cursor-pointer hover:opacity-90 min-h-[22px] {{ color_classes }} {{ extra_class }}"
+     title="{{ title }}">
+  <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ dot_color_class }}"></span>
+  <span class="truncate flex-1 font-medium leading-tight">
+    {% if time_str and time_str != "All Day" %}
+      <span class="opacity-75 font-normal mr-0.5">{{ time_str }}</span>
+    {% endif %}
+    {{ title }}
+  </span>
+</div>

@@ -72,7 +72,7 @@ PINNABLE_MENUS = {
         "is_superuser_only": False,
     },
     "shift_schedule": {
-        "label": "Shift Schedule",
+        "label": "Calendar",
         "url_name": "schedule:month_view",
         "icon": "calendar",
         "roles": ["admin", "system_owner", "hr", "manager"],
