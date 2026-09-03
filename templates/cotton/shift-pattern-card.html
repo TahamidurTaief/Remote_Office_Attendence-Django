@@ -1,0 +1,123 @@
+{% comment %}
+c-shift-pattern-card component
+Displays branch shift schedule details (working days, hours, rules, policies).
+Props:
+- branch: Branch object
+- schedule: OfficeSchedule object
+- policy: AttendancePolicy object
+- is_admin: boolean
+- manage_url: string
+{% endcomment %}
+<c-vars branch="" schedule="" policy="" is_admin="false" manage_url="" extra_class="" />
+
+<div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm space-y-4 {{ extra_class }}">
+  {# Header #}
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center text-primary-600 dark:text-primary-400 shrink-0">
+        <i data-lucide="building-2" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h3 class="text-[14px] font-bold text-slate-800 dark:text-slate-100">
+            {{ branch.name|default:"General Office Schedule" }}
+          </h3>
+          {% if branch.is_active %}
+          <c-badge variant="success" size="sm" label="Active"></c-badge>
+          {% else %}
+          <c-badge variant="neutral" size="sm" label="Inactive"></c-badge>
+          {% endif %}
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+          {{ branch.address|default:"Configured branch operational timetable" }}
+        </p>
+      </div>
+    </div>
+
+    {% if is_admin and manage_url %}
+    <c-button href="{{ manage_url }}"
+              variant="secondary"
+              size="sm"
+              icon="settings"
+              label="Manage Schedule"
+              extra_class="min-h-[38px]"></c-button>
+    {% endif %}
+  </div>
+
+  {# Details Grid #}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[12px]">
+    {# Office Hours #}
+    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+      <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-medium">
+        <i data-lucide="clock" class="w-3.5 h-3.5 text-primary-600 dark:text-primary-400"></i>
+        <span>Work Hours</span>
+      </div>
+      <p class="text-[13px] font-bold text-slate-800 dark:text-slate-100">
+        {{ schedule.office_start_time|time:"g:i A" }} – {{ schedule.office_end_time|time:"g:i A" }}
+      </p>
+      <p class="text-[10px] text-slate-400">Asia/Dhaka Standard</p>
+    </div>
+
+    {# Late Threshold #}
+    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+      <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-medium">
+        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-500"></i>
+        <span>Late Rule</span>
+      </div>
+      <p class="text-[13px] font-bold text-slate-800 dark:text-slate-100">
+        After {{ schedule.late_after_minutes }} mins
+      </p>
+      <p class="text-[10px] text-slate-400">Marked as Late</p>
+    </div>
+
+    {# Early Checkout #}
+    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+      <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-medium">
+        <i data-lucide="log-out" class="w-3.5 h-3.5 text-rose-500"></i>
+        <span>Early Checkout</span>
+      </div>
+      <p class="text-[13px] font-bold text-slate-800 dark:text-slate-100">
+        {{ schedule.early_checkout_before_minutes }} mins before
+      </p>
+      <p class="text-[10px] text-slate-400">Flagged early departure</p>
+    </div>
+
+    {# Overtime #}
+    <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+      <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-medium">
+        <i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-500"></i>
+        <span>Overtime Rule</span>
+      </div>
+      <p class="text-[13px] font-bold text-slate-800 dark:text-slate-100">
+        {% if schedule.overtime_after_minutes > 0 %}
+          After {{ schedule.overtime_after_minutes }} mins
+        {% else %}
+          Immediate after end
+        {% endif %}
+      </p>
+      <p class="text-[10px] text-slate-400">Calculated on checkout</p>
+    </div>
+  </div>
+
+  {# Working Days Badges #}
+  <div class="pt-1">
+    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-2">Weekly Working Schedule:</span>
+    <div class="flex flex-wrap items-center gap-1.5">
+      {% for day_key, day_name in schedule.DAYS %}
+      <span class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors
+        {% if day_key in schedule.working_days %}
+          bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-800/60
+        {% else %}
+          bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 border-slate-200/50 dark:border-slate-700/50 opacity-60
+        {% endif %}">
+        {{ day_name }}
+        {% if day_key in schedule.working_days %}
+          <span class="text-[9px] opacity-75 font-normal ml-0.5">· Open</span>
+        {% else %}
+          <span class="text-[9px] opacity-75 font-normal ml-0.5">· Off</span>
+        {% endif %}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+</div>

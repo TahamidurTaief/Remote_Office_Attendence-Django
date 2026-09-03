@@ -40,6 +40,7 @@
         next_month="{{ next_month }}"
         today_year="{{ today.year }}"
         today_month="{{ today.month }}"
+        is_admin="{{ is_admin|yesno:'true,false' }}"
         is_admin_or_manager="{{ is_admin_or_manager|yesno:'true,false' }}"></c-calendar-toolbar>
 
     {# 2. Filter Bar & Legend #}
@@ -64,11 +65,13 @@
             {% for day in week %}
             <div class="relative min-h-[105px] lg:min-h-[120px] p-1.5 flex flex-col justify-between transition-colors
                         {% if day.is_current_month %}bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100{% else %}bg-slate-50/70 dark:bg-slate-950/70 text-slate-400 dark:text-slate-500{% endif %}
+                        {% if day.day_tint_class %}{{ day.day_tint_class }}{% endif %}
                         {% if day.is_today %}ring-1 ring-inset ring-primary-500/30 bg-primary-50/15 dark:bg-primary-950/20{% endif %}"
                  x-data="{
                     dayData: {
                         date_str: '{{ day.date_str }}',
                         date_formatted: '{{ day.date_formatted|escapejs }}',
+                        has_holiday: {{ day.has_holiday|yesno:'true,false' }},
                         all_events: [
                             {% for event in day.all_events %}
                             {
@@ -76,6 +79,8 @@
                                 title: '{{ event.title|escapejs }}',
                                 raw_title: '{{ event.raw_title|escapejs }}',
                                 source_type: '{{ event.source_type }}',
+                                is_holiday: {{ event.is_holiday|yesno:'true,false' }},
+                                is_gov_holiday: {{ event.is_gov_holiday|yesno:'true,false' }},
                                 category_label: '{{ event.category_label|escapejs }}',
                                 edit_url: '{{ event.edit_url }}',
                                 time_str: '{{ event.time_str|escapejs }}',
@@ -112,7 +117,7 @@
 
                 {# Cell header #}
                 <div class="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
-                    <span class="text-[11px] font-semibold {% if day.is_today %}w-5 h-5 rounded-full bg-primary-600 text-white flex items-center justify-center font-bold text-[10px]{% else %}text-slate-700 dark:text-slate-300{% endif %}">
+                    <span class="text-[11px] {% if day.day_badge_class %}px-1.5 py-0.5 rounded-md text-[10px] {{ day.day_badge_class }}{% elif day.is_today %}w-5 h-5 rounded-full bg-primary-600 text-white flex items-center justify-center font-bold text-[10px]{% else %}{% if day.has_holiday %}font-bold text-slate-900 dark:text-slate-100{% else %}font-semibold text-slate-700 dark:text-slate-300{% endif %}{% endif %}">
                         {% if day.date.day == 1 %}
                         <span class="font-normal opacity-70 mr-0.5">{{ day.date|date:"M" }}</span>
                         {% endif %}
@@ -124,15 +129,25 @@
                     {% endif %}
                 </div>
 
-                {# Chips container #}
+                {# Chips container: full-width banner for holidays, compact chip for other events #}
                 <div class="relative z-10 flex-1 space-y-1 overflow-hidden pointer-events-auto">
                     <template x-for="event in visibleItems.slice(0, 3)" :key="event.id">
                         <div @click.stop.prevent="openEventDetail(event)">
-                            <c-calendar-event-chip
-                                ::title="event.title"
-                                ::time_str="event.time_str"
-                                ::color_classes="event.color_classes"
-                                ::dot_color_class="event.dot_color_class"></c-calendar-event-chip>
+                            <template x-if="event.is_holiday">
+                                <c-calendar-holiday-banner
+                                    ::title="event.title"
+                                    ::category_label="event.category_label"
+                                    ::is_gov="event.is_gov_holiday ? 'true' : 'false'"
+                                    ::color_classes="event.color_classes"
+                                    ::dot_color_class="event.dot_color_class"></c-calendar-holiday-banner>
+                            </template>
+                            <template x-if="!event.is_holiday">
+                                <c-calendar-event-chip
+                                    ::title="event.title"
+                                    ::time_str="event.time_str"
+                                    ::color_classes="event.color_classes"
+                                    ::dot_color_class="event.dot_color_class"></c-calendar-event-chip>
+                            </template>
                         </div>
                     </template>
 
@@ -154,11 +169,12 @@
         {% for week in weeks_data %}
         {% for day in week %}
         {% if day.is_current_month %}
-        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 space-y-2.5 shadow-sm"
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 space-y-2.5 shadow-sm {% if day.day_tint_class %}{{ day.day_tint_class }}{% endif %}"
              x-data="{
                 dayData: {
                     date_str: '{{ day.date_str }}',
                     date_formatted: '{{ day.date_formatted|escapejs }}',
+                    has_holiday: {{ day.has_holiday|yesno:'true,false' }},
                     all_events: [
                         {% for event in day.all_events %}
                         {
@@ -166,6 +182,8 @@
                             title: '{{ event.title|escapejs }}',
                             raw_title: '{{ event.raw_title|escapejs }}',
                             source_type: '{{ event.source_type }}',
+                            is_holiday: {{ event.is_holiday|yesno:'true,false' }},
+                            is_gov_holiday: {{ event.is_gov_holiday|yesno:'true,false' }},
                             category_label: '{{ event.category_label|escapejs }}',
                             edit_url: '{{ event.edit_url }}',
                             time_str: '{{ event.time_str|escapejs }}',
@@ -199,9 +217,14 @@
             {# Day Header #}
             <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                 <div class="flex items-center gap-2">
-                    <span class="text-[12px] font-bold text-slate-800 dark:text-slate-100 {% if day.is_today %}text-primary-600 dark:text-primary-400{% endif %}">
+                    <span class="text-[12px] {% if day.has_holiday %}font-extrabold text-slate-900 dark:text-white{% else %}font-bold text-slate-800 dark:text-slate-100{% endif %} {% if day.is_today %}text-primary-600 dark:text-primary-400{% endif %}">
                         {{ day.date|date:"l, F j" }}
                     </span>
+                    {% if day.has_gov_holiday %}
+                    <c-badge variant="danger" size="sm" label="Govt Holiday"></c-badge>
+                    {% elif day.has_office_holiday %}
+                    <c-badge variant="warning" size="sm" label="Office Holiday"></c-badge>
+                    {% endif %}
                     {% if day.is_today %}
                     <c-badge variant="primary" size="sm" label="Today"></c-badge>
                     {% endif %}
@@ -225,6 +248,7 @@
                             ::title="event.title"
                             ::time_str="event.time_str"
                             ::category_label="event.category_label"
+                            ::is_holiday="event.is_holiday ? 'true' : 'false'"
                             ::color_classes="event.color_classes"
                             ::dot_color_class="event.dot_color_class"></c-calendar-agenda-card>
                     </div>

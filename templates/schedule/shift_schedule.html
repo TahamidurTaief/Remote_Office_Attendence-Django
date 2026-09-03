@@ -1,0 +1,26 @@
+<c-app-shell page_title="Shift Schedule | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
+    </c-slot>
+
+    <c-slot name="topbar">
+        <c-topbar title="Shift Schedule">
+            <c-slot name="actions">
+                {% if is_admin and manage_schedule_url %}
+                <c-button href="{{ manage_schedule_url }}"
+                          variant="accent"
+                          icon="settings"
+                          label="Manage Schedule"></c-button>
+                {% endif %}
+            </c-slot>
+        </c-topbar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <c-page-container>
+        <div id="shift-schedule-view-container">
+            {% include 'schedule/partials/shift_schedule_content.html' %}
+        </div>
+    </c-page-container>
+</c-app-shell>

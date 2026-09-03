@@ -1,0 +1,80 @@
+<div class="space-y-4"
+     x-data="{
+        selectedBranchId: '{{ selected_branch.id|default:'' }}',
+        switchBranch(newId) {
+            if (!newId) return;
+            window.location.href = '?branch_id=' + newId;
+        }
+     }">
+
+    {# 1. Top Header & Toolbar #}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center text-primary-600 dark:text-primary-400 shrink-0">
+                <i data-lucide="clock" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    <h2 class="text-[15px] font-bold text-slate-800 dark:text-slate-100 truncate tracking-tight">
+                        Shift Schedule
+                    </h2>
+                    {% if selected_branch %}
+                    <c-badge variant="neutral" size="sm" label="{{ selected_branch.name }}"></c-badge>
+                    {% endif %}
+                </div>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                    Operational branch office hours, working days, and grace policies.
+                </p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5 sm:justify-end">
+            {# Branch Selector for Admin / Manager #}
+            {% if is_admin_or_manager and branches %}
+            <div class="w-48 sm:w-56">
+                <c-select name="branch_selector"
+                          id="branch_selector"
+                          value="{{ selected_branch.id|default:'' }}"
+                          attrs="x-on:change='switchBranch($event.target.value)'">
+                    {% for b in branches %}
+                    <option value="{{ b.id }}" {% if selected_branch and selected_branch.id == b.id %}selected{% endif %}>
+                        {{ b.name }}
+                    </option>
+                    {% endfor %}
+                </c-select>
+            </div>
+            {% endif %}
+
+            {% if is_admin and manage_schedule_url %}
+            <c-button href="{{ manage_schedule_url }}"
+                      variant="primary"
+                      size="sm"
+                      icon="settings"
+                      label="Manage Schedule"
+                      extra_class="min-h-[38px]"></c-button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# 2. Shift Schedules Content #}
+    {% if schedules_list %}
+        <div class="space-y-4">
+            {% for item in schedules_list %}
+            <c-shift-pattern-card
+                :branch="item.branch"
+                :schedule="item.schedule"
+                :policy="item.policy"
+                is_admin="{{ is_admin|yesno:'true,false' }}"
+                manage_url="{{ item.manage_url }}"></c-shift-pattern-card>
+            {% endfor %}
+        </div>
+    {% else %}
+        {# Empty State for users with no assigned branch or no schedules #}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-8 shadow-sm">
+            <c-empty-state
+                icon="clock"
+                title="No Shift Schedule Available"
+                description="Your account currently has no branch assigned or no shift timetable configured. Please contact an administrator to assign your operational branch."></c-empty-state>
+        </div>
+    {% endif %}
+</div>

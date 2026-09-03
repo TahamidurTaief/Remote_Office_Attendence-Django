@@ -467,10 +467,78 @@ class CalendarHolidayAndPermissionScopingTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, 'Victory Day')
 
+    def test_full_day_holiday_cell_styling_and_banner_prominence(self):
+        url = reverse('schedule:month_view') + '?year=2026&month=12'
+        self.client.force_login(self.admin)
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+
+        # Look up Dec 16th week and day
+        weeks_data = res.context['weeks_data']
+        target_day = None
+        for week in weeks_data:
+            for day in week:
+                if day['date'] == date(2026, 12, 16):
+                    target_day = day
+                    break
+
+        self.assertIsNotNone(target_day)
+        self.assertTrue(target_day['has_holiday'])
+        self.assertTrue(target_day['has_gov_holiday'])
+        self.assertIn('bg-rose-50', target_day['day_tint_class'])
+        self.assertIn('bg-rose-600', target_day['day_badge_class'])
+        self.assertContains(res, 'group/holiday')
+        self.assertContains(res, 'Govt Holiday')
+
+    def test_shift_schedule_route_cross_branch_isolation(self):
+        from apps.branches.models import OfficeSchedule
+        sched_dhaka, _ = OfficeSchedule.objects.get_or_create(
+            branch=self.branch_dhaka,
+            defaults={'office_start_time': '09:00', 'office_end_time': '17:00', 'working_days': ['sunday', 'monday']}
+        )
+        sched_ctg, _ = OfficeSchedule.objects.get_or_create(
+            branch=self.branch_ctg,
+            defaults={'office_start_time': '10:00', 'office_end_time': '18:00', 'working_days': ['saturday', 'sunday']}
+        )
+
+        shifts_url = reverse('schedule:shift_schedule')
+
+        # 1. Dhaka Employee sees Dhaka schedule ONLY
+        self.client.force_login(self.emp1_user)
+        res_dhk = self.client.get(shifts_url)
+        self.assertEqual(res_dhk.status_code, 200)
+        self.assertEqual(res_dhk.context['selected_branch'], self.branch_dhaka)
+        self.assertContains(res_dhk, 'Dhaka Branch')
+        self.assertNotContains(res_dhk, 'Chittagong Branch')
+        self.assertFalse(res_dhk.context['is_admin'])
+
+        # 2. Ctg Employee sees Ctg schedule ONLY
+        self.client.force_login(self.emp2_user)
+        res_ctg = self.client.get(shifts_url)
+        self.assertEqual(res_ctg.status_code, 200)
+        self.assertEqual(res_ctg.context['selected_branch'], self.branch_ctg)
+        self.assertContains(res_ctg, 'Chittagong Branch')
+        self.assertNotContains(res_ctg, 'Dhaka Branch')
+
+        # 3. Employee with NO profile gets safe empty state without crashing
+        self.client.force_login(self.emp_no_profile)
+        res_no_prof = self.client.get(shifts_url)
+        self.assertEqual(res_no_prof.status_code, 200)
+        self.assertIsNone(res_no_prof.context['selected_branch'])
+        self.assertEqual(len(res_no_prof.context['schedules_list']), 0)
+        self.assertContains(res_no_prof, 'No Shift Schedule Available')
+
+        # 4. Admin sees branch selector and can inspect authorized branch schedules
+        self.client.force_login(self.admin)
+        res_admin = self.client.get(shifts_url + f'?branch_id={self.branch_ctg.id}')
+        self.assertEqual(res_admin.status_code, 200)
+        self.assertEqual(res_admin.context['selected_branch'], self.branch_ctg)
+        self.assertTrue(res_admin.context['is_admin'])
+        self.assertContains(res_admin, 'Manage Schedule')
+
     def _get_day_events(self, weeks_data, target_date):
         for week in weeks_data:
             for day in week:
                 if day['date'] == target_date:
                     return day['all_events']
         return []
-

@@ -8,13 +8,13 @@ Props:
 - color_classes: string
 - dot_color_class: string
 {% endcomment %}
-<c-vars title="" time_str="" category_label="" color_classes="" dot_color_class="" extra_class="" />
+<c-vars title="" time_str="" category_label="" is_holiday="false" color_classes="" dot_color_class="" extra_class="" />
 
-<div class="p-3 rounded-xl border flex items-center justify-between gap-3 cursor-pointer hover:opacity-95 transition-all min-h-[44px] {{ color_classes }} {{ extra_class }}">
+<div class="p-3 rounded-xl border flex items-center justify-between gap-3 cursor-pointer hover:opacity-95 transition-all min-h-[44px] {% if is_holiday %}ring-1 ring-inset ring-black/5 dark:ring-white/10 font-bold{% endif %} {{ color_classes }} {{ extra_class }}">
   <div class="flex items-center gap-2.5 min-w-0">
-    <span class="w-2 h-2 rounded-full shrink-0 {{ dot_color_class }}"></span>
+    <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ dot_color_class }}"></span>
     <div class="min-w-0">
-      <h4 class="text-[12px] font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">
+      <h4 class="text-[12px] {% if is_holiday %}font-bold text-[13px]{% else %}font-semibold{% endif %} text-slate-800 dark:text-slate-100 truncate leading-tight">
         {{ title }}
       </h4>
       {% if category_label %}

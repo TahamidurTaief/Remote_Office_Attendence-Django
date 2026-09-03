@@ -292,6 +292,21 @@ class CalendarMonthView(RoleRequiredMixin, View):
             week_data = []
             for day in week:
                 day_events = events_by_date[day]
+                day_holidays = [e for e in day_events if e['source_type'] in ('gov_holiday', 'office_holiday')]
+                has_holiday = len(day_holidays) > 0
+                has_gov_holiday = any(e['source_type'] == 'gov_holiday' for e in day_holidays)
+                has_office_holiday = any(e['source_type'] == 'office_holiday' for e in day_holidays)
+
+                # Day cell styling for Google Calendar-style full day prominence:
+                day_tint_class = ""
+                day_badge_class = ""
+                if has_gov_holiday:
+                    day_tint_class = "bg-rose-50/70 dark:bg-rose-950/25 border-rose-200/60 dark:border-rose-900/40"
+                    day_badge_class = "bg-rose-600 text-white font-bold"
+                elif has_office_holiday:
+                    day_tint_class = "bg-amber-50/70 dark:bg-amber-950/25 border-amber-200/60 dark:border-amber-900/40"
+                    day_badge_class = "bg-amber-600 text-white font-bold"
+
                 week_data.append({
                     'date': day,
                     'date_str': day.strftime('%Y-%m-%d'),
@@ -300,6 +315,12 @@ class CalendarMonthView(RoleRequiredMixin, View):
                     'is_current_month': day.month == month,
                     'is_today': day == today,
                     'all_events': day_events,
+                    'holidays': day_holidays,
+                    'has_holiday': has_holiday,
+                    'has_gov_holiday': has_gov_holiday,
+                    'has_office_holiday': has_office_holiday,
+                    'day_tint_class': day_tint_class,
+                    'day_badge_class': day_badge_class,
                     'events_count': len(day_events),
                 })
             weeks_data.append(week_data)
@@ -321,6 +342,8 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         month_name = pycal.month_name[month]
 
+        is_admin = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner')
+
         context = {
             'weeks_data': weeks_data,
             'current_year': year,
@@ -331,6 +354,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
             'next_year': next_year,
             'next_month': next_month,
             'today': today,
+            'is_admin': is_admin,
             'is_admin_or_manager': is_admin_or_manager,
             'user_branch': user_branch,
         }
@@ -339,6 +363,85 @@ class CalendarMonthView(RoleRequiredMixin, View):
             return render(request, 'schedule/partials/calendar_content.html', context)
 
         return render(request, 'schedule/calendar_month.html', context)
+
+
+class ShiftScheduleView(RoleRequiredMixin, View):
+    allowed_roles = ['admin', 'system_owner', 'manager', 'staff', 'employee']
+
+    def get(self, request, *args, **kwargs):
+        from apps.branches.models import OfficeSchedule, Branch
+        from apps.attendance.models import AttendancePolicy
+
+        is_admin_or_manager = (
+            request.user.is_superuser or
+            getattr(request.user, 'role', '') in ('admin', 'system_owner', 'manager')
+        )
+        is_admin = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner')
+
+        user_branch = None
+        if request.user.is_authenticated:
+            master_emp = getattr(request.user, 'employee_master', None)
+            if master_emp:
+                user_branch = getattr(master_emp, 'branch', None)
+            if not user_branch:
+                profile = getattr(request.user, 'employee_profile', None)
+                if profile:
+                    user_branch = getattr(profile, 'branch', None)
+
+        branches_qs = Branch.objects.filter(is_active=True).order_by('name')
+
+        # Branch resolution:
+        selected_branch = None
+        selected_branch_id = request.GET.get('branch_id')
+
+        if is_admin_or_manager:
+            if selected_branch_id:
+                try:
+                    selected_branch = branches_qs.filter(id=int(selected_branch_id)).first()
+                except (ValueError, TypeError):
+                    selected_branch = None
+            if not selected_branch:
+                selected_branch = user_branch or branches_qs.first()
+        else:
+            # Staff & Employee: strict isolation to their own branch
+            selected_branch = user_branch
+
+        schedules_list = []
+        if selected_branch:
+            schedule = OfficeSchedule.objects.filter(branch=selected_branch).first()
+            if not schedule:
+                # Ensure default schedule exists
+                schedule, _ = OfficeSchedule.objects.get_or_create(
+                    branch=selected_branch,
+                    defaults={
+                        'working_days': ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+                    }
+                )
+            policy = AttendancePolicy.objects.filter(branch=selected_branch).first()
+            manage_url = reverse('admin_panel:schedule_settings') if is_admin else ""
+            schedules_list.append({
+                'branch': selected_branch,
+                'schedule': schedule,
+                'policy': policy,
+                'manage_url': manage_url
+            })
+
+        manage_schedule_url = reverse('admin_panel:schedule_settings') if is_admin else ""
+
+        context = {
+            'branches': branches_qs if is_admin_or_manager else [],
+            'selected_branch': selected_branch,
+            'schedules_list': schedules_list,
+            'is_admin': is_admin,
+            'is_admin_or_manager': is_admin_or_manager,
+            'manage_schedule_url': manage_schedule_url,
+            'user_branch': user_branch,
+        }
+
+        if request.headers.get('HX-Request') and request.GET.get('partial') == 'true':
+            return render(request, 'schedule/partials/shift_schedule_content.html', context)
+
+        return render(request, 'schedule/shift_schedule.html', context)
 
 
 class ScheduleEventCreateView(RoleRequiredMixin, CreateView):

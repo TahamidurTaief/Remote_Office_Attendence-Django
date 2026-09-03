@@ -12,7 +12,7 @@ Props:
 - today_month: integer
 - is_admin_or_manager: boolean
 {% endcomment %}
-<c-vars month_name="" current_year="" prev_year="" prev_month="" next_year="" next_month="" today_year="" today_month="" is_admin_or_manager="false" extra_class="" />
+<c-vars month_name="" current_year="" prev_year="" prev_month="" next_year="" next_month="" today_year="" today_month="" is_admin_or_manager="false" is_admin="false" extra_class="" />
 
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm {{ extra_class }}">
   <div class="flex flex-wrap items-center justify-between sm:justify-start gap-2.5 sm:gap-4 min-w-0">
@@ -67,6 +67,15 @@ Props:
       <span class="font-medium text-slate-700 dark:text-slate-300">BST</span>
       <span class="text-slate-400 dark:text-slate-500 font-mono text-[10px]">(UTC+6)</span>
     </div>
+
+    {% if is_admin %}
+    <c-button href="{% url 'branches:holiday_list' %}"
+              variant="secondary"
+              size="sm"
+              icon="settings"
+              label="Manage Holidays"
+              extra_class="min-h-[38px]"></c-button>
+    {% endif %}
 
     {% if is_admin_or_manager %}
     <c-button href="{% url 'schedule:create' %}"

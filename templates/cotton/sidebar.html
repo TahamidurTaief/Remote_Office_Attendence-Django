@@ -418,7 +418,8 @@
              x-collapse.duration.200ms
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
-          <c-sidebar-link href="{% url 'schedule:month_view' %}" label="Calendar" key="shift_schedule" :pinned_keys="pinned_keys" is_active="{% if '/schedule/' in path %}true{% endif %}"></c-sidebar-link>
+          <c-sidebar-link href="{% url 'schedule:month_view' %}" label="Calendar" key="calendar" :pinned_keys="pinned_keys" is_active="{% if request.path == '/schedule/' %}true{% endif %}"></c-sidebar-link>
+          <c-sidebar-link href="{% url 'schedule:shift_schedule' %}" label="Shift Schedule" key="shift_schedule" :pinned_keys="pinned_keys" is_active="{% if '/schedule/shifts/' in request.path %}true{% endif %}"></c-sidebar-link>
         </div>
       </div>
 

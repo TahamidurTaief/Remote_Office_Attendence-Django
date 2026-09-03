@@ -71,11 +71,18 @@ PINNABLE_MENUS = {
         "roles": ["admin", "system_owner", "hr"],
         "is_superuser_only": False,
     },
-    "shift_schedule": {
+    "calendar": {
         "label": "Calendar",
         "url_name": "schedule:month_view",
         "icon": "calendar",
-        "roles": ["admin", "system_owner", "hr", "manager"],
+        "roles": ["admin", "system_owner", "hr", "manager", "staff", "employee"],
+        "is_superuser_only": False,
+    },
+    "shift_schedule": {
+        "label": "Shift Schedule",
+        "url_name": "schedule:shift_schedule",
+        "icon": "clock",
+        "roles": ["admin", "system_owner", "hr", "manager", "staff", "employee"],
         "is_superuser_only": False,
     },
     "all_projects": {
