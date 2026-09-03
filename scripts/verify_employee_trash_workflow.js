@@ -20,8 +20,17 @@ const confContent = fs.readFileSync(confModalPath, 'utf8');
 
 assert.ok(confContent.includes('hx-post='), 'confirmation form must use hx-post');
 assert.ok(confContent.includes('submitting'), 'confirmation form must track submitting state to prevent double submit');
-assert.ok(confContent.includes(':disabled="submitting"'), 'submit button must be disabled when submitting');
+assert.ok(confContent.includes('x-bind:disabled="submitting"'), 'submit button must be disabled when submitting via x-bind:disabled');
 assert.ok(confContent.includes('min-h-[44px]'), 'action buttons must meet 44px touch target requirement');
+assert.ok(confContent.includes('<c-button'), 'confirmation modal must use <c-button> components');
+assert.ok(confContent.includes('<c-checkbox'), 'confirmation modal must use <c-checkbox> component');
+assert.ok(confContent.includes('<c-slot name="footer">'), 'confirmation modal must use <c-slot name="footer"> for sticky actions');
+assert.ok(confContent.includes('form="employee-confirm-form"'), 'submit button must link to form using form="employee-confirm-form"');
+
+// Ensure NO raw buttons, checkboxes, or inline styles
+assert.ok(!confContent.includes('<button'), 'confirmation_modal.html must not contain raw <button> tags');
+assert.ok(!confContent.includes('<input type="checkbox"'), 'confirmation_modal.html must not contain raw <input type="checkbox"> tags');
+assert.ok(!confContent.includes('style='), 'confirmation_modal.html must not contain inline style attributes');
 
 // 3. Verify Master Table row ID contract
 const tablePath = path.join(__dirname, '..', 'templates', 'employees', 'partials', 'master_table.html');
