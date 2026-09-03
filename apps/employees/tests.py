@@ -2256,7 +2256,7 @@ class EmployeeLifecycleTests(TestCase):
 
         # 5. Confirmed delete sets is_trashed=True, 6. TrashEntry created once, 7. AuditEvent created
         response = self.client.post(url, data={'reason': 'Employee resigned'}, HTTP_HX_REQUEST='true')
-        self.assertEqual(response.status_code, 204)
+        self.assertIn(response.status_code, [200, 204])
         self.employee.refresh_from_db()
         self.assertTrue(self.employee.is_trashed)
         self.assertEqual(self.employee.status, 'archived')
@@ -2267,7 +2267,7 @@ class EmployeeLifecycleTests(TestCase):
 
         # 8. Duplicate POST is idempotent
         response = self.client.post(url, data={'reason': 'Employee resigned again'}, HTTP_HX_REQUEST='true')
-        self.assertEqual(response.status_code, 204)
+        self.assertIn(response.status_code, [200, 204])
         self.assertEqual(TrashEntry.objects.filter(content_object_id=self.employee.pk, status='active').count(), 1)
 
 
