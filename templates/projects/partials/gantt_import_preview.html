@@ -452,7 +452,6 @@
 
       <div class="flex items-center gap-2">
         <c-button variant="ghost" size="md" href="{% url 'projects:project_gantt_import' project.pk %}" label="Upload New" icon="upload" extra_class="min-h-[44px]" />
-        
         <form hx-post="{% url 'projects:project_gantt_import_confirm' project.pk batch.uuid %}"
               hx-target="#gantt-import-container"
               hx-swap="innerHTML"
