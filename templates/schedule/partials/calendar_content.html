@@ -110,11 +110,10 @@
                     }
                  }">
 
-                {# Background click and right-click handler for cell #}
+                {# Background click handler for cell #}
                 <div @click.prevent="{% if is_admin_or_manager %}openDayList(dayData){% else %}if(dayData.all_events.length > 0) openDayList(dayData){% endif %}"
-                     @contextmenu.prevent="{% if is_admin_or_manager %}openDayList(dayData){% else %}if(dayData.all_events.length > 0) openDayList(dayData){% endif %}"
                      class="absolute inset-0 z-0 hover:bg-slate-100/40 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
-                     title="Click or right-click to view full day details"></div>
+                     title="Click to view full day details"></div>
 
                 {# Cell header #}
                 <div class="relative z-10 flex items-center justify-between mb-1 pointer-events-none">
@@ -133,8 +132,7 @@
                 {# Chips container: full-width banner for holidays, compact chip for other events #}
                 <div class="relative z-10 flex-1 space-y-1 overflow-hidden pointer-events-auto">
                     <template x-for="event in visibleItems.slice(0, 3)" :key="event.id">
-                        <div @click.stop.prevent="openEventDetail(event)"
-                             @contextmenu.stop.prevent="openEventDetail(event)">
+                        <div @click.stop.prevent="openEventDetail(event)">
                             <template x-if="event.is_holiday">
                                 <c-calendar-holiday-banner
                                     ::title="event.title"
@@ -155,7 +153,6 @@
 
                     <template x-if="visibleItems.length > 3">
                         <div @click.stop.prevent="openDayList(dayData)"
-                             @contextmenu.stop.prevent="openDayList(dayData)"
                              class="text-[10px] font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 px-1 py-0.5 cursor-pointer select-none">
                             +<span x-text="visibleItems.length - 3"></span> more
                         </div>
@@ -241,8 +238,7 @@
             {# Agenda Cards #}
             <div class="space-y-2">
                 <template x-for="event in visibleItems" :key="event.id">
-                    <div @click="openEventDetail(event)"
-                         @contextmenu.stop.prevent="openEventDetail(event)">
+                    <div @click="openEventDetail(event)">
                         <c-calendar-agenda-card
                             ::title="event.title"
                             ::time_str="event.time_str"
@@ -259,8 +255,8 @@
         {% endfor %}
     </div>
 
-    {# 5. Day Detail Modal (Drawer position: right) #}
-    <c-modal id="calendar-detail-modal" ::title="modalTitle" size="md" position="right">
+    {# 5. Day Detail Modal #}
+    <c-modal id="calendar-detail-modal" ::title="modalTitle" size="md">
         <div class="text-[12px] text-slate-600 dark:text-slate-300 space-y-3">
             {# Mode A: Day Events List #}
             <template x-if="modalMode === 'day_list'">

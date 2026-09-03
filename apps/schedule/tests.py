@@ -8,7 +8,7 @@ from apps.notifications.models import Notification
 # Aggregation test imports
 from apps.projects.models import Project, ProjectType, ProjectTask, DailyProgressLog
 from apps.leave.models import LeaveRequest, LeaveType
-from apps.branches.models import Branch
+from apps.branches.models import Branch, Holiday
 from apps.employees.models import EmployeeProfile
 
 User = get_user_model()
@@ -595,20 +595,155 @@ class CalendarHolidayAndPermissionScopingTests(TestCase):
         # Manager selectable branches must only contain user's branch
         self.assertEqual(list(res.context['branches']), [self.branch_dhaka])
 
-    def test_calendar_right_click_contextmenu_and_right_drawer_modal(self):
-        """Verify calendar content has @contextmenu handlers and the right-side drawer modal."""
+    def test_calendar_accessible_cotton_detail_modal(self):
+        """Verify calendar content has accessible Cotton modal for day and event details."""
         url = reverse('schedule:month_view') + '?year=2026&month=12'
         self.client.force_login(self.mgr_user)
         res = self.client.get(url)
         self.assertEqual(res.status_code, 200)
 
         content = res.content.decode()
-        self.assertIn('@contextmenu.prevent="openDayList(dayData)"', content)
-        self.assertIn('@contextmenu.stop.prevent="openEventDetail(event)"', content)
+        self.assertIn('openDayList(dayData)', content)
+        self.assertIn('openEventDetail(event)', content)
         self.assertIn('id="modal-calendar-detail-modal"', content)
-        # Rendered cotton modal with position="right" includes right-drawer placement classes
-        self.assertIn('justify-end', content)
-        self.assertIn('translate-x-full', content)
+        # Verify standard center accessible modal structure
+        self.assertIn('ft-modal', content)
+
+    def test_e2e_holiday_crud_calendar_rendering_and_htmx_flow(self):
+        """End-to-end flow:
+        - Admin creates global Government Holiday and branch Office Holiday via Holiday forms.
+        - Calendar displays full-cell tint, bold day number, and full-width holiday banners.
+        - Update operation reflects immediately in calendar.
+        - Delete operation reflects immediately in calendar.
+        - HTMX month navigation (prev, next, today) returns correct partial view and preserved state.
+        - Calendar (/schedule/) and Shift Schedule (/schedule/shifts/) remain separate submenu routes.
+        """
+        # 1. Admin login
+        self.client.force_login(self.admin)
+
+        # 2. Admin creates global Government Holiday via holiday_add view
+        create_url = reverse('branches:holiday_add')
+        res_create_gov = self.client.post(create_url, {
+            'name': 'International Mother Language Day',
+            'date': '2026-02-21',
+            'branch': ''  # Global / all branches
+        })
+        self.assertEqual(res_create_gov.status_code, 302)
+        gov_hol = Holiday.objects.get(name='International Mother Language Day')
+        self.assertIsNone(gov_hol.branch)
+
+        # 3. Admin creates branch Office Holiday via holiday_add view
+        res_create_off = self.client.post(create_url, {
+            'name': 'Dhaka Founders Day',
+            'date': '2026-02-21',
+            'branch': str(self.branch_dhaka.id)
+        })
+        self.assertEqual(res_create_off.status_code, 302)
+        off_hol = Holiday.objects.get(name='Dhaka Founders Day')
+        self.assertEqual(off_hol.branch, self.branch_dhaka)
+
+        # 4. Open /schedule/ for Feb 2026 and verify rendering
+        cal_feb_url = reverse('schedule:month_view') + '?year=2026&month=2'
+        res_cal = self.client.get(cal_feb_url)
+        self.assertEqual(res_cal.status_code, 200)
+
+        # Verify full-cell tint, bold day number, and banners in context
+        weeks_feb = res_cal.context['weeks_data']
+        feb_21_day = None
+        for w in weeks_feb:
+            for d in w:
+                if d['date'] == date(2026, 2, 21):
+                    feb_21_day = d
+                    break
+        self.assertIsNotNone(feb_21_day)
+        self.assertTrue(feb_21_day['has_holiday'])
+        self.assertTrue(feb_21_day['has_gov_holiday'])
+        self.assertTrue(feb_21_day['has_office_holiday'])
+        self.assertIn('bg-rose-50', feb_21_day['day_tint_class'])
+        self.assertIn('bg-rose-600', feb_21_day['day_badge_class'])
+
+        # Check content presence
+        cal_html = res_cal.content.decode()
+        self.assertIn('International Mother Language Day', cal_html)
+        self.assertIn('Dhaka Founders Day', cal_html)
+        self.assertIn('Govt Holiday', cal_html)
+
+        # 5. Update operation: rename holiday
+        edit_url = reverse('branches:holiday_edit', kwargs={'pk': off_hol.pk})
+        res_edit = self.client.post(edit_url, {
+            'name': 'Dhaka Innovation Day',
+            'date': '2026-02-21',
+            'branch': str(self.branch_dhaka.id)
+        })
+        self.assertEqual(res_edit.status_code, 302)
+
+        res_cal_updated = self.client.get(cal_feb_url)
+        self.assertContains(res_cal_updated, 'Dhaka Innovation Day')
+        self.assertNotContains(res_cal_updated, 'Dhaka Founders Day')
+
+        # 6. Delete operation: delete branch holiday
+        del_url = reverse('branches:holiday_delete', kwargs={'pk': off_hol.pk})
+        res_del = self.client.post(del_url, follow=True)
+        self.assertEqual(res_del.status_code, 200)
+
+        # Confirm holiday deleted from calendar grid
+        res_cal_after_del = self.client.get(cal_feb_url)
+        # Verify directly in weeks_data that the holiday no longer exists in Feb 21 events
+        feb_events_after_del = self._get_day_events(res_cal_after_del.context['weeks_data'], date(2026, 2, 21))
+        titles_after_del = [e['raw_title'] for e in feb_events_after_del]
+        self.assertNotIn('Dhaka Innovation Day', titles_after_del)
+        self.assertIn('International Mother Language Day', titles_after_del)
+
+        # 7. HTMX navigation: Previous month (Jan 2026) and Next month (Mar 2026)
+        cal_prev_url = reverse('schedule:month_view') + '?year=2026&month=1&partial=true'
+        res_prev = self.client.get(cal_prev_url, HTTP_HX_REQUEST='true')
+        self.assertEqual(res_prev.status_code, 200)
+        self.assertEqual(res_prev.context['current_month'], 1)
+        self.assertContains(res_prev, 'January 2026')
+
+        cal_next_url = reverse('schedule:month_view') + '?year=2026&month=3&partial=true'
+        res_next = self.client.get(cal_next_url, HTTP_HX_REQUEST='true')
+        self.assertEqual(res_next.status_code, 200)
+        self.assertEqual(res_next.context['current_month'], 3)
+        self.assertContains(res_next, 'March 2026')
+
+        # 8. Verify Shift Schedule route is distinct and does not share calendar content
+        shifts_url = reverse('schedule:shift_schedule')
+        res_shifts = self.client.get(shifts_url)
+        self.assertEqual(res_shifts.status_code, 200)
+        self.assertContains(res_shifts, 'Shift Schedule')
+        self.assertContains(res_shifts, 'Work Hours')
+        self.assertNotContains(res_shifts, 'International Mother Language Day')
+
+    def test_role_matrix_calendar_and_shift_schedule_access(self):
+        """Verify role-based branch isolation across Admin, Manager, Staff, and Employee."""
+        # 1. Admin: global access across all branches
+        self.client.force_login(self.admin)
+        res_admin = self.client.get(reverse('schedule:shift_schedule') + f'?branch_id={self.branch_ctg.id}')
+        self.assertEqual(res_admin.status_code, 200)
+        self.assertEqual(res_admin.context['selected_branch'], self.branch_ctg)
+        self.assertTrue(res_admin.context['is_admin'])
+
+        # 2. Manager: isolated strictly to assigned branch (Dhaka)
+        self.client.force_login(self.mgr_user)
+        res_mgr = self.client.get(reverse('schedule:shift_schedule') + f'?branch_id={self.branch_ctg.id}')
+        self.assertEqual(res_mgr.status_code, 200)
+        self.assertEqual(res_mgr.context['selected_branch'], self.branch_dhaka)
+        self.assertFalse(res_mgr.context['is_admin'])
+
+        # 3. Staff: isolated strictly to assigned branch (Dhaka)
+        self.client.force_login(self.emp1_user)
+        res_staff = self.client.get(reverse('schedule:shift_schedule') + f'?branch_id={self.branch_ctg.id}')
+        self.assertEqual(res_staff.status_code, 200)
+        self.assertEqual(res_staff.context['selected_branch'], self.branch_dhaka)
+        self.assertFalse(res_staff.context['is_admin'])
+
+        # 4. Employee: isolated strictly to assigned branch (Ctg)
+        self.client.force_login(self.emp2_user)
+        res_emp = self.client.get(reverse('schedule:shift_schedule') + f'?branch_id={self.branch_dhaka.id}')
+        self.assertEqual(res_emp.status_code, 200)
+        self.assertEqual(res_emp.context['selected_branch'], self.branch_ctg)
+        self.assertFalse(res_emp.context['is_admin'])
 
     def _get_day_events(self, weeks_data, target_date):
         for week in weeks_data:
