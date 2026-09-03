@@ -207,6 +207,16 @@
 
     {# ── TAB 1: Tasks ─────────────────────────────────────────────────── #}
     <div x-show="activeTab === 'tasks'" x-cloak class="space-y-3">
+        {% for task in tasks %}{% if task.status == 'Delayed' %}
+        <c-card padding="sm">
+            <div class="flex items-center gap-2 text-[12px] text-amber-800 dark:text-amber-300">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-500 shrink-0"></i>
+                <span class="font-semibold">Delay alert:</span>
+                <span>One or more tasks are marked <strong>Delayed</strong>. Review and update schedules as needed.</span>
+            </div>
+        </c-card>
+        {% endif %}{% endfor %}
+
         <c-card padding="sm">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
                 {# Status Pills #}
@@ -292,7 +302,7 @@
             </div>
             {% empty %}
             <c-card padding="lg">
-                <c-empty-state icon="list-checks" title="No tasks defined" description="Click 'Add Task' above to start tracking work."></c-empty-state>
+                <c-empty-state icon="list-checks" title="No tasks found" description="Click 'Add Task' above to start tracking work."></c-empty-state>
             </c-card>
             {% endfor %}
         </div>
@@ -356,7 +366,7 @@
                     {% empty %}
                     <tr>
                         <td colspan="7" class="py-8 text-center text-gray-400">
-                            <c-empty-state icon="list-checks" title="No tasks defined" description="Add tasks manually or apply a template."></c-empty-state>
+                            <c-empty-state icon="list-checks" title="No tasks found" description="Add tasks manually or apply a template."></c-empty-state>
                         </td>
                     </tr>
                     {% endfor %}
@@ -383,6 +393,9 @@
                 subtitle="Manpower: {{ log.manpower_count|default:'0' }} workers">
                 <c-slot name="meta">
                     <div class="w-full space-y-1">
+                        {% if log.planned_work %}
+                        <p class="text-[11px] text-gray-700 dark:text-gray-300"><strong>Planned:</strong> {{ log.planned_work|truncatechars:100 }}</p>
+                        {% endif %}
                         {% if log.completed_work %}
                         <p class="text-[11px] text-gray-700 dark:text-gray-300"><strong>Done:</strong> {{ log.completed_work|truncatechars:100 }}</p>
                         {% endif %}
@@ -414,6 +427,7 @@
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Supervisor</th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Manpower</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Planned Work</th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Completed Work</th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Delays</th>
                         <th class="py-2.5 px-3 text-right text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
@@ -423,6 +437,7 @@
                         <td class="py-2.5 px-3 text-[11px] font-bold text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap">{{ log.date|date:"d/m/Y" }}</td>
                         <td class="py-2.5 px-3 text-[12px] text-gray-700 dark:text-gray-300 font-medium">{{ log.supervisor_name }}</td>
                         <td class="py-2.5 px-3 text-[11px] text-gray-600 dark:text-gray-400 font-mono">{{ log.manpower_count|default:"0" }}</td>
+                        <td class="py-2.5 px-3 text-[12px] text-gray-800 dark:text-gray-200 max-w-xs truncate">{{ log.planned_work|default:"—" }}</td>
                         <td class="py-2.5 px-3 text-[12px] text-gray-800 dark:text-gray-200 max-w-xs truncate">{{ log.completed_work }}</td>
                         <td class="py-2.5 px-3 text-[11px]">
                             {% if log.delay_reason %}
@@ -606,11 +621,11 @@
                         <td class="py-2.5 px-3 text-[11px] text-gray-800 dark:text-gray-200 font-mono font-bold">{{ mat.balance }}</td>
                         <td class="py-2.5 px-3">
                             {% if mat.received_qty >= mat.required_qty %}
-                            <c-badge variant="success" size="sm" label="Fulfilled"></c-badge>
+                            <c-badge variant="success" size="sm" label="Fully Received"></c-badge>
                             {% elif mat.received_qty > 0 %}
                             <c-badge variant="warning" size="sm" label="Partial"></c-badge>
                             {% else %}
-                            <c-badge variant="danger" size="sm" label="Zero"></c-badge>
+                            <c-badge variant="danger" size="sm" label="Zero Received"></c-badge>
                             {% endif %}
                         </td>
                         <td class="py-2.5 px-3">
