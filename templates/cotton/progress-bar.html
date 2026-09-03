@@ -1,0 +1,24 @@
+{% comment %} c-progress-bar component
+   Props:
+   - value: current value or percentage (default: 0)
+   - label: label text (11px)
+   - show_text: boolean whether to show percentage text (default: true)
+   - size: sm (h-1.5) | md (h-2, default)
+   - is_delayed: boolean (uses danger color if delayed)
+   - variant: primary (default) | success | warning | danger
+   - extra_class: extra styling classes
+{% endcomment %}
+<div class="w-full flex flex-col gap-1 {{ extra_class }}">
+  {% if label or show_text != False and show_text != 'False' and show_text != 'false' %}
+  <div class="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+    {% if label %}<span>{{ label }}</span>{% else %}<span>Progress</span>{% endif %}
+    {% if show_text != False and show_text != 'False' and show_text != 'false' %}
+      <span class="font-semibold text-gray-700 dark:text-gray-300 text-[11px]">{{ value|default:0 }}%</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class="w-full bg-gray-100 dark:bg-gray-800 rounded-full {% if size == 'sm' %}h-1.5{% else %}h-2{% endif %} overflow-hidden">
+    <div class="h-full rounded-full transition-all duration-300 {% if is_delayed or variant == 'danger' %}bg-red-500{% elif variant == 'success' %}bg-emerald-500{% elif variant == 'warning' %}bg-amber-500{% else %}bg-primary{% endif %}"
+         style="width: {{ value|default:0 }}%"></div>
+  </div>
+</div>

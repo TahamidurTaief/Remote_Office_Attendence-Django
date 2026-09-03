@@ -1,0 +1,55 @@
+{% comment %} c-gantt-mobile-card component
+   Encapsulates mobile task card in Gantt chart timeline view.
+{% endcomment %}
+<div class="bg-white dark:bg-slate-900 rounded-xl border p-3 shadow-xs transition-colors"
+     :class="task.is_delayed ? 'border-red-200 dark:border-red-800/60 bg-red-50/40 dark:bg-red-950/20' : 'border-gray-100 dark:border-slate-800'">
+    <div class="flex items-start justify-between gap-2">
+        <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-[10px] text-gray-400 font-mono flex-shrink-0" x-text="'#'+task.order"></span>
+            <template x-if="task.is_milestone">
+                <span class="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0 inline-block"></span>
+            </template>
+            <span class="text-[12px] font-semibold text-gray-800 dark:text-gray-100 truncate" x-text="task.activity"></span>
+        </div>
+        <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
+              :class="{
+                  'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300': task.is_delayed,
+                  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': !task.is_delayed && task.status==='Completed',
+                  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300': !task.is_delayed && task.status==='In Progress',
+                  'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300': !task.is_delayed && task.status==='Not Started',
+              }"
+              x-text="task.is_delayed ? 'Delayed' : task.status"></span>
+    </div>
+
+    <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+        <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+        <span x-text="(task.planned_start || '—') + ' → ' + (task.planned_finish || '—')"></span>
+    </div>
+
+    {# Progress bar #}
+    <div class="mt-2">
+        <div class="flex items-center justify-between mb-0.5">
+            <span class="text-[10px] text-gray-500 dark:text-gray-400">Progress</span>
+            <span class="text-[10px] font-semibold text-gray-700 dark:text-gray-300" x-text="task.progress_percent + '%'"></span>
+        </div>
+        <div class="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+            <div class="h-1.5 rounded-full transition-all"
+                 :class="task.is_delayed ? 'bg-red-400' : 'bg-primary'"
+                 :style="`width: ${task.progress_percent}%`"></div>
+        </div>
+    </div>
+
+    {# Dependencies (mobile) #}
+    <template x-if="task.dependencies && task.dependencies.length > 0">
+        <div class="mt-2 flex flex-wrap gap-1">
+            <template x-for="dep in task.dependencies" :key="dep.predecessor_id">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-primary-50 dark:bg-primary-950/40 text-[9px] text-primary-700 dark:text-primary-300 font-medium border border-primary-100 dark:border-primary-800/40">
+                    ← #<span x-text="taskOrderById(dep.predecessor_id)"></span>&nbsp;<span x-text="dep.type"></span>
+                    <template x-if="dep.lag !== 0">
+                        <span x-text="(dep.lag > 0 ? '+' : '') + dep.lag + 'd'"></span>
+                    </template>
+                </span>
+            </template>
+        </div>
+    </template>
+</div>

@@ -1,22 +1,27 @@
-<c-app-shell page_title="Audit Activity Logs | FieldTrack" active_href="{% url 'audit:activity_list' %}">
-    <c-slot name="sidebar">
-        <c-sidebar active_href="{% url 'audit:activity_list' %}"></c-sidebar>
-    </c-slot>
+<c-app-shell page_title="{% if project_obj %}Audit Logs: {{ project_obj.name }}{% else %}Audit Activity Logs{% endif %} | FieldTrack" active_href="{% url 'audit:activity_list' %}">
+    <c-page-container>
+        <!-- Header Card -->
+        <c-card padding="sm">
+            <c-section-header
+                title="{% if project_obj %}Audit: {{ project_obj.name }}{% else %}Audit &amp; Activity Logs{% endif %}"
+                subtitle="{% if project_obj %}Audit trail for project #{{ object_id }}{% else %}Scoped database modification event details{% endif %}">
+                <c-slot name="actions">
+                    {% if project_obj %}
+                        <c-button href="{% url 'projects:project_detail' project_obj.pk %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Project"></c-button>
+                    {% elif object_id and module_filter == 'projects' %}
+                        <c-button href="{% url 'projects:project_detail' object_id %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Project"></c-button>
+                    {% endif %}
+                    <c-button href="{% url 'audit:trash_list' %}" variant="secondary" size="sm" icon="trash-2" label="Trash &amp; Recovery"></c-button>
+                </c-slot>
+            </c-section-header>
+        </c-card>
 
-    <c-slot name="topbar">
-        <c-topbar title="Audit & Activity Logs" subtitle="Scoped database modification event details">
-            <c-slot name="actions">
-                <c-button href="{% url 'audit:trash_list' %}" variant="secondary" size="sm" icon="trash-2" label="Trash & Recovery"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
-
-    <c-command-palette></c-command-palette>
-
-    <div class="p-4 lg:p-6 w-full space-y-4 max-w-7xl mx-auto">
         <!-- Filter Bar Card -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'audit:activity_list' %}" hx-get="{% url 'audit:activity_list' %}" hx-target="#activity-table-container" hx-trigger="keyup changed delay:300ms from:input, change from:select">
+                {% if object_id %}
+                    <input type="hidden" name="object_id" value="{{ object_id }}">
+                {% endif %}
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-end">
                     <c-input type="text" name="q" label="Search" value="{{ search_query }}" placeholder="Search actor, object, reason..." icon="search"></c-input>
                     <c-select name="module" label="Module" value="{{ module_filter }}">
@@ -37,5 +42,5 @@
         <div id="activity-table-container">
             {% include "audit/partials/activity_table.html" %}
         </div>
-    </div>
+    </c-page-container>
 </c-app-shell>

@@ -173,6 +173,7 @@ class ActivityListView(LoginRequiredMixin, View):
         module = request.GET.get("module", "").strip().lower()
         action = request.GET.get("action", "").strip().lower()
         search = request.GET.get("q", "").strip()
+        object_id = request.GET.get("object_id", "").strip()
 
         if module:
             if module == "tasks":
@@ -181,6 +182,9 @@ class ActivityListView(LoginRequiredMixin, View):
                 qs = qs.filter(Q(module__iexact="projects") & ~Q(object_type__iexact="ProjectTask"))
             else:
                 qs = qs.filter(module__iexact=module)
+
+        if object_id:
+            qs = qs.filter(object_id=object_id)
 
         if action:
             qs = qs.filter(action__iexact=action)
@@ -205,12 +209,21 @@ class ActivityListView(LoginRequiredMixin, View):
         page_number = request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)
 
+        object_id = request.GET.get("object_id", "").strip()
+        module_val = request.GET.get("module", "").strip().lower()
+        project_obj = None
+        if module_val == "projects" and object_id and object_id.isdigit():
+            from apps.projects.models import Project
+            project_obj = Project.objects.filter(pk=int(object_id)).first()
+
         context = {
             "page_obj": page_obj,
             "events": page_obj.object_list,
             "module_filter": request.GET.get("module", "").strip(),
             "action_filter": request.GET.get("action", "").strip(),
             "search_query": request.GET.get("q", "").strip(),
+            "object_id": object_id,
+            "project_obj": project_obj,
             "module_choices": self.MODULE_CHOICES,
             "action_choices": self.ACTION_CHOICES,
         }

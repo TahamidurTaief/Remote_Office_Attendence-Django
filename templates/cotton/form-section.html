@@ -1,0 +1,23 @@
+{% comment %} c-form-section component
+   Props:
+   - title: section title (13px max)
+   - subtitle: section description (11px max)
+   - columns: grid columns for sm screens (default: 6)
+   - extra_class: extra CSS classes
+   Slot: form fields
+{% endcomment %}
+<div class="space-y-3 pt-2 first:pt-0 {{ extra_class }}">
+  {% if title or subtitle %}
+  <div class="pb-2 border-b border-gray-100 dark:border-slate-800">
+    {% if title %}
+      <h4 class="text-[13px] font-semibold text-gray-900 dark:text-white">{{ title }}</h4>
+    {% endif %}
+    {% if subtitle %}
+      <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{{ subtitle }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class="grid grid-cols-1 sm:grid-cols-{{ columns|default:'6' }} gap-3 sm:gap-4">
+    {{ slot }}
+  </div>
+</div>

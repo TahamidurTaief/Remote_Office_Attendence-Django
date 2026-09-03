@@ -1,294 +1,164 @@
 {% load static %}
-<c-app-shell page_title="Gantt Chart: {{ project.name }} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4" x-data="ganttChart()" x-init="init()">
+<c-app-shell page_title="Gantt: {{ project.name }} | FieldTrack" active_href="{{ request.path }}">
+<c-page-container x-data="ganttChart()" x-init="init()">
 
-    {# ── Header ──────────────────────────────────────────────────────── #}
-    <div class="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-            <div class="flex items-center gap-2.5">
-                <a href="{% url 'projects:project_detail' project.pk %}"
-                   class="p-1.5 bg-white rounded-lg text-gray-500 hover:bg-gray-100 transition-colors border border-gray-100">
-                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
-                </a>
-                <div>
-                    <h2 class="text-[14px] font-semibold text-gray-900">Gantt: {{ project.name }}</h2>
-                    <p class="text-[11px] text-gray-500 mt-0.5">
-                        {{ chart_start|date:"d M Y" }} &ndash; {{ chart_end|date:"d M Y" }}
-                        ({{ total_days }} days)
-                    </p>
-                </div>
-            </div>
-        </div>
+    {# ── Header Section ────────────────────────────────────────────────── #}
+    <c-card padding="sm">
+        <c-section-header title="Gantt: {{ project.name }}" subtitle="{{ chart_start|date:'d M Y' }} &ndash; {{ chart_end|date:'d M Y' }} ({{ total_days }} days)">
+            <c-slot name="actions">
+                <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Project"></c-button>
+                <c-button href="{% url 'projects:project_gantt_import' project.pk %}" variant="primary" size="sm" icon="upload" label="Import Gantt Excel"></c-button>
+            </c-slot>
+        </c-section-header>
 
-        <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-slate-800 flex-wrap">
             {# Legend #}
-            <div class="flex items-center gap-3 text-[11px] text-gray-500 bg-white border border-gray-100 rounded-lg px-3 py-2">
-                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-indigo-500 inline-block"></span>Planned</span>
-                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-gray-300 inline-block border border-dashed border-gray-400"></span>Baseline</span>
+            <div class="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5 border border-gray-100 dark:border-slate-700/60 flex-wrap">
+                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-primary inline-block"></span>Planned</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-gray-300 dark:bg-gray-600 inline-block border border-dashed border-gray-400"></span>Baseline</span>
                 <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-emerald-500 inline-block"></span>Actual</span>
                 <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-red-400 inline-block"></span>Delayed</span>
                 <span class="flex items-center gap-1.5"><span class="w-2 h-2 rotate-45 bg-amber-500 inline-block"></span>Milestone</span>
             </div>
 
-            {# Filter toggles (Alpine) #}
-            <div class="flex items-center gap-1">
-                <button @click="toggleFilter('all')"
-                        :class="activeFilter==='all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-200'"
-                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors">
+            {# Filter toggles #}
+            <div class="flex items-center gap-1.5">
+                <button type="button"
+                        @click="toggleFilter('all')"
+                        :class="activeFilter==='all' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
+                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
                     All
                 </button>
-                <button @click="toggleFilter('delayed')"
-                        :class="activeFilter==='delayed' ? 'bg-red-500 text-white' : 'bg-white text-gray-600 border border-gray-200'"
-                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors">
+                <button type="button"
+                        @click="toggleFilter('delayed')"
+                        :class="activeFilter==='delayed' ? 'bg-red-500 text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
+                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
                     Delayed
                 </button>
-                <button @click="toggleFilter('in_progress')"
-                        :class="activeFilter==='in_progress' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 border border-gray-200'"
-                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors">
+                <button type="button"
+                        @click="toggleFilter('in_progress')"
+                        :class="activeFilter==='in_progress' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
+                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
                     In Progress
                 </button>
-                <button @click="toggleFilter('completed')"
-                        :class="activeFilter==='completed' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-600 border border-gray-200'"
-                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors">
+                <button type="button"
+                        @click="toggleFilter('completed')"
+                        :class="activeFilter==='completed' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
+                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
                     Completed
                 </button>
             </div>
-
-            <c-button variant="primary" size="sm" href="{% url 'projects:project_gantt_import' project.pk %}" label="Import Gantt Excel" icon="upload"></c-button>
         </div>
-    </div>
+    </c-card>
 
     {# ── Desktop Gantt ────────────────────────────────────────────────── #}
-    <div class="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="hidden md:block">
+        <c-card padding="none">
+            <div class="flex min-h-[80px]">
+                {# Task label column #}
+                <div class="flex-shrink-0 w-64 border-r border-gray-100 dark:border-slate-800">
+                    <div class="flex items-center px-3 py-2 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800 h-10">
+                        <span class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Task</span>
+                    </div>
 
-        {# Two-column layout: task labels | timeline area #}
-        <div class="flex" style="min-height: 80px;">
-
-            {# Task label column (fixed width) #}
-            <div class="flex-shrink-0 w-64 border-r border-gray-100">
-
-                {# Header row #}
-                <div class="flex items-center px-3 py-2 bg-gray-50 border-b border-gray-100 h-10">
-                    <span class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Task</span>
+                    <template x-for="task in filteredTasks" :key="task.id">
+                        <div class="flex items-center px-3 h-11 border-b border-gray-50 dark:border-slate-800/60 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors cursor-default"
+                             :class="task.is_delayed ? 'bg-red-50/40 dark:bg-red-950/20' : ''">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[10px] text-gray-400 font-mono flex-shrink-0 w-5 text-right" x-text="'#'+task.order"></span>
+                                <template x-if="task.is_milestone">
+                                    <span class="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0 inline-block"></span>
+                                </template>
+                                <span class="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate" x-text="task.activity"></span>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
-                {# Task rows #}
-                <template x-for="task in filteredTasks" :key="task.id">
-                    <div class="flex items-center px-3 h-11 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-default"
-                         :class="task.is_delayed ? 'bg-red-50/40' : ''">
-                        <div class="flex items-center gap-1.5 min-w-0">
-                            <span class="text-[10px] text-gray-400 flex-shrink-0 w-5 text-right" x-text="'#'+task.order"></span>
-                            <template x-if="task.is_milestone">
-                                <span class="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0 inline-block"></span>
-                            </template>
-                            <span class="text-[11px] font-medium text-gray-800 truncate" x-text="task.activity"></span>
-                        </div>
-                    </div>
-                </template>
+                {# Timeline canvas #}
+                <div class="flex-1 overflow-x-auto">
+                    <c-gantt-canvas>
+                        <c-gantt-ruler></c-gantt-ruler>
+
+                        <template x-for="task in filteredTasks" :key="task.id">
+                            <c-gantt-bar></c-gantt-bar>
+                        </template>
+                    </c-gantt-canvas>
+                </div>
             </div>
 
-            {# Timeline area (scrollable horizontally) #}
-            <div class="flex-1 overflow-x-auto">
-                <div class="relative" :style="`min-width: ${Math.max(700, totalDays * 6)}px`">
-
-                    {# Month ruler #}
-                    <div class="h-10 border-b border-gray-100 bg-gray-50 flex relative">
-                        <template x-for="month in rulerMonths" :key="month.label">
-                            <div class="absolute top-0 bottom-0 flex items-center px-2 border-r border-gray-100"
-                                 :style="`left: ${month.left_pct}%; width: ${month.width_pct}%`">
-                                <span class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide truncate"
-                                      x-text="month.label"></span>
-                            </div>
-                        </template>
-                    </div>
-
-                    {# Today line #}
-                    <template x-if="todayPct !== null">
-                        <div class="absolute top-10 bottom-0 w-px bg-red-400 z-10 pointer-events-none"
-                             :style="`left: ${todayPct}%`">
-                            <div class="absolute -top-4 left-0.5 text-[9px] text-red-500 font-semibold whitespace-nowrap">Today</div>
-                        </div>
-                    </template>
-
-                    {# Task bar rows #}
-                    <template x-for="task in filteredTasks" :key="task.id">
-                        <div class="relative h-11 border-b border-gray-50 flex items-center"
-                             :class="task.is_delayed ? 'bg-red-50/30' : ''">
-
-                            {# Vertical grid lines from ruler (light) #}
-
-                            {# Baseline bar (dashed, grey, behind planned) #}
-                            <template x-if="task.baseline_left_pct !== null">
-                                <div class="absolute h-2 rounded border border-dashed border-gray-400 bg-gray-100 opacity-70"
-                                     :style="`left: ${task.baseline_left_pct}%; width: ${task.baseline_width_pct}%; top: 50%; transform: translateY(-50%);`"></div>
-                            </template>
-
-                            {# Planned bar #}
-                            <template x-if="task.left_pct !== null && !task.is_milestone">
-                                <div class="absolute h-4 rounded-full overflow-hidden shadow-sm"
-                                     :class="task.is_delayed ? 'bg-red-400' : (task.status === 'Completed' ? 'bg-emerald-500' : 'bg-indigo-500')"
-                                     :style="`left: ${task.left_pct}%; width: ${task.width_pct}%; top: 50%; transform: translateY(-50%);`"
-                                     :title="`${task.activity}: ${task.planned_start} → ${task.planned_finish} (${task.progress_percent}%)`">
-                                    {# Progress fill #}
-                                    <div class="h-full bg-white/30 rounded-full"
-                                         :style="`width: ${task.progress_percent}%`"></div>
-                                </div>
-                            </template>
-
-                            {# Milestone diamond #}
-                            <template x-if="task.is_milestone && task.left_pct !== null">
-                                <div class="absolute w-3.5 h-3.5 rotate-45 bg-amber-500 shadow-md"
-                                     :style="`left: calc(${task.left_pct}% - 7px); top: 50%; transform: translateY(-50%) rotate(45deg);`"
-                                     :title="`Milestone: ${task.activity}`"></div>
-                            </template>
-
-                            {# Actual bar (emerald, thinner, below planned) #}
-                            <template x-if="task.actual_left_pct !== null">
-                                <div class="absolute h-1.5 rounded-full bg-emerald-400 opacity-80"
-                                     :style="`left: ${task.actual_left_pct}%; width: ${task.actual_width_pct}%; top: calc(50% + 8px); transform: translateY(-50%);`"
-                                     :title="`Actual: ${task.actual_start} → ${task.actual_finish}`"></div>
-                            </template>
-
-                            {# Progress label inside bar #}
-                            <template x-if="task.left_pct !== null && !task.is_milestone && task.width_pct > 8">
-                                <div class="absolute text-[9px] text-white font-semibold pointer-events-none select-none"
-                                     :style="`left: calc(${task.left_pct}% + 4px); top: 50%; transform: translateY(-50%);`"
-                                     x-text="task.progress_percent + '%'"></div>
-                            </template>
-
-                        </div>
-                    </template>
-
-                </div>{# /relative #}
-            </div>{# /timeline #}
-        </div>{# /flex #}
-
-        {# Footer: dependency summary #}
-        <div class="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center gap-4 flex-wrap">
-            <span class="text-[11px] text-gray-500">
-                <span class="font-semibold" x-text="filteredTasks.length"></span> tasks shown &nbsp;|&nbsp;
-                <span class="font-semibold text-red-500" x-text="filteredTasks.filter(t=>t.is_delayed).length"></span> delayed &nbsp;|&nbsp;
-                <span class="font-semibold text-emerald-600" x-text="filteredTasks.filter(t=>t.status==='Completed').length"></span> completed
-            </span>
-            <span class="text-[11px] text-gray-400">
-                Dependency types: FS = Finish-to-Start | SS = Start-to-Start | FF = Finish-to-Finish | SF = Start-to-Finish
-            </span>
-        </div>
+            <c-slot name="footer">
+                <div class="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 flex-wrap gap-2">
+                    <span>
+                        <span class="font-semibold text-gray-800 dark:text-gray-200" x-text="filteredTasks.length"></span> tasks shown &nbsp;|&nbsp;
+                        <span class="font-semibold text-red-500" x-text="filteredTasks.filter(t=>t.is_delayed).length"></span> delayed &nbsp;|&nbsp;
+                        <span class="font-semibold text-emerald-600 dark:text-emerald-400" x-text="filteredTasks.filter(t=>t.status==='Completed').length"></span> completed
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-mono">
+                        Dependencies: FS = Finish-to-Start | SS = Start-to-Start | FF = Finish-to-Finish | SF = Start-to-Finish
+                    </span>
+                </div>
+            </c-slot>
+        </c-card>
     </div>
 
     {# ── Mobile: Compact Task Timeline ────────────────────────────────── #}
-    <div class="md:hidden space-y-2">
+    <div class="md:hidden space-y-2.5">
         <template x-for="task in filteredTasks" :key="task.id">
-            <div class="bg-white rounded-xl border shadow-sm p-3"
-                 :class="task.is_delayed ? 'border-red-200 bg-red-50' : 'border-gray-100'">
-                <div class="flex items-start justify-between gap-2">
-                    <div class="flex items-center gap-2 min-w-0">
-                        <span class="text-[10px] text-gray-400 flex-shrink-0" x-text="'#'+task.order"></span>
-                        <template x-if="task.is_milestone">
-                            <span class="w-2 h-2 rotate-45 bg-amber-500 flex-shrink-0 inline-block"></span>
-                        </template>
-                        <span class="text-[12px] font-semibold text-gray-800 truncate" x-text="task.activity"></span>
-                    </div>
-                    <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
-                          :class="{
-                              'bg-red-100 text-red-700': task.is_delayed,
-                              'bg-emerald-100 text-emerald-700': !task.is_delayed && task.status==='Completed',
-                              'bg-blue-100 text-blue-700': !task.is_delayed && task.status==='In Progress',
-                              'bg-gray-100 text-gray-600': !task.is_delayed && task.status==='Not Started',
-                              'bg-amber-100 text-amber-700': !task.is_delayed && task.status==='Under Review',
-                          }"
-                          x-text="task.is_delayed ? 'Delayed' : task.status"></span>
-                </div>
-
-                <div class="mt-2 flex items-center gap-2 text-[11px] text-gray-500">
-                    <i data-lucide="calendar" class="w-3 h-3"></i>
-                    <span x-text="(task.planned_start || '—') + ' → ' + (task.planned_finish || '—')"></span>
-                </div>
-
-                {# Progress bar (mobile) #}
-                <div class="mt-2">
-                    <div class="flex items-center justify-between mb-0.5">
-                        <span class="text-[10px] text-gray-500">Progress</span>
-                        <span class="text-[10px] font-semibold text-gray-700" x-text="task.progress_percent + '%'"></span>
-                    </div>
-                    <div class="w-full bg-gray-100 rounded-full h-1.5">
-                        <div class="h-1.5 rounded-full transition-all"
-                             :class="task.is_delayed ? 'bg-red-400' : 'bg-indigo-500'"
-                             :style="`width: ${task.progress_percent}%`"></div>
-                    </div>
-                </div>
-
-                {# Dependencies (mobile) #}
-                <template x-if="task.dependencies && task.dependencies.length > 0">
-                    <div class="mt-2 flex flex-wrap gap-1">
-                        <template x-for="dep in task.dependencies" :key="dep.predecessor_id">
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-[9px] text-indigo-600 font-medium">
-                                ← #<span x-text="taskOrderById(dep.predecessor_id)"></span>&nbsp;<span x-text="dep.type"></span>
-                                <template x-if="dep.lag !== 0">
-                                    <span x-text="(dep.lag > 0 ? '+' : '') + dep.lag + 'd'"></span>
-                                </template>
-                            </span>
-                        </template>
-                    </div>
-                </template>
-            </div>
+            <c-gantt-mobile-card></c-gantt-mobile-card>
         </template>
 
         <template x-if="filteredTasks.length === 0">
-            <div class="text-center py-8 text-gray-400 text-sm">No tasks match the current filter.</div>
+            <c-card padding="lg">
+                <c-empty-state icon="calendar" title="No tasks match filter" description="Try selecting a different filter option above."></c-empty-state>
+            </c-card>
         </template>
     </div>
 
-    {# ── Dependency table (desktop, below Gantt) ─────────────────────── #}
-    <div class="hidden md:block mt-4 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <h3 class="text-[13px] font-semibold text-gray-800 flex items-center gap-2">
-                <i data-lucide="git-branch" class="w-4 h-4 text-indigo-500"></i>
-                Task Dependencies
-            </h3>
+    {# ── Dependency Table ─────────────────────────────────────────────── #}
+    <c-card padding="none">
+        <div class="p-3 border-b border-gray-100 dark:border-slate-800">
+            <c-section-header title="Task Dependencies" subtitle="Defined sequencing relationships between project tasks" icon="git-branch"></c-section-header>
         </div>
+
         <template x-if="allDependencies.length === 0">
-            <div class="px-4 py-6 text-center text-[12px] text-gray-400">
-                No task dependencies defined. Add dependencies from the project detail page.
+            <div class="p-6 text-center">
+                <c-empty-state icon="git-branch" title="No task dependencies defined" description="Add task dependencies from the project detail page."></c-empty-state>
             </div>
         </template>
+
         <template x-if="allDependencies.length > 0">
             <div class="overflow-x-auto">
-                <table class="w-full text-[12px]">
-                    <thead class="bg-gray-50 border-b border-gray-100">
-                        <tr>
-                            <th class="px-4 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Predecessor</th>
-                            <th class="px-4 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase">Type</th>
-                            <th class="px-4 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase">Lag</th>
-                            <th class="px-4 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Successor</th>
+                <c-table>
+                    <c-slot name="header">
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Predecessor</th>
+                        <th class="py-2.5 px-3 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Type</th>
+                        <th class="py-2.5 px-3 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Lag</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Successor</th>
+                    </c-slot>
+                    <template x-for="dep in allDependencies" :key="dep.successor_id + '-' + dep.predecessor_id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800">
+                            <td class="py-2.5 px-3 text-[12px] text-gray-700 dark:text-gray-300">
+                                <span class="text-gray-400 font-mono text-[10px]">#<span x-text="taskOrderById(dep.predecessor_id)"></span> </span>
+                                <span x-text="taskNameById(dep.predecessor_id)"></span>
+                            </td>
+                            <td class="py-2.5 px-3 text-center">
+                                <c-badge variant="primary" size="sm" x-text="dep.type"></c-badge>
+                            </td>
+                            <td class="py-2.5 px-3 text-center text-[11px] text-gray-500 font-mono"
+                                x-text="dep.lag !== 0 ? (dep.lag > 0 ? '+' : '') + dep.lag + 'd' : '—'"></td>
+                            <td class="py-2.5 px-3 text-[12px] text-gray-700 dark:text-gray-300">
+                                <span class="text-gray-400 font-mono text-[10px]">#<span x-text="taskOrderById(dep.successor_id)"></span> </span>
+                                <span x-text="taskNameById(dep.successor_id)"></span>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-50">
-                        <template x-for="dep in allDependencies" :key="dep.successor_id + '-' + dep.predecessor_id">
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-4 py-2 text-gray-700">
-                                    <span class="text-gray-400 text-[10px]">#<span x-text="taskOrderById(dep.predecessor_id)"></span> </span>
-                                    <span x-text="taskNameById(dep.predecessor_id)"></span>
-                                </td>
-                                <td class="px-4 py-2 text-center">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700"
-                                          x-text="dep.type"></span>
-                                </td>
-                                <td class="px-4 py-2 text-center text-gray-500"
-                                    x-text="dep.lag !== 0 ? (dep.lag > 0 ? '+' : '') + dep.lag + 'd' : '—'"></td>
-                                <td class="px-4 py-2 text-gray-700">
-                                    <span class="text-gray-400 text-[10px]">#<span x-text="taskOrderById(dep.successor_id)"></span> </span>
-                                    <span x-text="taskNameById(dep.successor_id)"></span>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
+                    </template>
+                </c-table>
             </div>
         </template>
-    </div>
+    </c-card>
 
-</div>{# /p-4 #}
+</c-page-container>
 
 <script>
 function ganttChart() {
@@ -300,7 +170,6 @@ function ganttChart() {
         activeFilter: 'all',
 
         init() {
-            // Lucide icon refresh after Alpine renders
             this.$nextTick(() => {
                 if (window.lucide) lucide.createIcons();
             });

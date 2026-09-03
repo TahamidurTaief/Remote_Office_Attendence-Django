@@ -1,68 +1,133 @@
-<c-table>
-    <c-slot name="header">
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actor</th>
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action &amp; Target</th>
-        <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Record Details</th>
-        <th class="text-right py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
-    </c-slot>
+<!-- Mobile Activity Card View -->
+<div class="block sm:hidden space-y-2.5" data-object-id="{{ object_id }}">
     {% for event in events %}
-    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-        <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300 font-mono whitespace-nowrap">
-            {{ event.created_at|date:"d/m/Y g:i A" }}
-        </td>
-        <td class="py-3 px-4 text-sm text-slate-900 dark:text-white font-medium">
-            <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
-                    {{ event.actor_user.email|first|upper|default:"S" }}
+    <c-mobile-record-card
+        title="{{ event.object_label|default:event.object_type }}"
+        subtitle="{{ event.created_at|date:'d/m/Y g:i A' }}">
+        <c-slot name="meta">
+            <div class="flex items-center gap-1.5 w-full justify-between">
+                <div class="flex items-center gap-1.5">
+                    <c-avatar
+                        name="{{ event.actor_user.email|default:event.actor_role|default:'System' }}"
+                        size="xs">
+                    </c-avatar>
+                    <span class="text-[11px] text-gray-700 dark:text-gray-300 font-medium">
+                        {{ event.actor_user.email|default:event.actor_role|default:"System" }}
+                    </span>
                 </div>
-                <div>
-                    <div>{{ event.actor_user.email|default:event.actor_role|default:"System" }}</div>
-                    {% if event.actor_role %}
-                    <div class="text-[10px] text-slate-400 font-mono">{{ event.actor_role }}</div>
-                    {% endif %}
-                </div>
-            </div>
-        </td>
-        <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">
-            <div class="flex items-center gap-1.5 flex-wrap">
                 <c-badge
                     variant="{% if event.action == 'created' %}success{% elif event.action == 'deleted' or event.action == 'trashed' %}danger{% elif event.action == 'updated' %}info{% elif event.action == 'restored' %}primary{% else %}neutral{% endif %}"
                     dot="true"
+                    size="sm"
                     label="{{ event.action|upper }}">
                 </c-badge>
-                <span class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.object_type }}</span>
             </div>
-        </td>
-        <td class="py-3 px-4 text-sm text-slate-900 dark:text-white">
-            <div class="font-semibold text-slate-800 dark:text-slate-100">{{ event.object_label|default:"—" }}</div>
-            <div class="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                <span class="uppercase tracking-wider font-semibold text-indigo-600 dark:text-indigo-400">{{ event.module }}</span>
-                <span>/</span>
-                <span>ID: {{ event.object_id }}</span>
+            <div class="text-[10px] text-gray-500 dark:text-gray-400 font-mono mt-1">
+                {{ event.module|upper }} / {{ event.object_type }} (ID: {{ event.object_id }})
             </div>
-        </td>
-        <td class="py-3 px-4 text-right whitespace-nowrap">
+        </c-slot>
+        <c-slot name="actions">
             <c-button
                 href="{% url 'audit:event_detail' event.uuid %}"
                 variant="secondary"
                 size="sm"
                 icon="file-search"
-                label="View Details">
+                label="Details">
             </c-button>
-        </td>
-    </tr>
+        </c-slot>
+    </c-mobile-record-card>
     {% empty %}
-    <tr>
-        <td colspan="5" class="py-8 px-4 text-center">
-            <c-empty-state icon="activity" title="No activity found" description="No audit events matched this filter or permission scope."></c-empty-state>
-        </td>
-    </tr>
+    <c-card padding="lg">
+        <c-empty-state icon="activity" title="No activity found" description="No audit events matched this filter or permission scope."></c-empty-state>
+    </c-card>
     {% endfor %}
+</div>
 
-    {% if page_obj.has_other_pages %}
-    <c-slot name="pagination">
-        <c-pagination :page_obj="page_obj"></c-pagination>
-    </c-slot>
-    {% endif %}
-</c-table>
+<!-- Desktop Activity Table View -->
+<div class="hidden sm:block">
+    <c-table>
+        <c-slot name="header">
+            <th class="text-left py-2.5 px-3 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Timestamp</th>
+            <th class="text-left py-2.5 px-3 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actor</th>
+            <th class="text-left py-2.5 px-3 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action &amp; Target</th>
+            <th class="text-left py-2.5 px-3 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Record Details</th>
+            <th class="text-right py-2.5 px-3 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+        </c-slot>
+        {% for event in events %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors border-b border-gray-100 dark:border-slate-800">
+            <td class="py-2.5 px-3 text-[11px] text-gray-600 dark:text-gray-300 font-mono whitespace-nowrap">
+                {{ event.created_at|date:"d/m/Y g:i A" }}
+            </td>
+            <td class="py-2.5 px-3 text-[12px] text-gray-900 dark:text-white font-medium">
+                <div class="flex items-center gap-2">
+                    <c-avatar
+                        name="{{ event.actor_user.email|default:event.actor_role|default:'System' }}"
+                        size="xs">
+                    </c-avatar>
+                    <div class="min-w-0">
+                        <div class="truncate">{{ event.actor_user.email|default:event.actor_role|default:"System" }}</div>
+                        {% if event.actor_role %}
+                        <div class="text-[10px] text-gray-400 font-mono">{{ event.actor_role }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </td>
+            <td class="py-2.5 px-3 text-[12px] text-gray-600 dark:text-gray-300">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <c-badge
+                        variant="{% if event.action == 'created' %}success{% elif event.action == 'deleted' or event.action == 'trashed' %}danger{% elif event.action == 'updated' %}info{% elif event.action == 'restored' %}primary{% else %}neutral{% endif %}"
+                        dot="true"
+                        size="sm"
+                        label="{{ event.action|upper }}">
+                    </c-badge>
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400 font-mono">{{ event.object_type }}</span>
+                </div>
+            </td>
+            <td class="py-2.5 px-3 text-[12px] text-gray-900 dark:text-white">
+                <div class="font-medium text-gray-800 dark:text-gray-100 truncate max-w-xs">{{ event.object_label|default:"—" }}</div>
+                <div class="text-[10px] text-gray-400 font-mono flex items-center gap-1.5 mt-0.5">
+                    <span class="uppercase tracking-wider font-semibold text-primary">{{ event.module }}</span>
+                    <span>/</span>
+                    <span>ID: {{ event.object_id }}</span>
+                </div>
+            </td>
+            <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                <c-button
+                    href="{% url 'audit:event_detail' event.uuid %}"
+                    variant="secondary"
+                    size="sm"
+                    icon="file-search"
+                    label="Details">
+                </c-button>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" class="py-8 px-4 text-center">
+                <c-empty-state icon="activity" title="No activity found" description="No audit events matched this filter or permission scope."></c-empty-state>
+            </td>
+        </tr>
+        {% endfor %}
+
+        {% if page_obj.has_other_pages %}
+        <c-slot name="pagination">
+            <c-pagination
+                :page_obj="page_obj"
+                base_url="?module={{ module_filter }}&action={{ action_filter }}&q={{ search_query }}&object_id={{ object_id }}&page="
+                hx_target="#activity-table-container">
+            </c-pagination>
+        </c-slot>
+        {% endif %}
+    </c-table>
+</div>
+
+<!-- Mobile Pagination -->
+{% if page_obj.has_other_pages %}
+<div class="block sm:hidden pt-2">
+    <c-pagination
+        :page_obj="page_obj"
+        base_url="?module={{ module_filter }}&action={{ action_filter }}&q={{ search_query }}&object_id={{ object_id }}&page="
+        hx_target="#activity-table-container">
+    </c-pagination>
+</div>
+{% endif %}

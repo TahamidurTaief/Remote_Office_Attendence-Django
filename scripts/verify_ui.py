@@ -355,6 +355,71 @@ def check_no_self_closing_cotton_tags():
         print("PASSED: Zero self-closing cotton tags found across all templates.", flush=True)
         return True
 
+def check_project_cotton_ui_compliance():
+    print("\n--- 11. PROJECT ROUTES COTTON UI COMPLIANCE CHECK ---", flush=True)
+    target_files = [
+        "templates/projects/project_detail.html",
+        "templates/projects/project_gantt.html",
+        "templates/projects/project_form.html",
+        "templates/audit/activity_list.html",
+        "templates/audit/partials/activity_table.html",
+        "templates/projects/partials/task_status_dropdown.html",
+        "templates/projects/partials/responsible_person_select.html",
+    ]
+
+    forbidden_text_patterns = [
+        r'\btext-lg\b',
+        r'\btext-xl\b',
+        r'\btext-2xl\b',
+        r'\btext-3xl\b',
+        r'\btext-4xl\b',
+        r'\btext-base\b',
+        r'\btext-sm\b',
+        r'\btext-\[1[4-9]px\]',
+        r'\btext-\[2[0-9]px\]',
+    ]
+
+    failures = []
+
+    for rel_path in target_files:
+        full_path = os.path.join(settings.BASE_DIR, rel_path)
+        if not os.path.exists(full_path):
+            failures.append(f"{rel_path}: File not found")
+            continue
+
+        with open(full_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # 1. No self-closing cotton tags
+        self_closing = re.findall(r'<c-[a-zA-Z0-9_-]+[^>]*?/>', content, re.DOTALL)
+        if self_closing:
+            failures.append(f"{rel_path}: Contains self-closing cotton tag: {self_closing[0][:40]}")
+
+        # 2. No inline style attributes
+        inline_styles = re.findall(r'(\sstyle="[^"]*"|\s:style="[^"]*")', content)
+        if inline_styles:
+            failures.append(f"{rel_path}: Contains inline style expression: {inline_styles[0][:40]}")
+
+        # 3. No forbidden text sizes (> 13px)
+        for pat in forbidden_text_patterns:
+            matches = re.findall(pat, content)
+            if matches:
+                failures.append(f"{rel_path}: Contains forbidden text size token '{matches[0]}'")
+
+        # 4. No native alert/confirm
+        alert_confirm = re.findall(r'\b(alert|confirm)\s*\(', content)
+        if alert_confirm:
+            failures.append(f"{rel_path}: Contains native {alert_confirm[0]}() call")
+
+    if failures:
+        print("FAILED: Project route Cotton UI compliance violations found:", flush=True)
+        for fail in failures:
+            print(f"  - {fail}", flush=True)
+        return False
+    else:
+        print(f"PASSED: All {len(target_files)} project templates strictly adhere to Cotton architecture, 11-13px typography, and zero inline styles.", flush=True)
+        return True
+
 def main():
     print("==================================================", flush=True)
     print("      STANDING PRE-COMMIT VERIFICATION GATE       ", flush=True)
@@ -371,6 +436,7 @@ def main():
         check_consecutive_css_loads(),
         check_no_container_gradients(),
         check_no_self_closing_cotton_tags(),
+        check_project_cotton_ui_compliance(),
     ]
     
     print("\n==================================================", flush=True)

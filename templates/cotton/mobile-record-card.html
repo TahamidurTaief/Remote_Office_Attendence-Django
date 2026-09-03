@@ -1,0 +1,41 @@
+{% comment %} c-mobile-record-card component
+   Compact card for mobile record rows (tasks, logs, manpower, materials, gantt tasks).
+   Props:
+   - title: main title (12-13px)
+   - subtitle: optional secondary label (11px)
+   - status: status text for status pill
+   - extra_class: extra CSS classes
+   Slots:
+   - meta: key-value or metric items
+   - actions: action buttons (minimum 44x44px touch target on mobile)
+   - default: body content
+{% endcomment %}
+<div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col gap-2 {{ extra_class }}">
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0 flex-1">
+      <h4 class="text-[12px] font-semibold text-gray-900 dark:text-white truncate">{{ title }}</h4>
+      {% if subtitle %}
+        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ subtitle }}</p>
+      {% endif %}
+    </div>
+    {% if status %}
+      <div class="shrink-0">
+        <c-status-pill :status="status" size="sm"></c-status-pill>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if meta %}
+    <div class="text-[11px] text-gray-600 dark:text-gray-400 flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 border-t border-gray-50 dark:border-slate-800/60">
+      {{ meta }}
+    </div>
+  {% endif %}
+
+  {{ slot }}
+
+  {% if actions %}
+    <div class="flex items-center justify-end gap-1 pt-2 border-t border-gray-100 dark:border-slate-800">
+      {{ actions }}
+    </div>
+  {% endif %}
+</div>

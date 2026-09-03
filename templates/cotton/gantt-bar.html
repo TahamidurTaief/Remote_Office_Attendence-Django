@@ -1,0 +1,46 @@
+{% comment %} c-gantt-bar component
+   Encapsulates calculated positioning for Gantt chart bars (planned, baseline, actual, milestone).
+   Zero inline styles in the page template.
+{% endcomment %}
+<div class="relative h-11 border-b border-gray-50 dark:border-slate-800/60 flex items-center"
+     :class="task.is_delayed ? 'bg-red-50/30 dark:bg-red-950/20' : ''">
+
+    {# Baseline bar (dashed, grey, behind planned) #}
+    <template x-if="task.baseline_left_pct !== null">
+        <div class="absolute h-2 rounded border border-dashed border-gray-400 bg-gray-100 dark:bg-gray-700/50 opacity-70"
+             :style="`left: ${task.baseline_left_pct}%; width: ${task.baseline_width_pct}%; top: 50%; transform: translateY(-50%);`"></div>
+    </template>
+
+    {# Planned bar #}
+    <template x-if="task.left_pct !== null && !task.is_milestone">
+        <div class="absolute h-4 rounded-full overflow-hidden shadow-xs cursor-pointer"
+             :class="task.is_delayed ? 'bg-red-400' : (task.status === 'Completed' ? 'bg-emerald-500' : 'bg-primary')"
+             :style="`left: ${task.left_pct}%; width: ${task.width_pct}%; top: 50%; transform: translateY(-50%);`"
+             :title="`${task.activity}: ${task.planned_start} → ${task.planned_finish} (${task.progress_percent}%)`">
+            {# Progress fill #}
+            <div class="h-full bg-white/30 rounded-full"
+                 :style="`width: ${task.progress_percent}%`"></div>
+        </div>
+    </template>
+
+    {# Milestone diamond #}
+    <template x-if="task.is_milestone && task.left_pct !== null">
+        <div class="absolute w-3.5 h-3.5 rotate-45 bg-amber-500 shadow-xs cursor-pointer"
+             :style="`left: calc(${task.left_pct}% - 7px); top: 50%; transform: translateY(-50%) rotate(45deg);`"
+             :title="`Milestone: ${task.activity}`"></div>
+    </template>
+
+    {# Actual bar (emerald, thinner, below planned) #}
+    <template x-if="task.actual_left_pct !== null">
+        <div class="absolute h-1.5 rounded-full bg-emerald-400 opacity-80 pointer-events-none"
+             :style="`left: ${task.actual_left_pct}%; width: ${task.actual_width_pct}%; top: calc(50% + 8px); transform: translateY(-50%);`"
+             :title="`Actual: ${task.actual_start} → ${task.actual_finish}`"></div>
+    </template>
+
+    {# Progress label inside bar #}
+    <template x-if="task.left_pct !== null && !task.is_milestone && task.width_pct > 8">
+        <div class="absolute text-[9px] text-white font-semibold pointer-events-none select-none"
+             :style="`left: calc(${task.left_pct}% + 4px); top: 50%; transform: translateY(-50%);`"
+             x-text="task.progress_percent + '%'"></div>
+    </template>
+</div>

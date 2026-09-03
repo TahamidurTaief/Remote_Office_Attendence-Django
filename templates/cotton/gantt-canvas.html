@@ -1,0 +1,6 @@
+{% comment %} c-gantt-canvas component
+   Encapsulates scrollable width calculation for Gantt chart timeline canvas.
+{% endcomment %}
+<div class="relative min-w-[700px]" :style="`min-width: ${Math.max(700, totalDays * 6)}px;`">
+  {{ slot }}
+</div>

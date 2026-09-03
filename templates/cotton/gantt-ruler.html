@@ -1,0 +1,22 @@
+{% comment %} c-gantt-ruler component
+   Encapsulates month ruler and today line calculations for Gantt chart.
+{% endcomment %}
+<div class="h-10 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50 flex relative">
+  <template x-for="month in rulerMonths" :key="month.label">
+    <div class="absolute top-0 bottom-0 flex items-center px-2 border-r border-gray-100 dark:border-slate-800"
+         :style="`left: ${month.left_pct}%; width: ${month.width_pct}%;`">
+      <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate"
+            x-text="month.label"></span>
+    </div>
+  </template>
+
+  {# Today vertical line indicator #}
+  <template x-if="todayPct !== null">
+    <div class="absolute top-0 bottom-0 w-px bg-red-400 dark:bg-red-500 z-20 pointer-events-none"
+         :style="`left: ${todayPct}%;`">
+      <div class="absolute top-1 left-1 text-[9px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider whitespace-nowrap bg-white/90 dark:bg-slate-900/90 px-1 py-0.5 rounded shadow-xs">
+        Today
+      </div>
+    </div>
+  </template>
+</div>

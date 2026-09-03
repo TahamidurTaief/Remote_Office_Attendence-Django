@@ -96,7 +96,7 @@
   </div>
 
   {# Selected Employees Chips Container #}
-  <div class="flex flex-wrap gap-1.5 min-h-[34px] p-2 rounded-[4px] items-center border"
+  <div class="flex flex-wrap gap-1.5 min-h-[34px] p-2 rounded-[4px] items-center border {% if error %}border-red-500 !border-red-500{% endif %}"
        style="background: var(--surface); border-color: var(--border); color: var(--text);">
     
     <template x-for="emp in selectedObjects" :key="emp.id">
@@ -117,6 +117,10 @@
       <span class="text-[11px] text-gray-400 italic">No employees assigned yet. Click "Add Employee" above.</span>
     </template>
   </div>
+
+  {% if error %}
+    <p class="ft-error-text">{{ error }}</p>
+  {% endif %}
 
   {# Ultra Minimal Selection Modal #}
   <div x-show="open"

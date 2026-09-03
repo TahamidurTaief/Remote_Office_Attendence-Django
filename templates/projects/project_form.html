@@ -1,608 +1,417 @@
 <c-app-shell page_title="{% if object %}Edit Project{% else %}Add Project{% endif %} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4 max-w-5xl mx-auto space-y-6">
-    <div class="mb-4 flex items-center justify-between">
-        <div>
-            <h2 class="text-[14px] font-semibold text-gray-900">
-                {% if object %}Edit Project: {{ object.name }}{% else %}Add New Project{% endif %}
-            </h2>
-            <p class="mt-0.5 text-[12px] text-gray-500">Provide details for the project below. HVAC-specific fields will appear after selecting the project type.</p>
-        </div>
-        <a href="{% url 'projects:project_list' %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-            <i data-lucide="arrow-left" class="w-3.5 h-3.5 mr-1.5"></i>
-            Back to List
-        </a>
-    </div>
+<c-page-container max_width="max-w-5xl">
 
-    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden">
-        <form method="POST" class="p-4 space-y-4">
+    {# ── Page Header ──────────────────────────────────────────────────── #}
+    <c-card padding="sm">
+        <c-section-header
+            title="{% if object %}Edit Project: {{ object.name }}{% else %}Add New Project{% endif %}"
+            subtitle="Provide details for the project below. HVAC-specific fields appear after selecting HVAC project type.">
+            <c-slot name="actions">
+                <c-button href="{% url 'projects:project_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to List"></c-button>
+            </c-slot>
+        </c-section-header>
+    </c-card>
+
+    {# ── Form Card ────────────────────────────────────────────────────── #}
+    <c-card padding="md">
+        <form method="POST" class="space-y-6" x-data="{
+            projectTypeName: '',
+            get isHVAC() { return this.projectTypeName.toLowerCase().includes('hvac'); }
+        }" x-init="
+            const sel = $el.querySelector('select[name=project_type]');
+            if (sel) {
+                const update = () => {
+                    const opt = sel.options[sel.selectedIndex];
+                    this.projectTypeName = opt ? opt.text.trim() : '';
+                };
+                sel.addEventListener('change', update);
+                update();
+                $nextTick(update);
+            }
+        ">
             {% csrf_token %}
-            
-            {% if form.errors %}
-            <div class="rounded-xl bg-red-50 p-3 border border-red-200">
-                <h3 class="text-[12px] font-medium text-red-800">Please correct the errors below:</h3>
-                <ul class="mt-1.5 list-disc list-inside text-[12px] text-red-700">
-                    {% for field in form %}
-                        {% for error in field.errors %}
-                            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
-                        {% endfor %}
+
+            {# Form-level error summary #}
+            <c-form-error-summary :form="form"></c-form-error-summary>
+
+            {# ── Section 1: General Information ───────────────────────── #}
+            <c-form-section title="General Information" subtitle="Project identity, categorization, and client credentials">
+                <c-input
+                    name="name"
+                    label="Project Name"
+                    value="{{ form.name.value|default:'' }}"
+                    required="true"
+                    error="{{ form.name.errors.0|default:'' }}"
+                    placeholder="Project Name"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-select
+                    name="project_type"
+                    label="Project Type"
+                    value="{{ form.project_type.value|default:'' }}"
+                    required="true"
+                    error="{{ form.project_type.errors.0|default:'' }}"
+                    extra_class="sm:col-span-3">
+                    <option value="">-- Select Type --</option>
+                    {% for ptype in form.fields.project_type.queryset %}
+                    <option value="{{ ptype.pk }}" {% if form.project_type.value == ptype.pk or form.project_type.value == ptype.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ ptype.name }}
+                    </option>
                     {% endfor %}
-                    {% for error in form.non_field_errors %}
-                        <li>{{ error }}</li>
+                </c-select>
+
+                <c-input
+                    name="client_name"
+                    label="Client Name"
+                    value="{{ form.client_name.value|default:'' }}"
+                    required="true"
+                    error="{{ form.client_name.errors.0|default:'' }}"
+                    placeholder="Client Name"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-input
+                    name="client_email"
+                    type="email"
+                    label="Client Email (Optional)"
+                    value="{{ form.client_email.value|default:'' }}"
+                    error="{{ form.client_email.errors.0|default:'' }}"
+                    placeholder="Client Email"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-input
+                    name="location"
+                    label="Location"
+                    value="{{ form.location.value|default:'' }}"
+                    required="true"
+                    error="{{ form.location.errors.0|default:'' }}"
+                    placeholder="Project Location"
+                    icon="map-pin"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-select
+                    name="branch"
+                    label="Associated Branch (Optional)"
+                    value="{{ form.branch.value|default:'' }}"
+                    error="{{ form.branch.errors.0|default:'' }}"
+                    extra_class="sm:col-span-3">
+                    <option value="">-- Unassigned --</option>
+                    {% for b in form.fields.branch.queryset %}
+                    <option value="{{ b.pk }}" {% if form.branch.value == b.pk or form.branch.value == b.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ b.name }}
+                    </option>
                     {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
+                </c-select>
 
-            <div class="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6" x-data="{
-                projectTypeName: '',
-                get isHVAC() { return this.projectTypeName === 'HVAC Installation'; }
-            }" x-init="
-                const select = $el.querySelector('select[name=project_type]');
-                if (select) {
-                    const updateTypeName = () => {
-                        const opt = select.options[select.selectedIndex];
-                        this.projectTypeName = opt ? opt.text.trim() : '';
-                    };
-                    select.addEventListener('change', updateTypeName);
-                    updateTypeName();
-                    setTimeout(updateTypeName, 100);
-                }
-            ">
-                <!-- Project Name -->
+                <c-input
+                    name="consultant"
+                    label="Consultant (Optional)"
+                    value="{{ form.consultant.value|default:'' }}"
+                    error="{{ form.consultant.errors.0|default:'' }}"
+                    placeholder="Consultant Name"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-input
+                    name="consultant_email"
+                    type="email"
+                    label="Consultant Email (Optional)"
+                    value="{{ form.consultant_email.value|default:'' }}"
+                    error="{{ form.consultant_email.errors.0|default:'' }}"
+                    placeholder="Consultant Email"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-input
+                    name="main_contractor"
+                    label="Main Contractor (Optional)"
+                    value="{{ form.main_contractor.value|default:'' }}"
+                    error="{{ form.main_contractor.errors.0|default:'' }}"
+                    placeholder="Main Contractor"
+                    extra_class="sm:col-span-6">
+                </c-input>
+            </c-form-section>
+
+            {# ── Section 2: Team Assignment ────────────────────────────── #}
+            <c-form-section title="Team Assignment" subtitle="Assign active managers, engineers, and staff members">
                 <div class="sm:col-span-3">
-                    <label for="{{ form.name.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Project Name *</label>
-                    {{ form.name }}
-                    {% if form.name.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.name.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Project Type -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.project_type.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Project Type *</label>
-                    {{ form.project_type }}
-                    {% if form.project_type.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.project_type.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Client Name -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.client_name.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Client Name *</label>
-                    {{ form.client_name }}
-                    {% if form.client_name.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.client_name.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Client Email -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.client_email.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Client Email (Optional)</label>
-                    {{ form.client_email }}
-                    {% if form.client_email.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.client_email.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Location -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.location.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Location *</label>
-                    {{ form.location }}
-                    {% if form.location.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.location.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Consultant -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.consultant.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Consultant (Optional)</label>
-                    {{ form.consultant }}
-                    {% if form.consultant.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.consultant.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Consultant Email -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.consultant_email.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Consultant Email (Optional)</label>
-                    {{ form.consultant_email }}
-                    {% if form.consultant_email.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.consultant_email.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Main Contractor -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.main_contractor.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Main Contractor (Optional)</label>
-                    {{ form.main_contractor }}
-                    {% if form.main_contractor.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.main_contractor.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Project Managers -->
-                <div class="sm:col-span-3" x-data="memberSelector('project_managers')">
-                    <label class="block text-[12px] font-semibold text-gray-700 mb-1.5">Project Managers</label>
-                    <div class="space-y-1.5 mb-2 max-h-48 overflow-y-auto pr-1">
-                        <template x-for="emp in selected" :key="emp.value">
-                            <div class="flex items-center justify-between px-3 py-1.5 bg-indigo-50/50 border border-indigo-100 rounded-xl transition-all hover:bg-indigo-50">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-5.5 h-5.5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-[10px]" x-text="emp.text.charAt(0).toUpperCase()"></div>
-                                    <span class="text-[12px] font-medium text-gray-800" x-text="emp.text"></span>
-                                </div>
-                                <button type="button" @click="removeMember(emp.value)" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </template>
-                        <div x-show="selected.length === 0" class="text-[12px] text-gray-400 italic py-2 px-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
-                            No project managers assigned yet.
-                        </div>
-                    </div>
-                    <div>
-                        <div x-show="!showAddDropdown">
-                            <button type="button" @click="showAddDropdown = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-indigo-200 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100/70 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3 h-3">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                </svg>
-                                Add Project Manager
-                            </button>
-                        </div>
-                        <div x-show="showAddDropdown" class="flex items-center gap-1.5" x-cloak x-transition>
-                            <select @change="addMember($event.target.value); $event.target.value = '';" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                <option value="">-- Choose Employee --</option>
-                                <template x-for="emp in unselected" :key="emp.value">
-                                    <option :value="emp.value" x-text="emp.text"></option>
-                                </template>
-                            </select>
-                            <button type="button" @click="showAddDropdown = false" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-gray-50 bg-white transition-colors">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                    <div style="display: none !important;">
+                    <c-employee-picker
+                        label="Project Managers"
+                        name="project_managers"
+                        error="{{ form.project_managers.errors.0|default:'' }}">
                         {{ form.project_managers }}
-                    </div>
-                    {% if form.project_managers.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.project_managers.errors.0 }}</p>{% endif %}
+                    </c-employee-picker>
                 </div>
 
-                <!-- Site Engineers -->
-                <div class="sm:col-span-3" x-data="memberSelector('site_engineers')">
-                    <label class="block text-[12px] font-semibold text-gray-700 mb-1.5">Site Engineers</label>
-                    <div class="space-y-1.5 mb-2 max-h-48 overflow-y-auto pr-1">
-                        <template x-for="emp in selected" :key="emp.value">
-                            <div class="flex items-center justify-between px-3 py-1.5 bg-teal-50/50 border border-teal-100 rounded-xl transition-all hover:bg-teal-50">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-5.5 h-5.5 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-[10px]" x-text="emp.text.charAt(0).toUpperCase()"></div>
-                                    <span class="text-[12px] font-medium text-gray-800" x-text="emp.text"></span>
-                                </div>
-                                <button type="button" @click="removeMember(emp.value)" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </template>
-                        <div x-show="selected.length === 0" class="text-[12px] text-gray-400 italic py-2 px-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
-                            No site engineers assigned yet.
-                        </div>
-                    </div>
-                    <div>
-                        <div x-show="!showAddDropdown">
-                            <button type="button" @click="showAddDropdown = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-teal-200 rounded-lg text-[11px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100/70 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3 h-3">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                </svg>
-                                Add Site Engineer
-                            </button>
-                        </div>
-                        <div x-show="showAddDropdown" class="flex items-center gap-1.5" x-cloak x-transition>
-                            <select @change="addMember($event.target.value); $event.target.value = '';" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-teal-50500">
-                                <option value="">-- Choose Employee --</option>
-                                <template x-for="emp in unselected" :key="emp.value">
-                                    <option :value="emp.value" x-text="emp.text"></option>
-                                </template>
-                            </select>
-                            <button type="button" @click="showAddDropdown = false" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-gray-50 bg-white transition-colors">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                    <div style="display: none !important;">
+                <div class="sm:col-span-3">
+                    <c-employee-picker
+                        label="Site Engineers"
+                        name="site_engineers"
+                        error="{{ form.site_engineers.errors.0|default:'' }}">
                         {{ form.site_engineers }}
-                    </div>
-                    {% if form.site_engineers.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.site_engineers.errors.0 }}</p>{% endif %}
+                    </c-employee-picker>
                 </div>
 
-                <!-- Project Members -->
-                <div class="sm:col-span-6" x-data="memberSelector('project_members')">
-                    <label class="block text-[12px] font-semibold text-gray-700 mb-1.5">Project Members</label>
-                    <div class="space-y-1.5 mb-2 max-h-48 overflow-y-auto pr-1">
-                        <template x-for="emp in selected" :key="emp.value">
-                            <div class="flex items-center justify-between px-3 py-1.5 bg-sky-50/50 border border-sky-100 rounded-xl transition-all hover:bg-sky-50">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-5.5 h-5.5 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-semibold text-[10px]" x-text="emp.text.charAt(0).toUpperCase()"></div>
-                                    <span class="text-[12px] font-medium text-gray-800" x-text="emp.text"></span>
-                                </div>
-                                <button type="button" @click="removeMember(emp.value)" class="text-gray-400 hover:text-red-500 transition-colors p-1" title="Remove">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </template>
-                        <div x-show="selected.length === 0" class="text-[12px] text-gray-400 italic py-2 px-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
-                            No project members assigned yet.
-                        </div>
-                    </div>
-                    <div>
-                        <div x-show="!showAddDropdown">
-                            <button type="button" @click="showAddDropdown = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-sky-200 rounded-lg text-[11px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100/70 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3 h-3">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                </svg>
-                                Add Project Member
-                            </button>
-                        </div>
-                        <div x-show="showAddDropdown" class="flex items-center gap-1.5" x-cloak x-transition>
-                            <select @change="addMember($event.target.value); $event.target.value = '';" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
-                                <option value="">-- Choose Employee --</option>
-                                <template x-for="emp in unselected" :key="emp.value">
-                                    <option :value="emp.value" x-text="emp.text"></option>
-                                </template>
-                            </select>
-                            <button type="button" @click="showAddDropdown = false" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-gray-50 bg-white transition-colors">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                    <div style="display: none !important;">
+                <div class="sm:col-span-6">
+                    <c-employee-picker
+                        label="Project Members"
+                        name="project_members"
+                        error="{{ form.project_members.errors.0|default:'' }}">
                         {{ form.project_members }}
-                    </div>
-                    {% if form.project_members.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.project_members.errors.0 }}</p>{% endif %}
+                    </c-employee-picker>
                 </div>
+            </c-form-section>
 
-                <!-- System Type (Conditionally Shown) -->
-                <div class="sm:col-span-3" x-show="isHVAC" x-cloak x-transition>
-                    <label for="{{ form.system_type.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">System Type *</label>
-                    {{ form.system_type }}
-                    {% if form.system_type.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.system_type.errors.0 }}</p>{% endif %}
-                </div>
+            {# ── Section 3: HVAC Specifications ────────────────────────── #}
+            <div x-show="isHVAC" x-cloak x-transition class="space-y-3">
+                <c-form-section title="HVAC Engineering Specifications" subtitle="System classification and cooling capacity">
+                    <c-select
+                        name="system_type"
+                        label="System Type"
+                        value="{{ form.system_type.value|default:'' }}"
+                        error="{{ form.system_type.errors.0|default:'' }}"
+                        extra_class="sm:col-span-3">
+                        <option value="">-- Choose System Type --</option>
+                        {% for code, label in form.fields.system_type.choices %}
+                            {% if code %}
+                            <option value="{{ code }}" {% if form.system_type.value == code %}selected{% endif %}>{{ label }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </c-select>
 
-                <!-- HVAC Capacity (Conditionally Shown) -->
-                <div class="sm:col-span-3" x-show="isHVAC" x-cloak x-transition>
-                    <label for="{{ form.hvac_capacity_tr.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">HVAC Capacity (TR)</label>
-                    {{ form.hvac_capacity_tr }}
-                    {% if form.hvac_capacity_tr.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.hvac_capacity_tr.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Start Date -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.start_date.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Start Date *</label>
-                    {{ form.start_date }}
-                    {% if form.start_date.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.start_date.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Completion Date -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.completion_date.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Completion Date (Optional)</label>
-                    {{ form.completion_date }}
-                    {% if form.completion_date.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.completion_date.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Status -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.status.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Status *</label>
-                    {{ form.status }}
-                    {% if form.status.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.status.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Progress Percent -->
-                <div class="sm:col-span-3">
-                    <label for="{{ form.progress_percent.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Progress (%) *</label>
-                    {{ form.progress_percent }}
-                    {% if form.progress_percent.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.progress_percent.errors.0 }}</p>{% endif %}
-                </div>
-
-                <!-- Branch -->
-                <div class="sm:col-span-6">
-                    <label for="{{ form.branch.id_for_label }}" class="block text-[12px] font-medium text-gray-700 mb-1">Branch (Optional)</label>
-                    {{ form.branch }}
-                    {% if form.branch.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.branch.errors.0 }}</p>{% endif %}
-                </div>
-
-                {% if not object %}
-                <!-- Initialize tasks from Template -->
-                <div class="sm:col-span-6">
-                    <label for="{{ form.task_template.id_for_label }}" class="block text-[12px] font-semibold text-gray-700 mb-1">Initialize Tasks from Template (Optional)</label>
-                    {{ form.task_template }}
-                    {% if form.task_template.errors %}<p class="mt-1 text-[12px] text-red-600">{{ form.task_template.errors.0 }}</p>{% endif %}
-                    <p class="mt-1 text-[10px] text-gray-400">If selected, the tasks from this template will be automatically added to the project scheduled from the start date.</p>
-                </div>
-                {% endif %}
+                    <c-input
+                        name="hvac_capacity_tr"
+                        type="number"
+                        label="HVAC Capacity (TR)"
+                        value="{{ form.hvac_capacity_tr.value|default:'' }}"
+                        error="{{ form.hvac_capacity_tr.errors.0|default:'' }}"
+                        placeholder="e.g. 150.00"
+                        attrs="step='0.01'"
+                        extra_class="sm:col-span-3">
+                    </c-input>
+                </c-form-section>
             </div>
 
-            <!-- Submit buttons -->
-            <div class="pt-3 flex justify-end gap-2.5 border-t border-gray-100 mt-4">
-                <a href="{% url 'projects:project_list' %}" class="bg-white py-1.5 px-3 border border-gray-200 rounded-lg shadow-soft text-[12px] font-medium text-gray-700 hover:bg-gray-50">
-                    Cancel
-                </a>
-                <button type="submit" class="inline-flex justify-center py-1.5 px-3 border border-transparent shadow-soft text-[12px] font-medium rounded-lg text-white bg-primary hover:opacity-90">
-                    <i data-lucide="check" class="w-3.5 h-3.5 mr-1.5 mt-px"></i>
-                    {% if object %}Save Changes{% else %}Create Project{% endif %}
-                </button>
+            {# ── Section 4: Schedule & Progress ────────────────────────── #}
+            <c-form-section title="Schedule &amp; Execution" subtitle="Planned dates, project milestone lifecycle, and initial progress">
+                <c-input
+                    name="start_date"
+                    type="date"
+                    label="Start Date"
+                    value="{{ form.start_date.value|date:'Y-m-d'|default:form.start_date.value|default:'' }}"
+                    required="true"
+                    error="{{ form.start_date.errors.0|default:'' }}"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-input
+                    name="completion_date"
+                    type="date"
+                    label="Completion Date (Optional)"
+                    value="{{ form.completion_date.value|date:'Y-m-d'|default:form.completion_date.value|default:'' }}"
+                    error="{{ form.completion_date.errors.0|default:'' }}"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                <c-select
+                    name="status"
+                    label="Status"
+                    value="{{ form.status.value|default:'Not Started' }}"
+                    required="true"
+                    error="{{ form.status.errors.0|default:'' }}"
+                    extra_class="sm:col-span-3">
+                    {% for code, label in form.fields.status.choices %}
+                    <option value="{{ code }}" {% if form.status.value == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <c-input
+                    name="progress_percent"
+                    type="number"
+                    label="Progress (%)"
+                    value="{{ form.progress_percent.value|default:0 }}"
+                    required="true"
+                    error="{{ form.progress_percent.errors.0|default:'' }}"
+                    min="0"
+                    max="100"
+                    extra_class="sm:col-span-3">
+                </c-input>
+
+                {% if not object and form.task_template %}
+                <c-select
+                    name="task_template"
+                    label="Initialize Tasks from Template (Optional)"
+                    value="{{ form.task_template.value|default:'' }}"
+                    help="If selected, tasks from this template will be scheduled starting from the start date."
+                    error="{{ form.task_template.errors.0|default:'' }}"
+                    extra_class="sm:col-span-6">
+                    <option value="">-- No Template --</option>
+                    {% for t in form.fields.task_template.queryset %}
+                    <option value="{{ t.pk }}" {% if form.task_template.value == t.pk or form.task_template.value == t.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ t.name }}
+                    </option>
+                    {% endfor %}
+                </c-select>
+                {% endif %}
+            </c-form-section>
+
+            {# ── Submit Button Group ───────────────────────────────────── #}
+            <div class="pt-4 border-t border-gray-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                <c-button href="{% url 'projects:project_list' %}" variant="secondary" size="md" label="Cancel"></c-button>
+                <c-button type="submit" variant="primary" size="md" icon="check" label="{% if object %}Save Changes{% else %}Create Project{% endif %}"></c-button>
             </div>
         </form>
-    </div>
+    </c-card>
 
+    {# ── Task Management Section (Edit Mode Only) ──────────────────────── #}
     {% if object %}
-    <!-- =========================================================
-         TASK MANAGEMENT SECTION (edit mode only)
-         ========================================================= -->
-    <div class="bg-white shadow-soft border border-gray-100 rounded-xl overflow-hidden" x-data="{ showAddForm: false }">
-        <!-- Section Header -->
-        <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-            <div class="flex items-center gap-2">
-                <div class="p-1.5 bg-indigo-50 rounded-lg">
-                    <i data-lucide="list-checks" class="w-4 h-4 text-indigo-600"></i>
-                </div>
-                <div>
-                    <h3 class="text-[13px] font-semibold text-gray-900">Project Tasks</h3>
-                    <p class="text-[11px] text-gray-400">{{ tasks.count }} task{{ tasks.count|pluralize }} assigned</p>
-                </div>
-            </div>
-            <div class="flex flex-wrap items-center gap-3">
-                {% if templates %}
-                <form action="{% url 'projects:project_apply_template' object.pk %}" method="POST"
-                      class="flex flex-wrap items-center gap-2">
+    <c-card padding="none">
+        <div class="p-3.5 border-b border-gray-100 dark:border-slate-800" x-data="{ showAddForm: false }">
+            <c-section-header
+                title="Project Tasks"
+                subtitle="{{ tasks.count }} task{{ tasks.count|pluralize }} assigned to this project"
+                count="{{ tasks.count }}"
+                icon="list-checks">
+                <c-slot name="actions">
+                    {% if templates %}
+                    <form action="{% url 'projects:project_apply_template' object.pk %}" method="POST" class="flex items-center gap-1.5">
+                        {% csrf_token %}
+                        <select name="template_id" required class="text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200">
+                            <option value="">-- Apply Template --</option>
+                            {% for t in templates %}
+                            <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
+                            {% endfor %}
+                        </select>
+                        <c-button type="submit" variant="secondary" size="sm" label="Apply"></c-button>
+                    </form>
+                    {% endif %}
+
+                    <c-button href="{% url 'projects:project_detail' object.pk %}" variant="secondary" size="sm" icon="external-link" label="Full View"></c-button>
+                    <c-button type="button" @click="showAddForm = !showAddForm" variant="primary" size="sm" icon="plus" label="Add Task"></c-button>
+                </c-slot>
+            </c-section-header>
+
+            {# Quick Add Task Form #}
+            <div x-show="showAddForm" x-cloak x-transition class="p-3 mt-3 rounded-xl border border-primary-100 dark:border-primary-900/40 bg-primary-50/20 dark:bg-primary-950/20">
+                <h4 class="text-[12px] font-semibold text-gray-800 dark:text-gray-200 mb-2.5 flex items-center gap-1.5">
+                    <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-primary"></i>
+                    Quick Add Task
+                </h4>
+                <form method="POST" action="{% url 'projects:project_task_add' object.pk %}" enctype="multipart/form-data" class="space-y-3">
                     {% csrf_token %}
-                    <select name="template_id" required class="text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
-                        <option value="">-- Apply Template --</option>
-                        {% for t in templates %}
-                        <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-semibold rounded-lg transition-colors">
-                        Apply
-                    </button>
-                </form>
-                {% endif %}
-
-                <a href="{% url 'projects:project_detail' object.pk %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                    <i data-lucide="external-link" class="w-3 h-3"></i>
-                    Full Task View
-                </a>
-                <button type="button" @click="showAddForm = !showAddForm"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-[11px] font-semibold rounded-lg bg-primary hover:opacity-90 transition-opacity">
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                    <span x-text="showAddForm ? 'Cancel' : 'Add Task'"></span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Quick-Add Task Form -->
-        <div x-show="showAddForm" x-cloak x-transition.opacity class="p-5 border-b border-gray-100 bg-indigo-50/40">
-            <h4 class="text-[12px] font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
-                <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-indigo-500"></i>
-                Quick Add Task
-            </h4>
-            <form method="POST" action="{% url 'projects:project_task_add' object.pk %}" enctype="multipart/form-data" class="space-y-3">
-                {% csrf_token %}
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-6">
-                    <!-- Activity -->
-                    <div class="sm:col-span-3">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Activity / Task Name *</label>
-                        <input type="text" name="activity" required placeholder="e.g. Install ductwork"
-                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder:text-gray-400 bg-white">
-                    </div>
-                    <!-- Responsible Person -->
-                    <div class="sm:col-span-3">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Assigned To</label>
-                        <select name="responsible_person" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                            <option value="">â€” Unassigned â€”</option>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-6">
+                        <c-input name="activity" label="Activity / Task Name" required="true" placeholder="e.g. Install ductwork" extra_class="sm:col-span-3"></c-input>
+                        <c-select name="responsible_person" label="Assigned To" extra_class="sm:col-span-3">
+                            <option value="">-- Unassigned --</option>
                             {% for emp in employees %}
                             <option value="{{ emp.pk }}">{{ emp.full_name }}{% if emp.designation %} ({{ emp.designation }}){% endif %}</option>
                             {% endfor %}
-                        </select>
-                    </div>
-                    <!-- Order -->
-                    <div class="sm:col-span-1">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Order *</label>
-                        <input type="number" name="order" min="1" value="{{ tasks.count|add:1 }}" required
-                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                    </div>
-                    <!-- Points -->
-                    <div class="sm:col-span-1">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Points</label>
-                        <input type="number" name="points" min="0" value="10" placeholder="10"
-                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                    </div>
-                    <!-- Status -->
-                    <div class="sm:col-span-2">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Status</label>
-                        <select name="status" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                        </c-select>
+                        <c-input name="order" type="number" label="Order" value="{{ tasks.count|add:1 }}" required="true" extra_class="sm:col-span-1"></c-input>
+                        <c-input name="points" type="number" label="Points" value="10" placeholder="10" extra_class="sm:col-span-1"></c-input>
+                        <c-select name="status" label="Status" value="Not Started" extra_class="sm:col-span-2">
                             <option value="Not Started" selected>Not Started</option>
                             <option value="In Progress">In Progress</option>
                             <option value="Delayed">Delayed</option>
                             <option value="Completed">Completed</option>
-                        </select>
+                        </c-select>
+                        <c-input name="planned_start" type="date" label="Planned Start" extra_class="sm:col-span-2"></c-input>
+                        <c-input name="planned_finish" type="date" label="Planned Finish" extra_class="sm:col-span-2"></c-input>
+                        <c-input name="remarks" label="Remarks" placeholder="Optional notes..." extra_class="sm:col-span-2"></c-input>
+                        <c-file-input name="assignment_attachment" label="Attachment (Optional)" accept=".jpg,.jpeg,.png,.pdf" extra_class="sm:col-span-6"></c-file-input>
                     </div>
-                    <!-- Planned Start -->
-                    <div class="sm:col-span-2">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Planned Start</label>
-                        <input type="date" name="planned_start"
-                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                    <div class="flex justify-end gap-2 pt-1">
+                        <c-button type="button" @click="showAddForm = false" variant="secondary" size="sm" label="Cancel"></c-button>
+                        <c-button type="submit" variant="primary" size="sm" icon="save" label="Save Task"></c-button>
                     </div>
-                    <!-- Planned Finish -->
-                    <div class="sm:col-span-2">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Planned Finish</label>
-                        <input type="date" name="planned_finish"
-                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                    </div>
-                    <!-- Remarks -->
-                    <div class="sm:col-span-4">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Remarks</label>
-                        <input type="text" name="remarks" placeholder="Optional notes..."
-                            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder:text-gray-400 bg-white">
-                    </div>
-                    <!-- Attachment -->
-                    <div class="sm:col-span-2">
-                        <label class="block text-[11px] font-medium text-gray-600 mb-1">Attachment</label>
-                        <input type="file" name="assignment_attachment" accept=".jpg,.jpeg,.png,.pdf"
-                            class="w-full text-[11px] text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2 pt-1">
-                    <button type="button" @click="showAddForm = false" class="px-3 py-1.5 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-1.5 bg-primary text-white text-[11px] font-semibold rounded-lg hover:opacity-90 transition-opacity">
-                        <i data-lucide="save" class="w-3 h-3"></i>
-                        Save Task
-                    </button>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
 
-        <!-- Task Table -->
+        {# Tasks List #}
         {% if tasks %}
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider w-10">#</th>
-                        <th class="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Activity</th>
-                        <th class="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Assigned To</th>
-                        <th class="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Planned</th>
-                        <th class="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                        <th class="px-4 py-3 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-50">
-                    {% for task in tasks %}
-                    <tr class="hover:bg-gray-50/60 transition-colors">
-                        <td class="px-4 py-3 text-[11px] font-bold text-gray-400">{{ task.order }}</td>
-                        <td class="px-4 py-3">
-                            <p class="text-[12px] font-semibold text-gray-900 truncate max-w-[280px]">{{ task.activity }}</p>
-                            {% if task.remarks %}<p class="text-[10px] text-gray-400 truncate max-w-[280px] mt-0.5">{{ task.remarks }}</p>{% endif %}
-                        </td>
-                        <td class="px-4 py-3">
-                            {% if task.responsible_person %}
-                            <div class="flex items-center gap-1.5">
-                                <div class="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                                    <span class="text-[9px] font-bold text-indigo-600">{{ task.responsible_person.full_name|first|upper }}</span>
-                                </div>
-                                <span class="text-[11px] text-gray-700 font-medium truncate max-w-[120px]">{{ task.responsible_person.full_name }}</span>
-                            </div>
-                            {% else %}
-                            <span class="text-[11px] text-gray-400 italic">Unassigned</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-[11px] text-gray-500">
-                            {% if task.planned_start %}
-                            <span>{{ task.planned_start|date:"d/m/Y" }}</span>
-                            {% if task.planned_finish %}<span class="text-gray-300 mx-1">â†’</span><span>{{ task.planned_finish|date:"d/m/Y" }}</span>{% endif %}
-                            {% else %}
-                            <span class="text-gray-300">â€”</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3">
-                            {% if task.status == 'Completed' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-100">Completed</span>
-                            {% elif task.status == 'In Progress' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">In Progress</span>
-                            {% elif task.status == 'Delayed' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-100">Delayed</span>
-                            {% else %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">Not Started</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-right">
-                            <div class="flex items-center justify-end gap-1.5">
-                                <a href="{% url 'projects:project_task_edit' task.pk %}" class="inline-flex items-center gap-1 px-2 py-1 border border-gray-200 rounded-md text-[10px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                                    <i data-lucide="pencil" class="w-3 h-3"></i>
-                                    Edit
-                                </a>
-                                <form method="POST" action="{% url 'projects:project_task_delete' task.pk %}" class="inline" onsubmit="return confirm('Delete task \'{{ task.activity }}\'?')">
-                                    {% csrf_token %}
-                                    <button type="submit" class="inline-flex items-center gap-1 px-2 py-1 border border-red-200 rounded-md text-[10px] font-medium text-red-600 hover:bg-red-50 transition-colors">
-                                        <i data-lucide="trash-2" class="w-3 h-3"></i>
-                                        Delete
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        {# Mobile view #}
+        <div class="block sm:hidden p-3 space-y-2">
+            {% for task in tasks %}
+            <c-mobile-record-card
+                title="#{{ task.order }} {{ task.activity }}"
+                subtitle="{{ task.responsible_person.full_name|default:'Unassigned' }}"
+                status="{{ task.status }}">
+                <c-slot name="meta">
+                    <span>{{ task.planned_start|date:"d M"|default:"—" }} &rarr; {{ task.planned_finish|date:"d M"|default:"—" }}</span>
+                </c-slot>
+                <c-slot name="actions">
+                    <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                    <form method="POST" action="{% url 'projects:project_task_delete' task.pk %}" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete task \'{{ task.activity|escapejs }}\'?', () => $el.submit()) : $el.submit()">
+                        {% csrf_token %}
+                        <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                    </form>
+                </c-slot>
+            </c-mobile-record-card>
+            {% endfor %}
+        </div>
+
+        {# Desktop view #}
+        <div class="hidden sm:block overflow-x-auto">
+            <c-table>
+                <c-slot name="header">
+                    <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-10">#</th>
+                    <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Activity</th>
+                    <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Assigned To</th>
+                    <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Planned</th>
+                    <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
+                    <th class="py-2.5 px-3 text-right text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                </c-slot>
+                {% for task in tasks %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800">
+                    <td class="py-2.5 px-3 text-[11px] font-bold text-gray-400 font-mono">{{ task.order }}</td>
+                    <td class="py-2.5 px-3">
+                        <div class="text-[12px] font-semibold text-gray-900 dark:text-white truncate max-w-xs">{{ task.activity }}</div>
+                        {% if task.remarks %}<div class="text-[10px] text-gray-400 truncate max-w-xs mt-0.5">{{ task.remarks }}</div>{% endif %}
+                    </td>
+                    <td class="py-2.5 px-3">
+                        {% if task.responsible_person %}
+                        <div class="flex items-center gap-1.5">
+                            <c-avatar name="{{ task.responsible_person.full_name }}" size="xs"></c-avatar>
+                            <span class="text-[11px] text-gray-700 dark:text-gray-300 font-medium truncate max-w-[140px]">{{ task.responsible_person.full_name }}</span>
+                        </div>
+                        {% else %}
+                        <span class="text-[11px] text-gray-400 italic">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-2.5 px-3 text-[11px] text-gray-500 font-mono whitespace-nowrap">
+                        {% if task.planned_start %}
+                            {{ task.planned_start|date:"d/m/Y" }}{% if task.planned_finish %} &rarr; {{ task.planned_finish|date:"d/m/Y" }}{% endif %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <c-status-pill :status="task.status" size="sm"></c-status-pill>
+                    </td>
+                    <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end gap-1.5">
+                            <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                            <form method="POST" action="{% url 'projects:project_task_delete' task.pk %}" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete task \'{{ task.activity|escapejs }}\'?', () => $el.submit()) : $el.submit()">
+                                {% csrf_token %}
+                                <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </c-table>
         </div>
         {% else %}
-        <div class="p-10 text-center">
-            <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <i data-lucide="clipboard-list" class="w-6 h-6 text-gray-300"></i>
-            </div>
-            <p class="text-[12px] font-medium text-gray-400">No tasks yet</p>
-            <p class="text-[11px] text-gray-300 mt-1">Click "Add Task" above to create the first task for this project.</p>
+        <div class="p-8 text-center">
+            <c-empty-state icon="list-checks" title="No tasks assigned" description="Click 'Add Task' above to define tasks for this project."></c-empty-state>
         </div>
         {% endif %}
-    </div>
+    </c-card>
     {% endif %}
 
-</div>
-
-
-<c-slot name="scripts">
-<script>
-    function initMemberSelector() {
-        Alpine.data('memberSelector', (fieldName) => ({
-            selected: [],
-            unselected: [],
-            showAddDropdown: false,
-            
-            init() {
-                const selectEl = this.$el.querySelector(`select[name="${fieldName}"]`);
-                if (!selectEl) return;
-                
-                const options = Array.from(selectEl.options);
-                
-                this.selected = options.filter(opt => opt.selected && opt.value).map(opt => ({
-                    value: opt.value,
-                    text: opt.text.trim()
-                }));
-                
-                this.unselected = options.filter(opt => !opt.selected && opt.value).map(opt => ({
-                    value: opt.value,
-                    text: opt.text.trim()
-                }));
-                
-                this.unselected.sort((a, b) => a.text.localeCompare(b.text));
-                
-                this.$watch('selected', (newVal) => {
-                    Array.from(selectEl.options).forEach(opt => {
-                        opt.selected = false;
-                    });
-                    newVal.forEach(item => {
-                        const opt = selectEl.querySelector(`option[value="${item.value}"]`);
-                        if (opt) opt.selected = true;
-                    });
-                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-                });
-            },
-            
-            addMember(value) {
-                if (!value) return;
-                const index = this.unselected.findIndex(item => item.value === value);
-                if (index !== -1) {
-                    const item = this.unselected[index];
-                    this.selected.push(item);
-                    this.unselected.splice(index, 1);
-                }
-                this.showAddDropdown = false;
-            },
-            
-            removeMember(value) {
-                const index = this.selected.findIndex(item => item.value === value);
-                if (index !== -1) {
-                    const item = this.selected[index];
-                    this.unselected.push(item);
-                    this.selected.splice(index, 1);
-                    this.unselected.sort((a, b) => a.text.localeCompare(b.text));
-                }
-            }
-        }));
-    }
-
-    if (window.Alpine) {
-        initMemberSelector();
-    } else {
-        document.addEventListener('alpine:init', initMemberSelector);
-    }
-</script>
-</c-slot>
+</c-page-container>
 </c-app-shell>
-

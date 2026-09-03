@@ -1,0 +1,41 @@
+{% comment %} c-section-header component
+   Props:
+   - title: heading text (13px max)
+   - subtitle: supporting text (11px max)
+   - count: optional numeric count badge
+   - icon: optional Lucide icon name
+   - extra_class: extra CSS classes
+   Slots:
+   - actions: right-aligned action buttons/links
+   - default: extra content below or within
+{% endcomment %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2 {{ extra_class }}">
+  <div class="flex items-center gap-2 min-w-0">
+    {% if icon %}
+      <i data-lucide="{{ icon }}" class="w-4 h-4 text-primary shrink-0"></i>
+    {% endif %}
+    <div class="min-w-0">
+      <div class="flex items-center gap-1.5">
+        <h3 class="text-[13px] font-semibold text-gray-900 dark:text-white truncate">
+          {{ title }}
+        </h3>
+        {% if count != None and count != '' %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+            {{ count }}
+          </span>
+        {% endif %}
+      </div>
+      {% if subtitle %}
+        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+          {{ subtitle }}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+  {% if actions %}
+    <div class="flex items-center gap-2 flex-wrap shrink-0">
+      {{ actions }}
+    </div>
+  {% endif %}
+  {{ slot }}
+</div>

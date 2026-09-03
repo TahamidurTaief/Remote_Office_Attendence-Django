@@ -1,1034 +1,898 @@
-<c-app-shell page_title="Project Details: {{ project.name }} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4">
-    <!-- Header -->
-    <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-            <div class="flex items-center gap-2.5">
-                <a href="{% url 'projects:project_list' %}" class="p-1.5 bg-white rounded-lg text-gray-500 hover:bg-gray-100 transition-colors border border-gray-100">
-                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
-                </a>
-                <h2 class="text-[14px] font-semibold text-gray-900">{{ project.name }}</h2>
-            </div>
-            <p class="text-[12px] text-gray-500 mt-1 ml-8">Client: <span class="font-semibold text-gray-700">{{ project.client_name }}</span></p>
-        </div>
-        <div class="flex items-center gap-2 ml-8 md:ml-0">
-            <a href="{% url 'projects:export_pdf' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-                <i data-lucide="file-text" class="w-3.5 h-3.5 mr-1.5 text-red-500"></i>
-                Export Work Plan Sheet (PDF)
-            </a>
-            <a href="{% url 'projects:project_gantt' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-indigo-200 rounded-lg shadow-sm text-[12px] font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors">
-                <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 mr-1.5"></i>
-                Gantt Chart
-            </a>
-            <a href="{% url 'audit:activity_list' %}?module=projects&object_id={{ project.pk }}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-                <i data-lucide="history" class="w-3.5 h-3.5 mr-1.5 text-gray-500"></i>
-                History
-            </a>
-            <a href="{% url 'projects:project_edit' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
-                <i data-lucide="edit" class="w-3.5 h-3.5 mr-1.5"></i>
-                Edit Project
-            </a>
-            <form action="{% url 'projects:project_delete' project.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to permanently delete this project?', () => $el.submit())">
-                {% csrf_token %}
-                <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-red-700 bg-white hover:bg-red-50">
-                    <i data-lucide="trash-2" class="w-3.5 h-3.5 mr-1.5"></i>
-                    Delete
-                </button>
-            </form>
-        </div>
-    </div>
+<c-app-shell page_title="Project: {{ project.name }} | FieldTrack" active_href="{{ request.path }}">
+<c-page-container x-data="{
+    activeTab: 'tasks',
+    statusFilter: 'all',
+    searchQuery: '',
+    selectedMember: '{{ selected_member_id|default:'' }}',
+    selectedTasks: [],
+    selectAll: false,
+    toggleAll() {
+        if (this.selectAll) {
+            this.selectedTasks = [{% for t in tasks %}'{{ t.pk }}',{% endfor %}];
+        } else {
+            this.selectedTasks = [];
+        }
+    }
+}">
 
-    <!-- Main Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <!-- Status & Progress Card -->
-        <div class="md:col-span-1 bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-            <div>
-                <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Project Status</h3>
-                <div class="mb-4">
-                    {% if project.status == 'Completed' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold bg-green-50 text-green-700 border border-green-100">Completed</span>
-                    {% elif project.status == 'In Progress' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">In Progress</span>
-                    {% elif project.status == 'Delayed' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold bg-red-50 text-red-700 border border-red-100">Delayed</span>
-                    {% else %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold bg-gray-50 text-gray-600 border border-gray-100">Not Started</span>
-                    {% endif %}
-                </div>
-            </div>
-            <div>
-                <div class="flex items-center justify-between text-[11px] text-gray-500 mb-1">
-                    <span>Overall Progress</span>
-                    <span class="font-bold text-gray-900 text-[12px]">{{ project.progress_percent }}%</span>
-                </div>
-                <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div class="bg-primary h-2 rounded-full" style="width: {{ project.progress_percent }}%"></div>
-                </div>
-            </div>
-        </div>
+    {# ── Topbar / Header Card ──────────────────────────────────────────── #}
+    <c-card padding="sm">
+        <c-section-header title="{{ project.name }}" subtitle="Client: {{ project.client_name|default:'Unassigned' }}">
+            <c-slot name="actions">
+                <c-button href="{% url 'projects:project_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Projects"></c-button>
+                <c-button href="{% url 'projects:export_pdf' project.pk %}" variant="secondary" size="sm" icon="file-text" label="Work Plan (PDF)"></c-button>
+                <c-button href="{% url 'projects:project_gantt' project.pk %}" variant="secondary" size="sm" icon="bar-chart-2" label="Gantt"></c-button>
+                <c-button href="{% url 'audit:activity_list' %}?module=projects&object_id={{ project.pk }}" variant="secondary" size="sm" icon="history" label="History"></c-button>
+                <c-button href="{% url 'projects:project_edit' project.pk %}" variant="primary" size="sm" icon="edit" label="Edit Project"></c-button>
+                <c-button type="button" @click="$dispatch('open-modal', {id: 'delete-project-modal'})" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+            </c-slot>
+        </c-section-header>
+    </c-card>
 
-        <!-- Specs Card -->
-        <div class="md:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Project Specifications</h3>
-            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6">
-                <div>
-                    <dt class="text-[11px] font-semibold text-gray-400">Project Type</dt>
-                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900">{{ project.project_type.name }}</dd>
+    {# ── Project Summary Cards Grid ────────────────────────────────────── #}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+        {# Status & Progress Card #}
+        <c-card padding="md" extra_class="flex flex-col justify-between">
+            <c-section-header title="Status &amp; Progress"></c-section-header>
+            <div class="space-y-3 py-1">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">Current Status:</span>
+                    <c-status-pill :status="project.status"></c-status-pill>
+                </div>
+                <c-progress-bar :value="project.progress_percent" label="Overall Progress" size="md"></c-progress-bar>
+            </div>
+            <div class="pt-2 border-t border-gray-100 dark:border-slate-800 text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                <span>Start: {{ project.start_date|date:"d M Y"|default:"TBD" }}</span>
+                <span>Target: {{ project.completion_date|date:"d M Y"|default:"TBD" }}</span>
+            </div>
+        </c-card>
+
+        {# Specifications Card #}
+        <c-card padding="md" extra_class="md:col-span-2">
+            <c-section-header title="Project Specifications"></c-section-header>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-y-2.5 gap-x-4 pt-1 text-[12px]">
+                <div class="flex items-baseline justify-between border-b border-gray-50 dark:border-slate-800/60 pb-1.5">
+                    <dt class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Project Type</dt>
+                    <dd class="font-semibold text-gray-800 dark:text-gray-200">{{ project.project_type.name }}</dd>
                 </div>
                 {% if project.project_type.name == 'HVAC Installation' %}
-                <div>
-                    <dt class="text-[11px] font-semibold text-gray-400">System Type</dt>
-                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900">{{ project.system_type|default:"-" }}</dd>
+                <div class="flex items-baseline justify-between border-b border-gray-50 dark:border-slate-800/60 pb-1.5">
+                    <dt class="text-[11px] font-medium text-gray-500 dark:text-gray-400">System Type</dt>
+                    <dd class="font-semibold text-gray-800 dark:text-gray-200">{{ project.system_type|default:"—" }}</dd>
                 </div>
-                <div>
-                    <dt class="text-[11px] font-semibold text-gray-400">Capacity (TR)</dt>
-                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900">
-                        {% if project.hvac_capacity_tr %}{{ project.hvac_capacity_tr }} Tons of Refrigeration{% else %}Not Specified{% endif %}
-                    </dd>
+                <div class="flex items-baseline justify-between border-b border-gray-50 dark:border-slate-800/60 pb-1.5">
+                    <dt class="text-[11px] font-medium text-gray-500 dark:text-gray-400">HVAC Capacity</dt>
+                    <dd class="font-semibold text-gray-800 dark:text-gray-200">{% if project.hvac_capacity_tr %}{{ project.hvac_capacity_tr }} TR{% else %}—{% endif %}</dd>
                 </div>
                 {% endif %}
-                <div>
-                    <dt class="text-[11px] font-semibold text-gray-400">Location</dt>
-                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900 flex items-center gap-1">
-                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-gray-400"></i>
+                <div class="flex items-baseline justify-between border-b border-gray-50 dark:border-slate-800/60 pb-1.5">
+                    <dt class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Branch</dt>
+                    <dd class="font-semibold text-gray-800 dark:text-gray-200">{{ project.branch.name|default:"Unassigned" }}</dd>
+                </div>
+                <div class="flex items-baseline justify-between border-b border-gray-50 dark:border-slate-800/60 pb-1.5 sm:col-span-2">
+                    <dt class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Location</dt>
+                    <dd class="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1">
+                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-primary"></i>
                         {{ project.location }}
                     </dd>
                 </div>
-                <div>
-                    <dt class="text-[11px] font-semibold text-gray-400">Associated Branch</dt>
-                    <dd class="mt-0.5 text-[12px] font-medium text-gray-900">{{ project.branch.name|default:"Unassigned" }}</dd>
-                </div>
             </dl>
-        </div>
+        </c-card>
     </div>
 
-    <!-- Details Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <!-- Team Members -->
-        <div class="md:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Assigned Personnel</h3>
-            <div class="space-y-3">
-                <!-- Project Managers -->
-                <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <p class="text-[10px] text-gray-400 font-semibold uppercase mb-2">Project Managers</p>
-                    <div class="space-y-2">
+    {# ── Personnel & Stakeholders ──────────────────────────────────────── #}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+        {# Assigned Personnel Card #}
+        <c-card padding="md" extra_class="md:col-span-2">
+            <c-section-header title="Assigned Personnel" subtitle="Managers, engineers, and deployed workforce"></c-section-header>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                {# Managers #}
+                <div class="p-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2">Managers</span>
+                    <div class="space-y-1.5">
                         {% for pm in project.project_managers.all %}
-                        <div class="flex items-center justify-between {% if not forloop.last %}border-b border-gray-100 pb-2{% endif %}">
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[10px]">PM</div>
-                                <span class="text-[12px] font-semibold text-gray-900">{{ pm.full_name }}</span>
-                            </div>
-                            <span class="text-[10px] text-gray-505 bg-white border px-1.5 py-0.5 rounded-lg font-medium">{{ pm.employee_id }}</span>
+                        <div class="flex items-center gap-2">
+                            <c-avatar name="{{ pm.full_name }}" size="xs"></c-avatar>
+                            <span class="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate">{{ pm.full_name }}</span>
                         </div>
                         {% empty %}
-                        <span class="text-[12px] text-gray-400 italic">No managers assigned</span>
+                        <span class="text-[11px] text-gray-400 italic">None</span>
                         {% endfor %}
                     </div>
                 </div>
 
-                <!-- Site Engineers -->
-                <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <p class="text-[10px] text-gray-400 font-semibold uppercase mb-2">Site Engineers</p>
-                    <div class="space-y-2">
+                {# Site Engineers #}
+                <div class="p-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2">Site Engineers</span>
+                    <div class="space-y-1.5">
                         {% for se in project.site_engineers.all %}
-                        <div class="flex items-center justify-between {% if not forloop.last %}border-b border-gray-100 pb-2{% endif %}">
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[10px]">SE</div>
-                                <span class="text-[12px] font-semibold text-gray-900">{{ se.full_name }}</span>
-                            </div>
-                            <span class="text-[10px] text-gray-505 bg-white border px-1.5 py-0.5 rounded-lg font-medium">{{ se.employee_id }}</span>
+                        <div class="flex items-center gap-2">
+                            <c-avatar name="{{ se.full_name }}" size="xs"></c-avatar>
+                            <span class="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate">{{ se.full_name }}</span>
                         </div>
                         {% empty %}
-                        <span class="text-[12px] text-gray-400 italic">No engineers assigned</span>
+                        <span class="text-[11px] text-gray-400 italic">None</span>
                         {% endfor %}
                     </div>
                 </div>
 
-                <!-- Project Members -->
-                <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <p class="text-[10px] text-gray-400 font-semibold uppercase mb-2">Project Members</p>
-                    <div class="space-y-2">
-                        {% for mem in project.project_members.all %}
-                        <div class="flex items-center justify-between {% if not forloop.last %}border-b border-gray-100 pb-2{% endif %}">
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-[10px]">MB</div>
-                                <span class="text-[12px] font-semibold text-gray-900">{{ mem.full_name }}</span>
-                            </div>
-                            <span class="text-[10px] text-gray-505 bg-white border px-1.5 py-0.5 rounded-lg font-medium">{{ mem.employee_id }}</span>
+                {# Project Members #}
+                <div class="p-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2">Team Members</span>
+                    <div class="space-y-1.5">
+                        {% for member in project.project_members.all %}
+                        <div class="flex items-center gap-2">
+                            <c-avatar name="{{ member.full_name }}" size="xs"></c-avatar>
+                            <span class="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate">{{ member.full_name }}</span>
                         </div>
                         {% empty %}
-                        <span class="text-[12px] text-gray-400 italic">No members assigned</span>
+                        <span class="text-[11px] text-gray-400 italic">None</span>
                         {% endfor %}
                     </div>
                 </div>
             </div>
-        </div>
+        </c-card>
 
-        <!-- Stakeholders & Timeline -->
-        <div class="md:col-span-1 bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between gap-4">
-            <div>
-                <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Project Stakeholders</h3>
-                <dl class="space-y-2.5">
-                    <div>
-                        <dt class="text-[10px] font-semibold text-gray-400 uppercase">Consultant</dt>
-                        <dd class="text-[12px] font-medium text-gray-800">{{ project.consultant|default:"-" }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-[10px] font-semibold text-gray-400 uppercase">Main Contractor</dt>
-                        <dd class="text-[12px] font-medium text-gray-800">{{ project.main_contractor|default:"-" }}</dd>
-                    </div>
-                </dl>
-            </div>
-            <div class="border-t border-gray-100 pt-3">
-                <h3 class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">Timeline</h3>
-                <div class="space-y-1.5 text-[12px] text-gray-600">
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 font-medium">Start Date:</span>
-                        <span class="font-semibold text-gray-800">{{ project.start_date|date:"d/m/Y" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 font-medium">Completion:</span>
-                        <span class="font-semibold text-gray-800">
-                            {% if project.completion_date %}{{ project.completion_date|date:"d/m/Y" }}{% else %}<span class="text-gray-400 italic">Ongoing</span>{% endif %}
-                        </span>
-                    </div>
+        {# Key Stakeholders Card #}
+        <c-card padding="md">
+            <c-section-header title="Key Stakeholders"></c-section-header>
+            <div class="space-y-2 pt-1 text-[11px]">
+                <div class="border-b border-gray-50 dark:border-slate-800/60 pb-1.5">
+                    <span class="text-[10px] uppercase font-semibold text-gray-400 block">Client Contact</span>
+                    <p class="font-semibold text-gray-800 dark:text-gray-200 text-[12px]">{{ project.client_name|default:"—" }}</p>
+                    {% if project.client_email %}<p class="text-gray-500 font-mono text-[10px]">{{ project.client_email }}</p>{% endif %}
+                </div>
+                <div class="border-b border-gray-50 dark:border-slate-800/60 pb-1.5">
+                    <span class="text-[10px] uppercase font-semibold text-gray-400 block">Consultant</span>
+                    <p class="font-semibold text-gray-800 dark:text-gray-200 text-[12px]">{{ project.consultant|default:"—" }}</p>
+                    {% if project.consultant_email %}<p class="text-gray-500 font-mono text-[10px]">{{ project.consultant_email }}</p>{% endif %}
+                </div>
+                <div>
+                    <span class="text-[10px] uppercase font-semibold text-gray-400 block">Main Contractor</span>
+                    <p class="font-semibold text-gray-800 dark:text-gray-200 text-[12px]">{{ project.main_contractor|default:"—" }}</p>
                 </div>
             </div>
-        </div>
+        </c-card>
     </div>
 
-    <!-- Tasks Checklist Section -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4"
-         x-data="{
-            statusFilter: 'all',
-            selectedTasks: [],
-            bulkStatus: '',
-            searchQuery: '',
-            assigneeFilter: '',
-            priorityFilter: 'all',
-            get filteredCount() {
-                let count = 0;
-                document.querySelectorAll('tr[data-task-id]').forEach(tr => {
-                    if (tr.style.display !== 'none') count++;
-                });
-                return count;
-            }
-         }">
+    {# ── Navigation Tabs ──────────────────────────────────────────────── #}
+    <div class="flex items-center gap-1.5 border-b border-gray-200 dark:border-slate-800 overflow-x-auto pb-1 scrollbar-hide">
+        <button type="button" @click="activeTab = 'tasks'"
+                :class="activeTab === 'tasks' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
+                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+            <span>Tasks</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ all_count }}</span>
+        </button>
 
-        {# Delay warning banner — visible when any task has status 'Delayed' #}
-        {% for task in tasks %}{% if task.status == 'Delayed' %}
-        <div class="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-[12px] text-amber-800">
-            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-500 shrink-0"></i>
-            <span class="font-semibold">Delay alert:</span>
-            One or more tasks are marked <strong>Delayed</strong>. Review and update schedules as needed.
-        </div>
-        {% endif %}{% endfor %}
+        <button type="button" @click="activeTab = 'logs'"
+                :class="activeTab === 'logs' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
+                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>
+            <span>Daily Progress Logs</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ progress_logs.count }}</span>
+        </button>
 
-        <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white">
-            <div>
-                <h3 class="text-[14px] font-semibold text-gray-900">Project Tasks Checklist</h3>
-                <p class="text-[12px] text-gray-500 mt-0.5">Add, update, or schedule task checklist items for this project.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-                {% if templates %}
-                <form action="{% url 'projects:project_apply_template' project.pk %}" method="POST"
-                      class="flex flex-wrap items-center gap-2">
-                    {% csrf_token %}
-                    <select name="template_id" required class="text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white">
-                        <option value="">-- Select Template --</option>
-                        {% for t in templates %}
-                        <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90 whitespace-nowrap">
-                        <i data-lucide="copy" class="w-3.5 h-3.5 mr-1"></i>
-                        Apply Template
+        <button type="button" @click="activeTab = 'manpower'"
+                :class="activeTab === 'manpower' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
+                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="users" class="w-3.5 h-3.5"></i>
+            <span>Manpower Deployment</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ manpower_logs.count }}</span>
+        </button>
+
+        <button type="button" @click="activeTab = 'materials'"
+                :class="activeTab === 'materials' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
+                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="package" class="w-3.5 h-3.5"></i>
+            <span>Material Tracking</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ materials.count }}</span>
+        </button>
+
+        <button type="button" @click="activeTab = 'signoff'"
+                :class="activeTab === 'signoff' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
+                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+            <span>Work Plan Sign-off</span>
+        </button>
+
+        <button type="button" @click="activeTab = 'activities'"
+                :class="activeTab === 'activities' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
+                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="history" class="w-3.5 h-3.5"></i>
+            <span>Activity History</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ activities.count }}</span>
+        </button>
+    </div>
+
+    {# ── TAB 1: Tasks ─────────────────────────────────────────────────── #}
+    <div x-show="activeTab === 'tasks'" x-cloak class="space-y-3">
+        <c-card padding="sm">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+                {# Status Pills #}
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <button type="button" @click="statusFilter = 'all'"
+                            :class="statusFilter === 'all' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'"
+                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
+                        All ({{ all_count }})
                     </button>
+                    <button type="button" @click="statusFilter = 'Not Started'"
+                            :class="statusFilter === 'Not Started' ? 'bg-gray-700 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'"
+                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
+                        Not Started ({{ not_started_count }})
+                    </button>
+                    <button type="button" @click="statusFilter = 'In Progress'"
+                            :class="statusFilter === 'In Progress' ? 'bg-blue-600 text-white' : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100'"
+                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
+                        In Progress ({{ in_progress_count }})
+                    </button>
+                    <button type="button" @click="statusFilter = 'Delayed'"
+                            :class="statusFilter === 'Delayed' ? 'bg-red-600 text-white' : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100'"
+                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
+                        Delayed ({{ delayed_count }})
+                    </button>
+                    <button type="button" @click="statusFilter = 'Completed'"
+                            :class="statusFilter === 'Completed' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'"
+                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
+                        Completed ({{ completed_count }})
+                    </button>
+                </div>
+
+                {# Actions #}
+                <div class="flex items-center gap-2 flex-wrap">
+                    {% if templates %}
+                    <c-button type="button" @click="$dispatch('open-modal', {id: 'apply-template-modal'})" variant="secondary" size="sm" icon="layers" label="Apply Template"></c-button>
+                    {% endif %}
+                    <c-button href="{% url 'projects:export_tasks_csv' project.pk %}" variant="secondary" size="sm" icon="download" label="CSV"></c-button>
+                    <c-button type="button" @click="$dispatch('open-modal', {id: 'add-task-modal'})" variant="primary" size="sm" icon="plus" label="Add Task"></c-button>
+                </div>
+            </div>
+
+            {# Bulk Actions Row #}
+            <div x-show="selectedTasks.length > 0" x-cloak x-transition class="mt-3 pt-2 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap bg-primary-50/40 dark:bg-primary-950/30 p-2 rounded-lg">
+                <span class="text-[11px] font-semibold text-primary">
+                    <span x-text="selectedTasks.length"></span> task(s) selected
+                </span>
+                <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST" class="flex items-center gap-2">
+                    {% csrf_token %}
+                    <template x-for="id in selectedTasks" :key="id">
+                        <input type="hidden" name="task_ids" :value="id">
+                    </template>
+                    <select name="status" class="text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200">
+                        <option value="Not Started">Not Started</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Delayed">Delayed</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                    <c-button type="submit" variant="secondary" size="sm" label="Update Status"></c-button>
                 </form>
-                {% endif %}
-                <c-button variant="secondary" size="sm" href="{% url 'projects:project_gantt_import' project.pk %}" label="Import Gantt Excel" icon="upload"></c-button>
-                <a href="{% url 'projects:export_tasks_csv' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i data-lucide="download" class="w-3.5 h-3.5 mr-1 text-primary-500"></i>
-                    Export CSV
-                </a>
-                <a href="{% url 'projects:project_task_add' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
-                    <i data-lucide="plus" class="w-3.5 h-3.5 mr-1"></i>
-                    Add Task
-                </a>
             </div>
+        </c-card>
+
+        {# Mobile Task Cards View #}
+        <div class="block sm:hidden space-y-2.5">
+            {% for task in tasks %}
+            <div x-show="(statusFilter === 'all' || statusFilter === '{{ task.status }}') && (!selectedMember || selectedMember === '{{ task.responsible_person_id|default:'' }}')">
+                <c-mobile-record-card
+                    title="#{{ task.order }} {{ task.activity }}"
+                    subtitle="{{ task.responsible_person.full_name|default:'Unassigned' }}"
+                    status="{{ task.status }}">
+                    <c-slot name="meta">
+                        <span class="font-mono">{{ task.planned_start|date:"d/m/Y"|default:"—" }} &rarr; {{ task.planned_finish|date:"d/m/Y"|default:"—" }}</span>
+                        {% if task.duration_days %}<span>{{ task.duration_days }} days</span>{% endif %}
+                    </c-slot>
+                    <c-slot name="actions">
+                        <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                        <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
+                            {% csrf_token %}
+                            <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                        </form>
+                    </c-slot>
+                </c-mobile-record-card>
+            </div>
+            {% empty %}
+            <c-card padding="lg">
+                <c-empty-state icon="list-checks" title="No tasks defined" description="Click 'Add Task' above to start tracking work."></c-empty-state>
+            </c-card>
+            {% endfor %}
         </div>
 
-        {# New Search & Filters Bar #}
-        <div class="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3 bg-gray-50/40">
-            <!-- Search -->
-            <div class="relative w-full sm:w-60">
-                <i data-lucide="search" class="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400"></i>
-                <input type="text"
-                       x-model="searchQuery"
-                       placeholder="Search tasks..."
-                       class="pl-8 pr-3 py-1.5 w-full bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-500">
-            </div>
-
-            <!-- Assignee -->
-            <div class="w-full sm:w-48">
-                <select x-model="assigneeFilter"
-                        class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
-                    <option value="">All Assignees</option>
-                    {% for member in project_members %}
-                    <option value="{{ member.id }}">{{ member.full_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <!-- Priority -->
-            <div class="w-full sm:w-40">
-                <select x-model="priorityFilter"
-                        class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
-                    <option value="all">All Priorities</option>
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                </select>
-            </div>
-
-            <!-- Status Dropdown -->
-            <div class="w-full sm:w-40">
-                <select x-model="statusFilter"
-                        class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
-                    <option value="all">All Status</option>
-                    <option value="Not Started">Not Started</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Delayed">Delayed</option>
-                    <option value="Completed">Completed</option>
-                </select>
-            </div>
-
-            <!-- Date Range -->
-            <div class="relative w-full sm:w-44">
-                <i data-lucide="calendar" class="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400"></i>
-                <input type="text"
-                       placeholder="All Time"
-                       readonly
-                       class="pl-8 pr-3 py-1.5 w-full bg-white border border-gray-200 rounded-lg text-xs cursor-pointer focus:outline-none">
-            </div>
-
-            <!-- Funnel & Clear All -->
-            <div class="flex items-center gap-2 ml-auto">
-                <button type="button" class="inline-flex items-center px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 mr-1"></i>
-                    Filters
-                </button>
-                <button type="button"
-                        @click="searchQuery = ''; assigneeFilter = ''; priorityFilter = 'all'; statusFilter = 'all';"
-                        class="text-xs text-primary-600 hover:text-primary-800 font-semibold cursor-pointer">
-                    Clear All
-                </button>
-            </div>
-        </div>
-
-        <!-- Status counts Tabs bar -->
-        <div class="px-4 py-2.5 border-b border-gray-100 flex flex-wrap items-center gap-2 bg-white">
-            <button type="button"
-                    @click="statusFilter = 'all'"
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
-                    :class="statusFilter === 'all' ? 'bg-green-600 text-white shadow-sm' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/50'">
-                All
-                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'all' ? 'bg-green-700 text-white' : 'bg-gray-200 text-gray-700'">{{ all_count }}</span>
-            </button>
-            <button type="button"
-                    @click="statusFilter = 'Not Started'"
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
-                    :class="statusFilter === 'Not Started' ? 'bg-gray-800 text-white shadow-sm' : 'bg-gray-50 text-gray-655 hover:bg-gray-100 border border-gray-200/50'">
-                Not Started
-                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'Not Started' ? 'bg-gray-900 text-gray-300' : 'bg-gray-200 text-gray-700'">{{ not_started_count }}</span>
-            </button>
-            <button type="button"
-                    @click="statusFilter = 'In Progress'"
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
-                    :class="statusFilter === 'In Progress' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-50 text-blue-600 hover:bg-blue-100/50 border border-blue-200'">
-                In Progress
-                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'In Progress' ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-700'">{{ in_progress_count }}</span>
-            </button>
-            <button type="button"
-                    @click="statusFilter = 'Delayed'"
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
-                    :class="statusFilter === 'Delayed' ? 'bg-red-600 text-white shadow-sm' : 'bg-gray-50 text-red-655 hover:bg-red-100 border border-red-200'">
-                Delayed
-                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'Delayed' ? 'bg-red-700 text-white' : 'bg-gray-200 text-gray-700'">{{ delayed_count }}</span>
-            </button>
-            <button type="button"
-                    @click="statusFilter = 'Completed'"
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
-                    :class="statusFilter === 'Completed' ? 'bg-green-600 text-white shadow-sm' : 'bg-gray-50 text-green-655 hover:bg-green-100 border border-green-200'">
-                Completed
-                <span class="px-1.5 py-0.2 text-[9px] rounded-full font-bold" :class="statusFilter === 'Completed' ? 'bg-green-700 text-white' : 'bg-gray-200 text-gray-700'">{{ completed_count }}</span>
-            </button>
-        </div>
-
-        {# Bulk actions bar #}
-        <div class="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between" x-show="selectedTasks.length > 0" x-cloak>
-            <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST" class="flex items-center gap-2">
-                {% csrf_token %}
-                <template x-for="id in selectedTasks" :key="id">
-                    <input type="hidden" name="task_ids" :value="id">
-                </template>
-                <span class="text-[11px] text-gray-500 font-medium" x-text="selectedTasks.length + ' selected'"></span>
-                <select name="new_status" x-model="bulkStatus" class="text-[11px] border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500">
-                    <option value="">-- Set status --</option>
-                    <option value="Not Started">Not Started</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Delayed">Delayed</option>
-                    <option value="Completed">Completed</option>
-                </select>
-                <button type="submit" :disabled="!bulkStatus" class="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium text-white bg-primary hover:opacity-90 disabled:opacity-40">
-                    Apply Status
-                </button>
-                <button type="button" @click="selectedTasks = []" class="text-[11px] text-gray-400 hover:text-gray-650 ml-2">Clear Selection</button>
-            </form>
-        </div>
-
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 bg-white">
-                <thead class="bg-gray-50">
-                    <tr>
-                        {% if tasks %}
-                        <th scope="col" class="px-4 py-2.5 w-8">
-                            <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-300"
-                                   @change="
-                                       if ($event.target.checked) {
-                                           selectedTasks = [...document.querySelectorAll('tr[data-task-id]')].filter(el => el.style.display !== 'none').map(el => el.dataset.taskId);
-                                       } else {
-                                           selectedTasks = [];
-                                       }"
-                                   title="Select all tasks">
+        {# Desktop Task Table View #}
+        <div class="hidden sm:block">
+            <c-card padding="none">
+                <c-table>
+                    <c-slot name="header">
+                        <th class="py-2 px-3 text-left w-8">
+                            <input type="checkbox" x-model="selectAll" @change="toggleAll()" class="rounded border-gray-300 text-primary">
                         </th>
-                        {% endif %}
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12">#</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Task</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Assignee</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Priority</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-36">Status</th>
-                        <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Remarks</th>
-                        <th scope="col" class="relative px-4 py-2.5 w-24 text-right"><span class="sr-only">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-100">
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-10">#</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Activity</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Assigned To</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Timeline</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
+                        <th class="py-2.5 px-3 text-right text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    </c-slot>
                     {% for task in tasks %}
-                    <tr class="hover:bg-gray-50/70 transition-colors"
-                        data-task-id="{{ task.pk }}"
-                        data-task-status="{{ task.status }}"
-                        x-show="(statusFilter === 'all' || statusFilter === '{{ task.status }}') &&
-                                (!searchQuery || '{{ task.activity|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase())) &&
-                                (!assigneeFilter || '{{ task.responsible_person.id }}' === assigneeFilter) &&
-                                (priorityFilter === 'all' || (priorityFilter === 'High' && {{ task.points }} >= 20) || (priorityFilter === 'Medium' && {{ task.points }} >= 10 && {{ task.points }} < 20) || (priorityFilter === 'Low' && {{ task.points }} < 10))"
-                    >
-                        <td class="px-4 py-2.5 w-8">
-                            <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-300"
-                                   :checked="selectedTasks.includes('{{ task.pk }}')"
-                                   @change="
-                                       if ($event.target.checked) {
-                                           selectedTasks.push('{{ task.pk }}');
-                                       } else {
-                                           selectedTasks = selectedTasks.filter(id => id !== '{{ task.pk }}');
-                                       }">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800"
+                        x-show="(statusFilter === 'all' || statusFilter === '{{ task.status }}') && (!selectedMember || selectedMember === '{{ task.responsible_person_id|default:'' }}')">
+                        <td class="py-2 px-3">
+                            <input type="checkbox" value="{{ task.pk }}" x-model="selectedTasks" class="rounded border-gray-300 text-primary">
                         </td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px] text-gray-900 font-semibold">{{ task.order }}</td>
-                        
-                        <!-- Task Column -->
-                        <td class="px-4 py-2.5 text-[12px] text-gray-800 font-medium">
-                            <div class="font-semibold text-gray-900 leading-tight">{{ task.activity }}</div>
-                            <div class="text-[10px] text-gray-400 mt-0.5">REF: PMP-2026-{{ task.pk }}</div>
-                            <div class="flex items-center gap-2.5 mt-1">
-                                {% if task.assignment_attachment %}
-                                <a href="{{ task.assignment_attachment.url }}" target="_blank" class="inline-flex items-center text-[10px] text-gray-400 hover:text-primary-600 transition-colors">
-                                    <i data-lucide="paperclip" class="w-3.5 h-3.5 mr-0.5 text-gray-400"></i>1
-                                </a>
-                                {% endif %}
-                                {% if task.completion_attachment %}
-                                <a href="{{ task.completion_attachment.url }}" target="_blank" class="inline-flex items-center text-[10px] text-green-600 hover:text-green-800 transition-colors">
-                                    <i data-lucide="check-square" class="w-3.5 h-3.5 mr-0.5"></i>Proof
-                                </a>
-                                {% endif %}
-                                {% if task.employee_note %}
-                                <span class="inline-flex items-center text-[10px] text-gray-400" title="{{ task.employee_note }}">
-                                    <i data-lucide="message-square" class="w-3.5 h-3.5 mr-0.5"></i>1
-                                </span>
-                                {% endif %}
-                            </div>
+                        <td class="py-2.5 px-3 text-[11px] font-bold text-gray-400 font-mono">{{ task.order }}</td>
+                        <td class="py-2.5 px-3">
+                            <div class="text-[12px] font-semibold text-gray-900 dark:text-white truncate max-w-xs">{{ task.activity }}</div>
+                            {% if task.remarks %}<div class="text-[10px] text-gray-400 truncate max-w-xs mt-0.5">{{ task.remarks }}</div>{% endif %}
                         </td>
-
-                        <!-- Assignee Column -->
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px]">
+                        <td class="py-2.5 px-3">
                             {% if task.responsible_person %}
-                            <div class="flex items-center gap-2.5">
-                                {% if task.responsible_person.profile_photo %}
-                                <img src="{{ task.responsible_person.profile_photo.url }}" class="w-8 h-8 rounded-full object-cover">
-                                {% else %}
-                                <div class="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[10px]">
-                                    {{ task.responsible_person.full_name|slice:":2"|upper }}
-                                </div>
-                                {% endif %}
-                                <div class="min-w-0">
-                                    <div class="font-semibold text-gray-900 leading-none truncate max-w-[140px]">{{ task.responsible_person.full_name }}</div>
-                                    <div class="text-[9px] text-gray-450 uppercase font-semibold mt-1 leading-none truncate max-w-[140px]">{{ task.responsible_person.designation|default:"Staff" }}</div>
-                                </div>
+                            <div class="flex items-center gap-1.5">
+                                <c-avatar name="{{ task.responsible_person.full_name }}" size="xs"></c-avatar>
+                                <span class="text-[11px] text-gray-700 dark:text-gray-300 font-medium truncate max-w-[120px]">{{ task.responsible_person.full_name }}</span>
                             </div>
                             {% else %}
-                            <span class="text-gray-400 italic text-[11px]">Unassigned</span>
+                            <span class="text-[11px] text-gray-400 italic">Unassigned</span>
                             {% endif %}
                         </td>
-
-                        <!-- Priority Column -->
-                        <td class="px-4 py-2.5 whitespace-nowrap">
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold
-                                {% if task.points >= 20 %}bg-red-50 text-red-700 border border-red-150
-                                {% elif task.points >= 10 %}bg-amber-50 text-amber-700 border border-amber-150
-                                {% else %}bg-green-50 text-green-700 border border-green-150{% endif %}">
-                                <span class="w-1.5 h-1.5 rounded-full
-                                    {% if task.points >= 20 %}bg-red-500
-                                    {% elif task.points >= 10 %}bg-amber-500
-                                    {% else %}bg-green-500{% endif %}"></span>
-                                {% if task.points >= 20 %}High{% elif task.points >= 10 %}Medium{% else %}Low{% endif %}
-                            </span>
-                        </td>
-
-                        <!-- Timeline Column -->
-                        <td class="px-4 py-2.5 whitespace-nowrap text-[12px]">
+                        <td class="py-2.5 px-3 text-[11px] text-gray-500 font-mono whitespace-nowrap">
                             {% if task.planned_start %}
-                            <div class="font-semibold text-gray-800">{{ task.planned_start|date:"d M" }} - {{ task.planned_finish|date:"d M" }}</div>
-                            <div class="text-[10px] mt-0.5 font-bold
-                                {% if task.status == 'Completed' %}text-green-600
-                                {% elif task.status == 'Delayed' %}text-red-500
-                                {% else %}text-amber-500{% endif %}">
-                                {% if task.status == 'Completed' %}Completed
-                                {% elif task.status == 'Delayed' %}Overdue
-                                {% else %}{{ task.duration_days|default:"0" }} days left{% endif %}
-                            </div>
+                                {{ task.planned_start|date:"d/m/Y" }}{% if task.planned_finish %} &rarr; {{ task.planned_finish|date:"d/m/Y" }}{% endif %}
                             {% else %}
-                            <span class="text-gray-400 italic text-[11px]">-</span>
+                                —
                             {% endif %}
                         </td>
-
-                        <!-- Progress Column -->
-                        <td class="px-4 py-2.5 whitespace-nowrap">
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden shrink-0">
-                                    <div class="h-1.5 rounded-full transition-all duration-300
-                                        {% if task.status == 'Completed' %}bg-green-500 w-full
-                                        {% elif task.status == 'In Progress' %}bg-blue-500 w-1/2
-                                        {% elif task.status == 'Delayed' %}bg-red-500 w-1/5
-                                        {% else %}bg-gray-300 w-0{% endif %}"></div>
-                                </div>
-                                <span class="text-[10px] text-gray-500 font-bold">
-                                    {% if task.status == 'Completed' %}100%
-                                    {% elif task.status == 'In Progress' %}50%
-                                    {% elif task.status == 'Delayed' %}20%
-                                    {% else %}0%{% endif %}
-                                </span>
-                            </div>
-                        </td>
-
-                        <!-- Status Badge/Dropdown Column -->
-                        <td class="px-4 py-2.5 whitespace-nowrap">
+                        <td class="py-2.5 px-3">
                             {% include 'projects/partials/task_status_dropdown.html' with task=task %}
                         </td>
-
-                        <!-- Remarks Column -->
-                        <td class="px-4 py-2.5 text-[11px] text-gray-500 max-w-xs truncate" title="{{ task.remarks }}">
-                            {{ task.remarks|default:"-" }}
-                        </td>
-
-                        <!-- Actions Column -->
-                        <td class="px-4 py-2.5 whitespace-nowrap text-right text-[12px] font-semibold">
+                        <td class="py-2.5 px-3 text-right whitespace-nowrap">
                             <div class="flex items-center justify-end gap-1">
-                                <a href="{% url 'projects:project_task_edit' task.pk %}" class="p-1 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded transition-colors" title="Edit">
-                                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                                </a>
-                                <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this task?', () => $el.submit())">
+                                <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                                     {% csrf_token %}
-                                    <button type="submit" class="p-1 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition-colors" title="Delete">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                    </button>
+                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="px-4 py-10 text-center text-gray-400 bg-white">
-                            <i data-lucide="list-todo" class="w-7 h-7 text-gray-200 mx-auto mb-1.5"></i>
-                            <p class="text-[12px] italic">No tasks found. Apply a template or add tasks manually.</p>
+                        <td colspan="7" class="py-8 text-center text-gray-400">
+                            <c-empty-state icon="list-checks" title="No tasks defined" description="Add tasks manually or apply a template."></c-empty-state>
                         </td>
                     </tr>
                     {% endfor %}
-                </tbody>
-            </table>
+                </c-table>
+            </c-card>
         </div>
     </div>
 
+    {# ── TAB 2: Daily Progress Logs ───────────────────────────────────── #}
+    <div x-show="activeTab === 'logs'" x-cloak class="space-y-3">
+        <c-card padding="sm">
+            <c-section-header title="Daily Progress Logs" subtitle="Field activity notes, completed works, and delay explanations">
+                <c-slot name="actions">
+                    <c-button type="button" @click="$dispatch('open-modal', {id: 'add-log-modal'})" variant="primary" size="sm" icon="plus" label="Add Daily Log"></c-button>
+                </c-slot>
+            </c-section-header>
+        </c-card>
 
-    <!-- Daily Progress Logs Section -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
-        <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-gray-50/50">
-            <div>
-                <h3 class="text-[14px] font-semibold text-gray-900">Daily Progress Logs</h3>
-                <p class="text-[12px] text-gray-500 mt-0.5">Track daily work updates, manpower details, and delays.</p>
-            </div>
+        {# Mobile View #}
+        <div class="block sm:hidden space-y-2.5">
+            {% for log in progress_logs %}
+            <c-mobile-record-card
+                title="{{ log.date|date:'d M Y' }} - Supervisor: {{ log.supervisor_name }}"
+                subtitle="Manpower: {{ log.manpower_count|default:'0' }} workers">
+                <c-slot name="meta">
+                    <div class="w-full space-y-1">
+                        {% if log.completed_work %}
+                        <p class="text-[11px] text-gray-700 dark:text-gray-300"><strong>Done:</strong> {{ log.completed_work|truncatechars:100 }}</p>
+                        {% endif %}
+                        {% if log.delay_reason %}
+                        <p class="text-[10px] text-red-600 dark:text-red-400 font-semibold">Delay: {{ log.delay_reason }}</p>
+                        {% endif %}
+                    </div>
+                </c-slot>
+                <c-slot name="actions">
+                    <c-button href="{% url 'projects:progress_log_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                    <form action="{% url 'projects:progress_log_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
+                        {% csrf_token %}
+                        <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                    </form>
+                </c-slot>
+            </c-mobile-record-card>
+            {% empty %}
+            <c-card padding="lg">
+                <c-empty-state icon="clipboard-list" title="No progress logs yet" description="Add daily progress logs to document ongoing field works."></c-empty-state>
+            </c-card>
+            {% endfor %}
         </div>
 
-        <div class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Logs List (Left/Middle column: spans 2 cols) -->
-            <div class="lg:col-span-2 space-y-4">
-                <h4 class="text-[12px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Log History</h4>
-                <div class="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+        {# Desktop View #}
+        <div class="hidden sm:block">
+            <c-card padding="none">
+                <c-table>
+                    <c-slot name="header">
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Supervisor</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Manpower</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Completed Work</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Delays</th>
+                        <th class="py-2.5 px-3 text-right text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    </c-slot>
                     {% for log in progress_logs %}
-                    <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 text-[12px]">
-                        <div class="flex justify-between items-start gap-2 mb-2">
-                            <div>
-                                <span class="font-bold text-gray-900">{{ log.date|date:"d/m/Y" }}</span>
-                                <span class="text-gray-400 mx-1.5">•</span>
-                                <span class="text-gray-500">Supervisor: <strong class="text-gray-700">{{ log.supervisor_name }}</strong></span>
-                                {% if log.manpower_count %}
-                                <span class="text-gray-400 mx-1.5">•</span>
-                                <span class="text-gray-500">Manpower: <strong class="text-gray-700">{{ log.manpower_count }}</strong></span>
-                                {% endif %}
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <a href="{% url 'projects:progress_log_edit' log.pk %}" class="text-primary-600 hover:text-primary-900 font-semibold">Edit</a>
-                                <span class="text-gray-300">|</span>
-                                <form action="{% url 'projects:progress_log_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to delete this progress log?', () => $el.submit())">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800">
+                        <td class="py-2.5 px-3 text-[11px] font-bold text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap">{{ log.date|date:"d/m/Y" }}</td>
+                        <td class="py-2.5 px-3 text-[12px] text-gray-700 dark:text-gray-300 font-medium">{{ log.supervisor_name }}</td>
+                        <td class="py-2.5 px-3 text-[11px] text-gray-600 dark:text-gray-400 font-mono">{{ log.manpower_count|default:"0" }}</td>
+                        <td class="py-2.5 px-3 text-[12px] text-gray-800 dark:text-gray-200 max-w-xs truncate">{{ log.completed_work }}</td>
+                        <td class="py-2.5 px-3 text-[11px]">
+                            {% if log.delay_reason %}
+                            <c-badge variant="danger" size="sm" label="{{ log.delay_reason|truncatechars:25 }}"></c-badge>
+                            {% else %}
+                            <span class="text-gray-400 text-[10px]">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1">
+                                <c-button href="{% url 'projects:progress_log_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <form action="{% url 'projects:progress_log_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                                     {% csrf_token %}
-                                    <button type="submit" class="text-red-600 hover:text-red-900 font-semibold">Delete</button>
+                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
                                 </form>
                             </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 pt-2 border-t border-gray-100">
-                            <div>
-                                <p class="text-[10px] text-gray-400 font-semibold uppercase">Planned Work</p>
-                                <p class="text-gray-700 mt-0.5 whitespace-pre-line">{{ log.planned_work }}</p>
-                            </div>
-                            <div>
-                                <p class="text-[10px] text-gray-400 font-semibold uppercase">Completed Work</p>
-                                <p class="text-gray-700 mt-0.5 whitespace-pre-line">{{ log.completed_work }}</p>
-                            </div>
-                        </div>
-                        {% if log.delay_reason %}
-                        <div class="mt-2.5 p-2 bg-red-50/50 border border-red-100 rounded-lg text-[11px]">
-                            <span class="font-semibold text-red-800 uppercase text-[9px] block">Delay Reason</span>
-                            <span class="text-red-700 mt-0.5 block whitespace-pre-line">{{ log.delay_reason }}</span>
-                        </div>
-                        {% endif %}
-                        <div class="mt-2 text-[10px] text-gray-400 flex items-center justify-between">
-                            <span>Logged by: {{ log.logged_by.email|default:"System" }}</span>
-                            <span>Created: {{ log.created_at|date:"d/m/Y H:i" }}</span>
-                        </div>
-                    </div>
+                        </td>
+                    </tr>
                     {% empty %}
-                    <div class="text-center py-8 text-gray-400 italic">
-                        <i data-lucide="clipboard-list" class="w-7 h-7 text-gray-200 mx-auto mb-1.5"></i>
-                        No progress logs registered for this project yet.
-                    </div>
+                    <tr>
+                        <td colspan="6" class="py-8 text-center text-gray-400">
+                            <c-empty-state icon="clipboard-list" title="No progress logs yet" description="Add daily progress logs to document ongoing field works."></c-empty-state>
+                        </td>
+                    </tr>
                     {% endfor %}
-                </div>
-            </div>
-
-            <!-- Add Log Form (Right column: spans 1 col) -->
-            <div class="bg-gray-50/70 p-4 rounded-xl border border-gray-100 h-fit">
-                <h4 class="text-[12px] font-semibold text-gray-700 mb-3">Add Daily Log</h4>
-                <form action="{% url 'projects:progress_log_add' project.pk %}" method="POST" class="space-y-3">
-                    {% csrf_token %}
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Date</label>
-                        {{ log_form.date }}
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Manpower</label>
-                            {{ log_form.manpower_count }}
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Supervisor</label>
-                            {{ log_form.supervisor_name }}
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Planned Work</label>
-                        {{ log_form.planned_work }}
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Completed Work</label>
-                        {{ log_form.completed_work }}
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Delay Reason (Optional)</label>
-                        {{ log_form.delay_reason }}
-                    </div>
-                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
-                        <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
-                        Submit Daily Log
-                    </button>
-                </form>
-            </div>
+                </c-table>
+            </c-card>
         </div>
     </div>
 
-    <!-- Manpower Deployment Section -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
-        <div class="p-4 border-b border-gray-150 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-gray-50/50">
-            <div>
-                <h3 class="text-[14px] font-semibold text-gray-900">Manpower Deployment</h3>
-                <p class="text-[12px] text-gray-500 mt-0.5">Manage trade requirements and track present worker counts.</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <a href="{% url 'projects:export_manpower_csv' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i data-lucide="download" class="w-3 h-3 mr-1 text-primary-500"></i>
-                    Export CSV
-                </a>
-            </div>
+    {# ── TAB 3: Manpower Deployment ───────────────────────────────────── #}
+    <div x-show="activeTab === 'manpower'" x-cloak class="space-y-3">
+        <c-card padding="sm">
+            <c-section-header title="Manpower Deployment" subtitle="Trade requirements, required allocations, and present worker headcounts">
+                <c-slot name="actions">
+                    <c-button href="{% url 'projects:export_manpower_csv' project.pk %}" variant="secondary" size="sm" icon="download" label="CSV"></c-button>
+                    <c-button type="button" @click="$dispatch('open-modal', {id: 'add-manpower-modal'})" variant="primary" size="sm" icon="plus" label="Add Requirement"></c-button>
+                </c-slot>
+            </c-section-header>
+        </c-card>
+
+        {# Mobile View #}
+        <div class="block sm:hidden space-y-2.5">
+            {% for log in manpower_logs %}
+            <c-mobile-record-card
+                title="{{ log.date|date:'d M Y' }} - {{ log.trade }}"
+                subtitle="Req: {{ log.required_count }} | Pres: {{ log.present_count|default:'Pending' }}"
+                status="{% if log.present_count == None %}pending{% elif log.present_count < log.required_count %}absent{% else %}present{% endif %}">
+                <c-slot name="actions">
+                    <form action="{% url 'projects:manpower_autofill' log.pk %}" method="POST" class="inline">
+                        {% csrf_token %}
+                        <c-button type="submit" variant="secondary" size="sm" icon="refresh-cw" label="Auto-fill"></c-button>
+                    </form>
+                    <c-button href="{% url 'projects:manpower_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                    <form action="{% url 'projects:manpower_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
+                        {% csrf_token %}
+                        <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                    </form>
+                </c-slot>
+            </c-mobile-record-card>
+            {% empty %}
+            <c-card padding="lg">
+                <c-empty-state icon="users" title="No manpower logs yet" description="Add daily trade workforce allocations."></c-empty-state>
+            </c-card>
+            {% endfor %}
         </div>
 
-        <div class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Deployment List (Left/Middle column: spans 2 cols) -->
-            <div class="lg:col-span-2 space-y-4">
-                <h4 class="text-[12px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Requirement History</h4>
-                <div class="overflow-x-auto border border-gray-100 rounded-xl max-h-[500px] overflow-y-auto">
-                    <table class="min-w-full divide-y divide-gray-100">
-                        <thead class="bg-gray-50 sticky top-0 z-10">
-                            <tr>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Trade</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Required</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Present</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Shortage Status</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-36">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-100">
-                            {% for log in manpower_logs %}
-                            <tr class="hover:bg-gray-50/70 transition-colors text-[12px]">
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">{{ log.date|date:"d/m/Y" }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-800 font-semibold">{{ log.trade }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">{{ log.required_count }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">
-                                    {% if log.present_count != None %}{{ log.present_count }}{% else %}<span class="text-gray-400 italic">Not set</span>{% endif %}
-                                </td>
-                                <td class="px-4 py-2.5 whitespace-nowrap">
-                                    {% if log.present_count == None %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-150 text-gray-600 border border-gray-200">Pending</span>
-                                    {% elif log.present_count < log.required_count %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-100">Shortage</span>
-                                    {% else %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-50 text-green-700 border border-green-100">Sufficient</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-2.5 whitespace-nowrap font-semibold flex items-center gap-3">
-                                    <form action="{% url 'projects:manpower_autofill' log.pk %}" method="POST" class="inline">
-                                        {% csrf_token %}
-                                        <button type="submit" class="text-primary-600 hover:text-primary-900 flex items-center gap-1" title="Auto-fill present count from real attendance records">
-                                            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Auto-fill
-                                        </button>
-                                    </form>
-                                    <span class="text-gray-300">|</span>
-                                    <a href="{% url 'projects:manpower_edit' log.pk %}" class="text-primary-600 hover:text-primary-900">Edit</a>
-                                    <span class="text-gray-300">|</span>
-                                    <form action="{% url 'projects:manpower_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to delete this manpower deployment entry?', () => $el.submit())">
-                                        {% csrf_token %}
-                                        <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-gray-400 italic">
-                                    <i data-lucide="users" class="w-7 h-7 text-gray-200 mx-auto mb-1.5"></i>
-                                    No manpower requirements registered yet.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Add Requirement Form (Right column: spans 1 col) -->
-            <div class="bg-gray-50/70 p-4 rounded-xl border border-gray-100 h-fit">
-                <h4 class="text-[12px] font-semibold text-gray-700 mb-3">Add Trade Requirement</h4>
-                <form action="{% url 'projects:manpower_add' project.pk %}" method="POST" class="space-y-3">
-                    {% csrf_token %}
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Date</label>
-                        {{ manpower_form.date }}
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Trade</label>
-                        {{ manpower_form.trade }}
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Required</label>
-                            {{ manpower_form.required_count }}
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Present (Optional)</label>
-                            {{ manpower_form.present_count }}
-                        </div>
-                    </div>
-                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
-                        <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
-                        Submit Requirement
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Material Tracking Section -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
-        <div class="p-4 border-b border-gray-150 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-gray-50/50">
-            <div>
-                <h3 class="text-[14px] font-semibold text-gray-900">Material Tracking</h3>
-                <p class="text-[12px] text-gray-500 mt-0.5">Monitor project materials required vs received quantities.</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <a href="{% url 'projects:export_materials_csv' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
-                    <i data-lucide="download" class="w-3 h-3 mr-1 text-primary-500"></i>
-                    Export CSV
-                </a>
-            </div>
-        </div>
-
-        <div class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Materials List (Left/Middle column: spans 2 cols) -->
-            <div class="lg:col-span-2 space-y-4">
-                <h4 class="text-[12px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Inventory Ledger</h4>
-                <div class="overflow-x-auto border border-gray-100 rounded-xl max-h-[500px] overflow-y-auto">
-                    <table class="min-w-full divide-y divide-gray-100">
-                        <thead class="bg-gray-50 sticky top-0 z-10">
-                            <tr>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Material</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Unit</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Required</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Received</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Balance</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-40">Quick Add</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-24">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-100">
-                            {% for log in materials %}
-                            <tr class="hover:bg-gray-50/70 transition-colors text-[12px]">
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-semibold">{{ log.material_name }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-600">{{ log.unit }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">{{ log.required_qty }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-medium">{{ log.received_qty }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap text-gray-900 font-semibold">{{ log.balance }}</td>
-                                <td class="px-4 py-2.5 whitespace-nowrap">
-                                    {% if log.received_qty >= log.required_qty %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-50 text-green-700 border border-green-100">Fully Received</span>
-                                    {% elif log.received_qty > 0 %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">Partial</span>
-                                    {% else %}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-100">Zero Received</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-4 py-2.5 whitespace-nowrap">
-                                    <form action="{% url 'projects:material_increment' log.pk %}" method="POST" class="flex items-center gap-1">
-                                        {% csrf_token %}
-                                        <input type="number" name="increment_qty" step="0.01" min="0.01" required placeholder="Qty" class="w-16 px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                                        <button type="submit" class="p-1 bg-primary text-white rounded-lg hover:opacity-90 inline-flex items-center justify-center">
-                                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                                        </button>
-                                    </form>
-                                </td>
-                                <td class="px-4 py-2.5 whitespace-nowrap font-semibold space-x-2">
-                                    <a href="{% url 'projects:material_edit' log.pk %}" class="text-primary-600 hover:text-primary-900">Edit</a>
-                                    <form action="{% url 'projects:material_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to delete this material record?', () => $el.submit())">
-                                        {% csrf_token %}
-                                        <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-gray-400 italic">
-                                    <i data-lucide="package" class="w-7 h-7 text-gray-200 mx-auto mb-1.5"></i>
-                                    No materials registered yet.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Add Material Form (Right column: spans 1 col) -->
-            <div class="bg-gray-50/70 p-4 rounded-xl border border-gray-100 h-fit">
-                <h4 class="text-[12px] font-semibold text-gray-700 mb-3">Add Project Material</h4>
-                <form action="{% url 'projects:material_add' project.pk %}" method="POST" class="space-y-3">
-                    {% csrf_token %}
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Material Name</label>
-                        {{ material_form.material_name }}
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Unit</label>
-                            {{ material_form.unit }}
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Required Qty</label>
-                            {{ material_form.required_qty }}
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Received Qty</label>
-                        {{ material_form.received_qty }}
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 uppercase mb-1">Remarks (Optional)</label>
-                        {{ material_form.remarks }}
-                    </div>
-                    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-[12px] font-medium text-white bg-primary hover:opacity-90">
-                        <i data-lucide="plus" class="w-3.5 h-3.5 mr-1.5"></i>
-                        Submit Material
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Project Sign-off Section -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
-        <div class="p-4 border-b border-gray-100 bg-gray-50/50">
-            <h3 class="text-[14px] font-semibold text-gray-900">Project Work Plan Sign-off</h3>
-            <p class="text-[12px] text-gray-500 mt-0.5">Sign off the work plan sheet by confirming authorization for each designated role.</p>
-        </div>
-        <div class="p-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                
-                <!-- Project Manager Slot -->
-                <div class="border border-gray-100 rounded-xl p-4 flex flex-col justify-between h-40 bg-gray-50/30">
-                    <div>
-                        <h4 class="text-[12px] font-semibold text-gray-700 uppercase tracking-wider mb-2">Project Manager</h4>
-                        {% if sign_off.project_manager_signed_at %}
-                        <div class="text-green-700 flex items-start gap-2">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
-                            <div>
-                                <p class="text-[12px] font-semibold">{{ sign_off.project_manager_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.project_manager_signed_at|date:"d/m/Y h:i A" }}</p>
+        {# Desktop View #}
+        <div class="hidden sm:block">
+            <c-card padding="none">
+                <c-table>
+                    <c-slot name="header">
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trade</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Required</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Present</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
+                        <th class="py-2.5 px-3 text-right text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    </c-slot>
+                    {% for log in manpower_logs %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800">
+                        <td class="py-2.5 px-3 text-[11px] font-bold text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap">{{ log.date|date:"d/m/Y" }}</td>
+                        <td class="py-2.5 px-3 text-[12px] text-gray-800 dark:text-gray-200 font-semibold">{{ log.trade }}</td>
+                        <td class="py-2.5 px-3 text-[11px] text-gray-700 dark:text-gray-300 font-mono">{{ log.required_count }}</td>
+                        <td class="py-2.5 px-3 text-[11px] text-gray-700 dark:text-gray-300 font-mono">
+                            {% if log.present_count != None %}{{ log.present_count }}{% else %}<span class="text-gray-400 italic">Not set</span>{% endif %}
+                        </td>
+                        <td class="py-2.5 px-3">
+                            {% if log.present_count == None %}
+                            <c-badge variant="neutral" size="sm" label="Pending"></c-badge>
+                            {% elif log.present_count < log.required_count %}
+                            <c-badge variant="danger" size="sm" label="Shortage"></c-badge>
+                            {% else %}
+                            <c-badge variant="success" size="sm" label="Sufficient"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <form action="{% url 'projects:manpower_autofill' log.pk %}" method="POST" class="inline">
+                                    {% csrf_token %}
+                                    <c-button type="submit" variant="secondary" size="sm" icon="refresh-cw" label="Auto-fill"></c-button>
+                                </form>
+                                <c-button href="{% url 'projects:manpower_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <form action="{% url 'projects:manpower_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
+                                    {% csrf_token %}
+                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                                </form>
                             </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-8 text-center text-gray-400">
+                            <c-empty-state icon="users" title="No manpower allocations" description="Add requirements to manage site trades."></c-empty-state>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </c-table>
+            </c-card>
+        </div>
+    </div>
+
+    {# ── TAB 4: Material Tracking ─────────────────────────────────────── #}
+    <div x-show="activeTab === 'materials'" x-cloak class="space-y-3">
+        <c-card padding="sm">
+            <c-section-header title="Material Tracking" subtitle="Procurement ledger tracking required, received, and remaining materials">
+                <c-slot name="actions">
+                    <c-button href="{% url 'projects:export_materials_csv' project.pk %}" variant="secondary" size="sm" icon="download" label="CSV"></c-button>
+                    <c-button type="button" @click="$dispatch('open-modal', {id: 'add-material-modal'})" variant="primary" size="sm" icon="plus" label="Add Material"></c-button>
+                </c-slot>
+            </c-section-header>
+        </c-card>
+
+        {# Mobile View #}
+        <div class="block sm:hidden space-y-2.5">
+            {% for mat in materials %}
+            <c-mobile-record-card
+                title="{{ mat.material_name }}"
+                subtitle="Req: {{ mat.required_qty }} {{ mat.unit }} | Recv: {{ mat.received_qty }} | Bal: {{ mat.balance }}"
+                status="{% if mat.received_qty >= mat.required_qty %}active{% elif mat.received_qty > 0 %}pending{% else %}inactive{% endif %}">
+                <c-slot name="actions">
+                    <form action="{% url 'projects:material_increment' mat.pk %}" method="POST" class="flex items-center gap-1">
+                        {% csrf_token %}
+                        <input type="number" name="increment_qty" step="0.01" min="0.01" required placeholder="+Qty" class="w-16 px-2 py-1 text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                        <c-button type="submit" variant="primary" size="sm" icon="plus" label="Add"></c-button>
+                    </form>
+                    <c-button href="{% url 'projects:material_edit' mat.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                    <form action="{% url 'projects:material_delete' mat.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete material?', () => $el.submit()) : $el.submit()">
+                        {% csrf_token %}
+                        <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                    </form>
+                </c-slot>
+            </c-mobile-record-card>
+            {% empty %}
+            <c-card padding="lg">
+                <c-empty-state icon="package" title="No materials registered" description="Add project materials to track inventory delivery."></c-empty-state>
+            </c-card>
+            {% endfor %}
+        </div>
+
+        {# Desktop View #}
+        <div class="hidden sm:block">
+            <c-card padding="none">
+                <c-table>
+                    <c-slot name="header">
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Material</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Unit</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Required</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Received</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Balance</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
+                        <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quick Add</th>
+                        <th class="py-2.5 px-3 text-right text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>
+                    </c-slot>
+                    {% for mat in materials %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800">
+                        <td class="py-2.5 px-3 text-[12px] text-gray-900 dark:text-white font-semibold">{{ mat.material_name }}</td>
+                        <td class="py-2.5 px-3 text-[11px] text-gray-600 dark:text-gray-400">{{ mat.unit }}</td>
+                        <td class="py-2.5 px-3 text-[11px] text-gray-800 dark:text-gray-200 font-mono">{{ mat.required_qty }}</td>
+                        <td class="py-2.5 px-3 text-[11px] text-gray-800 dark:text-gray-200 font-mono">{{ mat.received_qty }}</td>
+                        <td class="py-2.5 px-3 text-[11px] text-gray-800 dark:text-gray-200 font-mono font-bold">{{ mat.balance }}</td>
+                        <td class="py-2.5 px-3">
+                            {% if mat.received_qty >= mat.required_qty %}
+                            <c-badge variant="success" size="sm" label="Fulfilled"></c-badge>
+                            {% elif mat.received_qty > 0 %}
+                            <c-badge variant="warning" size="sm" label="Partial"></c-badge>
+                            {% else %}
+                            <c-badge variant="danger" size="sm" label="Zero"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 px-3">
+                            <form action="{% url 'projects:material_increment' mat.pk %}" method="POST" class="flex items-center gap-1">
+                                {% csrf_token %}
+                                <input type="number" name="increment_qty" step="0.01" min="0.01" required placeholder="Qty" class="w-16 px-2 py-1 text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                                <c-button type="submit" variant="primary" size="sm" icon="plus" label=""></c-button>
+                            </form>
+                        </td>
+                        <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1">
+                                <c-button href="{% url 'projects:material_edit' mat.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <form action="{% url 'projects:material_delete' mat.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete material?', () => $el.submit()) : $el.submit()">
+                                    {% csrf_token %}
+                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="py-8 text-center text-gray-400">
+                            <c-empty-state icon="package" title="No materials registered" description="Add project materials to track inventory delivery."></c-empty-state>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </c-table>
+            </c-card>
+        </div>
+    </div>
+
+    {# ── TAB 5: Work Plan Sign-off ────────────────────────────────────── #}
+    <div x-show="activeTab === 'signoff'" x-cloak class="space-y-3">
+        <c-card padding="md">
+            <c-section-header title="Project Work Plan Sign-off" subtitle="Authorization checkpoints for designated roles"></c-section-header>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3">
+                {# PM Slot #}
+                <div class="border border-gray-100 dark:border-slate-800 rounded-xl p-3 bg-gray-50/50 dark:bg-slate-800/40 flex flex-col justify-between min-h-[140px]">
+                    <div>
+                        <h4 class="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase mb-2">Project Manager</h4>
+                        {% if sign_off.project_manager_signed_at %}
+                        <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[12px] font-semibold">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                            <span>{{ sign_off.project_manager_name }}</span>
                         </div>
+                        <span class="text-[10px] text-gray-400 mt-1 block font-mono">{{ sign_off.project_manager_signed_at|date:"d/m/Y h:i A" }}</span>
                         {% else %}
                         <form action="{% url 'projects:confirm_signoff' project.pk %}" method="POST" class="space-y-2 mt-1">
                             {% csrf_token %}
                             <input type="hidden" name="role" value="project_manager">
-                            <input type="text" name="name" required placeholder="Manager Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
-                                Confirm Sign-off
-                            </button>
+                            <c-input name="name" placeholder="Manager Name" required="true" extra_class="w-full"></c-input>
+                            <c-button type="submit" variant="primary" size="sm" label="Confirm Sign-off" extra_class="w-full"></c-button>
                         </form>
                         {% endif %}
                     </div>
                 </div>
 
-                <!-- Site Engineer Slot -->
-                <div class="border border-gray-100 rounded-xl p-4 flex flex-col justify-between h-40 bg-gray-50/30">
+                {# Site Engineer Slot #}
+                <div class="border border-gray-100 dark:border-slate-800 rounded-xl p-3 bg-gray-50/50 dark:bg-slate-800/40 flex flex-col justify-between min-h-[140px]">
                     <div>
-                        <h4 class="text-[12px] font-semibold text-gray-700 uppercase tracking-wider mb-2">Site Engineer</h4>
+                        <h4 class="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase mb-2">Site Engineer</h4>
                         {% if sign_off.site_engineer_signed_at %}
-                        <div class="text-green-700 flex items-start gap-2">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
-                            <div>
-                                <p class="text-[12px] font-semibold">{{ sign_off.site_engineer_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.site_engineer_signed_at|date:"d/m/Y h:i A" }}</p>
-                            </div>
+                        <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[12px] font-semibold">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                            <span>{{ sign_off.site_engineer_name }}</span>
                         </div>
+                        <span class="text-[10px] text-gray-400 mt-1 block font-mono">{{ sign_off.site_engineer_signed_at|date:"d/m/Y h:i A" }}</span>
                         {% else %}
                         <form action="{% url 'projects:confirm_signoff' project.pk %}" method="POST" class="space-y-2 mt-1">
                             {% csrf_token %}
                             <input type="hidden" name="role" value="site_engineer">
-                            <input type="text" name="name" required placeholder="Engineer Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
-                                Confirm Sign-off
-                            </button>
+                            <c-input name="name" placeholder="Engineer Name" required="true" extra_class="w-full"></c-input>
+                            <c-button type="submit" variant="primary" size="sm" label="Confirm Sign-off" extra_class="w-full"></c-button>
                         </form>
                         {% endif %}
                     </div>
-                              <!-- Consultant Slot -->
-                <div class="border border-gray-100 rounded-xl p-4 flex flex-col justify-between h-auto min-h-40 bg-gray-50/30">
+                </div>
+
+                {# Consultant Slot #}
+                <div class="border border-gray-100 dark:border-slate-800 rounded-xl p-3 bg-gray-50/50 dark:bg-slate-800/40 flex flex-col justify-between min-h-[140px]">
                     <div>
-                        <h4 class="text-[12px] font-semibold text-gray-700 uppercase tracking-wider mb-2">Consultant</h4>
+                        <h4 class="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase mb-2">Consultant</h4>
                         {% if sign_off.consultant_signed_at %}
-                        <div class="text-green-700 flex items-start gap-2">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
-                            <div>
-                                <p class="text-[12px] font-semibold">{{ sign_off.consultant_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.consultant_signed_at|date:"d/m/Y h:i A" }}</p>
-                            </div>
+                        <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[12px] font-semibold">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                            <span>{{ sign_off.consultant_name }}</span>
                         </div>
+                        <span class="text-[10px] text-gray-400 mt-1 block font-mono">{{ sign_off.consultant_signed_at|date:"d/m/Y h:i A" }}</span>
                         {% else %}
                         <form action="{% url 'projects:confirm_signoff' project.pk %}" method="POST" class="space-y-2 mt-1">
                             {% csrf_token %}
                             <input type="hidden" name="role" value="consultant">
-                            <input type="text" name="name" required placeholder="Consultant Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
-                                Confirm Sign-off
-                            </button>
+                            <c-input name="name" placeholder="Consultant Name" required="true" extra_class="w-full"></c-input>
+                            <c-button type="submit" variant="primary" size="sm" label="Confirm Sign-off" extra_class="w-full"></c-button>
                         </form>
                         {% if project.consultant_email %}
-                        <form action="{% url 'projects:request_signoff' project.pk %}" method="POST" class="mt-2 pt-2 border-t border-dashed border-gray-150">
+                        <form action="{% url 'projects:request_signoff' project.pk %}" method="POST" class="mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                             {% csrf_token %}
                             <input type="hidden" name="role" value="consultant">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-750 hover:bg-gray-50 rounded-lg text-[11px] font-medium transition-colors shadow-sm">
-                                <i data-lucide="mail" class="w-3.5 h-3.5 mr-1 text-gray-500"></i>
-                                Request Sign-off
-                            </button>
+                            <c-button type="submit" variant="secondary" size="sm" icon="mail" label="Request Sign-off" extra_class="w-full"></c-button>
                         </form>
                         {% endif %}
                         {% endif %}
                     </div>
                 </div>
- 
-                <!-- Client Representative Slot -->
-                <div class="border border-gray-100 rounded-xl p-4 flex flex-col justify-between h-auto min-h-40 bg-gray-50/30">
+
+                {# Client Rep Slot #}
+                <div class="border border-gray-100 dark:border-slate-800 rounded-xl p-3 bg-gray-50/50 dark:bg-slate-800/40 flex flex-col justify-between min-h-[140px]">
                     <div>
-                        <h4 class="text-[12px] font-semibold text-gray-700 uppercase tracking-wider mb-2">Client Rep</h4>
+                        <h4 class="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase mb-2">Client Representative</h4>
                         {% if sign_off.client_representative_signed_at %}
-                        <div class="text-green-700 flex items-start gap-2">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 mt-0.5 shrink-0 text-green-500"></i>
-                            <div>
-                                <p class="text-[12px] font-semibold">{{ sign_off.client_representative_name }}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">Signed: {{ sign_off.client_representative_signed_at|date:"d/m/Y h:i A" }}</p>
-                            </div>
+                        <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[12px] font-semibold">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                            <span>{{ sign_off.client_representative_name }}</span>
                         </div>
+                        <span class="text-[10px] text-gray-400 mt-1 block font-mono">{{ sign_off.client_representative_signed_at|date:"d/m/Y h:i A" }}</span>
                         {% else %}
                         <form action="{% url 'projects:confirm_signoff' project.pk %}" method="POST" class="space-y-2 mt-1">
                             {% csrf_token %}
                             <input type="hidden" name="role" value="client_representative">
-                            <input type="text" name="name" required placeholder="Representative Name" class="w-full px-2 py-1 border border-gray-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-500">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90">
-                                Confirm Sign-off
-                            </button>
+                            <c-input name="name" placeholder="Representative Name" required="true" extra_class="w-full"></c-input>
+                            <c-button type="submit" variant="primary" size="sm" label="Confirm Sign-off" extra_class="w-full"></c-button>
                         </form>
                         {% if project.client_email %}
-                        <form action="{% url 'projects:request_signoff' project.pk %}" method="POST" class="mt-2 pt-2 border-t border-dashed border-gray-150">
+                        <form action="{% url 'projects:request_signoff' project.pk %}" method="POST" class="mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                             {% csrf_token %}
                             <input type="hidden" name="role" value="client_representative">
-                            <button type="submit" class="w-full inline-flex justify-center items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-750 hover:bg-gray-50 rounded-lg text-[11px] font-medium transition-colors shadow-sm">
-                                <i data-lucide="mail" class="w-3.5 h-3.5 mr-1 text-gray-500"></i>
-                                Request Sign-off
-                            </button>
+                            <c-button type="submit" variant="secondary" size="sm" icon="mail" label="Request Sign-off" extra_class="w-full"></c-button>
                         </form>
                         {% endif %}
                         {% endif %}
                     </div>
                 </div>
-
             </div>
-        </div>
+        </c-card>
+    </div>
 
-        {% include 'notifications/includes/activity_timeline.html' %}
+    {# ── TAB 6: Activity Feed ─────────────────────────────────────────── #}
+    <div x-show="activeTab === 'activities'" x-cloak class="space-y-3">
+        <c-card padding="md">
+            <c-section-header title="Project Activity Log" subtitle="Recent field audits and project task events"></c-section-header>
+            <div class="space-y-2.5 pt-2">
+                {% for act in activities %}
+                <div class="flex items-start gap-2.5 text-[12px] py-2 border-b border-gray-50 dark:border-slate-800/60 last:border-b-0">
+                    <c-avatar name="{% if act.actor %}{{ act.actor.employee_profile.full_name|default:act.actor.email }}{% else %}System{% endif %}" size="xs"></c-avatar>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-gray-800 dark:text-gray-200">
+                            <strong class="text-gray-900 dark:text-white">{% if act.actor %}{{ act.actor.employee_profile.full_name|default:act.actor.email }}{% else %}System{% endif %}</strong>
+                            {{ act.verb }}
+                            <span class="font-medium text-primary">{{ act.target }}</span>
+                        </p>
+                        <span class="text-[10px] text-gray-400 font-mono mt-0.5 block">{{ act.created_at|timesince }} ago</span>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-[11px] text-gray-400 italic py-4 text-center">No recent activity logged for this project.</p>
+                {% endfor %}
+            </div>
+        </c-card>
+    </div>
+
+    {# ── Modals ───────────────────────────────────────────────────────── #}
+
+    {# Delete Project Modal #}
+    <c-modal id="delete-project-modal" title="Delete Project">
+        <p class="text-[12px] text-gray-600 dark:text-gray-300">
+            Are you sure you want to permanently delete project <strong>{{ project.name }}</strong>? All associated tasks, progress logs, and allocations will be deleted.
+        </p>
+        <c-slot name="footer">
+            <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel"></c-button>
+            <form action="{% url 'projects:project_delete' project.pk %}" method="POST" class="inline">
+                {% csrf_token %}
+                <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete Project"></c-button>
+            </form>
+        </c-slot>
+    </c-modal>
+
+    {# Add Task Modal #}
+    <c-modal id="add-task-modal" title="Add Project Task" size="lg">
+        <form method="POST" action="{% url 'projects:project_task_add' project.pk %}" enctype="multipart/form-data" class="space-y-3">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                <c-input name="activity" label="Task Activity / Title" required="true" placeholder="e.g. Ducting Installation" extra_class="sm:col-span-6"></c-input>
+                <c-select name="responsible_person" label="Assigned Person" extra_class="sm:col-span-3">
+                    <option value="">-- Unassigned --</option>
+                    {% for emp in project_members %}
+                    <option value="{{ emp.pk }}">{{ emp.full_name }}</option>
+                    {% endfor %}
+                </c-select>
+                <c-input name="order" type="number" label="Order" value="{{ tasks.count|add:1 }}" required="true" extra_class="sm:col-span-1"></c-input>
+                <c-input name="points" type="number" label="Points" value="10" extra_class="sm:col-span-2"></c-input>
+                <c-select name="status" label="Status" value="Not Started" extra_class="sm:col-span-2">
+                    <option value="Not Started" selected>Not Started</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Delayed">Delayed</option>
+                    <option value="Completed">Completed</option>
+                </c-select>
+                <c-input name="planned_start" type="date" label="Planned Start" extra_class="sm:col-span-2"></c-input>
+                <c-input name="planned_finish" type="date" label="Planned Finish" extra_class="sm:col-span-2"></c-input>
+                <c-input name="remarks" label="Remarks (Optional)" placeholder="Additional task instructions" extra_class="sm:col-span-6"></c-input>
+                <c-file-input name="assignment_attachment" label="Attachment (Optional)" accept=".jpg,.jpeg,.png,.pdf" extra_class="sm:col-span-6"></c-file-input>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel"></c-button>
+                <c-button type="submit" variant="primary" size="sm" icon="check" label="Save Task"></c-button>
+            </div>
+        </form>
+    </c-modal>
+
+    {# Apply Template Modal #}
+    {% if templates %}
+    <c-modal id="apply-template-modal" title="Apply Task Template">
+        <form action="{% url 'projects:project_apply_template' project.pk %}" method="POST" class="space-y-3">
+            {% csrf_token %}
+            <c-select name="template_id" label="Choose Template" required="true">
+                <option value="">-- Choose Template --</option>
+                {% for t in templates %}
+                <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
+                {% endfor %}
+            </c-select>
+            <p class="text-[11px] text-gray-500">Tasks defined in this template will be appended to this project's schedule.</p>
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel"></c-button>
+                <c-button type="submit" variant="primary" size="sm" icon="check" label="Apply Template"></c-button>
+            </div>
+        </form>
+    </c-modal>
+    {% endif %}
+
+    {# Add Daily Progress Log Modal #}
+    <c-modal id="add-log-modal" title="Add Daily Progress Log">
+        <form action="{% url 'projects:progress_log_add' project.pk %}" method="POST" class="space-y-3">
+            {% csrf_token %}
+            <c-input name="date" type="date" label="Date" value="{{ log_form.date.value|date:'Y-m-d'|default:'' }}" required="true"></c-input>
+            <div class="grid grid-cols-2 gap-3">
+                <c-input name="manpower_count" type="number" label="Manpower Count" placeholder="0"></c-input>
+                <c-input name="supervisor_name" label="Supervisor Name" required="true"></c-input>
+            </div>
+            <c-textarea name="planned_work" label="Planned Work" rows="2" placeholder="Tasks planned for the day"></c-textarea>
+            <c-textarea name="completed_work" label="Completed Work" rows="2" placeholder="Tasks accomplished"></c-textarea>
+            <c-input name="delay_reason" label="Delay Reason (Optional)" placeholder="Explain site impediments"></c-input>
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel"></c-button>
+                <c-button type="submit" variant="primary" size="sm" icon="check" label="Save Daily Log"></c-button>
+            </div>
+        </form>
+    </c-modal>
+
+    {# Add Manpower Requirement Modal #}
+    <c-modal id="add-manpower-modal" title="Add Trade Requirement">
+        <form action="{% url 'projects:manpower_add' project.pk %}" method="POST" class="space-y-3">
+            {% csrf_token %}
+            <c-input name="date" type="date" label="Date" value="{{ manpower_form.date.value|date:'Y-m-d'|default:'' }}" required="true"></c-input>
+            <c-input name="trade" label="Trade / Discipline" placeholder="e.g. Electrician, Welder, Ductman" required="true"></c-input>
+            <div class="grid grid-cols-2 gap-3">
+                <c-input name="required_count" type="number" label="Required Workers" required="true" placeholder="0"></c-input>
+                <c-input name="present_count" type="number" label="Present (Optional)" placeholder="0"></c-input>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel"></c-button>
+                <c-button type="submit" variant="primary" size="sm" icon="check" label="Save Requirement"></c-button>
+            </div>
+        </form>
+    </c-modal>
+
+    {# Add Project Material Modal #}
+    <c-modal id="add-material-modal" title="Add Project Material">
+        <form action="{% url 'projects:material_add' project.pk %}" method="POST" class="space-y-3">
+            {% csrf_token %}
+            <c-input name="material_name" label="Material Name" required="true" placeholder="e.g. Copper Pipe, GI Sheet"></c-input>
+            <div class="grid grid-cols-2 gap-3">
+                <c-input name="unit" label="Unit" placeholder="e.g. Meters, Rolls, Pcs" required="true"></c-input>
+                <c-input name="required_qty" type="number" label="Required Qty" placeholder="0.00" attrs="step='0.01'" required="true"></c-input>
+            </div>
+            <c-input name="received_qty" type="number" label="Received Qty" value="0.00" attrs="step='0.01'"></c-input>
+            <c-input name="remarks" label="Remarks (Optional)" placeholder="Supplier or specification remarks"></c-input>
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel"></c-button>
+                <c-button type="submit" variant="primary" size="sm" icon="check" label="Save Material"></c-button>
+            </div>
+        </form>
+    </c-modal>
+
+</c-page-container>
 </c-app-shell>
