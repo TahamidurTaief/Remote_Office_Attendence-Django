@@ -35,19 +35,24 @@ def home(request):
     ).order_by('-check_in_time')
 
     # Check if there is an active check-in
-    active_session = Attendance.objects.filter(
+    active_session_obj = Attendance.objects.filter(
         employee=employee,
         date=today,
         attendance_type='check_in',
         check_out_time__isnull=True,
         is_expired=False
-    ).exists()
+    ).first()
+    active_session = bool(active_session_obj)
 
     total_leave_left = None
     pending_leave_count = 0
     pending_tasks = []
+    my_expenses = []
     if employee:
-        total_leave_left = employee.total_leave_left_by_year[today.year]
+        try:
+            total_leave_left = employee.total_leave_left_by_year[today.year]
+        except Exception:
+            total_leave_left = 0
         from apps.leave.models import LeaveRequest
         pending_leave_count = LeaveRequest.objects.filter(employee=employee, status='pending').count()
         from apps.projects.models import ProjectTask
@@ -58,14 +63,26 @@ def home(request):
             .select_related('project')
             .order_by('planned_finish')[:10]
         )
+        from apps.expense.models import Expense
+        my_expenses = (
+            Expense.objects
+            .filter(employee=employee)
+            .order_by('-requested_at')[:5]
+        )
+
+    from apps.notifications.models import Notification
+    unread_notifications = Notification.objects.filter(recipient=request.user, is_read=False).count()
 
     return render(request, 'staff/home.html', {
         'employee': employee,
         'field_visits': field_visits,
         'is_checked_in': active_session,
+        'active_session': active_session_obj,
         'total_leave_left': total_leave_left,
         'pending_leave_count': pending_leave_count,
         'pending_tasks': pending_tasks,
+        'my_expenses': my_expenses,
+        'unread_notifications': unread_notifications,
     })
 
 

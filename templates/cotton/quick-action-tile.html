@@ -1,0 +1,41 @@
+{% comment %}
+c-quick-action-tile component
+Compact touch-friendly action tile for mobile & responsive dashboards
+Props:
+- title: string
+- subtitle: optional string
+- icon: Lucide icon name
+- href: link url
+- badge: optional string
+- color: primary | success | warning | danger | neutral
+- extra_class: string
+{% endcomment %}
+<c-vars title="" subtitle="" icon="arrow-right" href="#" badge="" color="primary" extra_class="" />
+
+<a href="{{ href }}"
+   class="ft-card group flex items-center gap-3 p-3 rounded-xl transition-all duration-150 hover:border-slate-300 dark:hover:border-slate-700 min-h-[48px] select-none {{ extra_class }}">
+  <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105
+    {% if color == 'success' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400
+    {% elif color == 'warning' %}bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400
+    {% elif color == 'danger' %}bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400
+    {% elif color == 'neutral' %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300
+    {% else %}bg-primary-50 text-primary-600 dark:bg-primary-950/40 dark:text-primary-400{% endif %}">
+    <i data-lucide="{{ icon }}" class="w-4 h-4"></i>
+  </div>
+  <div class="flex-1 min-w-0">
+    <div class="flex items-center gap-1.5">
+      <p class="text-[12px] font-semibold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary transition-colors">
+        {{ title }}
+      </p>
+      {% if badge %}
+        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          {{ badge }}
+        </span>
+      {% endif %}
+    </div>
+    {% if subtitle %}
+      <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{{ subtitle }}</p>
+    {% endif %}
+  </div>
+  <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0"></i>
+</a>

@@ -99,6 +99,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             return full_name
         return self.phone or self.email or "User"
 
+    def get_full_name(self):
+        return self.display_name
+
+    def get_short_name(self):
+        return self.display_name
+
 
 
 class UserLoginActivity(models.Model):

@@ -1,0 +1,224 @@
+{% comment %}
+c-staff-dashboard component
+Shared responsive Django Cotton composition for canonical staff landing page (< 768px mobile app, >= 768px desktop dashboard)
+Props:
+- employee: EmployeeProfile
+- active_session: active Attendance session or None
+- is_checked_in: boolean
+- total_leave_left: integer
+- pending_leave_count: integer
+- pending_tasks: list of ProjectTask
+- field_visits: list of Attendance (field_visit)
+- my_expenses: list of Expense
+- unread_notifications: integer
+- extra_class: string
+{% endcomment %}
+<c-vars employee="" active_session="" is_checked_in="" total_leave_left="" pending_leave_count="0" pending_tasks="" field_visits="" my_expenses="" unread_notifications="0" extra_class="" />
+
+<div class="space-y-4 max-w-7xl mx-auto pb-16 md:pb-4 select-text {{ extra_class }}">
+  {# ── 1. Mobile App Header (< 768px) ────────────────────────────────── #}
+  <c-mobile-app-header :employee="employee" :active_session="active_session" :unread_notifications="unread_notifications" />
+
+  {# ── 2. Desktop Welcome Banner (>= 768px) ─────────────────────────── #}
+  <div class="hidden md:flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+    <div class="flex items-center gap-3 min-w-0">
+      <c-avatar initials="{{ employee.full_name|default:request.user.display_name|default:'User' }}" size="md" status="{% if active_session %}online{% else %}offline{% endif %}" />
+      <div class="min-w-0">
+        <h1 class="text-[14px] font-bold text-slate-900 dark:text-white truncate">
+          {{ employee.full_name|default:request.user.display_name|default:"Employee Portal" }}
+        </h1>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+          {% if employee.designation %}{{ employee.designation.name }} · {% endif %}
+          {% if employee.branch %}{{ employee.branch.name }}{% else %}Field Staff{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      {% if active_session %}
+        <c-badge label="Active Check-in" variant="soft" status_color="emerald" dot="true" />
+      {% else %}
+        <c-badge label="Off-duty" variant="soft" status_color="slate" />
+      {% endif %}
+      <a href="{% url 'staff:check_in' %}" class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px]">
+        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+        <span>Attendance</span>
+      </a>
+    </div>
+  </div>
+
+  {# ── 3. Quick KPI Metric Tiles (2 columns mobile, 4 columns desktop) ─── #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+    <c-status-card title="Duty Status"
+                   value="{% if active_session %}Checked In{% else %}Not Checked In{% endif %}"
+                   icon="clock"
+                   label="{% if active_session %}Active{% else %}Ready{% endif %}"
+                   color="{% if active_session %}emerald{% else %}neutral{% endif %}" />
+
+    <c-status-card title="Pending Tasks"
+                   value="{{ pending_tasks|length|default:0 }}"
+                   icon="check-square"
+                   label="Assigned"
+                   color="{% if pending_tasks %}indigo{% else %}neutral{% endif %}" />
+
+    <c-status-card title="Leave Balance"
+                   value="{{ total_leave_left|default:'0' }}d"
+                   icon="calendar"
+                   label="{% if pending_leave_count > 0 %}{{ pending_leave_count }} Pending{% else %}Available{% endif %}"
+                   color="{% if pending_leave_count > 0 %}amber{% else %}emerald{% endif %}" />
+
+    <c-status-card title="Expense Claims"
+                   value="{{ my_expenses|length|default:0 }}"
+                   icon="receipt"
+                   label="Recent"
+                   color="{% if my_expenses %}amber{% else %}neutral{% endif %}" />
+  </div>
+
+  {# ── 4. Quick Actions Grid (< 768px mobile grid, compact horizontal desktop) ─── #}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+    <c-quick-action-tile title="{% if active_session %}Check Out{% else %}Check In{% endif %}"
+                         subtitle="Office / Field"
+                         icon="log-in"
+                         href="{% url 'staff:check_in' %}"
+                         color="{% if active_session %}danger{% else %}success{% endif %}" />
+
+    <c-quick-action-tile title="Field Visit"
+                         subtitle="Log site visit"
+                         icon="map-pin"
+                         href="{% url 'staff:field_visit' %}"
+                         color="primary" />
+
+    <c-quick-action-tile title="Apply Leave"
+                         subtitle="New request"
+                         icon="calendar-plus"
+                         href="{% url 'leave:staff_request_create' %}"
+                         color="warning" />
+
+    <c-quick-action-tile title="Claim Expense"
+                         subtitle="Submit receipt"
+                         icon="receipt"
+                         href="{% url 'expense:staff_expense_create' %}"
+                         color="neutral" />
+  </div>
+
+  {# ── 5. Main Dashboard Grid (Progressive 2-column layout on desktop) ─── #}
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+    {# Left Column (7 cols on lg): Attendance Hero & Field Visits #}
+    <div class="lg:col-span-7 space-y-4">
+      {# Attendance Hero Widget with Independent HTMX Refresh #}
+      <div id="attendance-section"
+           hx-get="{% url 'staff:attendance_card' %}"
+           hx-trigger="load, every 60s"
+           hx-sync="this:replace">
+        <div class="ft-card p-5 rounded-xl border border-slate-200 dark:border-slate-800 animate-pulse flex flex-col justify-center items-center min-h-[140px]">
+          <div class="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin mb-2"></div>
+          <p class="text-[11px] text-slate-500">Syncing live attendance...</p>
+        </div>
+      </div>
+
+      {# Today's Field Visits #}
+      <c-card padding="none" extra_class="overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <c-section-header title="Field Visits Today"
+                            subtitle="Site inspections and client visits"
+                            count="{{ field_visits|length|default:0 }}"
+                            icon="map" />
+          <a href="{% url 'staff:field_visit' %}" class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px]">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Add Visit</span>
+          </a>
+        </div>
+        <div class="p-3 space-y-2">
+          {% for visit in field_visits %}
+            <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-start gap-3 transition-colors">
+              <div class="shrink-0 text-right min-w-[3.5rem]">
+                <p class="text-[12px] font-bold text-slate-800 dark:text-white">{{ visit.check_in_time|time:"h:i A" }}</p>
+                <p class="text-[9px] uppercase tracking-wider text-slate-400">Time</p>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="text-[12px] font-semibold text-slate-800 dark:text-white truncate">
+                  {{ visit.visit_title|default:"Field Visit" }}
+                </h4>
+                {% if visit.client_name %}
+                  <p class="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">{{ visit.client_name }}</p>
+                {% endif %}
+                {% if visit.site_address %}
+                  <p class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1 truncate">
+                    <i data-lucide="map-pin" class="w-3 h-3 shrink-0"></i>
+                    <span class="truncate">{{ visit.site_address }}</span>
+                  </p>
+                {% endif %}
+              </div>
+            </div>
+          {% empty %}
+            <c-empty-state icon="map" title="No field visits today" description="Log client visits and on-site activities.">
+              <a href="{% url 'staff:field_visit' %}" class="ft-btn ft-btn-secondary ft-btn-sm mt-2">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Log Visit
+              </a>
+            </c-empty-state>
+          {% endfor %}
+        </div>
+      </c-card>
+    </div>
+
+    {# Right Column (5 cols on lg): Assigned Tasks & Operational Summaries #}
+    <div class="lg:col-span-5 space-y-4">
+      {# Pending Tasks #}
+      <c-card padding="none" extra_class="overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <c-section-header title="My Tasks"
+                            subtitle="Assigned tasks requiring action"
+                            count="{{ pending_tasks|length|default:0 }}"
+                            icon="check-square" />
+          <a href="{% url 'staff:my_tasks' %}" class="text-[11px] font-medium text-primary hover:underline shrink-0">
+            View All
+          </a>
+        </div>
+        <div class="p-2 divide-y divide-slate-100 dark:divide-slate-800/60">
+          {% for task in pending_tasks %}
+            <c-task-row :task="task" />
+          {% empty %}
+            <c-empty-state icon="check-circle" title="All caught up" description="No pending tasks assigned." />
+          {% endfor %}
+        </div>
+      </c-card>
+
+      {# Leave & Expense Summaries Grid #}
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+        {# Leave Card #}
+        <a href="{% url 'leave:staff_dashboard' %}"
+           class="ft-card p-4 rounded-xl flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-700 transition-colors select-none">
+          <div class="min-w-0">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Leave Balance</p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-[14px] font-bold text-slate-800 dark:text-white">{{ total_leave_left|default:'0' }} days remaining</span>
+            </div>
+            {% if pending_leave_count > 0 %}
+              <p class="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+                {{ pending_leave_count }} request{{ pending_leave_count|pluralize }} pending approval
+              </p>
+            {% endif %}
+          </div>
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <i data-lucide="calendar" class="w-4 h-4"></i>
+          </div>
+        </a>
+
+        {# Expense Card #}
+        <a href="{% url 'expense:staff_expense_list' %}"
+           class="ft-card p-4 rounded-xl flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-700 transition-colors select-none">
+          <div class="min-w-0">
+            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Expense Claims</p>
+            <p class="text-[14px] font-bold text-slate-800 dark:text-white mt-1">View Claims & Reimbursements</p>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Submit new receipts</p>
+          </div>
+          <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <i data-lucide="receipt" class="w-4 h-4"></i>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ── 6. Fixed Safe-Area Mobile Bottom Navigation (< 768px) ───────────── #}
+  <c-bottom-nav active_tab="home" :unread_notifications="unread_notifications" :pending_tasks_count="pending_tasks|length" />
+</div>

@@ -1,0 +1,33 @@
+{% comment %}
+c-status-card component
+Compact 2-column or grid metric tile
+Props:
+- title: string
+- value: string | number
+- icon: Lucide icon name
+- label: optional status label/pill
+- color: primary | emerald | amber | rose | indigo | neutral
+- extra_class: string
+{% endcomment %}
+<c-vars title="" value="--" icon="activity" label="" color="primary" extra_class="" />
+
+<div class="ft-card p-3 rounded-xl flex items-center gap-3 transition-all duration-150 {{ extra_class }}">
+  <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0
+    {% if color == 'emerald' %}bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400
+    {% elif color == 'amber' %}bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400
+    {% elif color == 'rose' %}bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400
+    {% elif color == 'indigo' %}bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400
+    {% elif color == 'neutral' %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300
+    {% else %}bg-primary-50 text-primary-600 dark:bg-primary-950/40 dark:text-primary-400{% endif %}">
+    <i data-lucide="{{ icon }}" class="w-4 h-4"></i>
+  </div>
+  <div class="flex-1 min-w-0">
+    <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">{{ title }}</p>
+    <div class="flex items-baseline gap-2 mt-0.5">
+      <h4 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight leading-none truncate">{{ value }}</h4>
+      {% if label %}
+        <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate">{{ label }}</span>
+      {% endif %}
+    </div>
+  </div>
+</div>

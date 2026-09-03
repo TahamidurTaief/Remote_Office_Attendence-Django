@@ -186,6 +186,28 @@ def get_employee_dashboard_data(user):
         data['my_next_wizard_step'] = 8
         data['my_expiring_documents'] = []
 
+    # Unified keys for shared <c-staff-dashboard> composition
+    data['employee'] = emp_profile
+    data['is_checked_in'] = bool(data.get('active_session'))
+    data['pending_tasks'] = data.get('assigned_tasks', [])
+    data['unread_notifications'] = len(data.get('my_notifications', []))
+    if emp_profile:
+        try:
+            data['total_leave_left'] = emp_profile.total_leave_left_by_year[today.year]
+        except Exception:
+            data['total_leave_left'] = 0
+        data['pending_leave_count'] = LeaveRequest.objects.filter(employee=emp_profile, status='pending').count()
+        data['field_visits'] = Attendance.objects.filter(
+            employee=emp_profile,
+            date=today,
+            attendance_type='field_visit',
+            is_expired=False
+        ).order_by('-check_in_time')
+    else:
+        data['total_leave_left'] = 0
+        data['pending_leave_count'] = 0
+        data['field_visits'] = []
+
     return data
 
 

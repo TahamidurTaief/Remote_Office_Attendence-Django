@@ -80,14 +80,14 @@
         <input type="file" id="checkout-photo" accept="image/*" capture="environment"
                class="block w-full text-sm text-green-50 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-white file:text-green-700 hover:file:bg-green-50">
     </div>
-    <button id="checkout-btn" class="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
+    <button id="checkout-btn" class="flex items-center justify-center gap-2 w-full min-h-[44px] px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap min-w-fit">
         <i data-lucide="log-out" class="w-4 h-4"></i>
         Check Out
     </button>
 </div>
 
 <div class="mb-4 text-center">
-    <p class="text-xs text-gray-500">You can check out first, then check in again for a new session.</p>
+    <p class="text-xs text-slate-500 dark:text-slate-400">You can check out first, then check in again for a new session.</p>
 </div>
 
 {% else %}
@@ -97,14 +97,14 @@
             <p class="text-slate-400 text-sm">Good morning</p>
             <p class="text-xl font-semibold">{{ employee.full_name }}</p>
         </div>
-        <div class="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center">
+        <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center">
             <i data-lucide="clock" class="w-6 h-6 text-slate-300"></i>
         </div>
     </div>
     <p class="text-4xl font-bold mb-1" id="live-time">{{ now|time:"h:i A" }}</p>
     <p class="text-slate-400 text-sm mb-6" id="live-date">{{ now|date:"d/m/Y" }}</p>
     <p class="text-slate-300 text-sm mb-4">You haven't checked in yet</p>
-    <a href="{% url 'staff:check_in' %}" class="block w-full py-2.5 px-4 bg-green-500 hover:bg-green-400 text-white font-bold text-center rounded-xl transition-colors text-lg whitespace-nowrap min-w-fit">
+    <a href="{% url 'staff:check_in' %}" class="flex items-center justify-center w-full min-h-[44px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-center rounded-xl transition-colors text-base whitespace-nowrap min-w-fit">
         Check In
     </a>
 </div>
@@ -112,31 +112,31 @@
 
 {# ── Shift & Holiday Summary Row ────────────────────────────────────── #}
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-    <div class="bg-white rounded-xl p-3 border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+    <div class="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3">
+        <div class="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
             <i data-lucide="clock" class="w-4 h-4"></i>
         </div>
         <div>
-            <p class="text-[11px] text-gray-500 font-medium">Assigned Shift</p>
-            <p class="text-xs font-bold text-gray-900">{{ shift_info }}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Assigned Shift</p>
+            <p class="text-xs font-bold text-slate-900 dark:text-white">{{ shift_info }}</p>
         </div>
     </div>
-    <div class="bg-white rounded-xl p-3 border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+    <div class="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3">
+        <div class="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
             <i data-lucide="calendar" class="w-4 h-4"></i>
         </div>
         <div>
-            <p class="text-[11px] text-gray-500 font-medium">Next Holiday</p>
-            <p class="text-xs font-bold text-gray-900">{% if next_holiday %}{{ next_holiday.name }} ({{ next_holiday.date|date:"d M" }}){% else %}None{% endif %}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Next Holiday</p>
+            <p class="text-xs font-bold text-slate-900 dark:text-white">{% if next_holiday %}{{ next_holiday.name }} ({{ next_holiday.date|date:"d M" }}){% else %}None{% endif %}</p>
         </div>
     </div>
-    <div class="bg-white rounded-xl p-3 border border-gray-100 shadow-sm flex items-center gap-3">
-        <div class="p-2 rounded-lg bg-amber-50 text-amber-600">
+    <div class="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3">
+        <div class="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
             <i data-lucide="file-text" class="w-4 h-4"></i>
         </div>
         <div>
-            <p class="text-[11px] text-gray-500 font-medium">Pending Requests</p>
-            <p class="text-xs font-bold text-gray-900">{{ pending_correction_count }} Correction{% if pending_forgot_count %}, {{ pending_forgot_count }} Forgot{% endif %}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Pending Requests</p>
+            <p class="text-xs font-bold text-slate-900 dark:text-white">{{ pending_correction_count }} Correction{% if pending_forgot_count %}, {{ pending_forgot_count }} Forgot{% endif %}</p>
         </div>
     </div>
 </div>
@@ -144,17 +144,17 @@
 {# ── Sessions Today ──────────────────────────────────────────────── #}
 {% if all_sessions_today %}
 <div class="mb-4">
-    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Today's Sessions</p>
+    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Today's Sessions</p>
     <div class="space-y-2">
         {% for session in all_sessions_today %}
-        <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 flex items-center justify-between gap-3">
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs px-4 py-3 flex items-center justify-between gap-3">
             <div>
-                <p class="text-sm font-semibold text-gray-800">
+                <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">
                     {{ session.check_in_time|time:"h:i A" }}
                     {% if session.check_out_time %}
-                    <i data-lucide="arrow-right" class="w-3 h-3 text-gray-400 inline mx-1"></i> {{ session.check_out_time|time:"h:i A" }}
+                    <i data-lucide="arrow-right" class="w-3 h-3 text-slate-400 inline mx-1"></i> {{ session.check_out_time|time:"h:i A" }}
                     {% else %}
-                    <span class="text-green-600 text-xs font-normal ml-1">(active)</span>
+                    <span class="text-emerald-600 dark:text-emerald-400 text-xs font-normal ml-1">(active)</span>
                     {% endif %}
                 </p>
                 {% if session.total_hours %}

@@ -9,11 +9,16 @@
     </c-topbar>
   </c-slot>
 
-  <div id="dashboard-content" 
-       class="p-4 max-w-7xl mx-auto space-y-4"
-       hx-get="{% url 'dashboard' %}?partial=true{% if request.GET.role_view %}&role_view={{ request.GET.role_view }}{% endif %}"
-       hx-trigger="every 30s"
-       hx-swap="innerHTML">
-    {% include "dashboard/partials/employee_dashboard_content.html" %}
+  <div id="dashboard-content" class="p-2 sm:p-4 max-w-7xl mx-auto">
+    <c-staff-dashboard
+      :employee="employee"
+      :active_session="active_session"
+      :is_checked_in="is_checked_in"
+      :total_leave_left="total_leave_left"
+      :pending_leave_count="pending_leave_count"
+      :pending_tasks="pending_tasks"
+      :field_visits="field_visits"
+      :my_expenses="my_expenses"
+      :unread_notifications="unread_notifications" />
   </div>
 </c-app-shell>
