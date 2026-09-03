@@ -16,7 +16,11 @@ module.exports = {
             fontFamily: {
                 sans: [
                     'Inter',
+                    'Noto Sans Bengali',
+                    'Segoe UI Historic',
                     'Segoe UI',
+                    'Helvetica',
+                    'Arial',
                     'sans-serif',
                 ],
             },

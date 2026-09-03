@@ -1,0 +1,167 @@
+{% load static %}
+{% comment %}
+   c-ai-chatbot component
+   Global bottom-right floating AI chatbot launcher & compact messenger modal.
+   Props:
+   - shell_type: admin | staff (defaults to admin)
+   Features:
+   - Uses colorful static/icons/ai_icon.png with explicit width/height
+   - Restrained red-orange accents (#F97316, #EF4444)
+   - 11-13px typography, low padding, mobile safe-area spacing
+   - Focus management & Escape key trap
+   - Local dummy simulated conversation via HTMX (Zero Google AI Studio API calls)
+   - "Powered by TaiefLab" footer link
+   - Zero raw controls (uses c-button, c-input)
+{% endcomment %}
+
+<div id="ft-ai-chatbot"
+     x-data="{
+       open: false,
+       message: '',
+       loading: false,
+       init() {
+         window.addEventListener('open-ai-chatbot', () => {
+           this.open = true;
+           this.$nextTick(() => {
+             const inp = document.getElementById('ai-chat-input');
+             if (inp) inp.focus();
+           });
+         });
+         window.addEventListener('close-ai-chatbot', () => {
+           this.open = false;
+         });
+       },
+       toggle() {
+         this.open = !this.open;
+         if (this.open) {
+           this.$nextTick(() => {
+             const inp = document.getElementById('ai-chat-input');
+             if (inp) inp.focus();
+           });
+         }
+       }
+     }"
+     @keydown.escape.window="if (open) { open = false; }"
+     class="fixed bottom-4 right-4 z-[90] select-none"
+     style="bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); right: calc(1rem + env(safe-area-inset-right, 0px));">
+
+  {# ── Floating Launcher Button ─────────────────────────────────────── #}
+  <button type="button"
+          @click="toggle()"
+          class="w-12 h-12 rounded-full shadow-lg flex items-center justify-center p-2 bg-white dark:bg-slate-800 border-2 border-orange-500/40 hover:border-orange-500 hover:scale-105 active:scale-95 transition-all duration-200 group/launcher relative"
+          aria-label="Toggle AI Assistant"
+          :aria-expanded="open.toString()">
+    <img src="{% static 'icons/ai_icon.png' %}"
+         alt="AI Assistant"
+         width="32"
+         height="32"
+         loading="eager"
+         class="w-8 h-8 object-contain">
+    {# Red-orange online pulse badge #}
+    <span class="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#EF4444] opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-3 w-3 bg-[#F97316] border-2 border-white dark:border-slate-800"></span>
+    </span>
+  </button>
+
+  {# ── Compact Messenger Modal Window ───────────────────────────────── #}
+  <div x-show="open"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+       x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+       x-transition:leave-end="opacity-0 translate-y-4 scale-95"
+       class="absolute bottom-16 right-0 w-[350px] sm:w-[380px] max-w-[calc(100vw-2rem)] h-[480px] max-h-[calc(100vh-6rem)] bg-white dark:bg-slate-800 rounded-modal border border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col overflow-hidden z-[100]"
+       @click.outside="open = false"
+       x-cloak>
+
+    {# Modal Header #}
+    <div class="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-6 h-6 rounded-card bg-orange-500/10 border border-orange-500/20 flex items-center justify-center p-1 shrink-0">
+          <img src="{% static 'icons/ai_icon.png' %}"
+               alt="AI"
+               width="18"
+               height="18"
+               loading="eager"
+               class="w-4 h-4 object-contain">
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <h3 class="text-[12px] font-bold text-slate-800 dark:text-slate-100 truncate">FieldTrack AI Assistant</h3>
+            <span class="px-1 py-0.2 text-[9px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">Local</span>
+          </div>
+          <p class="text-[10px] text-slate-400">Deterministic Intelligence &bull; Offline Ready</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1 shrink-0">
+        <button type="button"
+                @click="open = false"
+                class="ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label="Close AI Chatbot">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    {# Chat History Scroll Body #}
+    <div id="ai-chat-messages"
+         class="flex-1 overflow-y-auto p-3 space-y-2 text-[12px] bg-[#f8fafc] dark:bg-slate-900/40">
+      {# Welcome Balloon #}
+      <div class="flex flex-col gap-1 items-start my-1">
+        <div class="max-w-[85%] px-3 py-2 rounded-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
+          <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold text-[#F97316]">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
+            <span>Local AI Assistant</span>
+          </div>
+          Welcome! Ask me about daily attendance trends, project task milestones, or payroll calculations.
+        </div>
+        <span class="text-[10px] text-slate-400">System &bull; Ready</span>
+      </div>
+    </div>
+
+    {# Chat Input Form (HTMX powered) #}
+    <div class="p-2.5 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shrink-0">
+      <form hx-post="{% url 'admin_panel:ai_chatbot_response' %}"
+            hx-target="#ai-chat-messages"
+            hx-swap="beforeend"
+            hx-indicator="#ai-chat-spinner"
+            @htmx:before-request="loading = true; message = '';"
+            @htmx:after-request="loading = false; $nextTick(() => { const el = document.getElementById('ai-chat-messages'); el.scrollTop = el.scrollHeight; const inp = document.getElementById('ai-chat-input'); if(inp) inp.focus(); });"
+            class="space-y-1.5">
+        {% csrf_token %}
+        <div class="flex items-center gap-1.5">
+          <div class="flex-1">
+            <input id="ai-chat-input"
+                   name="message"
+                   type="text"
+                   placeholder="Type your workforce question..."
+                   required
+                   x-model="message"
+                   autocomplete="off"
+                   class="ft-input w-full">
+          </div>
+          <button type="submit"
+                  class="ft-btn ft-btn-primary ft-btn-sm shrink-0 bg-[#F97316] hover:bg-[#EA580C] border-[#F97316] text-white"
+                  :disabled="loading">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </form>
+
+      {# Modal Footer: Attribution #}
+      <div class="mt-2 pt-1 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-400">
+        <span id="ai-chat-spinner" class="htmx-indicator flex items-center gap-1 text-[#F97316]">
+          <i data-lucide="loader" class="w-3 h-3 animate-spin"></i>
+          <span>Processing locally...</span>
+        </span>
+        <span class="htmx-indicator-none">Encrypted &bull; No External API</span>
+        <a href="https://www.taieflab.com" target="_blank" rel="noopener noreferrer" class="hover:text-[#F97316] transition-colors font-medium">
+          Powered by TaiefLab
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

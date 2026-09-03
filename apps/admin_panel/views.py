@@ -3957,4 +3957,85 @@ class AdminAttendanceDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, Vi
         return redirect('admin_panel:attendance_list')
 
 
+class AIWorkspaceView(RoleRequiredMixin, TemplateView):
+    """
+    AI Workspace placeholder view for AI submodules.
+    Fully responsive Cotton template with zero raw controls and zero inline styles.
+    """
+    allowed_roles = ['admin', 'manager']
+    template_name = 'admin_panel/ai_workspace.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        submodule = self.kwargs.get('submodule', 'assistant')
+        titles = {
+            'assistant': 'AI Assistant',
+            'attendance-insights': 'Attendance Insights',
+            'project-insights': 'Project Insights',
+            'payroll-insights': 'HR & Payroll Insights',
+            'smart-reports': 'Smart Reports',
+            'settings': 'AI Settings',
+        }
+        descriptions = {
+            'assistant': 'Interact with the local intelligent workforce assistant for quick queries and insights.',
+            'attendance-insights': 'Automated anomaly detection, absenteeism trend projections, and late arrival patterns.',
+            'project-insights': 'Predictive task completion dates, critical path analysis, and material bottleneck alerts.',
+            'payroll-insights': 'Overtime anomaly audits, payroll variance detection, and compensation ratio metrics.',
+            'smart-reports': 'AI-assisted executive summaries and deterministic natural language report synthesis.',
+            'settings': 'Configure intelligence models, telemetry retention, and privacy boundaries.',
+        }
+        context['submodule_key'] = submodule
+        context['page_title'] = titles.get(submodule, 'AI Intelligence Workspace')
+        context['submodule_title'] = titles.get(submodule, 'AI Workspace')
+        context['submodule_description'] = descriptions.get(submodule, 'Local intelligence analytics and deterministic workspace tools.')
+        return context
+
+
+class AIChatbotDummyResponseView(RoleRequiredMixin, View):
+    """
+    Local dummy endpoint for the global AI chatbot assistant.
+    Does NOT contact Google AI Studio or external APIs.
+    Accepts message and returns simulated, labelled dummy response with TaiefLab attribution.
+    """
+    allowed_roles = ['admin', 'manager', 'staff']
+
+    def post(self, request, *args, **kwargs):
+        user_message = request.POST.get('message', '').strip()
+        if not user_message:
+            return HttpResponse(
+                '<div class="flex items-start gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-[12px] text-amber-700 dark:text-amber-300">'
+                '<span>Please enter a message to begin inquiry.</span>'
+                '</div>'
+            )
+
+        # Pre-canned deterministic response based on keywords
+        query = user_message.lower()
+        if 'attendance' in query or 'late' in query or 'absent' in query:
+            reply = "Today's recorded attendance indicates 94.2% on-time check-ins. 3 employees flagged for late arrival at HQ Branch."
+        elif 'project' in query or 'task' in query or 'gantt' in query:
+            reply = "Project 'Alpha Tower HVAC' has 2 pending milestones this week. Material delivery for Duct Sizing is on schedule."
+        elif 'payroll' in query or 'salary' in query or 'expense' in query:
+            reply = "Current payroll calculations show 12 pending overtime requests awaiting managerial review before closing."
+        else:
+            reply = f"Inquiry received: '{user_message}'. Local AI Assistant ready for workforce analysis. Google AI Studio live connection is disabled in this phase."
+
+        # Return HTMX-rendered message balloon
+        html = f'''
+        <div class="flex flex-col gap-1 items-end my-1">
+          <div class="max-w-[85%] px-3 py-2 rounded-card bg-[#F97316] text-white text-[12px] leading-relaxed shadow-sm">
+            {user_message}
+          </div>
+          <span class="text-[10px] text-slate-400">You &bull; Just now</span>
+        </div>
+        <div class="flex flex-col gap-1 items-start my-1">
+          <div class="max-w-[85%] px-3 py-2 rounded-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
+            <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold text-[#F97316]">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
+              <span>Local AI Assistant (Demo Mode)</span>
+            </div>
+            {reply}
+          </div>
+          <span class="text-[10px] text-slate-400">AI Assistant &bull; Powered by TaiefLab</span>
+        </div>
+        '''
+        return HttpResponse(html)

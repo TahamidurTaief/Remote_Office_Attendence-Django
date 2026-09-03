@@ -67,4 +67,13 @@ urlpatterns = [
     path('permissions/matrix/', roles_views.DynamicRoleListView.as_view(), name='permission_matrix'),
     path('audit-logs/', roles_views.AdminAuditLogView.as_view(), name='admin_audit_logs'),
     path('security-dashboard/', roles_views.AdminSecurityDashboardView.as_view(), name='security_dashboard'),
+
+    # AI Intelligence Workspace & Chatbot
+    path('ai/assistant/', views.AIWorkspaceView.as_view(), {'submodule': 'assistant'}, name='ai_assistant'),
+    path('ai/attendance-insights/', views.AIWorkspaceView.as_view(), {'submodule': 'attendance-insights'}, name='ai_attendance_insights'),
+    path('ai/project-insights/', views.AIWorkspaceView.as_view(), {'submodule': 'project-insights'}, name='ai_project_insights'),
+    path('ai/payroll-insights/', views.AIWorkspaceView.as_view(), {'submodule': 'payroll-insights'}, name='ai_payroll_insights'),
+    path('ai/smart-reports/', views.AIWorkspaceView.as_view(), {'submodule': 'smart-reports'}, name='ai_smart_reports'),
+    path('ai/settings/', views.AIWorkspaceView.as_view(), {'submodule': 'settings'}, name='ai_settings'),
+    path('ai/chatbot/dummy-response/', views.AIChatbotDummyResponseView.as_view(), name='ai_chatbot_response'),
 ]
