@@ -10,7 +10,7 @@ from imagekit.processors import ResizeToFit, Transpose
 
 class EmployeeProfileQuerySet(models.QuerySet):
     def active_operational(self):
-        return self.filter(master_employee__is_trashed=False, is_active=True).exclude(master_employee__status='archived')
+        return self.filter(is_active=True).exclude(master_employee__is_trashed=True).exclude(master_employee__status='archived')
 
 class EmployeeProfileManager(models.Manager):
     def get_queryset(self):

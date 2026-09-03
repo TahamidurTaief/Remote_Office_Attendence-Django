@@ -84,18 +84,18 @@
          x-cloak>
       
       {# 1. Low Opacity Inward Ambient Glow focused at Top-Left #}
-      <div class="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-red-500/3 to-transparent backdrop-blur-[0.5px] shadow-[inset_0_0_100px_rgba(249,115,22,0.08)]"></div>
+      <div class="absolute inset-0 bg-orange-500/5 backdrop-blur-[0.5px] shadow-[inset_0_0_100px_rgba(249,115,22,0.08)]"></div>
 
       {# 2. Top-Left Primary Low Opacity Ambient Wave #}
-      <div class="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-gradient-to-br from-orange-500/10 via-red-500/5 to-transparent blur-3xl animate-pulse"
+      <div class="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-orange-500/10 blur-3xl animate-pulse"
            style="animation-duration: 6s;"></div>
 
       {# 3. Ambient Colors Moving Around Screen Corners (Low Opacity) #}
-      <div class="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full bg-gradient-to-bl from-red-500/5 via-orange-500/3 to-transparent blur-3xl animate-pulse"
+      <div class="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full bg-red-500/5 blur-3xl animate-pulse"
            style="animation-duration: 8s; animation-delay: 1.5s;"></div>
-      <div class="absolute -bottom-32 -left-32 w-[550px] h-[550px] rounded-full bg-gradient-to-tr from-orange-500/6 via-red-500/4 to-transparent blur-3xl animate-pulse"
+      <div class="absolute -bottom-32 -left-32 w-[550px] h-[550px] rounded-full bg-orange-500/5 blur-3xl animate-pulse"
            style="animation-duration: 7s; animation-delay: 3s;"></div>
-      <div class="absolute -bottom-32 -right-32 w-[450px] h-[450px] rounded-full bg-gradient-to-tl from-red-500/4 via-orange-500/3 to-transparent blur-3xl animate-pulse"
+      <div class="absolute -bottom-32 -right-32 w-[450px] h-[450px] rounded-full bg-red-500/5 blur-3xl animate-pulse"
            style="animation-duration: 9s; animation-delay: 0.5s;"></div>
 
       {# 4. Ultra-Clean Floating Red-Orange Badge #}
@@ -105,7 +105,7 @@
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
           <span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
         </span>
-        <span class="text-[11px] font-bold bg-gradient-to-r from-red-600 to-orange-500 bg-clip-text text-transparent truncate">
+        <span class="text-[11px] font-bold text-orange-600 dark:text-orange-400 truncate">
           TaiefLab AI Assistant Ready
         </span>
         <i data-lucide="sparkles" class="w-3.5 h-3.5 text-orange-500 animate-spin shrink-0" style="animation-duration: 5s;"></i>
@@ -116,10 +116,10 @@
   {# ── Floating Launcher Button (Google & Google AI Aesthetic Hover Effect) ── #}
   <div class="relative group/launcher flex items-center justify-center">
     {# Google & Gemini AI iridescent aura glow on hover (Ultra-subtle) #}
-    <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-[#4285F4]/30 via-[#A855F7]/30 via-[#EA4335]/30 to-[#FBBC05]/30 opacity-0 group-hover/launcher:opacity-100 blur-sm transition-all duration-500 group-hover/launcher:scale-105 pointer-events-none"></div>
+    <div class="absolute -inset-1 rounded-full bg-[#4285F4]/20 shadow-[0_0_12px_rgba(66,133,244,0.4)] opacity-0 group-hover/launcher:opacity-100 blur-sm transition-all duration-500 group-hover/launcher:scale-105 pointer-events-none"></div>
 
     {# Google AI iridescent subtle perimeter ring #}
-    <div class="absolute -inset-[1px] rounded-full bg-gradient-to-r from-[#4285F4]/40 via-[#EA4335]/40 via-[#FBBC05]/40 to-[#34A853]/40 opacity-0 group-hover/launcher:opacity-70 transition-opacity duration-300 pointer-events-none"></div>
+    <div class="absolute -inset-[1px] rounded-full ring-2 ring-[#EA4335]/30 opacity-0 group-hover/launcher:opacity-70 transition-opacity duration-300 pointer-events-none"></div>
 
     <button type="button"
             @click="toggle()"
@@ -136,7 +136,7 @@
            class="w-full h-full object-cover rounded-full group-hover/launcher:rotate-6 group-hover/launcher:scale-105 transition-transform duration-300">
       
       {# Subtle sheen reflection on hover #}
-      <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/25 to-transparent opacity-0 group-hover/launcher:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+      <div class="absolute inset-0 bg-white/20 opacity-0 group-hover/launcher:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
 
       {# Online pulse badge #}
       <span class="absolute top-0 right-0 flex h-3.5 w-3.5 z-10">

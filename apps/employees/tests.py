@@ -2415,7 +2415,210 @@ class DepartmentCRUDTests(TestCase):
         self.assertIn(self.branch, imp_dept2.branches.all())
 
 
+class EmployeeMoveToTrashWorkflowTests(TestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            phone='+8801711111111',
+            email='admin@fieldtrack.local',
+            password='Password123!',
+            role='admin'
+        )
+        self.staff_user = User.objects.create_user(
+            phone='+8801722222222',
+            email='staff@fieldtrack.local',
+            password='Password123!',
+            role='staff'
+        )
+        self.branch = Branch.objects.create(name="HQ Branch", latitude=23.81, longitude=90.41, radius_meters=200)
+        self.dept = Department.objects.create(name="Operations", code="OPS")
+        self.desig = Designation.objects.create(name="Field Officer", code="FO")
 
+        self.emp_user = User.objects.create_user(
+            phone='+8801733333333',
+            email='target@fieldtrack.local',
+            password='Password123!',
+            role='employee'
+        )
+        self.employee = Employee.objects.create(
+            user=self.emp_user,
+            first_name="Rahim",
+            last_name="Uddin",
+            employee_number="EMP-TEST-001",
+            personal_email="target@fieldtrack.local",
+            phone="+8801733333333",
+            branch=self.branch,
+            department=self.dept,
+            designation=self.desig,
+            status=EmployeeStatus.ACTIVE,
+            is_trashed=False
+        )
+        self.profile = EmployeeProfile.objects.create(
+            user=self.emp_user,
+            master_employee=self.employee,
+            employee_id="EMP-TEST-001",
+            full_name="Rahim Uddin",
+            phone="+8801733333333",
+            branch=self.branch,
+            joined_date=date.today(),
+            is_active=True
+        )
 
+        from apps.attendance.models import Attendance
+        self.attendance = Attendance.objects.create(
+            employee=self.profile,
+            date=date.today(),
+            status='on_time',
+            type='office'
+        )
 
+    def test_rbac_unauthorized_user_forbidden(self):
+        self.client.force_login(self.staff_user)
+        url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
 
+        get_res = self.client.get(url)
+        self.assertEqual(get_res.status_code, 403)
+
+        post_res = self.client.post(url, {'reason': 'Should not work'})
+        self.assertEqual(post_res.status_code, 403)
+
+    def test_missing_reason_validation(self):
+        from apps.audit.models import TrashEntry
+        self.client.force_login(self.admin_user)
+        url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
+
+        res = self.client.post(url, {'reason': ''}, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Reason is required")
+
+        self.employee.refresh_from_db()
+        self.assertFalse(self.employee.is_trashed)
+        self.assertEqual(TrashEntry.objects.filter(object_id=str(self.employee.pk)).count(), 0)
+
+    def test_persisted_database_state_on_soft_delete(self):
+        from apps.audit.models import TrashEntry, AuditEvent
+        self.client.force_login(self.admin_user)
+        url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
+
+        res = self.client.post(url, {'reason': 'Relocating to another city'}, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("employee-row-", res.content.decode('utf-8'))
+        self.assertIn('hx-swap-oob="delete"', res.content.decode('utf-8'))
+
+        self.employee.refresh_from_db()
+        self.profile.refresh_from_db()
+
+        self.assertTrue(self.employee.is_trashed)
+        self.assertEqual(self.employee.status, 'archived')
+        self.assertIsNotNone(self.employee.trashed_at)
+        self.assertFalse(self.profile.is_active)
+
+        entry = TrashEntry.objects.get(object_id=str(self.employee.pk), status=TrashEntry.STATUS_ACTIVE)
+        self.assertEqual(entry.delete_reason, 'Relocating to another city')
+        self.assertEqual(entry.metadata.get('profile_is_active'), True)
+
+        event = AuditEvent.objects.filter(action='deleted', object_id=str(self.employee.pk)).first()
+        self.assertIsNotNone(event)
+
+    def test_exclusion_from_active_querysets_and_pickers(self):
+        from apps.audit.services import TrashService
+        self.client.force_login(self.admin_user)
+        TrashService.soft_delete(self.employee, actor=self.admin_user, reason='Exclusion test')
+
+        master_list_url = reverse('employees:master_list')
+        res = self.client.get(master_list_url)
+        self.assertNotContains(res, self.employee.employee_number)
+
+        legacy_list_url = reverse('employees:employee_list')
+        res_legacy = self.client.get(legacy_list_url)
+        self.assertNotContains(res_legacy, self.employee.employee_number)
+
+        self.assertNotIn(self.employee, Employee.objects.active_operational())
+        self.assertNotIn(self.profile, EmployeeProfile.objects.active_operational())
+        self.assertNotIn(self.profile, EmployeeProfile.objects.filter(is_active=True))
+
+    def test_historical_preservation(self):
+        from apps.audit.services import TrashService
+        TrashService.soft_delete(self.employee, actor=self.admin_user, reason='Preserve test')
+
+        self.attendance.refresh_from_db()
+        self.assertEqual(self.attendance.employee_id, self.profile.pk)
+
+    def test_restoration_preserves_exact_profile_is_active(self):
+        from apps.audit.services import TrashService
+        # Case A: Profile was originally inactive
+        self.profile.is_active = False
+        self.profile.save()
+
+        entry, created = TrashService.soft_delete(self.employee, actor=self.admin_user, reason='Inactive test')
+        self.assertEqual(entry.metadata.get('profile_is_active'), False)
+
+        TrashService.restore(entry, actor=self.admin_user)
+        self.employee.refresh_from_db()
+        self.profile.refresh_from_db()
+
+        self.assertFalse(self.employee.is_trashed)
+        self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
+        # MUST remain False because previous was False!
+        self.assertFalse(self.profile.is_active)
+
+        # Case B: Profile was originally active
+        self.profile.is_active = True
+        self.profile.save()
+
+        entry2, created2 = TrashService.soft_delete(self.employee, actor=self.admin_user, reason='Active test')
+        self.assertEqual(entry2.metadata.get('profile_is_active'), True)
+
+        TrashService.restore(entry2, actor=self.admin_user)
+        self.employee.refresh_from_db()
+        self.profile.refresh_from_db()
+
+        self.assertFalse(self.employee.is_trashed)
+        self.assertTrue(self.profile.is_active)
+
+    def test_inconsistency_repair_without_duplicate_entry_or_event(self):
+        from apps.audit.models import TrashEntry, AuditEvent
+        from apps.audit.services import TrashService
+        from django.contrib.contenttypes.models import ContentType
+
+        entry = TrashEntry.objects.create(
+            module=self.employee._meta.app_label,
+            object_type=self.employee.__class__.__name__,
+            object_id=str(self.employee.pk),
+            object_label=self.employee.get_full_name(),
+            content_type=ContentType.objects.get_for_model(self.employee.__class__),
+            content_object_id=self.employee.pk,
+            status=TrashEntry.STATUS_ACTIVE,
+            metadata={'previous_status': self.employee.status}
+        )
+        self.assertFalse(self.employee.is_trashed)
+        self.assertTrue(self.profile.is_active)
+
+        initial_entries = TrashEntry.objects.filter(object_id=str(self.employee.pk)).count()
+        initial_events = AuditEvent.objects.filter(action='deleted', object_id=str(self.employee.pk)).count()
+
+        ret_entry, created = TrashService.soft_delete(self.employee, actor=self.admin_user, reason='Repair')
+        self.assertFalse(created)
+        self.assertEqual(ret_entry.pk, entry.pk)
+
+        self.employee.refresh_from_db()
+        self.profile.refresh_from_db()
+
+        self.assertTrue(self.employee.is_trashed)
+        self.assertEqual(self.employee.status, 'archived')
+        self.assertFalse(self.profile.is_active)
+
+        self.assertEqual(TrashEntry.objects.filter(object_id=str(self.employee.pk)).count(), initial_entries)
+        self.assertEqual(AuditEvent.objects.filter(action='deleted', object_id=str(self.employee.pk)).count(), initial_events)
+
+    def test_duplicate_post_idempotent(self):
+        from apps.audit.models import TrashEntry
+        self.client.force_login(self.admin_user)
+        url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
+
+        res1 = self.client.post(url, {'reason': 'First delete'}, HTTP_HX_REQUEST='true')
+        self.assertEqual(res1.status_code, 200)
+
+        res2 = self.client.post(url, {'reason': 'Duplicate delete'}, HTTP_HX_REQUEST='true')
+        self.assertEqual(res2.status_code, 200)
+
+        self.assertEqual(TrashEntry.objects.filter(object_id=str(self.employee.pk)).count(), 1)

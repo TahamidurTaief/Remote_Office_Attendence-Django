@@ -34,7 +34,7 @@ Props:
   <div class="flex items-center gap-2 shrink-0">
     <c-badge label="{{ task.get_status_display|default:task.status }}"
              variant="soft"
-             status_color="{% if task.status == 'Completed' %}emerald{% elif task.status == 'In Progress' or task.status == 'in_progress' %}blue{% elif task.status == 'Delayed' %}rose{% else %}slate{% endif %}" />
+             status_color="{% if task.status == 'Completed' %}emerald{% elif task.status == 'In Progress' or task.status == 'in_progress' %}blue{% elif task.status == 'Delayed' %}rose{% else %}slate{% endif %}"></c-badge>
     {% if task.project %}
       <a href="{% url 'staff:my_project_detail' task.project.pk %}"
          class="min-h-[36px] min-w-[36px] flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:text-primary transition-colors"

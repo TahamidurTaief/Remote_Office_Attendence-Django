@@ -304,7 +304,7 @@ class TrashService:
         payroll_count = EmployeePayrollCalculation.objects.filter(employee=obj).count()
         expense_count = Expense.objects.filter(employee=profile).count() if profile else 0
         document_count = EmployeeDocument.objects.filter(employee_master=obj).count()
-        asset_count = AssetAssignment.objects.filter(employee=profile).count() if profile else 0
+        asset_count = AssetAssignment.objects.filter(employee=obj).count()
 
         # projects/tasks
         project_count = 0
@@ -313,7 +313,7 @@ class TrashService:
             project_count = Project.objects.filter(
                 Q(project_managers=profile) |
                 Q(site_engineers=profile) |
-                Q(members=profile)
+                Q(project_members=profile)
             ).distinct().count()
             task_count = ProjectTask.objects.filter(responsible_person=profile).count()
 
@@ -355,12 +355,39 @@ class TrashService:
     @transaction.atomic
     def soft_delete(cls, obj, *, actor=None, reason="", request=None):
         existing = cls.get_active_entry(obj)
+        profile = getattr(obj, "legacy_profile", None)
+        if not profile and getattr(obj, "user", None):
+            profile = getattr(obj.user, "employee_profile", None)
+
         if existing:
+            # Edge Case Repair: Active TrashEntry exists but employee or profile was not marked trashed
+            needs_repair = not getattr(obj, "is_trashed", False) or getattr(obj, "status", "") != "archived" or (profile and profile.is_active)
+            if needs_repair:
+                obj._audit_skip_signal = True
+                obj._allow_trashed_write = True
+                obj._bypass_lifecycle_validation = True
+                obj.is_trashed = True
+                obj.trashed_at = getattr(existing, 'deleted_at', None) or timezone.now()
+                obj.status = "archived"
+                obj.save(update_fields=["is_trashed", "trashed_at", "status", "updated_at"])
+
+                if profile:
+                    meta = existing.metadata or {}
+                    if "profile_is_active" not in meta:
+                        meta["profile_is_active"] = profile.is_active
+                        existing.metadata = meta
+                        existing.save(update_fields=["metadata"])
+                    if profile.is_active:
+                        profile.is_active = False
+                        profile.save(update_fields=["is_active"])
+
             return existing, False
 
         before = serialize_instance(obj)
         if obj.__class__.__name__ != "Employee":
             raise ValidationError("Soft delete foundation is currently wired for Employee first.")
+
+        profile_prev_active = profile.is_active if profile else None
 
         obj._audit_skip_signal = True
         obj._allow_trashed_write = True
@@ -369,6 +396,10 @@ class TrashService:
         obj.trashed_at = timezone.now()
         obj.status = "archived"
         obj.save(update_fields=["is_trashed", "trashed_at", "status", "updated_at"])
+
+        if profile:
+            profile.is_active = False
+            profile.save(update_fields=["is_active"])
 
         entry = TrashEntry.objects.create(
             module=obj._meta.app_label,
@@ -382,7 +413,11 @@ class TrashService:
             restore_allowed=True,
             permanent_delete_allowed=True,
             dependency_summary=cls.get_dependencies(obj),
-            metadata={"previous_status": before.get("status"), "snapshot": before},
+            metadata={
+                "previous_status": before.get("status"),
+                "profile_is_active": profile_prev_active,
+                "snapshot": before,
+            },
             related_employee=obj,
             related_branch=obj.branch,
         )
@@ -436,6 +471,15 @@ class TrashService:
         obj.trashed_at = None
         obj.status = entry.metadata.get("previous_status") or "active"
         obj.save(update_fields=["is_trashed", "trashed_at", "status", "updated_at"])
+
+        profile = getattr(obj, "legacy_profile", None)
+        if not profile and getattr(obj, "user", None):
+            profile = getattr(obj.user, "employee_profile", None)
+
+        if profile and "profile_is_active" in entry.metadata:
+            profile.is_active = bool(entry.metadata["profile_is_active"])
+            profile.save(update_fields=["is_active"])
+
         entry.status = TrashEntry.STATUS_RESTORED
         entry.restored_by = actor if getattr(actor, "is_authenticated", False) else None
         entry.restored_at = timezone.now()

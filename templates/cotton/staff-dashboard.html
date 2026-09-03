@@ -17,12 +17,12 @@ Props:
 
 <div class="space-y-4 max-w-7xl mx-auto pb-16 md:pb-4 select-text {{ extra_class }}">
   {# ── 1. Mobile App Header (< 768px) ────────────────────────────────── #}
-  <c-mobile-app-header :employee="employee" :active_session="active_session" :unread_notifications="unread_notifications" />
+  <c-mobile-app-header :employee="employee" :active_session="active_session" :unread_notifications="unread_notifications"></c-mobile-app-header>
 
   {# ── 2. Desktop Welcome Banner (>= 768px) ─────────────────────────── #}
   <div class="hidden md:flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
     <div class="flex items-center gap-3 min-w-0">
-      <c-avatar initials="{{ employee.full_name|default:request.user.display_name|default:'User' }}" size="md" status="{% if active_session %}online{% else %}offline{% endif %}" />
+      <c-avatar initials="{{ employee.full_name|default:request.user.display_name|default:'User' }}" size="md" status="{% if active_session %}online{% else %}offline{% endif %}"></c-avatar>
       <div class="min-w-0">
         <h1 class="text-[14px] font-bold text-slate-900 dark:text-white truncate">
           {{ employee.full_name|default:request.user.display_name|default:"Employee Portal" }}
@@ -35,9 +35,9 @@ Props:
     </div>
     <div class="flex items-center gap-2 shrink-0">
       {% if active_session %}
-        <c-badge label="Active Check-in" variant="soft" status_color="emerald" dot="true" />
+        <c-badge label="Active Check-in" variant="soft" status_color="emerald" dot="true"></c-badge>
       {% else %}
-        <c-badge label="Off-duty" variant="soft" status_color="slate" />
+        <c-badge label="Off-duty" variant="soft" status_color="slate"></c-badge>
       {% endif %}
       <a href="{% url 'staff:check_in' %}" class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px]">
         <i data-lucide="clock" class="w-3.5 h-3.5"></i>
@@ -52,25 +52,25 @@ Props:
                    value="{% if active_session %}Checked In{% else %}Not Checked In{% endif %}"
                    icon="clock"
                    label="{% if active_session %}Active{% else %}Ready{% endif %}"
-                   color="{% if active_session %}emerald{% else %}neutral{% endif %}" />
+                   color="{% if active_session %}emerald{% else %}neutral{% endif %}"></c-status-card>
 
     <c-status-card title="Pending Tasks"
                    value="{{ pending_tasks|length|default:0 }}"
                    icon="check-square"
                    label="Assigned"
-                   color="{% if pending_tasks %}indigo{% else %}neutral{% endif %}" />
+                   color="{% if pending_tasks %}indigo{% else %}neutral{% endif %}"></c-status-card>
 
     <c-status-card title="Leave Balance"
                    value="{{ total_leave_left|default:'0' }}d"
                    icon="calendar"
                    label="{% if pending_leave_count > 0 %}{{ pending_leave_count }} Pending{% else %}Available{% endif %}"
-                   color="{% if pending_leave_count > 0 %}amber{% else %}emerald{% endif %}" />
+                   color="{% if pending_leave_count > 0 %}amber{% else %}emerald{% endif %}"></c-status-card>
 
     <c-status-card title="Expense Claims"
                    value="{{ my_expenses|length|default:0 }}"
                    icon="receipt"
                    label="Recent"
-                   color="{% if my_expenses %}amber{% else %}neutral{% endif %}" />
+                   color="{% if my_expenses %}amber{% else %}neutral{% endif %}"></c-status-card>
   </div>
 
   {# ── 4. Quick Actions Grid (< 768px mobile grid, compact horizontal desktop) ─── #}
@@ -79,25 +79,25 @@ Props:
                          subtitle="Office / Field"
                          icon="log-in"
                          href="{% url 'staff:check_in' %}"
-                         color="{% if active_session %}danger{% else %}success{% endif %}" />
+                         color="{% if active_session %}danger{% else %}success{% endif %}"></c-quick-action-tile>
 
     <c-quick-action-tile title="Field Visit"
                          subtitle="Log site visit"
                          icon="map-pin"
                          href="{% url 'staff:field_visit' %}"
-                         color="primary" />
+                         color="primary"></c-quick-action-tile>
 
     <c-quick-action-tile title="Apply Leave"
                          subtitle="New request"
                          icon="calendar-plus"
                          href="{% url 'leave:staff_request_create' %}"
-                         color="warning" />
+                         color="warning"></c-quick-action-tile>
 
     <c-quick-action-tile title="Claim Expense"
                          subtitle="Submit receipt"
                          icon="receipt"
                          href="{% url 'expense:staff_expense_create' %}"
-                         color="neutral" />
+                         color="neutral"></c-quick-action-tile>
   </div>
 
   {# ── 5. Main Dashboard Grid (Progressive 2-column layout on desktop) ─── #}
@@ -121,7 +121,7 @@ Props:
           <c-section-header title="Field Visits Today"
                             subtitle="Site inspections and client visits"
                             count="{{ field_visits|length|default:0 }}"
-                            icon="map" />
+                            icon="map"></c-section-header>
           <a href="{% url 'staff:field_visit' %}" class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px]">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
             <span>Add Visit</span>
@@ -168,16 +168,16 @@ Props:
           <c-section-header title="My Tasks"
                             subtitle="Assigned tasks requiring action"
                             count="{{ pending_tasks|length|default:0 }}"
-                            icon="check-square" />
+                            icon="check-square"></c-section-header>
           <a href="{% url 'staff:my_tasks' %}" class="text-[11px] font-medium text-primary hover:underline shrink-0">
             View All
           </a>
         </div>
         <div class="p-2 divide-y divide-slate-100 dark:divide-slate-800/60">
           {% for task in pending_tasks %}
-            <c-task-row :task="task" />
+            <c-task-row :task="task"></c-task-row>
           {% empty %}
-            <c-empty-state icon="check-circle" title="All caught up" description="No pending tasks assigned." />
+            <c-empty-state icon="check-circle" title="All caught up" description="No pending tasks assigned."></c-empty-state>
           {% endfor %}
         </div>
       </c-card>
@@ -220,5 +220,5 @@ Props:
   </div>
 
   {# ── 6. Fixed Safe-Area Mobile Bottom Navigation (< 768px) ───────────── #}
-  <c-bottom-nav active_tab="home" :unread_notifications="unread_notifications" :pending_tasks_count="pending_tasks|length" />
+  <c-bottom-nav active_tab="home" :unread_notifications="unread_notifications" :pending_tasks_count="pending_tasks|length"></c-bottom-nav>
 </div>

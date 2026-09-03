@@ -11,7 +11,8 @@
         </c-slot>
         
         {% for emp in employees %}
-            <tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors text-[12px] cursor-pointer"
+            <tr id="employee-row-{{ emp.pk }}"
+                class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors text-[12px] cursor-pointer"
                 data-title="{{ emp.get_full_name|escape }}"
                 data-subtitle="{{ emp.employee_number|escape }}"
                 @contextmenu.prevent="$dispatch('open-action-menu', { event: $event, isButton: false, emp: { id: {{ emp.pk }}, number: '{{ emp.employee_number }}', name: '{{ emp.get_full_name|escapejs }}', status: '{{ emp.status }}', completion: {{ emp.get_completion_percentage }}, detailUrl: '{% url 'employees:employee_detail' emp.pk %}', editUrl: '{% url 'employees:employee_wizard_step' uuid=emp.uuid step=1 %}', resumeUrl: '{% url 'employees:employee_wizard_step' uuid=emp.uuid step=emp.get_next_wizard_step %}', deleteUrl: '{% url 'employees:master_delete' emp.pk %}', inactiveUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=inactive', activeUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=active', suspendUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=suspended', archiveUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived', isSuperuser: {% if request.user.is_superuser %}true{% else %}false{% endif %}, isTrashed: {% if emp.is_trashed %}true{% else %}false{% endif %} } })">

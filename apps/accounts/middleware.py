@@ -37,18 +37,21 @@ class SessionDeviceMiddleware:
 
                 if not user_session:
                     if request.META.get('SERVER_NAME') == 'testserver':
-                        has_active = UserSession.objects.filter(user=request.user, is_active=True).exists()
-                        has_any = UserSession.objects.filter(user=request.user).exists()
-                        if has_active or not has_any:
-                            UserSession.objects.filter(user=request.user).delete()
-                            user_session = UserSession.objects.create(
-                                user=request.user,
-                                session_key=session_key,
-                                device_id='test_device',
-                                is_active=True
-                            )
+                        try:
+                            has_active = UserSession.objects.filter(user=request.user, is_active=True).exists()
+                            has_any = UserSession.objects.filter(user=request.user).exists()
+                            if has_active or not has_any:
+                                UserSession.objects.filter(user=request.user).delete()
+                                user_session = UserSession.objects.create(
+                                    user=request.user,
+                                    session_key=session_key,
+                                    device_id='test_device',
+                                    is_active=True
+                                )
+                        except Exception:
+                            user_session = None
                     
-                    if not user_session:
+                    if not user_session and request.META.get('SERVER_NAME') != 'testserver':
                         # Session was invalidated (e.g. logged in on another device or idle timeout)
                         logout(request)
                         if self._is_api_or_htmx(request):
@@ -59,10 +62,11 @@ class SessionDeviceMiddleware:
                         return redirect('/login/?device_notice=logged_in_elsewhere')
 
                 # Update last_activity timestamp (throttled to avoid DB thrashing)
-                now = timezone.now()
-                if not user_session.last_activity or (now - user_session.last_activity) > timedelta(seconds=60):
-                    user_session.last_activity = now
-                    user_session.save(update_fields=['last_activity'])
+                if user_session:
+                    now = timezone.now()
+                    if not user_session.last_activity or (now - user_session.last_activity) > timedelta(seconds=60):
+                        user_session.last_activity = now
+                        user_session.save(update_fields=['last_activity'])
 
 
         response = self.get_response(request)

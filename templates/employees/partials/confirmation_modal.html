@@ -1,11 +1,16 @@
 <c-modal id="employee-confirm-modal" title="{{ title|default:'Confirm Action' }}" size="md">
-    <form hx-post="{{ endpoint }}" hx-target="#modal-container" hx-swap="innerHTML" class="space-y-4">
+    <form hx-post="{{ endpoint }}"
+          hx-target="#modal-container"
+          hx-swap="innerHTML"
+          class="space-y-4"
+          x-data="{ submitting: false }"
+          @submit="submitting = true">
         {% csrf_token %}
         {% if to_status %}
         <input type="hidden" name="to_status" value="{{ to_status }}">
         {% endif %}
 
-        <p class="text-sm text-slate-700 dark:text-slate-300">
+        <p class="text-[12px] leading-relaxed text-slate-700 dark:text-slate-300">
             {{ message|default:'Are you sure you want to perform this action?' }}
         </p>
 
@@ -16,7 +21,7 @@
         </div>
         <div class="flex items-center gap-2">
             <input type="checkbox" name="auto_reactivate" id="auto_reactivate" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-            <label for="auto_reactivate" class="text-xs font-medium text-slate-700 dark:text-slate-300">Auto-reactivate when expired</label>
+            <label for="auto_reactivate" class="text-[12px] font-medium text-slate-700 dark:text-slate-300">Auto-reactivate when expired</label>
         </div>
         {% endif %}
 
@@ -24,9 +29,24 @@
             <c-textarea name="reason" rows="3" label="Reason" placeholder="Enter reason here..." required="{{ reason_required|yesno:'true,false' }}" error="{{ reason_error }}"></c-textarea>
         </div>
 
-        <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <c-button type="button" @click="$dispatch('close-modal', {id: 'employee-confirm-modal'})" variant="secondary" label="Cancel"></c-button>
-            <c-button type="submit" variant="{% if action == 'delete' or action == 'suspend' %}danger{% else %}primary{% endif %}" label="{{ action_label|default:'Confirm' }}"></c-button>
+        <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <button type="button"
+                    @click="$dispatch('close-modal', {id: 'employee-confirm-modal'})"
+                    class="min-h-[44px] px-4 py-2 rounded-xl text-[12px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center">
+                Cancel
+            </button>
+            <button type="submit"
+                    :disabled="submitting"
+                    class="min-h-[44px] px-4 py-2 rounded-xl text-[12px] font-semibold text-white flex items-center justify-center gap-2 transition-all {% if action == 'delete' or action == 'suspend' %}bg-rose-600 hover:bg-rose-700{% else %}bg-[#1877F2] hover:bg-[#166FE5]{% endif %} disabled:opacity-50 disabled:cursor-not-allowed">
+                <span x-show="!submitting">{{ action_label|default:'Confirm' }}</span>
+                <span x-show="submitting" class="flex items-center gap-2" x-cloak>
+                    <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <span>Processing...</span>
+                </span>
+            </button>
         </div>
     </form>
 </c-modal>

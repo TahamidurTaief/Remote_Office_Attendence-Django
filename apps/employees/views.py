@@ -40,7 +40,7 @@ class EmployeeListView(AdminRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = super().get_queryset().select_related(
+        queryset = super().get_queryset().exclude(master_employee__is_trashed=True).select_related(
             'branch', 'user', 'master_employee', 'master_employee__department', 'master_employee__designation'
         )
         search_query = self.request.GET.get('search', '')
@@ -620,16 +620,32 @@ class EmployeeMasterDeleteView(View):
     """
     Delete an Employee record. Soft-deletes to Trash by default.
     Super-admin can permanently delete if already trashed.
+    Protected by strict admin/RBAC delete permission.
     """
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect('login')
+        if not self._has_delete_permission(request.user):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to delete or trash employees.")
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self, request, pk):
+    @staticmethod
+    def _has_delete_permission(user):
+        if user.is_superuser:
+            return True
+        user_role_codes = [assignment.role.code for assignment in user.role_assignments.select_related('role').filter(role__is_active=True)]
+        if not user_role_codes and hasattr(user, 'role'):
+            user_role_codes = [user.role]
+        if any(r in ['admin', 'system_owner'] for r in user_role_codes):
+            return True
+        if user.has_perm('employees.delete_employee'):
+            return True
+        return False
 
-        """Return the confirmation modal (HTMX partial)."""
+    def get(self, request, pk):
+        """Return the confirmation modal (HTMX partial). Never mutate state."""
         employee = get_object_or_404(Employee, pk=pk)
         if employee.is_trashed:
             title = "Permanently Delete Employee?"
@@ -638,7 +654,7 @@ class EmployeeMasterDeleteView(View):
             reason_required = False
         else:
             title = "Move employee to Trash?"
-            message = f"This employee will be removed from active operations but historical records will be preserved."
+            message = "This employee will be removed from active operations but historical records will be preserved."
             action_label = "Move to Trash"
             reason_required = True
 
@@ -650,7 +666,6 @@ class EmployeeMasterDeleteView(View):
             'action_label': action_label,
             'reason_required': reason_required,
         })
-
 
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
@@ -674,12 +689,20 @@ class EmployeeMasterDeleteView(View):
 
         try:
             if employee.is_trashed:
-                # If reason is provided, this is a duplicate soft-delete request, handle idempotently
                 if reason:
+                    # Idempotent duplicate soft-delete request
+                    success_msg = f"Employee {name} ({emp_number}) is already in Trash."
                     if request.headers.get('HX-Request'):
-                        response = HttpResponse(status=204)
-                        response['HX-Redirect'] = reverse_lazy('employees:master_list')
+                        import json
+                        response = HttpResponse(
+                            f'<div id="modal-container"></div><tr id="employee-row-{employee.pk}" hx-swap-oob="delete"></tr>'
+                        )
+                        response['HX-Trigger'] = json.dumps({
+                            'close-modal': {'id': 'employee-confirm-modal'},
+                            'show-toast': {'message': success_msg, 'variant': 'info'},
+                        })
                         return response
+                    messages.info(request, success_msg)
                     return redirect('employees:master_list')
 
                 if not request.user.is_superuser:
@@ -691,33 +714,71 @@ class EmployeeMasterDeleteView(View):
                 else:
                     try:
                         TrashService.permanent_delete(entry, actor=request.user, request=request)
-                        messages.success(request, f"Employee {name} ({emp_number}) has been permanently deleted.")
+                        success_msg = f"Employee {name} ({emp_number}) has been permanently deleted."
+                        if request.headers.get('HX-Request'):
+                            import json
+                            response = HttpResponse(
+                                f'<div id="modal-container"></div><tr id="employee-row-{employee.pk}" hx-swap-oob="delete"></tr>'
+                            )
+                            response['HX-Trigger'] = json.dumps({
+                                'close-modal': {'id': 'employee-confirm-modal'},
+                                'show-toast': {'message': success_msg, 'variant': 'success'},
+                            })
+                            return response
+                        messages.success(request, success_msg)
+                        return redirect('employees:master_list')
                     except Exception as exc:
-
                         import logging
                         logger = logging.getLogger(__name__)
                         logger.error(f"Permanent delete failed for employee {pk}: {str(exc)}", exc_info=True)
-                        messages.error(request, "Unable to permanently delete this employee due to active historical or business dependencies.")
+                        err_msg = "Unable to permanently delete this employee due to active historical or business dependencies."
+                        if request.headers.get('HX-Request'):
+                            import json
+                            response = HttpResponse(
+                                f'<div id="modal-container"></div>'
+                            )
+                            response['HX-Trigger'] = json.dumps({
+                                'close-modal': {'id': 'employee-confirm-modal'},
+                                'show-toast': {'message': err_msg, 'variant': 'danger'},
+                            })
+                            return response
+                        messages.error(request, err_msg)
+                        return redirect('employees:master_list')
             else:
-                TrashService.soft_delete(
+                entry, created = TrashService.soft_delete(
                     employee,
                     actor=request.user,
                     reason=reason,
                     request=request
                 )
-                messages.success(request, f"Employee {name} ({emp_number}) has been moved to Trash.")
-        except ValidationError as e:
-            messages.error(request, str(e.messages[0]) if hasattr(e, 'messages') else str(e))
-            if request.headers.get('HX-Request'):
-                res = HttpResponse(status=200)
-                res['HX-Redirect'] = reverse_lazy('employees:master_list')
-                return res
-            return redirect('employees:master_list')
+                success_msg = f"Employee {name} ({emp_number}) has been moved to Trash."
+                if request.headers.get('HX-Request'):
+                    import json
+                    response = HttpResponse(
+                        f'<div id="modal-container"></div><tr id="employee-row-{employee.pk}" hx-swap-oob="delete"></tr>'
+                    )
+                    response['HX-Trigger'] = json.dumps({
+                        'close-modal': {'id': 'employee-confirm-modal'},
+                        'show-toast': {'message': success_msg, 'variant': 'success'},
+                    })
+                    return response
+                messages.success(request, success_msg)
+                return redirect('employees:master_list')
 
-        if request.headers.get('HX-Request'):
-            response = HttpResponse(status=204)
-            response['HX-Redirect'] = reverse_lazy('employees:master_list')
-            return response
+        except ValidationError as e:
+            err = str(e.messages[0]) if hasattr(e, 'messages') else str(e)
+            if request.headers.get('HX-Request'):
+                return render(request, 'employees/partials/confirmation_modal.html', {
+                    'title': "Move employee to Trash?",
+                    'endpoint': reverse_lazy('employees:master_delete', kwargs={'pk': pk}),
+                    'message': "This employee will be removed from active operations but historical records will be preserved.",
+                    'action': 'delete',
+                    'action_label': "Move to Trash",
+                    'reason_required': True,
+                    'reason_error': err,
+                })
+            messages.error(request, err)
+            return redirect('employees:master_list')
 
         return redirect('employees:master_list')
 
