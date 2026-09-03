@@ -289,3 +289,78 @@ class ProjectCottonUITests(TestCase):
             resp = self.client.get(url)
             self.assertEqual(resp.status_code, 200)
         self.assertLessEqual(len(ctx.captured_queries), 25)
+
+    # 7. Verification of Zero Raw Controls and Cotton Component Usage in Rendered Templates
+    def test_templates_render_cotton_components_and_no_raw_controls(self):
+        import re
+        self._login(self.admin)
+
+        routes = [
+            reverse("projects:project_detail", kwargs={"pk": self.project.pk}),
+            reverse("projects:project_gantt", kwargs={"pk": self.project.pk}),
+            reverse("projects:project_edit", kwargs={"pk": self.project.pk}),
+            f"{reverse('audit:activity_list')}?module=projects&object_id={self.project.pk}",
+        ]
+
+        for url in routes:
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 200, f"Route {url} must return 200")
+            html = resp.content.decode("utf-8")
+
+            # Must contain core Cotton component markers
+            self.assertIn("ft-card", html, f"{url} missing ft-card")
+            self.assertIn("ft-btn", html, f"{url} missing ft-btn")
+
+            # Check that within the main content container, all inputs are hidden or Cotton components
+            main_content = html.split("<main", 1)[-1].split("</main>", 1)[0] if "<main" in html else html
+            # Ignore search inputs inside c-select dropdown and global shell inputs
+            raw_unwrapped = [
+                inp for inp in re.findall(r'<input\b[^>]*>', main_content)
+                if not any(allowed in inp for allowed in ['type="hidden"', "type='hidden'", "searchInput", "opacity-0", "ft-input", "checkbox"])
+            ]
+            self.assertEqual(raw_unwrapped, [], f"{url} contains unwrapped raw input: {raw_unwrapped}")
+
+    def test_rendered_html_preserves_alpine_and_htmx_attributes(self):
+        self._login(self.admin)
+        detail_url = reverse("projects:project_detail", kwargs={"pk": self.project.pk})
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+
+        # Tab switching & filter Alpine attributes survive
+        self.assertIn("activeTab = 'tasks'", html)
+        self.assertIn("statusFilter = 'all'", html)
+        self.assertIn("selectedTasks", html)
+        self.assertIn("toggleAll()", html)
+
+        # HTMX attributes survive
+        self.assertIn("hx-post=", html)
+        self.assertIn("hx-headers=", html)
+
+    def test_project_form_field_level_accessible_red_errors_rendered(self):
+        self._login(self.admin)
+        url = reverse("projects:project_edit", kwargs={"pk": self.project.pk})
+
+        # Submit invalid data (empty name, invalid date range)
+        post_data = {
+            "name": "",
+            "project_type": self.ptype.pk,
+            "client_name": "Alpha Corp",
+            "location": "Downtown Center",
+            "start_date": "2026-06-01",
+            "completion_date": "2026-01-01",
+            "status": "In Progress",
+            "progress_percent": "50",
+            "system_type": "VRF System",
+            "project_managers": [self.emp1.pk],
+            "site_engineers": [self.emp2.pk],
+        }
+
+        resp = self.client.post(url, post_data)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+
+        # Check accessible aria-invalid and red error text / classes
+        self.assertIn("aria-invalid=\"true\"", html)
+        self.assertIn("ft-error-text", html)
+        self.assertIn("border-red-500", html)

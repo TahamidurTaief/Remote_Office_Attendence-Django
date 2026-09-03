@@ -157,52 +157,52 @@
 
     {# ── Navigation Tabs ──────────────────────────────────────────────── #}
     <div class="flex items-center gap-1.5 border-b border-gray-200 dark:border-slate-800 overflow-x-auto pb-1 scrollbar-hide">
-        <button type="button" @click="activeTab = 'tasks'"
-                :class="activeTab === 'tasks' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
-                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
-            <span>Tasks</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ all_count }}</span>
-        </button>
+        <c-tab-button
+            label="Tasks"
+            count="{{ all_count }}"
+            icon="check-square"
+            active_condition="activeTab === 'tasks'"
+            attrs="@click=&quot;activeTab = 'tasks'&quot;">
+        </c-tab-button>
 
-        <button type="button" @click="activeTab = 'logs'"
-                :class="activeTab === 'logs' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
-                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>
-            <span>Daily Progress Logs</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ progress_logs.count }}</span>
-        </button>
+        <c-tab-button
+            label="Daily Progress Logs"
+            count="{{ progress_logs.count }}"
+            icon="clipboard-list"
+            active_condition="activeTab === 'logs'"
+            attrs="@click=&quot;activeTab = 'logs'&quot;">
+        </c-tab-button>
 
-        <button type="button" @click="activeTab = 'manpower'"
-                :class="activeTab === 'manpower' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
-                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="users" class="w-3.5 h-3.5"></i>
-            <span>Manpower Deployment</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ manpower_logs.count }}</span>
-        </button>
+        <c-tab-button
+            label="Manpower Deployment"
+            count="{{ manpower_logs.count }}"
+            icon="users"
+            active_condition="activeTab === 'manpower'"
+            attrs="@click=&quot;activeTab = 'manpower'&quot;">
+        </c-tab-button>
 
-        <button type="button" @click="activeTab = 'materials'"
-                :class="activeTab === 'materials' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
-                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="package" class="w-3.5 h-3.5"></i>
-            <span>Material Tracking</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ materials.count }}</span>
-        </button>
+        <c-tab-button
+            label="Material Tracking"
+            count="{{ materials.count }}"
+            icon="package"
+            active_condition="activeTab === 'materials'"
+            attrs="@click=&quot;activeTab = 'materials'&quot;">
+        </c-tab-button>
 
-        <button type="button" @click="activeTab = 'signoff'"
-                :class="activeTab === 'signoff' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
-                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
-            <span>Work Plan Sign-off</span>
-        </button>
+        <c-tab-button
+            label="Work Plan Sign-off"
+            icon="pen-tool"
+            active_condition="activeTab === 'signoff'"
+            attrs="@click=&quot;activeTab = 'signoff'&quot;">
+        </c-tab-button>
 
-        <button type="button" @click="activeTab = 'activities'"
-                :class="activeTab === 'activities' ? 'border-primary text-primary font-semibold' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'"
-                class="px-3 py-2 text-[12px] border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-            <i data-lucide="history" class="w-3.5 h-3.5"></i>
-            <span>Activity History</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono">{{ activities.count }}</span>
-        </button>
+        <c-tab-button
+            label="Activity History"
+            count="{{ activities.count }}"
+            icon="history"
+            active_condition="activeTab === 'activities'"
+            attrs="@click=&quot;activeTab = 'activities'&quot;">
+        </c-tab-button>
     </div>
 
     {# ── TAB 1: Tasks ─────────────────────────────────────────────────── #}
@@ -219,33 +219,46 @@
 
         <c-card padding="sm">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
-                {# Status Pills #}
+                {# Status Filter Buttons #}
                 <div class="flex items-center gap-1.5 flex-wrap">
-                    <button type="button" @click="statusFilter = 'all'"
-                            :class="statusFilter === 'all' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'"
-                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
-                        All ({{ all_count }})
-                    </button>
-                    <button type="button" @click="statusFilter = 'Not Started'"
-                            :class="statusFilter === 'Not Started' ? 'bg-gray-700 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'"
-                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
-                        Not Started ({{ not_started_count }})
-                    </button>
-                    <button type="button" @click="statusFilter = 'In Progress'"
-                            :class="statusFilter === 'In Progress' ? 'bg-blue-600 text-white' : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100'"
-                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
-                        In Progress ({{ in_progress_count }})
-                    </button>
-                    <button type="button" @click="statusFilter = 'Delayed'"
-                            :class="statusFilter === 'Delayed' ? 'bg-red-600 text-white' : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100'"
-                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
-                        Delayed ({{ delayed_count }})
-                    </button>
-                    <button type="button" @click="statusFilter = 'Completed'"
-                            :class="statusFilter === 'Completed' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'"
-                            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer min-h-[36px] sm:min-h-[30px]">
-                        Completed ({{ completed_count }})
-                    </button>
+                    <c-filter-button
+                        label="All"
+                        count="{{ all_count }}"
+                        active_condition="statusFilter === 'all'"
+                        attrs="@click=&quot;statusFilter = 'all'&quot;">
+                    </c-filter-button>
+
+                    <c-filter-button
+                        label="Not Started"
+                        count="{{ not_started_count }}"
+                        variant="neutral"
+                        active_condition="statusFilter === 'Not Started'"
+                        attrs="@click=&quot;statusFilter = 'Not Started'&quot;">
+                    </c-filter-button>
+
+                    <c-filter-button
+                        label="In Progress"
+                        count="{{ in_progress_count }}"
+                        variant="info"
+                        active_condition="statusFilter === 'In Progress'"
+                        attrs="@click=&quot;statusFilter = 'In Progress'&quot;">
+                    </c-filter-button>
+
+                    <c-filter-button
+                        label="Delayed"
+                        count="{{ delayed_count }}"
+                        variant="danger"
+                        active_condition="statusFilter === 'Delayed'"
+                        attrs="@click=&quot;statusFilter = 'Delayed'&quot;">
+                    </c-filter-button>
+
+                    <c-filter-button
+                        label="Completed"
+                        count="{{ completed_count }}"
+                        variant="success"
+                        active_condition="statusFilter === 'Completed'"
+                        attrs="@click=&quot;statusFilter = 'Completed'&quot;">
+                    </c-filter-button>
                 </div>
 
                 {# Actions #}
@@ -268,12 +281,12 @@
                     <template x-for="id in selectedTasks" :key="id">
                         <input type="hidden" name="task_ids" :value="id">
                     </template>
-                    <select name="status" class="text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200">
+                    <c-select name="status" extra_class="w-36">
                         <option value="Not Started">Not Started</option>
                         <option value="In Progress">In Progress</option>
                         <option value="Delayed">Delayed</option>
                         <option value="Completed">Completed</option>
-                    </select>
+                    </c-select>
                     <c-button type="submit" variant="secondary" size="sm" label="Update Status"></c-button>
                 </form>
             </div>
@@ -313,7 +326,7 @@
                 <c-table>
                     <c-slot name="header">
                         <th class="py-2 px-3 text-left w-8">
-                            <input type="checkbox" x-model="selectAll" @change="toggleAll()" class="rounded border-gray-300 text-primary">
+                            <c-checkbox attrs="x-model='selectAll' @change='toggleAll()'"></c-checkbox>
                         </th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-10">#</th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Activity</th>
@@ -326,7 +339,7 @@
                     <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800"
                         x-show="(statusFilter === 'all' || statusFilter === '{{ task.status }}') && (!selectedMember || selectedMember === '{{ task.responsible_person_id|default:'' }}')">
                         <td class="py-2 px-3">
-                            <input type="checkbox" value="{{ task.pk }}" x-model="selectedTasks" class="rounded border-gray-300 text-primary">
+                            <c-checkbox value="{{ task.pk }}" attrs="x-model='selectedTasks'"></c-checkbox>
                         </td>
                         <td class="py-2.5 px-3 text-[11px] font-bold text-gray-400 font-mono">{{ task.order }}</td>
                         <td class="py-2.5 px-3">
@@ -581,7 +594,7 @@
                 <c-slot name="actions">
                     <form action="{% url 'projects:material_increment' mat.pk %}" method="POST" class="flex items-center gap-1">
                         {% csrf_token %}
-                        <input type="number" name="increment_qty" step="0.01" min="0.01" required placeholder="+Qty" class="w-16 px-2 py-1 text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                        <c-input type="number" name="increment_qty" placeholder="+Qty" required="true" attrs="step='0.01' min='0.01'" extra_class="w-20"></c-input>
                         <c-button type="submit" variant="primary" size="sm" icon="plus" label="Add"></c-button>
                     </form>
                     <c-button href="{% url 'projects:material_edit' mat.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
@@ -631,7 +644,7 @@
                         <td class="py-2.5 px-3">
                             <form action="{% url 'projects:material_increment' mat.pk %}" method="POST" class="flex items-center gap-1">
                                 {% csrf_token %}
-                                <input type="number" name="increment_qty" step="0.01" min="0.01" required placeholder="Qty" class="w-16 px-2 py-1 text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                                <c-input type="number" name="increment_qty" placeholder="Qty" required="true" attrs="step='0.01' min='0.01'" extra_class="w-20"></c-input>
                                 <c-button type="submit" variant="primary" size="sm" icon="plus" label=""></c-button>
                             </form>
                         </td>
@@ -769,17 +782,12 @@
             <c-section-header title="Project Activity Log" subtitle="Recent field audits and project task events"></c-section-header>
             <div class="space-y-2.5 pt-2">
                 {% for act in activities %}
-                <div class="flex items-start gap-2.5 text-[12px] py-2 border-b border-gray-50 dark:border-slate-800/60 last:border-b-0">
-                    <c-avatar name="{% if act.actor %}{{ act.actor.employee_profile.full_name|default:act.actor.email }}{% else %}System{% endif %}" size="xs"></c-avatar>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-gray-800 dark:text-gray-200">
-                            <strong class="text-gray-900 dark:text-white">{% if act.actor %}{{ act.actor.employee_profile.full_name|default:act.actor.email }}{% else %}System{% endif %}</strong>
-                            {{ act.verb }}
-                            <span class="font-medium text-primary">{{ act.target }}</span>
-                        </p>
-                        <span class="text-[10px] text-gray-400 font-mono mt-0.5 block">{{ act.created_at|timesince }} ago</span>
-                    </div>
-                </div>
+                <c-project-activity-row
+                    actor_name="{% if act.actor %}{{ act.actor.employee_profile.full_name|default:act.actor.email }}{% else %}System{% endif %}"
+                    verb="{{ act.verb }}"
+                    target="{{ act.target }}"
+                    timesince="{{ act.created_at|timesince }}">
+                </c-project-activity-row>
                 {% empty %}
                 <p class="text-[11px] text-gray-400 italic py-4 text-center">No recent activity logged for this project.</p>
                 {% endfor %}

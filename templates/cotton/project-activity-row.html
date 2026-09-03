@@ -1,0 +1,22 @@
+{% comment %} c-project-activity-row component
+   Props:
+   - actor_name: Name of actor or System
+   - verb: Action verb (e.g. updated, created)
+   - target: Target object label / name
+   - timesince: String representation of relative time (e.g. 5 minutes ago)
+   - extra_class: additional CSS classes
+{% endcomment %}
+<div class="flex items-start gap-2.5 text-[12px] py-2 border-b border-gray-50 dark:border-slate-800/60 last:border-b-0 {{ extra_class }}">
+  <c-avatar name="{{ actor_name|default:'System' }}" size="xs"></c-avatar>
+  <div class="flex-1 min-w-0">
+    <p class="text-gray-800 dark:text-gray-200">
+      <strong class="text-gray-900 dark:text-white">{{ actor_name|default:'System' }}</strong>
+      {{ verb }}
+      {% if target %}<span class="font-medium text-primary">{{ target }}</span>{% endif %}
+    </p>
+    {% if timesince %}
+      <span class="text-[10px] text-gray-400 font-mono mt-0.5 block">{{ timesince }} ago</span>
+    {% endif %}
+    {{ slot }}
+  </div>
+</div>

@@ -1,0 +1,27 @@
+{% comment %} c-filter-button component
+   Props:
+   - active_condition: AlpineJS boolean expression evaluating if active
+   - label: text label
+   - count: optional numeric count badge
+   - variant: default | primary | danger | success | info
+   - extra_class: additional CSS classes
+   - attrs: alpine / htmx attributes
+{% endcomment %}
+<button
+  type="button"
+  class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[32px] sm:min-h-[28px] focus:outline-none focus:ring-1 focus:ring-primary/30 select-none {{ extra_class }}"
+  :class="{{ active_condition|default:'false' }}
+    ? '{% if variant == 'danger' %}bg-red-600 border-red-600 text-white{% elif variant == 'success' %}bg-emerald-600 border-emerald-600 text-white{% elif variant == 'info' %}bg-blue-600 border-blue-600 text-white{% elif variant == 'neutral' %}bg-gray-700 border-gray-700 text-white{% else %}bg-primary border-primary text-white{% endif %}'
+    : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/60'"
+  {{ attrs }}>
+  {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>{% endif %}
+  {% if label %}<span>{{ label }}</span>{% endif %}
+  {{ slot }}
+  {% if count is not None and count != '' %}
+    <span
+      class="px-1.5 py-0.2 rounded-full text-[10px] font-mono"
+      :class="{{ active_condition|default:'false' }} ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400'">
+      {{ count }}
+    </span>
+  {% endif %}
+</button>

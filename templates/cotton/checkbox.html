@@ -1,0 +1,26 @@
+{% comment %} c-checkbox component
+   Props:
+   - name: input name
+   - id: input id (defaults to name)
+   - value: checkbox value
+   - checked: boolean checked attribute
+   - disabled: boolean disabled attribute
+   - label: label text displayed next to checkbox
+   - extra_class: extra CSS classes for the wrapper
+   - input_class: extra classes on the input element
+   - attrs: alpine / htmx attributes passed to input
+{% endcomment %}
+<label class="inline-flex items-center gap-2 cursor-pointer select-none text-[12px] text-gray-700 dark:text-gray-300 {{ extra_class }}">
+  <input
+    type="checkbox"
+    {% if name %}name="{{ name }}"{% endif %}
+    {% if id %}id="{{ id }}"{% endif %}
+    {% if value %}value="{{ value }}"{% endif %}
+    {% if checked %}checked{% endif %}
+    {% if disabled %}disabled{% endif %}
+    class="rounded border-gray-300 dark:border-slate-700 text-primary focus:ring-primary/20 bg-white dark:bg-slate-800 disabled:opacity-50 transition-colors {{ input_class }}"
+    {{ attrs }}
+  >
+  {% if label %}<span>{{ label }}</span>{% endif %}
+  {{ slot }}
+</label>

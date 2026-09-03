@@ -23,30 +23,32 @@
 
             {# Filter toggles #}
             <div class="flex items-center gap-1.5">
-                <button type="button"
-                        @click="toggleFilter('all')"
-                        :class="activeFilter==='all' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
-                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
-                    All
-                </button>
-                <button type="button"
-                        @click="toggleFilter('delayed')"
-                        :class="activeFilter==='delayed' ? 'bg-red-500 text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
-                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
-                    Delayed
-                </button>
-                <button type="button"
-                        @click="toggleFilter('in_progress')"
-                        :class="activeFilter==='in_progress' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
-                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
-                    In Progress
-                </button>
-                <button type="button"
-                        @click="toggleFilter('completed')"
-                        :class="activeFilter==='completed' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700 hover:bg-gray-50'"
-                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors min-h-[36px] sm:min-h-[32px] cursor-pointer">
-                    Completed
-                </button>
+                <c-filter-button
+                    label="All"
+                    active_condition="activeFilter === 'all'"
+                    attrs="@click=&quot;toggleFilter('all')&quot;">
+                </c-filter-button>
+
+                <c-filter-button
+                    label="Delayed"
+                    variant="danger"
+                    active_condition="activeFilter === 'delayed'"
+                    attrs="@click=&quot;toggleFilter('delayed')&quot;">
+                </c-filter-button>
+
+                <c-filter-button
+                    label="In Progress"
+                    variant="info"
+                    active_condition="activeFilter === 'in_progress'"
+                    attrs="@click=&quot;toggleFilter('in_progress')&quot;">
+                </c-filter-button>
+
+                <c-filter-button
+                    label="Completed"
+                    variant="success"
+                    active_condition="activeFilter === 'completed'"
+                    attrs="@click=&quot;toggleFilter('completed')&quot;">
+                </c-filter-button>
             </div>
         </div>
     </c-card>

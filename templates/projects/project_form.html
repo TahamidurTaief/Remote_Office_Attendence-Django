@@ -279,12 +279,12 @@
                     {% if templates %}
                     <form action="{% url 'projects:project_apply_template' object.pk %}" method="POST" class="flex items-center gap-1.5">
                         {% csrf_token %}
-                        <select name="template_id" required class="text-[11px] border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200">
+                        <c-select name="template_id" required="true" extra_class="w-44">
                             <option value="">-- Apply Template --</option>
                             {% for t in templates %}
                             <option value="{{ t.id }}">{{ t.name }} ({{ t.items_count }} steps)</option>
                             {% endfor %}
-                        </select>
+                        </c-select>
                         <c-button type="submit" variant="secondary" size="sm" label="Apply"></c-button>
                     </form>
                     {% endif %}
