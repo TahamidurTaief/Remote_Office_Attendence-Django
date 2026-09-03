@@ -9,7 +9,7 @@
     {% csrf_token %}
 
     {% if error %}
-      <c-form-error-summary title="Workbook Upload Failed" errors=error />
+      <c-form-error-summary title="Workbook Upload Failed" :errors="error"></c-form-error-summary>
     {% endif %}
 
     <div class="space-y-1">
@@ -20,8 +20,7 @@
         accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         required="true"
         help="Supported: Structured Task Tables, Offset-Based Planners, Zone Matrices, and Monthly Charts (Max 10 MB)."
-        error="{{ error_field|default:''|yesno:'Invalid workbook or unsupported format.,' }}"
-      />
+        error="{{ error_field|default:''|yesno:'Invalid workbook or unsupported format.,' }}"></c-file-input>
     </div>
 
     {# Optional default responsible person #}
@@ -52,7 +51,7 @@
     </div>
 
     <div class="flex items-center justify-between pt-2">
-      <c-button variant="ghost" size="md" href="{% url 'projects:project_gantt' project.pk %}" label="Cancel" icon="arrow-left" extra_class="min-h-[44px]" />
+      <c-button variant="ghost" size="md" href="{% url 'projects:project_gantt' project.pk %}" label="Cancel" icon="arrow-left" extra_class="min-h-[44px]"></c-button>
       <div class="flex items-center gap-2">
         <div id="upload-indicator" class="htmx-indicator flex items-center gap-1 text-xs text-indigo-600 font-medium">
           <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -61,7 +60,7 @@
           </svg>
           <span>Analyzing workbook...</span>
         </div>
-        <c-button variant="primary" size="md" type="submit" label="Upload & Preview" icon="upload" extra_class="min-h-[44px]" />
+        <c-button variant="primary" size="md" type="submit" label="Upload & Preview" icon="upload" extra_class="min-h-[44px]"></c-button>
       </div>
     </div>
   </form>

@@ -246,7 +246,7 @@
                     </button>
                 </form>
                 {% endif %}
-                <c-button variant="secondary" size="sm" href="{% url 'projects:project_gantt_import' project.pk %}" label="Import Gantt Excel" icon="upload" />
+                <c-button variant="secondary" size="sm" href="{% url 'projects:project_gantt_import' project.pk %}" label="Import Gantt Excel" icon="upload"></c-button>
                 <a href="{% url 'projects:export_tasks_csv' project.pk %}" class="inline-flex items-center px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50">
                     <i data-lucide="download" class="w-3.5 h-3.5 mr-1 text-primary-500"></i>
                     Export CSV
