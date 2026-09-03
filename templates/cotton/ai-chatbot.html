@@ -5,87 +5,191 @@
    Props:
    - shell_type: admin | staff (defaults to admin)
    Features:
-   - Uses colorful static/icons/ai_icon.png with explicit width/height
+   - Hover wave overlay active ONLY on hover (x-show="hovering && !open")
+   - Modal anchored at bottom-0 right-14 (opens horizontally from left of icon)
+   - Minimize & Close header buttons
+   - Previous chat history sessions bar with custom icons and names
    - Restrained red-orange accents (#F97316, #EF4444)
-   - 11-13px typography, low padding, mobile safe-area spacing
-   - Focus management & Escape key trap
-   - Local dummy simulated conversation via HTMX (Zero Google AI Studio API calls)
-   - "Powered by TaiefLab" footer link
-   - Zero raw controls (uses c-button, c-input)
+   - Powered by TaiefLab
 {% endcomment %}
 
 <div id="ft-ai-chatbot"
      x-data="{
        open: false,
+       minimized: false,
+       hovering: false,
        message: '',
        loading: false,
+       activeSessionId: 'session-1',
+       sessions: [
+         { id: 'session-1', title: 'Workforce Overview', icon: 'users', color: 'text-orange-500', badge: 'Active' },
+         { id: 'session-2', title: 'Attendance Trends', icon: 'calendar-check', color: 'text-emerald-500', badge: 'History' },
+         { id: 'session-3', title: 'Payroll & Leaves', icon: 'calculator', color: 'text-indigo-500', badge: 'History' }
+       ],
        init() {
-         window.addEventListener('open-ai-chatbot', () => {
+         window.addEventListener('open-ai-chatbot', (e) => {
            this.open = true;
+           this.minimized = false;
            this.$nextTick(() => {
              const inp = document.getElementById('ai-chat-input');
-             if (inp) inp.focus();
+             if (inp) {
+               if (e && e.detail && e.detail.message) {
+                 this.message = e.detail.message;
+                 inp.value = e.detail.message;
+               }
+               inp.focus();
+             }
            });
          });
          window.addEventListener('close-ai-chatbot', () => {
            this.open = false;
+           this.minimized = false;
          });
        },
        toggle() {
-         this.open = !this.open;
-         if (this.open) {
+         if (this.minimized) {
+           this.minimized = false;
+           this.open = true;
+         } else {
+           this.open = !this.open;
+         }
+         if (this.open && !this.minimized) {
            this.$nextTick(() => {
              const inp = document.getElementById('ai-chat-input');
              if (inp) inp.focus();
            });
          }
+       },
+       selectSession(id) {
+         this.activeSessionId = id;
+         if (window.lucide) {
+           this.$nextTick(() => { lucide.createIcons(); });
+         }
        }
      }"
-     @keydown.escape.window="if (open) { open = false; }"
+     @keydown.escape.window="if (open) { open = false; minimized = false; }"
      class="fixed bottom-4 right-4 z-[90] select-none"
      style="bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); right: calc(1rem + env(safe-area-inset-right, 0px));">
 
-  {# ── Floating Launcher Button ─────────────────────────────────────── #}
-  <button type="button"
-          @click="toggle()"
-          class="w-12 h-12 rounded-full shadow-lg flex items-center justify-center p-2 bg-white dark:bg-slate-800 border-2 border-orange-500/40 hover:border-orange-500 hover:scale-105 active:scale-95 transition-all duration-200 group/launcher relative"
-          aria-label="Toggle AI Assistant"
-          :aria-expanded="open.toString()">
-    <img src="{% static 'icons/ai_icon.png' %}"
-         alt="AI Assistant"
-         width="32"
-         height="32"
-         loading="eager"
-         class="w-8 h-8 object-contain">
-    {# Red-orange online pulse badge #}
-    <span class="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#EF4444] opacity-75"></span>
-      <span class="relative inline-flex rounded-full h-3 w-3 bg-[#F97316] border-2 border-white dark:border-slate-800"></span>
-    </span>
-  </button>
+  {# ── Full Screen Red & Orange AI Wave Hover Overlay (Active ONLY on Hover when modal is closed) ── #}
+  <template x-teleport="body">
+    <div x-show="hovering && !open"
+         x-transition:enter="transition ease-out duration-700"
+         x-transition:enter-start="opacity-0 scale-105"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-500"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-105"
+         class="fixed inset-0 pointer-events-none z-[85] overflow-hidden"
+         x-cloak>
+      
+      {# 1. Low Opacity Inward Ambient Glow focused at Top-Left #}
+      <div class="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-red-500/3 to-transparent backdrop-blur-[0.5px] shadow-[inset_0_0_100px_rgba(249,115,22,0.08)]"></div>
 
-  {# ── Compact Messenger Modal Window ───────────────────────────────── #}
-  <div x-show="open"
-       x-transition:enter="transition ease-out duration-200"
-       x-transition:enter-start="opacity-0 translate-y-4 scale-95"
-       x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-       x-transition:leave="transition ease-in duration-150"
-       x-transition:leave-start="opacity-100 translate-y-0 scale-100"
-       x-transition:leave-end="opacity-0 translate-y-4 scale-95"
-       class="absolute bottom-16 right-0 w-[350px] sm:w-[380px] max-w-[calc(100vw-2rem)] h-[480px] max-h-[calc(100vh-6rem)] bg-white dark:bg-slate-800 rounded-modal border border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col overflow-hidden z-[100]"
-       @click.outside="open = false"
-       x-cloak>
+      {# 2. Top-Left Primary Low Opacity Ambient Wave #}
+      <div class="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full bg-gradient-to-br from-orange-500/10 via-red-500/5 to-transparent blur-3xl animate-pulse"
+           style="animation-duration: 6s;"></div>
 
-    {# Modal Header #}
+      {# 3. Ambient Colors Moving Around Screen Corners (Low Opacity) #}
+      <div class="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full bg-gradient-to-bl from-red-500/5 via-orange-500/3 to-transparent blur-3xl animate-pulse"
+           style="animation-duration: 8s; animation-delay: 1.5s;"></div>
+      <div class="absolute -bottom-32 -left-32 w-[550px] h-[550px] rounded-full bg-gradient-to-tr from-orange-500/6 via-red-500/4 to-transparent blur-3xl animate-pulse"
+           style="animation-duration: 7s; animation-delay: 3s;"></div>
+      <div class="absolute -bottom-32 -right-32 w-[450px] h-[450px] rounded-full bg-gradient-to-tl from-red-500/4 via-orange-500/3 to-transparent blur-3xl animate-pulse"
+           style="animation-duration: 9s; animation-delay: 0.5s;"></div>
+
+      {# 4. Ultra-Clean Floating Red-Orange Badge #}
+      <div class="absolute bottom-20 right-6 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/95 dark:bg-slate-900/95 border border-orange-500/40 shadow-2xl backdrop-blur-xl animate-bounce max-w-[calc(100vw-3rem)]"
+           style="animation-duration: 2.2s;">
+        <span class="relative flex h-2 w-2 shrink-0">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+        </span>
+        <span class="text-[11px] font-bold bg-gradient-to-r from-red-600 to-orange-500 bg-clip-text text-transparent truncate">
+          TaiefLab AI Assistant Ready
+        </span>
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-orange-500 animate-spin shrink-0" style="animation-duration: 5s;"></i>
+      </div>
+    </div>
+  </template>
+
+  {# ── Floating Launcher Button (Google & Google AI Aesthetic Hover Effect) ── #}
+  <div class="relative group/launcher flex items-center justify-center">
+    {# Google & Gemini AI iridescent aura glow on hover (Ultra-subtle) #}
+    <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-[#4285F4]/30 via-[#A855F7]/30 via-[#EA4335]/30 to-[#FBBC05]/30 opacity-0 group-hover/launcher:opacity-100 blur-sm transition-all duration-500 group-hover/launcher:scale-105 pointer-events-none"></div>
+
+    {# Google AI iridescent subtle perimeter ring #}
+    <div class="absolute -inset-[1px] rounded-full bg-gradient-to-r from-[#4285F4]/40 via-[#EA4335]/40 via-[#FBBC05]/40 to-[#34A853]/40 opacity-0 group-hover/launcher:opacity-70 transition-opacity duration-300 pointer-events-none"></div>
+
+    <button type="button"
+            @click="toggle()"
+            @mouseenter="hovering = true"
+            @mouseleave="hovering = false"
+            class="relative w-12 h-12 rounded-full shadow-lg flex items-center justify-center p-0 overflow-hidden bg-white dark:bg-slate-900 border-2 border-white/60 dark:border-slate-700/60 group-hover/launcher:scale-105 active:scale-95 transition-all duration-300"
+            aria-label="Toggle AI Assistant"
+            :aria-expanded="open.toString()">
+      <img src="{% static 'icons/ai_icon.png' %}"
+           alt="Taief Lab AI"
+           width="48"
+           height="48"
+           loading="eager"
+           class="w-full h-full object-cover rounded-full group-hover/launcher:rotate-6 group-hover/launcher:scale-105 transition-transform duration-300">
+      
+      {# Subtle sheen reflection on hover #}
+      <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/25 to-transparent opacity-0 group-hover/launcher:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+
+      {# Online pulse badge #}
+      <span class="absolute top-0 right-0 flex h-3.5 w-3.5 z-10">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#EA4335] opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#34A853] border-2 border-white dark:border-slate-800"></span>
+      </span>
+    </button>
+  </div>
+
+  {# ── Minimized Collapsed Pill (Teleported to Body, Left side of Icon at Bottom-0) ── #}
+  <template x-teleport="body">
+    <div x-show="open && minimized"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-x-4 scale-95"
+         x-transition:enter-end="opacity-100 translate-x-0 scale-100"
+         class="fixed flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 rounded-lg border border-orange-500/40 shadow-xl backdrop-blur-md text-xs z-[100] max-w-[calc(100vw-5.5rem)]"
+         style="bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); right: calc(4.75rem + env(safe-area-inset-right, 0px));"
+         x-cloak>
+      <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 object-cover rounded-full">
+      <span class="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">AI Chat Minimized</span>
+      <button type="button" @click="minimized = false" class="p-1 text-slate-400 hover:text-orange-500 transition-colors" title="Maximize">
+        <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+      </button>
+      <button type="button" @click="open = false; minimized = false;" class="p-1 text-slate-400 hover:text-red-500 transition-colors" title="Close">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+  </template>
+
+  {# ── Full Messenger Modal (Teleported to Body, Left side of Icon at Bottom-0) ── #}
+  <template x-teleport="body">
+    <div x-show="open && !minimized"
+         x-transition:enter="transition ease-out duration-250"
+         x-transition:enter-start="opacity-0 translate-x-8 scale-95"
+         x-transition:enter-end="opacity-100 translate-x-0 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-x-0 scale-100"
+         x-transition:leave-end="opacity-0 translate-x-8 scale-95"
+         class="fixed w-[360px] sm:w-[400px] max-w-[calc(100vw-5.5rem)] h-[520px] max-h-[calc(100vh-2rem)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col overflow-hidden z-[100] origin-bottom-right"
+         style="bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); right: calc(4.75rem + env(safe-area-inset-right, 0px));"
+         @click.outside="open = false"
+         x-cloak>
+
+    {# Modal Header with Minimize & Close Buttons #}
     <div class="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
       <div class="flex items-center gap-2 min-w-0">
-        <div class="w-6 h-6 rounded-card bg-orange-500/10 border border-orange-500/20 flex items-center justify-center p-1 shrink-0">
+        <div class="w-6 h-6 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center p-0.5 shrink-0 overflow-hidden">
           <img src="{% static 'icons/ai_icon.png' %}"
                alt="AI"
-               width="18"
-               height="18"
+               width="24"
+               height="24"
                loading="eager"
-               class="w-4 h-4 object-contain">
+               class="w-full h-full object-cover rounded-md">
         </div>
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
@@ -96,30 +200,89 @@
         </div>
       </div>
 
+      {# Header Action Controls: Minimize (-) & Close (X) #}
       <div class="flex items-center gap-1 shrink-0">
         <button type="button"
-                @click="open = false"
-                class="ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                aria-label="Close AI Chatbot">
-          <i data-lucide="x" class="w-4 h-4"></i>
+                @click="minimized = true"
+                class="w-7 h-7 p-0 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
+                title="Minimize">
+          <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button"
+                @click="open = false; minimized = false;"
+                class="w-7 h-7 p-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                title="Close AI Assistant">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
         </button>
       </div>
     </div>
 
+    {# ── Top Previous Sessions Bar (Chat History Switcher with Custom Icons & Names) ── #}
+    <div class="px-2.5 py-1.5 bg-slate-100/70 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-700/60 flex items-center gap-1.5 overflow-x-auto shrink-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 pl-1">Sessions:</span>
+      <template x-for="sess in sessions" :key="sess.id">
+        <button type="button"
+                @click="selectSession(sess.id)"
+                :class="activeSessionId === sess.id ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold border-orange-500/40 shadow-xs' : 'bg-transparent text-slate-500 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50 border-transparent'"
+                class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] border transition-all shrink-0">
+          <i :data-lucide="sess.icon" class="w-3 h-3" :class="sess.color"></i>
+          <span x-text="sess.title"></span>
+        </button>
+      </template>
+    </div>
+
     {# Chat History Scroll Body #}
     <div id="ai-chat-messages"
-         class="flex-1 overflow-y-auto p-3 space-y-2 text-[12px] bg-[#f8fafc] dark:bg-slate-900/40">
-      {# Welcome Balloon #}
-      <div class="flex flex-col gap-1 items-start my-1">
-        <div class="max-w-[85%] px-3 py-2 rounded-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
-          <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold text-[#F97316]">
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
-            <span>Local AI Assistant</span>
+         class="flex-1 overflow-y-auto p-3 space-y-2 text-[12px] bg-[#f8fafc] dark:bg-slate-900/40 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      
+      {# Session 1 Messages #}
+      <template x-if="activeSessionId === 'session-1'">
+        <div class="space-y-2">
+          <div class="flex flex-col gap-1 items-start my-1">
+            <div class="max-w-[85%] px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
+              <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold text-[#F97316]">
+                <i data-lucide="users" class="w-3 h-3 text-orange-500"></i>
+                <span>Workforce Intelligence</span>
+              </div>
+              Welcome! Ask me about daily attendance trends, project task milestones, or payroll calculations.
+            </div>
+            <span class="text-[10px] text-slate-400 font-mono pl-1">System &bull; Active Session</span>
           </div>
-          Welcome! Ask me about daily attendance trends, project task milestones, or payroll calculations.
         </div>
-        <span class="text-[10px] text-slate-400">System &bull; Ready</span>
-      </div>
+      </template>
+
+      {# Session 2 Messages #}
+      <template x-if="activeSessionId === 'session-2'">
+        <div class="space-y-2">
+          <div class="flex flex-col gap-1 items-start my-1">
+            <div class="max-w-[85%] px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
+              <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <i data-lucide="calendar-check" class="w-3 h-3"></i>
+                <span>Attendance Analysis Session</span>
+              </div>
+              Showing previous history for attendance records. Total check-in rate is 94.8% for today across all branches.
+            </div>
+            <span class="text-[10px] text-slate-400 font-mono pl-1">History Session &bull; Attendance</span>
+          </div>
+        </div>
+      </template>
+
+      {# Session 3 Messages #}
+      <template x-if="activeSessionId === 'session-3'">
+        <div class="space-y-2">
+          <div class="flex flex-col gap-1 items-start my-1">
+            <div class="max-w-[85%] px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
+              <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+                <i data-lucide="calculator" class="w-3 h-3"></i>
+                <span>Payroll & Leaves Session</span>
+              </div>
+              Showing previous history for payroll calculations & pending leave approvals.
+            </div>
+            <span class="text-[10px] text-slate-400 font-mono pl-1">History Session &bull; Payroll</span>
+          </div>
+        </div>
+      </template>
+
     </div>
 
     {# Chat Input Form (HTMX powered) #}
@@ -158,10 +321,13 @@
           <span>Processing locally...</span>
         </span>
         <span class="htmx-indicator-none">Encrypted &bull; No External API</span>
-        <a href="https://www.taieflab.com" target="_blank" rel="noopener noreferrer" class="hover:text-[#F97316] transition-colors font-medium">
+        <a href="https://www.taieflab.com"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="hover:text-[#F97316] transition-colors font-medium">
           Powered by TaiefLab
         </a>
       </div>
     </div>
-  </div>
+  </template>
 </div>

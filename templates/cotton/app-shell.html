@@ -581,6 +581,24 @@
   <c-workspace-lock-screen></c-workspace-lock-screen>
   <c-command-palette></c-command-palette>
   <c-ai-chatbot shell_type="{{ shell_type|default:'admin' }}"></c-ai-chatbot>
+  <c-context-menu></c-context-menu>
+
+  {# ── Global HTMX Loaded Modal Container & Dispatcher ──────────────── #}
+  <div id="modal-container"></div>
+  <script>
+    document.body.addEventListener('htmx:afterSwap', function (evt) {
+        var container = document.getElementById('modal-container');
+        if (!container || !evt.target || !container.contains(evt.target)) return;
+        if (window.Alpine) {
+            Alpine.initTree(container);
+        }
+        var modal = container.querySelector('[id^="modal-"]');
+        if (modal) {
+            var modalId = modal.id.slice('modal-'.length);
+            window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: modalId } }));
+        }
+    });
+  </script>
 
   {{ scripts }}
 </body>

@@ -85,18 +85,12 @@ class AIApplicationShellTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Please enter a message", resp.content.decode('utf-8'))
 
-        # 2. Valid attendance message returns dummy response with TaiefLab footer
+        # 2. Valid attendance message returns truthful production response (no fabricated demo stats)
         resp = self.client.post(url, {'message': 'What is the attendance status today?'})
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode('utf-8')
-        self.assertIn("attendance indicates", html)
-        self.assertIn("Powered by TaiefLab", html)
-        self.assertIn("Local AI Assistant (Demo Mode)", html)
-
-        # 3. Project inquiry
-        resp = self.client.post(url, {'message': 'How is the project progressing?'})
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("Alpha Tower HVAC", resp.content.decode('utf-8'))
+        self.assertIn("FieldTrack AI", html)
+        self.assertIn("Truthful State", html)
 
     def test_self_hosted_font_files_and_licenses_exist(self):
         from django.conf import settings

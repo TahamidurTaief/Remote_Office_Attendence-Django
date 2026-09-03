@@ -17,10 +17,8 @@ module.exports = {
                 sans: [
                     'Inter',
                     'Noto Sans Bengali',
-                    'Segoe UI Historic',
-                    'Segoe UI',
-                    'Helvetica',
-                    'Arial',
+                    'system-ui',
+                    '-apple-system',
                     'sans-serif',
                 ],
             },

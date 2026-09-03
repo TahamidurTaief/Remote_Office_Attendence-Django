@@ -4,9 +4,9 @@
 {% endcomment %}
 
 <c-card padding="none">
-    <div class="p-6 text-center border-b" style="border-color:var(--border)">
-        <c-avatar name="{{ employee.get_full_name }}" size="xl" extra_class="mx-auto border-2 border-primary-500" ></c-avatar>
-        <h3 class="mt-4 text-lg font-bold" style="color:var(--text)">{{ employee.get_full_name }}</h3>
+    <div class="p-6 text-center border-b border-gray-150 dark:border-gray-700">
+        <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}" name="{{ employee.get_full_name }}" size="xl" extra_class="mx-auto border-2 border-indigo-500 shadow-sm" ></c-avatar>
+        <h3 class="mt-4 text-lg font-semibold" style="color:var(--text)">{{ employee.get_full_name }}</h3>
         <p class="text-xs mt-1" style="color:var(--text-muted)">
             {{ employee.designation.name|default:"No Designation" }} • {{ employee.department.name|default:"No Department" }}
         </p>
@@ -28,9 +28,9 @@
  
         {% with pct=employee.get_completion_percentage %}
         <div class="mt-4 max-w-[200px] mx-auto">
-            <div class="flex justify-between items-center text-xs mb-1 font-semibold text-slate-500">
+            <div class="flex justify-between items-center text-xs mb-1 font-medium text-slate-500">
                 <span>Profile Completion</span>
-                <span class="font-mono text-indigo-600">{{ pct }}%</span>
+                <span class="font-mono text-indigo-600 font-medium">{{ pct }}%</span>
             </div>
             <div class="w-full bg-slate-150 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
                 <div class="bg-indigo-600 h-full rounded-full transition-all duration-300" style="width: {{ pct }}%"></div>

@@ -7,7 +7,7 @@
 {% endcomment %}
 <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50 rounded-xl {{ extra_class }}">
   <span class="text-xs text-slate-550 dark:text-slate-400 font-medium">{{ label }}</span>
-  <div class="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-0.5">
+  <div class="text-sm font-medium text-slate-800 dark:text-slate-100 mt-0.5">
     {% if value is not None and value != "" %}{{ value }}{% else %}{{ slot|default:"—" }}{% endif %}
   </div>
 </div>

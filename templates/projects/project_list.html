@@ -54,7 +54,12 @@
                     </thead>
                     <tbody>
                         {% for project in projects %}
-                        <tr>
+                        <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                            data-title="{{ project.name|escape }}"
+                            data-subtitle="{{ project.client_name|escape }} • {{ project.status }}"
+                            data-detail="{% url 'projects:project_detail' project.pk %}"
+                            data-edit="{% url 'projects:project_edit' project.pk %}"
+                            data-delete="{% url 'projects:project_delete' project.pk %}">
                             <td>
                                 <a href="{% url 'projects:project_detail' project.pk %}" class="font-semibold hover:underline" style="color:var(--primary)">
                                     {{ project.name }}
@@ -87,8 +92,8 @@
                                         <span>Progress</span>
                                         <span class="font-semibold" style="color:var(--text)">{{ project.progress_percent }}%</span>
                                     </div>
-                                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden mt-0.5">
-                                        <div class="bg-primary-500 h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
+                                    <div class="w-full bg-gray-50 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden mt-0.5 border border-gray-100 dark:border-gray-800">
+                                        <div class="bg-gray-700 dark:bg-gray-300 h-1.5 rounded-full" style="width: {{ project.progress_percent }}%"></div>
                                     </div>
                                 </div>
                             </td>
@@ -106,16 +111,14 @@
                                 </div>
                             </td>
                             <td class="text-right">
-                                <div class="flex items-center justify-end gap-1">
-                                    <a href="{% url 'projects:project_edit' project.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1" title="Edit">
-                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-                                    </a>
+                                <div class="flex items-center justify-end gap-1" @click.stop>
+                                    <c-button href="{% url 'projects:project_detail' project.pk %}" variant="ghost" size="sm" icon="eye" title="View Details" ></c-button>
+                                    <c-button href="{% url 'projects:project_edit' project.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit" ></c-button>
                                     <form action="{% url 'projects:project_delete' project.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this project?', () => $el.submit())">
                                         {% csrf_token %}
-                                        <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm p-1 text-red-500 hover:text-red-600" title="Delete">
-                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                        </button>
+                                        <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete" ></c-button>
                                     </form>
+                                    <c-button type="button" @click.stop="$dispatch('open-action-menu', { event: $event, isButton: true, title: '{{ project.name|escapejs }}', subtitle: '{{ project.client_name|escapejs }} • {{ project.status }}' })" variant="ghost" size="sm" icon="more-vertical" title="More Actions" ></c-button>
                                 </div>
                             </td>
                         </tr>

@@ -11,8 +11,10 @@
         </c-slot>
         
         {% for emp in employees %}
-            <tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors text-[12px]"
-                @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-drawer', { detail: { id: 'employee-drawer-{{ emp.pk }}' } }))">
+            <tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors text-[12px] cursor-pointer"
+                data-title="{{ emp.get_full_name|escape }}"
+                data-subtitle="{{ emp.employee_number|escape }}"
+                @contextmenu.prevent="$dispatch('open-action-menu', { event: $event, isButton: false, emp: { id: {{ emp.pk }}, number: '{{ emp.employee_number }}', name: '{{ emp.get_full_name|escapejs }}', status: '{{ emp.status }}', completion: {{ emp.get_completion_percentage }}, detailUrl: '{% url 'employees:employee_detail' emp.pk %}', editUrl: '{% url 'employees:employee_wizard_step' uuid=emp.uuid step=1 %}', resumeUrl: '{% url 'employees:employee_wizard_step' uuid=emp.uuid step=emp.get_next_wizard_step %}', deleteUrl: '{% url 'employees:master_delete' emp.pk %}', inactiveUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=inactive', activeUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=active', suspendUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=suspended', archiveUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived', isSuperuser: {% if request.user.is_superuser %}true{% else %}false{% endif %}, isTrashed: {% if emp.is_trashed %}true{% else %}false{% endif %} } })">
                 <td class="px-3 py-2 text-[12px]">
                     <div class="flex items-center space-x-2.5">
                         <c-avatar src="{% if emp.profile_photo %}{{ emp.profile_photo.url }}{% endif %}" initials="{{ emp.get_full_name|make_list|first|upper }}" size="sm"></c-avatar>
@@ -32,7 +34,7 @@
                 </td>
                 <td class="px-3 py-2 text-[12px] text-slate-600 dark:text-slate-300">
                     {% if emp.reporting_manager %}
-                        <a href="{% url 'employees:employee_detail' emp.reporting_manager.pk %}" class="text-[12px] text-slate-700 dark:text-slate-300 hover:underline">
+                        <a href="{% url 'employees:employee_detail' emp.reporting_manager.pk %}" class="text-[12px] text-slate-700 dark:text-slate-300 hover:underline font-medium">
                             {{ emp.reporting_manager.get_full_name }}
                         </a>
                     {% else %}
@@ -45,7 +47,7 @@
                         {% if emp.status == 'suspended' %}
                             {% with active_susp=emp.suspensions.all|dictsortreversed:"changed_at"|first %}
                                 {% if active_susp and active_susp.is_active %}
-                                    <div class="text-[10px] text-slate-500 font-semibold">
+                                    <div class="text-[10px] text-slate-500 font-medium">
                                         {% if active_susp.suspension_end_date %}
                                             Until {{ active_susp.suspension_end_date|date:"d M Y" }}
                                         {% else %}
@@ -61,9 +63,9 @@
                     {% with pct=emp.get_completion_percentage %}
                     <div class="flex items-center gap-2">
                         <div class="w-16 bg-gray-50 dark:bg-gray-800 h-1.5 rounded-full overflow-hidden border border-gray-100 dark:border-gray-800">
-                            <div class="bg-gray-300 dark:bg-gray-600 h-full" style="width: {{ pct }}%"></div>
+                            <div class="bg-gray-700 dark:bg-gray-300 h-full" style="width: {{ pct }}%"></div>
                         </div>
-                        <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-400 font-mono">{{ pct }}%</span>
+                        <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400 font-mono">{{ pct }}%</span>
                     </div>
                     {% endwith %}
                 </td>
@@ -85,144 +87,11 @@
                         <c-button href="{% url 'employees:employee_detail' emp.pk %}" variant="secondary" size="sm" icon="eye"></c-button>
                         <c-button href="{% url 'employees:employee_wizard_step' uuid=emp.uuid step=1 %}" variant="ghost" size="sm" icon="edit"></c-button>
 
-                        <!-- Actions dropdown -->
-                        <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-                            <c-button type="button" @click="open = !open" variant="ghost" size="sm">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v.01M12 12v.01M12 19v.01"/>
-                                </svg>
-                            </c-button>
-                            <div x-show="open" x-transition
-                                 class="absolute right-0 mt-1 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-1 text-[12px]">
-                                
-                                {% if emp.status == 'active' %}
-                                    <button type="button"
-                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Delete
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=inactive"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="user-x" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Inactivate
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=suspended"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="pause-circle" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Suspend
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="archive" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Archive
-                                    </button>
-                                {% elif emp.status == 'inactive' %}
-                                    <button type="button"
-                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Delete
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="user-check" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Activate
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=suspended"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="pause-circle" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Suspend
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="archive" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Archive
-                                    </button>
-                                {% elif emp.status == 'suspended' %}
-                                    <button type="button"
-                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Delete
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="play-circle" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Reactivate
-                                    </button>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="archive" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Archive
-                                    </button>
-                                {% elif emp.status == 'archived' %}
-                                    <button type="button"
-                                            hx-get="{% url 'employees:lifecycle_action' emp.pk %}?to_status=active"
-                                            hx-target="#modal-container"
-                                            hx-swap="innerHTML"
-                                            @click="open = false"
-                                            class="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Restore (Activate)
-                                    </button>
-                                {% endif %}
-
-                                {% if request.user.is_superuser and emp.is_trashed %}
-                                    <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
-                                    <button type="button"
-                                            hx-get="{% url 'employees:master_delete' emp.pk %}"
-                                            hx-target="body"
-                                            hx-swap="beforeend"
-                                            @click="open = false"
-                                            class="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        <i data-lucide="trash" class="w-3.5 h-3.5 text-slate-400"></i>
-                                        Delete Permanently
-                                    </button>
-                                {% endif %}
-                            </div>
-                        </div>
+                        <c-button type="button"
+                                  @click.stop="$dispatch('open-action-menu', { event: $event, isButton: true, emp: { id: {{ emp.pk }}, number: '{{ emp.employee_number }}', name: '{{ emp.get_full_name|escapejs }}', status: '{{ emp.status }}', completion: {{ emp.get_completion_percentage }}, detailUrl: '{% url 'employees:employee_detail' emp.pk %}', editUrl: '{% url 'employees:employee_wizard_step' uuid=emp.uuid step=1 %}', resumeUrl: '{% url 'employees:employee_wizard_step' uuid=emp.uuid step=emp.get_next_wizard_step %}', deleteUrl: '{% url 'employees:master_delete' emp.pk %}', inactiveUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=inactive', activeUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=active', suspendUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=suspended', archiveUrl: '{% url 'employees:lifecycle_action' emp.pk %}?to_status=archived', isSuperuser: {% if request.user.is_superuser %}true{% else %}false{% endif %}, isTrashed: {% if emp.is_trashed %}true{% else %}false{% endif %} } })"
+                                  variant="ghost"
+                                  size="sm"
+                                  icon="more-vertical"></c-button>
                     </div>
                 </td>
             </tr>

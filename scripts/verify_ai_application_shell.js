@@ -30,7 +30,7 @@ console.log('PASS: Self-hosted font files and licenses present in static/fonts/'
 const cssSource = fs.readFileSync(path.join(projectRoot, 'static', 'css', 'source.css'), 'utf8');
 assert(cssSource.includes("font-family: 'Inter'"), 'source.css must declare Inter @font-face');
 assert(cssSource.includes("font-family: 'Noto Sans Bengali'"), 'source.css must declare Noto Sans Bengali @font-face');
-assert(cssSource.includes('"Inter", "Noto Sans Bengali", "Segoe UI Historic", "Segoe UI", Helvetica, Arial, sans-serif'), 'source.css body must have the exact required font stack');
+assert(cssSource.includes('"Inter", "Noto Sans Bengali", system-ui, -apple-system, sans-serif'), 'source.css body must have the exact required font stack');
 assert(!cssSource.includes('fonts.googleapis.com'), 'source.css must NOT have google fonts import');
 console.log('PASS: source.css font stack and @font-face verified');
 

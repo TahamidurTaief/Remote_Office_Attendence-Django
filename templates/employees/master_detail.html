@@ -134,7 +134,7 @@
                             <c-info-field label="Weekly Holiday Policy" :value="employee.weekly_holiday_policy|default:''"></c-info-field>
                             <c-info-field label="Reporting Manager">
                                 {% if employee.reporting_manager %}
-                                <a href="{% url 'employees:employee_detail' employee.reporting_manager.pk %}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+                                <a href="{% url 'employees:employee_detail' employee.reporting_manager.pk %}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
                                     {{ employee.reporting_manager.get_full_name }} ({{ employee.reporting_manager.employee_number }})
                                 </a>
                                 {% else %}
@@ -143,7 +143,7 @@
                             </c-info-field>
                             <c-info-field label="Direct Reports" extra_class="sm:col-span-2">
                                 {% for dr in employee.direct_reports.all %}
-                                    <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-block bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-semibold text-decoration-none border border-indigo-200/50 dark:border-indigo-700/50">
+                                    <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-block bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-medium text-decoration-none border border-indigo-200/50 dark:border-indigo-700/50">
                                         {{ dr.get_full_name }}
                                     </a>
                                 {% empty %}

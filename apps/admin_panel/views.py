@@ -3991,51 +3991,40 @@ class AIWorkspaceView(RoleRequiredMixin, TemplateView):
         return context
 
 
-class AIChatbotDummyResponseView(RoleRequiredMixin, View):
+class AIChatbotResponseView(RoleRequiredMixin, View):
     """
-    Local dummy endpoint for the global AI chatbot assistant.
-    Does NOT contact Google AI Studio or external APIs.
-    Accepts message and returns simulated, labelled dummy response with TaiefLab attribution.
+    Production-grade Gemini AI endpoint for the FieldTrack Assistant.
+    - Connects to Google AI Studio via official google-genai SDK
+    - Allowlisted, read-only ORM operational data extraction
+    - Strict RBAC: admin (company aggregates), manager (branch/team), staff/employee (self only)
+    - Prompt injection defense & confidentiality protection
+    - Rate-limited, bounded retries, timeout, truthful errors
+    - Renders via safe Cotton partial (cotton/ai-chat-response.html) with CSRF protection
     """
-    allowed_roles = ['admin', 'manager', 'staff']
+    allowed_roles = ['admin', 'manager', 'staff', 'employee', 'system_owner']
 
     def post(self, request, *args, **kwargs):
+        from .ai_service import GeminiClientService
+
         user_message = request.POST.get('message', '').strip()
         if not user_message:
-            return HttpResponse(
-                '<div class="flex items-start gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-[12px] text-amber-700 dark:text-amber-300">'
-                '<span>Please enter a message to begin inquiry.</span>'
-                '</div>'
-            )
+            return render(request, 'cotton/ai-chat-response.html', {
+                'user_message': '',
+                'ai_message': 'Please enter a message to begin inquiry.',
+                'is_error': True,
+                'error_type': 'Input Required',
+            })
 
-        # Pre-canned deterministic response based on keywords
-        query = user_message.lower()
-        if 'attendance' in query or 'late' in query or 'absent' in query:
-            reply = "Today's recorded attendance indicates 94.2% on-time check-ins. 3 employees flagged for late arrival at HQ Branch."
-        elif 'project' in query or 'task' in query or 'gantt' in query:
-            reply = "Project 'Alpha Tower HVAC' has 2 pending milestones this week. Material delivery for Duct Sizing is on schedule."
-        elif 'payroll' in query or 'salary' in query or 'expense' in query:
-            reply = "Current payroll calculations show 12 pending overtime requests awaiting managerial review before closing."
-        else:
-            reply = f"Inquiry received: '{user_message}'. Local AI Assistant ready for workforce analysis. Google AI Studio live connection is disabled in this phase."
+        # Query Gemini with scoped operational context
+        ai_reply, is_error, error_type = GeminiClientService.query_gemini(request.user, user_message)
 
-        # Return HTMX-rendered message balloon
-        html = f'''
-        <div class="flex flex-col gap-1 items-end my-1">
-          <div class="max-w-[85%] px-3 py-2 rounded-card bg-[#F97316] text-white text-[12px] leading-relaxed shadow-sm">
-            {user_message}
-          </div>
-          <span class="text-[10px] text-slate-400">You &bull; Just now</span>
-        </div>
-        <div class="flex flex-col gap-1 items-start my-1">
-          <div class="max-w-[85%] px-3 py-2 rounded-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
-            <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold text-[#F97316]">
-              <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
-              <span>Local AI Assistant (Demo Mode)</span>
-            </div>
-            {reply}
-          </div>
-          <span class="text-[10px] text-slate-400">AI Assistant &bull; Powered by TaiefLab</span>
-        </div>
-        '''
-        return HttpResponse(html)
+        return render(request, 'cotton/ai-chat-response.html', {
+            'user_message': user_message,
+            'ai_message': ai_reply,
+            'is_error': is_error,
+            'error_type': error_type,
+        })
+
+
+# Backward-compatibility alias for URL patterns
+AIChatbotDummyResponseView = AIChatbotResponseView
