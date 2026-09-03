@@ -1,0 +1,53 @@
+{% load static %}
+<c-app-shell page_title="Import Gantt: {{ project.name }} | FieldTrack" active_href="{% url 'projects:project_gantt' project.pk %}">
+  <div class="p-4 max-w-7xl mx-auto space-y-5">
+
+    {# ── Top Breadcrumbs & Heading ─────────────────────────────────────── #}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <a href="{% url 'projects:project_gantt' project.pk %}"
+           class="p-2 bg-white dark:bg-gray-800 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700 min-h-[44px] min-w-[44px] flex items-center justify-center"
+           aria-label="Back to Gantt chart">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        </a>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold text-gray-900 dark:text-gray-100">Gantt Excel Import</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium">Safe Ingestion</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-0.5">
+            Project: <strong class="text-gray-700 dark:text-gray-300">{{ project.name }}</strong> &bull; Client: {{ project.client_name }}
+          </p>
+        </div>
+      </div>
+
+      {# Stepper #}
+      <div class="flex items-center gap-2 text-xs font-medium">
+        <span class="flex items-center gap-1.5 {% if active_step >= 1 %}text-indigo-600 font-semibold{% else %}text-gray-400{% endif %}">
+          <span class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] {% if active_step >= 1 %}bg-indigo-600 text-white{% else %}bg-gray-100 text-gray-500{% endif %}">1</span>
+          Upload
+        </span>
+        <span class="text-gray-300">&rarr;</span>
+        <span class="flex items-center gap-1.5 {% if active_step >= 2 %}text-indigo-600 font-semibold{% else %}text-gray-400{% endif %}">
+          <span class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] {% if active_step >= 2 %}bg-indigo-600 text-white{% else %}bg-gray-100 text-gray-500{% endif %}">2</span>
+          Preview & Correct
+        </span>
+        <span class="text-gray-300">&rarr;</span>
+        <span class="flex items-center gap-1.5 {% if active_step >= 3 %}text-indigo-600 font-semibold{% else %}text-gray-400{% endif %}">
+          <span class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] {% if active_step >= 3 %}bg-indigo-600 text-white{% else %}bg-gray-100 text-gray-500{% endif %}">3</span>
+          Confirmed
+        </span>
+      </div>
+    </div>
+
+    {# ── Dynamic HTMX Container ───────────────────────────────────────── #}
+    <div id="gantt-import-container">
+      {% if active_step == 1 %}
+        {% include 'projects/partials/gantt_import_upload_card.html' %}
+      {% elif active_step == 2 %}
+        {% include 'projects/partials/gantt_import_preview.html' %}
+      {% endif %}
+    </div>
+
+  </div>
+</c-app-shell>

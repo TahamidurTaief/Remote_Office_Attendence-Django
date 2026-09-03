@@ -1,5 +1,6 @@
 import json
 from django.http import JsonResponse
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
@@ -15,8 +16,21 @@ from apps.branches.models import Branch
 from apps.employees.models import EmployeeProfile
 from apps.notifications.models import Notification
 from apps.notifications.dispatch import send_email_notification
-from .models import Project, ProjectType, TaskTemplate, TaskTemplateItem, ProjectTask, DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff, TaskDependency
+from .models import (
+    Project, ProjectType, TaskTemplate, TaskTemplateItem, ProjectTask,
+    DailyProgressLog, ManpowerDeployment, ProjectMaterial, ProjectSignOff,
+    TaskDependency, GanttImportBatch
+)
 from .forms import ProjectForm, ProjectTypeForm, TaskTemplateForm, TaskTemplateItemForm, ProjectTaskForm, DailyProgressLogForm, ManpowerDeploymentForm, ProjectMaterialForm, GlobalProjectTaskForm, TaskDependencyForm
+from apps.projects.services.gantt_import import (
+    WorkbookSafetyValidator,
+    GanttWorkbookParser,
+    GanttDuplicateDetector,
+    GanttImportStagingManager,
+    GanttImportExecutor,
+    GanttImportError,
+    check_gantt_import_permission
+)
 
 
 
@@ -2121,6 +2135,295 @@ class TaskDependencyDeleteView(AdminRequiredMixin, View):
         if project_pk:
             return redirect('projects:project_detail', pk=project_pk)
         return redirect('projects:global_task_list')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gantt Excel Import Workflow
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProjectGanttImportView(View):
+    """
+    Step 1: Upload & Initial Format Detection.
+    Accepts .xlsx workbook, enforces code-level safety limits, discovers sheets,
+    parses initial candidate tasks, and establishes staged batch foundation.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f"/login/?next={request.path}")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        if not check_gantt_import_permission(request.user, project):
+            raise PermissionDenied("You do not have permission to import Gantt tasks for this project.")
+
+        context = {
+            'project': project,
+            'active_step': 1,
+        }
+        return render(request, 'projects/gantt_import.html', context)
+
+    def post(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        if not check_gantt_import_permission(request.user, project):
+            raise PermissionDenied("You do not have permission to import Gantt tasks for this project.")
+
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            context = {
+                'project': project,
+                'error': 'Please select an Excel (.xlsx) file to upload.',
+                'error_field': 'file',
+                'active_step': 1
+            }
+            if request.headers.get('HX-Request'):
+                return render(request, 'projects/partials/gantt_import_upload_card.html', context, status=400)
+            return render(request, 'projects/gantt_import.html', context, status=400)
+
+        try:
+            content, sha256_hash = WorkbookSafetyValidator.validate_file(uploaded_file, uploaded_file.name)
+            parser = GanttWorkbookParser(content, uploaded_file.name)
+            sheets_info = parser.discover_sheets()
+            if not sheets_info:
+                raise GanttImportError("Workbook does not contain any readable sheets.", code="no_sheets")
+
+            # Cache file bytes for subsequent sheet-switching without re-uploading
+            from django.core.cache import cache
+            cache.set(f"gantt_file_{sha256_hash}", content, 3600 * 4)
+
+            # Choose initial sheet: prefer first sheet with detectable rows
+            selected_sheet = sheets_info[0]['name']
+            for s in sheets_info:
+                if s['total_rows'] > 0 and s['detected_format'] != 'unknown':
+                    selected_sheet = s['name']
+                    break
+
+            default_emp_id = request.POST.get('default_employee_id')
+            default_emp_id = int(default_emp_id) if default_emp_id and str(default_emp_id).isdigit() else None
+
+            parse_res = parser.parse_sheet(selected_sheet, default_employee_id=default_emp_id)
+            parser.close()
+
+            # Annotate duplicates against existing project tasks
+            annotated_rows = GanttDuplicateDetector.annotate_duplicates(project, parse_res['rows'])
+            parse_res['stats']['duplicate'] = sum(1 for r in annotated_rows if r.get('is_duplicate'))
+
+            # Create staged batch record
+            batch = GanttImportStagingManager.create_batch(
+                project=project,
+                user=request.user,
+                filename=uploaded_file.name,
+                file_sha256=sha256_hash,
+                detected_format=parse_res['detected_format'],
+                selected_sheet=selected_sheet,
+                staged_rows=annotated_rows,
+                stats=parse_res['stats']
+            )
+
+            employees = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+            context = {
+                'project': project,
+                'batch': batch,
+                'sheets': sheets_info,
+                'selected_sheet': selected_sheet,
+                'detected_format': parse_res['detected_format'],
+                'calc_note': parse_res.get('calc_note', ''),
+                'rows': annotated_rows,
+                'stats': parse_res['stats'],
+                'employees': employees,
+                'current_filter': 'all',
+                'active_step': 2,
+            }
+
+            if request.headers.get('HX-Request'):
+                return render(request, 'projects/partials/gantt_import_preview.html', context)
+            return render(request, 'projects/gantt_import.html', context)
+
+        except GanttImportError as e:
+            context = {
+                'project': project,
+                'error': e.message,
+                'error_field': e.field or 'file',
+                'active_step': 1
+            }
+            if request.headers.get('HX-Request'):
+                return render(request, 'projects/partials/gantt_import_upload_card.html', context, status=400)
+            messages.error(request, e.message)
+            return render(request, 'projects/gantt_import.html', context, status=400)
+
+
+class ProjectGanttImportPreviewView(View):
+    """
+    Step 2: Preview, Sheet Switching, In-Place Row Corrections, & Re-Validation.
+    Performs zero ProjectTask writes. Authoritative validation executed server-side.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f"/login/?next={request.path}")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk, batch_id):
+        project = get_object_or_404(Project, pk=pk)
+        if not check_gantt_import_permission(request.user, project):
+            raise PermissionDenied("You do not have permission to view this import batch.")
+
+        batch = GanttImportStagingManager.get_staged_batch(str(batch_id), project, request.user)
+
+        # Handle Sheet Switching if requested
+        sheet_switch = request.GET.get('sheet')
+        if sheet_switch and sheet_switch != batch.selected_sheet:
+            from django.core.cache import cache
+            raw_content = cache.get(f"gantt_file_{batch.file_sha256}")
+            if raw_content:
+                parser = GanttWorkbookParser(raw_content, batch.filename)
+                parse_res = parser.parse_sheet(sheet_switch)
+                parser.close()
+                annotated = GanttDuplicateDetector.annotate_duplicates(project, parse_res['rows'])
+                parse_res['stats']['duplicate'] = sum(1 for r in annotated if r.get('is_duplicate'))
+
+                batch.selected_sheet = sheet_switch
+                batch.detected_format = parse_res['detected_format']
+                batch.staged_data = {'rows': annotated, 'stats': parse_res['stats']}
+                batch.task_count = len(annotated)
+                batch.save(update_fields=['selected_sheet', 'detected_format', 'staged_data', 'task_count', 'updated_at'])
+
+        # Discover sheets if raw content is available
+        sheets_info = []
+        from django.core.cache import cache
+        raw_content = cache.get(f"gantt_file_{batch.file_sha256}")
+        if raw_content:
+            try:
+                p = GanttWorkbookParser(raw_content, batch.filename)
+                sheets_info = p.discover_sheets()
+                p.close()
+            except Exception:
+                pass
+
+        staged_data = batch.staged_data or {}
+        rows = staged_data.get('rows', [])
+        stats = staged_data.get('stats', {})
+
+        filter_type = request.GET.get('filter', 'all')
+        if filter_type == 'valid':
+            filtered_rows = [r for r in rows if not r.get('errors') and not r.get('warnings') and not r.get('excluded')]
+        elif filter_type == 'warning':
+            filtered_rows = [r for r in rows if r.get('warnings') and not r.get('errors') and not r.get('excluded')]
+        elif filter_type == 'invalid':
+            filtered_rows = [r for r in rows if r.get('errors') and not r.get('excluded')]
+        elif filter_type == 'duplicate':
+            filtered_rows = [r for r in rows if r.get('is_duplicate')]
+        elif filter_type == 'excluded':
+            filtered_rows = [r for r in rows if r.get('excluded')]
+        else:
+            filtered_rows = rows
+
+        employees = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        context = {
+            'project': project,
+            'batch': batch,
+            'sheets': sheets_info,
+            'selected_sheet': batch.selected_sheet,
+            'detected_format': batch.detected_format,
+            'calc_note': staged_data.get('calc_note', ''),
+            'rows': filtered_rows,
+            'all_rows_count': len(rows),
+            'stats': stats,
+            'employees': employees,
+            'current_filter': filter_type,
+            'active_step': 2,
+        }
+
+        if request.headers.get('HX-Request'):
+            return render(request, 'projects/partials/gantt_import_preview.html', context)
+        return render(request, 'projects/gantt_import.html', context)
+
+    def post(self, request, pk, batch_id):
+        project = get_object_or_404(Project, pk=pk)
+        if not check_gantt_import_permission(request.user, project):
+            raise PermissionDenied("You do not have permission to modify this import batch.")
+
+        batch = GanttImportStagingManager.get_staged_batch(str(batch_id), project, request.user)
+        action = request.POST.get('action')
+
+        try:
+            if action == 'update_field':
+                row_idx = int(request.POST.get('row_idx'))
+                field = request.POST.get('field')
+                value = request.POST.get('value')
+                GanttImportStagingManager.update_staged_row(batch, row_idx, field, value)
+
+            elif action == 'toggle_exclude':
+                row_idx = int(request.POST.get('row_idx'))
+                current_rows = batch.staged_data.get('rows', [])
+                if 0 <= row_idx < len(current_rows):
+                    new_val = not current_rows[row_idx].get('excluded', False)
+                    GanttImportStagingManager.update_staged_row(batch, row_idx, 'excluded', new_val)
+
+            elif action == 'exclude_all_invalid':
+                for idx, r in enumerate(batch.staged_data.get('rows', [])):
+                    if r.get('errors'):
+                        GanttImportStagingManager.update_staged_row(batch, idx, 'excluded', True)
+
+            elif action == 'set_default_responsible':
+                resp_id = request.POST.get('responsible_id')
+                if resp_id and str(resp_id).isdigit():
+                    resp_id_int = int(resp_id)
+                    for idx, r in enumerate(batch.staged_data.get('rows', [])):
+                        if not r.get('responsible_id'):
+                            GanttImportStagingManager.update_staged_row(batch, idx, 'responsible_id', resp_id_int)
+
+        except GanttImportError as e:
+            messages.error(request, e.message)
+
+        return self.get(request, pk, batch_id)
+
+
+class ProjectGanttImportConfirmView(View):
+    """
+    Step 3: Atomic Confirmation and Idempotent ProjectTask Creation.
+    Enforces transaction safety, row revalidation, non-colliding order, and audit tracking.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f"/login/?next={request.path}")
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, pk, batch_id):
+        project = get_object_or_404(Project, pk=pk)
+        if not check_gantt_import_permission(request.user, project):
+            raise PermissionDenied("You do not have permission to confirm this import.")
+
+        batch = GanttImportStagingManager.get_staged_batch(str(batch_id), project, request.user)
+
+        try:
+            result = GanttImportExecutor.confirm_import(batch, project, request.user, request)
+            messages.success(
+                request,
+                f"Successfully imported {result['imported_count']} Gantt tasks into {project.name}."
+            )
+
+            if request.headers.get('HX-Request'):
+                context = {
+                    'project': project,
+                    'result': result,
+                    'batch': batch
+                }
+                return render(request, 'projects/partials/gantt_import_success.html', context)
+
+            return redirect('projects:project_gantt', pk=project.pk)
+
+        except GanttImportError as e:
+            if request.headers.get('HX-Request'):
+                return HttpResponse(
+                    f'<div class="p-4 text-xs font-medium text-red-700 bg-red-50 rounded-xl border border-red-200" role="alert">'
+                    f'<strong>Import Error:</strong> {e.message}</div>',
+                    status=400
+                )
+            messages.error(request, e.message)
+            return redirect('projects:project_gantt_import_preview', pk=project.pk, batch_id=batch.uuid)
 
 
 

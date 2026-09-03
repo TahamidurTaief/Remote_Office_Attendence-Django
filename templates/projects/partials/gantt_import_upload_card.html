@@ -1,0 +1,68 @@
+{% load static %}
+<c-card title="Upload Gantt Schedule" subtitle="Select a Microsoft Excel (.xlsx) schedule or timeline workbook" padding="lg">
+  <form hx-post="{% url 'projects:project_gantt_import' project.pk %}"
+        hx-encoding="multipart/form-data"
+        hx-target="#gantt-import-container"
+        hx-swap="innerHTML"
+        hx-indicator="#upload-indicator"
+        class="space-y-4">
+    {% csrf_token %}
+
+    {% if error %}
+      <c-form-error-summary title="Workbook Upload Failed" errors=error />
+    {% endif %}
+
+    <div class="space-y-1">
+      <c-file-input
+        name="file"
+        id="gantt-excel-file"
+        label="Excel Workbook (.xlsx)"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        required="true"
+        help="Supported: Structured Task Tables, Offset-Based Planners, Zone Matrices, and Monthly Charts (Max 10 MB)."
+        error="{{ error_field|default:''|yesno:'Invalid workbook or unsupported format.,' }}"
+      />
+    </div>
+
+    {# Optional default responsible person #}
+    <div class="flex flex-col gap-1">
+      <label for="default_employee_id" class="ft-label">Default Assigned Employee (Optional)</label>
+      <select name="default_employee_id" id="default_employee_id" class="ft-input text-xs w-full min-h-[44px]">
+        <option value="">-- Auto-detect from sheet or Leave Unassigned --</option>
+        {% for emp in project.site_engineers.all %}
+          <option value="{{ emp.pk }}">{{ emp.full_name }} (Site Engineer)</option>
+        {% endfor %}
+        {% for emp in project.project_managers.all %}
+          <option value="{{ emp.pk }}">{{ emp.full_name }} (Project Manager)</option>
+        {% endfor %}
+        {% for emp in project.project_members.all %}
+          <option value="{{ emp.pk }}">{{ emp.full_name }} (Member)</option>
+        {% endfor %}
+      </select>
+      <p class="ft-help-text">Any task without an identified responsible person will use this assignee.</p>
+    </div>
+
+    {# Security & Limits Notice #}
+    <div class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 text-xs text-gray-500 space-y-1">
+      <div class="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>
+        <span>Safe Read-Only Ingestion</span>
+      </div>
+      <p>Formulas and macros are strictly sandboxed. Preview operates with zero database writes until explicit confirmation.</p>
+    </div>
+
+    <div class="flex items-center justify-between pt-2">
+      <c-button variant="ghost" size="md" href="{% url 'projects:project_gantt' project.pk %}" label="Cancel" icon="arrow-left" extra_class="min-h-[44px]" />
+      <div class="flex items-center gap-2">
+        <div id="upload-indicator" class="htmx-indicator flex items-center gap-1 text-xs text-indigo-600 font-medium">
+          <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span>Analyzing workbook...</span>
+        </div>
+        <c-button variant="primary" size="md" type="submit" label="Upload & Preview" icon="upload" extra_class="min-h-[44px]" />
+      </div>
+    </div>
+  </form>
+</c-card>

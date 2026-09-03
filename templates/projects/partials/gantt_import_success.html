@@ -1,0 +1,35 @@
+{% load static %}
+<c-card padding="lg" extra_class="text-center">
+  <div class="py-8 flex flex-col items-center max-w-md mx-auto space-y-4">
+    <div class="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+      <i data-lucide="check-circle" class="w-8 h-8"></i>
+    </div>
+
+    <div>
+      <h3 class="text-base font-bold text-gray-900 dark:text-gray-100">Gantt Import Successful</h3>
+      <p class="text-xs text-gray-500 mt-1">
+        Successfully imported <strong>{{ result.imported_count }}</strong> tasks into <strong>{{ project.name }}</strong>.
+      </p>
+    </div>
+
+    <div class="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800 text-xs text-gray-500 w-full text-left space-y-1">
+      <div class="flex justify-between">
+        <span>Batch ID:</span>
+        <span class="font-mono text-gray-700 dark:text-gray-300">{{ batch.uuid|stringformat:".8s" }}...</span>
+      </div>
+      <div class="flex justify-between">
+        <span>Source Workbook:</span>
+        <span class="text-gray-700 dark:text-gray-300">{{ batch.filename }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span>Sheet:</span>
+        <span class="text-gray-700 dark:text-gray-300">{{ batch.selected_sheet }}</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 pt-2 w-full justify-center">
+      <c-button variant="secondary" size="md" href="{% url 'projects:project_detail' project.pk %}" label="Task Checklist" icon="list" extra_class="min-h-[44px]" />
+      <c-button variant="primary" size="md" href="{% url 'projects:project_gantt' project.pk %}" label="Open Gantt Chart" icon="calendar" extra_class="min-h-[44px]" />
+    </div>
+  </div>
+</c-card>

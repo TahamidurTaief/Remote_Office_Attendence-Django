@@ -1,0 +1,485 @@
+{% load static %}
+<div class="space-y-4" id="gantt-preview-wrapper">
+
+  {# ── Header Bar: Detected Format & Stats ────────────────────────────── #}
+  <c-card padding="sm">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4 text-indigo-600"></i>
+          <span class="text-xs font-semibold text-gray-900">{{ batch.filename }}</span>
+        </div>
+        <c-badge variant="primary" size="sm" label="Format: {{ detected_format|title }}" />
+        {% if selected_sheet %}
+          <c-badge variant="neutral" size="sm" label="Sheet: {{ selected_sheet }}" />
+        {% endif %}
+      </div>
+
+      {# Sheet Selector (if multiple sheets discovered) #}
+      {% if sheets %}
+      <div class="flex items-center gap-2">
+        <label for="preview-sheet-select" class="text-xs text-gray-500 font-medium">Sheet:</label>
+        <select id="preview-sheet-select"
+                class="ft-input text-xs py-1 px-2.5 min-h-[36px]"
+                hx-get="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                hx-target="#gantt-import-container"
+                hx-swap="innerHTML"
+                name="sheet">
+          {% for s in sheets %}
+            <option value="{{ s.name }}" {% if s.name == selected_sheet %}selected{% endif %}>
+              {{ s.name }} ({{ s.total_rows }} rows)
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Calc Note for Offset / Matrix if applicable #}
+    {% if calc_note %}
+      <div class="mt-2 text-[11px] text-indigo-700 bg-indigo-50/70 p-2 rounded-lg border border-indigo-100 flex items-center gap-1.5">
+        <i data-lucide="info" class="w-3.5 h-3.5 flex-shrink-0"></i>
+        <span>{{ calc_note }}</span>
+      </div>
+    {% endif %}
+
+    {# Stats Pills #}
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-3 pt-3 border-t border-gray-100">
+      <div class="p-2 bg-gray-50 rounded-lg text-center">
+        <div class="text-[10px] text-gray-500 uppercase font-semibold">Total Rows</div>
+        <div class="text-base font-bold text-gray-800">{{ stats.total|default:0 }}</div>
+      </div>
+      <div class="p-2 bg-emerald-50 rounded-lg text-center">
+        <div class="text-[10px] text-emerald-600 uppercase font-semibold">Valid</div>
+        <div class="text-base font-bold text-emerald-700">{{ stats.valid|default:0 }}</div>
+      </div>
+      <div class="p-2 bg-amber-50 rounded-lg text-center">
+        <div class="text-[10px] text-amber-600 uppercase font-semibold">Warnings</div>
+        <div class="text-base font-bold text-amber-700">{{ stats.warning|default:0 }}</div>
+      </div>
+      <div class="p-2 bg-red-50 rounded-lg text-center">
+        <div class="text-[10px] text-red-600 uppercase font-semibold">Invalid</div>
+        <div class="text-base font-bold text-red-700">{{ stats.invalid|default:0 }}</div>
+      </div>
+      <div class="p-2 bg-purple-50 rounded-lg text-center">
+        <div class="text-[10px] text-purple-600 uppercase font-semibold">Duplicates</div>
+        <div class="text-base font-bold text-purple-700">{{ stats.duplicate|default:0 }}</div>
+      </div>
+      <div class="p-2 bg-indigo-50 rounded-lg text-center">
+        <div class="text-[10px] text-indigo-600 uppercase font-semibold">Importable</div>
+        <div class="text-base font-bold text-indigo-700">{{ stats.importable|default:0 }}</div>
+      </div>
+    </div>
+  </c-card>
+
+  {# ── Toolbar: Filter Bar & Bulk Actions ────────────────────────────── #}
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    {# Filter Pills #}
+    <div class="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+      <button type="button"
+              hx-get="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}?filter=all"
+              hx-target="#gantt-import-container"
+              hx-swap="innerHTML"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors min-h-[36px] {% if current_filter == 'all' or not current_filter %}bg-indigo-600 text-white{% else %}bg-white border border-gray-200 text-gray-700 hover:bg-gray-50{% endif %}">
+        All ({{ stats.total|default:0 }})
+      </button>
+      <button type="button"
+              hx-get="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}?filter=valid"
+              hx-target="#gantt-import-container"
+              hx-swap="innerHTML"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors min-h-[36px] {% if current_filter == 'valid' %}bg-emerald-600 text-white{% else %}bg-white border border-gray-200 text-gray-700 hover:bg-gray-50{% endif %}">
+        Valid ({{ stats.valid|default:0 }})
+      </button>
+      <button type="button"
+              hx-get="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}?filter=warning"
+              hx-target="#gantt-import-container"
+              hx-swap="innerHTML"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors min-h-[36px] {% if current_filter == 'warning' %}bg-amber-600 text-white{% else %}bg-white border border-gray-200 text-gray-700 hover:bg-gray-50{% endif %}">
+        Warnings ({{ stats.warning|default:0 }})
+      </button>
+      <button type="button"
+              hx-get="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}?filter=invalid"
+              hx-target="#gantt-import-container"
+              hx-swap="innerHTML"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors min-h-[36px] {% if current_filter == 'invalid' %}bg-red-600 text-white{% else %}bg-white border border-gray-200 text-gray-700 hover:bg-gray-50{% endif %}">
+        Invalid ({{ stats.invalid|default:0 }})
+      </button>
+      {% if stats.duplicate %}
+      <button type="button"
+              hx-get="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}?filter=duplicate"
+              hx-target="#gantt-import-container"
+              hx-swap="innerHTML"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors min-h-[36px] {% if current_filter == 'duplicate' %}bg-purple-600 text-white{% else %}bg-white border border-gray-200 text-gray-700 hover:bg-gray-50{% endif %}">
+        Duplicates ({{ stats.duplicate|default:0 }})
+      </button>
+      {% endif %}
+    </div>
+
+    {# Quick Actions #}
+    <div class="flex items-center gap-2">
+      {% if stats.invalid > 0 %}
+        <form hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+              hx-target="#gantt-import-container"
+              hx-swap="innerHTML">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="exclude_all_invalid">
+          <c-button variant="secondary" size="sm" type="submit" label="Exclude All Invalid" icon="filter-x" extra_class="min-h-[36px]" />
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Desktop View (c-table) ────────────────────────────────────────── #}
+  <div class="hidden lg:block">
+    <c-table id="gantt-preview-table">
+      <c-slot name="header">
+        <th class="w-10 px-3 py-2.5 text-center">Inc.</th>
+        <th class="w-12 px-3 py-2.5 text-center">Row</th>
+        <th class="px-3 py-2.5 text-left">Activity</th>
+        <th class="w-36 px-3 py-2.5 text-left">Planned Start</th>
+        <th class="w-36 px-3 py-2.5 text-left">Planned Finish</th>
+        <th class="w-20 px-3 py-2.5 text-center">Days</th>
+        <th class="w-24 px-3 py-2.5 text-center">Progress</th>
+        <th class="w-48 px-3 py-2.5 text-left">Responsible</th>
+        <th class="w-28 px-3 py-2.5 text-center">Status</th>
+        <th class="w-48 px-3 py-2.5 text-left">Validation Notes</th>
+      </c-slot>
+
+      <c-slot name="body">
+        {% for row in rows %}
+          <tr class="{% if row.excluded %}opacity-50 bg-gray-50{% elif row.errors %}bg-red-50/40{% elif row.warnings %}bg-amber-50/20{% endif %} border-b border-gray-100 hover:bg-gray-50/70 transition-colors">
+            {# Inclusion Checkbox #}
+            <td class="px-3 py-2 text-center">
+              <form hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                    hx-target="#gantt-import-container"
+                    hx-swap="innerHTML"
+                    hx-trigger="change">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle_exclude">
+                <input type="hidden" name="row_idx" value="{{ forloop.counter0 }}">
+                <input type="checkbox"
+                       {% if not row.excluded %}checked{% endif %}
+                       class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300 cursor-pointer min-h-[20px]"
+                       title="Toggle inclusion for this row">
+              </form>
+            </td>
+
+            {# Source Row #}
+            <td class="px-3 py-2 text-center text-xs text-gray-400 font-mono">
+              R{{ row.source_row }}
+            </td>
+
+            {# Activity Name (Editable) #}
+            <td class="px-3 py-2">
+              <div class="relative">
+                <input type="text"
+                       value="{{ row.activity }}"
+                       class="ft-input text-xs py-1 px-2 w-full {% if row.errors_by_field.activity %}!border-red-500 border-red-500{% endif %}"
+                       aria-invalid="{% if row.errors_by_field.activity %}true{% else %}false{% endif %}"
+                       aria-describedby="act-err-{{ forloop.counter0 }}"
+                       hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                       hx-trigger="blur changed"
+                       hx-target="#gantt-import-container"
+                       hx-swap="innerHTML"
+                       hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "activity"}'
+                       name="value">
+                {% if row.errors_by_field.activity %}
+                  <p id="act-err-{{ forloop.counter0 }}" class="text-[10px] text-red-500 mt-0.5">{{ row.errors_by_field.activity }}</p>
+                {% endif %}
+              </div>
+            </td>
+
+            {# Planned Start #}
+            <td class="px-3 py-2">
+              <div class="relative">
+                <input type="date"
+                       value="{{ row.planned_start|default:'' }}"
+                       class="ft-input text-xs py-1 px-2 w-full {% if row.errors_by_field.planned_start %}!border-red-500 border-red-500{% endif %}"
+                       aria-invalid="{% if row.errors_by_field.planned_start %}true{% else %}false{% endif %}"
+                       aria-describedby="start-err-{{ forloop.counter0 }}"
+                       hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                       hx-trigger="change"
+                       hx-target="#gantt-import-container"
+                       hx-swap="innerHTML"
+                       hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "planned_start"}'
+                       name="value">
+                {% if row.errors_by_field.planned_start %}
+                  <p id="start-err-{{ forloop.counter0 }}" class="text-[10px] text-red-500 mt-0.5">{{ row.errors_by_field.planned_start }}</p>
+                {% endif %}
+              </div>
+            </td>
+
+            {# Planned Finish #}
+            <td class="px-3 py-2">
+              <div class="relative">
+                <input type="date"
+                       value="{{ row.planned_finish|default:'' }}"
+                       class="ft-input text-xs py-1 px-2 w-full {% if row.errors_by_field.planned_finish %}!border-red-500 border-red-500{% endif %}"
+                       aria-invalid="{% if row.errors_by_field.planned_finish %}true{% else %}false{% endif %}"
+                       aria-describedby="finish-err-{{ forloop.counter0 }}"
+                       hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                       hx-trigger="change"
+                       hx-target="#gantt-import-container"
+                       hx-swap="innerHTML"
+                       hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "planned_finish"}'
+                       name="value">
+                {% if row.errors_by_field.planned_finish %}
+                  <p id="finish-err-{{ forloop.counter0 }}" class="text-[10px] text-red-500 mt-0.5">{{ row.errors_by_field.planned_finish }}</p>
+                {% endif %}
+              </div>
+            </td>
+
+            {# Duration #}
+            <td class="px-3 py-2 text-center text-xs text-gray-700 font-medium">
+              {{ row.duration_days|default:"—" }}
+            </td>
+
+            {# Progress #}
+            <td class="px-3 py-2 text-center">
+              <span class="text-xs font-semibold {% if row.progress_percent == 100 %}text-emerald-600{% else %}text-gray-700{% endif %}">
+                {{ row.progress_percent }}%
+              </span>
+            </td>
+
+            {# Responsible Employee #}
+            <td class="px-3 py-2">
+              <select class="ft-input text-xs py-1 px-2 w-full"
+                      hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                      hx-trigger="change"
+                      hx-target="#gantt-import-container"
+                      hx-swap="innerHTML"
+                      hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "responsible_id"}'
+                      name="value">
+                <option value="">-- Unassigned --</option>
+                {% for emp in employees %}
+                  <option value="{{ emp.pk }}" {% if emp.pk == row.responsible_id %}selected{% endif %}>
+                    {{ emp.full_name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </td>
+
+            {# Status #}
+            <td class="px-3 py-2 text-center">
+              <c-status-pill status="{{ row.status|lower|cut:' ' }}" label="{{ row.status }}" />
+            </td>
+
+            {# Validation Notes & Errors #}
+            <td class="px-3 py-2">
+              <div class="space-y-0.5">
+                {% for err in row.errors %}
+                  <div class="flex items-center gap-1 text-[11px] text-red-600 font-medium">
+                    <i data-lucide="alert-circle" class="w-3 h-3 flex-shrink-0"></i>
+                    <span>{{ err }}</span>
+                  </div>
+                {% endfor %}
+                {% for w in row.warnings %}
+                  <div class="flex items-center gap-1 text-[11px] text-amber-600">
+                    <i data-lucide="alert-triangle" class="w-3 h-3 flex-shrink-0"></i>
+                    <span>{{ w }}</span>
+                  </div>
+                {% endfor %}
+                {% for c in row.calc_notes %}
+                  <div class="flex items-center gap-1 text-[10px] text-indigo-500">
+                    <i data-lucide="calculator" class="w-2.5 h-2.5 flex-shrink-0"></i>
+                    <span>{{ c }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="10" class="py-12 text-center text-xs text-gray-500">
+              No tasks found in this view filter.
+            </td>
+          </tr>
+        {% endfor %}
+      </c-slot>
+    </c-table>
+  </div>
+
+  {# ── Mobile View: Stacked Cotton Cards ─────────────────────────────── #}
+  <div class="block lg:hidden space-y-3">
+    {% for row in rows %}
+      <c-card padding="sm" extra_class="{% if row.excluded %}opacity-60 bg-gray-50{% elif row.errors %}border-red-300 bg-red-50/20{% elif row.warnings %}border-amber-200 bg-amber-50/10{% endif %}">
+        <div class="space-y-3">
+          {# Card Header #}
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              {# Inclusion Checkbox with >=44px touch area #}
+              <form hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                    hx-target="#gantt-import-container"
+                    hx-swap="innerHTML"
+                    hx-trigger="change"
+                    class="flex items-center justify-center min-w-[44px] min-h-[44px]">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle_exclude">
+                <input type="hidden" name="row_idx" value="{{ forloop.counter0 }}">
+                <input type="checkbox"
+                       {% if not row.excluded %}checked{% endif %}
+                       class="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300 cursor-pointer">
+              </form>
+              <div>
+                <span class="text-[10px] font-mono text-gray-400">Row {{ row.source_row }}</span>
+                <c-status-pill status="{{ row.status|lower|cut:' ' }}" label="{{ row.status }}" />
+              </div>
+            </div>
+            <div class="text-xs font-semibold {% if row.progress_percent == 100 %}text-emerald-600{% else %}text-gray-600{% endif %}">
+              {{ row.progress_percent }}%
+            </div>
+          </div>
+
+          {# Activity Field #}
+          <div>
+            <label class="ft-label text-[11px]">Task Activity</label>
+            <input type="text"
+                   value="{{ row.activity }}"
+                   class="ft-input text-xs py-2 px-3 w-full min-h-[44px] {% if row.errors_by_field.activity %}!border-red-500 border-red-500{% endif %}"
+                   aria-invalid="{% if row.errors_by_field.activity %}true{% else %}false{% endif %}"
+                   hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                   hx-trigger="blur changed"
+                   hx-target="#gantt-import-container"
+                   hx-swap="innerHTML"
+                   hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "activity"}'
+                   name="value">
+            {% if row.errors_by_field.activity %}
+              <p class="text-[10px] text-red-500 mt-0.5">{{ row.errors_by_field.activity }}</p>
+            {% endif %}
+          </div>
+
+          {# Planned Dates Grid #}
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="ft-label text-[11px]">Start Date</label>
+              <input type="date"
+                     value="{{ row.planned_start|default:'' }}"
+                     class="ft-input text-xs py-2 px-3 w-full min-h-[44px] {% if row.errors_by_field.planned_start %}!border-red-500 border-red-500{% endif %}"
+                     aria-invalid="{% if row.errors_by_field.planned_start %}true{% else %}false{% endif %}"
+                     hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                     hx-trigger="change"
+                     hx-target="#gantt-import-container"
+                     hx-swap="innerHTML"
+                     hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "planned_start"}'
+                     name="value">
+              {% if row.errors_by_field.planned_start %}
+                <p class="text-[10px] text-red-500 mt-0.5">{{ row.errors_by_field.planned_start }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <label class="ft-label text-[11px]">Finish Date</label>
+              <input type="date"
+                     value="{{ row.planned_finish|default:'' }}"
+                     class="ft-input text-xs py-2 px-3 w-full min-h-[44px] {% if row.errors_by_field.planned_finish %}!border-red-500 border-red-500{% endif %}"
+                     aria-invalid="{% if row.errors_by_field.planned_finish %}true{% else %}false{% endif %}"
+                     hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                     hx-trigger="change"
+                     hx-target="#gantt-import-container"
+                     hx-swap="innerHTML"
+                     hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "planned_finish"}'
+                     name="value">
+              {% if row.errors_by_field.planned_finish %}
+                <p class="text-[10px] text-red-500 mt-0.5">{{ row.errors_by_field.planned_finish }}</p>
+              {% endif %}
+            </div>
+          </div>
+
+          {# Assignee #}
+          <div>
+            <label class="ft-label text-[11px]">Responsible Assignee</label>
+            <select class="ft-input text-xs py-2 px-3 w-full min-h-[44px]"
+                    hx-post="{% url 'projects:project_gantt_import_preview' project.pk batch.uuid %}"
+                    hx-trigger="change"
+                    hx-target="#gantt-import-container"
+                    hx-swap="innerHTML"
+                    hx-vals='{"action": "update_field", "row_idx": "{{ forloop.counter0 }}", "field": "responsible_id"}'
+                    name="value">
+              <option value="">-- Unassigned --</option>
+              {% for emp in employees %}
+                <option value="{{ emp.pk }}" {% if emp.pk == row.responsible_id %}selected{% endif %}>
+                  {{ emp.full_name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {# Row Diagnostics #}
+          {% if row.errors or row.warnings or row.calc_notes %}
+            <div class="pt-2 border-t border-gray-100 space-y-1">
+              {% for err in row.errors %}
+                <div class="flex items-center gap-1.5 text-xs text-red-600 font-medium">
+                  <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                  <span>{{ err }}</span>
+                </div>
+              {% endfor %}
+              {% for w in row.warnings %}
+                <div class="flex items-center gap-1.5 text-xs text-amber-600">
+                  <i data-lucide="alert-triangle" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                  <span>{{ w }}</span>
+                </div>
+              {% endfor %}
+              {% for c in row.calc_notes %}
+                <div class="flex items-center gap-1.5 text-[11px] text-indigo-600">
+                  <i data-lucide="calculator" class="w-3 h-3 flex-shrink-0"></i>
+                  <span>{{ c }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      </c-card>
+    {% empty %}
+      <c-empty-state title="No tasks found" description="There are no tasks matching the selected filter in this sheet." />
+    {% endfor %}
+  </div>
+
+  {# ── Confirmation Sticky Action Footer ──────────────────────────────── #}
+  <div class="sticky bottom-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xl z-20">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-bold text-gray-900 dark:text-gray-100">
+            Ready to import: {{ stats.importable|default:0 }} tasks
+          </span>
+          {% if stats.invalid > 0 %}
+            <c-badge variant="danger" size="sm" label="{{ stats.invalid }} invalid blocked" />
+          {% endif %}
+        </div>
+        <p class="text-[11px] text-gray-500 mt-0.5">
+          Tasks will be created with non-colliding order numbers. Project progress will recalculate automatically.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <c-button variant="ghost" size="md" href="{% url 'projects:project_gantt_import' project.pk %}" label="Upload New" icon="upload" extra_class="min-h-[44px]" />
+        
+        <form hx-post="{% url 'projects:project_gantt_import_confirm' project.pk batch.uuid %}"
+              hx-target="#gantt-import-container"
+              hx-swap="innerHTML"
+              hx-indicator="#confirm-indicator"
+              class="m-0">
+          {% csrf_token %}
+          <div class="flex items-center gap-2">
+            <div id="confirm-indicator" class="htmx-indicator flex items-center gap-1 text-xs text-indigo-600 font-medium">
+              <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              <span>Importing tasks...</span>
+            </div>
+            <c-button
+              variant="primary"
+              size="md"
+              type="submit"
+              label="Confirm Import ({{ stats.importable|default:0 }})"
+              icon="check-circle"
+              disabled="{% if stats.importable == 0 %}true{% endif %}"
+              extra_class="min-h-[44px]"
+            />
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>

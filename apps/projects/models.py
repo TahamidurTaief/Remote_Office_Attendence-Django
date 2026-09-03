@@ -608,3 +608,47 @@ class ProjectTaskReply(models.Model):
 
     def __str__(self):
         return f"Reply by {self.user.email} on task #{self.task.id}"
+
+
+class GanttImportBatch(models.Model):
+    """
+    Tracks staged Gantt Excel import batches.
+    Binds the batch to authenticated user, selected project, workbook checksum, and expiry.
+    Enforces atomic, idempotent confirmation without duplicate ProjectTask creation.
+    """
+    STATUS_CHOICES = (
+        ('staged', 'Staged'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    )
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='gantt_import_batches')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='gantt_import_batches')
+    filename = models.CharField(max_length=255)
+    file_sha256 = models.CharField(max_length=64, db_index=True)
+    detected_format = models.CharField(max_length=100)
+    selected_sheet = models.CharField(max_length=255)
+    staged_data = models.JSONField(default=dict)
+    imported_task_ids = models.JSONField(default=list)
+    task_count = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='staged')
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['project', 'status']),
+            models.Index(fields=['uuid', 'status']),
+        ]
+
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"Gantt Import {self.uuid} ({self.filename}) - {self.status}"
