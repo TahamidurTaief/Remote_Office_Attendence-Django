@@ -62,7 +62,7 @@
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-xs select-none"
        x-cloak>
 
-    <div class="ft-modal ft-modal-{{ size|default:'md' }} w-full sm:max-w-md max-h-[100dvh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
+    <div class="ft-modal ft-modal-{{ size|default:'md' }} w-full {% if size == 'sm' %}sm:max-w-sm{% elif size == 'lg' %}sm:max-w-2xl lg:max-w-3xl{% elif size == 'xl' %}sm:max-w-4xl{% else %}sm:max-w-lg{% endif %} max-h-[100dvh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
          @click.stop
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0 translate-y-6 sm:scale-95 sm:translate-y-0"
@@ -85,7 +85,7 @@
       {% endif %}
 
       {# Body: Content-based height #}
-      <div class="p-4 sm:p-5 overflow-y-auto flex-1 select-text">
+      <div class="p-4 sm:p-5 overflow-y-auto overflow-x-hidden flex-1 select-text">
         {{ slot }}
       </div>
 
