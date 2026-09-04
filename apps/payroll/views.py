@@ -230,7 +230,7 @@ class PayrollRunGridPartialView(PayrollManagerMixin, View):
     def get(self, request, pk):
         run = get_object_or_404(PayrollRun, pk=pk)
         calcs = EmployeePayrollCalculation.objects.filter(payroll_run=run).select_related(
-            'employee', 'employee__department', 'employee__designation', 'employee__branch'
+            'employee', 'employee__department', 'employee__designation', 'employee__branch', 'employee__legacy_profile'
         )
 
         search = request.GET.get('search', '').strip()

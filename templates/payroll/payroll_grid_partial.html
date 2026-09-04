@@ -1,66 +1,72 @@
 <div id="payroll-grid-container" class="space-y-4">
-    <c-table id="payroll-grid-table">
+    <c-table id="payroll-grid-table" top_scroll="true">
         <c-slot name="header">
-            <th>Employee</th>
-            <th>Department / Designation</th>
-            <th>Gross Salary</th>
-            <th>Attendance (P / L / A)</th>
-            <th>OT Hours / Amt</th>
-            <th>Total Earnings</th>
-            <th>Total Deductions</th>
-            <th>Net Payable</th>
-            <th>Disbursement</th>
-            <th class="text-right">Actions</th>
+            <th class="sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 min-w-[280px] w-[280px] border-r border-slate-200/80 dark:border-slate-700/80 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] font-medium text-slate-600 dark:text-slate-300">Employee</th>
+            <th class="min-w-[180px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Department / Designation</th>
+            <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Gross Salary</th>
+            <th class="min-w-[170px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Attendance (P / L / A)</th>
+            <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">OT Hours / Amt</th>
+            <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Total Earnings</th>
+            <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Total Deductions</th>
+            <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Net Payable</th>
+            <th class="min-w-[130px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Disbursement</th>
+            <th class="text-right min-w-[100px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Actions</th>
         </c-slot>
 
         <c-slot name="body">
             {% for calc in page_obj %}
-            <tr>
-                <td>
+            <tr class="group">
+                <td class="sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 border-r border-slate-200/80 dark:border-slate-700/80 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] min-w-[280px] w-[280px]">
                     <div class="flex items-center gap-2.5">
                         <c-avatar src="{% if calc.employee.profile_photo %}{{ calc.employee.profile_photo.url }}{% endif %}" initials="{{ calc.employee.first_name|make_list|first|upper }}" size="sm"></c-avatar>
-                        <div>
-                            <a href="{% url 'payroll:payslip_detail' calc.pk %}" class="font-semibold hover:underline" style="color:var(--text)">
+                        <div class="min-w-0 flex-1">
+                            <a href="{% url 'payroll:payslip_detail' calc.pk %}" class="font-medium text-[13px] hover:underline whitespace-nowrap block truncate" style="color:var(--text)">
                                 {{ calc.employee.get_full_name }}
                             </a>
-                            <div class="text-[11px] font-mono" style="color:var(--text-muted)">{{ calc.employee.employee_number }}</div>
+                            <div class="text-[11px] font-mono whitespace-nowrap text-slate-500 dark:text-slate-400">{{ calc.employee.phone|default:"—" }}</div>
                         </div>
                     </div>
                 </td>
-                <td>
+                <td class="whitespace-nowrap">
                     <div class="font-medium" style="color:var(--text)">{{ calc.employee.department.name|default:"General" }}</div>
                     <div class="text-[11px]" style="color:var(--text-muted)">{{ calc.employee.designation.name|default:"Staff" }}</div>
                 </td>
-                <td>
+                <td class="whitespace-nowrap">
                     <span class="font-medium" style="color:var(--text)">{{ calc.gross_salary|floatformat:2 }}</span>
                 </td>
-                <td>
-                    <div class="text-[11px] font-mono space-x-1">
-                        <span class="text-emerald-600 dark:text-emerald-400" title="Present Days">P:{{ calc.source_total_present_days }}</span>
-                        <span class="text-blue-600 dark:text-blue-400" title="Approved Paid Leave">L:{{ calc.source_total_approved_leave_days }}</span>
-                        <span class="text-rose-600 dark:text-rose-400" title="Unpaid Absence">A:{{ calc.unpaid_absent_days }}</span>
+                <td class="whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap">
+                        <span class="inline-flex items-center justify-center min-w-[46px] px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40" title="Present Days">
+                            <span class="text-[10px] text-emerald-500 mr-1 font-medium">P:</span>{{ calc.source_total_present_days|floatformat:"-1" }}
+                        </span>
+                        <span class="inline-flex items-center justify-center min-w-[46px] px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40" title="Approved Paid Leave">
+                            <span class="text-[10px] text-blue-500 mr-1 font-medium">L:</span>{{ calc.source_total_approved_leave_days|floatformat:"-1" }}
+                        </span>
+                        <span class="inline-flex items-center justify-center min-w-[46px] px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/40" title="Unpaid Absence">
+                            <span class="text-[10px] text-rose-500 mr-1 font-medium">A:</span>{{ calc.unpaid_absent_days|floatformat:"-1" }}
+                        </span>
                     </div>
                 </td>
-                <td>
+                <td class="whitespace-nowrap">
                     <div class="text-[11px]">
                         <div>{{ calc.ot_hours|floatformat:1 }} hrs</div>
                         <div class="text-emerald-600 font-medium">+{{ calc.ot_amount|floatformat:2 }}</div>
                     </div>
                 </td>
-                <td>
+                <td class="whitespace-nowrap">
                     <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ calc.total_earnings|floatformat:2 }}</span>
                 </td>
-                <td>
+                <td class="whitespace-nowrap">
                     <span class="font-medium text-rose-600 dark:text-rose-400">-{{ calc.total_deductions|floatformat:2 }}</span>
                 </td>
-                <td>
-                    <div class="font-bold text-[13px] text-emerald-700 dark:text-emerald-300">
+                <td class="whitespace-nowrap">
+                    <div class="font-medium text-[13px] text-emerald-700 dark:text-emerald-400">
                         {{ calc.net_payable|floatformat:2 }}
                     </div>
                 </td>
-                <td>
+                <td class="whitespace-nowrap">
                     <div class="text-[11px]">
-                        <span class="capitalize font-semibold" style="color:var(--text)">{{ calc.payment_mode }}</span>
+                        <span class="capitalize font-medium" style="color:var(--text)">{{ calc.payment_mode }}</span>
                         {% if calc.payment_mode == 'split' %}
                             <div style="color:var(--text-muted)">B: {{ calc.bank_payable|floatformat:0 }} | C: {{ calc.cash_payable|floatformat:0 }}</div>
                         {% elif calc.payment_mode == 'bank' %}
@@ -70,7 +76,7 @@
                         {% endif %}
                     </div>
                 </td>
-                <td class="text-right">
+                <td class="text-right whitespace-nowrap">
                     <div class="flex items-center justify-end gap-1">
                         <a href="{% url 'payroll:payslip_detail' calc.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1.5" title="View Payslip">
                             <i data-lucide="file-text" class="w-3.5 h-3.5"></i>

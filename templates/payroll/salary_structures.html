@@ -1,6 +1,6 @@
-<c-app-shell page_title="Salary Structures | FieldTrack" active_href="{% url 'payroll:payroll_run_list' %}">
+<c-app-shell page_title="Salary Structures | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">

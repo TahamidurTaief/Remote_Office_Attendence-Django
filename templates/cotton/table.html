@@ -1,7 +1,9 @@
+<c-vars id="" extra_class="" top_scroll="" />
 {% comment %} c-table component
    Props:
    - id: unique id for the table wrapper (optional)
    - extra_class: additional classes on the wrapper div
+   - top_scroll: boolean (true/false) to enable synchronized top scrollbar
    Slots:
    - header: <th> elements
    - body: <tr> rows (or empty state)
@@ -10,7 +12,35 @@
    - empty: custom empty state (overrides default)
 {% endcomment %}
 
-<div {% if id %}id="{{ id }}"{% endif %} class="w-full ft-card overflow-hidden {{ extra_class }}">
+<div {% if id %}id="{{ id }}"{% endif %} 
+     class="w-full ft-card overflow-hidden {{ extra_class }}"
+     {% if top_scroll %}
+     x-data="{
+       syncing: false,
+       initTopScroll() {
+         const top = this.$refs.topScroll;
+         const btm = this.$refs.bottomScroll;
+         const dummy = this.$refs.topScrollDummy;
+         const table = this.$refs.tableElement;
+         if (!top || !btm || !dummy || !table) return;
+
+         const syncWidth = () => {
+           const scrollW = table.scrollWidth || btm.scrollWidth;
+           dummy.style.width = scrollW + 'px';
+           if (scrollW <= btm.clientWidth) {
+             top.style.display = 'none';
+           } else {
+             top.style.display = 'block';
+           }
+         };
+         syncWidth();
+         if (window.ResizeObserver) {
+           new ResizeObserver(syncWidth).observe(btm);
+         }
+       }
+     }"
+     x-init="$nextTick(() => initTopScroll())"
+     {% endif %}>
   {# Optional toolbar #}
   {% if toolbar %}
   <div class="py-2 mb-2 border-b" style="border-color:var(--border)">
@@ -18,8 +48,33 @@
   </div>
   {% endif %}
 
-  <div class="overflow-x-auto">
-    <table class="ft-table">
+  {% if top_scroll %}
+  <div x-ref="topScroll"
+       @scroll="
+         if (!syncing) {
+           syncing = true;
+           if ($refs.bottomScroll) $refs.bottomScroll.scrollLeft = $el.scrollLeft;
+           requestAnimationFrame(() => { syncing = false; });
+         }
+       "
+       class="overflow-x-auto overflow-y-hidden border-b border-slate-200/70 dark:border-slate-700/70 bg-slate-50/70 dark:bg-slate-800/70"
+       style="scrollbar-width: thin; height: 14px;">
+    <div x-ref="topScrollDummy" style="height: 1px;"></div>
+  </div>
+  {% endif %}
+
+  <div class="overflow-x-auto"
+       {% if top_scroll %}
+       x-ref="bottomScroll"
+       @scroll="
+         if (!syncing) {
+           syncing = true;
+           if ($refs.topScroll) $refs.topScroll.scrollLeft = $el.scrollLeft;
+           requestAnimationFrame(() => { syncing = false; });
+         }
+       "
+       {% endif %}>
+    <table class="ft-table" {% if top_scroll %}x-ref="tableElement"{% endif %}>
       {% if header %}
       <thead>
         <tr>

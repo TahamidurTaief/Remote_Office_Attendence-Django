@@ -696,6 +696,7 @@ class PayrollPresentationLayerTests(TestCase):
             employee_number="EMP101",
             first_name="Alice",
             last_name="Staff",
+            phone="+8801711111111",
             joined_date=datetime.date(2026, 1, 1),
             status=EmployeeStatus.ACTIVE,
             branch=self.branch,
@@ -709,6 +710,7 @@ class PayrollPresentationLayerTests(TestCase):
             employee_number="EMP102",
             first_name="Bob",
             last_name="Cashier",
+            phone="+8801722222222",
             joined_date=datetime.date(2026, 1, 1),
             status=EmployeeStatus.ACTIVE,
             branch=self.branch,
@@ -800,21 +802,21 @@ class PayrollPresentationLayerTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "August 2026 Run")
-        self.assertContains(response, "EMP101")
-        self.assertContains(response, "EMP102")
+        self.assertContains(response, "+8801711111111")
+        self.assertContains(response, "+8801722222222")
 
         # Test partial grid for HTMX live search and check queries
         grid_url = reverse('payroll:payroll_run_grid_partial', kwargs={'pk': self.payroll_run.pk})
         with self.assertNumQueries(13):  # session, user, security policies, count, pinned menu, and 1 select_related query for calculations
             response = self.client.get(grid_url)
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, "EMP101")
+            self.assertContains(response, "+8801711111111")
 
         # Filter by search
         response = self.client.get(f"{grid_url}?search=Alice")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "EMP101")
-        self.assertNotContains(response, "EMP102")
+        self.assertContains(response, "+8801711111111")
+        self.assertNotContains(response, "+8801722222222")
 
     def test_payslip_access_permissions_and_security(self):
         from django.urls import reverse
