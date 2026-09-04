@@ -237,10 +237,11 @@
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
           {% for item in pinned_items %}
-          <div class="flex items-center justify-between group/pinned-item">
-            <a href="{{ item.url }}" class="ft-nav-item flex-1">
+          <div class="ft-submenu-item group/pinned-item w-full flex items-center justify-between {% if path == item.url %}active{% endif %}"
+               onclick="if (!event.target.closest('button')) { const a = this.querySelector('a'); if (a) a.click(); }">
+            <a href="{{ item.url }}" class="flex items-center gap-2 flex-1 min-w-0 h-full py-1.5 pl-2 text-inherit no-underline select-none">
               <i data-lucide="{{ item.icon }}" class="w-3.5 h-3.5 shrink-0 opacity-60"></i>
-              <span class="ft-nav-label">{{ item.label }}</span>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>{{ item.label }}</span>
             </a>
             <!-- Unpin Button -->
             <button type="button"
@@ -248,7 +249,7 @@
                     hx-vals='{"menu_key": "{{ item.key }}"}'
                     hx-target="#ft-sidebar"
                     hx-swap="outerHTML"
-                    class="p-1 text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-60 hover:opacity-100 transition-opacity"
+                    class="p-1 mr-1 rounded transition-all {% if path == item.url %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %}"
                     title="Unpin {{ item.label }}"
                     aria-label="Unpin {{ item.label }}"
                     onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin {{ item.label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ item.key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
@@ -446,7 +447,7 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-between group/menu-item w-full pr-1.5" x-show="matchSearch('Project Types')">
+      <div class="flex items-center justify-between group/menu-item w-full pr-1.5 {% if '/projects/types/' in path %}rounded-btn bg-[#1F2937] dark:bg-[#4B5563]{% endif %}" x-show="matchSearch('Project Types')">
         <a href="{% url 'projects:project_type_list' %}"
            class="ft-nav-item flex-1 {% if '/projects/types/' in path %}active{% endif %}"
            :title="collapsed ? 'Project Types' : ''"
@@ -456,15 +457,15 @@
         </a>
         {% if request.user.is_authenticated %}
           {% if 'project_types' in pinned_keys %}
-            <button type="button" class="p-1 text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-60 hover:opacity-100 transition-opacity" title="Unpin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Project Types? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
+            <button type="button" class="p-1 {% if '/projects/types/' in path %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %} rounded transition-opacity" title="Unpin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Project Types? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
           {% else %}
-            <button type="button" class="p-1 text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-40 hover:opacity-100 transition-opacity" title="Pin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Project Types? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
+            <button type="button" class="p-1 {% if '/projects/types/' in path %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %} rounded transition-opacity" title="Pin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Project Types? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
           {% endif %}
         {% endif %}
       </div>
 
       {# Menu direct link: Task Templates #}
-      <div class="flex items-center justify-between group/menu-item w-full pr-1.5" x-show="matchSearch('Task Templates')">
+      <div class="flex items-center justify-between group/menu-item w-full pr-1.5 {% if '/templates/' in path %}rounded-btn bg-[#1F2937] dark:bg-[#4B5563]{% endif %}" x-show="matchSearch('Task Templates')">
         <a href="{% url 'projects:template_list' %}"
            class="ft-nav-item flex-1 {% if '/templates/' in path %}active{% endif %}"
            :title="collapsed ? 'Task Templates' : ''"
@@ -474,9 +475,9 @@
         </a>
         {% if request.user.is_authenticated %}
           {% if 'task_templates' in pinned_keys %}
-            <button type="button" class="p-1 text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-60 hover:opacity-100 transition-opacity" title="Unpin Task Templates" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Task Templates? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'task_templates'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
+            <button type="button" class="p-1 {% if '/templates/' in path %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %} rounded transition-opacity" title="Unpin Task Templates" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Task Templates? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'task_templates'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
           {% else %}
-            <button type="button" class="p-1 text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-40 hover:opacity-100 transition-opacity" title="Pin Task Templates" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Task Templates? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'task_templates'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
+            <button type="button" class="p-1 {% if '/templates/' in path %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %} rounded transition-opacity" title="Pin Task Templates" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Task Templates? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'task_templates'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
           {% endif %}
         {% endif %}
       </div>
@@ -521,7 +522,7 @@
       </div>
 
       {# Menu direct link: Expenses #}
-      <div class="flex items-center justify-between group/menu-item w-full pr-1.5" x-show="matchSearch('Expenses')">
+      <div class="flex items-center justify-between group/menu-item w-full pr-1.5 {% if '/expense/' in path %}rounded-btn bg-[#1F2937] dark:bg-[#4B5563]{% endif %}" x-show="matchSearch('Expenses')">
         <a href="{% url 'expense:admin_expense_list' %}"
            class="ft-nav-item flex-1 {% if '/expense/' in path %}active{% endif %}"
            :title="collapsed ? 'Expenses' : ''"
@@ -534,9 +535,9 @@
         </a>
         {% if request.user.is_authenticated %}
           {% if 'expenses' in pinned_keys %}
-            <button type="button" class="p-1 text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-60 hover:opacity-100 transition-opacity" title="Unpin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Expenses? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
+            <button type="button" class="p-1 {% if '/expense/' in path %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %} rounded transition-opacity" title="Unpin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Expenses? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
           {% else %}
-            <button type="button" class="p-1 text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded opacity-40 hover:opacity-100 transition-opacity" title="Pin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Expenses? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
+            <button type="button" class="p-1 {% if '/expense/' in path %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %} rounded transition-opacity" title="Pin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Expenses? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
           {% endif %}
         {% endif %}
       </div>

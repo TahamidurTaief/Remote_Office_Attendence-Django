@@ -111,7 +111,7 @@ html:not(.dark) {
     --secondary-btn-hover-bg: rgba(24, 119, 242, 0.04);
 
     /* Layout Dimensions */
-    --sidebar-w: 216px;
+    --sidebar-w: 248px;
     --sidebar-w-collapsed: 52px;
     --topbar-h: 56px;
 
@@ -474,6 +474,56 @@ html.dark {
         text-overflow: ellipsis;
         white-space: nowrap;
         transition: opacity var(--transition-fast);
+    }
+
+    /* ── Submenu Nav Items ────────────────────────────────────────────────── */
+    .ft-submenu-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 32px;
+        margin: 1px 0;
+        border-radius: var(--radius-btn);
+        cursor: pointer;
+        text-decoration: none;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 400;
+        white-space: nowrap !important;
+        overflow: hidden;
+        transition: background var(--transition-fast), color var(--transition-fast);
+        position: relative;
+    }
+
+    .ft-submenu-item:hover {
+        background: var(--hover-overlay);
+        color: var(--text);
+    }
+
+    .ft-submenu-item.active {
+        background: #1F2937 !important;
+        color: #FFFFFF !important;
+        font-weight: 600;
+    }
+
+    html.dark .ft-submenu-item.active {
+        background: #4B5563 !important;
+        color: #FFFFFF !important;
+        font-weight: 600;
+    }
+
+    .ft-submenu-item.active .ft-icon,
+    .ft-submenu-item.active svg,
+    .ft-submenu-item.active span,
+    .ft-submenu-item.active i,
+    .ft-submenu-item.active button,
+    html.dark .ft-submenu-item.active .ft-icon,
+    html.dark .ft-submenu-item.active svg,
+    html.dark .ft-submenu-item.active span,
+    html.dark .ft-submenu-item.active i,
+    html.dark .ft-submenu-item.active button {
+        color: #FFFFFF !important;
+        stroke: #FFFFFF !important;
     }
 
     .ft-group-header {
