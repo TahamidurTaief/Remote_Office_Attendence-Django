@@ -153,7 +153,22 @@ class PermissionEngine:
         resolved_map = cls.get_user_resolved_permissions(user)
         perm_entry = resolved_map.get(codename)
 
-        if not perm_entry or not perm_entry['granted']:
+        if perm_entry is not None and not perm_entry.get('granted'):
+            # Explicitly revoked or denied
+            return PermissionResolutionResult(allowed=False, reason=f"Permission '{codename}' is explicitly revoked.", read_only=read_only)
+
+        if not perm_entry or not perm_entry.get('granted'):
+            # Compatibility alias resolution for equivalent action names
+            if codename.endswith('.create'):
+                perm_entry = resolved_map.get(codename[:-7] + '.add')
+            elif codename.endswith('.add'):
+                perm_entry = resolved_map.get(codename[:-4] + '.create')
+            elif codename.endswith('.update'):
+                perm_entry = resolved_map.get(codename[:-7] + '.edit')
+            elif codename.endswith('.edit'):
+                perm_entry = resolved_map.get(codename[:-5] + '.update')
+
+        if not perm_entry or not perm_entry.get('granted'):
             return PermissionResolutionResult(allowed=False, reason=f"Missing required permission '{codename}'.", read_only=read_only)
 
         effective_scope = perm_entry['scope']

@@ -28,10 +28,14 @@
   <!-- Role Matrix Builder Cotton Component -->
   <c-role-matrix-builder
     :role="role"
+    :hierarchy_tree="hierarchy_tree"
+    :flat_nodes="flat_nodes"
+    :matrix_bundle_json="matrix_bundle_json"
     :modules_with_perms="modules_with_perms"
     :role_perm_ids="role_perm_ids"
     :perm_scope_map="perm_scope_map"
     :total_permissions_count="total_permissions_count"
+    :active_permissions_count="active_permissions_count"
     :data_scope_choices="data_scope_choices"
     :is_superuser="is_superuser"
     :can_edit="can_edit"

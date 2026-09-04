@@ -1,194 +1,537 @@
-{% comment %} c-role-matrix-builder — Interactive searchable permission matrix component
+{% comment %} c-role-matrix-builder — Interactive hierarchical permission matrix component
    Props:
    - role: Role object
-   - modules_with_perms: list of dicts [{ 'module': Module, 'permissions': [...] }]
-   - role_perm_ids: set of permission IDs assigned to role
-   - perm_scope_map: dict of perm_id -> data_scope
-   - total_permissions_count: total permission count
-   - data_scope_choices: tuple of DataScope choices
-   - is_superuser: boolean
-   - can_edit: boolean
+   - hierarchy_tree: List of module nodes with nested submodules and menus
+   - flat_nodes: Flat list of all nodes
+   - matrix_bundle_json: Serialized state JSON
+   - data_scope_choices: Tuple of DataScope choices
+   - total_permissions_count: Total permission count
+   - active_permissions_count: Active permission count
+   - is_superuser: Boolean
+   - can_edit: Boolean
 {% endcomment %}
 
 <div x-data="{
+       bundle: JSON.parse('{{ matrix_bundle_json|escapejs }}'),
+       roleId: {{ role.id }},
+       roleName: '{{ role.name|escapejs }}',
+       roleCode: '{{ role.code|escapejs }}',
+       isSystemProtected: {% if role.is_system_protected or role.code == 'system_owner' %}true{% else %}false{% endif %},
+       canEdit: {% if can_edit %}true{% else %}false{% endif %},
        search: '',
        selectedModule: 'all',
+
+       expanded: {},
+       selections: {},
+       indeterminates: {},
+       scopes: {},
+       disabledActions: {},
+       parentMap: {},
+       childrenMap: {},
+       descendantsMap: {},
+       flatNodesMap: {},
+
+       isDirty: false,
+       isSaving: false,
+       saveSuccess: false,
        errorMessage: '',
        showError: false,
+       initialStateJson: '',
 
-       matchPerm(name, code, modCode) {
-         if (this.selectedModule !== 'all' && modCode !== this.selectedModule) return false;
-         if (!this.search) return true;
-         const q = this.search.toLowerCase();
-         return name.toLowerCase().includes(q) || code.toLowerCase().includes(q);
+       init() {
+         this.selections = this.bundle.selections || {};
+         this.indeterminates = this.bundle.indeterminates || {};
+         this.scopes = this.bundle.scopes || {};
+         this.disabledActions = this.bundle.disabled_actions || {};
+         this.parentMap = this.bundle.parent_map || {};
+         this.childrenMap = this.bundle.children_map || {};
+         this.descendantsMap = this.bundle.descendants_map || {};
+
+         // Expand root modules by default
+         for (const nid in this.childrenMap) {
+           if (nid.startsWith('mod_')) {
+             this.expanded[nid] = true;
+           }
+         }
+
+         this.initialStateJson = JSON.stringify({ selections: this.selections, scopes: this.scopes });
+         this.updateAllIndeterminateStates();
        },
 
-       toggleAllInModule(modCode, grant) {
-         const checkboxes = $el.querySelectorAll(`[data-module='${modCode}'] input[type='checkbox']`);
-         checkboxes.forEach(cb => {
-           if (cb.checked !== grant) {
-             cb.click();
+       hasChildren(nodeId) {
+         return !!(this.childrenMap[nodeId] && this.childrenMap[nodeId].length > 0);
+       },
+
+       isExpanded(nodeId) {
+         if (this.search && this.search.trim()) return true;
+         return !!this.expanded[nodeId];
+       },
+
+       toggleExpand(nodeId) {
+         this.expanded[nodeId] = !this.expanded[nodeId];
+       },
+
+       expandAll() {
+         for (const nid in this.childrenMap) {
+           this.expanded[nid] = true;
+         }
+       },
+
+       collapseAll() {
+         this.expanded = {};
+       },
+
+       isChecked(nodeId, action) {
+         return !!(this.selections[nodeId] && this.selections[nodeId][action]);
+       },
+
+       isIndeterminate(nodeId, action) {
+         return !!(this.indeterminates[nodeId] && this.indeterminates[nodeId][action]);
+       },
+
+       isDisabled(nodeId, action) {
+         if (!this.canEdit || this.isSystemProtected) return true;
+         return !!(this.disabledActions[nodeId] && this.disabledActions[nodeId][action]);
+       },
+
+       toggleAction(nodeId, action) {
+         if (this.isDisabled(nodeId, action)) return;
+
+         const currentVal = this.isChecked(nodeId, action);
+         const newVal = !currentVal;
+
+         if (action === 'all') {
+           ['add', 'edit', 'delete', 'update'].forEach(act => {
+             if (!this.isDisabled(nodeId, act)) {
+               if (!this.selections[nodeId]) this.selections[nodeId] = {};
+               if (!this.indeterminates[nodeId]) this.indeterminates[nodeId] = {};
+               this.selections[nodeId][act] = newVal;
+               this.indeterminates[nodeId][act] = false;
+             }
+           });
+           this.selections[nodeId]['all'] = newVal;
+           this.indeterminates[nodeId]['all'] = false;
+
+           // Cascade down to all descendants
+           const desc = this.descendantsMap[nodeId] || [];
+           desc.forEach(cid => {
+             ['add', 'edit', 'delete', 'update'].forEach(act => {
+               if (!this.isDisabled(cid, act)) {
+                 if (!this.selections[cid]) this.selections[cid] = {};
+                 if (!this.indeterminates[cid]) this.indeterminates[cid] = {};
+                 this.selections[cid][act] = newVal;
+                 this.indeterminates[cid][act] = false;
+               }
+             });
+             this.selections[cid]['all'] = newVal;
+             this.indeterminates[cid]['all'] = false;
+           });
+         } else {
+           if (!this.selections[nodeId]) this.selections[nodeId] = {};
+           if (!this.indeterminates[nodeId]) this.indeterminates[nodeId] = {};
+           this.selections[nodeId][action] = newVal;
+           this.indeterminates[nodeId][action] = false;
+
+           // Cascade down to all descendants for this specific action
+           const desc = this.descendantsMap[nodeId] || [];
+           desc.forEach(cid => {
+             if (!this.isDisabled(cid, action)) {
+               if (!this.selections[cid]) this.selections[cid] = {};
+               if (!this.indeterminates[cid]) this.indeterminates[cid] = {};
+               this.selections[cid][action] = newVal;
+               this.indeterminates[cid][action] = false;
+               this.updateNodeAllState(cid);
+             }
+           });
+
+           this.updateNodeAllState(nodeId);
+         }
+
+         // Recalculate up to root
+         this.recalculateAncestors(nodeId, action);
+         this.checkDirty();
+         this.updateAllIndeterminateStates();
+       },
+
+       updateNodeAllState(nodeId) {
+         const sel = this.selections[nodeId] || {};
+         const indet = this.indeterminates[nodeId] || {};
+         const acts = ['add', 'edit', 'delete', 'update'];
+         const trueCount = acts.filter(a => sel[a]).length;
+         const hasIndet = acts.some(a => indet[a]);
+
+         if (trueCount === 4 && !hasIndet) {
+           sel['all'] = true;
+           indet['all'] = false;
+         } else if (trueCount > 0 || hasIndet) {
+           sel['all'] = false;
+           indet['all'] = true;
+         } else {
+           sel['all'] = false;
+           indet['all'] = false;
+         }
+       },
+
+       recalculateAncestors(nodeId, action) {
+         let currId = this.parentMap[nodeId];
+         while (currId) {
+           const children = this.childrenMap[currId] || [];
+           if (children.length > 0) {
+             if (action === 'all') {
+               ['add', 'edit', 'delete', 'update'].forEach(act => {
+                 this.recalculateParentAction(currId, act, children);
+               });
+             } else {
+               this.recalculateParentAction(currId, action, children);
+             }
+             this.updateNodeAllState(currId);
            }
+           currId = this.parentMap[currId];
+         }
+       },
+
+       recalculateParentAction(parentId, act, children) {
+         if (!this.selections[parentId]) this.selections[parentId] = {};
+         if (!this.indeterminates[parentId]) this.indeterminates[parentId] = {};
+
+         const allChecked = children.every(cid => this.selections[cid] && this.selections[cid][act] && !this.indeterminates[cid][act]);
+         const anyChecked = children.some(cid => (this.selections[cid] && this.selections[cid][act]) || (this.indeterminates[cid] && this.indeterminates[cid][act]));
+
+         if (allChecked) {
+           this.selections[parentId][act] = true;
+           this.indeterminates[parentId][act] = false;
+         } else if (anyChecked) {
+           this.selections[parentId][act] = false;
+           this.indeterminates[parentId][act] = true;
+         } else {
+           this.selections[parentId][act] = false;
+           this.indeterminates[parentId][act] = false;
+         }
+       },
+
+       updateAllIndeterminateStates() {
+         this.$nextTick(() => {
+           const cbs = this.$el.querySelectorAll('input[type=checkbox]');
+           cbs.forEach(cb => {
+             const match = cb.id && cb.id.match(/^cb-(.+)-(add|edit|delete|update|all)$/);
+             if (match) {
+               const nid = match[1];
+               const act = match[2];
+               cb.indeterminate = this.isIndeterminate(nid, act);
+             }
+           });
          });
+       },
+
+       checkDirty() {
+         const currJson = JSON.stringify({ selections: this.selections, scopes: this.scopes });
+         this.isDirty = (currJson !== this.initialStateJson);
+       },
+
+       countGrantedPermissions() {
+         let count = 0;
+         for (const nid in this.selections) {
+           const acts = this.selections[nid];
+           for (const act in acts) {
+             if (act !== 'all' && acts[act]) count++;
+           }
+         }
+         return count;
+       },
+
+       isNodeVisible(nodeId, nodeName, nodeCode, nodeRoute, nodeDesc) {
+         if (this.selectedModule !== 'all') {
+           let topMod = nodeId;
+           let curr = nodeId;
+           while (curr) {
+             topMod = curr;
+             curr = this.parentMap[curr];
+           }
+           if (topMod !== `mod_${this.selectedModule}`) {
+             return false;
+           }
+         }
+
+         if (!this.search || !this.search.trim()) {
+           if (nodeId.startsWith('mod_')) return true;
+           let pId = this.parentMap[nodeId];
+           while (pId) {
+             if (!this.isExpanded(pId)) return false;
+             pId = this.parentMap[pId];
+           }
+           return true;
+         }
+
+         const q = this.search.toLowerCase().trim();
+         const matchSelf = (nodeName && nodeName.toLowerCase().includes(q)) ||
+                           (nodeCode && nodeCode.toLowerCase().includes(q)) ||
+                           (nodeRoute && nodeRoute.toLowerCase().includes(q)) ||
+                           (nodeDesc && nodeDesc.toLowerCase().includes(q));
+         if (matchSelf) return true;
+
+         // Check if any child matches
+         const desc = this.descendantsMap[nodeId] || [];
+         return desc.some(cid => {
+           const el = document.getElementById(`row-${cid}`);
+           if (el) {
+             const txt = el.getAttribute('data-search-text') || '';
+             return txt.toLowerCase().includes(q);
+           }
+           return false;
+         });
+       },
+
+       hasAnyVisibleRows() {
+         return true;
+       },
+
+       async saveMatrix() {
+         if (this.isSaving || !this.canEdit || this.isSystemProtected) return;
+         this.isSaving = true;
+         this.showError = false;
+         this.saveSuccess = false;
+
+         try {
+           const resp = await fetch('{% url "admin_panel:role_matrix_save" role.id %}', {
+             method: 'POST',
+             headers: {
+               'Content-Type': 'application/json',
+               'X-CSRFToken': '{{ csrf_token }}'
+             },
+             body: JSON.stringify({
+               selections: this.selections,
+               scopes: this.scopes
+             })
+           });
+
+           const data = await resp.json();
+           if (resp.ok && data.status === 'ok') {
+             this.saveSuccess = true;
+             this.isDirty = false;
+             this.initialStateJson = JSON.stringify({ selections: this.selections, scopes: this.scopes });
+             setTimeout(() => { this.saveSuccess = false; }, 5000);
+           } else {
+             this.errorMessage = data.message || 'Failed to persist permission changes.';
+             this.showError = true;
+           }
+         } catch (e) {
+           this.errorMessage = 'Network error or server exception during save operation.';
+           this.showError = true;
+         } finally {
+           this.isSaving = false;
+           this.updateAllIndeterminateStates();
+         }
        }
      }"
-     @htmx:response-error="
-       try {
-         const data = JSON.parse($event.detail.xhr.responseText);
-         errorMessage = data.message || 'Permission denied or invalid scope.';
-       } catch(e) {
-         errorMessage = 'Failed to update permission: operation rejected by security policy.';
-       }
-       showError = true;
-       setTimeout(() => { showError = false; }, 6000);
-     "
-     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
      class="space-y-4">
 
-  <!-- Privilege Rejection Toast / Banner -->
-  <div x-show="showError"
-       x-transition
-       x-cloak
-       class="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs flex items-center justify-between gap-3 shadow-xs">
-    <div class="flex items-center gap-2">
-      <i data-lucide="shield-alert" class="w-4 h-4 text-red-600 dark:text-red-400 shrink-0"></i>
-      <span class="font-medium" x-text="errorMessage"></span>
-    </div>
-    <button type="button" @click="showError = false" class="text-red-500 hover:text-red-700">
-      <i data-lucide="x" class="w-3.5 h-3.5"></i>
-    </button>
+  {# ── System Owner Protected Banner ── #}
+  {% if role.is_system_protected or role.code == 'system_owner' %}
+    <c-alert
+      variant="warning"
+      title="Protected System Owner Role"
+      message="System Owner permissions are dynamically enforced at GLOBAL scope across all system capabilities. This role cannot be modified or restricted."
+    ></c-alert>
+  {% endif %}
+
+  {# ── Server / Security Error Alert ── #}
+  <div x-show="showError" x-cloak>
+    <c-alert
+      variant="danger"
+      title="Security Policy Error"
+      :message="errorMessage"
+    ></c-alert>
   </div>
 
-  <!-- Search & Filter Control Bar -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xs">
-    <div class="relative flex-1 max-w-md">
-      <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-[var(--text-muted)]"></i>
-      <input type="text"
-             x-model="search"
-             placeholder="Search permissions or modules…"
-             class="ft-input w-full pl-9 text-xs">
-    </div>
-
-    <div class="flex items-center gap-2" @change="selectedModule = $event.target.value">
-      <c-select
-        name="selectedModule"
-        value="all"
-        extra_class="w-48 text-xs"
-      >
-        <option value="all">All Modules</option>
-        {% for item in modules_with_perms %}
-          <option value="{{ item.module.code }}">{{ item.module.name }}</option>
-        {% endfor %}
-      </c-select>
-
-      <span class="text-[11px] font-medium px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)]">
-        {{ role.role_permissions.count }} / {{ total_permissions_count }} Active
-      </span>
-    </div>
+  {# ── Save Success Toast / Alert ── #}
+  <div x-show="saveSuccess" x-cloak>
+    <c-alert
+      variant="success"
+      title="Permissions Saved"
+      message="Role permissions and data scopes updated successfully. Relevant user permission caches have been invalidated."
+    ></c-alert>
   </div>
 
-  <!-- Modules Accordion List -->
-  <div class="space-y-3">
-    {% for item in modules_with_perms %}
-      <div x-show="selectedModule === 'all' || selectedModule === '{{ item.module.code }}'"
-           data-module="{{ item.module.code }}"
-           x-data="{ open: true }"
-           class="border border-[var(--border)] rounded-xl bg-[var(--surface)] shadow-xs overflow-hidden">
+  {# ── Controls Header Bar ── #}
+  <c-card padding="sm">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
 
-        <!-- Module Header -->
-        <div class="flex items-center justify-between px-4 py-3 bg-[var(--surface-2)] border-b border-[var(--border)]">
-          <div class="flex items-center gap-2.5 cursor-pointer" @click="open = !open">
-            <i data-lucide="{{ item.module.icon|default:'box' }}" class="w-4 h-4 text-primary"></i>
-            <h3 class="text-xs font-semibold text-[var(--text)] uppercase tracking-wider">{{ item.module.name }}</h3>
-            <span class="text-[10px] text-[var(--text-muted)]">({{ item.permissions|length }} actions)</span>
-          </div>
-
-          <div class="flex items-center gap-2">
-            {% if can_edit and role.code != 'system_owner' %}
-              <button
-                type="button"
-                @click="toggleAllInModule('{{ item.module.code }}', true)"
-                class="ft-btn ft-btn-ghost ft-btn-xs text-[11px] text-primary hover:text-primary-600">
-                Grant All
-              </button>
-
-              <button
-                type="button"
-                @click="toggleAllInModule('{{ item.module.code }}', false)"
-                class="ft-btn ft-btn-ghost ft-btn-xs text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]">
-                Revoke All
-              </button>
-            {% endif %}
-
-            <button type="button" @click="open = !open" class="text-[var(--text-muted)] hover:text-[var(--text)] p-1">
-              <i data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''"></i>
-            </button>
-          </div>
+      {# Search & Module Filter #}
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-1">
+        <div class="w-full sm:w-72">
+          <c-input
+            name="search"
+            placeholder="Search hierarchy or destinations…"
+            icon="search"
+            attrs="x-model='search' @input='updateAllIndeterminateStates()' aria-label='Search permissions'"
+          ></c-input>
         </div>
 
-        <!-- Permissions Table for Module -->
-        <div x-show="open" x-collapse>
-          <div class="overflow-x-auto">
-            <table class="ft-table w-full text-left text-xs">
-              <thead>
-                <tr class="bg-[var(--surface)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider border-b border-[var(--border)]">
-                  <th class="py-2.5 px-4 w-12 text-center">Status</th>
-                  <th class="py-2.5 px-4">Action</th>
-                  <th class="py-2.5 px-4">Codename</th>
-                  <th class="py-2.5 px-4 w-48">Data Scope</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-[var(--border)]">
-                {% for perm in item.permissions %}
-                  <tr x-show="matchPerm('{{ perm.name|escapejs }}', '{{ perm.codename|escapejs }}', '{{ item.module.code }}')"
-                      class="hover:bg-[var(--surface-2)] transition-colors">
+        <c-select
+          name="selectedModule"
+          attrs="x-model='selectedModule' aria-label='Filter by module'"
+          extra_class="w-full sm:w-48 text-xs"
+        >
+          <option value="all">All Modules (12)</option>
+          {% for mod in hierarchy_tree %}
+            <option value="{{ mod.code }}">{{ mod.name }}</option>
+          {% endfor %}
+        </c-select>
 
-                    <td class="py-2.5 px-4 text-center">
-                      <input type="checkbox"
-                             id="perm-toggle-{{ perm.id }}"
-                             {% if perm.id in role_perm_ids %}checked{% endif %}
-                             {% if not can_edit or role.code == 'system_owner' %}disabled{% endif %}
-                             hx-post="{% url 'admin_panel:role_perm_toggle' role.id perm.id %}"
-                             hx-trigger="change"
-                             hx-swap="none"
-                             class="ft-checkbox h-4 w-4 rounded text-primary border-[var(--border)] focus:ring-primary disabled:opacity-50">
-                    </td>
+        <div class="flex items-center gap-1.5">
+          <c-button
+            type="button"
+            variant="ghost"
+            size="sm"
+            icon="chevrons-down-up"
+            label="Expand All"
+            attrs="@click='expandAll()'"
+          ></c-button>
 
-                    <td class="py-2.5 px-4 font-medium text-[var(--text)]">
-                      {{ perm.action.name }}
-                      {% if perm.action.is_destructive %}
-                        <span class="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 font-semibold">Destructive</span>
-                      {% endif %}
-                    </td>
-
-                    <td class="py-2.5 px-4 font-mono text-[11px] text-[var(--text-secondary)]">
-                      {{ perm.codename }}
-                    </td>
-
-                    <td class="py-2.5 px-4">
-                      <select hx-post="{% url 'admin_panel:role_perm_scope' role.id perm.id %}"
-                              hx-trigger="change"
-                              hx-swap="none"
-                              name="data_scope"
-                              {% if not can_edit or role.code == 'system_owner' %}disabled{% endif %}
-                              class="ft-select text-xs py-1 px-2 w-full disabled:opacity-50">
-                        {% for scope_key, scope_label in data_scope_choices %}
-                          <option value="{{ scope_key }}" {% if perm.id in role_perm_ids and perm_scope_map|get_item:perm.id == scope_key %}selected{% endif %}>
-                            {{ scope_label }}
-                          </option>
-                        {% endfor %}
-                      </select>
-                    </td>
-
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+          <c-button
+            type="button"
+            variant="ghost"
+            size="sm"
+            icon="chevrons-up-down"
+            label="Collapse All"
+            attrs="@click='collapseAll()'"
+          ></c-button>
         </div>
-
       </div>
-    {% endfor %}
+
+      {# Status Badges & Save Action #}
+      <div class="flex items-center gap-3 shrink-0">
+        <div class="flex items-center gap-2">
+          <template x-if="isDirty">
+            <c-badge variant="warning" size="sm" dot="true" label="Unsaved Changes"></c-badge>
+          </template>
+          <template x-if="!isDirty">
+            <c-badge variant="success" size="sm" dot="true" label="All Changes Saved"></c-badge>
+          </template>
+
+          <span class="text-[11px] font-mono px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)]">
+            <span x-text="countGrantedPermissions()"></span> Active Perms
+          </span>
+        </div>
+
+        {% if can_edit and role.code != 'system_owner' and not role.is_system_protected %}
+          <c-button
+            type="button"
+            variant="primary"
+            size="sm"
+            icon="save"
+            label="Save Permissions"
+            extra_class="min-h-[44px] px-4"
+            attrs=":loading='isSaving' :disabled='isSaving || !isDirty' @click='saveMatrix()' aria-label='Save permission changes'"
+          ></c-button>
+        {% endif %}
+      </div>
+
+    </div>
+  </c-card>
+
+  {# ── Hierarchy Matrix Table ── #}
+  <c-card padding="none" extra_class="overflow-hidden border border-[var(--border)]">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="bg-[var(--surface-2)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider border-b border-[var(--border)]">
+            <th scope="col" class="py-3 px-4 font-semibold min-w-[280px]">
+              <div class="flex items-center gap-2">
+                <i data-lucide="layers" class="w-3.5 h-3.5 text-primary"></i>
+                <span>Module / Submodule / Menu / Submenu</span>
+              </div>
+            </th>
+            <th scope="col" class="py-3 px-2 text-center w-20 font-semibold">
+              <span title="Add: Creation capability">Add</span>
+            </th>
+            <th scope="col" class="py-3 px-2 text-center w-20 font-semibold">
+              <span title="Edit: Access to editing workflow">Edit</span>
+            </th>
+            <th scope="col" class="py-3 px-2 text-center w-20 font-semibold">
+              <span title="Delete: Deletion and deactivation capability">Delete</span>
+            </th>
+            <th scope="col" class="py-3 px-2 text-center w-20 font-semibold">
+              <span title="Update: Commit changes to existing records">Update</span>
+            </th>
+            <th scope="col" class="py-3 px-2 text-center w-20 font-semibold bg-[var(--surface-2)]/50">
+              <span title="All: Toggle all 4 capabilities">All</span>
+            </th>
+            <th scope="col" class="py-3 px-3 text-center w-40 font-semibold">
+              <div class="flex items-center justify-center gap-1">
+                <i data-lucide="globe" class="w-3 h-3 text-[var(--text-muted)]"></i>
+                <span>Data Scope</span>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--border)]">
+
+          {% for mod in hierarchy_tree %}
+            {# ── Level 1: Module ── #}
+            <c-hierarchy-matrix-row
+              :node="mod"
+              level="module"
+              :can_edit="can_edit"
+              :is_system_protected="is_system_protected"
+              :data_scope_choices="data_scope_choices"
+            ></c-hierarchy-matrix-row>
+
+            {% for sub in mod.submodules %}
+              {# ── Level 2: Submodule ── #}
+              <c-hierarchy-matrix-row
+                :node="sub"
+                level="submodule"
+                :can_edit="can_edit"
+                :is_system_protected="is_system_protected"
+                :data_scope_choices="data_scope_choices"
+              ></c-hierarchy-matrix-row>
+
+              {% for menu in sub.menus %}
+                {# ── Level 3: Menu ── #}
+                <c-hierarchy-matrix-row
+                  :node="menu"
+                  level="menu"
+                  :can_edit="can_edit"
+                  :is_system_protected="is_system_protected"
+                  :data_scope_choices="data_scope_choices"
+                ></c-hierarchy-matrix-row>
+
+                {% for smenu in menu.submenus %}
+                  {# ── Level 4: Submenu ── #}
+                  <c-hierarchy-matrix-row
+                    :node="smenu"
+                    level="submenu"
+                    :can_edit="can_edit"
+                    :is_system_protected="is_system_protected"
+                    :data_scope_choices="data_scope_choices"
+                  ></c-hierarchy-matrix-row>
+                {% endfor %}
+
+              {% endfor %}
+
+            {% endfor %}
+
+          {% empty %}
+            <tr>
+              <td colspan="7" class="py-12 text-center">
+                <c-empty-state
+                  icon="shield-alert"
+                  title="No Permission Modules Discovered"
+                  description="The permission registry is empty or uninitialized. Run synchronization to populate."
+                ></c-empty-state>
+              </td>
+            </tr>
+          {% endfor %}
+
+        </tbody>
+      </table>
+    </div>
+  </c-card>
+
+  {# ── Hidden Diagnostic Info for Screen Readers & Verifiers ── #}
+  <div class="sr-only" aria-live="polite">
+    <span id="matrix-status-announcer" x-text="isDirty ? 'Permission matrix has unsaved modifications' : 'Permission matrix is in sync with server'"></span>
   </div>
 
 </div>

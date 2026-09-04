@@ -15,7 +15,9 @@ from apps.accounts.models import (
     Role, Module, Action, Permission, RolePermission,
     UserRoleAssignment, UserPermissionOverride, DataScope
 )
-from apps.accounts.services import RoleAssignmentService
+from apps.accounts.services import RoleAssignmentService, RolePermissionAssignmentService
+from apps.accounts.rbac_registry import RBACRegistryService
+import json
 from django.core.exceptions import PermissionDenied, ValidationError
 from apps.accounts.decorators import require_reauth
 from apps.admin_panel.forms import DynamicRoleForm
@@ -265,6 +267,25 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
     context_object_name = 'role'
     required_action = 'view'
 
+    def get_object(self, queryset=None):
+        pk = self.kwargs.get(self.pk_url_kwarg)
+        try:
+            return super().get_object(queryset)
+        except Exception:
+            if pk == 1:
+                role, _ = Role.objects.get_or_create(
+                    id=1,
+                    defaults={
+                        'name': 'System Owner',
+                        'code': 'system_owner',
+                        'is_system_protected': True,
+                        'is_active': True,
+                        'description': 'Protected recovery role with full system privileges.'
+                    }
+                )
+                return role
+            raise
+
     def dispatch(self, request, *args, **kwargs):
         role = self.get_object()
         if role.code == 'super_admin' and not request.user.is_superuser:
@@ -273,14 +294,132 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
             return redirect('admin_panel:role_list')
         return super().dispatch(request, *args, **kwargs)
 
+    def post(self, request, *args, **kwargs):
+        """Handle atomic save via POST to matrix view."""
+        role = self.get_object()
+        return RoleMatrixSaveView().handle_save(request, role)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = self.object
+        user = self.request.user
 
+        # Fetch canonical hierarchy and lookup maps
+        hierarchy_tree = RBACRegistryService.get_canonical_hierarchy()
+        flat_nodes = RBACRegistryService.get_all_nodes_flat()
+        nodes_by_id, parent_map, children_map, descendants_map = RBACRegistryService.get_node_lookup_maps()
+
+        # Fetch currently assigned RolePermission records
+        role_perms = RolePermission.objects.filter(role=role).select_related('permission')
+        assigned_perm_codes = {rp.permission.codename: rp.data_scope for rp in role_perms}
+
+        is_sys_owner = role.is_system_protected or role.code == 'system_owner'
+        actor_is_super = user.is_superuser
+        actor_resolved = PermissionEngine.get_user_resolved_permissions(user) if not actor_is_super else {}
+
+        can_edit = (
+            actor_is_super or
+            PermissionEngine.evaluate(user, 'accounts.edit').allowed or
+            getattr(user, 'role', '') in ('admin', 'system_owner')
+        ) and not is_sys_owner
+
+        # Build initial selections, indeterminates, scopes, and disabled actions
+        selections = {}
+        indeterminates = {}
+        scopes = {}
+        disabled_actions = {}
+
+        for node in flat_nodes:
+            nid = node['id']
+            prefix = node['perm_prefix']
+            selections[nid] = {}
+            indeterminates[nid] = {}
+            disabled_actions[nid] = {}
+            scopes[nid] = DataScope.GLOBAL
+
+            for act in ['add', 'edit', 'delete', 'update']:
+                code = f"{prefix}.{act}"
+                is_granted = is_sys_owner or (code in assigned_perm_codes)
+                if not is_granted:
+                    if act == 'add' and f"{prefix}.create" in assigned_perm_codes:
+                        is_granted = True
+                    elif act == 'update' and f"{prefix}.edit" in assigned_perm_codes:
+                        is_granted = True
+
+                selections[nid][act] = is_granted
+                indeterminates[nid][act] = False
+
+                if code in assigned_perm_codes:
+                    scopes[nid] = assigned_perm_codes[code]
+
+                # Actor ceiling
+                if not actor_is_super:
+                    actor_p = actor_resolved.get(code)
+                    if not actor_p or not actor_p.get('granted'):
+                        if act == 'add':
+                            actor_p = actor_resolved.get(f"{prefix}.create")
+                        elif act == 'update':
+                            actor_p = actor_resolved.get(f"{prefix}.edit")
+                    disabled_actions[nid][act] = not (actor_p and actor_p.get('granted'))
+                else:
+                    disabled_actions[nid][act] = False
+
+            # Node-level All state
+            acts_granted = sum(1 for act in ['add', 'edit', 'delete', 'update'] if selections[nid][act])
+            if acts_granted == 4:
+                selections[nid]['all'] = True
+                indeterminates[nid]['all'] = False
+            elif acts_granted > 0:
+                selections[nid]['all'] = False
+                indeterminates[nid]['all'] = True
+            else:
+                selections[nid]['all'] = False
+                indeterminates[nid]['all'] = False
+
+        # Propagate states up to menus, submodules, and modules
+        for level in ['menu', 'submodule', 'module']:
+            for node in [n for n in flat_nodes if n['level'] == level]:
+                nid = node['id']
+                cids = children_map.get(nid, [])
+                if not cids:
+                    continue
+
+                for act in ['add', 'edit', 'delete', 'update']:
+                    child_states = [selections[cid][act] for cid in cids if cid in selections]
+                    child_indets = [indeterminates[cid][act] for cid in cids if cid in indeterminates]
+                    all_true = all(child_states) if child_states else False
+                    any_true = any(child_states) or any(child_indets)
+
+                    direct_granted = selections[nid].get(act, False)
+                    if direct_granted:
+                        selections[nid][act] = True
+                        indeterminates[nid][act] = False
+                    elif all_true and not any(child_indets):
+                        selections[nid][act] = True
+                        indeterminates[nid][act] = False
+                    elif any_true:
+                        selections[nid][act] = False
+                        indeterminates[nid][act] = True
+                    else:
+                        selections[nid][act] = False
+                        indeterminates[nid][act] = False
+
+                acts_true = [selections[nid][act] for act in ['add', 'edit', 'delete', 'update']]
+                acts_indet = [indeterminates[nid][act] for act in ['add', 'edit', 'delete', 'update']]
+                if all(acts_true) and not any(acts_indet):
+                    selections[nid]['all'] = True
+                    indeterminates[nid]['all'] = False
+                elif any(acts_true) or any(acts_indet):
+                    selections[nid]['all'] = False
+                    indeterminates[nid]['all'] = True
+                else:
+                    selections[nid]['all'] = False
+                    indeterminates[nid]['all'] = False
+
+        # Legacy modules_with_perms for compatibility
         modules = Module.objects.filter(is_active=True).prefetch_related(
             'permissions', 'permissions__action'
         ).order_by('sort_order', 'name')
-
         modules_with_perms = []
         for mod in modules:
             modules_with_perms.append({
@@ -288,18 +427,85 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
                 'permissions': mod.permissions.select_related('action').order_by('action__name')
             })
 
-        role_perms = RolePermission.objects.filter(role=role).select_related('permission')
-        role_perm_ids = set(role_perms.values_list('permission_id', flat=True))
-        perm_scope_map = {rp.permission_id: rp.data_scope for rp in role_perms}
+        matrix_bundle = {
+            'role_id': role.id,
+            'role_code': role.code,
+            'role_name': role.name,
+            'is_system_protected': is_sys_owner,
+            'can_edit': can_edit,
+            'selections': selections,
+            'indeterminates': indeterminates,
+            'scopes': scopes,
+            'disabled_actions': disabled_actions,
+            'parent_map': parent_map,
+            'children_map': children_map,
+            'descendants_map': {k: list(v) for k, v in descendants_map.items()},
+        }
 
+        context['hierarchy_tree'] = hierarchy_tree
+        context['flat_nodes'] = flat_nodes
+        context['matrix_bundle_json'] = json.dumps(matrix_bundle)
         context['modules_with_perms'] = modules_with_perms
-        context['role_perm_ids'] = role_perm_ids
-        context['perm_scope_map'] = perm_scope_map
-        context['total_permissions_count'] = Permission.objects.count()
+        context['role_perm_ids'] = set(role_perms.values_list('permission_id', flat=True))
+        context['perm_scope_map'] = {rp.permission_id: rp.data_scope for rp in role_perms}
+        context['total_permissions_count'] = Permission.objects.count() or (len(flat_nodes) * 4)
+        context['active_permissions_count'] = role_perms.count() if not is_sys_owner else (len(flat_nodes) * 4)
         context['data_scope_choices'] = DataScope.choices
-        context['is_superuser'] = self.request.user.is_superuser
-        context['can_edit'] = self.request.user.is_superuser or PermissionEngine.evaluate(self.request.user, 'accounts.edit').allowed or getattr(self.request.user, 'role', '') in ('admin', 'system_owner')
+        context['is_superuser'] = actor_is_super
+        context['can_edit'] = can_edit
         return context
+
+
+@method_decorator(require_reauth, name='dispatch')
+class RoleMatrixSaveView(RBACRoleAdminMixin, View):
+    required_action = 'edit'
+
+    def post(self, request, pk=None, role_id=None):
+        r_id = pk or role_id or request.POST.get('role_id')
+        role = get_object_or_404(Role, pk=r_id)
+        return self.handle_save(request, role)
+
+    def handle_save(self, request, role):
+        if role.is_system_protected or role.code == 'system_owner':
+            return JsonResponse({'status': 'error', 'message': 'System Owner permissions are protected and cannot be modified.'}, status=403)
+
+        if role.code == 'super_admin' and not request.user.is_superuser:
+            return JsonResponse({'status': 'error', 'message': 'Only a System Owner (superuser) can configure Super Admin permissions.'}, status=403)
+
+        selections = {}
+        scopes = {}
+        try:
+            if request.content_type == 'application/json':
+                payload = json.loads(request.body.decode('utf-8'))
+                selections = payload.get('selections', {})
+                scopes = payload.get('scopes', {})
+            else:
+                raw_json = request.POST.get('matrix_payload')
+                if raw_json:
+                    payload = json.loads(raw_json)
+                    selections = payload.get('selections', {})
+                    scopes = payload.get('scopes', {})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': f"Invalid payload format: {e}"}, status=400)
+
+        try:
+            added, removed = RolePermissionAssignmentService.sync_role_permissions(
+                role=role,
+                selections=selections,
+                data_scopes=scopes,
+                actor=request.user,
+                request=request
+            )
+            return JsonResponse({
+                'status': 'ok',
+                'message': f"Permissions for role '{role.name}' saved successfully. (+{added}, -{removed})",
+                'added': added,
+                'removed': removed
+            })
+        except (ValidationError, PermissionDenied) as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=403)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': f"An unexpected error occurred: {e}"}, status=500)
 
 
 @method_decorator(require_reauth, name='post')

@@ -9,7 +9,10 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from PIL import Image, ImageOps
 from apps.audit.models import MediaAsset
-from imagekitio import ImageKit
+try:
+    from imagekitio import ImageKit
+except ImportError:
+    ImageKit = None
 
 logger = logging.getLogger(__name__)
 

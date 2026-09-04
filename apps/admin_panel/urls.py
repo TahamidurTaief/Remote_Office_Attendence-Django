@@ -59,6 +59,7 @@ urlpatterns = [
     path('roles/<int:pk>/edit/', roles_views.DynamicRoleUpdateView.as_view(), name='role_edit'),
     path('roles/<int:pk>/delete/', roles_views.DynamicRoleDeleteView.as_view(), name='role_delete'),
     path('roles/<int:pk>/matrix/', roles_views.DynamicRoleMatrixView.as_view(), name='role_matrix'),
+    path('roles/<int:pk>/matrix/save/', roles_views.RoleMatrixSaveView.as_view(), name='role_matrix_save'),
     path('roles/<int:pk>/members/', roles_views.RoleMembersView.as_view(), name='role_members'),
     path('roles/<int:role_id>/perm/<int:perm_id>/toggle/', roles_views.RolePermissionToggleView.as_view(), name='role_perm_toggle'),
     path('roles/<int:role_id>/perm/<int:perm_id>/scope/', roles_views.RolePermissionScopeView.as_view(), name='role_perm_scope'),

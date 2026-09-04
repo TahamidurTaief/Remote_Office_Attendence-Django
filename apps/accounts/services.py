@@ -1,5 +1,5 @@
 import logging
-from typing import Iterable, Optional, Set, Tuple, List
+from typing import Iterable, Optional, Set, Tuple, List, Dict, Any
 from django.db import transaction
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.contrib.auth import get_user_model
@@ -347,3 +347,199 @@ class RoleAssignmentService:
         cls.invalidate_user_permissions(user)
 
         return added_roles, removed_roles
+
+
+class RolePermissionAssignmentService:
+    """
+    Atomic permission matrix assignment and synchronization service for dynamic roles.
+    - Validates role IDs and permission IDs server-side.
+    - Enforces actor authority, effective permissions, and data-scope ceilings.
+    - Protects system_owner and other protected roles.
+    - Records before and after permission states in the audit system.
+    - Invalidate all relevant PermissionEngine caches immediately.
+    - Rolls back the complete update if any permission operation fails.
+    """
+
+    @classmethod
+    def validate_perm_grant_authority(
+        cls,
+        actor,
+        perm_codename: str,
+        requested_scope: str = DataScope.GLOBAL,
+        trusted_internal: bool = False
+    ):
+        """
+        Enforces that non-superuser actor cannot grant permissions or scopes exceeding their authority.
+        """
+        if trusted_internal or getattr(actor, 'is_superuser', False):
+            return
+
+        if not actor or not actor.is_authenticated:
+            raise PermissionDenied("Authentication required to assign role permissions.")
+
+        actor_perms = PermissionEngine.get_user_resolved_permissions(actor)
+        actor_p = actor_perms.get(perm_codename)
+
+        # Check compatibility aliases if exact perm not in actor_p
+        if not actor_p or not actor_p.get('granted'):
+            if perm_codename.endswith('.add'):
+                alt = perm_codename[:-4] + '.create'
+                actor_p = actor_perms.get(alt)
+            elif perm_codename.endswith('.update'):
+                alt = perm_codename[:-7] + '.edit'
+                actor_p = actor_perms.get(alt)
+
+        if not actor_p or not actor_p.get('granted'):
+            raise PermissionDenied(
+                f"Privilege escalation: You cannot grant permission '{perm_codename}' because you do not hold this permission."
+            )
+
+        req_rank = SCOPE_HIERARCHY.get(requested_scope, 0)
+        act_rank = SCOPE_HIERARCHY.get(actor_p.get('scope', DataScope.OWN), 0)
+        if req_rank > act_rank:
+            raise PermissionDenied(
+                f"Privilege escalation: You cannot grant scope '{requested_scope}' for '{perm_codename}' which exceeds your effective scope '{actor_p.get('scope')}'."
+            )
+
+    @classmethod
+    @transaction.atomic
+    def sync_role_permissions(
+        cls,
+        *,
+        role: Role,
+        selections: Dict[str, Any],
+        data_scopes: Optional[Dict[str, str]] = None,
+        actor=None,
+        request=None,
+        trusted_internal: bool = False
+    ) -> Tuple[int, int]:
+        """
+        Atomically synchronizes all permissions for a dynamic role.
+        """
+        from apps.accounts.rbac_registry import RBACRegistryService
+
+        if not role or not role.pk:
+            raise ValidationError("Valid persisted role is required.")
+
+        # 1. System Owner protection
+        if role.is_system_protected or role.code == 'system_owner':
+            raise PermissionDenied("System Owner permissions are protected and cannot be modified.")
+
+        # 2. Super Admin protection
+        if role.code == 'super_admin' and not (getattr(actor, 'is_superuser', False) or trusted_internal):
+            raise PermissionDenied("Only a System Owner (superuser) can configure Super Admin permissions.")
+
+        # 3. Check general actor permission to edit roles
+        if not (
+            getattr(actor, 'is_superuser', False)
+            or trusted_internal
+            or getattr(actor, 'role', '') in ('admin', 'system_owner')
+            or PermissionEngine.evaluate(actor, 'accounts.edit').allowed
+        ):
+            raise PermissionDenied("Insufficient RBAC permissions to administer system role permissions.")
+
+        data_scopes = data_scopes or {}
+
+        # 4. Map existing RolePermission records
+        existing_rps = {
+            rp.permission.codename: rp
+            for rp in RolePermission.objects.filter(role=role).select_related('permission')
+        }
+        before_state = {
+            code: {'granted': True, 'scope': rp.data_scope}
+            for code, rp in existing_rps.items()
+        }
+
+        # 5. Build desired permissions map: { codename: scope }
+        desired_perms: Dict[str, str] = {}
+
+        for node_key, actions in selections.items():
+            if isinstance(actions, dict):
+                for act_code, is_checked in actions.items():
+                    if act_code == 'all':
+                        continue
+                    if is_checked:
+                        clean_key = (
+                            node_key.replace('mod_', '')
+                            .replace('sub_', '')
+                            .replace('menu_', '')
+                            .replace('smenu_', '')
+                        )
+                        codename = f"{clean_key}.{act_code}"
+                        scope = data_scopes.get(clean_key, data_scopes.get(codename, DataScope.GLOBAL))
+                        cls.validate_perm_grant_authority(actor, codename, scope, trusted_internal=trusted_internal)
+                        desired_perms[codename] = scope
+            elif isinstance(actions, bool):
+                if actions:
+                    codename = node_key
+                    clean_key = (
+                        codename.rsplit('.', 1)[0]
+                        .replace('mod_', '')
+                        .replace('sub_', '')
+                        .replace('menu_', '')
+                        .replace('smenu_', '')
+                    )
+                    scope = data_scopes.get(clean_key, data_scopes.get(codename, DataScope.GLOBAL))
+                    cls.validate_perm_grant_authority(actor, codename, scope, trusted_internal=trusted_internal)
+                    desired_perms[codename] = scope
+
+        # 6. Apply deletions (permissions unselected)
+        deleted_count = 0
+        for code, rp in existing_rps.items():
+            if code not in desired_perms:
+                rp.delete()
+                deleted_count += 1
+
+        # 7. Apply additions and updates
+        added_count = 0
+        for code, scope in desired_perms.items():
+            perm = RBACRegistryService.ensure_permission(code)
+            rp, created = RolePermission.objects.get_or_create(
+                role=role,
+                permission=perm,
+                defaults={'data_scope': scope}
+            )
+            if created:
+                added_count += 1
+            elif rp.data_scope != scope:
+                rp.data_scope = scope
+                rp.save(update_fields=['data_scope'])
+
+        after_state = {
+            code: {'granted': True, 'scope': scope}
+            for code, scope in desired_perms.items()
+        }
+
+        # 8. Audit Logging
+        summary = f"Updated permissions for role '{role.name}' ({role.code}): +{added_count}, -{deleted_count}"
+        AuditService.log_event(
+            actor=actor if (actor and actor.is_authenticated) else None,
+            action="role_permissions_matrix_updated",
+            instance=role,
+            module="accounts",
+            object_type="Role",
+            object_id=str(role.pk),
+            object_label=role.name,
+            before=before_state,
+            after=after_state,
+            request=request
+        )
+        log_audit(
+            actor=actor if (actor and actor.is_authenticated) else None,
+            action="role_permissions_matrix_updated",
+            target=role,
+            summary=summary,
+            ip=request.META.get('REMOTE_ADDR') if request else None
+        )
+
+        # 9. Invalidate PermissionEngine caches for all users with this role
+        assigned_users = User.objects.filter(role_assignments__role=role)
+        for u in assigned_users:
+            RoleAssignmentService.invalidate_user_permissions(u)
+            try:
+                from apps.accounts.permissions import clear_user_perm_cache
+                clear_user_perm_cache(u)
+            except Exception:
+                pass
+
+        return added_count, deleted_count
