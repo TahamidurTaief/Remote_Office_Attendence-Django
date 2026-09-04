@@ -431,19 +431,38 @@ def main():
     print("      STANDING PRE-COMMIT VERIFICATION GATE       ", flush=True)
     print("==================================================", flush=True)
     
-    results = [
-        check_block_tag_balance(),
-        render_test_all_templates(),
-        check_design_tokens(),
-        run_django_checks(),
-        run_tailwind_build(),
-        spot_check_raw_html_content(),
-        check_compiled_css(),
-        check_consecutive_css_loads(),
-        check_no_container_gradients(),
-        check_no_self_closing_cotton_tags(),
-        check_project_cotton_ui_compliance(),
-    ]
+    db_path = os.path.join(settings.BASE_DIR, "db.sqlite3")
+    initial_db_bytes = None
+    if os.path.exists(db_path):
+        try:
+            with open(db_path, "rb") as f:
+                initial_db_bytes = f.read()
+        except Exception:
+            pass
+
+    try:
+        results = [
+            check_block_tag_balance(),
+            render_test_all_templates(),
+            check_design_tokens(),
+            run_django_checks(),
+            run_tailwind_build(),
+            spot_check_raw_html_content(),
+            check_compiled_css(),
+            check_consecutive_css_loads(),
+            check_no_container_gradients(),
+            check_no_self_closing_cotton_tags(),
+            check_project_cotton_ui_compliance(),
+        ]
+    finally:
+        if initial_db_bytes:
+            try:
+                with open(db_path, "r+b") as f:
+                    f.seek(0)
+                    f.write(initial_db_bytes)
+                    f.truncate(len(initial_db_bytes))
+            except Exception:
+                pass
     
     print("\n==================================================", flush=True)
     if all(results):

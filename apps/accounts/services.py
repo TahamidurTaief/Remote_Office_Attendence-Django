@@ -51,7 +51,7 @@ class RoleAssignmentService:
         if not actor or not actor.is_authenticated:
             return Role.objects.none()
 
-        qs = Role.objects.filter(is_active=True).exclude(code='system_owner')
+        qs = Role.objects.filter(is_active=True).exclude(code='system_owner').exclude(is_system_protected=True)
         if not actor.is_superuser:
             qs = qs.exclude(code='super_admin')
 
@@ -190,6 +190,12 @@ class RoleAssignmentService:
             return
         if hasattr(user, '_resolved_permissions_cache'):
             delattr(user, '_resolved_permissions_cache')
+        try:
+            from django.core.cache import cache
+            cache.delete(f"user_permissions_{user.pk}")
+            cache.delete(f"rbac_user_perms_{user.pk}")
+        except Exception:
+            pass
 
     @classmethod
     @transaction.atomic

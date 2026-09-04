@@ -1,221 +1,190 @@
-<c-app-shell page_title="Members of {{ role.name }} | FieldTrack" active_href="{{ request.path }}">
-<div class="p-4" x-data="{ openAddModal: false }">
-    <div class="mb-6 flex items-center justify-between">
+<c-app-shell page_title="Members of {{ role.name }} | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
+<div class="p-4 space-y-6">
+    <div class="flex items-center justify-between gap-4">
         <div class="flex-1 min-w-0">
-            <h2 class="text-[14px] font-semibold" style="color:var(--text)">
-                Members assigned to role: <span class="font-bold" style="color:var(--primary)">{{ role.name }}</span>
-            </h2>
+            <div class="flex items-center gap-2">
+                <a href="{% url 'admin_panel:role_list' %}" class="text-xs text-[var(--text-muted)] hover:text-primary transition-colors">Roles</a>
+                <span class="text-xs text-[var(--text-muted)]">/</span>
+                <span class="text-xs font-semibold text-[var(--text)]">{{ role.name }}</span>
+            </div>
+            <h1 class="text-sm font-bold text-[var(--text)] mt-1">
+                Members assigned to role: <span class="text-primary">{{ role.name }}</span>
+            </h1>
+            <p class="text-xs text-[var(--text-muted)] mt-0.5">
+                Manage user assignments and member roster for this system role.
+            </p>
         </div>
         <div class="flex items-center gap-2">
-            <button type="button" @click="openAddModal = true"
-                class="flex items-center gap-2 px-3 py-1.5 bg-primary hover:opacity-90 text-white text-xs font-medium rounded-xl transition-colors">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                Add Member
-            </button>
-            <a href="{% url 'admin_panel:role_list' %}"
-                class="flex items-center gap-2 px-3 py-1.5 border text-xs font-medium rounded-xl transition-colors" style="background:var(--surface); border-color:var(--border); color:var(--text)">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                Back to List
-            </a>
+            <c-button
+                type="button"
+                variant="primary"
+                size="sm"
+                icon="user-plus"
+                label="Add Member"
+                attrs="@click=&quot;$dispatch('open-modal', {id: 'add-member-modal'})&quot;"
+            ></c-button>
+            <c-button
+                href="{% url 'admin_panel:role_list' %}"
+                variant="secondary"
+                size="sm"
+                icon="arrow-left"
+                label="Back to List"
+            ></c-button>
         </div>
     </div>
 
-    <style>
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-        }
+    {% if messages %}
+      {% for msg in messages %}
+        <c-alert variant="{% if msg.tags == 'error' %}danger{% elif msg.tags == 'success' %}success{% else %}info{% endif %}" message="{{ msg }}"></c-alert>
+      {% endfor %}
+    {% endif %}
 
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: var(--surface-2);
-            border-radius: var(--radius-sm);
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: var(--radius-sm);
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
-        }
-    </style>
-
-    <!-- Add Members Modal -->
-    <div x-show="openAddModal" x-cloak
-        class="fixed inset-0 bg-black/50 h-full w-full z-50 flex items-center justify-center p-3 sm:p-4 overflow-hidden">
-        <div class="relative mx-auto p-4 sm:p-5 border w-full max-w-lg sm:max-w-xl md:max-w-2xl shadow-xl rounded-card text-left flex flex-col"
-            style="background:var(--surface); border-color:var(--border); height: 520px; max-height: 85vh;" @click.away="openAddModal = false">
-
-            <!-- Modal Header -->
-            <div class="flex items-center justify-between mb-3.5 pb-3 border-b border-gray-100 flex-shrink-0">
-                <h3 class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <div
-                        class="w-7 h-7 rounded-lg bg-primary-50 flex items-center justify-center text-primary-600 shrink-0">
-                        <i data-lucide="user-plus" class="w-4 h-4"></i>
-                    </div>
-                    <span>Add Members to Role</span>
-                </h3>
-                <button type="button" @click="openAddModal = false"
-                    class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-colors">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-
-            <form method="POST" x-data="{ searchQuery: '', selectedIds: [] }"
-                class="flex flex-col flex-1 min-h-0 overflow-hidden">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add">
-
-                <!-- Search Input Bar -->
-                <div class="!m-2 flex-shrink-0 relative flex items-center">
-                    <i data-lucide="search"
-                        class="w-4 h-4 text-gray-400 absolute top-1/2 transform -translate-y-1/2 pointer-events-none z-10"
-                        style="left: 0.75rem !important;"></i>
-                    <input type="text" x-model="searchQuery" placeholder="Search employees by name, ID, or phone..."
-                        class="w-full border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-500 transition-colors"
-                        style="padding-left: 2.25rem !important; padding-right: 2rem !important; padding-top: 0.5rem !important; padding-bottom: 0.5rem !important;">
-                    <button type="button" x-show="searchQuery" @click="searchQuery = ''"
-                        class="absolute top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-100 transition-colors"
-                        style="right: 0.625rem !important;">
-                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                    </button>
-                </div>
-
-                <!-- Scrollable Checkbox Grid -->
-                <div class="overflow-y-auto flex-1 min-h-0 pr-1.5 mb-3.5 custom-scrollbar">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {% for emp in non_members %}
-                        <label
-                            x-show="!searchQuery || '{{ emp.full_name|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ emp.phone|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ emp.employee_id|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase())"
-                            data-phone="{{ emp.phone }}"
-                            class="flex items-center gap-2 p-2 border border-gray-150 rounded-xl hover:border-primary-200 hover:bg-primary-50/20 cursor-pointer transition-all">
-                            <input type="checkbox" name="user_ids" value="{{ emp.user.id }}" x-model="selectedIds"
-                                class="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0">
-                            <div class="min-w-0 flex-1">
-                                <!-- prettier-ignore -->
-                                <span class="text-xs font-semibold text-gray-900 block truncate leading-tight">{{ emp.full_name }}</span>
-                                <!-- prettier-ignore -->
-                                <span class="text-[10px] text-gray-400 font-mono block truncate mt-0.5">{{ emp.employee_id }}</span>
-                            </div>
-                        </label>
-                        {% empty %}
-                        <p class="text-xs text-gray-500 italic text-center py-6 col-span-2">All active employees are
-                            already assigned to this role.</p>
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <!-- Modal Footer -->
-                <div
-                    class="border-t border-gray-100 pt-3 flex items-center justify-between flex-shrink-0 mt-auto bg-white">
-                    <span class="text-xs font-semibold text-gray-600"><span class="text-primary-600 font-bold"
-                            x-text="selectedIds.length"></span> selected</span>
-                    <div class="flex items-center gap-2">
-                        <button type="button" @click="openAddModal = false"
-                            class="px-3.5 py-1.5 border border-gray-200 rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 text-xs font-medium transition-colors">Cancel</button>
-                        <button type="submit" :disabled="selectedIds.length === 0"
-                            class="px-4 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">Add
-                            Selected</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Members Table -->
-    <div class="bg-white shadow-sm border border-gray-150 rounded-xl overflow-hidden">
+    <!-- Members Table Card -->
+    <c-card padding="none">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User
-                            / Employee</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Department/Role</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Branch</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <span class="sr-only">Actions</span>
-                        </th>
+            <table class="ft-table w-full text-left text-xs">
+                <thead>
+                    <tr class="border-b border-border bg-[var(--surface-2)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider">
+                        <th class="py-3 px-4 font-semibold">User / Employee</th>
+                        <th class="py-3 px-4 font-semibold">Department / Role</th>
+                        <th class="py-3 px-4 font-semibold">Branch</th>
+                        <th class="py-3 px-4 font-semibold">Status</th>
+                        <th class="py-3 px-4 font-semibold text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody class="divide-y divide-border">
                     {% for member in members %}
-                    <tr class="hover:bg-gray-50/80 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="flex items-center">
-                                <c-avatar src="{% if member.employee_profile and member.employee_profile.profile_photo %}{{ member.employee_profile.profile_photo.url }}{% endif %}" size="lg"></c-avatar>
-                                <div class="ml-4">
-                                    <div class="text-sm font-medium text-gray-900">
+                    <tr class="hover:bg-[var(--surface-2)] transition-colors">
+                        <td class="py-3 px-4 whitespace-nowrap">
+                            <div class="flex items-center gap-3">
+                                <c-avatar src="{% if member.employee_profile and member.employee_profile.profile_photo %}{{ member.employee_profile.profile_photo.url }}{% endif %}" size="md"></c-avatar>
+                                <div>
+                                    <div class="font-medium text-xs text-[var(--text)]">
                                         {% if member.employee_profile %}
-                                        {{ member.employee_profile.full_name }}
+                                            {{ member.employee_profile.full_name }}
                                         {% else %}
-                                        External / Admin User
+                                            External / Admin User
                                         {% endif %}
                                     </div>
-                                    <div class="text-sm text-gray-500">
+                                    <div class="text-[11px] text-[var(--text-muted)] font-mono">
                                         {{ member.email|default:member.phone }}
                                     </div>
                                 </div>
                             </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900">{{ member.employee_profile.department|default:"-" }}
-                            </div>
-                            <div class="text-sm text-gray-500">{{ member.employee_profile.designation|default:"-" }}
-                            </div>
+                        <td class="py-3 px-4 whitespace-nowrap">
+                            <div class="text-xs text-[var(--text)]">{{ member.employee_profile.department|default:"-" }}</div>
+                            <div class="text-[11px] text-[var(--text-muted)]">{{ member.employee_profile.designation|default:"-" }}</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td class="py-3 px-4 whitespace-nowrap text-xs text-[var(--text-secondary)]">
                             {{ member.employee_profile.branch.name|default:"Unassigned" }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="py-3 px-4 whitespace-nowrap">
                             {% if member.is_active %}
-                            <span
-                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Active
-                            </span>
+                                <c-badge variant="success" size="sm" dot="true" label="Active"></c-badge>
                             {% else %}
-                            <span
-                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                Inactive
-                            </span>
+                                <c-badge variant="danger" size="sm" dot="true" label="Inactive"></c-badge>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div class="flex items-center justify-end gap-3">
-                                <a href="{% url 'admin_panel:user_permissions' member.pk %}"
-                                    class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-primary text-white text-xs font-bold hover:opacity-90 transition-colors">
-                                    <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-                                    Edit Permissions
-                                </a>
-                                <form action="{% url 'admin_panel:role_members' role.pk %}" method="POST" class="inline"
-                                    x-data
-                                    @submit.prevent="window.confirmAction('Remove this user from the role?', () => $el.submit())">
+                        <td class="py-3 px-4 whitespace-nowrap text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <c-button
+                                    href="{% url 'admin_panel:user_permissions' member.pk %}"
+                                    variant="secondary"
+                                    size="sm"
+                                    icon="shield"
+                                    label="Permissions"
+                                ></c-button>
+                                <form action="{% url 'admin_panel:role_members' role.pk %}" method="POST" class="inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="action" value="remove">
                                     <input type="hidden" name="user_id" value="{{ member.pk }}">
-                                    <button type="submit"
-                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-red-200 bg-white text-red-650 text-xs font-bold hover:bg-red-50 transition-colors">
-                                        <i data-lucide="user-minus" class="w-3.5 h-3.5"></i>
-                                        Remove
-                                    </button>
+                                    <c-button
+                                        type="submit"
+                                        variant="danger"
+                                        size="sm"
+                                        icon="user-minus"
+                                        label="Remove"
+                                    ></c-button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-6 py-8 text-center">
-                            <p class="text-gray-500 font-medium">No users assigned to this role.</p>
-                            <p class="text-gray-400 text-sm mt-1">Assign users to this role using the "Add Member" form above.</p>
+                        <td colspan="5" class="py-8 text-center">
+                            <c-empty-state
+                                title="No Users Assigned"
+                                description="No employees or users currently have this role assigned. Use 'Add Member' to assign users."
+                                icon="users"
+                            ></c-empty-state>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-    </div>
+    </c-card>
+
+    <!-- Add Members Modal using Cotton Component -->
+    <c-modal id="add-member-modal" title="Add Members to {{ role.name }}" size="lg">
+        <form method="POST" action="{% url 'admin_panel:role_members' role.pk %}" x-data="{ searchQuery: '', selectedIds: [] }" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+
+            <!-- Search Input -->
+            <c-input
+                name="member_search"
+                id="member_search"
+                placeholder="Search employees by name, ID, or phone..."
+                icon="search"
+                attrs="x-model='searchQuery'"
+            ></c-input>
+
+            <!-- Scrollable List -->
+            <div class="max-h-72 overflow-y-auto pr-1 space-y-2 border border-border rounded-xl p-2 bg-[var(--surface-2)]">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {% for emp in non_members %}
+                    <label
+                        x-show="!searchQuery || '{{ emp.full_name|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ emp.phone|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ emp.employee_id|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase())"
+                        class="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-[var(--surface)] hover:border-primary cursor-pointer transition-colors">
+                        <input type="checkbox" name="user_ids" value="{{ emp.user.id }}" x-model="selectedIds"
+                            class="ft-checkbox h-4 w-4 rounded text-primary border-border shrink-0">
+                        <div class="min-w-0 flex-1">
+                            <span class="text-xs font-semibold text-[var(--text)] block truncate leading-tight">{{ emp.full_name }}</span>
+                            <span class="text-[10px] text-[var(--text-muted)] font-mono block truncate mt-0.5">{{ emp.employee_id }}</span>
+                        </div>
+                    </label>
+                    {% empty %}
+                    <div class="col-span-2 py-4 text-center text-xs text-[var(--text-muted)] italic">
+                        All active employees are already assigned to this role.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-border">
+                <span class="text-xs font-semibold text-[var(--text-secondary)]">
+                    <span class="text-primary font-bold" x-text="selectedIds.length">0</span> selected
+                </span>
+                <div class="flex items-center gap-2">
+                    <c-button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        label="Cancel"
+                        attrs="@click=&quot;$dispatch('close-modal')&quot;"
+                    ></c-button>
+                    <c-button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        icon="plus"
+                        label="Add Selected"
+                    ></c-button>
+                </div>
+            </div>
+        </form>
+    </c-modal>
 </div>
 </c-app-shell>

@@ -173,11 +173,16 @@ class EmployeeCreateForm(forms.ModelForm):
         cleaned_data = super().clean()
         password1 = cleaned_data.get('password1')
         password2 = cleaned_data.get('password2')
-        if password1 and password2:
+        if password1 or password2:
             if password1 != password2:
-                raise forms.ValidationError("Passwords do not match")
-            if len(password1) < 8:
-                raise forms.ValidationError("Password must be at least 8 characters")
+                self.add_error('password2', "Passwords do not match")
+            else:
+                from django.contrib.auth.password_validation import validate_password
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                try:
+                    validate_password(password1)
+                except DjangoValidationError as e:
+                    self.add_error('password1', e.messages)
         return cleaned_data
 
     @transaction.atomic
@@ -318,9 +323,15 @@ class EmployeeEditForm(forms.ModelForm):
         confirm_password = cleaned_data.get('confirm_password')
         if new_password or confirm_password:
             if new_password != confirm_password:
-                raise forms.ValidationError("Passwords do not match")
-            if len(new_password) < 8:
-                raise forms.ValidationError("Password must be at least 8 characters")
+                self.add_error('confirm_password', "Passwords do not match")
+            else:
+                from django.contrib.auth.password_validation import validate_password
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                user_instance = self.instance.user if (self.instance and self.instance.user) else None
+                try:
+                    validate_password(new_password, user=user_instance)
+                except DjangoValidationError as e:
+                    self.add_error('new_password', e.messages)
         return cleaned_data
 
     @transaction.atomic
@@ -340,6 +351,34 @@ class EmployeeEditForm(forms.ModelForm):
         if new_password:
             user.set_password(new_password)
             user.save()
+            from apps.accounts.models import UserSession
+            from django.contrib.sessions.models import Session
+            from apps.audit.services import AuditService
+            from apps.notifications.models import log_audit
+            from django.utils import timezone
+            now = timezone.now()
+            for sess in UserSession.objects.filter(user=user, is_active=True):
+                sess.is_active = False
+                sess.logout_time = now
+                sess.save(update_fields=['is_active', 'logout_time'])
+                if sess.session_key:
+                    Session.objects.filter(session_key=sess.session_key).delete()
+            AuditService.log_event(
+                actor=self.actor if (self.actor and self.actor.is_authenticated) else None,
+                action="password_change",
+                instance=user,
+                module="employees",
+                object_type="CustomUser",
+                object_id=str(user.pk),
+                object_label=user.email or user.phone,
+                reason=f"Password updated for employee {profile.full_name}"
+            )
+            log_audit(
+                actor=self.actor if (self.actor and self.actor.is_authenticated) else None,
+                action="password_change",
+                target=user,
+                summary=f"Password updated for employee {profile.full_name}"
+            )
 
         # Perform atomic role assignment diff sync
         if roles is not None:
@@ -958,8 +997,14 @@ class WizardStep4Form(forms.Form):
         if p1 or p2:
             if p1 != p2:
                 self.add_error('password2', "Passwords do not match.")
-            elif len(p1) < 8:
-                self.add_error('password1', "Password must be at least 8 characters long.")
+            else:
+                from django.contrib.auth.password_validation import validate_password
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                user_instance = self.employee.user if (self.employee and self.employee.user) else None
+                try:
+                    validate_password(p1, user=user_instance)
+                except DjangoValidationError as e:
+                    self.add_error('password1', e.messages)
         return cleaned_data
 
     @transaction.atomic
@@ -989,6 +1034,34 @@ class WizardStep4Form(forms.Form):
             if p1:
                 user.set_password(p1)
                 user.save()
+                from apps.accounts.models import UserSession
+                from django.contrib.sessions.models import Session
+                from apps.audit.services import AuditService
+                from apps.notifications.models import log_audit
+                from django.utils import timezone
+                now = timezone.now()
+                for sess in UserSession.objects.filter(user=user, is_active=True):
+                    sess.is_active = False
+                    sess.logout_time = now
+                    sess.save(update_fields=['is_active', 'logout_time'])
+                    if sess.session_key:
+                        Session.objects.filter(session_key=sess.session_key).delete()
+                AuditService.log_event(
+                    actor=self.actor if (self.actor and self.actor.is_authenticated) else None,
+                    action="password_change",
+                    instance=user,
+                    module="employees",
+                    object_type="CustomUser",
+                    object_id=str(user.pk),
+                    object_label=user.email or user.phone,
+                    reason=f"Password updated via wizard for employee {self.employee.get_full_name()}"
+                )
+                log_audit(
+                    actor=self.actor if (self.actor and self.actor.is_authenticated) else None,
+                    action="password_change",
+                    target=user,
+                    summary=f"Password updated via wizard for employee {self.employee.get_full_name()}"
+                )
 
         # Update Employee fields
         self.employee.user = user

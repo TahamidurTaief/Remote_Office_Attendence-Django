@@ -1,6 +1,6 @@
 <c-app-shell page_title="Backup Recovery Codes | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
   <c-slot name="topbar">
-    <c-topbar title="Backup Recovery Codes" ></c-topbar>
+    <c-topbar title="Backup Recovery Codes"></c-topbar>
   </c-slot>
 
   <c-command-palette></c-command-palette>
@@ -8,18 +8,10 @@
   <div class="p-4 space-y-4 max-w-xl mx-auto">
     <c-card title="MFA Enabled - Save Backup Recovery Codes" subtitle="Save these backup codes in a secure password manager. Each code can be used ONCE if you lose access to your mobile authenticator app.">
 
-      <div class="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 space-y-2 text-xs">
-        <div class="flex items-center gap-2 font-bold">
-          <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
-          <span>IMPORTANT: Copy or Download These Codes Now</span>
-        </div>
-        <p class="text-amber-500/90">
-          These backup codes will NOT be displayed again. Store them safely!
-        </p>
-      </div>
+      <c-alert variant="warning" icon="alert-triangle" title="IMPORTANT: Copy or Download These Codes Now" message="These backup codes will NOT be displayed again. Store them safely!"></c-alert>
 
-      <div class="p-4 rounded-xl border bg-slate-950/80 font-mono text-center my-4 space-y-2 border-slate-800" style="color:var(--text)">
-        <div class="grid grid-cols-2 gap-2 text-sm font-bold tracking-wider select-all">
+      <div class="p-4 rounded-xl border bg-slate-950/80 font-mono text-center my-4 space-y-2 border-slate-800 text-[var(--text)]">
+        <div class="grid grid-cols-2 gap-2 text-xs font-bold tracking-wider select-all">
           {% for code in backup_codes %}
             <div class="py-1.5 px-3 rounded bg-slate-800/60 border border-slate-700 text-primary">
               {{ code }}
@@ -28,14 +20,9 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-between gap-3 pt-2">
-        <a href="{% url 'accounts:login' %}" class="ft-btn ft-btn-secondary ft-btn-sm text-xs">
-          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Return to Account
-        </a>
-
-        <button onclick="window.print()" class="ft-btn ft-btn-primary ft-btn-sm text-xs">
-          <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print / Save PDF
-        </button>
+      <div class="flex items-center justify-between gap-3 pt-2 border-t border-border">
+        <c-button href="{% url 'accounts:login' %}" variant="secondary" size="sm" icon="arrow-left" label="Return to Account"></c-button>
+        <c-button type="button" variant="primary" size="sm" icon="printer" label="Print / Save PDF" attrs="onclick='window.print()'"></c-button>
       </div>
 
     </c-card>

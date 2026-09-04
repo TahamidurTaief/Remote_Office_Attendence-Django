@@ -1,192 +1,200 @@
-{% extends 'cotton/app-shell.html' %}
+<c-app-shell page_title="System Roles & Dynamic RBAC | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
+  <div class="space-y-6" x-data="{
+        activeModalRole: null,
+        activeModalAction: 'deactivate',
+        confirmDeactivate(roleId, roleName, action) {
+          this.activeModalRole = { id: roleId, name: roleName };
+          this.activeModalAction = action || 'deactivate';
+          $dispatch('open-modal', { id: 'role-status-modal' });
+        }
+      }">
 
-{% block content %}
-<div class="space-y-6" x-data="{
-       activeModalRole: null,
-       activeModalAction: 'deactivate',
-       confirmDeactivate(roleId, roleName, action) {
-         this.activeModalRole = { id: roleId, name: roleName };
-         this.activeModalAction = action || 'deactivate';
-         $dispatch('open-modal', { id: 'role-status-modal' });
-       }
-     }">
-
-  <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-    <div>
-      <div class="flex items-center gap-2">
-        <span class="text-xs font-semibold text-[var(--text-muted)]">Security & Access</span>
-        <span class="text-xs text-[var(--text-muted)]">/</span>
-        <span class="text-xs font-semibold text-[var(--text)]">Roles</span>
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-[var(--text-muted)]">Security & Access</span>
+          <span class="text-xs text-[var(--text-muted)]">/</span>
+          <span class="text-xs font-semibold text-[var(--text)]">Roles</span>
+        </div>
+        <h1 class="text-sm font-bold text-[var(--text)] mt-1">System Roles & Dynamic RBAC</h1>
+        <p class="text-xs text-[var(--text-muted)] mt-0.5">
+          Administer dynamic roles, multi-level data scoping, and audited activation states.
+        </p>
       </div>
-      <h1 class="text-lg font-bold text-[var(--text)] mt-1">System Roles & Dynamic RBAC</h1>
-      <p class="text-xs text-[var(--text-muted)] mt-0.5">
-        Administer dynamic roles, multi-level data scoping, and audited activation states.
-      </p>
+
+      {% if can_manage_roles %}
+      <c-button
+        href="{% url 'admin_panel:role_create' %}"
+        variant="primary"
+        size="sm"
+        icon="plus-circle"
+        label="Create New Role"
+      ></c-button>
+      {% endif %}
     </div>
 
-    {% if can_manage_roles %}
-    <c-button
-      href="{% url 'admin_panel:role_create' %}"
-      variant="primary"
-      size="sm"
-      icon="plus-circle"
-      label="Create New Role"
-    ></c-button>
-    {% endif %}
-  </div>
+    <!-- Roles Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for role in roles %}
+        <c-card padding="md" extra_class="flex flex-col justify-between space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+          <div>
+            <!-- Card Header -->
+            <div class="flex items-start justify-between gap-2">
+              <div class="space-y-1">
+                <h3 class="font-semibold text-xs text-[var(--text)] flex items-center gap-2 flex-wrap">
+                  {{ role.name }}
+                  {% if role.is_system_protected or role.code == 'system_owner' %}
+                    <c-badge variant="warning" size="sm" dot="true" label="System Owner"></c-badge>
+                  {% elif role.code == 'super_admin' %}
+                    <c-badge variant="primary" size="sm" dot="true" label="Super Admin"></c-badge>
+                  {% endif %}
+                </h3>
+                <p class="font-mono text-[11px] text-[var(--text-muted)]">{{ role.code }}</p>
+              </div>
 
-  <!-- Roles Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    {% for role in roles %}
-      <div class="border border-[var(--border)] rounded-xl bg-[var(--surface)] p-4 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
-        <div>
-          <!-- Card Header -->
-          <div class="flex items-start justify-between gap-2">
-            <div class="space-y-1">
-              <h3 class="font-semibold text-sm text-[var(--text)] flex items-center gap-2 flex-wrap">
-                {{ role.name }}
-                {% if role.is_system_protected or role.code == 'system_owner' %}
-                  <c-badge variant="warning" size="sm" dot="true" label="System Owner"></c-badge>
-                {% elif role.code == 'super_admin' %}
-                  <c-badge variant="primary" size="sm" dot="true" label="Super Admin"></c-badge>
+              <div>
+                {% if role.is_active %}
+                  <c-badge variant="success" size="sm" dot="true" label="Active"></c-badge>
+                {% else %}
+                  <c-badge variant="danger" size="sm" dot="true" label="Disabled"></c-badge>
                 {% endif %}
-              </h3>
-              <p class="font-mono text-[11px] text-[var(--text-muted)]">{{ role.code }}</p>
+              </div>
             </div>
 
-            <div>
-              {% if role.is_active %}
-                <c-badge variant="success" size="sm" dot="true" label="Active"></c-badge>
+            <!-- Description -->
+            <p class="text-xs text-[var(--text-muted)] mt-2 line-clamp-2">
+              {{ role.description|default:"No description provided for this dynamic role." }}
+            </p>
+
+            <!-- Metrics -->
+            <div class="mt-4 flex items-center gap-4 text-xs text-[var(--text-secondary)]">
+              <div class="flex items-center gap-1.5" title="Permissions configured">
+                <i data-lucide="key" class="w-3.5 h-3.5 text-primary"></i>
+                <span><strong>{{ role.role_permissions.count }}</strong> perms</span>
+              </div>
+              <div class="flex items-center gap-1.5" title="Assigned active users">
+                <i data-lucide="users" class="w-3.5 h-3.5 text-[var(--text-muted)]"></i>
+                <span><strong>{{ role.user_assignments.count }}</strong> users</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Footer Actions -->
+          <div class="pt-3 border-t border-border flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              {% if role.code != 'system_owner' %}
+                {% if role.code != 'super_admin' or is_superuser %}
+                  <c-button
+                    href="{% url 'admin_panel:role_matrix' role.id %}"
+                    variant="ghost"
+                    size="sm"
+                    icon="sliders"
+                    label="Matrix"
+                    extra_class="text-primary text-xs"
+                  ></c-button>
+
+                  <c-button
+                    href="{% url 'admin_panel:role_members' role.id %}"
+                    variant="ghost"
+                    size="sm"
+                    icon="users"
+                    label="Members"
+                    extra_class="text-indigo-600 dark:text-indigo-400 text-xs"
+                  ></c-button>
+                {% endif %}
+              {% endif %}
+            </div>
+
+            <div class="flex items-center gap-1">
+              {% if role.is_system_protected or role.code == 'system_owner' %}
+                <c-badge variant="neutral" icon="lock" label="Protected" size="sm"></c-badge>
+              {% elif role.code == 'super_admin' and not is_superuser %}
+                <c-badge variant="neutral" icon="shield-alert" label="Superuser Only" size="sm"></c-badge>
               {% else %}
-                <c-badge variant="danger" size="sm" dot="true" label="Disabled"></c-badge>
+                <c-button
+                  href="{% url 'admin_panel:role_edit' role.id %}"
+                  variant="ghost"
+                  size="sm"
+                  icon="edit-2"
+                  label=""
+                ></c-button>
+
+                {% if role.is_active %}
+                  <c-button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon="pause-circle"
+                    label=""
+                    extra_class="text-amber-600 dark:text-amber-400"
+                    attrs="@click=&quot;confirmDeactivate('{{ role.id }}', '{{ role.name|escapejs }}', 'deactivate')&quot;"
+                  ></c-button>
+                {% else %}
+                  <form action="{% url 'admin_panel:role_delete' role.id %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="activate">
+                    <c-button
+                      type="submit"
+                      variant="ghost"
+                      size="sm"
+                      icon="play-circle"
+                      label=""
+                      extra_class="text-emerald-600 dark:text-emerald-400"
+                    ></c-button>
+                  </form>
+                {% endif %}
               {% endif %}
             </div>
           </div>
-
-          <!-- Description -->
-          <p class="text-xs text-[var(--text-muted)] mt-2 line-clamp-2">
-            {{ role.description|default:"No description provided for this dynamic role." }}
-          </p>
-
-          <!-- Metrics -->
-          <div class="mt-4 flex items-center gap-4 text-xs text-[var(--text-secondary)]">
-            <div class="flex items-center gap-1.5" title="Permissions configured">
-              <i data-lucide="key" class="w-3.5 h-3.5 text-primary"></i>
-              <span><strong>{{ role.role_permissions.count }}</strong> perms</span>
-            </div>
-            <div class="flex items-center gap-1.5" title="Assigned active users">
-              <i data-lucide="users" class="w-3.5 h-3.5 text-[var(--text-muted)]"></i>
-              <span><strong>{{ role.user_assignments.count }}</strong> users</span>
-            </div>
-          </div>
+        </c-card>
+      {% empty %}
+        <div class="col-span-full">
+          <c-empty-state
+            title="No Dynamic Roles Configured"
+            description="Click 'Create New Role' to establish dynamic RBAC assignments."
+            icon="shield-alert"
+          ></c-empty-state>
         </div>
+      {% endfor %}
+    </div>
 
-        <!-- Card Footer Actions -->
-        <div class="pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
-          <div class="flex items-center gap-1.5">
-            {% if role.code != 'system_owner' %}
-              {% if role.code != 'super_admin' or is_superuser %}
-                <a href="{% url 'admin_panel:role_matrix' role.id %}" class="ft-btn ft-btn-ghost ft-btn-xs text-primary hover:text-primary-600 text-xs flex items-center gap-1" title="Permission Matrix">
-                  <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
-                  <span>Matrix</span>
-                </a>
-
-                <a href="{% url 'admin_panel:role_members' role.id %}" class="ft-btn ft-btn-ghost ft-btn-xs text-indigo-600 dark:text-indigo-400 text-xs flex items-center gap-1" title="Manage Members">
-                  <i data-lucide="users" class="w-3.5 h-3.5"></i>
-                  <span>Members</span>
-                </a>
-              {% endif %}
-            {% endif %}
-          </div>
-
-          <div class="flex items-center gap-1">
-            {% if role.is_system_protected or role.code == 'system_owner' %}
-              <span class="text-[11px] text-[var(--text-muted)] flex items-center gap-1 px-2 py-1 bg-[var(--surface-2)] rounded-lg" title="System Owner role is immutable and managed exclusively via bootstrap settings">
-                <i data-lucide="lock" class="w-3 h-3"></i> Protected
-              </span>
-            {% elif role.code == 'super_admin' and not is_superuser %}
-              <span class="text-[11px] text-[var(--text-muted)] flex items-center gap-1 px-2 py-1 bg-[var(--surface-2)] rounded-lg" title="Super Admin configuration requires System Owner (superuser) privileges">
-                <i data-lucide="shield-alert" class="w-3 h-3"></i> Superuser Only
-              </span>
-            {% else %}
-              <a href="{% url 'admin_panel:role_edit' role.id %}" class="ft-btn ft-btn-ghost ft-btn-xs text-[var(--text-secondary)] hover:text-[var(--text)]" title="Edit Role">
-                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
-              </a>
-
-              {% if role.is_active %}
-                <button
-                  type="button"
-                  class="ft-btn ft-btn-ghost ft-btn-xs text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                  title="Deactivate Role"
-                  @click="confirmDeactivate('{{ role.id }}', '{{ role.name|escapejs }}', 'deactivate')">
-                  <i data-lucide="pause-circle" class="w-3.5 h-3.5"></i>
-                </button>
-              {% else %}
-                <form action="{% url 'admin_panel:role_delete' role.id %}" method="post" class="inline">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="activate">
-                  <button
-                    type="submit"
-                    class="ft-btn ft-btn-ghost ft-btn-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                    title="Activate Role">
-                    <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
-                  </button>
-                </form>
-              {% endif %}
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    {% empty %}
-      <div class="col-span-full p-8 text-center bg-[var(--surface)] border border-[var(--border)] rounded-xl">
-        <i data-lucide="shield-alert" class="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2"></i>
-        <h4 class="text-sm font-semibold text-[var(--text)]">No Dynamic Roles Configured</h4>
-        <p class="text-xs text-[var(--text-muted)] mt-1">Click "Create New Role" to establish dynamic RBAC assignments.</p>
-      </div>
-    {% endfor %}
-  </div>
-
-  <!-- Accessible Deactivation Confirmation Modal -->
-  <c-modal id="role-status-modal" title="Confirm Role Status Change" size="md">
-    <div class="space-y-3">
-      <div class="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300">
-        <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0 mt-0.5"></i>
-        <div class="text-xs space-y-1">
-          <p class="font-semibold">Audited Role Deactivation</p>
+    <!-- Accessible Deactivation Confirmation Modal -->
+    <c-modal id="role-status-modal" title="Confirm Role Status Change" size="md">
+      <div class="space-y-3">
+        <c-alert variant="warning" icon="alert-triangle" title="Audited Role Deactivation">
           <p>
             Deactivating <span class="font-bold text-[var(--text)]" x-text="activeModalRole ? activeModalRole.name : ''"></span> will disable all permissions granted under this role.
           </p>
-          <p class="text-[11px] text-[var(--text-muted)]">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">
             Existing user assignments and historical audit records will remain completely intact. You can reactivate this role at any time.
           </p>
-        </div>
+        </c-alert>
+
+        <form :action="'/admin-panel/roles/' + (activeModalRole ? activeModalRole.id : '') + '/delete/'" method="post" id="deactivate-form" class="pt-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="deactivate">
+        </form>
       </div>
 
-      <form :action="'/admin-panel/roles/' + (activeModalRole ? activeModalRole.id : '') + '/delete/'" method="post" id="deactivate-form" class="pt-2">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="deactivate">
-      </form>
-    </div>
+      <c-slot name="footer">
+        <c-button
+          type="button"
+          variant="secondary"
+          size="sm"
+          label="Cancel"
+          attrs="@click=&quot;$dispatch('close-modal')&quot;"
+        ></c-button>
+        <c-button
+          type="submit"
+          form="deactivate-form"
+          variant="danger"
+          size="sm"
+          icon="pause-circle"
+          label="Confirm Deactivation"
+        ></c-button>
+      </c-slot>
+    </c-modal>
 
-    <c-slot name="footer">
-      <c-button
-        type="button"
-        variant="secondary"
-        size="sm"
-        label="Cancel"
-        @click="$dispatch('close-modal')"
-      ></c-button>
-      <c-button
-        type="submit"
-        form="deactivate-form"
-        variant="danger"
-        size="sm"
-        icon="pause-circle"
-        label="Confirm Deactivation"
-      ></c-button>
-    </c-slot>
-  </c-modal>
-
-</div>
-{% endblock %}
+  </div>
+</c-app-shell>

@@ -414,40 +414,83 @@ def staff_change_password(request):
         return redirect('accounts:login')
 
     from django.contrib import messages
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError
+    from django.utils import timezone
+    from django.contrib.sessions.models import Session
+    from apps.accounts.models import UserSession
+    from apps.audit.services import AuditService
+    from apps.notifications.models import log_audit
+
+    errors = {}
     if request.method == 'POST':
         current_password = request.POST.get('current_password', '')
         new_password = request.POST.get('new_password', '')
         confirm_password = request.POST.get('confirm_password', '')
-        
-        errors = {}
-        
+
         # Verify current password
         if not request.user.check_password(current_password):
             errors['current_password'] = 'Current password is incorrect.'
-        
+
         # Validate new password
-        if len(new_password) < 8:
-            errors['new_password'] = 'Password must be at least 8 characters.'
-        
-        # Check passwords match
-        if new_password != confirm_password:
+        if not new_password:
+            errors['new_password'] = 'New password cannot be empty.'
+        elif new_password != confirm_password:
             errors['confirm_password'] = 'Passwords do not match.'
-        
+        else:
+            try:
+                validate_password(new_password, user=request.user)
+            except ValidationError as e:
+                errors['new_password'] = ' '.join(e.messages)
+
         if not errors:
-            # Set new password
-            request.user.set_password(new_password)
-            request.user.save()
-            
-            # Keep user logged in after password change
+            user = request.user
+            user.set_password(new_password)
+            user.save()
+
+            # Keep current session logged in
             from django.contrib.auth import update_session_auth_hash
-            update_session_auth_hash(request, request.user)
-            
-            messages.success(request, 'Password changed successfully.')
+            old_session_key = request.session.session_key
+            update_session_auth_hash(request, user)
+            current_session_key = request.session.session_key
+
+            if old_session_key and current_session_key and old_session_key != current_session_key:
+                UserSession.objects.filter(user=user, session_key=old_session_key).update(session_key=current_session_key)
+
+            # Security audit log
+            AuditService.log_event(
+                actor=user,
+                action="password_change",
+                instance=user,
+                module="staff",
+                object_type="CustomUser",
+                object_id=str(user.pk),
+                object_label=user.email or user.phone,
+                reason="Staff member updated account password",
+                request=request
+            )
+            client_ip = request.META.get('REMOTE_ADDR')
+            log_audit(user, 'password_change', target=user, summary="Staff member updated account password", ip=client_ip)
+
+            # Revoke other device sessions
+            now = timezone.now()
+            other_sessions = UserSession.objects.filter(user=user, is_active=True).exclude(session_key=current_session_key)
+            if old_session_key:
+                other_sessions = other_sessions.exclude(session_key=old_session_key)
+
+            for sess in other_sessions:
+                sess.is_active = False
+                sess.logout_time = now
+                sess.save(update_fields=['is_active', 'logout_time'])
+                if sess.session_key:
+                    Session.objects.filter(session_key=sess.session_key).delete()
+
+            messages.success(request, 'Password changed successfully. Other active sessions have been logged out.')
             return redirect('staff:profile')
-        
+
         # Return with errors
         return render(request, 'staff/change_password.html', {'errors': errors})
-    
+
     return render(request, 'staff/change_password.html')
 
 

@@ -1,4 +1,4 @@
-<c-app-shell page_title="Permissions for {{ role.name }} | FieldTrack" active_href="{{ request.path }}">
+<c-app-shell page_title="Permissions for {{ role.name }} | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
 
 <div class="p-4 space-y-4">
 
@@ -6,40 +6,45 @@
         {% csrf_token %}
 
         <!-- Header -->
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-4">
             <div>
-                <h1 class="text-[14px] font-semibold" style="color:var(--text)">
+                <h1 class="text-sm font-bold text-[var(--text)]">
                     Permissions for:
-                    <span style="color:var(--primary)">{{ role.name }}</span>
+                    <span class="text-primary">{{ role.name }}</span>
                 </h1>
-                <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">
+                <p class="text-xs text-[var(--text-muted)] mt-0.5">
                     Select which actions this role can perform across the system.
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" label="Cancel" ></c-button>
-                <c-button type="submit" variant="primary" icon="save" label="Save Changes" ></c-button>
+                <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" size="sm" label="Cancel"></c-button>
+                <c-button type="submit" variant="primary" size="sm" icon="save" label="Save Changes"></c-button>
             </div>
         </div>
+
+        {% if messages %}
+          {% for msg in messages %}
+            <c-alert variant="{% if msg.tags == 'error' %}danger{% elif msg.tags == 'success' %}success{% else %}info{% endif %}" message="{{ msg }}"></c-alert>
+          {% endfor %}
+        {% endif %}
 
         <!-- Permission Groups -->
         {% for app_name, permissions in grouped_permissions.items %}
         {% if permissions %}
         <c-card padding="none">
-            <div class="px-4 py-2.5 border-b" style="border-color:var(--border); background:var(--surface-2)">
-                <h3 class="text-[12px] font-bold" style="color:var(--text)">{{ app_name }}</h3>
+            <div class="px-4 py-2.5 border-b border-border bg-[var(--surface-2)]">
+                <h3 class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">{{ app_name }}</h3>
             </div>
             <div class="p-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {% for perm in permissions %}
-                    <label class="flex items-start gap-2.5 p-3 rounded-[4px] border cursor-pointer transition-colors hover:border-primary"
-                           style="border-color:var(--border); background:var(--surface)">
+                    <label class="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-[var(--surface)] cursor-pointer transition-colors hover:border-primary">
                         <input type="checkbox" name="permissions" value="{{ perm.id }}"
                                {% if perm.id in role_permissions %}checked{% endif %}
-                               class="mt-0.5 rounded accent-primary">
-                        <div>
-                            <span class="text-[12px] font-semibold block" style="color:var(--text)">{{ perm.name }}</span>
-                            <span class="text-[11px] font-mono" style="color:var(--text-muted)">{{ perm.codename }}</span>
+                               class="ft-checkbox h-4 w-4 rounded text-primary border-border mt-0.5">
+                        <div class="min-w-0 flex-1">
+                            <span class="text-xs font-semibold text-[var(--text)] block">{{ perm.name }}</span>
+                            <span class="text-[11px] font-mono text-[var(--text-muted)] block">{{ perm.codename }}</span>
                         </div>
                     </label>
                     {% endfor %}
@@ -50,9 +55,9 @@
         {% endfor %}
 
         <!-- Bottom Actions -->
-        <div class="flex justify-end gap-2 pt-2 border-t" style="border-color:var(--border)">
-            <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" label="Cancel" ></c-button>
-            <c-button type="submit" variant="primary" icon="save" label="Save Changes" ></c-button>
+        <div class="flex justify-end gap-2 pt-2 border-t border-border">
+            <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" size="md" label="Cancel" extra_class="min-h-[44px]"></c-button>
+            <c-button type="submit" variant="primary" size="md" icon="save" label="Save Changes" extra_class="min-h-[44px]"></c-button>
         </div>
     </form>
 

@@ -1,4 +1,4 @@
-<c-app-shell page_title="{% if object %}Edit Role: {{ object.name }}{% else %}Add Role{% endif %} | FieldTrack" active_href="{{ request.path }}">
+<c-app-shell page_title="{% if object %}Edit Role: {{ object.name }}{% else %}Add Role{% endif %} | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
 
 <div class="p-4 max-w-2xl mx-auto space-y-4"
      x-data="{
@@ -28,14 +28,14 @@
                 <span class="text-xs text-[var(--text-muted)]">/</span>
                 <span class="text-xs font-semibold text-[var(--text)]">{% if object %}Edit Role{% else %}New Role{% endif %}</span>
             </div>
-            <h1 class="text-lg font-bold mt-1" style="color:var(--text)">
+            <h1 class="text-sm font-bold text-[var(--text)] mt-1">
                 {% if object %}Edit Role: {{ object.name }}{% else %}Create New Role{% endif %}
             </h1>
-            <p class="text-xs mt-0.5" style="color:var(--text-muted)">
+            <p class="text-xs text-[var(--text-muted)] mt-0.5">
                 Define dynamic RBAC role credentials, identifiers, and operational status.
             </p>
         </div>
-        <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to List" ></c-button>
+        <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to List"></c-button>
     </div>
 
     <!-- Form Card -->
@@ -44,10 +44,7 @@
             {% csrf_token %}
 
             {% if form.non_field_errors %}
-            <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
-                <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 mt-0.5"></i>
-                <div>{{ form.non_field_errors.0 }}</div>
-            </div>
+              <c-alert variant="danger" icon="alert-circle" message="{{ form.non_field_errors.0 }}"></c-alert>
             {% endif %}
 
             <!-- Role Name -->
@@ -90,7 +87,7 @@
             ></c-textarea>
 
             <!-- Active Status -->
-            <div class="pt-2 border-t" style="border-color:var(--border)">
+            <div class="pt-2 border-t border-border">
                 <c-checkbox
                     name="is_active"
                     id="id_is_active"
@@ -111,9 +108,9 @@
             </div>
 
             <!-- Actions -->
-            <div class="pt-4 flex items-center justify-end gap-2 border-t" style="border-color:var(--border)">
-                <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" size="md" label="Cancel" ></c-button>
-                <c-button type="submit" variant="primary" size="md" icon="save" label="{% if object %}Save Changes{% else %}Create Role{% endif %}" ></c-button>
+            <div class="pt-4 flex items-center justify-end gap-2 border-t border-border">
+                <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" size="md" label="Cancel" extra_class="min-h-[44px]"></c-button>
+                <c-button type="submit" variant="primary" size="md" icon="save" label="{% if object %}Save Changes{% else %}Create Role{% endif %}" extra_class="min-h-[44px]"></c-button>
             </div>
         </form>
     </c-card>

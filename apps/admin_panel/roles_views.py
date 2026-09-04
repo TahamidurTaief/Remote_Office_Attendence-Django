@@ -15,6 +15,8 @@ from apps.accounts.models import (
     Role, Module, Action, Permission, RolePermission,
     UserRoleAssignment, UserPermissionOverride, DataScope
 )
+from apps.accounts.services import RoleAssignmentService
+from django.core.exceptions import PermissionDenied, ValidationError
 from apps.accounts.decorators import require_reauth
 from apps.admin_panel.forms import DynamicRoleForm
 from apps.audit.services import AuditService
@@ -349,28 +351,43 @@ class RoleMembersView(RBACRoleAdminMixin, View):
             if user_ids:
                 users_to_add = User.objects.filter(pk__in=user_ids)
                 for user in users_to_add:
-                    _, created = UserRoleAssignment.objects.get_or_create(
-                        user=user,
-                        role=role,
-                        defaults={'assigned_by': request.user}
-                    )
-                    if created:
-                        added_count += 1
-                        log_rbac_event(request.user, 'user_role_assigned', target=user, summary=f"Assigned role '{role.name}' to user '{user.email}'", request=request)
+                    current_roles = list(Role.objects.filter(user_assignments__user=user, is_active=True))
+                    if role not in current_roles:
+                        current_roles.append(role)
+                    try:
+                        added, _ = RoleAssignmentService.sync_user_roles(
+                            user=user,
+                            target_roles=current_roles,
+                            actor=request.user,
+                            request=request,
+                            preserve_protected=True
+                        )
+                        if added:
+                            added_count += len(added)
+                    except (ValidationError, PermissionDenied) as e:
+                        messages.error(request, f"Cannot assign role '{role.name}' to {user.email or user.phone}: {e}")
+                        return redirect('admin_panel:role_members', pk=role.pk)
             messages.success(request, f"Successfully added {added_count} user(s) to role '{role.name}'.")
 
         elif action == 'remove':
             user_id = request.POST.get('user_id')
             if user_id:
                 target_user = User.objects.filter(pk=user_id).first()
-                deleted_count, _ = UserRoleAssignment.objects.filter(
-                    role=role,
-                    user_id=user_id
-                ).delete()
-                if deleted_count > 0:
-                    user_str = target_user.email if target_user else f"ID {user_id}"
-                    log_rbac_event(request.user, 'user_role_removed', target=target_user, summary=f"Removed role '{role.name}' from user '{user_str}'", request=request)
-                    messages.info(request, f"Removed user from role '{role.name}'.")
+                if target_user:
+                    current_roles = [r for r in Role.objects.filter(user_assignments__user=target_user, is_active=True) if r.pk != role.pk]
+                    try:
+                        _, removed = RoleAssignmentService.sync_user_roles(
+                            user=target_user,
+                            target_roles=current_roles,
+                            actor=request.user,
+                            request=request,
+                            preserve_protected=True
+                        )
+                        if removed:
+                            messages.info(request, f"Removed user '{target_user.email or target_user.phone}' from role '{role.name}'.")
+                    except (ValidationError, PermissionDenied) as e:
+                        messages.error(request, f"Cannot remove role '{role.name}': {e}")
+                        return redirect('admin_panel:role_members', pk=role.pk)
 
         return redirect('admin_panel:role_members', pk=role.pk)
 
@@ -470,9 +487,7 @@ class UserPermissionsView(RBACRoleAdminMixin, DetailView):
         context = super().get_context_data(**kwargs)
         target = self.object
 
-        roles_qs = Role.objects.filter(is_active=True).exclude(code='system_owner')
-        if not self.request.user.is_superuser:
-            roles_qs = roles_qs.exclude(code='super_admin')
+        roles_qs = RoleAssignmentService.get_assignable_roles_queryset(actor=self.request.user)
 
         context['all_roles'] = roles_qs.order_by('name')
         context['assigned_role_ids'] = set(
@@ -487,24 +502,41 @@ class UserPermissionsView(RBACRoleAdminMixin, DetailView):
         target = get_object_or_404(User, pk=pk)
         role_ids = request.POST.getlist('role_ids')
 
-        roles_qs = Role.objects.filter(pk__in=role_ids, is_active=True).exclude(code='system_owner')
-        if not request.user.is_superuser:
-            roles_qs = roles_qs.exclude(code='super_admin')
+        if not request.user or not request.user.is_authenticated:
+            messages.error(request, "Authentication required to manage user roles.")
+            return redirect('admin_panel:user_permissions', pk=target.pk)
 
-        valid_roles = list(roles_qs)
+        submitted_ids = set()
+        for r_id in role_ids:
+            try:
+                submitted_ids.add(int(r_id))
+            except (ValueError, TypeError):
+                messages.error(request, "Invalid role ID format submitted.")
+                return redirect('admin_panel:user_permissions', pk=target.pk)
 
-        preserved_assignments = list(
-            UserRoleAssignment.objects.filter(user=target, role__code__in=['system_owner'] + (['super_admin'] if not request.user.is_superuser else []))
-        )
-        preserved_role_ids = {a.role_id for a in preserved_assignments}
+        assignable_roles = RoleAssignmentService.get_assignable_roles_queryset(actor=request.user)
+        target_roles = list(assignable_roles.filter(pk__in=submitted_ids))
 
-        UserRoleAssignment.objects.filter(user=target).exclude(role_id__in=preserved_role_ids).delete()
-        for r_obj in valid_roles:
-            if r_obj.id not in preserved_role_ids:
-                UserRoleAssignment.objects.create(user=target, role=r_obj, assigned_by=request.user)
-                log_rbac_event(request.user, 'user_role_assigned', target=target, summary=f"Assigned role '{r_obj.name}' to user '{target.email}'", request=request)
+        found_ids = {r.id for r in target_roles}
+        invalid_ids = submitted_ids - found_ids
+        if invalid_ids:
+            messages.error(request, "One or more selected roles are inactive, unauthorized, protected, or invalid.")
+            return redirect('admin_panel:user_permissions', pk=target.pk)
 
-        messages.success(request, f"Updated role assignments for {target.email}.")
+        try:
+            RoleAssignmentService.sync_user_roles(
+                user=target,
+                target_roles=target_roles,
+                actor=request.user,
+                request=request,
+                preserve_protected=True
+            )
+            messages.success(request, f"Updated role assignments for {target.email or target.phone}.")
+        except (ValidationError, PermissionDenied) as e:
+            messages.error(request, f"Failed to update roles: {e}")
+        except Exception as e:
+            messages.error(request, f"An unexpected error occurred: {e}")
+
         return redirect('admin_panel:user_permissions', pk=target.pk)
 
 

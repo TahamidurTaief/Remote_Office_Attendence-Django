@@ -304,9 +304,13 @@ class ChangePasswordView(LoginRequiredMixin, View):
         return render(request, 'accounts/change_password.html')
 
     def post(self, request):
-        old_password = request.POST.get('old_password')
-        new_password1 = request.POST.get('new_password1')
-        new_password2 = request.POST.get('new_password2')
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        from apps.audit.services import AuditService
+
+        old_password = request.POST.get('old_password') or ''
+        new_password1 = request.POST.get('new_password1') or ''
+        new_password2 = request.POST.get('new_password2') or ''
 
         errors = []
 
@@ -315,27 +319,50 @@ class ChangePasswordView(LoginRequiredMixin, View):
 
         if not new_password1:
             errors.append("New password cannot be empty.")
-
-        if new_password1 != new_password2:
+        elif new_password1 != new_password2:
             errors.append("New password and confirm password do not match.")
+        else:
+            try:
+                validate_password(new_password1, user=request.user)
+            except ValidationError as e:
+                errors.extend(e.messages)
 
         if errors:
             for err in errors:
                 messages.error(request, err)
+            context = {'errors': errors}
             if request.headers.get('HX-Request') == 'true':
-                return render(request, 'accounts/partials/change_password_form.html')
-            return render(request, 'accounts/change_password.html')
+                return render(request, 'accounts/partials/change_password_form.html', context)
+            return render(request, 'accounts/change_password.html', context)
 
         user = request.user
         user.set_password(new_password1)
         user.save()
 
+        old_session_key = request.session.session_key
         update_session_auth_hash(request, user)
-        log_audit(user, 'password_change', summary="User updated account password", ip=get_client_ip(request))
+        current_session_key = request.session.session_key
+
+        if old_session_key and current_session_key and old_session_key != current_session_key:
+            UserSession.objects.filter(user=user, session_key=old_session_key).update(session_key=current_session_key)
+
+        AuditService.log_event(
+            actor=user,
+            action="password_change",
+            instance=user,
+            module="accounts",
+            object_type="CustomUser",
+            object_id=str(user.pk),
+            object_label=user.email or user.phone,
+            reason="User updated account password",
+            request=request
+        )
+        log_audit(user, 'password_change', target=user, summary="User updated account password", ip=get_client_ip(request))
 
         now = timezone.now()
-        current_session_key = request.session.session_key
         other_sessions = UserSession.objects.filter(user=user, is_active=True).exclude(session_key=current_session_key)
+        if old_session_key:
+            other_sessions = other_sessions.exclude(session_key=old_session_key)
 
         for sess in other_sessions:
             sess.is_active = False
@@ -346,9 +373,10 @@ class ChangePasswordView(LoginRequiredMixin, View):
                 Session.objects.filter(session_key=sess.session_key).delete()
 
         messages.success(request, 'Your password was successfully updated! Other device sessions have been logged out.')
+        context = {'password_updated': True}
         if request.headers.get('HX-Request') == 'true':
-            return render(request, 'accounts/partials/change_password_form.html')
-        return render(request, 'accounts/change_password.html')
+            return render(request, 'accounts/partials/change_password_form.html', context)
+        return render(request, 'accounts/change_password.html', context)
 
 
 class ForgotPasswordView(View):
@@ -446,6 +474,16 @@ class ForgotPasswordResetView(View):
             })
 
         user = otp_obj.user
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as e:
+            return render(request, 'accounts/partials/forgot_step3.html', {
+                'reset_token': reset_token,
+                'error': ' '.join(e.messages)
+            })
+
         user.set_password(new_password)
         user.save()
         log_audit(user, 'password_reset', summary="Password reset via OTP", ip=get_client_ip(request))

@@ -1,33 +1,31 @@
 <c-app-shell page_title="Permission Matrix | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
   <c-slot name="sidebar">
-    <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
+    <c-sidebar active_href="{{ request.path }}"></c-sidebar>
   </c-slot>
 
   <c-slot name="topbar">
-    <c-topbar title="Permission Matrix Editor" ></c-topbar>
+    <c-topbar title="Permission Matrix Editor"></c-topbar>
   </c-slot>
 
   <c-command-palette></c-command-palette>
 
   <div class="p-4 space-y-4 max-w-7xl mx-auto">
-    <c-card title="Module Access Control Matrix" subtitle="View and toggle role permissions across all 10 system modules with real-time HTMX updates.">
+    <c-card title="Module Access Control Matrix" subtitle="View and toggle role permissions across all system modules with real-time updates.">
 
       {# ── Role Selector Bar ────────────────────────────────────────────── #}
-      <div class="flex items-center justify-between mb-4 border-b pb-3 flex-wrap gap-2" style="border-color:var(--border)">
+      <div class="flex items-center justify-between mb-4 border-b border-border pb-3 flex-wrap gap-2">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs font-semibold" style="color:var(--text-secondary)">Select Role:</span>
+          <span class="text-xs font-semibold text-[var(--text-secondary)]">Select Role:</span>
           {% for r in roles %}
             <a href="?role_id={{ r.id }}"
-               class="px-3 py-1 text-xs rounded-lg border font-medium transition-all {% if selected_role.id == r.id %}bg-primary text-white border-primary shadow-sm{% else %}bg-surface border-border text-secondary hover:border-slate-400{% endif %}">
+               class="px-3 py-1 text-xs rounded-lg border font-medium transition-all {% if selected_role.id == r.id %}bg-primary text-white border-primary shadow-xs{% else %}bg-[var(--surface)] border-border text-[var(--text-secondary)] hover:border-slate-400{% endif %}">
               {{ r.name }}
             </a>
           {% endfor %}
         </div>
 
         <div>
-          <a href="{% url 'admin_panel:role_list' %}" class="ft-btn ft-btn-secondary ft-btn-sm text-xs">
-            <i data-lucide="shield" class="w-3.5 h-3.5"></i> Manage Roles
-          </a>
+          <c-button href="{% url 'admin_panel:role_list' %}" variant="secondary" size="sm" icon="shield" label="Manage Roles"></c-button>
         </div>
       </div>
 
@@ -35,7 +33,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs border-collapse">
           <thead>
-            <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
+            <tr class="border-b border-border text-[var(--text-secondary)]">
               <th class="py-3 px-4 font-semibold w-1/4">Module Name</th>
               <th class="py-3 px-3 font-semibold text-center">View</th>
               <th class="py-3 px-3 font-semibold text-center">Create</th>
@@ -45,7 +43,7 @@
               <th class="py-3 px-3 font-semibold text-center">Export</th>
             </tr>
           </thead>
-          <tbody class="divide-y" style="border-color:var(--border)">
+          <tbody class="divide-y divide-border">
             {% for app_key, mod in matrix.items %}
               <c-permission-module-table mod="{{ mod }}" selected_role="{{ selected_role }}"></c-permission-module-table>
             {% endfor %}

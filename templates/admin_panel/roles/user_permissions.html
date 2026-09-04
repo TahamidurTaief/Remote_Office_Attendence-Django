@@ -1,116 +1,139 @@
-{% extends 'cotton/app-shell.html' %}
-
-{% block content %}
+<c-app-shell page_title="User Roles & Permissions — {{ target_user.email|default:target_user.phone }} | FieldTrack" shell_type="admin" active_href="{{ request.path }}">
 <div class="space-y-6">
   <!-- Page Header -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
-      <h1 class="text-xl font-bold text-[var(--text)]">User Roles & Permission Overrides</h1>
-      <p class="text-xs text-[var(--text-muted)] mt-0.5">Manage multi-role assignments and direct permission overrides for {{ target_user.email }}.</p>
+      <div class="flex items-center gap-2">
+        <a href="{% url 'admin_panel:role_list' %}" class="text-xs text-[var(--text-muted)] hover:text-primary transition-colors">Roles</a>
+        <span class="text-xs text-[var(--text-muted)]">/</span>
+        <span class="text-xs font-semibold text-[var(--text)]">User Permissions</span>
+      </div>
+      <h1 class="text-sm font-bold text-[var(--text)] mt-1">User Roles & Permission Overrides</h1>
+      <p class="text-xs text-[var(--text-muted)] mt-0.5">Manage multi-role assignments and direct permission overrides for {{ target_user.email|default:target_user.phone }}.</p>
     </div>
-    <a href="{% url 'employees:employee_list' %}" class="ft-btn ft-btn-secondary ft-btn-sm">
-      Back to Directory
-    </a>
+    <div class="flex items-center gap-2">
+      <c-button href="{% url 'employees:employee_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Directory"></c-button>
+    </div>
   </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <c-alert variant="{% if msg.tags == 'error' %}danger{% elif msg.tags == 'success' %}success{% else %}info{% endif %}" message="{{ msg }}"></c-alert>
+    {% endfor %}
+  {% endif %}
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Multi-role Assignment Form -->
-    <div class="border border-[var(--border)] rounded-card bg-[var(--surface)] p-5 shadow-xs h-fit space-y-4">
-      <h3 class="font-semibold text-sm text-[var(--text)] border-b border-[var(--border)] pb-2.5">
-        Assigned Roles
-      </h3>
+    <c-card padding="md" extra_class="h-fit space-y-4">
+      <div class="border-b border-border pb-2.5">
+        <h3 class="font-semibold text-xs text-[var(--text)] uppercase tracking-wider">
+          Assigned Roles
+        </h3>
+        <p class="text-[11px] text-[var(--text-muted)]">Select active dynamic roles for this account.</p>
+      </div>
 
       <form action="{% url 'admin_panel:user_permissions' target_user.id %}" method="post" class="space-y-3">
         {% csrf_token %}
 
         <div class="space-y-2">
           {% for r in all_roles %}
-            <label class="flex items-start gap-3 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] hover:bg-opacity-80 cursor-pointer">
+            <label class="flex items-start gap-3 p-2.5 rounded-lg border border-border bg-[var(--surface-2)] hover:border-primary cursor-pointer transition-colors">
               <input type="checkbox"
                      name="role_ids"
                      value="{{ r.id }}"
                      {% if r.id in assigned_role_ids %}checked{% endif %}
-                     class="ft-checkbox h-4 w-4 rounded text-primary border-[var(--border)] mt-0.5">
-              <div>
-                <div class="text-xs font-semibold text-[var(--text)] flex items-center gap-1.5">
+                     class="ft-checkbox h-4 w-4 rounded text-primary border-border mt-0.5">
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-semibold text-[var(--text)] flex items-center gap-1.5 flex-wrap">
                   {{ r.name }}
                   {% if r.is_system_protected %}
-                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-bold">Protected</span>
+                    <c-badge variant="warning" size="sm" label="Protected"></c-badge>
                   {% endif %}
                 </div>
-                <div class="text-[11px] text-[var(--text-muted)] mt-0.5">{{ r.description|default:"Standard role" }}</div>
+                <div class="text-[11px] text-[var(--text-muted)] mt-0.5 line-clamp-1">{{ r.description|default:"Standard role" }}</div>
               </div>
             </label>
+          {% empty %}
+            <p class="text-xs text-[var(--text-muted)] italic py-2">No assignable roles available.</p>
           {% endfor %}
         </div>
 
-        <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm w-full mt-2">
-          Save Role Assignments
-        </button>
+        <div class="pt-2">
+          <c-button type="submit" variant="primary" size="sm" label="Save Role Assignments" extra_class="w-full justify-center min-h-[44px]"></c-button>
+        </div>
       </form>
-    </div>
+    </c-card>
 
     <!-- Direct User Permission Overrides -->
-    <div class="lg:col-span-2 border border-[var(--border)] rounded-card bg-[var(--surface)] p-5 shadow-xs space-y-4">
-      <h3 class="font-semibold text-sm text-[var(--text)] border-b border-[var(--border)] pb-2.5">
-        Direct User Permission Overrides (Grant / Revoke)
-      </h3>
+    <c-card padding="md" extra_class="lg:col-span-2 space-y-4">
+      <div class="border-b border-border pb-2.5">
+        <h3 class="font-semibold text-xs text-[var(--text)] uppercase tracking-wider">
+          Direct User Permission Overrides (Grant / Revoke)
+        </h3>
+        <p class="text-[11px] text-[var(--text-muted)]">Configure explicit granular grants or revocations bypassing role permissions.</p>
+      </div>
 
-      <form action="{% url 'admin_panel:user_permission_override' target_user.id %}" method="post" class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg">
+      <form action="{% url 'admin_panel:user_permission_override' target_user.id %}" method="post" class="space-y-3 p-3 bg-[var(--surface-2)] border border-border rounded-xl">
         {% csrf_token %}
 
-        <div class="sm:col-span-3 font-medium text-xs text-[var(--text)] mb-1">Add Specific Permission Override:</div>
+        <div class="font-medium text-xs text-[var(--text)]">Add Specific Permission Override:</div>
 
-        <select name="permission_id" class="ft-select text-xs col-span-1" required>
-          <option value="">Select Permission…</option>
-          {% for p in all_permissions %}
-            <option value="{{ p.id }}">{{ p.module.name }} — {{ p.name }} ({{ p.codename }})</option>
-          {% endfor %}
-        </select>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <c-select name="permission_id" required="true" extra_class="text-xs">
+              <option value="">Select Permission…</option>
+              {% for p in all_permissions %}
+                <option value="{{ p.id }}">{{ p.module.name }} — {{ p.name }} ({{ p.codename }})</option>
+              {% endfor %}
+            </c-select>
+          </div>
 
-        <select name="is_granted" class="ft-select text-xs" required>
-          <option value="true">GRANT Override</option>
-          <option value="false">REVOKE Override</option>
-        </select>
+          <div>
+            <c-select name="is_granted" required="true" extra_class="text-xs">
+              <option value="true">GRANT Override</option>
+              <option value="false">REVOKE Override</option>
+            </c-select>
+          </div>
 
-        <select name="data_scope" class="ft-select text-xs">
-          <option value="">Default Scope</option>
-          {% for s_key, s_label in data_scope_choices %}
-            <option value="{{ s_key }}">{{ s_label }}</option>
-          {% endfor %}
-        </select>
+          <div>
+            <c-select name="data_scope" extra_class="text-xs">
+              <option value="">Default Scope</option>
+              {% for s_key, s_label in data_scope_choices %}
+                <option value="{{ s_key }}">{{ s_label }}</option>
+              {% endfor %}
+            </c-select>
+          </div>
+        </div>
 
-        <div class="sm:col-span-3 flex justify-end">
-          <button type="submit" class="ft-btn ft-btn-primary ft-btn-xs">
-            Save Override
-          </button>
+        <div class="flex justify-end pt-1">
+          <c-button type="submit" variant="primary" size="sm" icon="plus" label="Save Override"></c-button>
         </div>
       </form>
 
       <!-- Existing Overrides List -->
-      <div class="overflow-x-auto">
-        <table class="ft-table w-full text-xs">
+      <div class="overflow-x-auto border border-border rounded-xl">
+        <table class="ft-table w-full text-xs text-left">
           <thead>
-            <tr class="bg-[var(--surface-2)] text-[var(--text-muted)] text-[11px] uppercase">
-              <th class="py-2 px-3">Permission</th>
-              <th class="py-2 px-3">Type</th>
-              <th class="py-2 px-3">Data Scope</th>
+            <tr class="bg-[var(--surface-2)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider border-b border-border">
+              <th class="py-2.5 px-3">Permission</th>
+              <th class="py-2.5 px-3">Type</th>
+              <th class="py-2.5 px-3">Data Scope</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-[var(--border)]">
+          <tbody class="divide-y divide-border">
             {% for ov in overrides %}
-              <tr>
-                <td class="py-2 px-3 font-mono text-[11px] font-semibold text-[var(--text)]">
+              <tr class="hover:bg-[var(--surface-2)] transition-colors">
+                <td class="py-2.5 px-3 font-mono text-[11px] font-semibold text-[var(--text)]">
                   {{ ov.permission.codename }}
                 </td>
-                <td class="py-2 px-3">
+                <td class="py-2.5 px-3">
                   {% if ov.is_granted %}
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-600">GRANT</span>
+                    <c-badge variant="success" size="sm" label="GRANT"></c-badge>
                   {% else %}
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-600">REVOKE</span>
+                    <c-badge variant="danger" size="sm" label="REVOKE"></c-badge>
                   {% endif %}
                 </td>
-                <td class="py-2 px-3 text-[var(--text-secondary)]">
+                <td class="py-2.5 px-3 text-[var(--text-secondary)]">
                   {{ ov.get_data_scope_display|default:"Role Default" }}
                 </td>
               </tr>
@@ -123,7 +146,7 @@
         </table>
       </div>
 
-    </div>
+    </c-card>
   </div>
 </div>
-{% endblock %}
+</c-app-shell>
