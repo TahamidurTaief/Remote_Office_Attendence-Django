@@ -167,6 +167,185 @@ class AdminExpenseListView(AdminRequiredMixin, ListView):
             pass
         return qs
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import ExpenseCategory
+        from apps.projects.models import Project
+        context['categories'] = ExpenseCategory.objects.filter(is_active=True)
+        context['projects'] = Project.objects.all()
+        base_qs = Expense.objects.all()
+        context['all_count'] = base_qs.count()
+        context['pending_count'] = base_qs.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts']).count()
+        context['approved_count'] = base_qs.filter(status='approved').count()
+        context['rejected_count'] = base_qs.filter(status='rejected').count()
+        return context
+
+
+@login_required
+def expense_detail_api(request, pk):
+    import os
+    expense = get_object_or_404(
+        Expense.objects.select_related('employee', 'project', 'category', 'reviewed_by'),
+        pk=pk
+    )
+    from apps.accounts.engine import PermissionEngine
+    can_manage = (
+        request.user.is_superuser
+        or PermissionEngine.evaluate(request.user, 'expense.approve').allowed
+        or getattr(request.user, 'role', '') in ('admin', 'manager', 'finance', 'accounts')
+    )
+    employee = _get_profile(request.user)
+    if not can_manage and expense.employee != employee:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+
+    return_events_data = []
+    for ev in expense.return_events.select_related('returned_by').order_by('-created_at'):
+        return_events_data.append({
+            'id': ev.id,
+            'returned_by': ev.returned_by.email if ev.returned_by else 'Reviewer',
+            'reason': ev.reason,
+            'returned_from_status': ev.returned_from_status,
+            'fields_to_correct': ev.fields_to_correct or [],
+            'due_date': ev.due_date.strftime('%d %b %Y') if ev.due_date else None,
+            'created_at': ev.created_at.strftime('%d %b %Y, %I:%M %p') if ev.created_at else '',
+            'attachment_url': ev.attachment.url if ev.attachment else None,
+        })
+
+    history_data = []
+    for h in expense.history.select_related('updated_by', 'category').order_by('-changed_at')[:10]:
+        history_data.append({
+            'id': h.id,
+            'updated_by': h.updated_by.email if h.updated_by else 'System',
+            'amount': f"{h.amount:.2f}",
+            'category': h.category.name if h.category else 'Uncategorized',
+            'description': h.description,
+            'changed_at': h.changed_at.strftime('%d %b %Y, %I:%M %p') if h.changed_at else '',
+        })
+
+    emp = expense.employee
+    dept = getattr(emp, 'department', None)
+    dept_name = dept if isinstance(dept, str) else (str(dept.name) if hasattr(dept, 'name') and not callable(getattr(dept, 'name')) else str(dept or ''))
+    desig = getattr(emp, 'designation', None)
+    desig_title = desig if isinstance(desig, str) else (str(desig.title) if hasattr(desig, 'title') and not callable(getattr(desig, 'title')) else str(desig or ''))
+
+    attachment_data = None
+    if expense.attachment:
+        name = os.path.basename(expense.attachment.name)
+        ext = os.path.splitext(name)[1].lower()
+        attachment_data = {
+            'url': expense.attachment.url,
+            'name': name,
+            'is_image': ext in ['.jpg', '.jpeg', '.png', '.webp'],
+            'is_pdf': ext == '.pdf',
+        }
+
+    return JsonResponse({
+        'id': expense.id,
+        'employee': {
+            'id': emp.id,
+            'name': emp.full_name,
+            'employee_id': emp.employee_id,
+            'photo': emp.profile_photo.url if emp.profile_photo else None,
+            'department': dept_name,
+            'designation': desig_title,
+        },
+        'amount': f"{expense.amount:.2f}",
+        'category': {
+            'id': expense.category.id if expense.category else None,
+            'name': expense.category.name if expense.category else 'Uncategorized',
+            'code': expense.category.code if expense.category else '',
+        },
+        'project': {
+            'id': expense.project.id if expense.project else None,
+            'name': expense.project.name if expense.project else 'None',
+        } if expense.project else None,
+        'description': expense.description or '',
+        'status': expense.status,
+        'status_display': expense.get_status_display(),
+        'requested_at': expense.requested_at.strftime('%d %b %Y, %I:%M %p') if expense.requested_at else '',
+        'reviewed_by': expense.reviewed_by.email if expense.reviewed_by else None,
+        'reviewed_at': expense.reviewed_at.strftime('%d %b %Y, %I:%M %p') if expense.reviewed_at else None,
+        'rejection_reason': expense.rejection_reason or '',
+        'attachment': attachment_data,
+        'can_approve': expense.status in ('pending_manager', 'pending_finance', 'pending_accounts'),
+        'can_return': expense.status in ('pending_manager', 'pending_finance'),
+        'can_reject': expense.status in ('pending_manager', 'pending_finance', 'pending_accounts'),
+        'return_events': return_events_data,
+        'history': history_data,
+    })
+
+
+class AdminExpenseUpdateView(AdminRequiredMixin, View):
+    def post(self, request, pk):
+        from django.db import transaction
+        from .models import ExpenseHistory, ExpenseCategory
+        from apps.projects.models import Project
+
+        expense = get_object_or_404(Expense, pk=pk)
+
+        content_type = request.content_type or ''
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(request.body)
+            except (json.JSONDecodeError, ValueError):
+                data = request.POST
+        else:
+            data = request.POST
+
+        amount = data.get('amount')
+        category_id = data.get('category')
+        project_id = data.get('project')
+        description = data.get('description')
+        status = data.get('status')
+
+        with transaction.atomic():
+            ExpenseHistory.objects.create(
+                expense=expense,
+                updated_by=request.user,
+                amount=expense.amount,
+                category=expense.category,
+                description=expense.description,
+                attachment=expense.attachment
+            )
+
+            if amount:
+                try:
+                    expense.amount = float(amount)
+                except (ValueError, TypeError):
+                    pass
+
+            if category_id:
+                cat = ExpenseCategory.objects.filter(pk=category_id).first()
+                if cat:
+                    expense.category = cat
+            elif 'category' in data and not category_id:
+                expense.category = None
+
+            if project_id:
+                proj = Project.objects.filter(pk=project_id).first()
+                if proj:
+                    expense.project = proj
+            elif 'project' in data and not project_id:
+                expense.project = None
+
+            if description is not None:
+                expense.description = description.strip()
+
+            if status and status in dict(Expense.STATUS_CHOICES):
+                expense.status = status
+
+            expense.save()
+
+        if 'application/json' in content_type or request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'id': expense.id})
+
+        messages.success(request, f"Expense claim #{expense.id} updated successfully.")
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
+        return redirect('expense:admin_expense_list')
+
+
 class BaseProcessExpenseView(View):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:

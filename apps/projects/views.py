@@ -541,21 +541,25 @@ class ProjectTaskReorderView(AdminRequiredMixin, View):
 
 class ProjectTaskBulkStatusView(AdminRequiredMixin, View):
     """Bulk-update the status of multiple tasks in one POST.
-    POST body: task_ids (list of pk strings), new_status (string)
+    POST body: task_ids (list of pk strings), new_status / status (string)
     """
-    def post(self, request, project_id):
-        project = get_object_or_404(Project, pk=project_id)
+    def post(self, request, project_id=None, pk=None, *args, **kwargs):
+        pid = project_id or pk or kwargs.get('project_id') or kwargs.get('pk')
+        project = get_object_or_404(Project, pk=pid)
         task_ids = request.POST.getlist('task_ids')
-        new_status = request.POST.get('new_status', '').strip()
+        if not task_ids and request.POST.get('task_ids_csv'):
+            task_ids = [x.strip() for x in request.POST.get('task_ids_csv').split(',') if x.strip()]
+
+        new_status = (request.POST.get('new_status') or request.POST.get('status', '')).strip()
 
         if not task_ids:
             messages.error(request, 'No tasks selected.')
-            return redirect('projects:project_detail', pk=project_id)
+            return redirect('projects:project_detail', pk=pid)
 
         valid_statuses = dict(ProjectTask.STATUS_CHOICES)
         if new_status not in valid_statuses:
             messages.error(request, f'Invalid status: {new_status}')
-            return redirect('projects:project_detail', pk=project_id)
+            return redirect('projects:project_detail', pk=pid)
 
         # Restrict update to tasks that belong to this project (prevents IDOR)
         updated = ProjectTask.objects.filter(
@@ -563,7 +567,30 @@ class ProjectTaskBulkStatusView(AdminRequiredMixin, View):
         ).update(status=new_status)
 
         messages.success(request, f'{updated} task(s) updated to "{valid_statuses[new_status]}".')
-        return redirect('projects:project_detail', pk=project_id)
+        return redirect('projects:project_detail', pk=pid)
+
+
+class ProjectTaskBulkDeleteView(AdminRequiredMixin, View):
+    """Bulk-delete multiple tasks belonging to a project.
+    POST body: task_ids (list of pk strings or task_ids_csv)
+    """
+    def post(self, request, project_id=None, pk=None, *args, **kwargs):
+        pid = project_id or pk or kwargs.get('project_id') or kwargs.get('pk')
+        project = get_object_or_404(Project, pk=pid)
+        task_ids = request.POST.getlist('task_ids')
+        if not task_ids and request.POST.get('task_ids_csv'):
+            task_ids = [x.strip() for x in request.POST.get('task_ids_csv').split(',') if x.strip()]
+
+        if not task_ids:
+            messages.error(request, 'No tasks selected for deletion.')
+            return redirect('projects:project_detail', pk=pid)
+
+        deleted_count, _ = ProjectTask.objects.filter(
+            pk__in=task_ids, project=project
+        ).delete()
+
+        messages.success(request, f'Successfully deleted {deleted_count} task(s).')
+        return redirect('projects:project_detail', pk=pid)
 
 
 # Apply Template view
@@ -1331,11 +1358,28 @@ class ProjectTypeDeleteView(AdminRequiredMixin, DeleteView):
 
 class ExportProjectTasksCSVView(AdminRequiredMixin, View):
     def get(self, request, pk):
+        return self._generate_csv(request, pk)
+
+    def post(self, request, pk):
+        return self._generate_csv(request, pk)
+
+    def _generate_csv(self, request, pk):
         project = get_object_or_404(Project, pk=pk)
         tasks = project.tasks.select_related('responsible_person').all().order_by('order')
+
+        # Support selective export via task_ids
+        task_ids = request.POST.getlist('task_ids') or request.GET.getlist('task_ids')
+        if not task_ids and request.GET.get('task_ids'):
+            task_ids = [x.strip() for x in request.GET.get('task_ids').split(',') if x.strip()]
+        elif not task_ids and request.POST.get('task_ids_csv'):
+            task_ids = [x.strip() for x in request.POST.get('task_ids_csv').split(',') if x.strip()]
+
+        if task_ids:
+            tasks = tasks.filter(pk__in=task_ids)
         
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="project_{project.id}_tasks.csv"'
+        filename = f"project_{project.id}_selected_tasks.csv" if task_ids else f"project_{project.id}_tasks.csv"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         writer = csv.writer(response)
         writer.writerow(['Order', 'Activity', 'Responsible Person', 'Planned Start', 'Planned Finish', 'Duration (Days)', 'Status', 'Remarks'])

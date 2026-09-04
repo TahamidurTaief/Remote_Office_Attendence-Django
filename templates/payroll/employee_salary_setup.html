@@ -47,8 +47,8 @@
                 </c-select>
 
                 <div class="flex gap-2">
-                    <button type="submit" class="ft-btn ft-btn-primary flex-1">Apply</button>
-                    <a href="?" class="ft-btn ft-btn-secondary">Reset</a>
+                    <c-button type="submit" variant="primary" label="Apply" extra_class="flex-1"></c-button>
+                    <c-button href="?" variant="secondary" label="Reset"></c-button>
                 </div>
             </form>
         </c-card>
@@ -64,13 +64,9 @@
                         <p class="text-xs text-gray-600 mt-1">{{ emp.department.name|default:"No Department" }} • {{ emp.branch.name|default:"No Branch" }}</p>
                     </div>
                     {% if not emp.active_salary_assignment %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                        Not Configured
-                    </span>
+                    <c-badge variant="error" label="Not Configured"></c-badge>
                     {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                        Configured
-                    </span>
+                    <c-badge variant="success" label="Configured"></c-badge>
                     {% endif %}
                 </div>
 
@@ -111,7 +107,7 @@
 
                 <div class="mt-4 pt-3 border-t border-gray-150 flex justify-end gap-2">
                     {% if emp.active_salary_assignment %}
-                    <button type="button" @click="editAssignment({
+                    <c-button type="button" variant="secondary" size="sm" extra_class="w-full" label="Update Assignment" @click="editAssignment({
                         id: '{{ emp.active_salary_assignment.pk }}',
                         employee_name: '{{ emp.get_full_name|escapejs }}',
                         structure_id: '{{ emp.active_salary_assignment.salary_structure.pk }}',
@@ -120,16 +116,12 @@
                         effective_to: '{{ emp.active_salary_assignment.effective_to|date:"Y-m-d" }}',
                         payment_mode: '{{ emp.active_salary_assignment.payment_mode }}',
                         bank_limit: '{{ emp.active_salary_assignment.bank_limit }}'
-                    })" class="ft-btn ft-btn-secondary ft-btn-sm w-full">
-                        Update Assignment
-                    </button>
+                    })"></c-button>
                     {% else %}
-                    <button type="button" @click="createAssignment({
+                    <c-button type="button" variant="primary" size="sm" extra_class="w-full" label="Set Salary Structure" @click="createAssignment({
                         id: '{{ emp.pk }}',
                         name: '{{ emp.get_full_name|escapejs }}'
-                    })" class="ft-btn ft-btn-primary ft-btn-sm w-full">
-                        Set Salary Structure
-                    </button>
+                    })"></c-button>
                     {% endif %}
                 </div>
             </c-card>
@@ -153,14 +145,11 @@
             employee_id = $event.detail.employee_id;
             employee_name = $event.detail.employee_name;
         }">
-            <form method="post" action="{% url 'payroll:employee_salary_assign' %}" class="space-y-4">
+            <form id="create-assignment-form" method="post" action="{% url 'payroll:employee_salary_assign' %}" class="space-y-4">
                 {% csrf_token %}
                 <input type="hidden" name="employee_id" :value="employee_id">
 
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Employee</label>
-                    <input type="text" readonly :value="employee_name" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 font-bold">
-                </div>
+                <c-input label="Employee" readonly="true" :value="employee_name"></c-input>
 
                 <c-select name="salary_structure_id" label="Salary Structure" required="true">
                     {% for s in structures %}
@@ -182,15 +171,15 @@
                 </c-select>
 
                 <c-input type="number" step="0.01" name="bank_limit" label="Bank Limit Amount (For Split Mode only)" placeholder="e.g. 20000.00"></c-input>
-
-                <c-slot name="footer">
-                    <div class="flex items-center justify-end gap-2 w-full">
-                        <button type="button" @click="$dispatch('close-drawer')" class="ft-btn ft-btn-secondary">Cancel</button>
-                        <button type="submit" class="ft-btn ft-btn-primary">Assign Structure</button>
-                    </div>
-                </c-slot>
             </form>
         </div>
+
+        <c-slot name="footer">
+            <div class="flex items-center justify-end gap-2 w-full">
+                <c-button type="button" variant="secondary" size="sm" label="Cancel" @click="$dispatch('close-drawer')"></c-button>
+                <c-button type="submit" form="create-assignment-form" variant="primary" size="sm" label="Assign Structure"></c-button>
+            </div>
+        </c-slot>
     </c-right-drawer>
 
     <!-- Edit Assignment Drawer -->
@@ -207,12 +196,9 @@
             payment_mode = $event.detail.payment_mode;
             bank_limit = $event.detail.bank_limit;
         }">
-            <form method="post" :action="action" class="space-y-4">
+            <form id="edit-assignment-form" method="post" :action="action" class="space-y-4">
                 {% csrf_token %}
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Employee</label>
-                    <input type="text" readonly :value="employee_name" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 font-bold">
-                </div>
+                <c-input label="Employee" readonly="true" :value="employee_name"></c-input>
 
                 <c-select name="salary_structure_id" label="Salary Structure" required="true" x-model="structure_id">
                     {% for s in structures %}
@@ -234,14 +220,14 @@
                 </c-select>
 
                 <c-input type="number" step="0.01" name="bank_limit" label="Bank Limit Amount (For Split Mode only)" x-model="bank_limit"></c-input>
-
-                <c-slot name="footer">
-                    <div class="flex items-center justify-end gap-2 w-full">
-                        <button type="button" @click="$dispatch('close-drawer')" class="ft-btn ft-btn-secondary">Cancel</button>
-                        <button type="submit" class="ft-btn ft-btn-primary">Save Assignment</button>
-                    </div>
-                </c-slot>
             </form>
         </div>
+
+        <c-slot name="footer">
+            <div class="flex items-center justify-end gap-2 w-full">
+                <c-button type="button" variant="secondary" size="sm" label="Cancel" @click="$dispatch('close-drawer')"></c-button>
+                <c-button type="submit" form="edit-assignment-form" variant="primary" size="sm" label="Save Assignment"></c-button>
+            </div>
+        </c-slot>
     </c-right-drawer>
 </c-app-shell>

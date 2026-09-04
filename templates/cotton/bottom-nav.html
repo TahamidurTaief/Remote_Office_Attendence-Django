@@ -1,6 +1,6 @@
 {% comment %}
 c-bottom-nav component
-Mobile-only bottom navigation bar (< 768px) with safe-area support
+Android-native style bottom navigation bar (< 768px) with safe-area support
 Props:
 - active_tab: 'home' (default) | 'attendance' | 'tasks' | 'leave' | 'more'
 - unread_notifications: integer count
@@ -10,68 +10,68 @@ Props:
 <c-vars active_tab="home" unread_notifications="" pending_tasks_count="" extra_class="" />
 
 <nav id="ft-mobile-bottom-nav"
-     aria-label="Mobile Navigation"
-     class="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-[calc(env(safe-area-inset-bottom,0px)+0.35rem)] pt-1.5 px-2 transition-all duration-200 select-none {{ extra_class }}">
-  <div class="grid grid-cols-5 items-center justify-around max-w-lg mx-auto">
+     aria-label="Bottom Navigation"
+     class="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 pb-[calc(env(safe-area-inset-bottom,0px)+0.4rem)] pt-2 px-3 transition-all duration-200 select-none shadow-[0_-2px_10px_rgba(0,0,0,0.04)] {{ extra_class }}">
+  <div class="grid grid-cols-5 items-center justify-around max-w-md mx-auto">
     {# Tab 1: Home #}
     <a href="{% url 'staff:home' %}"
-       class="flex flex-col items-center justify-center min-h-[44px] py-1 px-1 rounded-xl transition-colors relative {% if active_tab == 'home' %}text-primary font-semibold{% else %}text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
+       class="flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl transition-all relative group {% if active_tab == 'home' %}text-[#1877F2] font-semibold{% else %}text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
        aria-label="Home">
       <div class="relative flex items-center justify-center">
-        <i data-lucide="home" class="w-5 h-5"></i>
+        <i data-lucide="home" class="w-5 h-5 {% if active_tab == 'home' %}stroke-[2.5]{% else %}stroke-[1.8]{% endif %}"></i>
       </div>
-      <span class="text-[11px] leading-tight mt-1 tracking-tight">Home</span>
+      <span class="text-[11px] leading-tight mt-1 tracking-tight {% if active_tab == 'home' %}font-bold{% else %}font-medium{% endif %}">Home</span>
     </a>
 
     {# Tab 2: Attendance #}
-    <a href="{% url 'staff:home' %}#attendance-section"
-       class="flex flex-col items-center justify-center min-h-[44px] py-1 px-1 rounded-xl transition-colors relative {% if active_tab == 'attendance' %}text-primary font-semibold{% else %}text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
+    <a href="{% url 'staff:check_in' %}"
+       class="flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl transition-all relative group {% if active_tab == 'attendance' %}text-[#1877F2] font-semibold{% else %}text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
        aria-label="Attendance">
       <div class="relative flex items-center justify-center">
-        <i data-lucide="clock" class="w-5 h-5"></i>
+        <i data-lucide="clock" class="w-5 h-5 {% if active_tab == 'attendance' %}stroke-[2.5]{% else %}stroke-[1.8]{% endif %}"></i>
       </div>
-      <span class="text-[11px] leading-tight mt-1 tracking-tight">Attendance</span>
+      <span class="text-[11px] leading-tight mt-1 tracking-tight {% if active_tab == 'attendance' %}font-bold{% else %}font-medium{% endif %}">Attendance</span>
     </a>
 
     {# Tab 3: Tasks #}
     <a href="{% url 'staff:my_tasks' %}"
-       class="flex flex-col items-center justify-center min-h-[44px] py-1 px-1 rounded-xl transition-colors relative {% if active_tab == 'tasks' %}text-primary font-semibold{% else %}text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
-       aria-label="My Tasks">
+       class="flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl transition-all relative group {% if active_tab == 'tasks' %}text-[#1877F2] font-semibold{% else %}text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
+       aria-label="Tasks">
       <div class="relative flex items-center justify-center">
-        <i data-lucide="check-square" class="w-5 h-5"></i>
+        <i data-lucide="check-square" class="w-5 h-5 {% if active_tab == 'tasks' %}stroke-[2.5]{% else %}stroke-[1.8]{% endif %}"></i>
         {% if pending_tasks_count and pending_tasks_count > 0 %}
-          <span class="absolute -top-1 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+          <span class="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#1877F2] text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
             {{ pending_tasks_count }}
           </span>
         {% endif %}
       </div>
-      <span class="text-[11px] leading-tight mt-1 tracking-tight">Tasks</span>
+      <span class="text-[11px] leading-tight mt-1 tracking-tight {% if active_tab == 'tasks' %}font-bold{% else %}font-medium{% endif %}">Tasks</span>
     </a>
 
     {# Tab 4: Leave #}
     <a href="{% url 'leave:staff_dashboard' %}"
-       class="flex flex-col items-center justify-center min-h-[44px] py-1 px-1 rounded-xl transition-colors relative {% if active_tab == 'leave' %}text-primary font-semibold{% else %}text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
+       class="flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl transition-all relative group {% if active_tab == 'leave' %}text-[#1877F2] font-semibold{% else %}text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
        aria-label="Leave">
       <div class="relative flex items-center justify-center">
-        <i data-lucide="calendar" class="w-5 h-5"></i>
+        <i data-lucide="calendar" class="w-5 h-5 {% if active_tab == 'leave' %}stroke-[2.5]{% else %}stroke-[1.8]{% endif %}"></i>
       </div>
-      <span class="text-[11px] leading-tight mt-1 tracking-tight">Leave</span>
+      <span class="text-[11px] leading-tight mt-1 tracking-tight {% if active_tab == 'leave' %}font-bold{% else %}font-medium{% endif %}">Leave</span>
     </a>
 
     {# Tab 5: More #}
     <button type="button"
             @click="$dispatch('open-drawer-notifications')"
-            class="flex flex-col items-center justify-center min-h-[44px] py-1 px-1 rounded-xl transition-colors relative {% if active_tab == 'more' %}text-primary font-semibold{% else %}text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
-            aria-label="More options and notifications">
+            class="flex flex-col items-center justify-center min-h-[46px] py-1 px-1 rounded-xl transition-all relative group {% if active_tab == 'more' %}text-[#1877F2] font-semibold{% else %}text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
+            aria-label="More options">
       <div class="relative flex items-center justify-center">
-        <i data-lucide="grid" class="w-5 h-5"></i>
+        <i data-lucide="menu" class="w-5 h-5 {% if active_tab == 'more' %}stroke-[2.5]{% else %}stroke-[1.8]{% endif %}"></i>
         {% if unread_notifications and unread_notifications > 0 %}
           <span class="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
             {{ unread_notifications }}
           </span>
         {% endif %}
       </div>
-      <span class="text-[11px] leading-tight mt-1 tracking-tight">More</span>
+      <span class="text-[11px] leading-tight mt-1 tracking-tight {% if active_tab == 'more' %}font-bold{% else %}font-medium{% endif %}">More</span>
     </button>
   </div>
 </nav>

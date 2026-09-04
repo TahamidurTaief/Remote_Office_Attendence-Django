@@ -153,6 +153,30 @@
           g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
           o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.12);
         });
+      },
+      playDropdownOpen() {
+        this.runAudio(ctx => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(380, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(540, ctx.currentTime + 0.09);
+          g.gain.setValueAtTime(0.06, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+          o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.09);
+        });
+      },
+      playDropdownSelect() {
+        this.runAudio(ctx => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(580, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(780, ctx.currentTime + 0.08);
+          g.gain.setValueAtTime(0.07, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+          o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.08);
+        });
       }
     };
     window.SoundFX = SoundFX;
@@ -416,7 +440,7 @@
 
   {# ── Sidebar ────────────────────────────────────────────────────────── #}
   {% if sidebar %}{{ sidebar }}{% else %}
-    <c-sidebar shell_type="{{ shell_type|default:'admin' }}" active_href="{{ active_href }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" pending_expense_count="{{ pending_expense_count }}" ></c-sidebar>
+    <c-sidebar shell_type="{{ shell_type|default:'admin' }}" active_href="{{ active_href }}" pending_leave_count="{{ pending_leave_count }}" unread_notifications="{{ unread_notifications }}" expired_data_count="{{ expired_data_count }}" pending_expense_count="{{ pending_expense_count }}" pending_tasks_count="{{ pending_tasks_count }}"></c-sidebar>
   {% endif %}
 
   {# ── Main area ──────────────────────────────────────────────────────── #}
@@ -437,11 +461,13 @@
       <div class="absolute bottom-5 left-[12%] w-[500px] h-[500px] rounded-full blur-[110px] opacity-40 dark:opacity-15 ft-ambient-purple"></div>
     </div>
 
-    {# ── Topbar (fixed & uniform across every page) ───────────────────── #}
-    <c-topbar></c-topbar>
+    {# ── Topbar (fixed & uniform across every page, hidden on mobile for staff app view) ── #}
+    <div class="{% if shell_type == 'staff' %}hidden md:block{% endif %}">
+      <c-topbar shell_type="{{ shell_type|default:'admin' }}"></c-topbar>
+    </div>
 
     {# ── Page content ────────────────────────────────────────────────── #}
-    <main class="flex-1 flex flex-col p-4 overflow-y-auto relative z-10">
+    <main class="flex-1 flex flex-col {% if shell_type == 'staff' %}p-2.5 sm:p-4 pb-24 md:pb-6 max-w-lg md:max-w-7xl mx-auto w-full{% else %}p-4{% endif %} overflow-y-auto relative z-10">
       {% if topbar_actions %}
       <div class="flex items-center justify-between gap-3 mb-4 pb-2 border-b" style="border-color:var(--border)">
         <h2 class="text-[16px] font-bold" style="color:var(--text)">{{ page_title }}</h2>

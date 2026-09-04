@@ -1,5 +1,5 @@
-<div id="adjustments-modal-content" class="space-y-4">
-    <div class="flex items-center justify-between pb-3 border-b" style="border-color:var(--border)">
+<div id="adjustments-drawer-content" class="space-y-4 w-full">
+    <div class="flex items-center justify-between pb-3 border-b w-full" style="border-color:var(--border)">
         <div>
             <h4 class="font-semibold text-sm" style="color:var(--text)">{{ employee.get_full_name }}</h4>
             <span class="text-xs font-mono" style="color:var(--text-muted)">{{ employee.employee_number }} &bull; {{ employee.department.name|default:"General" }}</span>
@@ -14,10 +14,10 @@
     </div>
 
     <!-- Existing Adjustments List -->
-    <div class="space-y-2">
+    <div class="space-y-2 w-full">
         <h5 class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Current Run Adjustments</h5>
         {% if adjustments %}
-        <div class="border rounded-lg overflow-hidden" style="border-color:var(--border)">
+        <div class="border rounded-lg overflow-hidden w-full" style="border-color:var(--border)">
             <table class="w-full text-xs">
                 <thead class="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-b" style="border-color:var(--border)">
                     <tr>
@@ -48,7 +48,7 @@
                             <form method="post"
                                   action="{% url 'payroll:payroll_adjustment_delete' run.pk adj.pk %}"
                                   hx-post="{% url 'payroll:payroll_adjustment_delete' run.pk adj.pk %}"
-                                  hx-target="#adjustments-modal-content">
+                                  hx-target="#adjustments-drawer-content">
                                 {% csrf_token %}
                                 <button type="submit" class="text-rose-600 hover:text-rose-800 p-1" title="Remove">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
@@ -68,40 +68,37 @@
 
     <!-- Add Adjustment Form -->
     {% if not is_locked %}
-    <div class="pt-3 border-t space-y-3" style="border-color:var(--border)">
+    <div class="pt-3 border-t space-y-3 w-full" style="border-color:var(--border)">
         <h5 class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Add Manual Adjustment</h5>
         <form method="post"
               action="{% url 'payroll:payroll_adjustment_add' run.pk %}"
               hx-post="{% url 'payroll:payroll_adjustment_add' run.pk %}"
-              hx-target="#adjustments-modal-content"
-              class="space-y-3">
+              hx-target="#adjustments-drawer-content"
+              class="space-y-3 w-full">
             {% csrf_token %}
             <input type="hidden" name="employee_id" value="{{ employee.pk }}">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <c-select name="component_id" label="Salary Component" required="true">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                <c-select name="component_id" label="Salary Component" required="true" class="w-full">
                     <option value="">Select Component</option>
                     {% for comp in components %}
                     <option value="{{ comp.id }}">{{ comp.name }} ({{ comp.get_type_display }})</option>
                     {% endfor %}
                 </c-select>
 
-                <c-select name="type" label="Adjustment Type" required="true">
+                <c-select name="type" label="Adjustment Type" required="true" class="w-full">
                     <option value="earning">Addition (Earning)</option>
                     <option value="deduction">Deduction</option>
                 </c-select>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <c-input name="amount" label="Amount (BDT)" type="number" step="0.01" min="0.01" placeholder="e.g. 5000.00" required="true"></c-input>
-                <c-input name="reason" label="Reason / Description" placeholder="e.g. Performance bonus or Arrear"></c-input>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                <c-input name="amount" label="Amount (BDT)" type="number" step="0.01" min="0.01" placeholder="e.g. 5000.00" required="true" class="w-full"></c-input>
+                <c-input name="reason" label="Reason / Description" placeholder="e.g. Performance bonus or Arrear" class="w-full"></c-input>
             </div>
 
-            <div class="flex items-center justify-end gap-2 pt-2">
-                <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1">
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                    <span>Apply Adjustment</span>
-                </button>
+            <div class="flex items-center justify-end gap-2 pt-2 w-full">
+                <c-button type="submit" variant="primary" size="sm" icon="plus" label="Apply Adjustment" extra_class="w-full sm:w-auto"></c-button>
             </div>
         </form>
     </div>

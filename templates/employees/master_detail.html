@@ -6,7 +6,7 @@
  
     <c-command-palette></c-command-palette>
  
-    <div class="p-4 lg:p-6 w-full space-y-6">
+    <div class="p-4 lg:p-6 w-full space-y-6 font-sans">
         <c-page-header title="{{ employee.get_full_name }}">
             <c-slot name="actions">
                 <div class="flex items-center space-x-2">
@@ -51,13 +51,12 @@
         </c-page-header>
         <!-- Suspended Status Alert -->
         {% if employee.is_suspended %}
-        <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-700 dark:text-red-300 mb-6">
-            <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            <div>
-                <span class="text-sm font-semibold block">Suspended Status Alert</span>
-                <span class="text-xs">This employee's account has been suspended. Login, attendance clock-in, and leave submissions are blocked.</span>
-            </div>
-        </div>
+        <c-alert
+            variant="danger"
+            title="Suspended Status Alert"
+            message="This employee's account has been suspended. Login, attendance clock-in, and leave submissions are blocked."
+            extra_class="mb-6"
+        ></c-alert>
         {% endif %}
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -66,7 +65,7 @@
                 <c-profile-card :employee="employee" ></c-profile-card>
             </div>
  
-            <div class="lg:col-span-3 space-y-6" x-data="{ tab: '{{ active_tab }}' }">
+            <div class="lg:col-span-3 space-y-6" x-data="{ tab: '{{ active_tab|default:'identity' }}' }">
                 <c-card padding="lg">
                     <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
                         <nav class="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-3">
@@ -109,7 +108,7 @@
                     </div>
  
                     <!-- Contact Tab -->
-                    <div x-show="tab === 'contact'" class="space-y-4" style="display: none;">
+                    <div x-show="tab === 'contact'" x-cloak class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <c-info-field label="Phone Number" :value="employee.phone|default:''"></c-info-field>
                             <c-info-field label="Personal Email" :value="employee.personal_email|default:''"></c-info-field>
@@ -122,7 +121,7 @@
                     </div>
  
                     <!-- Organization Tab -->
-                    <div x-show="tab === 'organization'" class="space-y-4" style="display: none;">
+                    <div x-show="tab === 'organization'" x-cloak class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                             <c-info-field label="Branch" :value="employee.branch.name|default:''"></c-info-field>
                             <c-info-field label="Department" :value="employee.department.name|default:''"></c-info-field>
@@ -136,16 +135,17 @@
                                     {{ employee.reporting_manager.get_full_name }} ({{ employee.reporting_manager.employee_number }})
                                 </a>
                                 {% else %}
-                                <span class="text-gray-400">None</span>
+                                <span class="text-slate-400">None</span>
                                 {% endif %}
                             </c-info-field>
                             <c-info-field label="Direct Reports" extra_class="sm:col-span-2">
                                 {% for dr in employee.direct_reports.all %}
-                                    <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-block bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-medium text-decoration-none border border-indigo-200/50 dark:border-indigo-700/50">
+                                    <a href="{% url 'employees:employee_detail' dr.pk %}" class="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-xs mr-1 mb-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-medium text-decoration-none border border-indigo-200/50 dark:border-indigo-700/50">
+                                        <i data-lucide="user" class="w-3 h-3"></i>
                                         {{ dr.get_full_name }}
                                     </a>
                                 {% empty %}
-                                    <span class="text-xs text-gray-400">No direct reports</span>
+                                    <span class="text-xs text-slate-400">No direct reports</span>
                                 {% endfor %}
                             </c-info-field>
                         </div>
@@ -153,13 +153,13 @@
  
                     <!-- Payroll Tab (Gated) -->
                     {% if can_view_payroll %}
-                    <div x-show="tab === 'payroll'" class="space-y-4" style="display: none;">
+                    <div x-show="tab === 'payroll'" x-cloak class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                             <c-info-field label="Basic Salary">
                                 {% if employee.basic_salary is not None %}
                                     <span class="font-mono font-bold">${{ employee.basic_salary }}</span>
                                 {% else %}
-                                    <span class="text-gray-400 italic">Not Set</span>
+                                    <span class="text-slate-400 italic">Not Set</span>
                                 {% endif %}
                             </c-info-field>
                             <c-info-field label="Salary Structure" :value="employee.salary_structure|default:''"></c-info-field>
@@ -169,9 +169,9 @@
                             <c-info-field label="Tax Profile" :value="employee.tax_profile|default:''"></c-info-field>
                             <c-info-field label="Provident Fund (PF)">
                                 {% if employee.pf_enabled %}
-                                    <span class="text-emerald-600 dark:text-emerald-400 font-bold">Enabled</span>
+                                    <c-badge variant="success" size="sm" label="Enabled"></c-badge>
                                 {% else %}
-                                    <span class="text-gray-400">Disabled</span>
+                                    <c-badge variant="neutral" size="sm" label="Disabled"></c-badge>
                                 {% endif %}
                             </c-info-field>
                             <c-info-field label="Overtime Policy" :value="employee.overtime_policy|default:''"></c-info-field>
@@ -181,50 +181,50 @@
  
  
                     <!-- Employment History Tab -->
-                    <div x-show="tab === 'history'" class="space-y-4" style="display: none;">
+                    <div x-show="tab === 'history'" x-cloak class="space-y-4">
                         <c-timeline>
                             {% for hist in employee.employment_history.all %}
                             <c-timeline-item title="{{ hist.field_changed|title }} Update" time="{{ hist.effective_date|date:'M d, Y' }}">
-                                <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                    <div><span class="font-medium text-gray-800 dark:text-gray-200">From:</span> {{ hist.old_value|default:"(empty)" }} → <span class="font-medium text-gray-800 dark:text-gray-200">To:</span> {{ hist.new_value }}</div>
-                                    {% if hist.reason %}<div class="text-gray-500 dark:text-gray-400 italic mt-1 font-medium">Reason: {{ hist.reason }}</div>{% endif %}
-                                    {% if hist.approved_by %}<div class="text-gray-400 text-[10px] mt-0.5">Approved by: {{ hist.approved_by.email|default:hist.approved_by.phone }}</div>{% endif %}
+                                <div class="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                    <div><span class="font-medium text-slate-800 dark:text-slate-200">From:</span> {{ hist.old_value|default:"(empty)" }} → <span class="font-medium text-slate-800 dark:text-slate-200">To:</span> {{ hist.new_value }}</div>
+                                    {% if hist.reason %}<div class="text-slate-500 dark:text-slate-400 italic mt-1 font-medium">Reason: {{ hist.reason }}</div>{% endif %}
+                                    {% if hist.approved_by %}<div class="text-slate-400 text-[10px] mt-0.5">Approved by: {{ hist.approved_by.email|default:hist.approved_by.phone }}</div>{% endif %}
                                 </div>
                             </c-timeline-item>
                             {% empty %}
-                            <div class="text-sm text-gray-400 py-6 italic text-center">No employment history events recorded.</div>
+                            <div class="text-sm text-slate-400 py-6 italic text-center">No employment history events recorded.</div>
                             {% endfor %}
                         </c-timeline>
                     </div>
  
                     <!-- Documents Tab Componentized -->
-                    <div x-show="tab === 'documents'" style="display: none;">
+                    <div x-show="tab === 'documents'" x-cloak>
                         <c-doc-list :employee="employee" :documents="active_documents" :archived_documents="archived_documents" ></c-doc-list>
                     </div>
  
                     <!-- Assets Tab Componentized -->
-                    <div x-show="tab === 'assets'" style="display: none;">
+                    <div x-show="tab === 'assets'" x-cloak>
                         <c-asset-list :employee="employee" :asset_assignments="active_asset_assignments" :historical_assignments="historical_asset_assignments" ></c-asset-list>
                     </div>
  
                     <!-- Activity Feed Tab -->
                     {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
-                    <div x-show="tab === 'activity'" style="display: none;">
+                    <div x-show="tab === 'activity'" x-cloak>
                         <c-activity-feed :logs="employee.activity_logs.all" ></c-activity-feed>
                     </div>
                     {% endif %}
  
                     <!-- Audit Log Tab -->
                     {% if request.user.is_superuser or request.user.role == 'admin' %}
-                    <div x-show="tab === 'audit'" style="display: none;">
+                    <div x-show="tab === 'audit'" x-cloak>
                         <div id="audit-tab-content">
                             <div class="flex justify-center py-8">
                                 <div class="animate-pulse flex space-x-4 w-full">
                                     <div class="flex-1 space-y-4 py-1">
-                                        <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                                        <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
                                         <div class="space-y-2">
-                                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                                            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+                                            <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                                            <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
                                         </div>
                                     </div>
                                 </div>

@@ -331,7 +331,7 @@
          }
        }
      }"
-     class="space-y-4">
+     class="space-y-4 font-sans">
 
   {# ── System Owner Protected Banner ── #}
   {% if role.is_system_protected or role.code == 'system_owner' %}
@@ -371,20 +371,22 @@
             name="search"
             placeholder="Search hierarchy or destinations…"
             icon="search"
-            attrs="x-model='search' @input='updateAllIndeterminateStates()' aria-label='Search permissions'"
+            x-model="search"
+            @input="updateAllIndeterminateStates()"
+            aria-label="Search permissions"
           ></c-input>
         </div>
 
-        <c-select
-          name="selectedModule"
-          attrs="x-model='selectedModule' aria-label='Filter by module'"
-          extra_class="w-full sm:w-48 text-xs"
+        <select
+          x-model="selectedModule"
+          aria-label="Filter by module"
+          class="ft-input w-full sm:w-48 text-xs h-[36px] rounded-lg px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 cursor-pointer"
         >
           <option value="all">All Modules (12)</option>
           {% for mod in hierarchy_tree %}
             <option value="{{ mod.code }}">{{ mod.name }}</option>
           {% endfor %}
-        </c-select>
+        </select>
 
         <div class="flex items-center gap-1.5">
           <c-button
@@ -393,7 +395,7 @@
             size="sm"
             icon="chevrons-down-up"
             label="Expand All"
-            attrs="@click='expandAll()'"
+            @click="expandAll()"
           ></c-button>
 
           <c-button
@@ -402,7 +404,7 @@
             size="sm"
             icon="chevrons-up-down"
             label="Collapse All"
-            attrs="@click='collapseAll()'"
+            @click="collapseAll()"
           ></c-button>
         </div>
       </div>
@@ -430,7 +432,9 @@
             icon="save"
             label="Save Permissions"
             extra_class="min-h-[44px] px-4"
-            attrs=":loading='isSaving' :disabled='isSaving || !isDirty' @click='saveMatrix()' aria-label='Save permission changes'"
+            x-bind:disabled="isSaving || !isDirty"
+            @click="saveMatrix()"
+            aria-label="Save permission changes"
           ></c-button>
         {% endif %}
       </div>

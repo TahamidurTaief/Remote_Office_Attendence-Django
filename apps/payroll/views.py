@@ -1,4 +1,5 @@
 import calendar
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from django.shortcuts import render, get_object_or_404, redirect
@@ -823,13 +824,36 @@ class SalaryStructureListView(PayrollManagerMixin, ListView):
 
 
 class SalaryStructureCreateView(PayrollManagerMixin, View):
+    def get(self, request):
+        components = SalaryComponent.objects.filter(is_active=True).order_by('type', 'name')
+        components_data = [
+            {
+                'id': str(c.id),
+                'code': c.code,
+                'name': c.name,
+                'type': c.type,
+                'default_value_type': c.value_type,
+                'default_value': str(c.value.normalize() if c.value % 1 == 0 else c.value),
+                'label': f"{c.name} ({c.code})",
+            }
+            for c in components
+        ]
+        context = {
+            'structure': None,
+            'components': components,
+            'components_json': json.dumps(components_data),
+            'existing_components_json': json.dumps([]),
+            'is_edit': False,
+        }
+        return render(request, 'payroll/salary_structure_form.html', context)
+
     def post(self, request):
         name = request.POST.get('name', '').strip()
         is_active = request.POST.get('is_active', 'on') == 'on'
         
         if not name:
             messages.error(request, "Structure name is required.")
-            return redirect('payroll:salary_structures')
+            return redirect(request.META.get('HTTP_REFERER') or 'payroll:salary_structures')
 
         component_ids = request.POST.getlist('component_ids')
         values = request.POST.getlist('component_values')
@@ -847,7 +871,7 @@ class SalaryStructureCreateView(PayrollManagerMixin, View):
                 val = Decimal(val_str)
             except Exception:
                 messages.error(request, f"Invalid value for component '{comp.code}'.")
-                return redirect('payroll:salary_structures')
+                return redirect(request.META.get('HTTP_REFERER') or 'payroll:salary_structures')
 
             if comp.type == SalaryComponentType.EARNING and vt == SalaryComponentValueType.PERCENTAGE:
                 pct_earnings_total += val
@@ -861,7 +885,7 @@ class SalaryStructureCreateView(PayrollManagerMixin, View):
 
         if has_pct_earnings and pct_earnings_total != Decimal('100.00'):
             messages.error(request, f"Validation failed: Earning percentage components must sum to exactly 100%. Current sum: {pct_earnings_total}%.")
-            return redirect('payroll:salary_structures')
+            return redirect(request.META.get('HTTP_REFERER') or 'payroll:salary_structures')
 
         with transaction.atomic():
             struct = SalaryStructure.objects.create(name=name, is_active=is_active)
@@ -878,6 +902,44 @@ class SalaryStructureCreateView(PayrollManagerMixin, View):
 
 
 class SalaryStructureUpdateView(PayrollManagerMixin, View):
+    def get(self, request, pk):
+        struct = get_object_or_404(
+            SalaryStructure.objects.prefetch_related('structure_components__salary_component'),
+            pk=pk
+        )
+        components = SalaryComponent.objects.filter(is_active=True).order_by('type', 'name')
+        components_data = [
+            {
+                'id': str(c.id),
+                'code': c.code,
+                'name': c.name,
+                'type': c.type,
+                'default_value_type': c.value_type,
+                'default_value': str(c.value.normalize() if c.value % 1 == 0 else c.value),
+                'label': f"{c.name} ({c.code})",
+            }
+            for c in components
+        ]
+        existing_components = []
+        for sc in struct.structure_components.all():
+            existing_components.append({
+                'component_id': str(sc.salary_component.id),
+                'code': sc.salary_component.code,
+                'name': sc.salary_component.name,
+                'type': sc.salary_component.type,
+                'value_type': sc.value_type,
+                'value': str(sc.value.normalize() if sc.value % 1 == 0 else sc.value),
+            })
+
+        context = {
+            'structure': struct,
+            'components': components,
+            'components_json': json.dumps(components_data),
+            'existing_components_json': json.dumps(existing_components),
+            'is_edit': True,
+        }
+        return render(request, 'payroll/salary_structure_form.html', context)
+
     def post(self, request, pk):
         struct = get_object_or_404(SalaryStructure, pk=pk)
         name = request.POST.get('name', '').strip()
@@ -885,7 +947,7 @@ class SalaryStructureUpdateView(PayrollManagerMixin, View):
 
         if not name:
             messages.error(request, "Structure name is required.")
-            return redirect('payroll:salary_structures')
+            return redirect(request.META.get('HTTP_REFERER') or 'payroll:salary_structures')
 
         component_ids = request.POST.getlist('component_ids')
         values = request.POST.getlist('component_values')
@@ -903,7 +965,7 @@ class SalaryStructureUpdateView(PayrollManagerMixin, View):
                 val = Decimal(val_str)
             except Exception:
                 messages.error(request, f"Invalid value for component '{comp.code}'.")
-                return redirect('payroll:salary_structures')
+                return redirect(request.META.get('HTTP_REFERER') or 'payroll:salary_structures')
 
             if comp.type == SalaryComponentType.EARNING and vt == SalaryComponentValueType.PERCENTAGE:
                 pct_earnings_total += val
@@ -917,7 +979,7 @@ class SalaryStructureUpdateView(PayrollManagerMixin, View):
 
         if has_pct_earnings and pct_earnings_total != Decimal('100.00'):
             messages.error(request, f"Validation failed: Earning percentage components must sum to exactly 100%. Current sum: {pct_earnings_total}%.")
-            return redirect('payroll:salary_structures')
+            return redirect(request.META.get('HTTP_REFERER') or 'payroll:salary_structures')
 
         with transaction.atomic():
             struct.name = name

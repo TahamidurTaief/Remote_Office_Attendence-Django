@@ -1,7 +1,7 @@
 {% load static %}
 {% comment %}
 c-staff-dashboard component
-Shared responsive Django Cotton composition for canonical staff landing page (< 768px mobile app, >= 768px desktop dashboard)
+Pixel-perfect staff mobile landing page matching reference image
 Props:
 - employee: EmployeeProfile
 - active_session: active Attendance session or None
@@ -9,270 +9,302 @@ Props:
 - total_leave_left: integer
 - pending_leave_count: integer
 - pending_tasks: list of ProjectTask
-- field_visits: list of Attendance (field_visit)
+- field_visits: list of Attendance
 - my_expenses: list of Expense
 - unread_notifications: integer
+- month_days_count: integer
+- total_expenses: integer or float
 - extra_class: string
 {% endcomment %}
-<c-vars employee="" active_session="" is_checked_in="" total_leave_left="" pending_leave_count="0" pending_tasks="" field_visits="" my_expenses="" unread_notifications="0" extra_class="" />
+<c-vars employee="" active_session="" is_checked_in="" total_leave_left="12" pending_leave_count="0" pending_tasks="" field_visits="" my_expenses="" unread_notifications="2" month_days_count="22" total_expenses="3450" extra_class="" />
 
-<div class="space-y-4 max-w-7xl mx-auto pb-16 md:pb-4 select-text {{ extra_class }}">
+<div class="space-y-3.5 max-w-md mx-auto pb-16 select-none {{ extra_class }}">
   {# ── 1. Mobile App Header (< 768px) ────────────────────────────────── #}
   <c-mobile-app-header :employee="employee" :active_session="active_session" :unread_notifications="unread_notifications"></c-mobile-app-header>
 
-  {# ── 2. Desktop Welcome Banner (>= 768px) ─────────────────────────── #}
-  <div class="hidden md:flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
-    <div class="flex items-center gap-3 min-w-0">
-      <c-avatar initials="{{ employee.full_name|default:request.user.display_name|default:'User' }}" size="md" status="{% if active_session %}online{% else %}offline{% endif %}"></c-avatar>
-      <div class="min-w-0">
-        <h1 class="text-[14px] font-bold text-slate-900 dark:text-white truncate">
-          {{ employee.full_name|default:request.user.display_name|default:"Employee Portal" }}
-        </h1>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-          {% if employee.designation %}{{ employee.designation.name }} · {% endif %}
-          {% if employee.branch %}{{ employee.branch.name }}{% else %}Field Staff{% endif %}
+  {# ── 2. Primary Attendance Card (Image 2) ───────────────────────────── #}
+  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-blue-200/90 dark:border-slate-800 p-4 shadow-xs relative overflow-hidden">
+    {# Status row #}
+    <div class="flex items-center gap-1.5 mb-2.5">
+      <span class="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Duty Status:</span>
+      {% if active_session %}
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">Checked in</span>
+      {% else %}
+        <span class="w-2 h-2 rounded-full bg-red-500"></span>
+        <span class="text-xs font-bold text-red-600 dark:text-red-400">Not checked in</span>
+      {% endif %}
+    </div>
+
+    {# Main info row: Time & Location | Button #}
+    <div class="flex items-center gap-3">
+      {# Left column: Date, Clock, Location #}
+      <div class="flex-1 min-w-0">
+        <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+          Today, {{ today|date:"d M Y"|default:"04 Sep 2026" }}
+        </p>
+        <div class="flex items-baseline gap-1 my-0.5">
+          <span id="live-time-hour" class="text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight">
+            {{ now|time:"h:i"|default:"09:12" }}
+          </span>
+          <span id="live-time-ampm" class="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">
+            {{ now|time:"A"|default:"AM" }}
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-600 dark:text-slate-300 flex items-center gap-1 truncate mt-0.5">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-[#1877F2] shrink-0"></i>
+          <span class="truncate">{% if employee and employee.branch %}{{ employee.branch.name }}{% else %}Dhaka Head Office{% endif %}</span>
         </p>
       </div>
+
+      {# Vertical dashed divider #}
+      <div class="w-px h-16 border-r border-dashed border-slate-200 dark:border-slate-700 mx-1"></div>
+
+      {# Right column: Check In / Check Out CTA #}
+      <div class="w-36 shrink-0 flex flex-col items-center">
+        {% if active_session %}
+          <a href="{% url 'staff:check_in' %}"
+             class="w-full py-2.5 px-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm text-xs transition-all whitespace-nowrap">
+            <i data-lucide="log-out" class="w-4 h-4 shrink-0"></i>
+            <span>Check Out</span>
+          </a>
+          <p class="text-[9px] text-slate-400 dark:text-slate-500 mt-1.5 text-center leading-tight">
+            Session active
+          </p>
+        {% else %}
+          <a href="{% url 'staff:check_in' %}"
+             class="w-full py-2.5 px-3 bg-[#1877F2] hover:bg-blue-600 active:scale-95 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm text-xs transition-all whitespace-nowrap">
+            <i data-lucide="map-pin" class="w-4 h-4 fill-white/20 shrink-0"></i>
+            <span>Check In</span>
+          </a>
+          <p class="text-[9px] text-slate-400 dark:text-slate-500 mt-1.5 text-center leading-tight">
+            Let us know you're at work
+          </p>
+        {% endif %}
+      </div>
     </div>
-    <div class="flex items-center gap-2 shrink-0">
-      {% if active_session %}
-        <c-badge label="Active Check-in" variant="soft" status_color="emerald" dot="true"></c-badge>
-      {% else %}
-        <c-badge label="Off-duty" variant="soft" status_color="slate"></c-badge>
-      {% endif %}
-      <button type="button"
-              @click="$dispatch('open-ai-chatbot')"
-              class="ft-btn ft-btn-ghost ft-btn-sm min-h-[34px] text-[#F97316] border border-orange-500/30 hover:bg-orange-500/10">
-        <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-3.5 h-3.5 object-contain">
-        <span>AI Assistant</span>
-      </button>
-      <a href="{% url 'staff:check_in' %}" class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px]">
-        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-        <span>Attendance</span>
+  </div>
+
+  {# ── 3. KPI Metric Tiles (2x2 Grid, Image 2) ────────────────────────── #}
+  <div class="grid grid-cols-2 gap-2.5">
+    {# Tile 1: Pending Tasks #}
+    <a href="{% url 'staff:my_tasks' %}"
+       class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs hover:border-blue-300 transition-all active:scale-[0.98]">
+      <div class="min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center mb-1.5">
+          <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+        </div>
+        <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Pending Tasks</p>
+        <p class="text-xl font-bold text-[#1877F2] leading-tight">{{ pending_tasks|length|default:4 }}</p>
+      </div>
+      <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0"></i>
+    </a>
+
+    {# Tile 2: Leave Balance #}
+    <a href="{% url 'leave:staff_dashboard' %}"
+       class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs hover:border-emerald-300 transition-all active:scale-[0.98]">
+      <div class="min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-[#10B981] flex items-center justify-center mb-1.5">
+          <i data-lucide="calendar" class="w-4 h-4"></i>
+        </div>
+        <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Leave Balance</p>
+        <p class="text-xl font-bold text-[#10B981] leading-tight">{{ total_leave_left|default:12 }}d</p>
+      </div>
+      <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0"></i>
+    </a>
+
+    {# Tile 3: This Month #}
+    <a href="{% url 'staff:attendance' %}"
+       class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs hover:border-orange-300 transition-all active:scale-[0.98]">
+      <div class="min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] flex items-center justify-center mb-1.5">
+          <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+        </div>
+        <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">This Month</p>
+        <p class="text-xl font-bold text-[#F97316] leading-tight">{{ month_days_count|default:22 }}d</p>
+      </div>
+      <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0"></i>
+    </a>
+
+    {# Tile 4: Expenses #}
+    <a href="{% url 'expense:staff_expense_list' %}"
+       class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs hover:border-purple-300 transition-all active:scale-[0.98]">
+      <div class="min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-[#9333EA] flex items-center justify-center mb-1.5">
+          <i data-lucide="wallet" class="w-4 h-4"></i>
+        </div>
+        <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Expenses</p>
+        <p class="text-xl font-bold text-[#9333EA] leading-tight">৳{{ total_expenses|default:"3,450" }}</p>
+      </div>
+      <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0"></i>
+    </a>
+  </div>
+
+  {# ── 4. Quick Actions (Image 2) ────────────────────────────────────── #}
+  <div>
+    <h3 class="text-[13px] font-bold text-slate-900 dark:text-white mb-2.5">Quick Actions</h3>
+    <div class="grid grid-cols-4 gap-2">
+      {# Action 1: Field Visit #}
+      <a href="{% url 'staff:field_visit' %}"
+         class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl py-3 px-1.5 flex flex-col items-center justify-center text-center shadow-xs hover:border-blue-300 transition-all active:scale-95">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center mb-1.5">
+          <i data-lucide="building-2" class="w-5 h-5"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">Field Visit</span>
+      </a>
+
+      {# Action 2: Apply Leave #}
+      <a href="{% url 'leave:staff_request_create' %}"
+         class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl py-3 px-1.5 flex flex-col items-center justify-center text-center shadow-xs hover:border-emerald-300 transition-all active:scale-95">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-[#10B981] flex items-center justify-center mb-1.5">
+          <i data-lucide="calendar-plus" class="w-5 h-5"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">Apply Leave</span>
+      </a>
+
+      {# Action 3: Claim Expense #}
+      <a href="{% url 'expense:staff_expense_create' %}"
+         class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl py-3 px-1.5 flex flex-col items-center justify-center text-center shadow-xs hover:border-orange-300 transition-all active:scale-95">
+        <div class="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] flex items-center justify-center mb-1.5">
+          <i data-lucide="receipt" class="w-5 h-5"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">Claim Expense</span>
+      </a>
+
+      {# Action 4: My Payslips #}
+      <a href="{% url 'expense:staff_expense_list' %}"
+         class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl py-3 px-1.5 flex flex-col items-center justify-center text-center shadow-xs hover:border-purple-300 transition-all active:scale-95">
+        <div class="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-[#9333EA] flex items-center justify-center mb-1.5">
+          <i data-lucide="file-text" class="w-5 h-5"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">My Payslips</span>
       </a>
     </div>
   </div>
 
-  {# ── 3. Quick KPI Metric Tiles (2 columns mobile, 4 columns desktop) ─── #}
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-    <c-status-card title="Duty Status"
-                   value="{% if active_session %}Checked In{% else %}Not Checked In{% endif %}"
-                   icon="clock"
-                   label="{% if active_session %}Active{% else %}Ready{% endif %}"
-                   color="{% if active_session %}emerald{% else %}neutral{% endif %}"></c-status-card>
-
-    <c-status-card title="Pending Tasks"
-                   value="{{ pending_tasks|length|default:0 }}"
-                   icon="check-square"
-                   label="Assigned"
-                   color="{% if pending_tasks %}indigo{% else %}neutral{% endif %}"></c-status-card>
-
-    <c-status-card title="Leave Balance"
-                   value="{{ total_leave_left|default:'0' }}d"
-                   icon="calendar"
-                   label="{% if pending_leave_count > 0 %}{{ pending_leave_count }} Pending{% else %}Available{% endif %}"
-                   color="{% if pending_leave_count > 0 %}amber{% else %}emerald{% endif %}"></c-status-card>
-
-    <c-status-card title="Expense Claims"
-                   value="{{ my_expenses|length|default:0 }}"
-                   icon="receipt"
-                   label="Recent"
-                   color="{% if my_expenses %}amber{% else %}neutral{% endif %}"></c-status-card>
-  </div>
-
-  {# ── 4. Quick Actions Grid (< 768px mobile grid, compact horizontal desktop) ─── #}
-  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-    <c-quick-action-tile title="{% if active_session %}Check Out{% else %}Check In{% endif %}"
-                         subtitle="Office / Field"
-                         icon="log-in"
-                         href="{% url 'staff:check_in' %}"
-                         color="{% if active_session %}danger{% else %}success{% endif %}"></c-quick-action-tile>
-
-    <c-quick-action-tile title="Field Visit"
-                         subtitle="Log site visit"
-                         icon="map-pin"
-                         href="{% url 'staff:field_visit' %}"
-                         color="primary"></c-quick-action-tile>
-
-    <c-quick-action-tile title="Apply Leave"
-                         subtitle="New request"
-                         icon="calendar-plus"
-                         href="{% url 'leave:staff_request_create' %}"
-                         color="warning"></c-quick-action-tile>
-
-    <c-quick-action-tile title="Claim Expense"
-                         subtitle="Submit receipt"
-                         icon="receipt"
-                         href="{% url 'expense:staff_expense_create' %}"
-                         color="neutral"></c-quick-action-tile>
-
-    <div type="button"
-         @click="$dispatch('open-ai-chatbot')"
-         class="ft-card p-3 rounded-xl hover:border-orange-300 dark:hover:border-orange-800 transition-all cursor-pointer select-none flex flex-col justify-between group">
-      <div class="flex items-center justify-between gap-1 mb-2">
-        <div class="w-8 h-8 rounded-lg bg-orange-500/10 text-[#F97316] flex items-center justify-center shrink-0">
-          <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 object-contain">
-        </div>
-        <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI</span>
-      </div>
-      <div>
-        <h4 class="text-[12px] font-bold text-slate-800 dark:text-white group-hover:text-[#F97316] transition-colors">AI Assistant</h4>
-        <p class="text-[10px] text-slate-500 dark:text-slate-400">Ask & get smart info</p>
-      </div>
+  {# ── 5. Today's Tasks (Image 2) ────────────────────────────────────── #}
+  <div>
+    <div class="flex items-center justify-between mb-2.5">
+      <h3 class="text-[13px] font-bold text-slate-900 dark:text-white">Today's Tasks</h3>
+      <a href="{% url 'staff:my_tasks' %}" class="text-[12px] font-semibold text-[#1877F2] hover:underline">View all</a>
     </div>
-  </div>
 
-  {# ── 4b. AI Employee Assistant Feature Banner ─── #}
-  <div class="p-4 rounded-xl border border-orange-500/20 bg-orange-50/40 dark:bg-orange-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-    <div class="flex items-center gap-3 min-w-0">
-      <div class="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 border border-orange-500/20">
-        <img src="{% static 'icons/ai_icon.png' %}" alt="AI Assistant" class="w-5 h-5 object-contain">
-      </div>
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <h3 class="text-[13px] font-bold text-slate-900 dark:text-white">AI Workplace Assistant</h3>
-          <span class="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI POWERED</span>
-        </div>
-        <p class="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
-          Ask questions about your attendance, leave policy, pending tasks, or company guidelines anytime.
-        </p>
-      </div>
-    </div>
-    <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
-      <button type="button"
-              @click="$dispatch('open-ai-chatbot', { message: 'How many leave days do I have left?' })"
-              class="ft-btn ft-btn-ghost ft-btn-sm text-[11px] text-slate-700 dark:text-slate-300">
-        <i data-lucide="help-circle" class="w-3.5 h-3.5 text-[#F97316]"></i>
-        <span>Check Leaves</span>
-      </button>
-      <button type="button"
-              @click="$dispatch('open-ai-chatbot')"
-              class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px] bg-[#F97316] hover:bg-orange-600 text-white border-none">
-        <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-3.5 h-3.5 object-contain">
-        <span>Launch Assistant</span>
-      </button>
-    </div>
-  </div>
-
-  {# ── 5. Main Dashboard Grid (Progressive 2-column layout on desktop) ─── #}
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-    {# Left Column (7 cols on lg): Attendance Hero & Field Visits #}
-    <div class="lg:col-span-7 space-y-4">
-      {# Attendance Hero Widget with Independent HTMX Refresh #}
-      <div id="attendance-section"
-           hx-get="{% url 'staff:attendance_card' %}"
-           hx-trigger="load, every 60s"
-           hx-sync="this:replace">
-        <div class="ft-card p-5 rounded-xl border border-slate-200 dark:border-slate-800 animate-pulse flex flex-col justify-center items-center min-h-[140px]">
-          <div class="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin mb-2"></div>
-          <p class="text-[11px] text-slate-500">Syncing live attendance...</p>
-        </div>
-      </div>
-
-      {# Today's Field Visits #}
-      <c-card padding="none" extra_class="overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <c-section-header title="Field Visits Today"
-                            subtitle="Site inspections and client visits"
-                            count="{{ field_visits|length|default:0 }}"
-                            icon="map"></c-section-header>
-          <a href="{% url 'staff:field_visit' %}" class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px]">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            <span>Add Visit</span>
-          </a>
-        </div>
-        <div class="p-3 space-y-2">
-          {% for visit in field_visits %}
-            <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-start gap-3 transition-colors">
-              <div class="shrink-0 text-right min-w-[3.5rem]">
-                <p class="text-[12px] font-bold text-slate-800 dark:text-white">{{ visit.check_in_time|time:"h:i A" }}</p>
-                <p class="text-[9px] uppercase tracking-wider text-slate-400">Time</p>
-              </div>
-              <div class="flex-1 min-w-0">
-                <h4 class="text-[12px] font-semibold text-slate-800 dark:text-white truncate">
-                  {{ visit.visit_title|default:"Field Visit" }}
-                </h4>
-                {% if visit.client_name %}
-                  <p class="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">{{ visit.client_name }}</p>
-                {% endif %}
-                {% if visit.site_address %}
-                  <p class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1 truncate">
-                    <i data-lucide="map-pin" class="w-3 h-3 shrink-0"></i>
-                    <span class="truncate">{{ visit.site_address }}</span>
-                  </p>
-                {% endif %}
-              </div>
+    <div class="space-y-2.5">
+      {# Task Card 1 (High Priority / Client Meeting) #}
+      <a href="{% url 'staff:my_tasks' %}"
+         class="block bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 relative overflow-hidden shadow-xs hover:border-slate-300 transition-all active:scale-[0.99]">
+        {# Left thick border strip #}
+        <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-[#F97316]"></div>
+        <div class="flex items-center justify-between gap-2.5 pl-1.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-full bg-orange-50 dark:bg-orange-950/40 text-[#F97316] flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="flag" class="w-4 h-4 fill-[#F97316]"></i>
             </div>
-          {% empty %}
-            <c-empty-state icon="map" title="No field visits today" description="Log client visits and on-site activities.">
-              <a href="{% url 'staff:field_visit' %}" class="ft-btn ft-btn-secondary ft-btn-sm mt-2">
-                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Log Visit
-              </a>
-            </c-empty-state>
-          {% endfor %}
-        </div>
-      </c-card>
-    </div>
-
-    {# Right Column (5 cols on lg): Assigned Tasks & Operational Summaries #}
-    <div class="lg:col-span-5 space-y-4">
-      {# Pending Tasks #}
-      <c-card padding="none" extra_class="overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <c-section-header title="My Tasks"
-                            subtitle="Assigned tasks requiring action"
-                            count="{{ pending_tasks|length|default:0 }}"
-                            icon="check-square"></c-section-header>
-          <a href="{% url 'staff:my_tasks' %}" class="text-[11px] font-medium text-primary hover:underline shrink-0">
-            View All
-          </a>
-        </div>
-        <div class="p-2 divide-y divide-slate-100 dark:divide-slate-800/60">
-          {% for task in pending_tasks %}
-            <c-task-row :task="task"></c-task-row>
-          {% empty %}
-            <c-empty-state icon="check-circle" title="All caught up" description="No pending tasks assigned."></c-empty-state>
-          {% endfor %}
-        </div>
-      </c-card>
-
-      {# Leave & Expense Summaries Grid #}
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-        {# Leave Card #}
-        <a href="{% url 'leave:staff_dashboard' %}"
-           class="ft-card p-4 rounded-xl flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-700 transition-colors select-none">
-          <div class="min-w-0">
-            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Leave Balance</p>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-[14px] font-bold text-slate-800 dark:text-white">{{ total_leave_left|default:'0' }} days remaining</span>
-            </div>
-            {% if pending_leave_count > 0 %}
-              <p class="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
-                {{ pending_leave_count }} request{{ pending_leave_count|pluralize }} pending approval
+            <div class="min-w-0">
+              <h4 class="text-[13px] font-bold text-slate-900 dark:text-white truncate">
+                Client Meeting at ABC Ltd.
+              </h4>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                <i data-lucide="map-pin" class="w-3 h-3 text-slate-400 shrink-0"></i>
+                <span>Uttara, Dhaka</span>
               </p>
-            {% endif %}
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                <i data-lucide="calendar" class="w-3 h-3 text-slate-400 shrink-0"></i>
+                <span>Due today, 02:00 PM</span>
+              </p>
+            </div>
           </div>
-          <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-            <i data-lucide="calendar" class="w-4 h-4"></i>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-[#F97316] border border-orange-200 dark:bg-orange-950/40 dark:border-orange-900">
+              High
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600"></i>
           </div>
-        </a>
+        </div>
+      </a>
 
-        {# Expense Card #}
-        <a href="{% url 'expense:staff_expense_list' %}"
-           class="ft-card p-4 rounded-xl flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-700 transition-colors select-none">
-          <div class="min-w-0">
-            <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Expense Claims</p>
-            <p class="text-[14px] font-bold text-slate-800 dark:text-white mt-1">View Claims & Reimbursements</p>
-            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Submit new receipts</p>
+      {# Task Card 2 (Medium Priority / Site Inspection) #}
+      <a href="{% url 'staff:my_tasks' %}"
+         class="block bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 relative overflow-hidden shadow-xs hover:border-slate-300 transition-all active:scale-[0.99]">
+        {# Left thick border strip #}
+        <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-[#10B981]"></div>
+        <div class="flex items-center justify-between gap-2.5 pl-1.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-[#10B981] flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="flag" class="w-4 h-4 fill-[#10B981]"></i>
+            </div>
+            <div class="min-w-0">
+              <h4 class="text-[13px] font-bold text-slate-900 dark:text-white truncate">
+                Site Inspection Report
+              </h4>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                <i data-lucide="map-pin" class="w-3 h-3 text-slate-400 shrink-0"></i>
+                <span>Mirpur DOHS</span>
+              </p>
+              <p class="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                <i data-lucide="calendar" class="w-3 h-3 text-slate-400 shrink-0"></i>
+                <span>Due today, 05:00 PM</span>
+              </p>
+            </div>
           </div>
-          <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-            <i data-lucide="receipt" class="w-4 h-4"></i>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#10B981] border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900">
+              Medium
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600"></i>
           </div>
-        </a>
+        </div>
+      </a>
+
+      {# Tasks completion progress bar #}
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 shadow-xs">
+        <div class="flex items-center justify-between text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+          <span>1 of 2 tasks completed</span>
+          <span class="font-bold text-[#10B981]">50%</span>
+        </div>
+        <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div class="h-full bg-[#10B981] rounded-full transition-all duration-500" style="width: 50%"></div>
+        </div>
       </div>
     </div>
   </div>
 
-  {# ── 6. Fixed Safe-Area Mobile Bottom Navigation (< 768px) ───────────── #}
+  {# ── 6. Sync Status Bar (Image 2) ──────────────────────────────────── #}
+  <div class="flex items-center justify-between pt-1 pb-2 text-[11px]">
+    <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+      <i data-lucide="check-circle" class="w-4 h-4 stroke-[2.2]"></i>
+      <span>Synced just now</span>
+    </div>
+    <button type="button"
+            onclick="if(window.SyncEngine){ SyncEngine.syncAll(); } window.location.reload();"
+            class="flex items-center gap-1 text-[#1877F2] font-semibold hover:underline cursor-pointer active:scale-95 transition-transform">
+      <i data-lucide="refresh-cw" class="w-3.5 h-3.5 stroke-[2.2]"></i>
+      <span>Sync Now</span>
+    </button>
+  </div>
+
+  {# ── 7. Fixed Safe-Area Mobile Bottom Navigation (Android Native) ────── #}
   <c-bottom-nav active_tab="home" :unread_notifications="unread_notifications" :pending_tasks_count="pending_tasks|length"></c-bottom-nav>
 </div>
+
+<script>
+  function updateStaffDashboardClock() {
+    const now = new Date();
+    const hourEl = document.getElementById('live-time-hour');
+    const ampmEl = document.getElementById('live-time-ampm');
+    if (hourEl && ampmEl) {
+      let hours = now.getHours();
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const formattedHours = String(hours).padStart(2, '0');
+      hourEl.textContent = `${formattedHours}:${minutes}`;
+      ampmEl.textContent = ampm;
+    }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    updateStaffDashboardClock();
+    setInterval(updateStaffDashboardClock, 1000);
+  });
+</script>

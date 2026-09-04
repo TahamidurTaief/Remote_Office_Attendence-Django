@@ -82,13 +82,15 @@
          if (!this.isDragging) return;
          const dx = e.clientX - this.dragStartX;
          const dy = e.clientY - this.dragStartY;
-         if (!this.dragMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+         if (!this.dragMoved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
            this.dragMoved = true;
            this.hovering = false;
          }
          if (this.dragMoved) {
-           this.posX = this.clampX(this.origX + dx);
-           this.posY = this.clampY(this.origY + dy);
+           requestAnimationFrame(() => {
+             this.posX = this.clampX(this.origX + dx);
+             this.posY = this.clampY(this.origY + dy);
+           });
          }
        },
        onPointerUp(e) {
@@ -114,6 +116,7 @@
          this.toggle();
        },
        getModalStyle() {
+         if (!this.open || this.minimized) return '';
          const btnX = (this.posX !== null) ? this.posX : ((window.innerWidth || 1024) - 64);
          const btnY = (this.posY !== null) ? this.posY : ((window.innerHeight || 768) - 64);
          const btnSize = 48;
@@ -152,6 +155,7 @@
          return `left: ${Math.round(left)}px; top: ${Math.round(top)}px; width: ${modalW}px; height: ${modalH}px;`;
        },
        getPillStyle() {
+         if (!this.open || !this.minimized) return '';
          const btnX = (this.posX !== null) ? this.posX : ((window.innerWidth || 1024) - 64);
          const btnY = (this.posY !== null) ? this.posY : ((window.innerHeight || 768) - 64);
          const btnSize = 48;
@@ -220,7 +224,7 @@
      }"
      @keydown.escape.window="if (open) { open = false; minimized = false; }"
      @contextmenu.prevent="resetPosition()"
-     class="fixed z-[90] select-none touch-none transition-shadow"
+     class="fixed z-[90] select-none touch-none"
      :style="posX !== null && posY !== null ? ('left: ' + posX + 'px; top: ' + posY + 'px;') : 'bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); right: calc(1rem + env(safe-area-inset-right, 0px));'">
 
   {# ── Full Screen Red & Orange AI Wave Hover Overlay (Active ONLY on Hover when modal is closed and not dragging) ── #}

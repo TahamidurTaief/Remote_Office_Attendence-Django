@@ -3,10 +3,9 @@
         <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
-
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <div class="p-4 max-w-7xl mx-auto space-y-4 font-sans">
         <c-page-header title="Employee Profile">
             <c-slot name="actions">
                 <c-button href="{% url 'admin_panel:reports_employee' employee.pk %}" variant="primary" icon="bar-chart-2" label="Report" ></c-button>
@@ -21,49 +20,28 @@
             <!-- Left Column: Profile & Documents -->
             <div class="space-y-4 lg:col-span-1">
                 <c-card padding="none">
-                    <div class="p-4 text-center border-b" style="border-color:var(--border)">
-                        <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}" initials="{{ employee.full_name|make_list|first|upper }}" size="lg" extra_class="mx-auto border-2 border-primary-500" ></c-avatar>
-                        <h3 class="mt-3 text-base font-semibold" style="color:var(--text)">{{ employee.full_name }}</h3>
-                        <p class="text-xs" style="color:var(--text-muted)">{{ employee.designation }} • {{ employee.department }}</p>
+                    <div class="p-4 text-center border-b border-slate-200 dark:border-slate-800">
+                        <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}" initials="{{ employee.full_name|make_list|first|upper }}" size="lg" extra_class="mx-auto border-2 border-primary" ></c-avatar>
+                        <h3 class="mt-3 text-base font-semibold text-slate-800 dark:text-slate-100">{{ employee.full_name }}</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ employee.designation }} • {{ employee.department }}</p>
                         <div class="mt-3">
                             {% include 'employees/partials/status_badge.html' with employee=employee %}
                         </div>
                     </div>
                     <div class="p-4 space-y-3">
-                        <div>
-                            <span class="ft-label">Employee ID</span>
-                            <span class="text-xs font-medium" style="color:var(--text)">{{ employee.employee_id }}</span>
-                        </div>
-                        <div>
-                            <span class="ft-label">Email</span>
-                            <span class="text-xs font-medium" style="color:var(--text)">{{ employee.user.email|default:"Not Provided" }}</span>
-                        </div>
-                        <div>
-                            <span class="ft-label">Phone</span>
-                            <span class="text-xs font-medium" style="color:var(--text)">{{ employee.phone }}</span>
-                        </div>
-                        <div>
-                            <span class="ft-label">Emergency Contact</span>
-                            <span class="text-xs font-medium" style="color:var(--text)">{{ employee.emergency_contact }}</span>
-                        </div>
-                        <div>
-                            <span class="ft-label">Branch</span>
-                            <span class="text-xs font-medium" style="color:var(--text)">{{ employee.branch.name|default:"None" }}</span>
-                        </div>
-                        <div>
-                            <span class="ft-label">Join Date</span>
-                            <span class="text-xs font-medium" style="color:var(--text)">{{ employee.joined_date }}</span>
-                        </div>
-                        <div>
-                            <span class="ft-label">Overtime</span>
-                            <span class="text-xs font-medium" style="color:var(--text)">
-                                {% if employee.overtime_enabled %}
-                                Enabled <i data-lucide="check-circle" class="inline w-3.5 h-3.5 text-accent-500 align-text-bottom"></i>
-                                {% else %}
-                                Disabled <i data-lucide="x-circle" class="inline w-3.5 h-3.5 text-red-500 align-text-bottom"></i>
-                                {% endif %}
-                            </span>
-                        </div>
+                        <c-info-field label="Employee ID" value="{{ employee.employee_id }}"></c-info-field>
+                        <c-info-field label="Email" value="{{ employee.user.email|default:'Not Provided' }}"></c-info-field>
+                        <c-info-field label="Phone" value="{{ employee.phone }}"></c-info-field>
+                        <c-info-field label="Emergency Contact" value="{{ employee.emergency_contact|default:'None' }}"></c-info-field>
+                        <c-info-field label="Branch" value="{{ employee.branch.name|default:'None' }}"></c-info-field>
+                        <c-info-field label="Join Date" value='{{ employee.joined_date|default:"" }}'></c-info-field>
+                        <c-info-field label="Overtime">
+                            {% if employee.overtime_enabled %}
+                                <c-badge variant="success" size="sm" label="Enabled" icon="check-circle"></c-badge>
+                            {% else %}
+                                <c-badge variant="neutral" size="sm" label="Disabled" icon="x-circle"></c-badge>
+                            {% endif %}
+                        </c-info-field>
                     </div>
                 </c-card>
 
@@ -71,42 +49,38 @@
                 <c-card padding="none">
                     <c-slot name="header">
                         <div class="flex justify-between items-center w-full">
-                            <h3 class="text-xs font-semibold" style="color:var(--text)">Documents</h3>
-                            <c-button href="{% url 'employees:document_add' employee.pk %}" variant="accent" size="sm" icon="plus" label="Add" ></c-button>
+                            <h3 class="text-xs font-semibold text-slate-800 dark:text-slate-100">Documents</h3>
+                            <c-button href="{% url 'employees:document_add' employee.pk %}" variant="secondary" size="sm" icon="plus" label="Add" ></c-button>
                         </div>
                     </c-slot>
                     <div class="p-3">
                         {% if employee.documents.all %}
                         <div class="space-y-2">
                             {% for doc in employee.documents.all %}
-                            <div class="p-2.5 rounded-btn border flex justify-between items-start gap-2" style="background:var(--surface-2); border-color:var(--border)">
+                            <div class="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-start gap-2">
                                 <div class="min-w-0">
-                                    <h4 class="text-xs font-semibold truncate" style="color:var(--text)">{{ doc.document_type }}</h4>
-                                    <p class="text-[10px] mt-0.5 {% if doc.expiry_date <= today %}text-red-500 font-bold{% else %}text-gray-400{% endif %}">
+                                    <h4 class="text-xs font-semibold truncate text-slate-800 dark:text-slate-100">{{ doc.document_type }}</h4>
+                                    <p class="text-[10px] mt-0.5 {% if doc.expiry_date <= today %}text-rose-500 font-bold{% else %}text-slate-400{% endif %}">
                                         Expires: {{ doc.expiry_date }}
                                     </p>
                                     {% if doc.file %}
-                                    <a href="{{ doc.file.url }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-medium hover:underline mt-1" style="color:var(--primary)">
+                                    <a href="{{ doc.file.url }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-medium hover:underline mt-1 text-primary">
                                         <i data-lucide="download" class="w-3 h-3"></i> Download
                                     </a>
                                     {% endif %}
                                 </div>
                                 <div class="flex items-center gap-1.5 shrink-0">
-                                    <a href="{% url 'employees:document_edit' doc.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1">
-                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-                                    </a>
+                                    <c-button href="{% url 'employees:document_edit' doc.pk %}" variant="ghost" size="sm" icon="pencil" extra_class="!p-1"></c-button>
                                     <form action="{% url 'employees:document_delete' doc.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this document?', () => $el.submit())">
                                         {% csrf_token %}
-                                        <button type="submit" class="ft-btn ft-btn-ghost ft-btn-sm p-1 text-red-500 hover:text-red-600">
-                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                        </button>
+                                        <c-button type="submit" variant="ghost" size="sm" icon="trash-2" extra_class="!p-1 text-rose-500 hover:text-rose-600"></c-button>
                                     </form>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
                         {% else %}
-                        <p class="text-xs text-center py-4" style="color:var(--text-muted)">No documents uploaded.</p>
+                        <p class="text-xs text-center py-4 text-slate-500 dark:text-slate-400">No documents uploaded.</p>
                         {% endif %}
                     </div>
                 </c-card>
@@ -124,42 +98,38 @@
                 </c-card>
 
                 <c-card title="Recent Attendance" padding="none">
-                    <div class="overflow-x-auto">
-                        <table class="ft-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Check In</th>
-                                    <th>Check Out</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for att in recent_attendances %}
-                                <tr>
-                                    <td><span class="font-medium" style="color:var(--text)">{{ att.date }}</span></td>
-                                    <td>{{ att.check_in_time|time:"h:i A"|default:"-" }}</td>
-                                    <td>{{ att.check_out_time|time:"h:i A"|default:"-" }}</td>
-                                    <td>
-                                        {% if att.status == 'PRESENT' %}
-                                            <c-status-pill status="present" ></c-status-pill>
-                                        {% elif att.status == 'LATE' %}
-                                            <c-status-pill status="late" ></c-status-pill>
-                                        {% else %}
-                                            <c-status-pill status="{{ att.status|lower }}" ></c-status-pill>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="4" class="py-8">
-                                        <c-empty-state icon="clock" title="No Attendance History" description="No attendance entries recorded for this employee." ></c-empty-state>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                    <c-table extra_class="border-0 shadow-none">
+                        <c-slot name="header">
+                            <th class="py-2.5 px-3">Date</th>
+                            <th class="py-2.5 px-3">Check In</th>
+                            <th class="py-2.5 px-3">Check Out</th>
+                            <th class="py-2.5 px-3">Status</th>
+                        </c-slot>
+                        <c-slot name="body">
+                            {% for att in recent_attendances %}
+                            <tr class="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                <td class="py-2.5 px-3"><span class="font-medium text-slate-800 dark:text-slate-100">{{ att.date }}</span></td>
+                                <td class="py-2.5 px-3 text-slate-600 dark:text-slate-300">{{ att.check_in_time|time:"h:i A"|default:"-" }}</td>
+                                <td class="py-2.5 px-3 text-slate-600 dark:text-slate-300">{{ att.check_out_time|time:"h:i A"|default:"-" }}</td>
+                                <td class="py-2.5 px-3">
+                                    {% if att.status == 'PRESENT' %}
+                                        <c-status-pill status="present" ></c-status-pill>
+                                    {% elif att.status == 'LATE' %}
+                                        <c-status-pill status="late" ></c-status-pill>
+                                    {% else %}
+                                        <c-status-pill status="{{ att.status|lower }}" ></c-status-pill>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="py-8 text-center">
+                                    <c-empty-state icon="clock" title="No Attendance History" description="No attendance entries recorded for this employee." ></c-empty-state>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </c-slot>
+                    </c-table>
                 </c-card>
             </div>
         </div>

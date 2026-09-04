@@ -101,6 +101,7 @@ class EmployeeCreateForm(forms.ModelForm):
             default_role = assignable_qs.filter(code='staff').first()
             if default_role:
                 self.initial['roles'] = [default_role.pk]
+                self.fields['roles'].initial = [default_role.pk]
 
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
@@ -294,7 +295,12 @@ class EmployeeEditForm(forms.ModelForm):
             user_role_ids = list(
                 UserRoleAssignment.objects.filter(user=self.instance.user).values_list('role_id', flat=True)
             )
+            if not user_role_ids and self.instance.user.role:
+                role_match = assignable_qs.filter(code=self.instance.user.role).first()
+                if role_match:
+                    user_role_ids = [role_match.pk]
             self.fields['roles'].initial = user_role_ids
+            self.initial['roles'] = user_role_ids
             existing_overrides = UserPermissionOverride.objects.filter(user=self.instance.user).select_related('permission')
             if existing_overrides.exists():
                 self.fields['custom_permissions'].initial = json.dumps([
@@ -1041,8 +1047,13 @@ class WizardStep4Form(forms.Form):
             self.fields['login_email'].initial = employee.user.email
             self.fields['data_scope'].initial = employee.data_scope
             self.fields['mfa_required'].initial = employee.mfa_required
-            assigned_role_ids = UserRoleAssignment.objects.filter(user=employee.user).values_list('role_id', flat=True)
-            self.fields['roles'].initial = list(assigned_role_ids)
+            assigned_role_ids = list(UserRoleAssignment.objects.filter(user=employee.user).values_list('role_id', flat=True))
+            if not assigned_role_ids and employee.user.role:
+                role_match = assignable_qs.filter(code=employee.user.role).first()
+                if role_match:
+                    assigned_role_ids = [role_match.pk]
+            self.fields['roles'].initial = assigned_role_ids
+            self.initial['roles'] = assigned_role_ids
 
             existing_overrides = UserPermissionOverride.objects.filter(user=employee.user).select_related('permission')
             if existing_overrides.exists():
@@ -1060,6 +1071,7 @@ class WizardStep4Form(forms.Form):
             default_role = assignable_qs.filter(code='staff').first()
             if default_role:
                 self.initial['roles'] = [default_role.pk]
+                self.fields['roles'].initial = [default_role.pk]
 
     def clean_login_email(self):
         email = self.cleaned_data.get('login_email', '').strip()

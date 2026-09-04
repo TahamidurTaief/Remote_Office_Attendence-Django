@@ -1,6 +1,6 @@
 {% comment %} c-employee-roles-picker component
-   Reusable multi-role selection, role dropdown, active pills, primary access persona,
-   and dynamic custom permission overrides.
+   Full Cotton component composition for RBAC multi-role selection, persona detection,
+   tabbed filtering, active pills, and dynamic custom permission overrides.
    Props:
    - field: Django form field for roles (e.g. form.roles)
    - initial_persona: current compatibility persona ('admin', 'manager', 'staff')
@@ -14,12 +14,18 @@
   x-data="{
     selectedRoles: [
       {% if field.value %}
-        {% for val in field.value %}
-          '{{ val|escapejs }}'{% if not forloop.last %},{% endif %}
-        {% endfor %}
+        {% if field.value.all %}
+          {% for val in field.value.all %}
+            String('{{ val.pk|escapejs }}'){% if not forloop.last %},{% endif %}
+          {% endfor %}
+        {% else %}
+          {% for val in field.value %}
+            String('{{ val.pk|default:val|escapejs }}'){% if not forloop.last %},{% endif %}
+          {% endfor %}
+        {% endif %}
       {% endif %}
-    ],
-    dropdownRole: '',
+    ].map(String),
+    roleFilter: 'all',
     newPerm: '',
     newType: 'grant',
     newScope: 'branch',
@@ -63,13 +69,6 @@
       }
       return 'staff';
     },
-    addRole(id) {
-      if (!id) return;
-      const sId = String(id);
-      if (!this.selectedRoles.includes(sId)) {
-        this.selectedRoles.push(sId);
-      }
-    },
     toggleRole(id) {
       const sId = String(id);
       if (this.selectedRoles.includes(sId)) {
@@ -78,8 +77,29 @@
         this.selectedRoles.push(sId);
       }
     },
+    selectAll() {
+      this.selectedRoles = Object.keys(this.rolesMeta);
+    },
+    clearAll() {
+      this.selectedRoles = [];
+    },
     isSelected(id) {
       return this.selectedRoles.includes(String(id));
+    },
+    shouldShowRole(roleId) {
+      if (this.roleFilter === 'all') return true;
+      if (this.roleFilter === 'selected') return this.isSelected(roleId);
+      const code = (this.rolesMeta[roleId]?.code || '').toLowerCase();
+      if (this.roleFilter === 'admin') {
+        return ['system_owner', 'super_admin', 'admin', 'administrator'].includes(code);
+      }
+      if (this.roleFilter === 'manager') {
+        return ['manager', 'branch_manager', 'project_manager', 'department_head', 'hr_manager'].includes(code);
+      }
+      if (this.roleFilter === 'staff') {
+        return !['system_owner', 'super_admin', 'admin', 'administrator', 'manager', 'branch_manager', 'project_manager', 'department_head', 'hr_manager'].includes(code);
+      }
+      return true;
     },
     addCustomPermission() {
       if (!this.newPerm) return;
@@ -106,206 +126,207 @@
   }"
   class="space-y-4 {{ extra_class }}"
 >
-  <!-- Card Header & Persona Badge -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-2.5">
-    <div>
-      <div class="flex items-center gap-2">
-        <label class="ft-label mb-0 text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+  {# ════════════════════ 1. AUTHORIZED DYNAMIC ROLES CARD ════════════════════ #}
+  <c-card padding="md" extra_class="border border-slate-200/80 dark:border-slate-800">
+    <c-slot name="header">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
           <i data-lucide="shield-check" class="w-4 h-4 text-primary"></i>
-          Authorized Dynamic Roles
-          {% if required %}<span class="text-rose-500">*</span>{% endif %}
-        </label>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-[13px] font-bold text-slate-800 dark:text-white flex items-center gap-1.5 leading-tight">
+            Authorized Dynamic Roles
+            {% if required %}<span class="text-rose-500">*</span>{% endif %}
+          </h3>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+            {{ help_text|default:'Select one or more active RBAC system roles to grant system permissions.' }}
+          </p>
+        </div>
       </div>
-      <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-        {{ help_text|default:'Select authorized RBAC roles from dropdown or grid. Effective permissions resolve automatically as a union.' }}
-      </p>
+    </c-slot>
+
+    <c-slot name="actions">
+      <div class="flex items-center gap-2">
+        <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Primary Persona:</span>
+        <template x-if="activePersona === 'admin'">
+          <c-badge variant="primary" size="sm" dot="true" label="ADMIN"></c-badge>
+        </template>
+        <template x-if="activePersona === 'manager'">
+          <c-badge variant="info" size="sm" dot="true" label="MANAGER"></c-badge>
+        </template>
+        <template x-if="activePersona === 'staff'">
+          <c-badge variant="neutral" size="sm" dot="true" label="STAFF"></c-badge>
+        </template>
+      </div>
+    </c-slot>
+
+    {# Category Filter Tabs & Quick Action Buttons #}
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-200/70 dark:border-slate-800">
+      <div class="flex items-center gap-1 overflow-x-auto scrollbar-hide py-0.5">
+        <c-tab-button label="All Roles" :count="Object.keys(rolesMeta).length" variant="pill" active_condition="roleFilter === 'all'" @click="roleFilter = 'all'"></c-tab-button>
+        <c-tab-button label="Administrative" variant="pill" active_condition="roleFilter === 'admin'" @click="roleFilter = 'admin'"></c-tab-button>
+        <c-tab-button label="Management" variant="pill" active_condition="roleFilter === 'manager'" @click="roleFilter = 'manager'"></c-tab-button>
+        <c-tab-button label="Staff & Operational" variant="pill" active_condition="roleFilter === 'staff'" @click="roleFilter = 'staff'"></c-tab-button>
+        <c-tab-button label="Selected" :count="selectedRoles.length" variant="pill" active_condition="roleFilter === 'selected'" @click="roleFilter = 'selected'"></c-tab-button>
+      </div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <c-button type="button" variant="ghost" size="sm" label="Select All" @click="selectAll()" extra_class="text-xs"></c-button>
+        <c-button type="button" variant="ghost" size="sm" label="Clear" @click="clearAll()" extra_class="text-xs text-slate-500" :disabled="selectedRoles.length === 0"></c-button>
+      </div>
     </div>
 
-    <!-- Primary Persona Badge -->
-    <div class="flex items-center gap-1.5 self-start sm:self-auto">
-      <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Primary Persona:</span>
-      <template x-if="activePersona === 'admin'">
-        <c-badge variant="primary" size="sm" dot="true" label="ADMIN"></c-badge>
-      </template>
-      <template x-if="activePersona === 'manager'">
-        <c-badge variant="info" size="sm" dot="true" label="MANAGER"></c-badge>
-      </template>
-      <template x-if="activePersona === 'staff'">
-        <c-badge variant="neutral" size="sm" dot="true" label="STAFF"></c-badge>
-      </template>
-    </div>
-  </div>
-
-  <!-- Role Dropdown Selector Section -->
-  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-    <div class="flex-1">
-      <c-select
-        name="role_dropdown_select"
-        attrs="x-model='dropdownRole' @change='if (dropdownRole) { addRole(dropdownRole); dropdownRole = \'\'; }' aria-label='Choose role to assign from dropdown'"
-        extra_class="w-full text-xs"
-      >
-        <option value="">-- Select role to assign from dropdown --</option>
-        {% for role in field.field.queryset %}
-          <option value="{{ role.pk }}">{{ role.name }} ({{ role.code }})</option>
-        {% endfor %}
-      </c-select>
-    </div>
-    <c-button
-      type="button"
-      variant="secondary"
-      size="sm"
-      icon="plus"
-      label="Assign Selected Role"
-      attrs=":disabled='!dropdownRole' @click='if (dropdownRole) { addRole(dropdownRole); dropdownRole = \'\'; }'"
-      extra_class="shrink-0"
-    ></c-button>
-  </div>
-
-  <!-- Active Assigned Role Badges Pills -->
-  <div class="flex flex-wrap items-center gap-1.5 min-h-[36px] p-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-    <span class="text-[11px] text-slate-400 dark:text-slate-500 select-none mr-1" x-show="selectedRoles.length === 0">
-      No roles assigned yet. Choose from the dropdown above or check boxes below.
-    </span>
-    <template x-for="rId in selectedRoles" :key="rId">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 shadow-2xs transition-all">
-        <i data-lucide="shield" class="w-3 h-3 text-primary shrink-0"></i>
-        <span x-text="rolesMeta[rId]?.name || ('Role #' + rId)"></span>
-        <c-button
-          type="button"
-          variant="ghost"
-          size="sm"
-          extra_class="!p-0 !h-auto text-primary/70 hover:text-primary min-w-0"
-          attrs="@click.stop='toggleRole(rId)' title='Remove role'"
-        >
-          <i data-lucide="x" class="w-3 h-3"></i>
-        </c-button>
+    {# Active Selected Role Badges / Pills #}
+    <div class="flex flex-wrap items-center gap-1.5 min-h-[38px] p-2.5 mb-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+      <span class="text-[11px] text-slate-400 dark:text-slate-500 select-none mr-1" x-show="selectedRoles.length === 0">
+        No roles assigned yet. Click any role card below to assign.
       </span>
-    </template>
-  </div>
-
-  <!-- Grid of Selectable Role Cards -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-    {% for role in field.field.queryset %}
-    <div
-      role="checkbox"
-      tabindex="0"
-      :aria-checked="isSelected('{{ role.pk }}')"
-      @click="toggleRole('{{ role.pk }}')"
-      @keydown.space.prevent="toggleRole('{{ role.pk }}')"
-      @keydown.enter.prevent="toggleRole('{{ role.pk }}')"
-      class="group relative flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all select-none shadow-2xs hover:shadow-xs min-h-[44px] focus:outline-hidden focus:ring-2 focus:ring-primary/40"
-      :class="isSelected('{{ role.pk }}')
-        ? 'border-primary bg-primary-50/40 dark:bg-primary-950/20 ring-1 ring-primary/30'
-        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-primary/40'"
-    >
-      <c-checkbox
-        name="{{ field.html_name }}"
-        value="{{ role.pk }}"
-        x_model="selectedRoles"
-        extra_class="mt-0.5 shrink-0"
-        attrs="@click.stop"
-      ></c-checkbox>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center justify-between gap-1">
-          <span
-            class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors truncate"
+      <template x-for="rId in selectedRoles" :key="rId">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 shadow-2xs transition-all">
+          <i data-lucide="shield" class="w-3 h-3 text-primary shrink-0"></i>
+          <span x-text="rolesMeta[rId]?.name || ('Role #' + rId)"></span>
+          <c-button
+            type="button"
+            variant="ghost"
+            size="sm"
+            extra_class="!p-0 !h-auto text-primary/70 hover:text-primary min-w-0"
+            @click.stop="toggleRole(rId)"
+            title="Remove role"
           >
-            {{ role.name }}
-          </span>
-          <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800">
-            {{ role.code }}
-          </span>
-        </div>
-        {% if role.description %}
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
-          {{ role.description }}
-        </p>
-        {% endif %}
-      </div>
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </c-button>
+        </span>
+      </template>
     </div>
-    {% endfor %}
-  </div>
 
-  <!-- Form Field Error Display -->
-  {% if field.errors %}
-  <div class="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
-    <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-rose-500"></i>
-    <span>{{ field.errors.0 }}</span>
-  </div>
-  {% endif %}
+    {# Grid of Selectable Role Cards #}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {% for role in field.field.queryset %}
+      <div
+        x-show="shouldShowRole('{{ role.pk }}')"
+        role="checkbox"
+        tabindex="0"
+        :aria-checked="isSelected('{{ role.pk }}')"
+        @click="toggleRole('{{ role.pk }}')"
+        @keydown.space.prevent="toggleRole('{{ role.pk }}')"
+        @keydown.enter.prevent="toggleRole('{{ role.pk }}')"
+        class="group relative flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all select-none shadow-2xs hover:shadow-xs min-h-[56px] focus:outline-hidden focus:ring-2 focus:ring-primary/40"
+        :class="isSelected('{{ role.pk }}')
+          ? 'border-primary bg-primary-50/50 dark:bg-primary-950/20 ring-1 ring-primary/40'
+          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-primary/40'"
+      >
+        <c-checkbox
+          name="{{ field.html_name }}"
+          value="{{ role.pk }}"
+          x_model="selectedRoles"
+          extra_class="mt-0.5 shrink-0"
+          attrs="@click.stop"
+        ></c-checkbox>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-1.5">
+            <span
+              class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors truncate"
+            >
+              {{ role.name }}
+            </span>
+            <c-badge variant="neutral" size="sm">
+              <span class="font-mono text-[9px] uppercase">{{ role.code }}</span>
+            </c-badge>
+          </div>
+          {% if role.description %}
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+            {{ role.description }}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
 
-  <!-- Direct Custom Permission Overrides Section -->
-  <div class="pt-4 border-t border-slate-200/80 dark:border-slate-800 space-y-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-      <div>
-        <div class="flex items-center gap-2">
-          <label class="ft-label mb-0 text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
-            <i data-lucide="key-round" class="w-4 h-4 text-indigo-500"></i>
+    {# Form Field Error Display #}
+    {% if field.errors %}
+    <div class="mt-3">
+      <c-alert variant="danger" :message="field.errors.0"></c-alert>
+    </div>
+    {% endif %}
+  </c-card>
+
+  {# ════════════════════ 2. DIRECT CUSTOM PERMISSIONS OVERRIDES CARD ════════════════════ #}
+  <c-card padding="md" extra_class="border border-slate-200/80 dark:border-slate-800">
+    <c-slot name="header">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+          <i data-lucide="key-round" class="w-4 h-4 text-indigo-500"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-[13px] font-bold text-slate-800 dark:text-white leading-tight">
             Direct Custom Permissions (Overrides)
-          </label>
-          <c-badge variant="neutral" size="sm">
-            <span x-text="customPermissions.length"></span> Overrides
-          </c-badge>
+          </h3>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+            Grant or revoke specific capabilities and configure enforced data scoping for this user, bypassing role defaults.
+          </p>
         </div>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-          Grant or revoke specific capabilities and configure enforced data scoping for this user, bypassing role defaults.
-        </p>
       </div>
-    </div>
+    </c-slot>
 
-    <!-- Hidden Input for Form Submission -->
+    <c-slot name="actions">
+      <c-badge variant="neutral" size="sm">
+        <span x-text="customPermissions.length"></span> Overrides
+      </c-badge>
+    </c-slot>
+
+    {# Hidden Input for Form Submission #}
     <input type="hidden" name="custom_permissions" :value="JSON.stringify(customPermissions)">
 
-    <!-- Add Custom Permission Controls Bar -->
-    <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 space-y-2.5">
-      <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-        <!-- Permission Selector -->
+    {# Add Custom Permission Controls Bar #}
+    <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 space-y-3 mb-3">
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+        {# Permission Selector #}
         <div class="sm:col-span-6">
           <label class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
             Select Capability / Permission
           </label>
-          <c-select
-            name="new_override_perm"
-            attrs="x-model='newPerm' aria-label='Select permission to override'"
-            extra_class="w-full text-xs"
+          <select
+            x-model="newPerm"
+            aria-label="Select permission to override"
+            class="ft-input w-full text-xs h-[36px] rounded-lg px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 cursor-pointer"
           >
             <option value="">-- Choose permission to override --</option>
             {% for p in field.field.available_permissions %}
               <option value="{{ p.codename }}">{{ p.module }} — {{ p.name }} ({{ p.codename }})</option>
             {% endfor %}
-          </c-select>
+          </select>
         </div>
 
-        <!-- Grant / Revoke Type Selector -->
+        {# Grant / Revoke Type Selector #}
         <div class="sm:col-span-3">
           <label class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
             Override Type
           </label>
-          <c-select
-            name="new_override_type"
-            attrs="x-model='newType' aria-label='Select override type'"
-            extra_class="w-full text-xs"
+          <select
+            x-model="newType"
+            aria-label="Select override type"
+            class="ft-input w-full text-xs h-[36px] rounded-lg px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 cursor-pointer"
           >
             <option value="grant">GRANT (Allow access)</option>
             <option value="revoke">REVOKE (Explicitly deny)</option>
-          </c-select>
+          </select>
         </div>
 
-        <!-- Scope Selector -->
+        {# Scope Selector #}
         <div class="sm:col-span-3">
           <label class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
             Data Scoping
           </label>
-          <c-select
-            name="new_override_scope"
-            attrs="x-model='newScope' aria-label='Select data scope'"
-            extra_class="w-full text-xs"
+          <select
+            x-model="newScope"
+            aria-label="Select data scope"
+            class="ft-input w-full text-xs h-[36px] rounded-lg px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 cursor-pointer"
           >
             <option value="global">Global (Full System)</option>
             <option value="branch">Branch (Assigned Branch)</option>
             <option value="department">Department (Assigned Dept)</option>
             <option value="own">Own (Personal Only)</option>
-          </c-select>
+          </select>
         </div>
       </div>
 
@@ -316,65 +337,61 @@
           size="sm"
           icon="plus"
           label="Add Custom Permission"
-          attrs=":disabled='!newPerm' @click='addCustomPermission()'"
+          :disabled="!newPerm"
+          @click="addCustomPermission()"
         ></c-button>
       </div>
     </div>
 
-    <!-- Active Custom Permissions Table / List -->
-    <div class="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
-      <table class="w-full text-xs text-left">
-        <thead>
-          <tr class="bg-slate-100/70 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-            <th class="py-2.5 px-3 font-semibold">Capability / Permission</th>
-            <th class="py-2.5 px-3 font-semibold w-28 text-center">Override</th>
-            <th class="py-2.5 px-3 font-semibold w-36 text-center">Data Scope</th>
-            <th class="py-2.5 px-3 font-semibold w-16 text-center">Action</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-          <template x-for="(ov, idx) in customPermissions" :key="ov.codename || idx">
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-              <td class="py-2 px-3">
-                <div class="flex flex-col">
-                  <span class="font-semibold text-slate-800 dark:text-slate-100" x-text="ov.name || ov.codename"></span>
-                  <span class="font-mono text-[10px] text-slate-400 dark:text-slate-500" x-text="ov.codename"></span>
-                </div>
-              </td>
-              <td class="py-2 px-3 text-center">
-                <template x-if="ov.is_granted">
-                  <c-badge variant="success" size="sm" label="GRANT"></c-badge>
-                </template>
-                <template x-if="!ov.is_granted">
-                  <c-badge variant="danger" size="sm" label="REVOKE"></c-badge>
-                </template>
-              </td>
-              <td class="py-2 px-3 text-center">
-                <c-badge variant="neutral" size="sm">
-                  <span x-text="(ov.data_scope || 'branch').toUpperCase()"></span>
-                </c-badge>
-              </td>
-              <td class="py-2 px-3 text-center">
-                <c-button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  icon="trash-2"
-                  extra_class="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 !p-1.5"
-                  attrs="@click='removeCustomPermission(idx)' title='Remove override'"
-                ></c-button>
-              </td>
-            </tr>
-          </template>
-          <tr x-show="customPermissions.length === 0">
-            <td colspan="4" class="py-6 text-center text-slate-400 dark:text-slate-500 italic text-xs">
-              No custom overrides configured. Standard RBAC role permissions govern this account.
+    {# Active Custom Permissions Table using c-table #}
+    <c-table extra_class="border border-slate-200 dark:border-slate-800 rounded-xl">
+      <c-slot name="header">
+        <th class="py-2.5 px-3 font-semibold text-left">Capability / Permission</th>
+        <th class="py-2.5 px-3 font-semibold w-28 text-center">Override</th>
+        <th class="py-2.5 px-3 font-semibold w-36 text-center">Data Scope</th>
+        <th class="py-2.5 px-3 font-semibold w-16 text-center">Action</th>
+      </c-slot>
+      <c-slot name="body">
+        <template x-for="(ov, idx) in customPermissions" :key="ov.codename || idx">
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors border-b border-slate-100 dark:border-slate-800/80">
+            <td class="py-2 px-3">
+              <div class="flex flex-col">
+                <span class="font-semibold text-slate-800 dark:text-slate-100 text-xs" x-text="ov.name || ov.codename"></span>
+                <span class="font-mono text-[10px] text-slate-400 dark:text-slate-500" x-text="ov.codename"></span>
+              </div>
+            </td>
+            <td class="py-2 px-3 text-center">
+              <template x-if="ov.is_granted">
+                <c-badge variant="success" size="sm" label="GRANT"></c-badge>
+              </template>
+              <template x-if="!ov.is_granted">
+                <c-badge variant="danger" size="sm" label="REVOKE"></c-badge>
+              </template>
+            </td>
+            <td class="py-2 px-3 text-center">
+              <c-badge variant="neutral" size="sm">
+                <span x-text="(ov.data_scope || 'branch').toUpperCase()"></span>
+              </c-badge>
+            </td>
+            <td class="py-2 px-3 text-center">
+              <c-button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon="trash-2"
+                extra_class="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 !p-1.5"
+                @click="removeCustomPermission(idx)"
+                title="Remove override"
+              ></c-button>
             </td>
           </tr>
-        </tbody>
-      </table>
-    </div>
-
-  </div>
+        </template>
+        <tr x-show="customPermissions.length === 0">
+          <td colspan="4" class="py-6 text-center text-slate-400 dark:text-slate-500 italic text-xs">
+            No custom overrides configured. Standard RBAC role permissions govern this account.
+          </td>
+        </tr>
+      </c-slot>
+    </c-table>
+  </c-card>
 </div>
-

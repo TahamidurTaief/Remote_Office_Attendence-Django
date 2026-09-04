@@ -656,3 +656,100 @@ class ExpenseHardeningTests(TestCase):
         self.assertIsNone(expense.workflow_instance.completed_at)
 
 
+class AdminExpenseDetailAndEditTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(
+            name='HQ Branch',
+            address='Dhaka',
+            latitude=23.7925,
+            longitude=90.4078,
+            radius_meters=150,
+            wifi_ip='192.168.1.1',
+            is_active=True
+        )
+        self.admin_user = User.objects.create_superuser(
+            email='admin_test_exp@fieldtrack.com',
+            phone='+8801700000099',
+            password='adminpassword123',
+            role='admin'
+        )
+        self.staff_user = User.objects.create_user(
+            email='staff_test_exp@fieldtrack.com',
+            phone='+8801700000098',
+            password='staffpassword123',
+            role='staff'
+        )
+        self.employee = EmployeeProfile.objects.create(
+            user=self.staff_user,
+            employee_id='EMP-ADM-TEST',
+            full_name='Test Staff Member',
+            phone='+8801700000098',
+            joined_date=datetime.date(2026, 1, 1),
+            branch=self.branch,
+            is_active=True
+        )
+        from .models import ExpenseCategory
+        self.category = ExpenseCategory.objects.create(
+            name='Office Supplies',
+            code='supplies',
+            is_active=True
+        )
+        self.project_type = ProjectType.objects.create(name='Internal')
+        self.project = Project.objects.create(
+            name='Internal Renovation',
+            branch=self.branch,
+            project_type=self.project_type,
+            start_date=datetime.date(2026, 1, 1)
+        )
+        self.expense = Expense.objects.create(
+            employee=self.employee,
+            amount=250.00,
+            category=self.category,
+            project=self.project,
+            description='Original description of expense claim',
+            status='pending_manager'
+        )
+
+    def test_expense_detail_api(self):
+        self.client.force_login(self.admin_user)
+        url = reverse('expense:admin_expense_detail_api', kwargs={'pk': self.expense.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['id'], self.expense.pk)
+        self.assertEqual(data['employee']['name'], 'Test Staff Member')
+        self.assertEqual(data['employee']['employee_id'], 'EMP-ADM-TEST')
+        self.assertEqual(data['amount'], '250.00')
+        self.assertEqual(data['category']['name'], 'Office Supplies')
+        self.assertEqual(data['project']['name'], 'Internal Renovation')
+        self.assertEqual(data['description'], 'Original description of expense claim')
+        self.assertTrue(data['can_approve'])
+        self.assertTrue(data['can_return'])
+        self.assertTrue(data['can_reject'])
+
+    def test_admin_expense_update_view(self):
+        self.client.force_login(self.admin_user)
+        url = reverse('expense:admin_expense_edit', kwargs={'pk': self.expense.pk})
+        post_data = {
+            'amount': '420.50',
+            'category': self.category.pk,
+            'project': self.project.pk,
+            'description': 'Updated description by admin',
+            'status': 'approved'
+        }
+        response = self.client.post(url, data=post_data)
+        self.assertEqual(response.status_code, 302)
+
+        self.expense.refresh_from_db()
+        self.assertEqual(float(self.expense.amount), 420.50)
+        self.assertEqual(self.expense.description, 'Updated description by admin')
+        self.assertEqual(self.expense.status, 'approved')
+
+        from .models import ExpenseHistory
+        hist = ExpenseHistory.objects.filter(expense=self.expense).first()
+        self.assertIsNotNone(hist)
+        self.assertEqual(float(hist.amount), 250.00)
+        self.assertEqual(hist.description, 'Original description of expense claim')
+
+
+

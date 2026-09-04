@@ -1,0 +1,785 @@
+<c-app-shell page_title="{% if is_edit %}Edit {{ structure.name }}{% else %}Create Salary Structure{% endif %} | FieldTrack" active_href="{% url 'payroll:salary_structures' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:salary_structures' %}"></c-sidebar>
+    </c-slot>
+
+    <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 font-sans"
+         x-data="salaryStructureForm({
+             isEdit: {% if is_edit %}true{% else %}false{% endif %},
+             structureName: '{{ structure.name|default:""|escapejs }}',
+             isActive: {% if structure %}{% if structure.is_active %}true{% else %}false{% endif %}{% else %}true{% endif %},
+             availableComponents: {{ components_json|safe }},
+             initialRows: {{ existing_components_json|safe }}
+         })"
+         @keydown.window.ctrl.s.prevent="submitForm()"
+         @keydown.window.meta.s.prevent="submitForm()">
+
+        <!-- Top Header & Breadcrumb -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
+            <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                    <c-button href="{% url 'payroll:salary_structures' %}" variant="ghost" size="sm" icon="arrow-left" label="Back to Structures"></c-button>
+                    <span class="text-xs text-gray-400">/</span>
+                    <span class="text-xs font-semibold text-primary uppercase tracking-wider">Payroll Architecture</span>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2.5">
+                    <span class="p-2 rounded-lg bg-primary/10 text-primary">
+                        <i data-lucide="layers" class="w-6 h-6"></i>
+                    </span>
+                    <span>{% if is_edit %}Edit Salary Structure: {{ structure.name }}{% else %}Create New Salary Structure{% endif %}</span>
+                </h1>
+                <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                    Define base earnings ratio, statutory deductions, and percentage allocations of employee gross salaries.
+                </p>
+            </div>
+
+            <div class="flex items-center gap-3 shrink-0">
+                <c-button href="{% url 'payroll:salary_structures' %}" variant="ghost" label="Cancel"></c-button>
+                <c-button type="button" @click="submitForm()" variant="primary" icon="check" label="{% if is_edit %}Save Changes{% else %}Create Structure{% endif %}"></c-button>
+            </div>
+        </div>
+
+        <!-- Notification Banner if Form is Invalid -->
+        <div x-show="!isEarningBalanced && rows.length > 0"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 -translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             class="p-4 rounded-xl border flex items-start sm:items-center justify-between gap-3 shadow-sm"
+             :class="earningPctTotal < 100 ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200' : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-900 dark:text-rose-200'">
+            <div class="flex items-center gap-3">
+                <div class="p-1.5 rounded-full shrink-0" :class="earningPctTotal < 100 ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/50' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/50'">
+                    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h4 class="text-xs sm:text-sm font-semibold" x-text="earningPctTotal < 100 ? 'Earnings allocation is incomplete (' + earningPctTotal + '% / 100%)' : 'Earnings allocation exceeds 100% (' + earningPctTotal + '% / 100%)'"></h4>
+                    <p class="text-[11px] sm:text-xs opacity-90" x-text="earningPctTotal < 100 ? 'Gross salary earning components must total exactly 100.00%. You need ' + (100 - earningPctTotal).toFixed(2) + '% more to balance.' : 'Total earnings percentage exceeds the allowable gross total by ' + (earningPctTotal - 100).toFixed(2) + '%. Please decrease component ratios.'"></p>
+                </div>
+            </div>
+            <div class="shrink-0 flex items-center gap-2">
+                <template x-if="earningPctTotal < 100">
+                    <button type="button" @click="autoBalance()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
+                        <span>Auto-balance</span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <form id="salary-structure-form" method="post" action="{% if is_edit %}{% url 'payroll:salary_structure_edit' structure.pk %}{% else %}{% url 'payroll:salary_structure_create' %}{% endif %}" class="space-y-6">
+            {% csrf_token %}
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- Left 8 Columns: Structure Setup & Component Breakdown Table -->
+                <div class="lg:col-span-8 space-y-6">
+                    
+                    <!-- 1. Structure Details Card -->
+                    <c-card>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between border-b border-border pb-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                        <i data-lucide="sliders" class="w-4 h-4 text-primary"></i>
+                                        <span>Structure Identification</span>
+                                    </h3>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Give this compensation template a clear descriptive name.</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700 dark:text-gray-300">
+                                        <input type="checkbox" name="is_active" x-model="isActive" class="w-4 h-4 rounded text-primary focus:ring-primary/20 border-border">
+                                        <span>Active Structure</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                                <div class="sm:col-span-2 space-y-1.5">
+                                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                        Structure Name <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" name="name" x-model="structureName" required
+                                           placeholder="e.g. Standard Corporate Executive (50/25/15/10)"
+                                           class="ft-input w-full text-sm rounded-btn h-10 px-3.5 bg-white dark:bg-slate-900 border border-border focus:border-primary focus:ring-1 focus:ring-primary/20 text-gray-900 dark:text-gray-100 placeholder-gray-400">
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                        Quick Templates
+                                    </label>
+                                    <div class="relative" x-data="{ openPresets: false }" @click.outside="openPresets = false">
+                                        <button type="button" @click="openPresets = !openPresets; if(openPresets && window.SoundFX?.playDropdownOpen) window.SoundFX.playDropdownOpen()"
+                                                class="ft-input w-full flex items-center justify-between text-xs rounded-btn h-10 px-3 bg-slate-50 dark:bg-slate-800/60 border border-border hover:border-primary/50 text-gray-700 dark:text-gray-200">
+                                            <span class="flex items-center gap-1.5">
+                                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i>
+                                                <span>Apply Preset</span>
+                                            </span>
+                                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
+                                        </button>
+                                        <div x-show="openPresets"
+                                             x-transition
+                                             class="absolute z-30 left-0 right-0 mt-1 rounded-lg bg-white dark:bg-slate-900 border border-border shadow-xl p-1 text-xs space-y-1">
+                                            <button type="button" @click="applyPreset('standard'); openPresets = false"
+                                                    class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between">
+                                                <span class="font-medium text-gray-900 dark:text-gray-100">Standard 50/25/15/10 + PF</span>
+                                                <span class="text-[10px] text-gray-400">Corporate</span>
+                                            </button>
+                                            <button type="button" @click="applyPreset('executive'); openPresets = false"
+                                                    class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between">
+                                                <span class="font-medium text-gray-900 dark:text-gray-100">Executive 60/40</span>
+                                                <span class="text-[10px] text-gray-400">Simple</span>
+                                            </button>
+                                            <button type="button" @click="applyPreset('half'); openPresets = false"
+                                                    class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between">
+                                                <span class="font-medium text-gray-900 dark:text-gray-100">Equal 50/50</span>
+                                                <span class="text-[10px] text-gray-400">Basic/HRA</span>
+                                            </button>
+                                            <div class="border-t border-border my-1"></div>
+                                            <button type="button" @click="clearAllRows(); openPresets = false"
+                                                    class="w-full text-left px-2.5 py-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                                                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                                <span>Clear All Rows</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </c-card>
+
+                    <!-- 2. Dynamic Component Builder Table -->
+                    <c-card padding="none">
+                        <div class="p-4 sm:p-5 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                    <i data-lucide="layers-3" class="w-4 h-4 text-primary"></i>
+                                    <span>Salary Components Breakdown</span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 font-mono" x-text="rows.length + ' components'"></span>
+                                </h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Add earnings (Base, HRA, Medical) and statutory deductions (PF, Tax).</p>
+                            </div>
+
+                            <div class="flex items-center gap-2.5">
+                                <c-button type="button" @click="addRow()" variant="secondary" size="sm" icon="plus" label="Add Component"></c-button>
+                            </div>
+                        </div>
+
+                        <!-- Components Table Rows -->
+                        <div class="p-4 sm:p-5 space-y-3">
+                            <template x-for="(row, index) in rows" :key="index">
+                                <div class="p-3.5 rounded-xl border transition-all duration-200 space-y-3 sm:space-y-0 relative group"
+                                     :class="isDuplicate(row.component_id, index) ? 'border-rose-300 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/20' : 'border-border bg-slate-50/60 dark:bg-slate-800/30 hover:border-primary/40 hover:bg-slate-50/90 dark:hover:bg-slate-800/50'">
+                                    
+                                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                                        
+                                        <!-- Column 1: Component Selector (5 cols) -->
+                                        <div class="sm:col-span-5 relative" x-data="{ openComp: false, search: '' }" @click.outside="openComp = false">
+                                            <label class="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1 sm:hidden">
+                                                Component
+                                            </label>
+                                            
+                                            <button type="button"
+                                                    @click="openComp = !openComp; if(openComp && window.SoundFX?.playDropdownOpen) window.SoundFX.playDropdownOpen()"
+                                                    class="ft-input w-full flex items-center justify-between text-xs rounded-lg h-10 px-3 bg-white dark:bg-slate-900 border border-border hover:border-primary/50 text-left transition-colors cursor-pointer">
+                                                <div class="flex items-center gap-2 truncate">
+                                                    <template x-if="getComponent(row.component_id)">
+                                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0"
+                                                              :class="getComponent(row.component_id).type === 'earning' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'"
+                                                              x-text="getComponent(row.component_id).type === 'earning' ? 'Earn' : 'Ded'"></span>
+                                                    </template>
+                                                    <span class="truncate font-medium" :class="row.component_id ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'"
+                                                          x-text="getComponentName(row.component_id) || '-- Select Salary Component --'"></span>
+                                                </div>
+                                                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400 shrink-0 ml-1 transition-transform duration-200" :class="openComp ? 'rotate-180' : ''"></i>
+                                            </button>
+                                            <input type="hidden" name="component_ids" :value="row.component_id" required>
+
+                                            <!-- Dropdown Menu -->
+                                            <div x-show="openComp"
+                                                 x-transition:enter="transition ease-out duration-100"
+                                                 x-transition:enter-start="opacity-0 scale-95"
+                                                 x-transition:enter-end="opacity-100 scale-100"
+                                                 x-transition:leave="transition ease-in duration-75"
+                                                 x-transition:leave-start="opacity-100 scale-100"
+                                                 x-transition:leave-end="opacity-0 scale-95"
+                                                 class="absolute z-40 top-full mt-1.5 w-full rounded-xl bg-white dark:bg-slate-900 border border-border shadow-2xl overflow-hidden flex flex-col font-sans"
+                                                 style="display: none;">
+                                                <div class="p-2 border-b border-border bg-slate-50 dark:bg-slate-800/80 flex items-center gap-2">
+                                                    <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 shrink-0"></i>
+                                                    <input type="text" x-model="search" placeholder="Search components..."
+                                                           class="w-full bg-transparent text-xs border-none p-0 focus:ring-0 focus:outline-none text-gray-900 dark:text-gray-100"
+                                                           @click.stop>
+                                                </div>
+                                                <div class="max-h-56 overflow-y-auto py-1">
+                                                    <template x-for="comp in availableComponents.filter(c => !search || c.label.toLowerCase().includes(search.toLowerCase()))" :key="comp.id">
+                                                        <button type="button"
+                                                                @click="selectComponent(row, comp.id); openComp = false; search = ''"
+                                                                class="w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                                :class="String(row.component_id) === String(comp.id) ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-700 dark:text-gray-200'">
+                                                            <div class="flex items-center gap-2 truncate">
+                                                                <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider shrink-0"
+                                                                      :class="comp.type === 'earning' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'"
+                                                                      x-text="comp.type === 'earning' ? 'Earning' : 'Deduction'"></span>
+                                                                <span x-text="comp.label" class="truncate"></span>
+                                                            </div>
+                                                            <i x-show="String(row.component_id) === String(comp.id)" data-lucide="check" class="w-3.5 h-3.5 text-primary shrink-0 ml-1"></i>
+                                                        </button>
+                                                    </template>
+                                                    <div x-show="availableComponents.filter(c => !search || c.label.toLowerCase().includes(search.toLowerCase())).length === 0"
+                                                         class="px-3 py-3 text-xs text-gray-400 text-center italic">
+                                                        No salary component matched
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <template x-if="isDuplicate(row.component_id, index)">
+                                                <span class="text-[10px] text-danger font-medium mt-1 block">Duplicate component selected</span>
+                                            </template>
+                                        </div>
+
+                                        <!-- Column 2: Calculation Mode Selector (4 cols) -->
+                                        <div class="sm:col-span-4 relative" x-data="{ openType: false }" @click.outside="openType = false">
+                                            <label class="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1 sm:hidden">
+                                                Calculation Mode
+                                            </label>
+                                            
+                                            <button type="button"
+                                                    @click="openType = !openType; if(openType && window.SoundFX?.playDropdownOpen) window.SoundFX.playDropdownOpen()"
+                                                    class="ft-input w-full flex items-center justify-between text-xs rounded-lg h-10 px-3 bg-white dark:bg-slate-900 border border-border hover:border-primary/50 text-left transition-colors cursor-pointer">
+                                                <span class="truncate font-medium text-gray-900 dark:text-gray-100"
+                                                      x-text="row.value_type === 'percentage' ? 'Percentage of Gross (%)' : 'Fixed Amount (৳)'"></span>
+                                                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400 shrink-0 ml-1 transition-transform duration-200" :class="openType ? 'rotate-180' : ''"></i>
+                                            </button>
+                                            <input type="hidden" name="component_value_types" :value="row.value_type">
+
+                                            <!-- Dropdown Menu -->
+                                            <div x-show="openType"
+                                                 x-transition
+                                                 class="absolute z-40 top-full mt-1.5 w-full rounded-xl bg-white dark:bg-slate-900 border border-border shadow-2xl p-1 font-sans"
+                                                 style="display: none;">
+                                                <button type="button"
+                                                        @click="row.value_type = 'percentage'; openType = false; if(window.SoundFX?.playDropdownSelect) window.SoundFX.playDropdownSelect()"
+                                                        class="w-full text-left px-3 py-2 text-xs rounded-lg flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                        :class="row.value_type === 'percentage' ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-700 dark:text-gray-200'">
+                                                    <div class="flex items-center gap-2">
+                                                        <i data-lucide="percent" class="w-3.5 h-3.5"></i>
+                                                        <span>Percentage of Gross</span>
+                                                    </div>
+                                                    <i x-show="row.value_type === 'percentage'" data-lucide="check" class="w-3.5 h-3.5 text-primary"></i>
+                                                </button>
+                                                <button type="button"
+                                                        @click="row.value_type = 'fixed'; openType = false; if(window.SoundFX?.playDropdownSelect) window.SoundFX.playDropdownSelect()"
+                                                        class="w-full text-left px-3 py-2 text-xs rounded-lg flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                        :class="row.value_type === 'fixed' ? 'bg-primary/10 text-primary font-semibold' : 'text-gray-700 dark:text-gray-200'">
+                                                    <div class="flex items-center gap-2">
+                                                        <i data-lucide="banknote" class="w-3.5 h-3.5"></i>
+                                                        <span>Fixed Amount (BDT)</span>
+                                                    </div>
+                                                    <i x-show="row.value_type === 'fixed'" data-lucide="check" class="w-3.5 h-3.5 text-primary"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Column 3: Value Amount Input (2 cols) -->
+                                        <div class="sm:col-span-2">
+                                            <label class="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1 sm:hidden">
+                                                Rate / Amount
+                                            </label>
+                                            <div class="relative">
+                                                <input type="number" step="0.01" min="0" name="component_values" x-model="row.value" required
+                                                       class="ft-input w-full text-xs font-mono font-bold text-right rounded-lg h-10 pl-2 pr-7 bg-white dark:bg-slate-900 border border-border focus:border-primary focus:ring-1 focus:ring-primary/20 text-gray-900 dark:text-gray-100">
+                                                <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 pointer-events-none"
+                                                      x-text="row.value_type === 'percentage' ? '%' : '৳'"></span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Column 4: Row Delete Button (1 col) -->
+                                        <div class="sm:col-span-1 flex justify-end">
+                                            <button type="button" @click="removeRow(index)"
+                                                    title="Remove component"
+                                                    class="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer">
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template x-if="rows.length === 0">
+                                <div class="text-center py-8 border-2 border-dashed border-border rounded-xl space-y-3">
+                                    <div class="p-3 rounded-full bg-slate-100 dark:bg-slate-800 text-gray-400 w-fit mx-auto">
+                                        <i data-lucide="plus-circle" class="w-6 h-6"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">No Components Assigned Yet</h4>
+                                        <p class="text-xs text-gray-400 mt-0.5">Click the button below or choose a preset template above.</p>
+                                    </div>
+                                    <c-button type="button" @click="addRow()" variant="secondary" size="sm" icon="plus" label="Add First Component"></c-button>
+                                </div>
+                            </template>
+                        </div>
+                    </c-card>
+
+                </div>
+
+                <!-- Right 4 Columns: Sticky Live Simulator, Allocation KPI & Validation Card -->
+                <div class="lg:col-span-4 space-y-5 lg:sticky lg:top-4">
+                    
+                    <!-- 1. Allocation Progress Bar & KPIs -->
+                    <c-card>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between border-b border-border pb-3">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                    <i data-lucide="pie-chart" class="w-4 h-4 text-primary"></i>
+                                    <span>Earnings Allocation</span>
+                                </h3>
+                                <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-full"
+                                      :class="isEarningBalanced ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'"
+                                      x-text="earningPctTotal + '% / 100%'"></span>
+                            </div>
+
+                            <!-- Visual Progress Bar -->
+                            <div class="space-y-1.5">
+                                <div class="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-border p-0.5">
+                                    <div class="h-full rounded-full transition-all duration-300"
+                                         :style="'width: ' + Math.min(earningPctTotal, 100) + '%'"
+                                         :class="isEarningBalanced ? 'bg-emerald-500' : (earningPctTotal > 100 ? 'bg-rose-500' : 'bg-amber-500')"></div>
+                                </div>
+                                <div class="flex justify-between text-[11px] text-gray-400 font-mono">
+                                    <span>0%</span>
+                                    <span>Target: 100%</span>
+                                </div>
+                            </div>
+
+                            <!-- Metrics Grid -->
+                            <div class="grid grid-cols-2 gap-2.5 pt-1">
+                                <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-border">
+                                    <span class="text-[10px] uppercase font-semibold text-gray-400 block">Earnings Ratio</span>
+                                    <span class="text-sm font-bold font-mono" :class="isEarningBalanced ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'" x-text="earningPctTotal + '%'"></span>
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-border">
+                                    <span class="text-[10px] uppercase font-semibold text-gray-400 block">Fixed Earnings</span>
+                                    <span class="text-sm font-bold font-mono text-gray-800 dark:text-gray-200" x-text="'৳ ' + earningFixedTotal.toLocaleString()"></span>
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-border">
+                                    <span class="text-[10px] uppercase font-semibold text-gray-400 block">Deductions Ratio</span>
+                                    <span class="text-sm font-bold font-mono text-rose-600 dark:text-rose-400" x-text="deductionPctTotal + '%'"></span>
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-border">
+                                    <span class="text-[10px] uppercase font-semibold text-gray-400 block">Fixed Deductions</span>
+                                    <span class="text-sm font-bold font-mono text-rose-600 dark:text-rose-400" x-text="'৳ ' + deductionFixedTotal.toLocaleString()"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </c-card>
+
+                    <!-- 2. Live Salary Simulator Card -->
+                    <c-card>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between border-b border-border pb-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                        <i data-lucide="calculator" class="w-4 h-4 text-primary"></i>
+                                        <span>Live Salary Simulator</span>
+                                    </h3>
+                                    <p class="text-[11px] text-gray-400">Test net pay against a sample gross</p>
+                                </div>
+                            </div>
+
+                            <!-- Sample Gross Input -->
+                            <div class="space-y-2">
+                                <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400">
+                                    Sample Monthly Gross Salary
+                                </label>
+                                <div class="relative">
+                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">৳</span>
+                                    <input type="number" step="1000" min="0" x-model="sampleGross"
+                                           class="ft-input w-full text-xs font-mono font-bold pl-7 pr-3 h-9 rounded-lg bg-white dark:bg-slate-900 border border-border text-gray-900 dark:text-gray-100">
+                                </div>
+                                
+                                <!-- Quick chips -->
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    <button type="button" @click="sampleGross = 25000" class="px-2 py-0.5 text-[10px] font-medium rounded border border-border hover:border-primary hover:text-primary transition-colors bg-white dark:bg-slate-900">৳25k</button>
+                                    <button type="button" @click="sampleGross = 50000" class="px-2 py-0.5 text-[10px] font-medium rounded border border-border hover:border-primary hover:text-primary transition-colors bg-white dark:bg-slate-900">৳50k</button>
+                                    <button type="button" @click="sampleGross = 100000" class="px-2 py-0.5 text-[10px] font-medium rounded border border-border hover:border-primary hover:text-primary transition-colors bg-white dark:bg-slate-900">৳100k</button>
+                                    <button type="button" @click="sampleGross = 150000" class="px-2 py-0.5 text-[10px] font-medium rounded border border-border hover:border-primary hover:text-primary transition-colors bg-white dark:bg-slate-900">৳150k</button>
+                                </div>
+                            </div>
+
+                            <!-- Calculated Breakdown Table -->
+                            <div class="rounded-lg border border-border overflow-hidden text-xs">
+                                <div class="bg-slate-50 dark:bg-slate-800/80 px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 flex justify-between border-b border-border">
+                                    <span>Earnings Breakdown</span>
+                                    <span class="font-mono text-emerald-600 dark:text-emerald-400" x-text="'৳ ' + Math.round(simulatedGross).toLocaleString()"></span>
+                                </div>
+                                <div class="divide-y divide-border/60 max-h-36 overflow-y-auto bg-white dark:bg-slate-900">
+                                    <template x-for="item in simulatedEarnings" :key="item.name">
+                                        <div class="px-3 py-1.5 flex justify-between items-center text-[11px]">
+                                            <span class="text-gray-600 dark:text-gray-400 truncate pr-2" x-text="item.name"></span>
+                                            <span class="font-mono font-medium text-gray-900 dark:text-gray-100" x-text="'৳ ' + Math.round(item.amount).toLocaleString()"></span>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div class="bg-slate-50 dark:bg-slate-800/80 px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 flex justify-between border-t border-b border-border">
+                                    <span>Deductions Breakdown</span>
+                                    <span class="font-mono text-rose-600 dark:text-rose-400" x-text="'- ৳ ' + Math.round(simulatedDeductionsTotal).toLocaleString()"></span>
+                                </div>
+                                <div class="divide-y divide-border/60 max-h-28 overflow-y-auto bg-white dark:bg-slate-900">
+                                    <template x-for="item in simulatedDeductions" :key="item.name">
+                                        <div class="px-3 py-1.5 flex justify-between items-center text-[11px]">
+                                            <span class="text-gray-600 dark:text-gray-400 truncate pr-2" x-text="item.name"></span>
+                                            <span class="font-mono font-medium text-rose-600 dark:text-rose-400" x-text="'- ৳ ' + Math.round(item.amount).toLocaleString()"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="simulatedDeductions.length === 0">
+                                        <div class="px-3 py-1.5 text-[11px] text-gray-400 italic text-center">No deductions</div>
+                                    </template>
+                                </div>
+
+                                <!-- Net Pay Row -->
+                                <div class="bg-primary/10 dark:bg-primary/20 px-3 py-2.5 flex justify-between items-center border-t border-primary/20 font-bold">
+                                    <span class="text-primary text-xs">Estimated Net Take-Home</span>
+                                    <span class="font-mono text-primary text-sm" x-text="'৳ ' + Math.round(simulatedNetPay).toLocaleString()"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </c-card>
+
+                    <!-- 3. Validation Checklist & Final Action -->
+                    <c-card>
+                        <div class="space-y-4">
+                            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Validation Checklist</h4>
+                            <div class="space-y-2 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="check-circle" class="w-4 h-4" :class="structureName.trim() ? 'text-emerald-500' : 'text-gray-300 dark:text-gray-600'"></i>
+                                    <span :class="structureName.trim() ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'">Structure name provided</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="check-circle" class="w-4 h-4" :class="hasEarningComponent ? 'text-emerald-500' : 'text-gray-300 dark:text-gray-600'"></i>
+                                    <span :class="hasEarningComponent ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'">At least one earning component</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="check-circle" class="w-4 h-4" :class="isEarningBalanced ? 'text-emerald-500' : 'text-gray-300 dark:text-gray-600'"></i>
+                                    <span :class="isEarningBalanced ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'">Earnings percentage equals 100.0%</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="check-circle" class="w-4 h-4" :class="!hasDuplicates ? 'text-emerald-500' : 'text-gray-300 dark:text-gray-600'"></i>
+                                    <span :class="!hasDuplicates ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400'">No duplicate components</span>
+                                </div>
+                            </div>
+
+                            <div class="pt-2">
+                                <c-button type="button" @click="submitForm()" variant="primary" size="lg" icon="check" extra_class="w-full justify-center" label="{% if is_edit %}Update Structure{% else %}Save Structure{% endif %}" :disabled="!isFormValid"></c-button>
+                                <p class="text-[11px] text-gray-400 text-center mt-2">
+                                    Shortcut: <kbd class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border border-border font-mono text-[10px]">Ctrl + S</kbd> to save
+                                </p>
+                            </div>
+                        </div>
+                    </c-card>
+
+                </div>
+
+            </div>
+        </form>
+
+    </div>
+
+    <script>
+        function salaryStructureForm(config) {
+            return {
+                isEdit: config.isEdit || false,
+                structureName: config.structureName || '',
+                isActive: config.isActive !== undefined ? config.isActive : true,
+                availableComponents: config.availableComponents || [],
+                sampleGross: 50000,
+                rows: [],
+
+                init() {
+                    if (config.initialRows && config.initialRows.length > 0) {
+                        this.rows = config.initialRows.map(r => ({
+                            component_id: String(r.component_id),
+                            value_type: r.value_type || 'percentage',
+                            value: r.value || '0'
+                        }));
+                    } else {
+                        // Default starting template: Standard basic 50%
+                        const basic = this.availableComponents.find(c => c.code.toLowerCase().includes('basic'));
+                        if (basic) {
+                            this.rows = [{
+                                component_id: String(basic.id),
+                                value_type: 'percentage',
+                                value: '50'
+                            }];
+                        } else {
+                            this.rows = [{
+                                component_id: this.availableComponents.length > 0 ? String(this.availableComponents[0].id) : '',
+                                value_type: 'percentage',
+                                value: '100'
+                            }];
+                        }
+                    }
+                    this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                },
+
+                getComponent(id) {
+                    if (!id) return null;
+                    return this.availableComponents.find(c => String(c.id) === String(id)) || null;
+                },
+
+                getComponentName(id) {
+                    const comp = this.getComponent(id);
+                    return comp ? comp.label : '';
+                },
+
+                selectComponent(row, compId) {
+                    row.component_id = String(compId);
+                    const comp = this.getComponent(compId);
+                    if (comp) {
+                        if (comp.default_value_type) row.value_type = comp.default_value_type;
+                        if (parseFloat(comp.default_value || 0) > 0 && parseFloat(row.value || 0) === 0) {
+                            row.value = comp.default_value;
+                        }
+                    }
+                    if (window.SoundFX?.playDropdownSelect) window.SoundFX.playDropdownSelect();
+                    this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                },
+
+                addRow() {
+                    // Pick the next unselected component if possible
+                    const selectedIds = new Set(this.rows.map(r => String(r.component_id)));
+                    const nextAvailable = this.availableComponents.find(c => !selectedIds.has(String(c.id)));
+                    const nextId = nextAvailable ? String(nextAvailable.id) : (this.availableComponents.length > 0 ? String(this.availableComponents[0].id) : '');
+                    
+                    let defVal = '0';
+                    let defType = 'percentage';
+                    if (nextAvailable) {
+                        defType = nextAvailable.default_value_type || 'percentage';
+                        defVal = nextAvailable.default_value || '0';
+                    }
+
+                    this.rows.push({
+                        component_id: nextId,
+                        value_type: defType,
+                        value: defVal
+                    });
+
+                    if (window.SoundFX?.playClick) window.SoundFX.playClick();
+                    this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                },
+
+                removeRow(index) {
+                    if (this.rows.length > 1) {
+                        this.rows.splice(index, 1);
+                    } else {
+                        this.rows[0] = { component_id: '', value_type: 'percentage', value: '0' };
+                    }
+                    if (window.SoundFX?.playClick) window.SoundFX.playClick();
+                    this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                },
+
+                clearAllRows() {
+                    this.rows = [];
+                    this.addRow();
+                },
+
+                isDuplicate(id, currentIndex) {
+                    if (!id) return false;
+                    return this.rows.some((r, idx) => idx !== currentIndex && String(r.component_id) === String(id));
+                },
+
+                get hasDuplicates() {
+                    const ids = this.rows.map(r => String(r.component_id)).filter(id => Boolean(id));
+                    return new Set(ids).size !== ids.length;
+                },
+
+                get hasEarningComponent() {
+                    return this.rows.some(r => {
+                        const comp = this.getComponent(r.component_id);
+                        return comp && comp.type === 'earning';
+                    });
+                },
+
+                get earningPctTotal() {
+                    let sum = 0;
+                    for (let r of this.rows) {
+                        const comp = this.getComponent(r.component_id);
+                        if (comp && comp.type === 'earning' && r.value_type === 'percentage') {
+                            sum += parseFloat(r.value || 0);
+                        }
+                    }
+                    return Math.round(sum * 100) / 100;
+                },
+
+                get earningFixedTotal() {
+                    let sum = 0;
+                    for (let r of this.rows) {
+                        const comp = this.getComponent(r.component_id);
+                        if (comp && comp.type === 'earning' && r.value_type === 'fixed') {
+                            sum += parseFloat(r.value || 0);
+                        }
+                    }
+                    return Math.round(sum * 100) / 100;
+                },
+
+                get deductionPctTotal() {
+                    let sum = 0;
+                    for (let r of this.rows) {
+                        const comp = this.getComponent(r.component_id);
+                        if (comp && comp.type === 'deduction' && r.value_type === 'percentage') {
+                            sum += parseFloat(r.value || 0);
+                        }
+                    }
+                    return Math.round(sum * 100) / 100;
+                },
+
+                get deductionFixedTotal() {
+                    let sum = 0;
+                    for (let r of this.rows) {
+                        const comp = this.getComponent(r.component_id);
+                        if (comp && comp.type === 'deduction' && r.value_type === 'fixed') {
+                            sum += parseFloat(r.value || 0);
+                        }
+                    }
+                    return Math.round(sum * 100) / 100;
+                },
+
+                get isEarningBalanced() {
+                    return Math.abs(this.earningPctTotal - 100.0) < 0.001;
+                },
+
+                get isFormValid() {
+                    return this.structureName.trim().length > 0 &&
+                           this.rows.length > 0 &&
+                           this.hasEarningComponent &&
+                           this.isEarningBalanced &&
+                           !this.hasDuplicates;
+                },
+
+                autoBalance() {
+                    const remaining = Math.round((100 - this.earningPctTotal) * 100) / 100;
+                    if (remaining <= 0) return;
+
+                    // Find Basic component row to balance into, or first earning row
+                    let targetRow = this.rows.find(r => {
+                        const comp = this.getComponent(r.component_id);
+                        return comp && comp.code.toLowerCase().includes('basic') && r.value_type === 'percentage';
+                    });
+
+                    if (!targetRow) {
+                        targetRow = this.rows.find(r => {
+                            const comp = this.getComponent(r.component_id);
+                            return comp && comp.type === 'earning' && r.value_type === 'percentage';
+                        });
+                    }
+
+                    if (targetRow) {
+                        const currentVal = parseFloat(targetRow.value || 0);
+                        targetRow.value = String(Math.round((currentVal + remaining) * 100) / 100);
+                        if (window.SoundFX?.playSuccess) window.SoundFX.playSuccess();
+                    }
+                },
+
+                applyPreset(type) {
+                    const findComp = (term) => this.availableComponents.find(c => 
+                        c.code.toLowerCase().includes(term.toLowerCase()) || c.name.toLowerCase().includes(term.toLowerCase())
+                    );
+
+                    const basic = findComp('basic');
+                    const hra = findComp('hra') || findComp('rent');
+                    const med = findComp('med');
+                    const conv = findComp('conv') || findComp('transport');
+                    const pf = findComp('pf') || findComp('provident');
+
+                    if (type === 'standard') {
+                        this.rows = [];
+                        if (basic) this.rows.push({ component_id: String(basic.id), value_type: 'percentage', value: '50' });
+                        if (hra) this.rows.push({ component_id: String(hra.id), value_type: 'percentage', value: '25' });
+                        if (med) this.rows.push({ component_id: String(med.id), value_type: 'percentage', value: '15' });
+                        if (conv) this.rows.push({ component_id: String(conv.id), value_type: 'percentage', value: '10' });
+                        if (pf) this.rows.push({ component_id: String(pf.id), value_type: 'percentage', value: '10' });
+                        if (!this.structureName) this.structureName = "Standard Corporate (50/25/15/10)";
+                    } else if (type === 'executive') {
+                        this.rows = [];
+                        if (basic) this.rows.push({ component_id: String(basic.id), value_type: 'percentage', value: '60' });
+                        if (hra) this.rows.push({ component_id: String(hra.id), value_type: 'percentage', value: '40' });
+                        if (pf) this.rows.push({ component_id: String(pf.id), value_type: 'percentage', value: '10' });
+                        if (!this.structureName) this.structureName = "Executive Structure (60/40)";
+                    } else if (type === 'half') {
+                        this.rows = [];
+                        if (basic) this.rows.push({ component_id: String(basic.id), value_type: 'percentage', value: '50' });
+                        if (hra) this.rows.push({ component_id: String(hra.id), value_type: 'percentage', value: '50' });
+                        if (!this.structureName) this.structureName = "Equal 50/50 Structure";
+                    }
+
+                    if (window.SoundFX?.playSuccess) window.SoundFX.playSuccess();
+                    this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+                },
+
+                get simulatedGross() {
+                    return parseFloat(this.sampleGross || 0) + this.earningFixedTotal;
+                },
+
+                get simulatedEarnings() {
+                    const gross = parseFloat(this.sampleGross || 0);
+                    const list = [];
+                    for (let r of this.rows) {
+                        const comp = this.getComponent(r.component_id);
+                        if (comp && comp.type === 'earning') {
+                            const val = parseFloat(r.value || 0);
+                            const amt = r.value_type === 'percentage' ? (gross * val / 100) : val;
+                            list.push({
+                                name: comp.name + ' (' + comp.code + ')',
+                                amount: amt,
+                                type: 'earning'
+                            });
+                        }
+                    }
+                    return list;
+                },
+
+                get simulatedDeductions() {
+                    const gross = parseFloat(this.sampleGross || 0);
+                    const list = [];
+                    for (let r of this.rows) {
+                        const comp = this.getComponent(r.component_id);
+                        if (comp && comp.type === 'deduction') {
+                            const val = parseFloat(r.value || 0);
+                            const amt = r.value_type === 'percentage' ? (gross * val / 100) : val;
+                            list.push({
+                                name: comp.name + ' (' + comp.code + ')',
+                                amount: amt,
+                                type: 'deduction'
+                            });
+                        }
+                    }
+                    return list;
+                },
+
+                get simulatedDeductionsTotal() {
+                    return this.simulatedDeductions.reduce((sum, item) => sum + item.amount, 0);
+                },
+
+                get simulatedNetPay() {
+                    return Math.max(0, this.simulatedGross - this.simulatedDeductionsTotal);
+                },
+
+                submitForm() {
+                    if (!this.structureName.trim()) {
+                        alert("Please enter a structure name.");
+                        return;
+                    }
+                    if (!this.isEarningBalanced) {
+                        alert("Earning percentages must total exactly 100.00%. Currently: " + this.earningPctTotal + "%.");
+                        return;
+                    }
+                    if (this.hasDuplicates) {
+                        alert("Please resolve duplicate salary components before saving.");
+                        return;
+                    }
+                    document.getElementById('salary-structure-form').submit();
+                }
+            };
+        }
+    </script>
+</c-app-shell>

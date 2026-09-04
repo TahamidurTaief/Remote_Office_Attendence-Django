@@ -9,10 +9,7 @@
     <div class="p-4 max-w-7xl mx-auto space-y-4">
         <c-page-header title="Payroll Management">
             <c-slot name="actions">
-                <button type="button" @click="$dispatch('open-modal', {id: 'create-payroll-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                <span>Create Payroll Run</span>
-                </button>
+                <c-button variant="primary" icon="plus" label="Create Payroll Run" @click="$dispatch('open-modal', {id: 'create-payroll-modal'})"></c-button>
             </c-slot>
         </c-page-header>
         <!-- Filter Card -->
@@ -34,7 +31,7 @@
                     </c-select>
 
                     <div class="flex items-center gap-2">
-                        <button type="submit" class="ft-btn ft-btn-secondary w-full">Apply Filter</button>
+                        <c-button type="submit" variant="secondary" extra_class="w-full" label="Apply Filter"></c-button>
                     </div>
                 </div>
             </c-filter-bar>
@@ -94,10 +91,7 @@
                         </td>
                         <td class="text-right">
                             <div class="flex items-center justify-end gap-1.5">
-                                <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-primary ft-btn-sm" title="View Details">
-                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-                                    <span>Manage</span>
-                                </a>
+                                <c-button href="{% url 'payroll:payroll_run_detail' run.pk %}" variant="primary" size="sm" icon="eye" label="Manage"></c-button>
                             </div>
                         </td>
                     </tr>
@@ -137,8 +131,8 @@
 
             <c-slot name="footer">
                 <div class="flex items-center justify-end gap-2 w-full">
-                    <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
-                    <button type="submit" class="ft-btn ft-btn-primary">Create Run</button>
+                    <c-button type="button" variant="secondary" size="sm" label="Cancel" @click="$dispatch('close-modal')"></c-button>
+                    <c-button type="submit" variant="primary" size="sm" label="Create Run"></c-button>
                 </div>
             </c-slot>
         </form>

@@ -37,3 +37,33 @@ class EnterpriseAppShellTest(TestCase):
         self.assertIn('new-toast', rendered)
         self.assertIn('open-command-palette', rendered)
         self.assertIn('notifications-drawer', rendered)
+
+    def test_staff_shell_renders_staff_navigation_without_admin_menu(self):
+        """Verify that shell_type='staff' renders staff app navigation and no admin sections."""
+        rendered = render_to_string(
+            'cotton/app-shell.html',
+            {'user': self.user, 'request': self._make_request(), 'shell_type': 'staff'}
+        )
+        # Staff specific links
+        self.assertIn('/staff/home/', rendered)
+        self.assertIn('/staff/check-in/', rendered)
+        self.assertIn('/staff/my-tasks/', rendered)
+        self.assertIn('Staff Workspace', rendered)
+        self.assertIn('STAFF', rendered)
+
+        # Must NOT contain admin-only sections/menus
+        self.assertNotIn('Executive Dashboard', rendered)
+        self.assertNotIn('Employee Directory', rendered)
+        self.assertNotIn('System Roles & Access', rendered)
+        self.assertNotIn('Salary Components', rendered)
+
+    def test_admin_shell_renders_admin_menu(self):
+        """Verify that default admin shell renders admin menu items."""
+        rendered = render_to_string(
+            'cotton/app-shell.html',
+            {'user': self.user, 'request': self._make_request(), 'shell_type': 'admin'}
+        )
+        self.assertIn('Executive Dashboard', rendered)
+        self.assertIn('Employee Directory', rendered)
+        self.assertIn('System Roles', rendered)
+

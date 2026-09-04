@@ -51,20 +51,84 @@ class AdminLeaveBalanceForm(forms.ModelForm):
         }
 
 
+import datetime
+from django.utils import timezone
+
+
 class AdminAttendanceForm(forms.ModelForm):
+    date = forms.DateField(
+        required=True,
+        input_formats=['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d'],
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'text'})
+    )
+    check_in_time = forms.DateTimeField(
+        required=False,
+        input_formats=[
+            '%Y-%m-%dT%H:%M',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%d %H:%M',
+            '%Y-%m-%d %H:%M:%S',
+            '%m/%d/%Y %H:%M',
+            '%m/%d/%Y %I:%M %p',
+            '%m/%d/%Y %H:%M:%S',
+            '%m/%d/%Y',
+            '%Y-%m-%d',
+            '%H:%M',
+            '%I:%M %p',
+        ],
+        widget=forms.DateTimeInput(format='%Y-%m-%dT%H:%M', attrs={'type': 'text'})
+    )
+    check_out_time = forms.DateTimeField(
+        required=False,
+        input_formats=[
+            '%Y-%m-%dT%H:%M',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%d %H:%M',
+            '%Y-%m-%d %H:%M:%S',
+            '%m/%d/%Y %H:%M',
+            '%m/%d/%Y %I:%M %p',
+            '%m/%d/%Y %H:%M:%S',
+            '%m/%d/%Y',
+            '%Y-%m-%d',
+            '%H:%M',
+            '%I:%M %p',
+        ],
+        widget=forms.DateTimeInput(format='%Y-%m-%dT%H:%M', attrs={'type': 'text'})
+    )
+
     class Meta:
         model = Attendance
         fields = ['employee', 'date', 'check_in_time', 'check_out_time', 'type', 'status', 'ot_status', 'is_policy_exception']
         widgets = {
             'employee': forms.Select(attrs={'class': SELECT_INPUT}),
-            'date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
-            'check_in_time': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': TEXT_INPUT}),
-            'check_out_time': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': TEXT_INPUT}),
             'type': forms.Select(attrs={'class': SELECT_INPUT}),
             'status': forms.Select(attrs={'class': SELECT_INPUT}),
             'ot_status': forms.Select(attrs={'class': SELECT_INPUT}),
-            'is_policy_exception': forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-indigo-650 focus:ring-indigo-500 border-gray-305 rounded'}),
+            'is_policy_exception': forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-primary focus:ring-primary/20 border-gray-300 rounded'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk and 'date' not in self.initial:
+            self.initial['date'] = timezone.localdate().strftime('%Y-%m-%d')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        date = cleaned_data.get('date')
+        check_in = cleaned_data.get('check_in_time')
+        check_out = cleaned_data.get('check_out_time')
+
+        if date and check_in:
+            if check_in.date() != date:
+                combined = datetime.datetime.combine(date, check_in.time())
+                cleaned_data['check_in_time'] = timezone.make_aware(combined) if timezone.is_naive(combined) else combined
+
+        if date and check_out:
+            if check_out.date() != date:
+                combined = datetime.datetime.combine(date, check_out.time())
+                cleaned_data['check_out_time'] = timezone.make_aware(combined) if timezone.is_naive(combined) else combined
+
+        return cleaned_data
 
 
 import re

@@ -78,6 +78,13 @@
       this.open = false;
       this.search = '';
       this.activeIndex = -1;
+      if (window.SoundFX) {
+        if (typeof window.SoundFX.playDropdownSelect === 'function') {
+          window.SoundFX.playDropdownSelect();
+        } else if (typeof window.SoundFX.playClick === 'function') {
+          window.SoundFX.playClick();
+        }
+      }
     },
 
     get filteredOptions() {
@@ -145,7 +152,7 @@
       x-ref="trigger"
       {% if disabled %}disabled{% endif %}
       {% if error %}aria-invalid="true" aria-describedby="{{ id|default:name }}-error"{% elif help %}aria-describedby="{{ id|default:name }}-help"{% endif %}
-      @click="open = !open; if(open) { checkPosition(); $nextTick(() => $refs.searchInput.focus()); activeIndex = -1; }"
+      @click="open = !open; if(open) { checkPosition(); $nextTick(() => $refs.searchInput.focus()); activeIndex = -1; if(window.SoundFX && typeof window.SoundFX.playDropdownOpen === 'function') { window.SoundFX.playDropdownOpen(); } else if(window.SoundFX) { window.SoundFX.playClick(); } }"
       class="ft-input w-full flex items-center justify-between text-[12px] rounded-[4px] focus:outline-none focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2]/10 disabled:opacity-50 cursor-pointer h-[34px] px-[10px] {% if error %}!border-red-500 border-red-500 focus:!box-shadow-[0_0_0_3px_rgba(239,68,68,0.15)]{% endif %}"
       style="background: var(--surface); border: 1px solid {% if error %}#ef4444{% else %}var(--border){% endif %}; color: var(--text); text-align: left;"
     >

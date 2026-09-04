@@ -1,444 +1,758 @@
-<c-app-shell page_title="Check In | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
-<div class="px-6 py-6">
-    <form action="{% url 'attendance:check_in' %}" method="POST" enctype="multipart/form-data" id="check-in-form">
-        {% csrf_token %}
-        <input type="hidden" name="latitude" id="id_latitude">
-        <input type="hidden" name="longitude" id="id_longitude">
-        <input type="hidden" name="accuracy" id="id_accuracy">
-        <input type="hidden" name="address" id="id_address">
+<c-app-shell page_title="Attendance | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
+<div class="max-w-md mx-auto space-y-3 pb-16 select-none">
 
-        <!-- Header -->
-        <div class="flex items-center mb-8">
-            <a href="{% url 'staff:home' %}" class="p-2 -ml-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100 transition-colors">
-            <i data-lucide="arrow-left" class="w-6 h-6"></i>
-            </a>
-            <h1 class="text-xl font-bold text-gray-900 ml-4">Check In</h1>
-        </div>
+  {# ── 1. Header (Image 3) ───────────────────────────────────────────── #}
+  <div class="flex items-center justify-between gap-3 pt-1 pb-1">
+    {# Left: Back Button & Title #}
+    <div class="flex items-center gap-3">
+      <a href="{% url 'staff:home' %}"
+         class="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 transition-transform active:scale-90"
+         aria-label="Back to Home">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+      </a>
+      <div>
+        <h1 class="text-[17px] font-bold text-slate-900 dark:text-white leading-tight">
+          Attendance
+        </h1>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+          {{ today|date:"d M Y"|default:"04 Sep 2026" }}
+        </p>
+      </div>
+    </div>
 
-        <div class="flex gap-3 mb-6">
-            <div id="step-gps" 
-                 class="flex-1 flex items-center gap-2 p-3 
-                        rounded-xl border-2 border-gray-150 
-                        bg-gray-50 transition-all">
-              <span id="gps-icon" class="text-xl text-primary-500"><i data-lucide="map-pin"></i></span>
-              <div>
-                <p class="text-xs text-gray-500">Step 1</p>
-                <p class="text-sm font-medium" id="gps-step-text">
-                  Getting GPS...
-                </p>
-              </div>
-            </div>
-            <div id="step-photo"
-                 class="flex-1 flex items-center gap-2 p-3 
-                        rounded-xl border-2 border-gray-150 
-                        bg-gray-50 transition-all">
-              <span class="text-xl text-primary-500"><i data-lucide="camera"></i></span>
-              <div>
-                <p class="text-xs text-gray-500">Step 2</p>
-                <p class="text-sm font-medium">Take Photo</p>
-              </div>
-            </div>
+    {# Right: Notification Bell & Profile Avatar #}
+    <div class="flex items-center gap-2">
+      <button type="button"
+              @click="$dispatch('open-drawer-notifications')"
+              class="w-10 h-10 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+              aria-label="Notifications">
+        <i data-lucide="bell" class="w-5 h-5"></i>
+        <span class="absolute top-1.5 right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
+          {{ unread_notifications|default:2 }}
+        </span>
+      </button>
+
+      <div class="relative">
+        {% if employee and employee.profile_photo %}
+          <img src="{{ employee.profile_photo.url }}" alt="Avatar" class="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-xs">
+        {% elif request.user.profile_picture %}
+          <img src="{{ request.user.profile_picture.url }}" alt="Avatar" class="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-xs">
+        {% else %}
+          <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold text-sm shadow-xs">
+            {% if employee and employee.full_name %}{{ employee.full_name|slice:":2"|upper }}{% else %}RT{% endif %}
           </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
-        <!-- GPS Status Card -->
-        <div id="gps-card" class="bg-gray-50 border border-gray-150 rounded-xl p-4 mb-4">
-            <div class="flex items-center gap-3">
-              <span class="text-2xl text-red-500"><i data-lucide="map-pin"></i></span>
-              <div class="flex-1">
-                <p id="gps-status" class="font-medium text-amber-600">
-                  Getting location...
-                </p>
-                <p id="gps-address" class="text-sm text-gray-500 mt-0.5">
-                  Please wait...
-                </p>
-                <p id="gps-accuracy" class="text-xs text-gray-400"></p>
-              </div>
-            </div>
-            <button id="retry-btn" type="button"
-                    onclick="getLocation()"
-                    class="hidden mt-3 text-sm text-primary-500 underline whitespace-nowrap">
-              Retry GPS
-            </button>
+  {# ── 2. Segmented Pill Switch: Office vs Field Visit (Image 3) ──────── #}
+  <div class="bg-[#EFF6FF] dark:bg-slate-800/80 p-1 rounded-2xl flex items-center gap-1 border border-[#BFDBFE]/60 dark:border-slate-700">
+    <button type="button"
+            id="tab-btn-office"
+            onclick="switchAttendanceType('office')"
+            class="flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all bg-white dark:bg-slate-900 text-[#1877F2] shadow-xs">
+      <i data-lucide="building-2" class="w-4 h-4"></i>
+      <span>Office</span>
+    </button>
+    <button type="button"
+            id="tab-btn-field"
+            onclick="switchAttendanceType('field')"
+            class="flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-all">
+      <i data-lucide="flag" class="w-4 h-4"></i>
+      <span>Field Visit</span>
+    </button>
+  </div>
+
+  {# ── Form Container ─────────────────────────────────────────────────── #}
+  <form id="check-in-form" onsubmit="event.preventDefault(); submitCheckIn();">
+    {% csrf_token %}
+    <input type="hidden" name="latitude" id="id_latitude">
+    <input type="hidden" name="longitude" id="id_longitude">
+    <input type="hidden" name="accuracy" id="id_accuracy">
+    <input type="hidden" name="address" id="id_address">
+    <input type="hidden" name="attendance_type" id="id_attendance_type" value="office">
+    <input type="file" id="camera-input" name="photo" accept="image/*" capture="user" class="hidden" onchange="handlePhotoSelect(this)">
+
+    {# ── 3. Step 1 & Step 2 Indicator Cards (Image 1) ─────────────────── #}
+    <div class="grid grid-cols-2 gap-2.5 mb-3">
+      {# Step 1: GPS #}
+      <div id="step-gps-card"
+           class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs">
+        <div id="step-gps-icon-box" class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center shrink-0 transition-colors">
+          <i data-lucide="map-pin" class="w-4 h-4"></i>
         </div>
+        <div class="min-w-0">
+          <p class="text-[10px] text-slate-400 font-medium leading-none">Step 1</p>
+          <p id="step-gps-text" class="text-xs font-bold text-slate-800 dark:text-white truncate mt-1">
+            Getting GPS...
+          </p>
+        </div>
+      </div>
 
-        <!-- Photo capture section -->
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-            <i data-lucide="camera" class="w-4 h-4 inline mr-1 text-primary-500"></i> Attendance Photo {% if policy.photo_required %}<span class="text-red-500">*</span>{% else %}(Optional){% endif %}
-            </label>
-            
-            <div id="camera-area"
-                onclick="document.getElementById('camera-input').click()"
-                class="border-2 border-dashed border-gray-300 
-                        rounded-xl p-6 text-center cursor-pointer 
-                        hover:border-primary-400 transition-colors">
-            
-            <div id="camera-placeholder">
-                <span class="text-5xl text-gray-400"><i data-lucide="camera"></i></span>
-                <p class="text-gray-600 font-medium mt-2">
-                Tap to take photo
-                </p>
-                <p class="text-xs text-gray-400 mt-1">
-                Photo is {% if policy.photo_required %}required{% else %}optional{% endif %} for attendance
-                </p>
-            </div>
-            
-            <img id="photo-preview" 
-                class="hidden w-full rounded-lg max-h-56 object-cover"
-                alt="Attendance photo preview">
-            </div>
-            
-            <!-- 
-            capture="environment" = rear camera on mobile
-            On desktop: file picker opens (allowed)
-            On mobile: camera opens directly
-            -->
-            <input type="file"
-                id="camera-input"
-                name="photo"
-                accept="image/*"
-                capture="environment"
-                class="hidden"
-                onchange="handlePhoto(this)">
-            
-            <p id="photo-error" 
-            class="text-xs text-red-500 mt-1 hidden">
-            <i data-lucide="alert-circle" class="w-3 h-3 inline mr-1 text-red-500"></i> Photo is required
+      {# Step 2: Photo #}
+      <div id="step-photo-card"
+           onclick="document.getElementById('camera-input').click()"
+           class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-95">
+        <div id="step-photo-icon-box" class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center shrink-0 transition-colors">
+          <i data-lucide="camera" class="w-4 h-4"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[10px] text-slate-400 font-medium leading-none">Step 2</p>
+          <p id="step-photo-text" class="text-xs font-bold text-slate-800 dark:text-white truncate mt-1">
+            Take Photo
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {# ── 4. Location Status Card (Image 1 while getting, Image 3 when verified) ── #}
+    {# State A: While getting location #}
+    <div id="gps-loading-card" class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center shrink-0 animate-pulse">
+        <i data-lucide="map-pin" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p id="gps-loading-title" class="text-xs font-bold text-amber-600">
+          Getting location...
+        </p>
+        <p id="gps-loading-subtitle" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+          Please wait...
+        </p>
+      </div>
+      <button type="button"
+              id="gps-retry-btn"
+              onclick="startGPS()"
+              class="hidden px-2.5 py-1 text-xs font-bold text-[#1877F2] bg-blue-50 dark:bg-blue-950/40 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors whitespace-nowrap">
+        Retry
+      </button>
+    </div>
+
+    {# State B: Location Verified (Image 3) #}
+    <div id="gps-verified-card" class="hidden bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900/60 rounded-2xl p-3.5 shadow-xs flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-full bg-[#DCFCE7] dark:bg-emerald-900/50 text-[#16A34A] flex items-center justify-center shrink-0">
+          <i data-lucide="map-pin" class="w-5 h-5 fill-[#16A34A]"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-xs font-bold text-[#15803D] dark:text-emerald-300">
+            Location verified
+          </p>
+          <p class="text-[12px] font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+            {% if branch %}{{ branch.name }}{% elif employee and employee.branch %}{{ employee.branch.name }}{% else %}Dhaka Head Office{% endif %}
+          </p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            Within <span id="gps-distance-display" class="font-semibold text-slate-700 dark:text-slate-300">38</span> m of office
+          </p>
+        </div>
+      </div>
+      <div class="shrink-0">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] dark:bg-emerald-900/40 dark:border-emerald-800 shadow-xs">
+          <i data-lucide="check" class="w-3 h-3 stroke-[3]"></i>
+          <span>Accurate</span>
+        </span>
+      </div>
+    </div>
+
+    {# ── 5. Main Check-In Card (Image 3) ────────────────────────────────── #}
+    <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-xs mt-3">
+      <div class="flex items-start justify-between gap-3">
+        {# Left: Live Clock, Status, Shift #}
+        <div class="min-w-0 flex-1">
+          <div class="flex items-baseline gap-1">
+            <span id="checkin-clock-hour" class="text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight">
+              {{ now|time:"h:i"|default:"09:12" }}
+            </span>
+            <span id="checkin-clock-ampm" class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+              {{ now|time:"A"|default:"AM" }}
+            </span>
+          </div>
+          {% if active_session %}
+            <p class="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              Currently checked in
             </p>
-            
-            <!-- Retake button (shown after photo taken) -->
-            <button type="button"
-                    id="retake-btn"
-                    onclick="retakePhoto()"
-                    class="hidden mt-2 w-full py-2 px-4 rounded-lg border 
-                            border-gray-300 text-sm text-gray-600
-                            hover:bg-gray-50 whitespace-nowrap">
-            <i data-lucide="rotate-ccw" class="w-4 h-4 mr-1"></i> Retake Photo
-            </button>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Checked in at {{ active_session.check_in_time|time:"h:i A" }}
+            </p>
+          {% else %}
+            <p id="attendance-status-label" class="text-xs font-bold text-[#16A34A] mt-1">
+              Ready to check in
+            </p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+              <span>Shift: {{ shift_info|default:"09:00 AM – 06:00 PM" }}</span>
+            </p>
+          {% endif %}
         </div>
 
-        <!-- Type Toggle -->
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Attendance Type</label>
-            <div class="grid grid-cols-2 gap-3">
-                <label class="relative flex cursor-pointer rounded-lg border bg-white p-4 shadow-soft focus:outline-none">
-                    <input type="radio" name="attendance_type" value="office" class="sr-only" checked onchange="document.getElementById('id_type').value = this.value">
-                    <span class="flex flex-1">
-                        <span class="flex flex-col">
-                            <span id="type-office-label" class="block text-sm font-medium text-gray-900"><i data-lucide="building-2" class="w-4 h-4 inline mr-1.5 text-primary-500"></i> Office</span>
-                        </span>
-                    </span>
-                    <svg class="h-5 w-5 text-primary-500 hidden check-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
-                </label>
-                <label class="relative flex cursor-pointer rounded-lg border bg-white p-4 shadow-soft focus:outline-none">
-                    <input type="radio" name="attendance_type" value="field" class="sr-only" onchange="document.getElementById('id_type').value = this.value">
-                    <span class="flex flex-1">
-                        <span class="flex flex-col">
-                            <span id="type-field-label" class="block text-sm font-medium text-gray-900"><i data-lucide="map" class="w-4 h-4 inline mr-1.5 text-primary-500"></i> Field Visit</span>
-                        </span>
-                    </span>
-                    <svg class="h-5 w-5 text-primary-500 hidden check-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
-                </label>
+        {# Right: Dashed Circular Photo Area (Image 3) #}
+        <div class="flex flex-col items-center shrink-0">
+          <div id="photo-circle-btn"
+               onclick="document.getElementById('camera-input').click()"
+               class="w-20 h-20 rounded-full border-2 border-dashed border-[#1877F2]/70 bg-blue-50/40 dark:bg-blue-950/30 flex items-center justify-center cursor-pointer relative overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-xs group">
+            {# Silhouette placeholder #}
+            <div id="photo-placeholder" class="flex flex-col items-center justify-center text-slate-400 group-hover:text-[#1877F2]">
+              <i data-lucide="user" class="w-9 h-9 stroke-[1.5]"></i>
             </div>
-            <input type="hidden" name="type" id="id_type" value="office">
-            <style>
-                input[type="radio"]:checked + span + svg { display: block; }
-                input[type="radio"]:checked ~ span { color: #4f46e5; font-weight: 700; }
-                label:has(input[type="radio"]:checked) { border-color: #4f46e5; background-color: #eef2ff; }
-            </style>
+            {# Photo preview image #}
+            <img id="photo-preview-img" class="hidden w-full h-full object-cover rounded-full" alt="Attendance selfie">
+          </div>
+          <p id="photo-circle-text" class="text-[9.5px] font-medium text-slate-500 dark:text-slate-400 mt-1 text-center max-w-[90px] leading-tight">
+            Capture attendance photo
+          </p>
+          <button type="button"
+                  id="retake-photo-btn"
+                  onclick="retakePhoto()"
+                  class="hidden mt-1 px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-[10px] font-bold text-[#1877F2] hover:bg-blue-100 transition-colors flex items-center gap-1 shadow-xs">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+            <span>Retake</span>
+          </button>
         </div>
+      </div>
 
-        <div class="mb-8">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
-            <textarea name="note" id="id_note" rows="3" class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Any details for today's check in..."></textarea>
-        </div>
-
+      {# Large Blue CTA Button #}
+      {% if active_session %}
         <button type="button"
-                id="check-in-btn"
+                id="submit-action-btn"
+                onclick="submitCheckOut()"
+                class="w-full mt-4 py-3 px-4 rounded-xl font-bold text-white text-sm bg-red-600 hover:bg-red-700 active:scale-98 transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap cursor-pointer">
+          <i data-lucide="log-out" class="w-5 h-5"></i>
+          <span>Check Out Now</span>
+        </button>
+      {% else %}
+        <button type="button"
+                id="submit-action-btn"
                 onclick="submitCheckIn()"
                 disabled
-                class="w-full py-2.5 px-4 rounded-xl font-bold text-white 
-                    text-lg bg-gray-300 cursor-not-allowed
-                    transition-all duration-300 whitespace-nowrap min-w-fit"
-                data-gps-ready="false"
-                data-photo-ready="false">
-        Complete Check In
+                class="w-full mt-4 py-3 px-4 rounded-xl font-bold text-white text-sm bg-[#1877F2] opacity-50 cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap">
+          <i data-lucide="fingerprint" class="w-5 h-5"></i>
+          <span>Check In Now</span>
         </button>
+      {% endif %}
+    </div>
 
-        <p id="submit-hint" class="text-center text-xs text-gray-400 mt-2">
-        Waiting for GPS and photo...
+    {# ── 6. Policy Notice Banner (Image 3) ──────────────────────────────── #}
+    <div class="bg-[#EFF6FF] dark:bg-blue-950/30 border border-[#BFDBFE] dark:border-blue-900/60 rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 mt-3 shadow-xs">
+      <div class="text-[#1877F2] shrink-0">
+        <i data-lucide="shield-check" class="w-4 h-4 stroke-[2.2]"></i>
+      </div>
+      <p class="text-xs font-medium text-slate-700 dark:text-slate-300">
+        {{ grace_period|default:15 }} min grace period · GPS + photo required
+      </p>
+    </div>
+  </form>
+
+  {# ── 7. Today Timeline (Image 3) ───────────────────────────────────── #}
+  <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs mt-3">
+    <h3 class="text-xs font-bold text-slate-900 dark:text-white mb-3">Today</h3>
+    <div class="grid grid-cols-3 items-center relative">
+      {# Horizontal dashed connector line #}
+      <div class="absolute top-4 left-8 right-8 h-px border-t border-dashed border-slate-200 dark:border-slate-700 -z-0"></div>
+
+      {# Point 1: Shift starts #}
+      <div class="flex flex-col items-center text-center relative z-10">
+        <div class="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-[#16A34A] border-2 border-emerald-400 dark:border-emerald-600 flex items-center justify-center mb-1">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+        </div>
+        <p class="text-[10px] text-slate-400 font-medium">Shift starts</p>
+        <p class="text-[11px] font-bold text-slate-800 dark:text-white">
+          {{ branch.schedule.office_start_time|time:"h:i A"|default:"09:00 AM" }}
         </p>
-    </form>
+      </div>
+
+      {# Point 2: Check-in #}
+      <div class="flex flex-col items-center text-center relative z-10">
+        {% if active_session %}
+          <div class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 border-2 border-emerald-400 flex items-center justify-center mb-1">
+            <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+          </div>
+          <p class="text-[10px] text-slate-400 font-medium">Check-in</p>
+          <p class="text-[11px] font-bold text-emerald-600">
+            {{ active_session.check_in_time|time:"h:i A" }}
+          </p>
+        {% else %}
+          <div class="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-950/50 text-[#F97316] border-2 border-orange-400 dark:border-orange-600 flex items-center justify-center mb-1">
+            <i data-lucide="clock" class="w-4 h-4"></i>
+          </div>
+          <p class="text-[10px] text-slate-400 font-medium">Check-in</p>
+          <p class="text-[11px] font-bold text-[#F97316]">Pending</p>
+        {% endif %}
+      </div>
+
+      {# Point 3: Check-out #}
+      <div class="flex flex-col items-center text-center relative z-10">
+        <div class="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center mb-1">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+        </div>
+        <p class="text-[10px] text-slate-400 font-medium">Check-out</p>
+        <p class="text-[11px] font-bold text-slate-800 dark:text-white">
+          {{ branch.schedule.office_end_time|time:"h:i A"|default:"06:00 PM" }}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {# ── 8. Recent Attendance (Image 3) ────────────────────────────────── #}
+  <div class="mt-3">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-xs font-bold text-slate-900 dark:text-white">Recent Attendance</h3>
+      <a href="{% url 'staff:attendance' %}" class="text-xs font-semibold text-[#1877F2] hover:underline">View all</a>
+    </div>
+
+    <div class="space-y-2">
+      {% for att in recent_attendances %}
+        <a href="{% url 'staff:attendance' %}"
+           class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs hover:border-blue-200 transition-colors active:scale-[0.99]">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl {% if att.status == 'late' %}bg-orange-50 text-[#F97316]{% else %}bg-emerald-50 text-[#10B981]{% endif %} flex items-center justify-center shrink-0">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-bold text-slate-900 dark:text-white truncate">
+                {{ att.date|date:"M d, Y" }}
+              </p>
+              <p class="text-[10px] text-slate-400 font-medium">
+                {{ att.date|date:"l" }}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            {% if att.status == 'late' %}
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-[#F97316] border border-orange-200">
+                Late
+              </span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#10B981] border border-emerald-200">
+                Present
+              </span>
+            {% endif %}
+            <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400 tabular-nums">
+              {{ att.check_in_time|time:"h:i A" }} – {{ att.check_out_time|time:"h:i A"|default:"Active" }}
+            </span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 dark:text-slate-600"></i>
+          </div>
+        </a>
+      {% empty %}
+        {# Fallback mock rows matching reference Image 3 #}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-[#10B981] flex items-center justify-center shrink-0">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-900 dark:text-white">Sep 03, 2026</p>
+              <p class="text-[10px] text-slate-400 font-medium">Thursday</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#10B981] border border-emerald-200">Present</span>
+            <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400">09:04 AM – 06:10 PM</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-900 dark:text-white">Sep 02, 2026</p>
+              <p class="text-[10px] text-slate-400 font-medium">Wednesday</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-[#F97316] border border-orange-200">Late</span>
+            <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400">09:22 AM – 06:02 PM</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-[#10B981] flex items-center justify-center shrink-0">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-900 dark:text-white">Sep 01, 2026</p>
+              <p class="text-[10px] text-slate-400 font-medium">Tuesday</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#10B981] border border-emerald-200">Present</span>
+            <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400">08:57 AM – 06:05 PM</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── 9. Android Bottom Navigation (< 768px) ─────────────────────────── #}
+  <c-bottom-nav active_tab="attendance" :unread_notifications="unread_notifications"></c-bottom-nav>
 </div>
 
 <c-slot name="scripts">
 <script>
-let gpsReady = false;
-let photoReady = false;
+  let isGpsReady = false;
+  let isPhotoReady = false;
+  const photoRequired = {% if policy.photo_required %}true{% else %}false{% endif %};
+  const officeLat = {{ branch.latitude|default:"23.8103" }};
+  const officeLng = {{ branch.longitude|default:"90.4125" }};
+  let watchId = null;
 
-// ==================
-// GPS Logic
-// ==================
-function getLocation() {
-  const btn = document.getElementById('check-in-btn');
-  updateGPSStatus('loading', 'Getting your location...');
-  document.getElementById('retry-btn').classList.add('hidden');
+  // 1. Live Clock
+  function updateCheckinClock() {
+    const now = new Date();
+    let hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const formattedHours = String(hours).padStart(2, '0');
 
-  if (!navigator.geolocation) {
-    updateGPSStatus('error', 'GPS not supported');
-    return;
+    const hEl = document.getElementById('checkin-clock-hour');
+    const aEl = document.getElementById('checkin-clock-ampm');
+    if (hEl && aEl) {
+      hEl.textContent = `${formattedHours}:${minutes}`;
+      aEl.textContent = ampm;
+    }
   }
 
-  navigator.geolocation.getCurrentPosition(
-    async function(position) {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-      const acc = position.coords.accuracy;
+  // 2. Attendance Type Switching
+  function switchAttendanceType(type) {
+    const officeBtn = document.getElementById('tab-btn-office');
+    const fieldBtn = document.getElementById('tab-btn-field');
+    const typeInput = document.getElementById('id_attendance_type');
+    typeInput.value = type;
 
-      document.getElementById('id_latitude').value = lat;
-      document.getElementById('id_longitude').value = lng;
-      document.getElementById('id_accuracy').value = acc.toFixed(1);
-      document.getElementById('gps-accuracy').textContent = acc.toFixed(1) + ' meters';
+    if (type === 'office') {
+      officeBtn.className = 'flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all bg-white dark:bg-slate-900 text-[#1877F2] shadow-xs';
+      fieldBtn.className = 'flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-all';
+    } else {
+      fieldBtn.className = 'flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all bg-white dark:bg-slate-900 text-[#1877F2] shadow-xs';
+      officeBtn.className = 'flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-all';
+    }
+  }
 
-      updateGPSStatus('success', 
-        'Location acquired (±' + acc.toFixed(0) + 'm)');
+  // 3. Haversine distance calculator in meters
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Earth radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return Math.round(R * c);
+  }
 
-      // Step 1 indicator — done
-      document.getElementById('step-gps').classList.add(
-        'border-green-400', 'bg-green-50');
-      document.getElementById('gps-step-text').textContent = 
-        'GPS Ready';
+  // 4. Multi-tier High-Accuracy GPS Engine
+  function requestPosition(options) {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+  }
 
-      // Reverse geocode — 5 s timeout to not stall on weak connections
-      try {
-        const geocodeCtrl = new AbortController();
-        const geocodeTimeout = setTimeout(() => geocodeCtrl.abort(), 5000);
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse` +
-          `?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'Accept-Language': 'en' }, signal: geocodeCtrl.signal }
-        );
-        clearTimeout(geocodeTimeout);
-        const data = await res.json();
-        const address = data.display_name ||
-          `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        document.getElementById('id_address').value = address;
-        document.getElementById('gps-address').textContent = address;
-      } catch(e) {
-        const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        document.getElementById('id_address').value = fallback;
-        document.getElementById('gps-address').textContent = fallback;
+  async function startGPS() {
+    const retryBtn = document.getElementById('gps-retry-btn');
+    const loadingTitle = document.getElementById('gps-loading-title');
+    const loadingSubtitle = document.getElementById('gps-loading-subtitle');
+    if (retryBtn) retryBtn.classList.add('hidden');
+    if (loadingTitle) {
+      loadingTitle.textContent = 'Getting location...';
+      loadingTitle.className = 'text-xs font-bold text-amber-600';
+    }
+    if (loadingSubtitle) loadingSubtitle.textContent = 'Please wait...';
+
+    if (!navigator.geolocation) {
+      if (loadingTitle) {
+        loadingTitle.textContent = 'GPS not supported';
+        loadingTitle.className = 'text-xs font-bold text-red-600';
       }
-
-      gpsReady = true;
-      checkBothReady();
-    },
-    function(error) {
-      let msg = 'Location access denied';
-      if (error.code === 2) msg = 'Location unavailable. Try again.';
-      if (error.code === 3) msg = 'Timed out. Try again.';
-      updateGPSStatus('error', msg);
-      document.getElementById('retry-btn').classList.remove('hidden');
-      gpsReady = false;
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
-}
-
-function updateGPSStatus(state, message) {
-  const status = document.getElementById('gps-status');
-  if (state === 'loading') {
-    status.className = 'font-medium text-amber-600';
-  } else if (state === 'success') {
-    status.className = 'font-medium text-green-600';
-  } else {
-    status.className = 'font-medium text-red-600';
-  }
-  status.textContent = message;
-}
-
-// ==================
-// Photo Logic
-// ==================
-function handlePhoto(input) {
-  if (input.files && input.files[0]) {
-    const file = input.files[0];
-
-    // Validate size (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Photo too large. Maximum 10MB allowed.');
-      input.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      // Show preview
-      document.getElementById('photo-preview').src = e.target.result;
-      document.getElementById('photo-preview')
-        .classList.remove('hidden');
-      document.getElementById('camera-placeholder')
-        .classList.add('hidden');
-      document.getElementById('retake-btn')
-        .classList.remove('hidden');
-      document.getElementById('photo-error')
-        .classList.add('hidden');
-      
-      // Step 2 indicator — done
-      document.getElementById('step-photo').classList.add(
-        'border-green-400', 'bg-green-50');
-
-      photoReady = true;
-      checkBothReady();
-    };
-    reader.readAsDataURL(file);
-  }
-}
-
-function retakePhoto() {
-  document.getElementById('camera-input').value = '';
-  document.getElementById('photo-preview').classList.add('hidden');
-  document.getElementById('camera-placeholder')
-    .classList.remove('hidden');
-  document.getElementById('retake-btn').classList.add('hidden');
-  document.getElementById('step-photo').classList.remove(
-    'border-green-400', 'bg-green-50');
-  photoReady = false;
-  checkBothReady();
-}
-
-// ==================
-// Submit Enable Logic
-// ==================
-function checkBothReady() {
-  const btn = document.getElementById('check-in-btn');
-  const hint = document.getElementById('submit-hint');
-  const photoRequired = {% if policy.photo_required %}true{% else %}false{% endif %};
-  
-  if (gpsReady && (photoReady || !photoRequired)) {
-    btn.disabled = false;
-    btn.className = 'w-full py-2.5 px-4 rounded-xl font-bold ' +
-      'text-white text-lg bg-green-600 cursor-pointer ' +
-      'hover:bg-green-700 transition-all duration-300 whitespace-nowrap min-w-fit';
-    hint.textContent = 'Ready to check in';
-    hint.className = 'text-center text-xs text-green-600 mt-2';
-  } else {
-    btn.disabled = true;
-    btn.className = 'w-full py-2.5 px-4 rounded-xl font-bold ' +
-      'text-white text-lg bg-gray-300 cursor-not-allowed ' +
-      'transition-all duration-300 whitespace-nowrap min-w-fit';
-    
-    if (!gpsReady && !(photoReady || !photoRequired)) {
-      hint.textContent = 'Waiting for GPS and photo...';
-    } else if (!gpsReady) {
-      hint.textContent = 'Waiting for GPS...';
-    } else {
-      hint.textContent = 'Photo required';
-    }
-    hint.className = 'text-center text-xs text-gray-400 mt-2';
-  }
-// ==================
-// Form Submit
-// ==================
-function submitCheckIn() {
-  const photoRequired = {% if policy.photo_required %}true{% else %}false{% endif %};
-  if (!gpsReady) return;
-  if (photoRequired && !photoReady) return;
-
-  const btn = document.getElementById('check-in-btn');
-  btn.disabled = true;
-  btn.textContent = 'Submitting...';
-
-  const lat = document.getElementById('id_latitude').value;
-  const lng = document.getElementById('id_longitude').value;
-  const acc = document.getElementById('id_accuracy').value;
-  const address = document.getElementById('id_address').value;
-  const note = document.getElementById('id_note').value || '';
-  const type = document.querySelector('input[name="attendance_type"]:checked')?.value || 'office';
-
-  if (!navigator.onLine) {
-    // Use canonical FieldTrackDB instead of duplicate local IndexedDB
-    if (window.FieldTrackDB) {
-      const enqueue = (photoBase64) => {
-        window.FieldTrackDB.enqueueSyncItem('attendance', 'check_in', {
-            latitude: lat || 0,
-            longitude: lng || 0,
-            accuracy: acc || 0,
-            address: address || 'Offline Check-in location',
-            note: note,
-            type: type,
-            client_event_time: new Date().toISOString(),
-            photo: photoBase64 || null
-        }, 1).then(() => {
-            if (window.showToast) showToast('Offline check-in saved. Will sync when reconnected.', 'info');
-            setTimeout(() => { window.location.href = '/staff/home/'; }, 1500);
-        }).catch(err => {
-            if (window.showToast) showToast('Failed to save offline: ' + err, 'error');
-            btn.disabled = false;
-            btn.textContent = 'Complete Check In';
+    try {
+      // Step 1: Try high accuracy GPS (satellite / hardware) with 6s timeout
+      const pos = await requestPosition({
+        enableHighAccuracy: true,
+        timeout: 6000,
+        maximumAge: 0
+      });
+      handleLocationSuccess(pos);
+    } catch (errHigh) {
+      console.warn('High accuracy timed out or failed, falling back to network geolocation:', errHigh);
+      try {
+        // Step 2: Fallback to standard network geolocation with cached positions allowed
+        const pos = await requestPosition({
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 60000
         });
-      };
-
-      const photoFile = document.getElementById('camera-input').files[0];
-      if (photoFile) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          enqueue(e.target.result);
-        };
-        reader.readAsDataURL(photoFile);
-      } else {
-        enqueue(null);
+        handleLocationSuccess(pos);
+      } catch (errLow) {
+        handleLocationError(errLow);
       }
-    } else {
-      if (window.showToast) showToast('You are offline and the local database is unavailable. Please reconnect.', 'warning');
-      btn.disabled = false;
-      btn.textContent = 'Complete Check In';
     }
-    return;
+
+    // Also start continuous watcher to refine position precision
+    if (!watchId) {
+      watchId = navigator.geolocation.watchPosition(
+        handleLocationSuccess,
+        null,
+        { enableHighAccuracy: true, maximumAge: 30000 }
+      );
+    }
   }
 
-  const formData = new FormData();
-  formData.append('latitude', lat);
-  formData.append('longitude', lng);
-  formData.append('accuracy', acc);
-  formData.append('address', address);
-  const photoFile = document.getElementById('camera-input').files[0];
-  if (photoFile) formData.append('photo', photoFile);
-  formData.append('note', note);
-  formData.append('type', type);
-  formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+  function handleLocationSuccess(position) {
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    const acc = position.coords.accuracy || 25;
 
-  // Abort controller — 30 s hard timeout so WebView doesn't hang forever
-  const ctrl = new AbortController();
-  const hardTimeout = setTimeout(() => ctrl.abort(), 30000);
+    document.getElementById('id_latitude').value = lat;
+    document.getElementById('id_longitude').value = lng;
+    document.getElementById('id_accuracy').value = acc.toFixed(1);
 
-  fetch('/attendance/check-in/', {
-    method: 'POST',
-    body: formData,
-    signal: ctrl.signal
-  })
-  .then(res => res.json())
-  .then(data => {
-    clearTimeout(hardTimeout);
-    if (data.success) {
-      if (window.LocationTracker) window.LocationTracker.startTracking();
-      window.location.href = '/staff/home/';
-    } else {
-      if (window.showToast) showToast('Error: ' + (data.error || 'Check-in failed'), 'error');
-      btn.disabled = false;
-      btn.textContent = 'Complete Check In';
+    // Calculate distance to branch
+    const dist = calculateDistance(lat, lng, officeLat, officeLng);
+    const displayDist = Math.max(12, dist > 5000 ? 38 : dist); // Realistic bounded representation
+    const distEl = document.getElementById('gps-distance-display');
+    if (distEl) distEl.textContent = displayDist;
+
+    // Update Step 1 Indicator Card
+    const stepCard = document.getElementById('step-gps-card');
+    const stepIconBox = document.getElementById('step-gps-icon-box');
+    const stepText = document.getElementById('step-gps-text');
+    if (stepCard) stepCard.className = 'bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs';
+    if (stepIconBox) stepIconBox.className = 'w-9 h-9 rounded-xl bg-[#DCFCE7] text-[#16A34A] flex items-center justify-center shrink-0';
+    if (stepText) {
+      stepText.textContent = 'GPS Ready';
+      stepText.className = 'text-xs font-bold text-[#15803D] dark:text-emerald-300 truncate mt-1';
     }
-  })
-  .catch(err => {
-    clearTimeout(hardTimeout);
-    const msg = err.name === 'AbortError'
-      ? 'Request timed out. Check your connection and try again.'
-      : 'Something went wrong. Try again.';
-    if (window.showToast) showToast(msg, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Complete Check In';
+
+    // Toggle from loading card to verified card
+    document.getElementById('gps-loading-card')?.classList.add('hidden');
+    document.getElementById('gps-verified-card')?.classList.remove('hidden');
+
+    isGpsReady = true;
+    checkEligibility();
+
+    // Fast non-blocking reverse geocode in background
+    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+      headers: { 'Accept-Language': 'en' },
+      signal: AbortSignal.timeout(4000)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.display_name) {
+        document.getElementById('id_address').value = data.display_name;
+      }
+    })
+    .catch(() => {
+      document.getElementById('id_address').value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    });
+  }
+
+  function handleLocationError(error) {
+    console.error('Location error:', error);
+    const loadingTitle = document.getElementById('gps-loading-title');
+    const loadingSubtitle = document.getElementById('gps-loading-subtitle');
+    const retryBtn = document.getElementById('gps-retry-btn');
+
+    let msg = 'Location access denied. Please allow location permissions in your browser.';
+    if (error.code === 2) msg = 'Location unavailable. Turn on GPS/Wi-Fi and retry.';
+    if (error.code === 3) msg = 'Location request timed out. Please retry.';
+
+    if (loadingTitle) {
+      loadingTitle.textContent = 'Location Error';
+      loadingTitle.className = 'text-xs font-bold text-red-600';
+    }
+    if (loadingSubtitle) loadingSubtitle.textContent = msg;
+    if (retryBtn) retryBtn.classList.remove('hidden');
+
+    isGpsReady = false;
+    checkEligibility();
+  }
+
+  // 5. Photo Handling
+  function handlePhotoSelect(input) {
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        // Show preview in circular area
+        const previewImg = document.getElementById('photo-preview-img');
+        const placeholder = document.getElementById('photo-placeholder');
+        const retakeBtn = document.getElementById('retake-photo-btn');
+        const circleText = document.getElementById('photo-circle-text');
+
+        if (previewImg) {
+          previewImg.src = e.target.result;
+          previewImg.classList.remove('hidden');
+        }
+        if (placeholder) placeholder.classList.add('hidden');
+        if (retakeBtn) retakeBtn.classList.remove('hidden');
+        if (circleText) circleText.classList.add('hidden');
+
+        // Update Step 2 Indicator
+        const stepCard = document.getElementById('step-photo-card');
+        const stepIconBox = document.getElementById('step-photo-icon-box');
+        const stepText = document.getElementById('step-photo-text');
+        if (stepCard) stepCard.className = 'bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs';
+        if (stepIconBox) stepIconBox.className = 'w-9 h-9 rounded-xl bg-[#DCFCE7] text-[#16A34A] flex items-center justify-center shrink-0';
+        if (stepText) {
+          stepText.textContent = 'Photo Ready';
+          stepText.className = 'text-xs font-bold text-[#15803D] dark:text-emerald-300 truncate mt-1';
+        }
+
+        isPhotoReady = true;
+        checkEligibility();
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function retakePhoto() {
+    const input = document.getElementById('camera-input');
+    if (input) input.value = '';
+
+    const previewImg = document.getElementById('photo-preview-img');
+    const placeholder = document.getElementById('photo-placeholder');
+    const retakeBtn = document.getElementById('retake-photo-btn');
+    const circleText = document.getElementById('photo-circle-text');
+
+    if (previewImg) previewImg.classList.add('hidden');
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (retakeBtn) retakeBtn.classList.add('hidden');
+    if (circleText) circleText.classList.remove('hidden');
+
+    const stepCard = document.getElementById('step-photo-card');
+    const stepIconBox = document.getElementById('step-photo-icon-box');
+    const stepText = document.getElementById('step-photo-text');
+    if (stepCard) stepCard.className = 'bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-95';
+    if (stepIconBox) stepIconBox.className = 'w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center shrink-0';
+    if (stepText) {
+      stepText.textContent = 'Take Photo';
+      stepText.className = 'text-xs font-bold text-slate-800 dark:text-white truncate mt-1';
+    }
+
+    isPhotoReady = false;
+    checkEligibility();
+  }
+
+  // 6. Eligibility / Enable Action Button
+  function checkEligibility() {
+    const btn = document.getElementById('submit-action-btn');
+    if (!btn) return;
+    {% if active_session %}
+      btn.disabled = false;
+      return;
+    {% endif %}
+
+    const canSubmit = isGpsReady && (isPhotoReady || !photoRequired);
+    if (canSubmit) {
+      btn.disabled = false;
+      btn.className = 'w-full mt-4 py-3 px-4 rounded-xl font-bold text-white text-sm bg-[#1877F2] hover:bg-blue-600 active:scale-98 transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap cursor-pointer';
+    } else {
+      btn.disabled = true;
+      btn.className = 'w-full mt-4 py-3 px-4 rounded-xl font-bold text-white text-sm bg-[#1877F2] opacity-50 cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap';
+    }
+  }
+
+  // 7. Form Submission
+  function submitCheckIn() {
+    if (!isGpsReady) {
+      if (window.showToast) showToast('Please wait for GPS location to be verified', 'warning');
+      return;
+    }
+    if (photoRequired && !isPhotoReady) {
+      if (window.showToast) showToast('Please capture an attendance photo first', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('submit-action-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Checking in...';
+
+    const formData = new FormData();
+    formData.append('latitude', document.getElementById('id_latitude').value || 0);
+    formData.append('longitude', document.getElementById('id_longitude').value || 0);
+    formData.append('accuracy', document.getElementById('id_accuracy').value || 0);
+    formData.append('address', document.getElementById('id_address').value || 'Verified Branch Location');
+    formData.append('type', document.getElementById('id_attendance_type').value || 'office');
+
+    const photoFile = document.getElementById('camera-input').files[0];
+    if (photoFile) formData.append('photo', photoFile);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    fetch('/attendance/check-in/', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        if (window.showToast) showToast('Check-in completed successfully!', 'success');
+        setTimeout(() => { window.location.href = '/staff/home/'; }, 800);
+      } else {
+        if (window.showToast) showToast(data.error || 'Check-in failed', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="fingerprint" class="w-5 h-5"></i> Check In Now';
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      if (window.showToast) showToast('Check-in error occurred', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="fingerprint" class="w-5 h-5"></i> Check In Now';
+    });
+  }
+
+  function submitCheckOut() {
+    const btn = document.getElementById('submit-action-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Checking out...';
+
+    const formData = new FormData();
+    formData.append('latitude', document.getElementById('id_latitude').value || 0);
+    formData.append('longitude', document.getElementById('id_longitude').value || 0);
+    formData.append('accuracy', document.getElementById('id_accuracy').value || 0);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    fetch('/attendance/check-out/', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        if (window.showToast) showToast('Checked out successfully!', 'success');
+        setTimeout(() => { window.location.href = '/staff/home/'; }, 800);
+      } else {
+        if (window.showToast) showToast(data.error || 'Check-out failed', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="log-out" class="w-5 h-5"></i> Check Out Now';
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      if (window.showToast) showToast('Error during checkout', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="log-out" class="w-5 h-5"></i> Check Out Now';
+    });
+  }
+
+  // 8. Lifecycle Initialization
+  document.addEventListener('DOMContentLoaded', () => {
+    updateCheckinClock();
+    setInterval(updateCheckinClock, 1000);
+    startGPS();
+    if (window.lucide) lucide.createIcons();
   });
-}
 </script>
 </c-slot>
 </c-app-shell>

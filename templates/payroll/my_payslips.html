@@ -1,7 +1,4 @@
-<c-app-shell page_title="My Payslips | FieldTrack" active_href="{{ request.path }}">
-    <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
-    </c-slot>
+<c-app-shell page_title="My Payslips | FieldTrack" shell_type="{% if request.user.role == 'admin' or request.user.role == 'system_owner' %}admin{% else %}staff{% endif %}" active_href="{{ request.path }}">
 
 
     <c-command-palette></c-command-palette>
@@ -54,14 +51,8 @@
                         </td>
                         <td class="text-right">
                             <div class="flex items-center justify-end gap-1.5">
-                                <a href="{% url 'payroll:payslip_detail' p.pk %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
-                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-                                    <span>View</span>
-                                </a>
-                                <a href="{% url 'payroll:payslip_pdf' p.pk %}" target="_blank" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1">
-                                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                                    <span>PDF</span>
-                                </a>
+                                <c-button href="{% url 'payroll:payslip_detail' p.pk %}" variant="secondary" size="sm" icon="eye" label="View"></c-button>
+                                <c-button href="{% url 'payroll:payslip_pdf' p.pk %}" target="_blank" variant="primary" size="sm" icon="download" label="PDF"></c-button>
                             </div>
                         </td>
                     </tr>

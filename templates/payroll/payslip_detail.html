@@ -10,19 +10,11 @@
         <c-page-header title="Employee Payslip">
             <c-slot name="actions">
                 <div class="flex items-center gap-2">
-                <a href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                <span>Download PDF</span>
-                </a>
-                <button type="button" onclick="window.print()" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1.5">
-                <i data-lucide="printer" class="w-3.5 h-3.5"></i>
-                <span>Print</span>
-                </button>
-                {% if is_manager %}
-                <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm">
-                <span>Back to Run</span>
-                </a>
-                {% endif %}
+                    <c-button href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" variant="primary" size="sm" icon="download" label="Download PDF"></c-button>
+                    <c-button type="button" onclick="window.print()" variant="secondary" size="sm" icon="printer" label="Print"></c-button>
+                    {% if is_manager %}
+                    <c-button href="{% url 'payroll:payroll_run_detail' run.pk %}" variant="ghost" size="sm" label="Back to Run"></c-button>
+                    {% endif %}
                 </div>
             </c-slot>
         </c-page-header>

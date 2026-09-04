@@ -13,6 +13,8 @@ urlpatterns = [
     
     # Admin URLs
     path('admin/', views.AdminExpenseListView.as_view(), name='admin_expense_list'),
+    path('admin/<int:pk>/edit/', views.AdminExpenseUpdateView.as_view(), name='admin_expense_edit'),
+    path('admin/<int:pk>/detail-api/', views.expense_detail_api, name='admin_expense_detail_api'),
     path('admin/<int:pk>/approve/', views.ApproveExpenseView.as_view(), name='approve_expense'),
     path('admin/<int:pk>/reject/', views.RejectExpenseView.as_view(), name='reject_expense'),
     path('admin/<int:pk>/return/', views.ReturnExpenseView.as_view(), name='return_expense'),

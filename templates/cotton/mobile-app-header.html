@@ -1,7 +1,7 @@
 {% load static %}
 {% comment %}
 c-mobile-app-header component
-Compact mobile-first app header (< 768px)
+Native Android-style mobile header (< 768px)
 Props:
 - employee: EmployeeProfile object
 - active_session: Attendance object or boolean
@@ -10,47 +10,58 @@ Props:
 {% endcomment %}
 <c-vars employee="" active_session="" unread_notifications="" extra_class="" />
 
-<header class="md:hidden flex items-center justify-between gap-3 pb-3 pt-1 border-b border-slate-200/80 dark:border-slate-800 {{ extra_class }}">
-  <div class="flex items-center gap-2.5 min-w-0">
-    <c-avatar initials="{{ employee.full_name|default:request.user.display_name|default:'User' }}" size="sm" status="{% if active_session %}online{% else %}offline{% endif %}"></c-avatar>
+<header class="md:hidden flex items-center justify-between gap-3 pb-2 pt-1 select-none {{ extra_class }}">
+  {# Left: Avatar & Greeting #}
+  <div class="flex items-center gap-3 min-w-0">
+    <div class="relative shrink-0">
+      {% if employee and employee.profile_photo %}
+        <img src="{{ employee.profile_photo.url }}" alt="Profile" class="w-11 h-11 rounded-full object-cover border border-slate-200 shadow-xs">
+      {% elif request.user.profile_picture %}
+        <img src="{{ request.user.profile_picture.url }}" alt="Profile" class="w-11 h-11 rounded-full object-cover border border-slate-200 shadow-xs">
+      {% else %}
+        <div class="w-11 h-11 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold text-sm shadow-xs">
+          {% if employee and employee.full_name %}{{ employee.full_name|slice:":2"|upper }}{% else %}RT{% endif %}
+        </div>
+      {% endif %}
+    </div>
     <div class="min-w-0">
-      <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-none truncate">Welcome back,</p>
-      <h2 class="text-[13px] font-bold text-slate-900 dark:text-white leading-tight truncate mt-0.5">
-        {{ employee.full_name|default:request.user.display_name|default:"Staff" }}
+      <h2 class="text-[15px] font-bold text-slate-900 dark:text-white leading-snug truncate">
+        Good morning, {% if employee and employee.full_name %}{{ employee.full_name }}{% elif request.user.display_name %}{{ request.user.display_name }}{% else %}Rahim{% endif %}
       </h2>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 leading-none mt-0.5 truncate">
+        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+        <span>{% if employee and employee.branch %}{{ employee.branch.name }}{% else %}Dhaka Head Office{% endif %}</span>
+      </p>
     </div>
   </div>
 
-  <div class="flex items-center gap-1.5 shrink-0">
-    {% if active_session %}
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        Active
-      </span>
-    {% else %}
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-        Off-duty
-      </span>
-    {% endif %}
-
-    <button type="button"
-            @click="$dispatch('open-ai-chatbot')"
-            class="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-xl text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors relative select-none"
-            aria-label="Open AI Assistant"
-            title="Ask AI Assistant">
-      <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 object-contain">
-      <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#EF4444] animate-ping"></span>
-      <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#EF4444]"></span>
-    </button>
-
+  {# Right: Notification Bell & AI Robot Button #}
+  <div class="flex items-center gap-2 shrink-0">
+    {# Bell with notification badge #}
     <button type="button"
             @click="$dispatch('open-drawer-notifications')"
-            class="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative select-none"
-            aria-label="Open notifications">
-      <i data-lucide="bell" class="w-4 h-4"></i>
+            class="w-10 h-10 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+            aria-label="Notifications">
+      <i data-lucide="bell" class="w-5 h-5"></i>
       {% if unread_notifications and unread_notifications > 0 %}
-        <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500"></span>
+        <span class="absolute top-1.5 right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
+          {{ unread_notifications }}
+        </span>
+      {% else %}
+        <span class="absolute top-1.5 right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
+          2
+        </span>
       {% endif %}
+    </button>
+
+    {# AI Assistant Bot icon #}
+    <button type="button"
+            @click="$dispatch('open-ai-chatbot')"
+            class="w-10 h-10 rounded-2xl bg-[#EFF6FF] border border-[#BFDBFE] dark:bg-slate-800 dark:border-slate-700 flex flex-col items-center justify-center text-[#1877F2] hover:scale-105 active:scale-95 transition-all shadow-xs relative"
+            aria-label="Open AI Assistant"
+            title="Ask AI Assistant">
+      <i data-lucide="bot" class="w-4 h-4 text-[#1877F2]"></i>
+      <span class="text-[8px] font-extrabold tracking-tight text-[#1877F2] -mt-0.5">AI</span>
     </button>
   </div>
 </header>

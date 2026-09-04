@@ -3924,7 +3924,14 @@ class AdminAttendanceCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Cr
         return AdminAttendanceForm
 
     def form_valid(self, form):
-        instance = form.save()
+        instance = form.save(commit=False)
+        if instance.check_in_time and instance.check_out_time and instance.check_out_time > instance.check_in_time:
+            duration = instance.check_out_time - instance.check_in_time
+            instance.total_hours = round(duration.total_seconds() / 3600.0, 2)
+        if not instance.attendance_type:
+            instance.attendance_type = 'check_in'
+        instance.save()
+
         log_audit(
             actor=self.request.user,
             action='attendance_create',
@@ -3933,8 +3940,15 @@ class AdminAttendanceCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Cr
             ip=self.request.META.get('REMOTE_ADDR')
         )
         if self.request.headers.get('HX-Request') == 'true':
-            return HttpResponse('<script>window.location.reload();</script>')
+            response = HttpResponse()
+            response['HX-Refresh'] = 'true'
+            return response
         return redirect('admin_panel:attendance_list')
+
+    def form_invalid(self, form):
+        if self.request.headers.get('HX-Request') == 'true':
+            return self.render_to_response(self.get_context_data(form=form), status=422)
+        return super().form_invalid(form)
 
 
 class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, UpdateView):
@@ -3946,7 +3960,12 @@ class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Up
         return AdminAttendanceForm
 
     def form_valid(self, form):
-        instance = form.save()
+        instance = form.save(commit=False)
+        if instance.check_in_time and instance.check_out_time and instance.check_out_time > instance.check_in_time:
+            duration = instance.check_out_time - instance.check_in_time
+            instance.total_hours = round(duration.total_seconds() / 3600.0, 2)
+        instance.save()
+
         log_audit(
             actor=self.request.user,
             action='attendance_edit',
@@ -3955,8 +3974,15 @@ class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Up
             ip=self.request.META.get('REMOTE_ADDR')
         )
         if self.request.headers.get('HX-Request') == 'true':
-            return HttpResponse('<script>window.location.reload();</script>')
+            response = HttpResponse()
+            response['HX-Refresh'] = 'true'
+            return response
         return redirect('admin_panel:attendance_list')
+
+    def form_invalid(self, form):
+        if self.request.headers.get('HX-Request') == 'true':
+            return self.render_to_response(self.get_context_data(form=form), status=422)
+        return super().form_invalid(form)
 
 
 class AdminAttendanceDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, View):

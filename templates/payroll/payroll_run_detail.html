@@ -10,10 +10,7 @@
         <c-page-header title="{{ run.name|default:'Payroll Run' }}">
             <c-slot name="actions">
                 <div class="flex items-center gap-2 flex-wrap">
-                <a href="{% url 'audit:activity_list' %}?module=payroll&object_id={{ run.pk }}" class="ft-btn ft-btn-ghost ft-btn-sm flex items-center gap-1">
-                <i data-lucide="history" class="w-3.5 h-3.5"></i>
-                <span>History</span>
-                </a>
+                <c-button href="{% url 'audit:activity_list' %}?module=payroll&object_id={{ run.pk }}" variant="ghost" size="sm" icon="history" label="History"></c-button>
                 <!-- Export Menu Dropdown -->
                 <div x-data="{ open: false }" class="relative">
                 <button @click="open = !open" @click.outside="open = false" type="button" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
@@ -77,10 +74,7 @@
                 {% if run.status == 'draft' %}
                 <form method="post" action="{% url 'payroll:payroll_run_sync' run.pk %}">
                 {% csrf_token %}
-                <button type="submit" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1.5">
-                <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-600"></i>
-                <span>Sync Inputs</span>
-                </button>
+                <c-button type="submit" variant="secondary" size="sm" icon="refresh-cw" label="Sync Inputs"></c-button>
                 </form>
                 {% endif %}
                 <!-- Workflow Transitions -->
@@ -88,37 +82,25 @@
                 <form method="post" action="{% url 'payroll:payroll_run_transition' run.pk %}">
                 {% csrf_token %}
                 <input type="hidden" name="target_status" value="review">
-                <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
-                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
-                <span>Submit for Review</span>
-                </button>
+                <c-button type="submit" variant="primary" size="sm" icon="check-circle" label="Submit for Review"></c-button>
                 </form>
                 {% elif run.status == 'review' %}
                 <form method="post" action="{% url 'payroll:payroll_run_transition' run.pk %}">
                 {% csrf_token %}
                 <input type="hidden" name="target_status" value="approved_locked">
-                <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
-                <i data-lucide="lock" class="w-3.5 h-3.5"></i>
-                <span>Approve & Lock</span>
-                </button>
+                <c-button type="submit" variant="primary" size="sm" icon="lock" label="Approve & Lock"></c-button>
                 </form>
                 {% elif run.status == 'approved_locked' %}
                 <form method="post" action="{% url 'payroll:payroll_run_transition' run.pk %}">
                 {% csrf_token %}
                 <input type="hidden" name="target_status" value="disbursed">
-                <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700">
-                <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
-                <span>Mark Disbursed</span>
-                </button>
+                <c-button type="submit" variant="primary" size="sm" extra_class="bg-emerald-600 hover:bg-emerald-700 text-white" icon="check-check" label="Mark Disbursed"></c-button>
                 </form>
                 {% endif %}
                 <!-- Admin Reversal Button -->
                 {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'system_owner' %}
                 {% if run.status != 'draft' %}
-                <button type="button" @click="$dispatch('open-modal', {id: 'reverse-modal'})" class="ft-btn ft-btn-ghost ft-btn-sm text-rose-600 hover:bg-rose-50 flex items-center gap-1">
-                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-                <span>Admin Reversal</span>
-                </button>
+                <c-button type="button" variant="ghost" size="sm" extra_class="text-rose-600 hover:bg-rose-50" icon="rotate-ccw" label="Admin Reversal" @click="$dispatch('open-modal', {id: 'reverse-modal'})"></c-button>
                 {% endif %}
                 {% endif %}
                 </div>
@@ -148,9 +130,7 @@
                     <p class="text-xs mt-0.5">These staff will not be included in calculations. Set their structures before calculating or syncing.</p>
                 </div>
             </div>
-            <a href="{% url 'payroll:employee_salary_setup' %}" class="ft-btn ft-btn-sm ft-btn-secondary border-amber-300 text-amber-900 bg-amber-100 hover:bg-amber-200 shrink-0">
-                Setup Salaries
-            </a>
+            <c-button href="{% url 'payroll:employee_salary_setup' %}" variant="secondary" size="sm" label="Setup Salaries"></c-button>
         </div>
         {% endif %}
 
@@ -235,12 +215,12 @@
         </c-card>
     </div>
 
-    <!-- Adjustments Modal -->
-    <c-modal id="adjustments-modal" title="Manage Employee Payroll Adjustments" size="lg">
-        <div id="adjustments-modal-content" class="py-8 flex justify-center items-center">
+    <!-- Adjustments Right Drawer -->
+    <c-right-drawer id="adjustments-drawer" title="Manage Employee Payroll Adjustments" width="lg">
+        <div id="adjustments-drawer-content" class="py-8 flex justify-center items-center">
             <c-loading-spinner text="Loading adjustments..."></c-loading-spinner>
         </div>
-    </c-modal>
+    </c-right-drawer>
 
     <!-- Admin Reversal Confirmation Modal -->
     <c-modal id="reverse-modal" title="Confirm Payroll Reversal" size="md">
@@ -258,8 +238,8 @@
 
             <c-slot name="footer">
                 <div class="flex items-center justify-end gap-2 w-full">
-                    <button type="button" @click="$dispatch('close-modal')" class="ft-btn ft-btn-secondary">Cancel</button>
-                    <button type="submit" class="ft-btn ft-btn-primary bg-rose-600 hover:bg-rose-700">Confirm Reversal</button>
+                    <c-button type="button" variant="secondary" size="sm" label="Cancel" @click="$dispatch('close-modal')"></c-button>
+                    <c-button type="submit" variant="primary" size="sm" extra_class="bg-rose-600 hover:bg-rose-700 text-white" label="Confirm Reversal"></c-button>
                 </div>
             </c-slot>
         </form>

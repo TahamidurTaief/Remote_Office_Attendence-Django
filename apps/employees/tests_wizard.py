@@ -536,8 +536,9 @@ class EmployeeWizardFullTestSuite(TestCase):
 
         # Verify Authorized Dynamic Roles header
         self.assertIn('Authorized Dynamic Roles', content)
-        # Verify role dropdown picker is present
-        self.assertIn('role_dropdown_select', content)
+        # Verify role tabs and active pills are present
+        self.assertIn('All Roles', content)
+        self.assertIn('rolesMeta', content)
         # Verify Direct Custom Permissions section is present
         self.assertIn('Direct Custom Permissions (Overrides)', content)
         self.assertIn('custom_permissions', content)

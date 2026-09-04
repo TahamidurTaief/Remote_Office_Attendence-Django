@@ -1,34 +1,81 @@
 <c-app-shell page_title="Project: {{ project.name }} | FieldTrack" active_href="{{ request.path }}">
-<c-page-container x-data="{
+<c-page-container>
+<div x-data="{
     activeTab: 'tasks',
     statusFilter: 'all',
     searchQuery: '',
     selectedMember: '{{ selected_member_id|default:'' }}',
     selectedTasks: [],
     selectAll: false,
+    allTasks: [
+        {% for task in tasks %}
+        { id: '{{ task.pk }}', status: '{{ task.status }}', memberId: '{{ task.responsible_person_id|default:'' }}' },
+        {% endfor %}
+    ],
+    get visibleTasks() {
+        return this.allTasks.filter(t => {
+            const statusMatch = (this.statusFilter === 'all' || this.statusFilter === t.status);
+            const memberMatch = (!this.selectedMember || this.selectedMember === t.memberId);
+            return statusMatch && memberMatch;
+        });
+    },
     toggleAll() {
+        const visibleIds = this.visibleTasks.map(t => t.id);
         if (this.selectAll) {
-            this.selectedTasks = [{% for t in tasks %}'{{ t.pk }}',{% endfor %}];
+            this.selectedTasks = Array.from(new Set([...this.selectedTasks, ...visibleIds]));
         } else {
-            this.selectedTasks = [];
+            this.selectedTasks = this.selectedTasks.filter(id => !visibleIds.includes(id));
         }
+    },
+    updateSelectAll() {
+        const visibleIds = this.visibleTasks.map(t => t.id);
+        if (visibleIds.length === 0) {
+            this.selectAll = false;
+        } else {
+            this.selectAll = visibleIds.every(id => this.selectedTasks.includes(id));
+        }
+    },
+    clearSelection() {
+        this.selectedTasks = [];
+        this.selectAll = false;
+    },
+    drawerTask: null,
+    drawerLoading: false,
+    openTaskDrawer(taskId) {
+        this.drawerLoading = true;
+        this.drawerTask = null;
+        window.dispatchEvent(new CustomEvent('open-drawer', { detail: { id: 'task-detail-drawer' } }));
+        fetch('/projects/tasks/' + taskId + '/detail-api/', {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to load task details');
+            return res.json();
+        })
+        .then(data => {
+            this.drawerTask = data;
+            this.drawerLoading = false;
+            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        })
+        .catch(err => {
+            this.drawerLoading = false;
+            console.error('Error fetching task details:', err);
+        });
     }
 }">
 
-    {# ── Topbar / Header Card ──────────────────────────────────────────── #}
-    <c-card padding="sm">
-        <c-section-header title="{{ project.name }}" subtitle="Client: {{ project.client_name|default:'Unassigned' }}">
-            <c-slot name="actions">
-                <c-button href="{% url 'projects:project_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Projects"></c-button>
-                <c-button href="{% url 'projects:export_pdf' project.pk %}" variant="secondary" size="sm" icon="file-text" label="Work Plan (PDF)"></c-button>
-                <c-button href="{% url 'projects:project_gantt' project.pk %}" variant="secondary" size="sm" icon="bar-chart-2" label="Gantt"></c-button>
-                <c-button href="{% url 'projects:project_gantt_export' project.pk %}" variant="secondary" size="sm" icon="download" label="Export Gantt (.xlsx)"></c-button>
-                <c-button href="{% url 'audit:activity_list' %}?module=projects&object_id={{ project.pk }}" variant="secondary" size="sm" icon="history" label="History"></c-button>
-                <c-button href="{% url 'projects:project_edit' project.pk %}" variant="primary" size="sm" icon="edit" label="Edit Project"></c-button>
-                <c-button type="button" @click="$dispatch('open-modal', {id: 'delete-project-modal'})" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
-            </c-slot>
-        </c-section-header>
-    </c-card>
+    {# ── Topbar / Header ───────────────────────────────────────────────── #}
+    <c-page-header title="{{ project.name }}" subtitle="Client: {{ project.client_name|default:'Unassigned' }}">
+        <c-slot name="actions">
+            <c-button href="{% url 'projects:project_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Projects"></c-button>
+            <c-button href="{% url 'projects:export_pdf' project.pk %}" variant="secondary" size="sm" icon="file-text" label="Work Plan (PDF)"></c-button>
+            <c-button href="{% url 'projects:project_gantt' project.pk %}" variant="secondary" size="sm" icon="bar-chart-2" label="Gantt"></c-button>
+            <c-button href="{% url 'projects:project_gantt_export' project.pk %}" variant="secondary" size="sm" icon="download" label="Export Gantt (.xlsx)"></c-button>
+            <c-button href="{% url 'audit:activity_list' %}?module=projects&object_id={{ project.pk }}" variant="secondary" size="sm" icon="history" label="History"></c-button>
+            <c-button href="{% url 'projects:project_edit' project.pk %}" variant="primary" size="sm" icon="edit" label="Edit Project"></c-button>
+            <c-button type="button" @click="$dispatch('open-modal', {id: 'delete-project-modal'})" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+        </c-slot>
+    </c-page-header>
 
     {# ── Project Summary Cards Grid ────────────────────────────────────── #}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
@@ -226,7 +273,7 @@
                         label="All"
                         count="{{ all_count }}"
                         active_condition="statusFilter === 'all'"
-                        attrs="@click=&quot;statusFilter = 'all'&quot;">
+                        attrs="@click=&quot;statusFilter = 'all'; $nextTick(() => updateSelectAll())&quot;">
                     </c-filter-button>
 
                     <c-filter-button
@@ -234,7 +281,7 @@
                         count="{{ not_started_count }}"
                         variant="neutral"
                         active_condition="statusFilter === 'Not Started'"
-                        attrs="@click=&quot;statusFilter = 'Not Started'&quot;">
+                        attrs="@click=&quot;statusFilter = 'Not Started'; $nextTick(() => updateSelectAll())&quot;">
                     </c-filter-button>
 
                     <c-filter-button
@@ -242,7 +289,7 @@
                         count="{{ in_progress_count }}"
                         variant="info"
                         active_condition="statusFilter === 'In Progress'"
-                        attrs="@click=&quot;statusFilter = 'In Progress'&quot;">
+                        attrs="@click=&quot;statusFilter = 'In Progress'; $nextTick(() => updateSelectAll())&quot;">
                     </c-filter-button>
 
                     <c-filter-button
@@ -250,7 +297,7 @@
                         count="{{ delayed_count }}"
                         variant="danger"
                         active_condition="statusFilter === 'Delayed'"
-                        attrs="@click=&quot;statusFilter = 'Delayed'&quot;">
+                        attrs="@click=&quot;statusFilter = 'Delayed'; $nextTick(() => updateSelectAll())&quot;">
                     </c-filter-button>
 
                     <c-filter-button
@@ -258,7 +305,7 @@
                         count="{{ completed_count }}"
                         variant="success"
                         active_condition="statusFilter === 'Completed'"
-                        attrs="@click=&quot;statusFilter = 'Completed'&quot;">
+                        attrs="@click=&quot;statusFilter = 'Completed'; $nextTick(() => updateSelectAll())&quot;">
                     </c-filter-button>
                 </div>
 
@@ -272,24 +319,62 @@
                 </div>
             </div>
 
-            {# Bulk Actions Row #}
-            <div x-show="selectedTasks.length > 0" x-cloak x-transition class="mt-3 pt-2 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap bg-primary-50/40 dark:bg-primary-950/30 p-2 rounded-lg">
-                <span class="text-[11px] font-semibold text-primary">
-                    <span x-text="selectedTasks.length"></span> task(s) selected
-                </span>
-                <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST" class="flex items-center gap-2">
-                    {% csrf_token %}
-                    <template x-for="id in selectedTasks" :key="id">
-                        <input type="hidden" name="task_ids" :value="id">
-                    </template>
-                    <c-select name="status" extra_class="w-36">
-                        <option value="Not Started">Not Started</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Delayed">Delayed</option>
-                        <option value="Completed">Completed</option>
-                    </c-select>
-                    <c-button type="submit" variant="secondary" size="sm" label="Update Status"></c-button>
-                </form>
+            {# Dynamic Bulk Actions Toolbar (Visible when 1+ tasks are selected) #}
+            <div x-show="selectedTasks.length > 0"
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 -translate-y-2 scale-98"
+                 x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave-end="opacity-0 -translate-y-2 scale-98"
+                 class="mt-3 p-3 rounded-xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="inline-flex items-center justify-center min-w-[22px] h-5.5 px-2 rounded-full bg-primary text-white text-[11px] font-bold shadow-xs" x-text="selectedTasks.length"></span>
+                    <span class="text-[12px] font-bold text-gray-900 dark:text-white">
+                        task(s) selected
+                    </span>
+                    <span class="text-gray-300 dark:text-gray-700">|</span>
+                    <button type="button"
+                            @click="clearSelection()"
+                            class="text-[11px] text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary underline cursor-pointer">
+                        Deselect all
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                    {# Option 1: Export Selected Tasks #}
+                    <form action="{% url 'projects:export_tasks_csv' project.pk %}" method="POST" class="inline">
+                        {% csrf_token %}
+                        <template x-for="id in selectedTasks" :key="'export-' + id">
+                            <input type="hidden" name="task_ids" :value="id">
+                        </template>
+                        <c-button type="submit" variant="secondary" size="sm" icon="download" label="Export Selected"></c-button>
+                    </form>
+
+                    {# Option 2: Delete Selected Tasks #}
+                    <c-button type="button"
+                              @click="$dispatch('open-modal', {id: 'bulk-delete-tasks-modal'})"
+                              variant="danger"
+                              size="sm"
+                              icon="trash-2"
+                              label="Delete Selected"></c-button>
+
+                    {# Helper: Set Status #}
+                    <form action="{% url 'projects:project_task_bulk_status' project.pk %}" method="POST" class="flex items-center gap-1.5 pl-2 border-l border-blue-200 dark:border-blue-800">
+                        {% csrf_token %}
+                        <template x-for="id in selectedTasks" :key="'status-' + id">
+                            <input type="hidden" name="task_ids" :value="id">
+                        </template>
+                        <c-select name="status" extra_class="w-32 text-[11px]">
+                            <option value="Not Started">Not Started</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Delayed">Delayed</option>
+                            <option value="Completed">Completed</option>
+                        </c-select>
+                        <c-button type="submit" variant="secondary" size="sm" label="Set Status"></c-button>
+                    </form>
+                </div>
             </div>
         </c-card>
 
@@ -302,14 +387,22 @@
                     subtitle="{{ task.responsible_person.full_name|default:'Unassigned' }}"
                     status="{{ task.status }}">
                     <c-slot name="meta">
+                        <c-checkbox
+                            value="{{ task.pk }}"
+                            x_model="selectedTasks"
+                            attrs="@change=&quot;updateSelectAll()&quot;"
+                            label="Select task"
+                            extra_class="pb-1">
+                        </c-checkbox>
                         <span class="font-mono">{{ task.planned_start|date:"d/m/Y"|default:"—" }} &rarr; {{ task.planned_finish|date:"d/m/Y"|default:"—" }}</span>
                         {% if task.duration_days %}<span>{{ task.duration_days }} days</span>{% endif %}
                     </c-slot>
                     <c-slot name="actions">
-                        <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                        <c-button type="button" @click="openTaskDrawer('{{ task.pk }}')" variant="ghost" size="sm" icon="eye" title="View Details"></c-button>
+                        <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit Task"></c-button>
                         <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                             {% csrf_token %}
-                            <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                            <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete Task"></c-button>
                         </form>
                     </c-slot>
                 </c-mobile-record-card>
@@ -326,8 +419,12 @@
             <c-card padding="none">
                 <c-table>
                     <c-slot name="header">
-                        <th class="py-2 px-3 text-left w-8">
-                            <c-checkbox attrs="x-model='selectAll' @change='toggleAll()'"></c-checkbox>
+                        <th class="py-2.5 px-3 text-left w-10">
+                            <c-checkbox
+                                x_model="selectAll"
+                                attrs="@change=&quot;toggleAll()&quot;"
+                                title="Select all visible tasks">
+                            </c-checkbox>
                         </th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-10">#</th>
                         <th class="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Activity</th>
@@ -338,14 +435,18 @@
                     </c-slot>
                     {% for task in tasks %}
                     <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors border-b border-gray-100 dark:border-slate-800"
+                        :class="selectedTasks.includes('{{ task.pk }}') ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''"
                         x-show="(statusFilter === 'all' || statusFilter === '{{ task.status }}') && (!selectedMember || selectedMember === '{{ task.responsible_person_id|default:'' }}')">
-                        <td class="py-2 px-3">
-                            <c-checkbox value="{{ task.pk }}" attrs="x-model='selectedTasks'"></c-checkbox>
+                        <td class="py-2.5 px-3 w-10">
+                            <c-checkbox
+                                value="{{ task.pk }}"
+                                x_model="selectedTasks"
+                                attrs="@change=&quot;updateSelectAll()&quot;">
+                            </c-checkbox>
                         </td>
                         <td class="py-2.5 px-3 text-[11px] font-bold text-gray-400 font-mono">{{ task.order }}</td>
                         <td class="py-2.5 px-3">
                             <div class="text-[12px] font-semibold text-gray-900 dark:text-white truncate max-w-xs">{{ task.activity }}</div>
-                            {% if task.remarks %}<div class="text-[10px] text-gray-400 truncate max-w-xs mt-0.5">{{ task.remarks }}</div>{% endif %}
                         </td>
                         <td class="py-2.5 px-3">
                             {% if task.responsible_person %}
@@ -369,10 +470,11 @@
                         </td>
                         <td class="py-2.5 px-3 text-right whitespace-nowrap">
                             <div class="flex items-center justify-end gap-1">
-                                <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <c-button type="button" @click="openTaskDrawer('{{ task.pk }}')" variant="ghost" size="sm" icon="eye" title="View Details"></c-button>
+                                <c-button href="{% url 'projects:project_task_edit' task.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit Task"></c-button>
                                 <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                                     {% csrf_token %}
-                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                                    <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete Task"></c-button>
                                 </form>
                             </div>
                         </td>
@@ -419,10 +521,10 @@
                     </div>
                 </c-slot>
                 <c-slot name="actions">
-                    <c-button href="{% url 'projects:progress_log_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                    <c-button href="{% url 'projects:progress_log_edit' log.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit Log"></c-button>
                     <form action="{% url 'projects:progress_log_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                         {% csrf_token %}
-                        <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                        <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete Log"></c-button>
                     </form>
                 </c-slot>
             </c-mobile-record-card>
@@ -462,17 +564,17 @@
                         </td>
                         <td class="py-2.5 px-3 text-right whitespace-nowrap">
                             <div class="flex items-center justify-end gap-1">
-                                <c-button href="{% url 'projects:progress_log_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <c-button href="{% url 'projects:progress_log_edit' log.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit Log"></c-button>
                                 <form action="{% url 'projects:progress_log_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                                     {% csrf_token %}
-                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                                    <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete Log"></c-button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="py-8 text-center text-gray-400">
+                        <td colspan="7" class="py-8 text-center text-gray-400">
                             <c-empty-state icon="clipboard-list" title="No progress logs yet" description="Add daily progress logs to document ongoing field works."></c-empty-state>
                         </td>
                     </tr>
@@ -503,12 +605,12 @@
                 <c-slot name="actions">
                     <form action="{% url 'projects:manpower_autofill' log.pk %}" method="POST" class="inline">
                         {% csrf_token %}
-                        <c-button type="submit" variant="secondary" size="sm" icon="refresh-cw" label="Auto-fill"></c-button>
+                        <c-button type="submit" variant="ghost" size="sm" icon="refresh-cw" title="Auto-fill"></c-button>
                     </form>
-                    <c-button href="{% url 'projects:manpower_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                    <c-button href="{% url 'projects:manpower_edit' log.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit"></c-button>
                     <form action="{% url 'projects:manpower_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                         {% csrf_token %}
-                        <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                        <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete"></c-button>
                     </form>
                 </c-slot>
             </c-mobile-record-card>
@@ -549,15 +651,15 @@
                             {% endif %}
                         </td>
                         <td class="py-2.5 px-3 text-right whitespace-nowrap">
-                            <div class="flex items-center justify-end gap-1.5">
+                            <div class="flex items-center justify-end gap-1">
                                 <form action="{% url 'projects:manpower_autofill' log.pk %}" method="POST" class="inline">
                                     {% csrf_token %}
-                                    <c-button type="submit" variant="secondary" size="sm" icon="refresh-cw" label="Auto-fill"></c-button>
+                                    <c-button type="submit" variant="ghost" size="sm" icon="refresh-cw" title="Auto-fill"></c-button>
                                 </form>
-                                <c-button href="{% url 'projects:manpower_edit' log.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <c-button href="{% url 'projects:manpower_edit' log.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit"></c-button>
                                 <form action="{% url 'projects:manpower_delete' log.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete record?', () => $el.submit()) : $el.submit()">
                                     {% csrf_token %}
-                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                                    <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete"></c-button>
                                 </form>
                             </div>
                         </td>
@@ -596,12 +698,12 @@
                     <form action="{% url 'projects:material_increment' mat.pk %}" method="POST" class="flex items-center gap-1">
                         {% csrf_token %}
                         <c-input type="number" name="increment_qty" placeholder="+Qty" required="true" attrs="step='0.01' min='0.01'" extra_class="w-20"></c-input>
-                        <c-button type="submit" variant="primary" size="sm" icon="plus" label="Add"></c-button>
+                        <c-button type="submit" variant="primary" size="sm" icon="plus" title="Add Quantity"></c-button>
                     </form>
-                    <c-button href="{% url 'projects:material_edit' mat.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                    <c-button href="{% url 'projects:material_edit' mat.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit Material"></c-button>
                     <form action="{% url 'projects:material_delete' mat.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete material?', () => $el.submit()) : $el.submit()">
                         {% csrf_token %}
-                        <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                        <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete Material"></c-button>
                     </form>
                 </c-slot>
             </c-mobile-record-card>
@@ -646,15 +748,15 @@
                             <form action="{% url 'projects:material_increment' mat.pk %}" method="POST" class="flex items-center gap-1">
                                 {% csrf_token %}
                                 <c-input type="number" name="increment_qty" placeholder="Qty" required="true" attrs="step='0.01' min='0.01'" extra_class="w-20"></c-input>
-                                <c-button type="submit" variant="primary" size="sm" icon="plus" label=""></c-button>
+                                <c-button type="submit" variant="primary" size="sm" icon="plus" title="Add Quantity"></c-button>
                             </form>
                         </td>
                         <td class="py-2.5 px-3 text-right whitespace-nowrap">
                             <div class="flex items-center justify-end gap-1">
-                                <c-button href="{% url 'projects:material_edit' mat.pk %}" variant="secondary" size="sm" icon="pencil" label="Edit"></c-button>
+                                <c-button href="{% url 'projects:material_edit' mat.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit Material"></c-button>
                                 <form action="{% url 'projects:material_delete' mat.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction ? window.confirmAction('Delete material?', () => $el.submit()) : $el.submit()">
                                     {% csrf_token %}
-                                    <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>
+                                    <c-button type="submit" variant="ghost" size="sm" icon="trash-2" class="text-red-500 hover:text-red-600" title="Delete Material"></c-button>
                                 </form>
                             </div>
                         </td>
@@ -918,5 +1020,177 @@
         </form>
     </c-modal>
 
+    {# Bulk Delete Tasks Confirmation Modal #}
+    <c-modal id="bulk-delete-tasks-modal" title="Delete Selected Tasks" size="md">
+        <div class="space-y-3">
+            <div class="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-300">
+                <i data-lucide="alert-triangle" class="w-5 h-5 text-red-500 shrink-0 mt-0.5"></i>
+                <div class="text-[12px]">
+                    <p class="font-bold">Are you sure you want to delete <span x-text="selectedTasks.length"></span> task(s)?</p>
+                    <p class="mt-1 text-gray-600 dark:text-gray-400">This action will permanently delete all selected tasks and their associated records. This cannot be undone.</p>
+                </div>
+            </div>
+        </div>
+        <c-slot name="footer">
+            <c-button type="button" @click="$dispatch('close-modal')" variant="secondary" size="sm" label="Cancel"></c-button>
+            <form action="{% url 'projects:project_task_bulk_delete' project.pk %}" method="POST" class="inline">
+                {% csrf_token %}
+                <template x-for="id in selectedTasks" :key="'bulk-del-' + id">
+                    <input type="hidden" name="task_ids" :value="id">
+                </template>
+                <c-button type="submit" variant="danger" size="sm" icon="trash-2" label="Yes, Delete Tasks"></c-button>
+            </form>
+        </c-slot>
+    </c-modal>
+
+    {# ── Task Details Right Drawer ────────────────────────────────────── #}
+    <c-right-drawer id="task-detail-drawer" title="Task Details" width="lg">
+        {# Loading State #}
+        <div x-show="drawerLoading" class="py-16 text-center text-gray-400 space-y-3">
+            <div class="inline-block animate-spin rounded-full h-7 w-7 border-b-2 border-primary"></div>
+            <p class="text-[12px] font-medium">Loading task details...</p>
+        </div>
+
+        {# Loaded Content #}
+        <div x-show="!drawerLoading && drawerTask" class="space-y-4" x-cloak>
+            {# Task Header & Status #}
+            <div class="p-4 rounded-xl bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-800 space-y-3">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2 text-[11px] font-mono text-gray-400">
+                            <span>TASK #<strong class="text-gray-700 dark:text-gray-200" x-text="drawerTask?.order"></strong></span>
+                            <span>•</span>
+                            <span x-text="drawerTask?.points ? drawerTask.points + ' Points' : '0 Points'"></span>
+                        </div>
+                        <h4 class="text-[13px] font-bold text-gray-900 dark:text-white leading-snug" x-text="drawerTask?.activity"></h4>
+                    </div>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider shrink-0"
+                          :class="{
+                              'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300': drawerTask?.status === 'Completed',
+                              'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300': drawerTask?.status === 'In Progress',
+                              'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300': drawerTask?.status === 'Delayed',
+                              'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300': drawerTask?.status === 'Not Started'
+                          }"
+                          x-text="drawerTask?.status">
+                    </span>
+                </div>
+
+                {# Progress Bar #}
+                <div class="space-y-1 pt-1" x-effect="if ($refs.taskProgressBar) { $refs.taskProgressBar.style.width = (drawerTask ? (drawerTask.progress_percent || 0) : 0) + '%' }">
+                    <div class="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                        <span>Progress Completion</span>
+                        <span class="font-bold text-primary font-mono" x-text="(drawerTask?.progress_percent || 0) + '%'"></span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                        <div x-ref="taskProgressBar" class="bg-primary h-2 rounded-full transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            {# Assigned Person & Project Info #}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/40 border border-gray-100 dark:border-slate-800 space-y-1">
+                    <span class="text-[10px] uppercase font-semibold text-gray-400 block tracking-wide">Assigned Person</span>
+                    <div class="flex items-center gap-2 pt-0.5">
+                        <div class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[11px]">
+                            <span x-text="drawerTask?.responsible_person_name ? drawerTask.responsible_person_name.charAt(0).toUpperCase() : '?'"></span>
+                        </div>
+                        <span class="font-semibold text-gray-800 dark:text-gray-200" x-text="drawerTask?.responsible_person_name || 'Unassigned'"></span>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/40 border border-gray-100 dark:border-slate-800 space-y-1">
+                    <span class="text-[10px] uppercase font-semibold text-gray-400 block tracking-wide">Project & Branch</span>
+                    <p class="font-semibold text-gray-800 dark:text-gray-200 truncate pt-0.5" x-text="drawerTask?.project_name"></p>
+                    <p class="text-[10px] text-gray-400 truncate" x-text="drawerTask?.branch_name"></p>
+                </div>
+            </div>
+
+            {# Schedule Timeline Card #}
+            <div class="p-3.5 rounded-xl bg-white dark:bg-slate-800/40 border border-gray-100 dark:border-slate-800 space-y-2.5 text-[11px]">
+                <span class="text-[10px] uppercase font-semibold text-gray-400 block tracking-wide">Schedule Timeline</span>
+                <div class="grid grid-cols-3 gap-2 font-mono">
+                    <div>
+                        <span class="text-[10px] text-gray-400 block">Planned Start</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200" x-text="drawerTask?.planned_start || '—'"></span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-gray-400 block">Planned Finish</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200" x-text="drawerTask?.planned_finish || '—'"></span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-gray-400 block">Duration</span>
+                        <span class="font-medium text-gray-800 dark:text-gray-200" x-text="drawerTask?.duration_days || '—'"></span>
+                    </div>
+                </div>
+                <div x-show="drawerTask?.completed_at && drawerTask?.completed_at !== '—'" class="pt-2 border-t border-gray-100 dark:border-slate-700 text-[10px] text-emerald-600 dark:text-emerald-400">
+                    <span>Completed on: </span>
+                    <span class="font-mono font-medium" x-text="drawerTask?.completed_at"></span>
+                </div>
+            </div>
+
+            {# Full Description & Remarks #}
+            <div class="p-3.5 rounded-xl bg-white dark:bg-slate-800/40 border border-gray-100 dark:border-slate-800 space-y-1.5 text-[12px]">
+                <div class="flex items-center gap-1.5 text-[10px] uppercase font-semibold text-gray-400 tracking-wide">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-primary"></i>
+                    <span>Task Description & Remarks</span>
+                </div>
+                <div class="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line text-[12px]"
+                     x-text="drawerTask?.remarks || 'No remarks provided for this task.'"></div>
+            </div>
+
+            {# Employee Note #}
+            <div x-show="drawerTask?.employee_note" class="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 space-y-1 text-[12px]">
+                <span class="text-[10px] uppercase font-semibold text-amber-700 dark:text-amber-400 block tracking-wide">Field Worker Note</span>
+                <p class="text-amber-900 dark:text-amber-200 text-[12px]" x-text="drawerTask?.employee_note"></p>
+            </div>
+
+            {# Attachments #}
+            <div x-show="drawerTask?.attachments && drawerTask.attachments.length > 0" class="space-y-2">
+                <span class="text-[10px] uppercase font-semibold text-gray-400 block tracking-wide">Task Attachments</span>
+                <div class="space-y-1.5">
+                    <template x-for="att in drawerTask?.attachments || []" :key="att.url">
+                        <a :href="att.url" target="_blank"
+                           class="flex items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors text-[11px] text-gray-700 dark:text-gray-200">
+                            <i data-lucide="paperclip" class="w-3.5 h-3.5 text-primary shrink-0"></i>
+                            <span class="truncate flex-1 font-medium" x-text="att.name"></span>
+                            <span class="text-[10px] uppercase text-gray-400" x-text="att.type"></span>
+                            <i data-lucide="external-link" class="w-3 h-3 text-gray-400 shrink-0"></i>
+                        </a>
+                    </template>
+                </div>
+            </div>
+
+            {# Discussion / Updates #}
+            <div x-show="drawerTask?.replies && drawerTask.replies.length > 0" class="space-y-2">
+                <span class="text-[10px] uppercase font-semibold text-gray-400 block tracking-wide">Discussion & Activity</span>
+                <div class="space-y-2">
+                    <template x-for="reply in drawerTask?.replies || []" :key="reply.created_at + reply.message">
+                        <div class="p-2.5 rounded-lg bg-white dark:bg-slate-850 border border-gray-100 dark:border-slate-800 space-y-1 text-[11px]">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-gray-800 dark:text-gray-200" x-text="reply.author_name"></span>
+                                <span class="text-[10px] text-gray-400 font-mono" x-text="reply.created_at"></span>
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-300" x-text="reply.message"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        {# Footer Actions #}
+        <c-slot name="footer">
+            <div class="flex items-center justify-end gap-2 w-full">
+                <c-button type="button" @click="$dispatch('close-drawer')" variant="secondary" size="sm" label="Close"></c-button>
+                <c-button type="button"
+                          @click="if (drawerTask) window.location.href = '/projects/tasks/' + drawerTask.id + '/edit/'"
+                          variant="primary"
+                          size="sm"
+                          icon="pencil"
+                          label="Edit Task"></c-button>
+            </div>
+        </c-slot>
+    </c-right-drawer>
+
+</div>
 </c-page-container>
 </c-app-shell>

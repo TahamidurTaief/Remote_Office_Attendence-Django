@@ -950,6 +950,24 @@ html.dark {
         background: rgba(24,119,242,0.03);
     }
 
+    .ft-table th.sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 30;
+        background-color: var(--surface-2) !important;
+    }
+
+    .ft-table td.sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 20;
+        background-color: var(--surface) !important;
+    }
+
+    .ft-table tbody tr:hover td.sticky-col {
+        background-color: var(--surface-2) !important;
+    }
+
     /* ── Notification Panel — floating overlay: shadow only, no border ──── */
     .ft-notification-panel {
         width: 320px;

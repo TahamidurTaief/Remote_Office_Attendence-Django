@@ -37,8 +37,8 @@ urlpatterns = [
     path('tasks/<int:pk>/complete/', views.staff_task_complete, name='staff_task_complete'),
     path('tasks/<int:pk>/detail-api/', views.task_detail_api, name='task_detail_api'),
     path('tasks/<int:pk>/reply-api/', views.task_add_reply_api, name='task_add_reply_api'),
-    path('tasks/<int:pk>/approve-api/', views.task_approve_api, name='task_approve_api'),
     path('<int:project_id>/tasks/bulk-status/', views.ProjectTaskBulkStatusView.as_view(), name='project_task_bulk_status'),
+    path('<int:project_id>/tasks/bulk-delete/', views.ProjectTaskBulkDeleteView.as_view(), name='project_task_bulk_delete'),
     path('<int:project_id>/apply-template/', views.ProjectApplyTemplateView.as_view(), name='project_apply_template'),
     
     # Daily Progress Logs

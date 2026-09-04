@@ -1403,6 +1403,41 @@ class PayrollUITests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(SalaryStructure.objects.filter(name="Valid Structure").exists())
 
+    def test_salary_structure_create_and_edit_page_views(self):
+        self.client.login(email="admin@test.com", password="adminpassword")
+
+        # GET Create Page
+        response = self.client.get("/payroll/structures/create/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "payroll/salary_structure_form.html")
+        self.assertIn("components", response.context)
+        self.assertFalse(response.context["is_edit"])
+        self.assertContains(response, "Create New Salary Structure")
+        self.assertContains(response, "Live Salary Simulator")
+        self.assertContains(response, "Earnings Allocation")
+        self.assertContains(response, "Apply Preset")
+
+        # GET Edit Page
+        response = self.client.get(f"/payroll/structures/{self.structure.pk}/edit/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "payroll/salary_structure_form.html")
+        self.assertEqual(response.context["structure"], self.structure)
+        self.assertTrue(response.context["is_edit"])
+        self.assertContains(response, "Edit Salary Structure:")
+        self.assertContains(response, "Test Structure")
+
+        # POST Edit Page
+        response = self.client.post(f"/payroll/structures/{self.structure.pk}/edit/", {
+            "name": "Updated Structure Name",
+            "is_active": "on",
+            "component_ids": [self.basic_comp.pk],
+            "component_values": ["100.00"],
+            "component_value_types": ["percentage"]
+        })
+        self.assertEqual(response.status_code, 302)
+        self.structure.refresh_from_db()
+        self.assertEqual(self.structure.name, "Updated Structure Name")
+
     def test_employee_salary_assignment(self):
         self.client.login(email="admin@test.com", password="adminpassword")
         response = self.client.post("/payroll/setup/assign/", {

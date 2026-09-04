@@ -1,8 +1,8 @@
 <div id="payroll-grid-container" class="space-y-4">
     <c-table id="payroll-grid-table" top_scroll="true">
         <c-slot name="header">
-            <th class="sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 min-w-[280px] w-[280px] border-r border-slate-200/80 dark:border-slate-700/80 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] font-medium text-slate-600 dark:text-slate-300">Employee</th>
-            <th class="min-w-[180px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Department / Designation</th>
+            <th class="min-w-[240px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Employee</th>
+            <th class="min-w-[160px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Department / Designation</th>
             <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Gross Salary</th>
             <th class="min-w-[170px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Attendance (P / L / A)</th>
             <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">OT Hours / Amt</th>
@@ -10,13 +10,13 @@
             <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Total Deductions</th>
             <th class="min-w-[120px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Net Payable</th>
             <th class="min-w-[130px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Disbursement</th>
-            <th class="text-right min-w-[100px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Actions</th>
+            <th class="text-right min-w-[110px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Actions</th>
         </c-slot>
 
         <c-slot name="body">
             {% for calc in page_obj %}
-            <tr class="group">
-                <td class="sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 border-r border-slate-200/80 dark:border-slate-700/80 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] min-w-[280px] w-[280px]">
+            <tr class="group hover:bg-slate-50/70 dark:hover:bg-slate-800/70">
+                <td class="whitespace-nowrap">
                     <div class="flex items-center gap-2.5">
                         <c-avatar src="{% if calc.employee.profile_photo %}{{ calc.employee.profile_photo.url }}{% endif %}" initials="{{ calc.employee.first_name|make_list|first|upper }}" size="sm"></c-avatar>
                         <div class="min-w-0 flex-1">
@@ -28,11 +28,11 @@
                     </div>
                 </td>
                 <td class="whitespace-nowrap">
-                    <div class="font-medium" style="color:var(--text)">{{ calc.employee.department.name|default:"General" }}</div>
+                    <div class="font-medium text-[13px]" style="color:var(--text)">{{ calc.employee.department.name|default:"General" }}</div>
                     <div class="text-[11px]" style="color:var(--text-muted)">{{ calc.employee.designation.name|default:"Staff" }}</div>
-                </td>
+                </td> 
                 <td class="whitespace-nowrap">
-                    <span class="font-medium" style="color:var(--text)">{{ calc.gross_salary|floatformat:2 }}</span>
+                    <span class="font-medium text-[13px]" style="color:var(--text)">{{ calc.gross_salary|floatformat:2 }}</span>
                 </td>
                 <td class="whitespace-nowrap">
                     <div class="inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap">
@@ -54,10 +54,10 @@
                     </div>
                 </td>
                 <td class="whitespace-nowrap">
-                    <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ calc.total_earnings|floatformat:2 }}</span>
+                    <span class="font-medium text-emerald-600 dark:text-emerald-400 text-[13px]">{{ calc.total_earnings|floatformat:2 }}</span>
                 </td>
                 <td class="whitespace-nowrap">
-                    <span class="font-medium text-rose-600 dark:text-rose-400">-{{ calc.total_deductions|floatformat:2 }}</span>
+                    <span class="font-medium text-rose-600 dark:text-rose-400 text-[13px]">-{{ calc.total_deductions|floatformat:2 }}</span>
                 </td>
                 <td class="whitespace-nowrap">
                     <div class="font-medium text-[13px] text-emerald-700 dark:text-emerald-400">
@@ -78,22 +78,9 @@
                 </td>
                 <td class="text-right whitespace-nowrap">
                     <div class="flex items-center justify-end gap-1">
-                        <a href="{% url 'payroll:payslip_detail' calc.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm p-1.5" title="View Payslip">
-                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-                        </a>
-                        <a href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" class="ft-btn ft-btn-ghost ft-btn-sm p-1.5" title="Download Payslip PDF">
-                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                        </a>
-                        {% if not is_locked %}
-                        <button type="button"
-                                hx-get="{% url 'payroll:payroll_adjustment_modal' run.pk %}?employee_id={{ calc.employee.pk }}"
-                                hx-target="#adjustments-modal-content"
-                                @click="$dispatch('open-modal', {id: 'adjustments-modal'})"
-                                class="ft-btn ft-btn-ghost ft-btn-sm p-1.5"
-                                title="Adjustments">
-                            <i data-lucide="sliders" class="w-3.5 h-3.5 text-indigo-600"></i>
-                        </button>
-                        {% endif %}
+                        <c-button href="{% url 'payroll:payslip_detail' calc.pk %}" variant="ghost" size="sm" icon="file-text" extra_class="!p-1.5" title="View Payslip"></c-button>
+                        <c-button href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" variant="ghost" size="sm" icon="download" extra_class="!p-1.5" title="Download Payslip PDF"></c-button>
+                        <c-button type="button" variant="ghost" size="sm" icon="sliders" extra_class="!p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40" hx-get="{% url 'payroll:payroll_adjustment_modal' run.pk %}?employee_id={{ calc.employee.pk }}" hx-target="#adjustments-drawer-content" @click="$dispatch('open-drawer', {id: 'adjustments-drawer'})" title="Adjustments"></c-button>
                     </div>
                 </td>
             </tr>

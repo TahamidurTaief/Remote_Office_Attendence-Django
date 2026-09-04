@@ -1,12 +1,14 @@
 {% load static %}
-<c-vars shell_type="admin" active_href="" pending_leave_count="" unread_notifications="" expired_data_count="" pending_expense_count="" ></c-vars>
+<c-vars shell_type="admin" active_href="" pending_leave_count="" unread_notifications="" expired_data_count="" pending_expense_count="" pending_tasks_count=""></c-vars>
 {% comment %} c-sidebar — Full hierarchical navigation sidebar
    Props:
+   - shell_type: 'admin' (default) | 'staff'
    - active_href: request.path string for active state detection
    - pending_leave_count: integer badge
    - unread_notifications: integer badge
    - expired_data_count: integer badge
    - pending_expense_count: integer badge
+   - pending_tasks_count: integer badge
 {% endcomment %}
 
 <div id="ft-sidebar" x-data="{
@@ -24,6 +26,9 @@
          }
        },
        getActiveId() {
+         if ('{{ shell_type }}' === 'staff') {
+           return null;
+         }
          const p = '{{ active_href }}';
          if (p === '/admin-panel/dashboard/' || p === '/staff/home/' || p.includes('/notifications/')) return 'dashboards';
          if (p.includes('/admin-panel/ai/')) return 'ai_workspace';
@@ -98,23 +103,36 @@
         <div class="w-7 h-7 rounded-btn bg-primary flex items-center justify-center flex-shrink-0">
           <i data-lucide="zap" class="w-4 h-4 text-white"></i>
         </div>
-        <div x-show="!collapsed" class="flex-1 min-w-0" x-cloak>
+        <div x-show="!collapsed" class="flex items-center gap-1.5 flex-1 min-w-0" x-cloak>
           <img src="{% static 'main_logo.jpg' %}"
                alt="FieldTrack"
                class="h-6 w-auto object-contain"
                onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
           <span class="text-[12px] font-bold hidden" style="color:var(--text)">FieldTrack</span>
+          {% if shell_type == 'staff' %}
+            <span class="px-1.5 py-0.5 text-[9px] font-bold tracking-wide rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">STAFF</span>
+          {% endif %}
         </div>
       </div>
 
-      <button @click="toggle()"
-              type="button"
-              x-show="!collapsed"
-              class="hidden lg:flex ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 items-center justify-center flex-shrink-0"
-              title="Collapse sidebar"
-              x-cloak>
-        <i data-lucide="panel-left-close" class="w-4 h-4"></i>
-      </button>
+      <div class="flex items-center gap-1">
+        <button @click="toggle()"
+                type="button"
+                x-show="!collapsed"
+                class="hidden lg:flex ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 items-center justify-center flex-shrink-0"
+                title="Collapse sidebar"
+                x-cloak>
+          <i data-lucide="panel-left-close" class="w-4 h-4"></i>
+        </button>
+        <button @click="mobileOpen = false"
+                type="button"
+                x-show="!collapsed"
+                class="flex lg:hidden ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 items-center justify-center flex-shrink-0 text-slate-500"
+                title="Close menu"
+                x-cloak>
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
     </div>
 
     <button x-show="collapsed"
@@ -162,8 +180,211 @@
       {% firstof active_href request.path '' as path %}
       {% firstof request.GET.type '' as req_get_type %}
       {% firstof request.GET.urlencode '' as req_get_urlencode %}
-      {% firstof request.user.email user.email 'User' as user_email %}
+      {% if shell_type == 'staff' %}
+      {# ════════════════════ STAFF APP NAVIGATION ════════════════════ #}
 
+      {# Quick Staff Status Pill #}
+      <div x-show="!collapsed" class="mx-2 mb-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60" x-cloak>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+            <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">Staff Workspace</span>
+          </div>
+          <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">PWA</span>
+        </div>
+      </div>
+
+      {# ── SECTION: MAIN ── #}
+      <div x-show="!collapsed && (matchSearch('Home') || matchSearch('Check In') || matchSearch('Attendance') || matchSearch('Field Visit'))" x-cloak>
+        <div class="ft-group-header"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i><span>MAIN</span></div>
+      </div>
+
+      {# Home / Dashboard #}
+      <a href="{% url 'staff:home' %}"
+         class="ft-nav-item {% if path == '/staff/home/' or path == '/staff/' %}active{% endif %}"
+         x-show="matchSearch('Home') || matchSearch('Dashboard')"
+         :title="collapsed ? 'Home' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="home" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Home</span>
+      </a>
+
+      {# Live Attendance / Check In #}
+      <a href="{% url 'staff:check_in' %}"
+         class="ft-nav-item {% if '/staff/check-in/' in path %}active{% endif %}"
+         x-show="matchSearch('Check In') || matchSearch('Attendance')"
+         :title="collapsed ? 'Check In / Out' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="clock" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Check In / Out</span>
+        <span class="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" x-show="!collapsed" x-cloak>Live</span>
+      </a>
+
+      {# Attendance History #}
+      <a href="{% url 'staff:attendance' %}"
+         class="ft-nav-item {% if '/staff/attendance' in path and '/staff/check-in' not in path %}active{% endif %}"
+         x-show="matchSearch('Attendance History') || matchSearch('My Attendance') || matchSearch('Attendance')"
+         :title="collapsed ? 'Attendance History' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="calendar-check" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Attendance History</span>
+      </a>
+
+      {# Field Visit #}
+      <a href="{% url 'staff:field_visit' %}"
+         class="ft-nav-item {% if '/staff/field-visit/' in path %}active{% endif %}"
+         x-show="matchSearch('Field Visit')"
+         :title="collapsed ? 'Field Visit' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="map-pin" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Field Visit</span>
+      </a>
+
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+
+      {# ── SECTION: WORK ── #}
+      <div x-show="!collapsed && (matchSearch('Tasks') || matchSearch('Projects') || matchSearch('My Tasks'))" x-cloak>
+        <div class="ft-group-header"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i><span>WORK</span></div>
+      </div>
+
+      {# My Tasks #}
+      <a href="{% url 'staff:my_tasks' %}"
+         class="ft-nav-item {% if '/staff/my-tasks/' in path %}active{% endif %}"
+         x-show="matchSearch('My Tasks') || matchSearch('Tasks')"
+         :title="collapsed ? 'My Tasks' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="check-square" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Tasks</span>
+        {% if pending_tasks_count %}
+          <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_tasks_count }}</span>
+        {% endif %}
+      </a>
+
+      {# My Projects #}
+      <a href="{% url 'staff:my_projects' %}"
+         class="ft-nav-item {% if '/staff/projects/' in path %}active{% endif %}"
+         x-show="matchSearch('My Projects') || matchSearch('Projects')"
+         :title="collapsed ? 'My Projects' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="briefcase" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Projects</span>
+      </a>
+
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+
+      {# ── SECTION: LEAVE & FINANCE ── #}
+      <div x-show="!collapsed && (matchSearch('Leave') || matchSearch('Expense') || matchSearch('Payslip') || matchSearch('Salary'))" x-cloak>
+        <div class="ft-group-header"><i data-lucide="wallet" class="w-3.5 h-3.5"></i><span>LEAVE & FINANCE</span></div>
+      </div>
+
+      {# My Leaves #}
+      <a href="{% url 'leave:staff_dashboard' %}"
+         class="ft-nav-item {% if '/leave/' in path and '/leave/request/' not in path %}active{% endif %}"
+         x-show="matchSearch('Leave') || matchSearch('My Leaves')"
+         :title="collapsed ? 'My Leaves' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="calendar" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Leaves</span>
+        {% if pending_leave_count %}
+          <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_leave_count }}</span>
+        {% endif %}
+      </a>
+
+      {# Apply Leave #}
+      <a href="{% url 'leave:staff_request_create' %}"
+         class="ft-nav-item {% if '/leave/request/' in path %}active{% endif %}"
+         x-show="matchSearch('Apply Leave') || matchSearch('Leave')"
+         :title="collapsed ? 'Apply Leave' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="calendar-plus" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Apply Leave</span>
+      </a>
+
+      {# Expense Claims #}
+      <a href="{% url 'expense:staff_expense_list' %}"
+         class="ft-nav-item {% if '/expense/' in path %}active{% endif %}"
+         x-show="matchSearch('Expenses') || matchSearch('Claims')"
+         :title="collapsed ? 'Expenses' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="receipt" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Expenses</span>
+        {% if pending_expense_count %}
+          <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_expense_count }}</span>
+        {% endif %}
+      </a>
+
+      {# My Payslips #}
+      <a href="{% url 'payroll:my_payslips' %}"
+         class="ft-nav-item {% if '/payroll/' in path %}active{% endif %}"
+         x-show="matchSearch('Payslips') || matchSearch('Salary')"
+         :title="collapsed ? 'My Payslips' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="wallet" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Payslips</span>
+      </a>
+
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+
+      {# ── SECTION: TOOLS & ACCOUNT ── #}
+      <div x-show="!collapsed && (matchSearch('AI') || matchSearch('Profile') || matchSearch('Security'))" x-cloak>
+        <div class="ft-group-header"><i data-lucide="user" class="w-3.5 h-3.5"></i><span>ACCOUNT & TOOLS</span></div>
+      </div>
+
+      {# AI Assistant #}
+      <button type="button"
+              @click="$dispatch('open-ai-chatbot')"
+              class="ft-nav-item w-full flex items-center justify-between text-left"
+              x-show="matchSearch('AI') || matchSearch('Assistant')"
+              :title="collapsed ? 'AI Assistant' : ''"
+              :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <div class="flex items-center gap-2 min-w-0">
+          <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 shrink-0 object-contain">
+          <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Assistant</span>
+        </div>
+        <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20" x-show="!collapsed" x-cloak>AI</span>
+      </button>
+
+      {# My Profile #}
+      <a href="{% url 'staff:profile' %}"
+         class="ft-nav-item {% if '/staff/profile/' in path or '/account/profile/' in path %}active{% endif %}"
+         x-show="matchSearch('Profile') || matchSearch('Account')"
+         :title="collapsed ? 'My Profile' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="user-circle" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Profile</span>
+      </a>
+
+      {# Security Settings #}
+      <a href="{% url 'accounts:security_settings' %}"
+         class="ft-nav-item {% if '/account/security/' in path %}active{% endif %}"
+         x-show="matchSearch('Security') || matchSearch('Password')"
+         :title="collapsed ? 'Security Settings' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="shield-check" class="ft-icon"></i>
+        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Security Settings</span>
+      </a>
+
+      {# Optional Switcher for Admins/Managers browsing staff view #}
+      {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'manager' or request.user.role == 'hr' or request.user.role == 'system_owner' %}
+      <div class="my-2 border-t" style="border-color:var(--border)"></div>
+      <div x-show="!collapsed && (matchSearch('Admin') || matchSearch('Switch'))" x-cloak>
+        <div class="ft-group-header flex items-center gap-1.5 text-indigo-500">
+          <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+          <span>ADMIN ACCESS</span>
+        </div>
+      </div>
+      <a href="{% url 'admin_panel:dashboard' %}"
+         class="ft-nav-item text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+         x-show="matchSearch('Admin') || matchSearch('Switch')"
+         :title="collapsed ? 'Admin Panel' : ''"
+         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+        <i data-lucide="layout-dashboard" class="ft-icon"></i>
+        <span class="ft-nav-label font-semibold" x-show="!collapsed" x-cloak>Admin Panel</span>
+        <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300" x-show="!collapsed" x-cloak>SWITCH</span>
+      </a>
+      {% endif %}
+
+      {% else %}
       {# ════════════════════ SECTION: DASHBOARD ════════════════════ #}
       <div x-show="!collapsed && (matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity'))" x-cloak>
         <div class="ft-group-header"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i><span>DASHBOARD</span></div>
@@ -644,7 +865,7 @@
         </div>
       </div>
 
-
+      {% endif %}
 
     </nav>
 
@@ -656,9 +877,11 @@
         {{ user_email|make_list|first|upper }}
       </div>
       <div class="flex-1 min-w-0" x-show="!collapsed" x-cloak>
-        <p class="text-[12px] font-medium truncate" style="color:var(--text)">Admin</p>
-        <p class="text-[11px] truncate" style="color:var(--text-muted)">
-          {{ user_email }}
+        <p class="text-[12px] font-medium truncate" style="color:var(--text)">
+          {{ request.user.display_name|default:request.user.get_full_name|default:"Employee" }}
+        </p>
+        <p class="text-[11px] truncate capitalize" style="color:var(--text-muted)">
+          {% if shell_type == 'staff' %}Staff Member{% else %}{{ request.user.role|default:"Admin"|title }}{% endif %}
         </p>
       </div>
       <a href="{% url 'accounts:logout' %}"

@@ -20,13 +20,12 @@
             <p class="text-xs text-gray-500">Choose a specific payroll run from the list to view or export the detailed financial reports.</p>
             
             <div class="max-w-md">
-                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Payroll Period / Run</label>
-                <select x-model="selectedRun" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-primary-500">
+                <c-select name="selected_run" label="Payroll Period / Run" x-model="selectedRun">
                     <option value="">-- Select Run --</option>
                     {% for run in runs %}
                     <option value="{{ run.pk }}">{{ run.name }} ({{ run.period_start|date:"M Y" }} - {{ run.status|title }})</option>
                     {% endfor %}
-                </select>
+                </c-select>
             </div>
         </c-card>
 
@@ -41,9 +40,7 @@
                     <p class="text-xs text-gray-500">Comprehensive overview of all employee calculations, earnings, deductions, overtime, and final net payable.</p>
                 </div>
                 <div class="mt-4">
-                    <button type="button" @click="openReport('{% url 'payroll:payroll_register' 0 %}')" class="ft-btn ft-btn-primary ft-btn-sm w-full">
-                        Open Register
-                    </button>
+                    <c-button type="button" variant="primary" size="sm" extra_class="w-full" label="Open Register" @click="openReport('{% url 'payroll:payroll_register' 0 %}')"></c-button>
                 </div>
             </c-card>
 
@@ -57,9 +54,7 @@
                     <p class="text-xs text-gray-500">List of bank payables for employees set to Bank Transfer or Split mode, ready for corporate portal upload.</p>
                 </div>
                 <div class="mt-4">
-                    <button type="button" @click="openReport('{% url 'payroll:bank_report' 0 %}')" class="ft-btn ft-btn-primary ft-btn-sm w-full">
-                        Open Bank Report
-                    </button>
+                    <c-button type="button" variant="primary" size="sm" extra_class="w-full" label="Open Bank Report" @click="openReport('{% url 'payroll:bank_report' 0 %}')"></c-button>
                 </div>
             </c-card>
 
@@ -73,9 +68,7 @@
                     <p class="text-xs text-gray-500">Summary list for employees receiving payments via cash or cheque disbursements.</p>
                 </div>
                 <div class="mt-4">
-                    <button type="button" @click="openReport('{% url 'payroll:cash_report' 0 %}')" class="ft-btn ft-btn-primary ft-btn-sm w-full">
-                        Open Cash Report
-                    </button>
+                    <c-button type="button" variant="primary" size="sm" extra_class="w-full" label="Open Cash Report" @click="openReport('{% url 'payroll:cash_report' 0 %}')"></c-button>
                 </div>
             </c-card>
 
@@ -89,9 +82,7 @@
                     <p class="text-xs text-gray-500">Access the details dashboard including calculation audits, KPI summaries, and transition history.</p>
                 </div>
                 <div class="mt-4">
-                    <button type="button" @click="openReport('/payroll/runs/0/')" class="ft-btn ft-btn-primary ft-btn-sm w-full">
-                        Open Run Details
-                    </button>
+                    <c-button type="button" variant="primary" size="sm" extra_class="w-full" label="Open Run Details" @click="openReport('/payroll/runs/0/')"></c-button>
                 </div>
             </c-card>
         </div>
