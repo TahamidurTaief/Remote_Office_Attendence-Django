@@ -3,20 +3,18 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Payroll Management">
-            <c-slot name="actions">
-                <button type="button" @click="$dispatch('open-modal', {id: 'create-payroll-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>Create Payroll Run</span>
-                </button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <c-page-header title="Payroll Management">
+            <c-slot name="actions">
+                <button type="button" @click="$dispatch('open-modal', {id: 'create-payroll-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Create Payroll Run</span>
+                </button>
+            </c-slot>
+        </c-page-header>
         <!-- Filter Card -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'payroll:payroll_run_list' %}">

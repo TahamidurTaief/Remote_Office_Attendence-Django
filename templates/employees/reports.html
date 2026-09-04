@@ -3,13 +3,9 @@
         <c-sidebar active_href="{% url 'employees:employee_list' %}" ></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="HR Reports & Analytics">
-            <c-slot name="actions"></c-slot>
-        </c-topbar>
-    </c-slot>
 
     <div class="p-4 lg:p-6 w-full space-y-6" x-data="{ activeTab: 'lifecycle' }">
+        <c-page-header title="HR Reports & Analytics"></c-page-header>
         <!-- Navigation Tabs -->
         <div class="border-b border-gray-200 dark:border-gray-700 pb-2">
             <nav class="flex items-center gap-1 overflow-x-auto scrollbar-hide" aria-label="Tabs">

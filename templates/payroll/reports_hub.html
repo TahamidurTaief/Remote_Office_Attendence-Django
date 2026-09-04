@@ -3,9 +3,6 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Payroll Reports Hub"></c-topbar>
-    </c-slot>
 
     <div class="p-4 max-w-4xl mx-auto space-y-6" x-data="{
         selectedRun: '',
@@ -17,6 +14,7 @@
             window.location.href = urlTemplate.replace('0', this.selectedRun);
         }
     }">
+        <c-page-header title="Payroll Reports Hub"></c-page-header>
         <c-card padding="md" class="space-y-4">
             <h2 class="text-base font-bold text-gray-900">Select Payroll Period</h2>
             <p class="text-xs text-gray-500">Choose a specific payroll run from the list to view or export the detailed financial reports.</p>

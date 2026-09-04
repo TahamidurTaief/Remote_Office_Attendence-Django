@@ -3,54 +3,52 @@
         <c-sidebar active_href="{% url 'employees:employee_list' %}" ></c-sidebar>
     </c-slot>
  
-    <c-slot name="topbar">
-        <c-topbar title="{{ employee.get_full_name }}">
-            <c-slot name="actions">
-                <div class="flex items-center space-x-2">
-                    {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
-                    <c-button hx-get="{% url 'employees:employee_suspend_toggle_modal' employee.pk %}"
-                              hx-target="#modal-container"
-                              variant="{% if employee.is_suspended %}secondary{% else %}danger{% endif %}"
-                              size="sm"
-                              label="{% if employee.is_suspended %}Un-suspend Profile{% else %}Suspend Profile{% endif %}"
-                              extra_class="rounded-xl {% if employee.is_suspended %}!bg-emerald-50 dark:!bg-emerald-950/40 !text-emerald-700 dark:!text-emerald-300 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/60{% endif %}"></c-button>
-                    {% endif %}
-                    <c-button href="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=1 %}"
-                              variant="secondary"
-                              size="sm"
-                              icon="edit"
-                              label="Edit Profile"
-                              extra_class="rounded-xl"></c-button>
-                    <c-button hx-get="{% url 'employees:master_delete' employee.pk %}"
-                              hx-target="#modal-container"
-                              hx-swap="innerHTML"
-                              variant="danger"
-                              size="sm"
-                              icon="trash-2"
-                              label="Delete"
-                              extra_class="rounded-xl"></c-button>
-                    {% include "employees/partials/lifecycle_action_buttons.html" %}
-                    {% if employee.status != 'archived' %}
-                    <c-button href="{% url 'employees:lifecycle_requests' %}"
-                              variant="ghost"
-                              size="sm"
-                              label="Pending requests"
-                              extra_class="rounded-xl text-xs"></c-button>
-                    {% endif %}
-                    <c-button href="{% url 'audit:activity_list' %}?module=employees&object_id={{ employee.pk }}"
-                              variant="ghost"
-                              size="sm"
-                              icon="history"
-                              label="History"
-                              extra_class="rounded-xl text-xs"></c-button>
-                </div>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
  
     <c-command-palette></c-command-palette>
  
     <div class="p-4 lg:p-6 w-full space-y-6">
+        <c-page-header title="{{ employee.get_full_name }}">
+            <c-slot name="actions">
+                <div class="flex items-center space-x-2">
+                {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
+                <c-button hx-get="{% url 'employees:employee_suspend_toggle_modal' employee.pk %}"
+                hx-target="#modal-container"
+                variant="{% if employee.is_suspended %}secondary{% else %}danger{% endif %}"
+                size="sm"
+                label="{% if employee.is_suspended %}Un-suspend Profile{% else %}Suspend Profile{% endif %}"
+                extra_class="rounded-xl {% if employee.is_suspended %}!bg-emerald-50 dark:!bg-emerald-950/40 !text-emerald-700 dark:!text-emerald-300 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/60{% endif %}"></c-button>
+                {% endif %}
+                <c-button href="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=1 %}"
+                variant="secondary"
+                size="sm"
+                icon="edit"
+                label="Edit Profile"
+                extra_class="rounded-xl"></c-button>
+                <c-button hx-get="{% url 'employees:master_delete' employee.pk %}"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                variant="danger"
+                size="sm"
+                icon="trash-2"
+                label="Delete"
+                extra_class="rounded-xl"></c-button>
+                {% include "employees/partials/lifecycle_action_buttons.html" %}
+                {% if employee.status != 'archived' %}
+                <c-button href="{% url 'employees:lifecycle_requests' %}"
+                variant="ghost"
+                size="sm"
+                label="Pending requests"
+                extra_class="rounded-xl text-xs"></c-button>
+                {% endif %}
+                <c-button href="{% url 'audit:activity_list' %}?module=employees&object_id={{ employee.pk }}"
+                variant="ghost"
+                size="sm"
+                icon="history"
+                label="History"
+                extra_class="rounded-xl text-xs"></c-button>
+                </div>
+            </c-slot>
+        </c-page-header>
         <!-- Suspended Status Alert -->
         {% if employee.is_suspended %}
         <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-700 dark:text-red-300 mb-6">

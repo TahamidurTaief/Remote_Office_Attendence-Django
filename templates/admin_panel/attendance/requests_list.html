@@ -1,12 +1,9 @@
 <c-app-shell page_title="Attendance Requests | FieldTrack Admin" active_href="{{ request.path }}">
-    <c-slot name="topbar">
-        <c-topbar title="Attendance Requests">
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-8">
+        <c-page-header title="Attendance Requests"></c-page-header>
         {# Forgot Checkout Requests Section #}
         <c-card padding="none" title="Forgot Check-out Requests" subtitle="Review and approve employee check-out requests for unclosed sessions. Requires reporting manager and then HR approval.">
             <div class="overflow-x-auto">

@@ -3,13 +3,11 @@
     <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
   </c-slot>
 
-  <c-slot name="topbar">
-    <c-topbar title="Sensitive Action Audit Log" ></c-topbar>
-  </c-slot>
 
   <c-command-palette></c-command-palette>
 
   <div class="p-4 space-y-4 max-w-7xl mx-auto">
+      <c-page-header title="Sensitive Action Audit Log"></c-page-header>
     <c-card title="System Security & Sensitive Action Audit Log" subtitle="Comprehensive immutable audit record of sensitive administrative and security events.">
 
       {# ── Filter & Search Bar ───────────────────────────────────────────── #}

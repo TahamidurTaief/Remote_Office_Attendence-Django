@@ -3,22 +3,20 @@
         <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Hardware & Asset Registry">
-            <c-slot name="actions">
-                <c-button hx-get="{% url 'employees:asset_create' %}"
-                          hx-target="#modal-container"
-                          hx-swap="innerHTML"
-                          variant="primary"
-                          icon="plus"
-                          label="Add New Asset"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <c-page-header title="Hardware & Asset Registry">
+            <c-slot name="actions">
+                <c-button hx-get="{% url 'employees:asset_create' %}"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                variant="primary"
+                icon="plus"
+                label="Add New Asset"></c-button>
+            </c-slot>
+        </c-page-header>
         <c-table id="asset-registry-table">
             <c-slot name="header">
                 <th class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Asset Tag</th>

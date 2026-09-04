@@ -1,23 +1,21 @@
 <c-app-shell page_title="Lifecycle Requests | FieldTrack" active_href="{% url 'employees:lifecycle_requests' %}">
-  <c-slot name="topbar">
-    <c-topbar title="Lifecycle Transition Requests">
-      <c-slot name="actions">
-        <div class="flex items-center gap-2">
-          {% if pending_count > 0 %}
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500">
-            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-            {{ pending_count }} pending
-          </span>
-          {% endif %}
-          <a href="{% url 'employees:master_list' %}" class="ft-btn ft-btn-ghost ft-btn-sm text-xs">
-            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Employees
-          </a>
-        </div>
-      </c-slot>
-    </c-topbar>
-  </c-slot>
 
   <div class="p-4 max-w-7xl mx-auto space-y-4">
+      <c-page-header title="Lifecycle Transition Requests">
+          <c-slot name="actions">
+              <div class="flex items-center gap-2">
+              {% if pending_count > 0 %}
+              <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500">
+              <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+              {{ pending_count }} pending
+              </span>
+              {% endif %}
+              <a href="{% url 'employees:master_list' %}" class="ft-btn ft-btn-ghost ft-btn-sm text-xs">
+              <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Employees
+              </a>
+              </div>
+          </c-slot>
+      </c-page-header>
 
     {# Simple tab links #}
     <div class="flex items-center gap-2 border-b pb-3" style="border-color:var(--border)">

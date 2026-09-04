@@ -3,17 +3,15 @@
         <c-sidebar active_href="{% url 'employees:employee_list' %}" ></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Edit Employee Master: {{ form.instance.get_full_name }}">
-            <c-slot name="actions">
-                <c-button href="{% url 'employees:employee_detail' form.instance.pk %}" variant="secondary" icon="arrow-left" label="Back to Profile" ></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 max-w-5xl mx-auto space-y-6">
+        <c-page-header title="Edit Employee Master: {{ form.instance.get_full_name }}">
+            <c-slot name="actions">
+                <c-button href="{% url 'employees:employee_detail' form.instance.pk %}" variant="secondary" icon="arrow-left" label="Back to Profile" ></c-button>
+            </c-slot>
+        </c-page-header>
         <c-card>
             <form method="post" action="{% url 'employees:master_edit' form.instance.pk %}" class="space-y-6">
                 {% csrf_token %}

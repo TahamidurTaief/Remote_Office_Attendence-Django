@@ -3,13 +3,6 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Task Management">
-            <c-slot name="actions">
-                <c-button href="{% url 'projects:global_task_add' %}" variant="accent" icon="plus" label="Create Individual Task"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
@@ -50,7 +43,12 @@
             this.newReplyMessage = '';
 
             fetch(`/projects/tasks/${taskId}/detail-api/`)
-            .then(res => res.json())
+            .then(res =>
+        <c-page-header title="Task Management">
+            <c-slot name="actions">
+                <c-button href="{% url 'projects:global_task_add' %}" variant="accent" icon="plus" label="Create Individual Task"></c-button>
+            </c-slot>
+        </c-page-header> res.json())
             .then(data => {
                 if (data.error) {
                     alert(data.error);

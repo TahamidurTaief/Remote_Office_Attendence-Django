@@ -3,16 +3,6 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Salary Structures">
-            <c-slot name="actions">
-                <button type="button" @click="$dispatch('open-modal', {id: 'create-structure-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>Create Structure</span>
-                </button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
         editStructure(struct) {
@@ -25,6 +15,14 @@
             });
         }
     }">
+        <c-page-header title="Salary Structures">
+            <c-slot name="actions">
+                <button type="button" @click="$dispatch('open-modal', {id: 'create-structure-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Create Structure</span>
+                </button>
+            </c-slot>
+        </c-page-header>
         <c-card padding="none">
             <c-table>
                 <c-slot name="header">

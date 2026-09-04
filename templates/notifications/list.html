@@ -3,22 +3,18 @@
         <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Notifications">
-            {% if notifs %}
-            <c-slot name="actions">
-                <form method="post" action="{% url 'notifications:mark_all_read' %}" class="inline">
-                    {% csrf_token %}
-                    <c-button type="submit" variant="secondary" icon="check-circle" label="Mark all read" ></c-button>
-                </form>
-            </c-slot>
-            {% endif %}
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-4xl mx-auto space-y-4">
+        <c-page-header title="Notifications">
+            <c-slot name="actions">
+                <form method="post" action="{% url 'notifications:mark_all_read' %}" class="inline">
+                {% csrf_token %}
+                <c-button type="submit" variant="secondary" icon="check-circle" label="Mark all read" ></c-button>
+                </form>
+            </c-slot>
+        </c-page-header>
         <!-- Filter Tabs -->
         <c-card padding="sm">
             <div class="flex gap-1.5 flex-wrap">

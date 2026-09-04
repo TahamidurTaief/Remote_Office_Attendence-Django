@@ -3,8 +3,11 @@
         <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Employee Profile">
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <c-page-header title="Employee Profile">
             <c-slot name="actions">
                 <c-button href="{% url 'admin_panel:reports_employee' employee.pk %}" variant="primary" icon="bar-chart-2" label="Report" ></c-button>
                 {% if employee.user %}
@@ -13,12 +16,7 @@
                 <c-button href="{% url 'employees:employee_edit' employee.pk %}" variant="secondary" icon="pencil" label="Edit" ></c-button>
                 <c-button href="{% url 'employees:employee_list' %}" variant="ghost" icon="arrow-left" label="Back" ></c-button>
             </c-slot>
-        </c-topbar>
-    </c-slot>
-
-    <c-command-palette></c-command-palette>
-
-    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        </c-page-header>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <!-- Left Column: Profile & Documents -->
             <div class="space-y-4 lg:col-span-1">

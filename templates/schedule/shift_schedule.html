@@ -3,22 +3,20 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Shift Schedule">
-            <c-slot name="actions">
-                {% if is_admin and manage_schedule_url %}
-                <c-button href="{{ manage_schedule_url }}"
-                          variant="accent"
-                          icon="settings"
-                          label="Manage Schedule"></c-button>
-                {% endif %}
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <c-page-container>
+        <c-page-header title="Shift Schedule">
+            <c-slot name="actions">
+                {% if is_admin and manage_schedule_url %}
+                <c-button href="{{ manage_schedule_url }}"
+                variant="accent"
+                icon="settings"
+                label="Manage Schedule"></c-button>
+                {% endif %}
+            </c-slot>
+        </c-page-header>
         <div id="shift-schedule-view-container">
             {% include 'schedule/partials/shift_schedule_content.html' %}
         </div>

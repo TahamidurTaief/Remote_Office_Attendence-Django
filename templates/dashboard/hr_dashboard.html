@@ -1,21 +1,21 @@
 <c-app-shell page_title="HR Dashboard | FieldTrack" active_href="{% url 'dashboard' %}">
-  <c-slot name="topbar">
-    <c-topbar title="HR Analytics & Control">
-      <c-slot name="actions">
-        <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-600">
-          Role: HR
-        </span>
-      </c-slot>
-    </c-topbar>
-  </c-slot>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <div id="dashboard-content" 
-       class="p-4 max-w-7xl mx-auto space-y-4"
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <c-page-header title="HR Analytics & Control">
+      <c-slot name="actions">
+        <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-600">
+        Role: HR
+        </span>
+      </c-slot>
+    </c-page-header>
+
+    <div id="dashboard-content"
        hx-get="{% url 'dashboard' %}?partial=true{% if request.GET.role_view %}&role_view={{ request.GET.role_view }}{% endif %}"
        hx-trigger="every 30s"
        hx-swap="innerHTML">
     {% include "dashboard/partials/hr_dashboard_content.html" %}
+  </div>
   </div>
 </c-app-shell>

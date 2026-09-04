@@ -3,13 +3,11 @@
         <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="{% if object %}Edit Document: {{ object.document_type }}{% else %}Add Document for {{ employee.full_name }}{% endif %}" ></c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-3xl mx-auto space-y-4">
+        <c-page-header title="{% if object %}Edit Document: {{ object.document_type }}{% else %}Add Document for {{ employee.full_name }}{% endif %}"></c-page-header>
         <c-card>
             <form method="POST" enctype="multipart/form-data" class="space-y-4">
                 {% csrf_token %}

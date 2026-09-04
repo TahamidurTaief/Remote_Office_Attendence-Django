@@ -1,0 +1,38 @@
+{% comment %} c-page-header component
+   Props:
+   - title: page heading string (h1)
+   - subtitle: supporting description string (optional)
+   - icon: Lucide icon name (optional)
+   - extra_class: additional CSS classes
+   Slots:
+   - actions: right-aligned page action buttons/controls
+   - default: extra content rendered below/within header
+{% endcomment %}
+<c-vars title="" subtitle="" icon="" extra_class="" />
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 mb-4 border-b {{ extra_class }}"
+     style="border-color:var(--border);" {{ attrs }}>
+  <div class="flex items-center gap-2.5 min-w-0">
+    {% if icon %}
+      <div class="w-9 h-9 rounded-btn flex items-center justify-center shrink-0"
+           style="background:var(--surface-2); border:1px solid var(--border); color:var(--primary)">
+        <i data-lucide="{{ icon }}" class="w-4 h-4"></i>
+      </div>
+    {% endif %}
+    <div class="min-w-0">
+      <h1 class="text-[18px] sm:text-[20px] font-bold tracking-tight truncate" style="color:var(--text)">
+        {{ title }}
+      </h1>
+      {% if subtitle %}
+        <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">
+          {{ subtitle }}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+  {% if actions %}
+    <div class="flex items-center gap-2 flex-wrap shrink-0">
+      {{ actions }}
+    </div>
+  {% endif %}
+  {{ slot }}
+</div>

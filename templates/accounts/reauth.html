@@ -1,11 +1,9 @@
 <c-app-shell page_title="Re-Authentication Required | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
-  <c-slot name="topbar">
-    <c-topbar title="Security Re-Authentication" ></c-topbar>
-  </c-slot>
 
   <c-command-palette></c-command-palette>
 
   <div class="p-4 space-y-4 max-w-md mx-auto">
+      <c-page-header title="Security Re-Authentication"></c-page-header>
     <c-card title="Re-Authentication Required" subtitle="You are attempting to access a sensitive operation. Please re-authenticate your session.">
       {% include "accounts/partials/reauth_modal.html" %}
     </c-card>

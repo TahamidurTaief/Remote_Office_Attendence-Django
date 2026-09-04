@@ -3,23 +3,17 @@
     <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
   </c-slot>
 
-  <c-slot name="topbar">
-    <c-topbar title="Per-Role Security Policies" ></c-topbar>
-  </c-slot>
 
   <c-command-palette></c-command-palette>
 
   <div class="p-4 space-y-6 max-w-5xl mx-auto">
-    <div class="flex items-center justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-bold" style="color:var(--text)">Per-Role Security Policies</h1>
-        <p class="text-xs text-slate-400 mt-1">Configure MFA enforcement, unlock methods, re-authentication intervals, and trusted device validity per role.</p>
-      </div>
-
-      <a href="{% url 'accounts:admin_login_activity' %}" class="ft-btn ft-btn-secondary ft-btn-sm text-xs">
+    <c-page-header title="Per-Role Security Policies" subtitle="Configure MFA enforcement, unlock methods, re-authentication intervals, and trusted device validity per role.">
+      <c-slot name="actions">
+        <a href="{% url 'accounts:admin_login_activity' %}" class="ft-btn ft-btn-secondary ft-btn-sm text-xs">
         <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Login Activity &amp; Audit Logs
-      </a>
-    </div>
+        </a>
+      </c-slot>
+    </c-page-header>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       {% for policy in policies %}

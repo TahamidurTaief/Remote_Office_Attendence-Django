@@ -1,17 +1,15 @@
 <c-app-shell page_title="Leave Requests | FieldTrack Admin" active_href="{{ request.path }}">
-    <c-slot name="topbar">
-        <c-topbar title="Leave Requests">
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-3 sm:p-4 max-w-7xl mx-auto space-y-4">
+        <c-page-header title="Leave Requests">
             <c-slot name="actions">
                 <c-button href="{% url 'leave:admin_balances' %}" variant="secondary" icon="users" label="Balances" ></c-button>
                 <c-button href="{% url 'leave:admin_leave_types' %}" variant="secondary" icon="settings" label="Leave Types" ></c-button>
                 <c-button hx-get="{% url 'admin_panel:leave_request_create' %}" hx-target="#modal-container" variant="accent" size="sm" icon="plus" label="Add Leave"></c-button>
             </c-slot>
-        </c-topbar>
-    </c-slot>
-
-    <c-command-palette></c-command-palette>
-
-    <div class="p-3 sm:p-4 max-w-7xl mx-auto space-y-4">
+        </c-page-header>
         <!-- Stats grid -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <c-kpi-widget label="Pending Requests" value="{{ pending_count }}" icon="clock" color="warning" ></c-kpi-widget>

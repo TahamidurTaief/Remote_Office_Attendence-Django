@@ -3,17 +3,15 @@
         <c-sidebar active_href="{% url 'audit:activity_list' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Audit Event Detail" subtitle="Immutable event record — read-only">
-            <c-slot name="actions">
-                <c-button href="{% url 'audit:activity_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Logs"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 w-full space-y-5 max-w-6xl mx-auto">
+        <c-page-header title="Audit Event Detail" subtitle="Immutable event record — read-only">
+            <c-slot name="actions">
+                <c-button href="{% url 'audit:activity_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Logs"></c-button>
+            </c-slot>
+        </c-page-header>
 
         {# ── Breadcrumb ─────────────────────────────────────────────────── #}
         <c-breadcrumb

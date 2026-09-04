@@ -1,15 +1,15 @@
 <c-app-shell page_title="Employee Dashboard | FieldTrack" active_href="{% url 'dashboard' %}">
-  <c-slot name="topbar">
-    <c-topbar title="Employee Portal">
+
+    <div class="p-2 sm:p-4 max-w-7xl mx-auto space-y-4">
+    <c-page-header title="Employee Portal">
       <c-slot name="actions">
         <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-          Role: Employee
+        Role: Employee
         </span>
       </c-slot>
-    </c-topbar>
-  </c-slot>
+    </c-page-header>
 
-  <div id="dashboard-content" class="p-2 sm:p-4 max-w-7xl mx-auto">
+    <div id="dashboard-content">
     <c-staff-dashboard
       :employee="employee"
       :active_session="active_session"
@@ -20,5 +20,6 @@
       :field_visits="field_visits"
       :my_expenses="my_expenses"
       :unread_notifications="unread_notifications"></c-staff-dashboard>
+  </div>
   </div>
 </c-app-shell>

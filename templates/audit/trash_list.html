@@ -3,23 +3,19 @@
         <c-sidebar active_href="{% url 'audit:trash_list' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Recycle Bin / Trash" subtitle="Soft-deleted database records and restoration repository">
-            {% if request.user.is_superuser %}
-            <c-slot name="actions">
-                <form method="post" action="{% url 'audit:trash_bulk' %}" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to completely empty the trash? This action cannot be undone.', () => $el.submit())">
-                    {% csrf_token %}
-                    <input type="hidden" name="bulk_action" value="empty_trash">
-                    <c-button type="submit" variant="danger" icon="trash" label="Empty Trash" size="sm" extra_class="!bg-red-600 hover:!bg-red-700 !text-white"></c-button>
-                </form>
-            </c-slot>
-            {% endif %}
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 w-full space-y-4">
+        <c-page-header title="Recycle Bin / Trash" subtitle="Soft-deleted database records and restoration repository">
+            <c-slot name="actions">
+                <form method="post" action="{% url 'audit:trash_bulk' %}" class="inline" x-data @submit.prevent="window.confirmAction('Are you sure you want to completely empty the trash? This action cannot be undone.', () => $el.submit())">
+                {% csrf_token %}
+                <input type="hidden" name="bulk_action" value="empty_trash">
+                <c-button type="submit" variant="danger" icon="trash" label="Empty Trash" size="sm" extra_class="!bg-red-600 hover:!bg-red-700 !text-white"></c-button>
+                </form>
+            </c-slot>
+        </c-page-header>
         <!-- Filter Bar -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'audit:trash_list' %}" hx-get="{% url 'audit:trash_list' %}" hx-target="#trash-table-container" hx-trigger="keyup changed delay:300ms from:input, change from:select">

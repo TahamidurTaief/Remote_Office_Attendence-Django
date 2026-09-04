@@ -3,17 +3,15 @@
         <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Branches">
-            <c-slot name="actions">
-                <c-button href="{% url 'branches:branch_add' %}" variant="accent" icon="plus" label="Add Branch" ></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <c-page-header title="Branches">
+            <c-slot name="actions">
+                <c-button href="{% url 'branches:branch_add' %}" variant="accent" icon="plus" label="Add Branch" ></c-button>
+            </c-slot>
+        </c-page-header>
         <!-- Filters -->
         <c-card padding="sm">
             <c-filter-bar method="get" action="{% url 'branches:branch_list' %}">

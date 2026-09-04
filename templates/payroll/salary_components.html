@@ -3,16 +3,6 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Salary Components">
-            <c-slot name="actions">
-                <button type="button" @click="$dispatch('open-modal', {id: 'create-component-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>Add Component</span>
-                </button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
         editComponent(comp) {
@@ -29,6 +19,14 @@
             });
         }
     }">
+        <c-page-header title="Salary Components">
+            <c-slot name="actions">
+                <button type="button" @click="$dispatch('open-modal', {id: 'create-component-modal'})" class="ft-btn ft-btn-primary flex items-center gap-1.5">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Add Component</span>
+                </button>
+            </c-slot>
+        </c-page-header>
         <c-card padding="sm">
             <form method="get" action="" class="flex gap-2">
                 <c-input name="search" placeholder="Search by name or code..." value="{{ request.GET.search }}" class="flex-1"></c-input>

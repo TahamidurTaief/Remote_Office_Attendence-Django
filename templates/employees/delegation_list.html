@@ -3,22 +3,20 @@
         <c-sidebar active_href="{% url 'employees:employee_list' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Manager Delegations">
-            <c-slot name="actions">
-                <c-button hx-get="{% url 'employees:delegation_create' %}"
-                          hx-target="#modal-container"
-                          hx-swap="innerHTML"
-                          variant="primary"
-                          icon="plus"
-                          label="Add Delegation"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 w-full space-y-6">
+        <c-page-header title="Manager Delegations">
+            <c-slot name="actions">
+                <c-button hx-get="{% url 'employees:delegation_create' %}"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                variant="primary"
+                icon="plus"
+                label="Add Delegation"></c-button>
+            </c-slot>
+        </c-page-header>
         <!-- Delegations Table -->
         <c-table id="delegations-table">
             <c-slot name="header">

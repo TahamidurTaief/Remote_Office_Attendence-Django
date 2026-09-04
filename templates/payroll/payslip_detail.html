@@ -3,31 +3,29 @@
         <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Employee Payslip">
-            <c-slot name="actions">
-                <div class="flex items-center gap-2">
-                    <a href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
-                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                        <span>Download PDF</span>
-                    </a>
-                    <button type="button" onclick="window.print()" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1.5">
-                        <i data-lucide="printer" class="w-3.5 h-3.5"></i>
-                        <span>Print</span>
-                    </button>
-                    {% if is_manager %}
-                    <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm">
-                        <span>Back to Run</span>
-                    </a>
-                    {% endif %}
-                </div>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-4xl mx-auto space-y-6">
+        <c-page-header title="Employee Payslip">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2">
+                <a href="{% url 'payroll:payslip_pdf' calc.pk %}" target="_blank" class="ft-btn ft-btn-primary ft-btn-sm flex items-center gap-1.5">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span>Download PDF</span>
+                </a>
+                <button type="button" onclick="window.print()" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1.5">
+                <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                <span>Print</span>
+                </button>
+                {% if is_manager %}
+                <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-ghost ft-btn-sm">
+                <span>Back to Run</span>
+                </a>
+                {% endif %}
+                </div>
+            </c-slot>
+        </c-page-header>
         <c-card padding="lg">
             <!-- Company & Payslip Header -->
             <div class="border-b pb-4 text-center space-y-1" style="border-color:var(--border)">

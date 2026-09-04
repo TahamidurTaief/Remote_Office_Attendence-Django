@@ -3,13 +3,11 @@
         <c-sidebar active_href="{% url 'employees:department_list' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Departments"></c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 w-full space-y-4" x-data="{ showImport: false, exportDropdown: false, format: 'csv' }">
+        <c-page-header title="Departments"></c-page-header>
         <!-- Action Bar -->
         <div class="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800/80">
             <div class="flex items-center gap-2">

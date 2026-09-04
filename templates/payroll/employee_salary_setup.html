@@ -3,9 +3,6 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Employee Salary Setup"></c-topbar>
-    </c-slot>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
         editAssignment(assign) {
@@ -29,6 +26,7 @@
             });
         }
     }">
+        <c-page-header title="Employee Salary Setup"></c-page-header>
         <!-- Search and Filters -->
         <c-card padding="sm">
             <form method="get" action="" class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">

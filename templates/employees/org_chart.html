@@ -3,20 +3,18 @@
         <c-sidebar active_href="{% url 'employees:employee_list' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Organization Chart">
-            <c-slot name="actions">
-                <c-button href="{% url 'employees:delegation_list' %}"
-                          variant="secondary"
-                          icon="users"
-                          label="Manage Delegations"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 w-full space-y-6">
+        <c-page-header title="Organization Chart">
+            <c-slot name="actions">
+                <c-button href="{% url 'employees:delegation_list' %}"
+                variant="secondary"
+                icon="users"
+                label="Manage Delegations"></c-button>
+            </c-slot>
+        </c-page-header>
         <c-card padding="md">
             <div class="pb-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <div>

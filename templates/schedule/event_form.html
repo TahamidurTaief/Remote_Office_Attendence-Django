@@ -3,21 +3,19 @@
         <c-sidebar active_href="{% url 'schedule:month_view' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="{% if object %}Edit Event{% else %}New Event{% endif %}">
-            <c-slot name="actions">
-                <c-button href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}"
-                          variant="ghost"
-                          size="sm"
-                          icon="arrow-left"
-                          label="Back to Calendar"></c-button>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <c-page-container>
+        <c-page-header title="{% if object %}Edit Event{% else %}New Event{% endif %}">
+            <c-slot name="actions">
+                <c-button href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}"
+                variant="ghost"
+                size="sm"
+                icon="arrow-left"
+                label="Back to Calendar"></c-button>
+            </c-slot>
+        </c-page-header>
         <div class="max-w-2xl mx-auto space-y-4">
             <!-- Breadcrumb / Back to Calendar -->
             <div>

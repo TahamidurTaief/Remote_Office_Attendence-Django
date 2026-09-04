@@ -3,22 +3,17 @@
     <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
   </c-slot>
 
-  <c-slot name="topbar">
-    <c-topbar title="Backup &amp; Restore Management" ></c-topbar>
-  </c-slot>
 
   <c-command-palette></c-command-palette>
 
   <div class="p-4 max-w-7xl mx-auto space-y-5" x-data="{ showSettings: false }">
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold" style="color:var(--text)">Backup &amp; Disaster Recovery</h1>
-        <p class="text-xs mt-1" style="color:var(--text-muted)">Create JSON snapshots, schedule automatic backups, and sync securely to Google Drive.</p>
-      </div>
-      <div class="text-xs px-3 py-1.5 rounded-lg border font-mono" style="background:var(--surface-2); border-color:var(--border); color:var(--text-muted)">
+    <c-page-header title="Backup &amp; Disaster Recovery" subtitle="Create JSON snapshots, schedule automatic backups, and sync securely to Google Drive.">
+      <c-slot name="actions">
+        <div class="text-xs px-3 py-1.5 rounded-lg border font-mono" style="background:var(--surface-2); border-color:var(--border); color:var(--text-muted)">
         Storage: <span class="font-semibold" style="color:var(--text)">/backups/files</span>
-      </div>
-    </div>
+        </div>
+      </c-slot>
+    </c-page-header>
 
     {# ── Overview KPI Cards ────────────────────────────────────────── #}
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

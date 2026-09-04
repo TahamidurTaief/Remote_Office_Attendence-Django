@@ -3,33 +3,31 @@
         <c-sidebar active_href="{% url 'payroll:payroll_run_list' %}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Monthly Payroll Register">
-            <c-slot name="actions">
-                <div class="flex items-center gap-2">
-                    <a href="{% url 'payroll:payroll_register_export' run.pk 'excel' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
-                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i>
-                        <span>Export Excel</span>
-                    </a>
-                    <a href="{% url 'payroll:payroll_register_export' run.pk 'pdf' %}" target="_blank" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
-                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-600"></i>
-                        <span>Export PDF</span>
-                    </a>
-                    <a href="{% url 'payroll:payroll_register_export' run.pk 'csv' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
-                        <i data-lucide="file-code" class="w-3.5 h-3.5 text-amber-600"></i>
-                        <span>Export CSV</span>
-                    </a>
-                    <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-primary ft-btn-sm">
-                        <span>Back to Run</span>
-                    </a>
-                </div>
-            </c-slot>
-        </c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <div class="p-4 max-w-full mx-auto space-y-4">
+        <c-page-header title="Monthly Payroll Register">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2">
+                <a href="{% url 'payroll:payroll_register_export' run.pk 'excel' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i>
+                <span>Export Excel</span>
+                </a>
+                <a href="{% url 'payroll:payroll_register_export' run.pk 'pdf' %}" target="_blank" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-600"></i>
+                <span>Export PDF</span>
+                </a>
+                <a href="{% url 'payroll:payroll_register_export' run.pk 'csv' %}" class="ft-btn ft-btn-secondary ft-btn-sm flex items-center gap-1">
+                <i data-lucide="file-code" class="w-3.5 h-3.5 text-amber-600"></i>
+                <span>Export CSV</span>
+                </a>
+                <a href="{% url 'payroll:payroll_run_detail' run.pk %}" class="ft-btn ft-btn-primary ft-btn-sm">
+                <span>Back to Run</span>
+                </a>
+                </div>
+            </c-slot>
+        </c-page-header>
         <c-card padding="none">
             <div class="p-4 border-b flex items-center justify-between" style="border-color:var(--border)">
                 <div>

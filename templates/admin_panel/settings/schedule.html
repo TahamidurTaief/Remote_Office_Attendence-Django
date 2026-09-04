@@ -3,13 +3,11 @@
         <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
-    <c-slot name="topbar">
-        <c-topbar title="Office Schedule Settings"></c-topbar>
-    </c-slot>
 
     <c-command-palette></c-command-palette>
 
     <c-page-container>
+        <c-page-header title="Office Schedule Settings"></c-page-header>
         <!-- Global Default Attendance Policy Card -->
         <c-card>
             <c-slot name="header">
