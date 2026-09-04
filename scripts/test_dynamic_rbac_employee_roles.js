@@ -349,7 +349,7 @@ function runTests() {
   {
     testCount++;
     const editTarget = { id: 106, email: 'edittarget@company.com', role: 'staff' };
-    
+
     // Seed existing: super_admin (protected from normal admin), staff, supervisor
     state.assignments.push({ id: state.nextAssignmentId++, userId: editTarget.id, role: roleSuperAdmin });
     state.assignments.push({ id: state.nextAssignmentId++, userId: editTarget.id, role: roleStaff });

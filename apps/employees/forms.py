@@ -44,7 +44,7 @@ def generate_employee_id():
         if not EmployeeProfile.objects.filter(employee_id=candidate).exists() and \
            not Employee.objects.filter(employee_number=candidate).exists():
             return candidate
-    
+
     unique_hex = uuid.uuid4().hex[:6].upper()
     return f"EMP-{year}-{unique_hex}"
 
@@ -56,15 +56,9 @@ class EmployeeCreateForm(forms.ModelForm):
     email = forms.EmailField(required=False, label="Email Address (Optional)")
     roles = forms.ModelMultipleChoiceField(
         queryset=Role.objects.none(),
-        required=False,
+        required=True,
         label="Roles"
     )
-    role = forms.ChoiceField(
-        choices=[('staff', 'Staff'), ('manager', 'Manager')],
-        required=False,
-        widget=forms.HiddenInput()
-    )
-    groups = forms.ModelMultipleChoiceField(queryset=Group.objects.all(), required=False, widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT}), label="Roles / Groups")
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     password1 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Set login password', 'class': TEXT_INPUT}), label="Password", required=True)
     password2 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat password', 'class': TEXT_INPUT}), label="Confirm Password", required=True)
@@ -104,7 +98,7 @@ class EmployeeCreateForm(forms.ModelForm):
             default_role = assignable_qs.filter(code='staff').first()
             if default_role:
                 self.initial['roles'] = [default_role.pk]
-        
+
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.update({'class': CHECKBOX_INPUT})
@@ -156,25 +150,22 @@ class EmployeeCreateForm(forms.ModelForm):
 
     def clean_roles(self):
         roles = list(self.cleaned_data.get('roles') or [])
-        # Fallback to legacy 'role' field if no roles selected in 'roles'
-        if not roles and self.data.get('role'):
-            role_code = self.data.get('role')
-            role_obj = Role.objects.filter(code=role_code, is_active=True).first()
-            if role_obj:
-                roles = [role_obj]
-
         if not roles:
-            # Default to active staff role if available
-            staff_role = Role.objects.filter(code='staff', is_active=True).first()
-            if staff_role:
-                roles = [staff_role]
+            raise forms.ValidationError("At least one active role must be assigned.")
 
-        # Authority validation check
-        if self.actor:
-            try:
-                RoleAssignmentService.validate_role_authority(self.actor, roles)
-            except PermissionDenied as e:
-                raise forms.ValidationError(str(e))
+        for r in roles:
+            if not r.is_active:
+                raise forms.ValidationError(f"Role '{r.name}' is inactive and cannot be assigned.")
+            if r.code == 'system_owner' or r.is_system_protected:
+                raise forms.ValidationError("The System Owner role cannot be assigned via employee forms.")
+
+        if not self.actor or not self.actor.is_authenticated:
+            raise forms.ValidationError("You must be logged in with authorization to assign roles.")
+
+        try:
+            RoleAssignmentService.validate_role_authority(self.actor, roles)
+        except PermissionDenied as e:
+            raise forms.ValidationError(str(e))
 
         return roles
 
@@ -193,16 +184,10 @@ class EmployeeCreateForm(forms.ModelForm):
     def save(self, commit=True):
         profile = super().save(commit=False)
         email = self.cleaned_data.get('email')
-        roles = self.cleaned_data.get('roles') or []
-        legacy_role = self.cleaned_data.get('role')
-        if not roles and legacy_role:
-            r_obj = Role.objects.filter(code=legacy_role, is_active=True).first()
-            if r_obj:
-                roles = [r_obj]
-
+        roles = self.cleaned_data['roles']
         password = self.cleaned_data['password1']
         phone = self.cleaned_data.get('phone')
-        
+
         if email:
             email = email.strip()
             if not email:
@@ -212,9 +197,8 @@ class EmployeeCreateForm(forms.ModelForm):
 
         compat_role = RoleAssignmentService.compute_compatibility_persona(roles)
         user = User.objects.create_user(email=email, phone=phone, password=password, role=compat_role)
-        user.groups.set(self.cleaned_data.get('groups', []))
         profile.user = user
-        
+
         if commit:
             profile.save()
 
@@ -225,21 +209,15 @@ class EmployeeCreateForm(forms.ModelForm):
             actor=self.actor,
             preserve_protected=True
         )
-            
+
         return profile
 
 class EmployeeEditForm(forms.ModelForm):
     roles = forms.ModelMultipleChoiceField(
         queryset=Role.objects.none(),
-        required=False,
+        required=True,
         label="Roles"
     )
-    role = forms.ChoiceField(
-        choices=[('staff', 'Staff'), ('manager', 'Manager')],
-        required=False,
-        widget=forms.HiddenInput()
-    )
-    groups = forms.ModelMultipleChoiceField(queryset=Group.objects.all(), required=False, widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT}), label="Roles / Groups")
     new_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Leave blank to keep current'}), label="New Password", required=False)
     confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat new password', 'class': TEXT_INPUT}), label="Confirm Password", required=False)
 
@@ -274,12 +252,6 @@ class EmployeeEditForm(forms.ModelForm):
                 UserRoleAssignment.objects.filter(user=self.instance.user).values_list('role_id', flat=True)
             )
             self.fields['roles'].initial = user_role_ids
-
-            assignment = self.instance.user.role_assignments.select_related('role').first()
-            if assignment:
-                self.fields['role'].initial = assignment.role.code
-            else:
-                self.fields['role'].initial = self.instance.user.role
         elif not self.initial.get('roles'):
             default_role = assignable_qs.filter(code='staff').first()
             if default_role:
@@ -300,7 +272,7 @@ class EmployeeEditForm(forms.ModelForm):
                 qs_profile = qs_profile.exclude(pk=self.instance.pk)
             if qs_profile.exists():
                 raise forms.ValidationError("An employee with this phone number already exists.")
-            
+
             qs_user = User.objects.filter(phone=phone)
             if self.instance and self.instance.user:
                 qs_user = qs_user.exclude(pk=self.instance.user.pk)
@@ -321,22 +293,22 @@ class EmployeeEditForm(forms.ModelForm):
 
     def clean_roles(self):
         roles = list(self.cleaned_data.get('roles') or [])
-        if not roles and self.data.get('role'):
-            role_code = self.data.get('role')
-            role_obj = Role.objects.filter(code=role_code, is_active=True).first()
-            if role_obj:
-                roles = [role_obj]
+        if not roles:
+            raise forms.ValidationError("At least one active role must be assigned.")
 
-        if not roles and not (self.instance and self.instance.user and self.instance.user.role_assignments.exists()):
-            staff_role = Role.objects.filter(code='staff', is_active=True).first()
-            if staff_role:
-                roles = [staff_role]
+        for r in roles:
+            if not r.is_active:
+                raise forms.ValidationError(f"Role '{r.name}' is inactive and cannot be assigned.")
+            if r.code == 'system_owner' or r.is_system_protected:
+                raise forms.ValidationError("The System Owner role cannot be assigned via employee forms.")
 
-        if self.actor:
-            try:
-                RoleAssignmentService.validate_role_authority(self.actor, roles)
-            except PermissionDenied as e:
-                raise forms.ValidationError(str(e))
+        if not self.actor or not self.actor.is_authenticated:
+            raise forms.ValidationError("You must be logged in with authorization to assign roles.")
+
+        try:
+            RoleAssignmentService.validate_role_authority(self.actor, roles)
+        except PermissionDenied as e:
+            raise forms.ValidationError(str(e))
 
         return roles
 
@@ -350,27 +322,21 @@ class EmployeeEditForm(forms.ModelForm):
             if len(new_password) < 8:
                 raise forms.ValidationError("Password must be at least 8 characters")
         return cleaned_data
-        
+
     @transaction.atomic
     def save(self, commit=True):
         profile = super().save(commit=False)
         new_password = self.cleaned_data.get('new_password')
         phone = self.cleaned_data.get('phone')
         roles = self.cleaned_data.get('roles')
-        legacy_role = self.cleaned_data.get('role')
-        if roles is None and legacy_role:
-            r_obj = Role.objects.filter(code=legacy_role, is_active=True).first()
-            if r_obj:
-                roles = [r_obj]
-        
+
         # Sync phone to CustomUser
         user = profile.user
         if phone:
             phone = phone.strip()
         user.phone = phone
         user.save()
-        user.groups.set(self.cleaned_data.get('groups', []))
-        
+
         if new_password:
             user.set_password(new_password)
             user.save()
@@ -640,7 +606,7 @@ class LifecycleActionForm(forms.Form):
         cleaned_data = super().clean()
         to_status = cleaned_data.get('to_status')
         reason = cleaned_data.get('reason')
-        
+
         # Enforce reason requirement for inactive, suspended, archived
         if to_status in ('inactive', 'suspended', 'archived') and not reason:
             self.add_error('reason', 'A reason is mandatory for this status change.')
@@ -736,7 +702,7 @@ class AssetReassignForm(forms.Form):
         widget=forms.Textarea(attrs={'class': TEXT_INPUT, 'rows': 2}),
         label="Return Notes"
     )
-    
+
     new_employee = forms.ModelChoiceField(
         queryset=Employee.objects.filter(status='active'),
         widget=forms.Select(attrs={'class': SELECT_INPUT}),
@@ -954,11 +920,20 @@ class WizardStep4Form(forms.Form):
         roles = list(self.cleaned_data.get('roles') or [])
         if not roles:
             raise forms.ValidationError("Please select at least one authorized role.")
-        if self.actor:
-            try:
-                RoleAssignmentService.validate_role_authority(self.actor, roles)
-            except PermissionDenied as e:
-                raise forms.ValidationError(str(e))
+
+        for r in roles:
+            if not r.is_active:
+                raise forms.ValidationError(f"Role '{r.name}' is inactive and cannot be assigned.")
+            if r.code == 'system_owner' or r.is_system_protected:
+                raise forms.ValidationError("The System Owner role cannot be assigned via employee forms.")
+
+        if not self.actor or not self.actor.is_authenticated:
+            raise forms.ValidationError("You must be logged in with authorization to assign roles.")
+
+        try:
+            RoleAssignmentService.validate_role_authority(self.actor, roles)
+        except PermissionDenied as e:
+            raise forms.ValidationError(str(e))
         return roles
 
     def clean(self):

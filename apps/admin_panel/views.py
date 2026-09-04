@@ -45,10 +45,10 @@ def admin_required(view_func):
 class AdminDashboardView(RoleRequiredMixin, TemplateView):
     allowed_roles = ['admin', 'manager']
     template_name = 'admin_panel/admin_dashboard.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         date_str = self.request.GET.get('date')
         if date_str:
             try:
@@ -60,15 +60,15 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
 
         branch_id = self.request.GET.get('branch')
         employee_id = self.request.GET.get('employee')
-        
+
         role_name = self.request.user.role.name if hasattr(self.request.user.role, 'name') else self.request.user.role
         can_view_all = (role_name == 'admin')
-        
+
         # Scoping variables
         profile = getattr(self.request.user, 'employee_profile', None)
         manager_branch = None
         project_employees = None
-        
+
         if not can_view_all and role_name == 'manager':
             # Manager scoping
             if profile and profile.branch:
@@ -106,7 +106,7 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
                 employee_id = None
 
         todays_attendances = Attendance.objects.filter(date=today, is_expired=False).select_related('employee', 'employee__branch')
-        
+
         if can_view_all:
             if branch_id:
                 todays_attendances = todays_attendances.filter(employee__branch_id=branch_id)
@@ -117,10 +117,10 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
                 todays_attendances = todays_attendances.filter(employee__in=project_employees)
             else:
                 todays_attendances = todays_attendances.none()
-                
+
         if employee_id:
             todays_attendances = todays_attendances.filter(employee_id=employee_id)
-        
+
         # For present count, count distinct employees who checked in today
         present_count = todays_attendances.filter(
             attendance_type='check_in'
@@ -167,7 +167,7 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
         if not can_view_all and role_name == 'manager':
             from apps.projects.models import Project
             my_projects = Project.objects.filter(project_managers=profile).select_related('project_type', 'branch').prefetch_related('tasks')
-            
+
             if has_approve_permission:
                 from apps.leave.models import LeaveRequest
                 if manager_branch:
@@ -345,7 +345,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
     template_name = 'admin_panel/admin_attendance.html'
     context_object_name = 'attendances'
     paginate_by = 20
-    
+
     def get_queryset(self):
         date_from = self.request.GET.get('date_from')
         date_to = self.request.GET.get('date_to')
@@ -353,13 +353,13 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         branch_id = self.request.GET.get('branch')
         att_type = self.request.GET.get('type')
         status = self.request.GET.get('status')
-        
+
         # Enforce Manager branch limits
         user = self.request.user
         role_name = user.role.name if hasattr(user.role, 'name') else str(getattr(user, 'role', ''))
-        can_view_all = user.is_superuser or role_name in ('admin', 'system_owner')
+        can_view_all = (user.is_superuser and role_name != 'manager') or role_name in ('admin', 'system_owner')
         profile = getattr(user, 'employee_profile', None)
-        
+
         if not can_view_all and role_name == 'manager':
             if profile and profile.branch:
                 branch_id = str(profile.branch.id)
@@ -367,7 +367,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                 branch_id = None
         elif not can_view_all:
             branch_id = None
-            
+
         if status == 'absent':
             return [r for r in get_absent_records(
                 date_from=date_from,
@@ -382,9 +382,9 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                 employee_id=emp_id,
                 branch_id=branch_id
             ) if r.status == 'on_leave']
-            
+
         queryset = super().get_queryset().filter(is_expired=False).select_related('employee', 'employee__branch')
-        
+
         if date_from:
             queryset = queryset.filter(date__gte=date_from)
         if date_to:
@@ -400,25 +400,25 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                 queryset = queryset.filter(status__in=['on_time', 'late'])
             else:
                 queryset = queryset.filter(status=status)
-            
+
         return queryset.order_by('-date', '-check_in_time')
-        
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         date_from = self.request.GET.get('date_from')
         date_to = self.request.GET.get('date_to')
         emp_id = self.request.GET.get('employee')
         branch_id = self.request.GET.get('branch')
         att_type = self.request.GET.get('type')
         status = self.request.GET.get('status')
-        
+
         # Enforce Manager branch limits
         user = self.request.user
         role_name = user.role.name if hasattr(user.role, 'name') else str(getattr(user, 'role', ''))
         can_view_all = user.is_superuser or role_name in ('admin', 'system_owner')
         profile = getattr(user, 'employee_profile', None)
-        
+
         if not can_view_all and role_name == 'manager':
             if profile and profile.branch:
                 branch_id = str(profile.branch.id)
@@ -439,20 +439,20 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
             base_qs = base_qs.filter(employee__branch_id=branch_id)
         if att_type:
             base_qs = base_qs.filter(type=att_type)
- 
+
         # Count Present (distinct employees checked in today)
         total_present = base_qs.filter(
             attendance_type='check_in'
         ).values('employee_id', 'date').distinct().count()
- 
+
         # Count Late (distinct employees late checked in today)
         total_late = base_qs.filter(
             attendance_type='check_in', status='late'
         ).values('employee_id', 'date').distinct().count()
- 
+
         # Count Field (total field visits and check_ins of type field)
         total_field = base_qs.filter(type='field').count()
- 
+
         # Count Absent / On Leave (using the helper)
         absent_records = get_absent_records(
             date_from=date_from,
@@ -462,7 +462,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         )
         total_absent = sum(1 for r in absent_records if r.status == 'absent')
         total_on_leave = sum(1 for r in absent_records if r.status == 'on_leave')
- 
+
         # Determine total_records based on active status filter
         if status == 'absent':
             total_records = total_absent
@@ -474,23 +474,23 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
             total_records = base_qs.filter(attendance_type='check_in', status='late').count()
         else:
             total_records = base_qs.count()
-            
+
         context['total_records'] = total_records
         context['total_present'] = total_present
         context['total_absent'] = total_absent
         context['total_on_leave'] = total_on_leave
         context['total_late'] = total_late
         context['total_field'] = total_field
-        
+
         context['employees'] = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
         from apps.branches.utils import get_cached_branches
         context['branches'] = get_cached_branches()
-        
+
         get_copy = self.request.GET.copy()
         if 'page' in get_copy:
             del get_copy['page']
         context['query_string'] = get_copy.urlencode()
-        
+
         # Attach Leave Balance (remaining days, per leave type) as visible info
         year = timezone.localdate().year
         if date_from:
@@ -498,13 +498,13 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                 year = datetime.strptime(date_from, '%Y-%m-%d').year
             except ValueError:
                 pass
-                
+
         page_attendances = context['attendances']
         employee_ids = {att.employee.id for att in page_attendances}
-        
+
         leave_types = list(LeaveType.objects.all())
         balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year)
-        
+
         balances_by_emp = defaultdict(list)
         for bal in balances_qs:
             balances_by_emp[bal.employee_id].append({
@@ -512,7 +512,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                 'remaining': bal.remaining_days,
                 'total': bal.total_days
             })
-            
+
         for emp_id in employee_ids:
             emp_bals = balances_by_emp[emp_id]
             existing_types = {b['type'].id for b in emp_bals}
@@ -523,10 +523,10 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                         'remaining': lt.default_days_per_year,
                         'total': lt.default_days_per_year
                     })
-                    
+
         for att in page_attendances:
             att.leave_balances = balances_by_emp[att.employee.id]
-            
+
         return context
 
 class ExportAttendanceCSVView(AdminRequiredMixin, View):
@@ -537,7 +537,7 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
         branch_id = request.GET.get('branch')
         att_type = request.GET.get('type')
         status = request.GET.get('status')
-        
+
         if status == 'absent':
             records = get_absent_records(
                 date_from=date_from,
@@ -549,7 +549,7 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
             queryset = Attendance.objects.select_related(
                 'employee', 'employee__branch'
             ).filter(is_expired=False)
-            
+
             if date_from:
                 queryset = queryset.filter(date__gte=date_from)
             if date_to:
@@ -565,15 +565,15 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
                     queryset = queryset.filter(status__in=['on_time', 'late'])
                 else:
                     queryset = queryset.filter(status=status)
-                
+
             records = queryset.order_by('-date', '-check_in_time')
-        
+
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="attendance_export_{timezone.localdate()}.csv"'
-        
+
         writer = csv.writer(response)
         writer.writerow(['SN', 'Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours', 'Type', 'Status', 'Note'])
-        
+
         for idx, att in enumerate(records, 1):
             check_in = timezone.localtime(att.check_in_time).strftime('%H:%M:%S') if att.check_in_time else ''
             check_out = timezone.localtime(att.check_out_time).strftime('%H:%M:%S') if att.check_out_time else ''
@@ -591,25 +591,25 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
                 att.get_status_display(),
                 att.note
             ])
-            
+
         return response
 
 class ManualEntryView(AdminRequiredMixin, FormView):
     template_name = 'admin_panel/manual_entry.html'
     form_class = ManualAttendanceForm
     success_url = '/admin-panel/attendance/'
-    
+
     def form_valid(self, form):
         att = form.save(commit=False)
         if att.check_in_time and att.check_out_time:
             if att.check_out_time > att.check_in_time:
                 duration = att.check_out_time - att.check_in_time
                 att.total_hours = round(duration.total_seconds() / 3600.0, 2)
-                
+
         reason = form.cleaned_data.get('admin_override_reason')
         if reason:
             att.note = f"Admin Override: {reason}"
-            
+
         att.save()
         messages.success(self.request, "Manual attendance record added successfully.")
         return super().form_valid(form)
@@ -632,18 +632,18 @@ class AttendanceDetailView(RoleRequiredMixin, DetailView):
         attendance = self.object
         employee = attendance.employee
         locations = attendance.locations.all().order_by('timestamp')
-        
+
         # Date range for today in BST timezone
         tz = timezone.get_current_timezone()
         today = attendance.date
-        
+
         # Start and end datetimes for today
         start_dt = timezone.make_aware(datetime.combine(today, datetime.min.time()), tz)
         end_dt = timezone.make_aware(datetime.combine(today, datetime.max.time()), tz)
-        
+
         time_from = self.request.GET.get('time_from')
         time_to = self.request.GET.get('time_to')
-        
+
         if time_from:
             try:
                 tf = datetime.strptime(time_from, '%H:%M').time()
@@ -656,12 +656,12 @@ class AttendanceDetailView(RoleRequiredMixin, DetailView):
                 end_dt = timezone.make_aware(datetime.combine(today, tt), tz)
             except ValueError:
                 pass
-                
+
         syncs = EmployeeLocationSync.objects.filter(
             employee=employee,
             timestamp__range=(start_dt, end_dt)
         ).order_by('timestamp')
-        
+
         context['location_syncs'] = syncs
         context['locations'] = locations
         context['first_location'] = locations.first()
@@ -710,7 +710,7 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
     Returns a list of SyntheticAttendance objects representing dates on which active employees were absent.
     """
     today = timezone.localdate()
-    
+
     if date_from:
         if isinstance(date_from, str):
             try:
@@ -811,7 +811,7 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
             day_atts = att_by_emp_date[(emp.id, curr_date)]
             has_check_in = any(a.attendance_type == 'check_in' for a in day_atts)
             has_field_visit = any(a.attendance_type == 'field_visit' for a in day_atts)
-            
+
             # Check if there is no check_in and no field_visit
             if not has_check_in and not has_field_visit:
                 req = approved_leaves.get((emp.id, curr_date))
@@ -841,14 +841,14 @@ def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branc
     if branch_id:
         employees = employees.filter(branch_id=branch_id)
     employees = {emp.id: emp for emp in employees.select_related('branch')}
-    
+
     valid_employee_ids = list(employees.keys())
     if not valid_employee_ids:
         return []
 
     # 2. Query AttendanceAbsentLog
     absent_logs = AttendanceAbsentLog.objects.filter(employee_id__in=valid_employee_ids).select_related('leave_type_deducted')
-    
+
     if date_from and date_from != "":
         d_from = datetime.strptime(date_from, '%Y-%m-%d').date() if isinstance(date_from, str) else date_from
         absent_logs = absent_logs.filter(date__gte=d_from)
@@ -865,7 +865,7 @@ def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branc
         absent_logs = absent_logs.filter(leave_type_deducted_id=leave_type_id)
 
     deductions = []
-    
+
     # Add absent logs to list
     for log in absent_logs:
         emp = employees.get(log.employee_id)
@@ -939,7 +939,7 @@ def _get_employee_schedule(employee):
 def _get_working_day_set(schedule):
     if schedule is not None:
         return {day.lower() for day in (schedule.working_days or [])}
-    
+
     # Try to load the schedule from the schedule settings page (first office schedule in DB)
     from apps.branches.models import OfficeSchedule
     try:
@@ -948,7 +948,7 @@ def _get_working_day_set(schedule):
             return {day.lower() for day in first_schedule.working_days}
     except Exception:
         pass
-        
+
     # Default fallback if database query fails or no schedules exist
     return {'saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday'}
 
@@ -1033,7 +1033,7 @@ def _filter_qs_by_request(qs, request):
     role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
     can_view_all = (role_name == 'admin')
     profile = getattr(request.user, 'employee_profile', None)
-    
+
     if not can_view_all and role_name == 'manager':
         if profile and profile.branch:
             branch = str(profile.branch.id)
@@ -1067,30 +1067,30 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         from django.db.models import Avg, Count, Q, F
         from django.db.models.functions import ExtractHour
-        
+
         today = timezone.localdate()
         thirty_days_ago = today - timedelta(days=30)
-        
+
         # 1. Total headcount
         employees = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
         ctx['employees'] = employees
         total_employees = employees.count() or 1
-        
+
         # 2. Query 30-day check-in records
         checkins_30d = Attendance.objects.filter(
             date__range=(thirty_days_ago, today),
             attendance_type='check_in',
             is_expired=False
         )
-        
+
         # 3. Overall rate calculations
         total_checkins_count = checkins_30d.count()
         on_time_count = checkins_30d.filter(status__in=['on_time', 'present']).count()
-        
+
         on_time_rate = int((on_time_count / total_checkins_count * 100)) if total_checkins_count > 0 else 0
         avg_hours = checkins_30d.aggregate(avg_h=Avg('total_hours'))['avg_h'] or 0.0
         avg_hours_formatted = round(float(avg_hours), 1)
-        
+
         # 4. Average Attendance Rate (days present / working days)
         daily_presence_counts = checkins_30d.values('date').annotate(count=Count('id'))
         if daily_presence_counts:
@@ -1099,7 +1099,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
             avg_attendance_rate = min(avg_attendance_rate, 100)
         else:
             avg_attendance_rate = 0
-            
+
         ctx['avg_attendance_rate'] = avg_attendance_rate
         ctx['avg_work_hours'] = avg_hours_formatted
         ctx['on_time_rate'] = on_time_rate
@@ -1115,20 +1115,20 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
             present=Count('id', filter=Q(status__in=['on_time', 'present'])),
             late=Count('id', filter=Q(status='late'))
         ).order_by('date')
-        
+
         ctx['attendance_trend'] = list(trend_qs)
 
         # 6. Peak check-in hours breakdown
         hour_qs = checkins_30d.annotate(
             hour=ExtractHour('check_in_time')
         ).values('hour').annotate(count=Count('id')).order_by('hour')
-        
+
         hour_breakdown = {h: 0 for h in range(7, 14)}
         for entry in hour_qs:
             h = entry['hour']
             if h is not None and 7 <= h <= 13:
                 hour_breakdown[h] = entry['count']
-                
+
         ctx['hour_breakdown'] = [{'hour': f"{h:02d}:00", 'count': count} for h, count in hour_breakdown.items()]
 
         # 7. Department comparison
@@ -1140,7 +1140,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
             total=Count('id'),
             late=Count('id', filter=Q(status='late'))
         ).order_by('-total')[:5]
-        
+
         dept_stats = []
         for d in dept_qs:
             tot = d['total']
@@ -1157,11 +1157,11 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         today_records = Attendance.objects.filter(date=today, is_expired=False).select_related('employee', 'employee__branch')
         ctx['today_present_count'] = today_records.filter(attendance_type='check_in').count()
         ctx['today_late_count'] = today_records.filter(status='late').count()
-        
+
         recent_logs = Attendance.objects.filter(
             is_expired=False
         ).select_related('employee', 'employee__branch').prefetch_related('locations').order_by('-date', '-check_in_time')[:20]
-        
+
         recent_list = []
         for a in recent_logs:
             loc = a.locations.filter(event='check_in').first() if a.attendance_type == 'check_in' else None
@@ -1256,7 +1256,7 @@ class DailyReportView(AdminRequiredMixin, View):
             check_in = check_in_sessions[0] if check_in_sessions else None
             fv_list  = [a for a in emp_atts if a.attendance_type == 'field_visit']
             loc = check_in.locations.filter(event='check_in').first() if check_in else None
-            
+
             emp_total_hours = sum((float(a.total_hours or 0)) for a in check_in_sessions)
 
             if check_in:
@@ -1265,7 +1265,7 @@ class DailyReportView(AdminRequiredMixin, View):
                 status = 'on_time'  # They are working, just off-site
             else:
                 status = 'absent'
-                
+
             rows.append({
                 'employee':     emp,
                 'check_in':     check_in,
@@ -1367,7 +1367,7 @@ def format_hours_minutes(total_hours_val):
         return "0 min"
     hours = total_minutes // 60
     minutes = total_minutes % 60
-    
+
     if hours == 0:
         return f"{minutes} min"
     elif minutes == 0:
@@ -1460,20 +1460,20 @@ class EmployeeReportView(AdminRequiredMixin, View):
 
         cis     = [a for a in attendances if a.attendance_type == 'check_in']
         fvs     = [a for a in attendances if a.attendance_type == 'field_visit']
-        
+
         check_in_dates = set(a.date for a in cis)
         field_dates = set(a.date for a in fvs)
-        
+
         present_days = len(check_in_dates)
         field_only_days = len(field_dates - check_in_dates)
-        
+
         present = present_days
         late    = sum(1 for a in cis if calculate_attendance_status(a.check_in_time, schedule) == 'late')
         early_checkouts = sum(
             1 for a in cis
             if a.check_out_time and calculate_early_checkout(a.check_out_time, schedule)
         )
-        
+
         # Calculate stats considering current time limits (avoid marking future as absent)
         if year < today.year or (year == today.year and month < today.month):
             max_date = month_end
@@ -1504,7 +1504,7 @@ class EmployeeReportView(AdminRequiredMixin, View):
         absent = absent_days
         total_hours_sum = sum(float(a.total_hours or 0) for a in cis)
         total_hours_str = format_hours_minutes(total_hours_sum)
-        
+
         overtime_minutes = sum(
             calculate_overtime(a.check_out_time, schedule, employee)
             if a.check_out_time else 0
@@ -1526,7 +1526,7 @@ class EmployeeReportView(AdminRequiredMixin, View):
             overtime_for_day = 0
             overtime_str = ''
             total_hours_for_day_str = ''
-            
+
             if ci:
                 if ci.total_hours:
                     total_hours_for_day_str = format_hours_minutes(ci.total_hours)
@@ -1534,7 +1534,7 @@ class EmployeeReportView(AdminRequiredMixin, View):
                     overtime_for_day = calculate_overtime(ci.check_out_time, schedule, employee)
                     if overtime_for_day > 0:
                         overtime_str = format_minutes(overtime_for_day)
-            
+
             if is_weekend and not ci and not fv:
                 status_val = 'weekend'
                 status_display = 'Weekend'
@@ -1575,7 +1575,7 @@ class EmployeeReportView(AdminRequiredMixin, View):
             models.Q(site_engineers=employee) |
             models.Q(project_members=employee)
         ).distinct()
-        
+
         completed_projects_count = connected_projects.filter(status='Completed').count()
         in_progress_projects_count = connected_projects.filter(status='In Progress').count()
 
@@ -1908,14 +1908,14 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
                 branch_obj = master.branch if master else req.employee.branch
                 policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
                 policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
-                
+
                 curr = s_date
                 while curr <= e_date:
                     day_name = curr.strftime('%A').lower()
                     if day_name in policy:
                         curr += timedelta(days=1)
                         continue
-                    
+
                     holiday_qs = Holiday.objects.filter(date=curr)
                     if branch_obj:
                         holiday_qs = holiday_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
@@ -1924,7 +1924,7 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
                     if holiday_qs.exists():
                         curr += timedelta(days=1)
                         continue
-                    
+
                     days_count += 1
                     curr += timedelta(days=1)
             else:
@@ -2018,14 +2018,14 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
                 branch_obj = master.branch if master else req.employee.branch
                 policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
                 policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
-                
+
                 curr = s_date
                 while curr <= e_date:
                     day_name = curr.strftime('%A').lower()
                     if day_name in policy:
                         curr += timedelta(days=1)
                         continue
-                    
+
                     holiday_qs = Holiday.objects.filter(date=curr)
                     if branch_obj:
                         holiday_qs = holiday_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
@@ -2034,7 +2034,7 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
                     if holiday_qs.exists():
                         curr += timedelta(days=1)
                         continue
-                    
+
                     days_count += 1
                     curr += timedelta(days=1)
             else:
@@ -2161,12 +2161,12 @@ class ExportReportCSVView(AdminRequiredMixin, View):
         branch_id = request.GET.get('branch')
         att_type = request.GET.get('type')
         status = request.GET.get('status')
-        
+
         # Enforce Manager branch limits
         role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
         can_view_all = (role_name == 'admin')
         profile = getattr(request.user, 'employee_profile', None)
-        
+
         if not can_view_all and role_name == 'manager':
             if profile and profile.branch:
                 branch_id = str(profile.branch.id)
@@ -2237,12 +2237,12 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         branch_id = request.GET.get('branch')
         att_type = request.GET.get('type')
         status = request.GET.get('status')
-        
+
         # Enforce Manager branch limits
         role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
         can_view_all = (role_name == 'admin')
         profile = getattr(request.user, 'employee_profile', None)
-        
+
         if not can_view_all and role_name == 'manager':
             if profile and profile.branch:
                 branch_id = str(profile.branch.id)
@@ -2395,7 +2395,7 @@ class OfficeScheduleView(AdminRequiredMixin, View):
                 'schedule': schedule,
                 'policy': policy
             })
-        
+
         global_policy, _ = AttendancePolicy.objects.get_or_create(
             branch=None,
             defaults={
@@ -2461,7 +2461,7 @@ class OfficeScheduleView(AdminRequiredMixin, View):
         schedule.early_checkout_before_minutes = int(request.POST.get('early_checkout_before_minutes', schedule.early_checkout_before_minutes))
         schedule.overtime_after_minutes = int(request.POST.get('overtime_after_minutes', schedule.overtime_after_minutes))
         schedule.tracking_interval_minutes = int(request.POST.get('tracking_interval_minutes', schedule.tracking_interval_minutes))
-        
+
         # Working days
         working_days = request.POST.getlist(f'working_days_{branch_id}')
         if working_days:
@@ -2485,7 +2485,7 @@ class OfficeScheduleView(AdminRequiredMixin, View):
 
 import openpyxl
 from openpyxl.styles import (
-    Font, PatternFill, Alignment, 
+    Font, PatternFill, Alignment,
     Border, Side
 )
 from openpyxl.utils import get_column_letter
@@ -2495,7 +2495,7 @@ def export_attendance(request):
     format_type = request.GET.get('format', 'xlsx')
     year = request.GET.get('year')
     month = request.GET.get('month')
-    
+
     if year and month:
         if format_type == 'xlsx':
             return export_monthly_xlsx(request)
@@ -2521,7 +2521,7 @@ def get_monthly_grid_data(request):
 
     year = int(request.GET.get('year', date.today().year))
     month = int(request.GET.get('month', date.today().month))
-    
+
     branch_id = request.GET.get('branch') or request.GET.get('branch_id')
     employee_id = request.GET.get('employee')
 
@@ -2529,7 +2529,7 @@ def get_monthly_grid_data(request):
     role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
     can_view_all = (role_name == 'admin')
     profile = getattr(request.user, 'employee_profile', None)
-    
+
     if not can_view_all and role_name == 'manager':
         if profile and profile.branch:
             branch_id = str(profile.branch.id)
@@ -2544,7 +2544,7 @@ def get_monthly_grid_data(request):
         employee_id=employee_id or None,
         branch_id=branch_id or None
     )
-    
+
 @admin_required
 def export_monthly_xlsx(request):
     from datetime import date
@@ -2556,13 +2556,13 @@ def export_monthly_xlsx(request):
     att_lookup = data['att_lookup']
     employee_stats = data['employee_stats']
     approved_leaves = data['approved_leaves']
-    
+
     # Create workbook
     wb = openpyxl.Workbook()
     ws = wb.active
     month_name = date(year, month, 1).strftime('%B-%y')
     ws.title = month_name
-    
+
     # ==================
     # STYLES
     # ==================
@@ -2576,7 +2576,7 @@ def export_monthly_xlsx(request):
     normal_font = Font(name='Calibri', size=9)
     late_font = Font(
         name='Calibri', size=9, color='FF0000')
-    
+
     header_fill = PatternFill(
         'solid', fgColor='1F4E79')  # dark blue
     weekend_fill = PatternFill(
@@ -2585,40 +2585,40 @@ def export_monthly_xlsx(request):
         'solid', fgColor='FFE0E0')  # light red
     overtime_fill = PatternFill(
         'solid', fgColor='E0F0FF')  # light blue
-    
+
     center = Alignment(
         horizontal='center', vertical='center',
         wrap_text=True)
     left = Alignment(
         horizontal='left', vertical='center')
-    
+
     thin = Side(style='thin', color='000000')
     border = Border(
-        left=thin, right=thin, 
+        left=thin, right=thin,
         top=thin, bottom=thin)
-    
+
     # ==================
     # ROW 1: Company name + Dates
     # ==================
-    
+
     # Col A: Company name (merged A1:C1)
     ws.merge_cells('A1:C1')
-    ws['A1'] = 'SIGNTECH TECHNOLOGY'  
+    ws['A1'] = 'SIGNTECH TECHNOLOGY'
     # Replace with actual company name from settings
     ws['A1'].font = company_font
     ws['A1'].alignment = center
-    
+
     # Date columns start at col D
     # Each day has 2 columns: In | Out
     # So day 1 = cols D,E | day 2 = cols F,G | etc.
-    
+
     col = 4  # Start at column D
     day_col_map = {}  # {day_number: start_col}
-    
+
     for d in all_days:
         day_col_map[d.day] = col
         # Date in row 1
-        ws.cell(row=1, column=col, 
+        ws.cell(row=1, column=col,
                 value=d).number_format = 'D'
         ws.merge_cells(
             start_row=1, start_column=col,
@@ -2629,11 +2629,11 @@ def export_monthly_xlsx(request):
         cell.alignment = center
         cell.fill = header_fill
         cell.font = Font(
-            name='Calibri', bold=True, 
+            name='Calibri', bold=True,
             size=9, color='FFFFFF')
-        
+
         col += 2
-    
+
     # Last cols: Present | Absent | Late | OT | Holiday Work
     summary_start_col = col
     ws.cell(row=1, column=summary_start_col,
@@ -2646,17 +2646,17 @@ def export_monthly_xlsx(request):
             value='Overtime').font = subheader_font
     ws.cell(row=1, column=summary_start_col+4,
             value='Holiday Work').font = subheader_font
-    
+
     # ==================
     # ROW 2: Day names
     # ==================
     ws.cell(row=2, column=1, value='')
     ws.cell(row=2, column=2, value='')
     ws.cell(row=2, column=3, value='')
-    
+
     day_names = ['Mon','Tue','Wed','Thu',
                  'Fri','Sat','Sun']
-    
+
     col = 4
     for d in all_days:
         day_name = d.strftime('%a')  # Mon, Tue, etc.
@@ -2668,7 +2668,7 @@ def export_monthly_xlsx(request):
         cell.font = Font(
             name='Calibri', bold=True, size=9)
         cell.alignment = center
-        
+
         # Weekend styling
         is_weekend = False
         if employees:
@@ -2679,40 +2679,40 @@ def export_monthly_xlsx(request):
         if is_weekend:
             cell.fill = PatternFill(
                 'solid', fgColor='F2DCDB')
-        
+
         col += 2
-        
+
     ws.cell(row=2, column=summary_start_col, value='')
     ws.cell(row=2, column=summary_start_col+1, value='')
     ws.cell(row=2, column=summary_start_col+2, value='')
     ws.cell(row=2, column=summary_start_col+3, value='')
     ws.cell(row=2, column=summary_start_col+4, value='')
-    
+
     # ==================
     # ROW 3: Headers
     # ==================
-    ws.cell(row=3, column=1, 
+    ws.cell(row=3, column=1,
             value='SN').font = Font(
         bold=True, size=9)
-    ws.cell(row=3, column=2, 
+    ws.cell(row=3, column=2,
             value='Employee name').font = Font(
         bold=True, size=9)
-    ws.cell(row=3, column=3, 
+    ws.cell(row=3, column=3,
             value='Designation').font = Font(
         bold=True, size=9)
-    
+
     col = 4
     for d in all_days:
-        ws.cell(row=3, column=col, 
+        ws.cell(row=3, column=col,
                 value='In').font = Font(
             bold=True, size=8)
-        ws.cell(row=3, column=col+1, 
+        ws.cell(row=3, column=col+1,
                 value='Out').font = Font(
             bold=True, size=8)
         ws.cell(row=3, column=col).alignment = center
         ws.cell(row=3, column=col+1).alignment = center
         col += 2
-    
+
     ws.cell(row=3, column=summary_start_col,
             value='Present')
     ws.cell(row=3, column=summary_start_col+1,
@@ -2723,7 +2723,7 @@ def export_monthly_xlsx(request):
             value='OT Hours')
     ws.cell(row=3, column=summary_start_col+4,
             value='Holiday Work')
-    
+
     # Apply header fill to row 3
     for c in range(1, summary_start_col+5):
         cell = ws.cell(row=3, column=c)
@@ -2736,13 +2736,13 @@ def export_monthly_xlsx(request):
             size=9, color='FFFFFF')
         cell.alignment = center
         cell.border = border
-    
+
     # ==================
     # ROW 4 onward: Employee data
     # ==================
-    
+
     data_row = 4
-    
+
     for idx, emp in enumerate(employees, 1):
         ws.cell(row=data_row, column=1,
                 value=idx).font = normal_font
@@ -2750,52 +2750,52 @@ def export_monthly_xlsx(request):
                 value=emp.full_name).font = normal_font
         ws.cell(row=data_row, column=3,
                 value=emp.designation).font = normal_font
-        
+
         emp_stat = employee_stats.get(emp.id, {})
         present_count = emp_stat.get('present_count', 0)
         late_count = emp_stat.get('late_count', 0)
         ot_display = emp_stat.get('overtime_display', '-')
         absent_count = emp_stat.get('absent_count', 0)
         holiday_work_count = emp_stat.get('holiday_work_count', 0)
-        
+
         col = 4
         for d in all_days:
             att = att_lookup.get(emp.id, {}).get(d)
-            
+
             in_cell = ws.cell(row=data_row, column=col)
             out_cell = ws.cell(
                 row=data_row, column=col+1)
-            
+
             if att:
-                # Format time as decimal 
+                # Format time as decimal
                 # (like original: 9.05 = 9:05 AM)
                 if att.check_in_time:
                     t = timezone.localtime(att.check_in_time)
-                    time_val = (t.hour + 
+                    time_val = (t.hour +
                                 t.minute/100)
                     in_cell.value = time_val
-                    
+
                     # Late highlight
                     if att.status == 'late':
                         in_cell.fill = late_fill
                         in_cell.font = late_font
-                
+
                 if att.check_out_time:
                     t = timezone.localtime(att.check_out_time)
-                    time_val = (t.hour + 
+                    time_val = (t.hour +
                                 t.minute/100)
                     out_cell.value = time_val
-                    
+
                     # Overtime highlight
                     if getattr(att, 'overtime_minutes', 0) > 0:
                         out_cell.fill = overtime_fill
-                
+
                 # Leave text
                 if hasattr(att, 'leave_type') and att.leave_type:
                     in_cell.value = 'Leave'
                     in_cell.font = Font(
                         name='Calibri', size=8,
-                        italic=True, 
+                        italic=True,
                         color='0070C0')
             else:
                 # check if on approved leave
@@ -2804,9 +2804,9 @@ def export_monthly_xlsx(request):
                     in_cell.value = 'Leave'
                     in_cell.font = Font(
                         name='Calibri', size=8,
-                        italic=True, 
+                        italic=True,
                         color='0070C0')
-            
+
             # Weekend styling
             from apps.attendance.schedule_utils import is_employee_holiday
             if is_employee_holiday(emp, d):
@@ -2814,15 +2814,15 @@ def export_monthly_xlsx(request):
                     'solid', fgColor='F2DCDB')
                 out_cell.fill = PatternFill(
                     'solid', fgColor='F2DCDB')
-            
+
             # Apply border and alignment
             for cell in [in_cell, out_cell]:
                 cell.alignment = center
                 cell.border = border
                 cell.number_format = '0.00'
-            
+
             col += 2
-        
+
         # Summary columns: Present, Absent, Late Days, OT Hours, Holiday Work
         # Present
         present_cell = ws.cell(
@@ -2832,7 +2832,7 @@ def export_monthly_xlsx(request):
         present_cell.alignment = center
         present_cell.border = border
         present_cell.font = normal_font
-        
+
         # Absent
         absent_cell = ws.cell(
             row=data_row,
@@ -2845,7 +2845,7 @@ def export_monthly_xlsx(request):
             absent_cell.font = normal_font
         absent_cell.alignment = center
         absent_cell.border = border
-        
+
         # Late Days
         late_cell = ws.cell(
             row=data_row,
@@ -2858,7 +2858,7 @@ def export_monthly_xlsx(request):
             late_cell.font = normal_font
         late_cell.alignment = center
         late_cell.border = border
-        
+
         # Overtime
         ot_cell = ws.cell(
             row=data_row,
@@ -2869,7 +2869,7 @@ def export_monthly_xlsx(request):
         ot_cell.alignment = center
         ot_cell.border = border
         ot_cell.font = normal_font
-        
+
         # Holiday Work
         hw_cell = ws.cell(
             row=data_row,
@@ -2878,22 +2878,22 @@ def export_monthly_xlsx(request):
         hw_cell.alignment = center
         hw_cell.border = border
         hw_cell.font = normal_font
-        
+
         # Apply border to SN, name, and designation
         ws.cell(row=data_row, column=1).border = border
         ws.cell(row=data_row, column=1).alignment = center
         ws.cell(row=data_row, column=2).border = border
         ws.cell(row=data_row, column=3).border = border
-        
+
         data_row += 1
-    
+
     # ==================
     # COLUMN WIDTHS
     # ==================
     ws.column_dimensions['A'].width = 6   # SN
     ws.column_dimensions['B'].width = 22  # Employee name
     ws.column_dimensions['C'].width = 18  # Designation
-    
+
     col = 4
     for d in all_days:
         col_letter = get_column_letter(col)
@@ -2901,7 +2901,7 @@ def export_monthly_xlsx(request):
         ws.column_dimensions[col_letter].width = 6
         ws.column_dimensions[col_letter2].width = 6
         col += 2
-    
+
     # Summary columns
     ws.column_dimensions[
         get_column_letter(summary_start_col)].width = 10
@@ -2913,17 +2913,17 @@ def export_monthly_xlsx(request):
         get_column_letter(summary_start_col+3)].width = 10
     ws.column_dimensions[
         get_column_letter(summary_start_col+4)].width = 12
-    
+
     # Row heights
     ws.row_dimensions[1].height = 25
     ws.row_dimensions[2].height = 20
     ws.row_dimensions[3].height = 20
     for r in range(4, data_row):
         ws.row_dimensions[r].height = 18
-    
+
     # Freeze panes (keep headers and metadata columns visible)
     ws.freeze_panes = 'D4'
-    
+
     # ==================
     # HTTP RESPONSE
     # ==================
@@ -2945,20 +2945,20 @@ def export_monthly_csv(request):
     month = data['month']
     employees = data['employees']
     employee_stats = data['employee_stats']
-    
+
     month_name = date(year, month, 1).strftime('%B-%y')
-    
+
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = (
         f'attachment; filename="attendance_{month_name}.csv"'
     )
-    
+
     writer = csv.writer(response)
-    
+
     # Headers
     headers = ['SN', 'Employee Name', 'Designation', 'Present', 'Absent', 'Late Days', 'OT Hours', 'Holiday Work']
     writer.writerow(headers)
-    
+
     for idx, emp in enumerate(employees, 1):
         emp_stat = employee_stats.get(emp.id, {})
         row = [
@@ -2972,7 +2972,7 @@ def export_monthly_csv(request):
             emp_stat.get('holiday_work_count', 0)
         ]
         writer.writerow(row)
-        
+
     return response
 
 @admin_required
@@ -2982,20 +2982,20 @@ def export_monthly_pdf(request):
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    
+
     data = get_monthly_grid_data(request)
     year = data['year']
     month = data['month']
     employees = data['employees']
     employee_stats = data['employee_stats']
-    
+
     month_name = date(year, month, 1).strftime('%B-%y')
-    
+
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = (
         f'attachment; filename="attendance_{month_name}.pdf"'
     )
-    
+
     doc = SimpleDocTemplate(
         response,
         pagesize=landscape(A4),
@@ -3004,9 +3004,9 @@ def export_monthly_pdf(request):
         topMargin=20,
         bottomMargin=20,
     )
-    
+
     styles = getSampleStyleSheet()
-    
+
     # Custom cell paragraph styles
     cell_style = ParagraphStyle(
         'GridCell',
@@ -3029,7 +3029,7 @@ def export_monthly_pdf(request):
         parent=cell_style,
         textColor=colors.HexColor('#FF0000')
     )
-    
+
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
@@ -3039,7 +3039,7 @@ def export_monthly_pdf(request):
         textColor=colors.HexColor('#1F4E79'),
         alignment=0
     )
-    
+
     subtitle_style = ParagraphStyle(
         'SubtitleStyle',
         parent=styles['Normal'],
@@ -3048,17 +3048,17 @@ def export_monthly_pdf(request):
         leading=10,
         textColor=colors.HexColor('#4B5563')
     )
-    
+
     elements = []
-    
+
     elements.append(Paragraph(f"Monthly Attendance Report — {date(year, month, 1).strftime('%B %Y')}", title_style))
     elements.append(Paragraph(f"Generated: {timezone.localtime().strftime('%d %b %Y, %I:%M %p')}", subtitle_style))
     elements.append(Spacer(1, 10))
-    
+
     # Table headers
     headers = ['SN', 'Employee Name', 'Designation', 'Present', 'Absent', 'Late Days', 'OT Hours', 'Holiday Work']
     table_data = [headers]
-    
+
     t_style = [
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -3073,7 +3073,7 @@ def export_monthly_pdf(request):
         ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
         ('TOPPADDING', (0, 1), (-1, -1), 5),
     ]
-    
+
     r_idx = 1
     for idx, emp in enumerate(employees, 1):
         emp_stat = employee_stats.get(emp.id, {})
@@ -3082,7 +3082,7 @@ def export_monthly_pdf(request):
         late_count = emp_stat.get('late_count', 0)
         ot_display = emp_stat.get('overtime_display', '-')
         holiday_work_count = emp_stat.get('holiday_work_count', 0)
-        
+
         row = [
             Paragraph(str(idx), cell_style),
             Paragraph(emp.full_name, cell_style_left),
@@ -3093,27 +3093,27 @@ def export_monthly_pdf(request):
             Paragraph(ot_display, cell_style),
             Paragraph(str(holiday_work_count), cell_style)
         ]
-        
+
         # Color highlights
         if absent_count > 0:
             t_style.append(('BACKGROUND', (4, r_idx), (4, r_idx), colors.HexColor('#FFE0E0')))
             row[4] = Paragraph(str(absent_count), late_text_style)
-            
+
         if late_count > 0:
             t_style.append(('BACKGROUND', (5, r_idx), (5, r_idx), colors.HexColor('#FFE0E0')))
             row[5] = Paragraph(str(late_count), late_text_style)
-            
+
         if ot_display != '-':
             t_style.append(('BACKGROUND', (6, r_idx), (6, r_idx), colors.HexColor('#E0F0FF')))
-            
+
         table_data.append(row)
         r_idx += 1
-        
+
     col_widths = [30, 160, 140, 70, 70, 70, 80, 80]
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle(t_style))
     elements.append(table)
-    
+
     doc.build(elements)
     return response
 
@@ -3128,15 +3128,15 @@ class ExpiredDataView(AdminRequiredMixin, ListView):
     template_name = 'admin_panel/expired_data.html'
     context_object_name = 'attendances'
     paginate_by = 25
-    
+
     def get_queryset(self):
         queryset = super().get_queryset().filter(is_expired=True).select_related('employee', 'employee__branch')
-        
+
         date_from = self.request.GET.get('date_from')
         date_to = self.request.GET.get('date_to')
         emp_id = self.request.GET.get('employee')
         branch_id = self.request.GET.get('branch')
-        
+
         if date_from:
             queryset = queryset.filter(date__gte=date_from)
         if date_to:
@@ -3145,9 +3145,9 @@ class ExpiredDataView(AdminRequiredMixin, ListView):
             queryset = queryset.filter(employee_id=emp_id)
         if branch_id:
             queryset = queryset.filter(employee__branch_id=branch_id)
-            
+
         return queryset.order_by('-expired_at', '-date')
-        
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         stats = get_retention_stats()
@@ -3256,13 +3256,13 @@ class AbsentReportView(AdminRequiredMixin, ListView):
             'date_from': self.request.GET.get('date_from', ''),
             'date_to': self.request.GET.get('date_to', ''),
         })
-        
+
         # Build query string for pagination links
         get_copy = self.request.GET.copy()
         if 'page' in get_copy:
             del get_copy['page']
         context['query_string'] = get_copy.urlencode()
-        
+
         return context
 
 
@@ -3294,11 +3294,11 @@ class ExportAbsentReportExcelView(AdminRequiredMixin, View):
         company_font = Font(name='Calibri', bold=True, size=14)
         header_font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
         normal_font = Font(name='Calibri', size=9)
-        
+
         header_fill = PatternFill('solid', fgColor='1F4E79')  # dark blue
         center = Alignment(horizontal='center', vertical='center')
         left = Alignment(horizontal='left', vertical='center')
-        
+
         thin = Side(style='thin', color='E5E7EB')
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -3322,7 +3322,7 @@ class ExportAbsentReportExcelView(AdminRequiredMixin, View):
             emp = item['employee']
             dt = item['date']
             lt = item['leave_type_deducted']
-            
+
             if lt:
                 bal = LeaveBalance.objects.filter(employee=emp, leave_type=lt, year=dt.year).first()
                 if bal:
@@ -3445,7 +3445,7 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
             textColor=colors.HexColor('#374151'),
             alignment=0
         )
-        
+
         title_style = ParagraphStyle(
             'TitleStyle',
             parent=styles['Heading1'],
@@ -3455,7 +3455,7 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
             textColor=colors.HexColor('#111827'),
             alignment=0
         )
-        
+
         subtitle_style = ParagraphStyle(
             'SubtitleStyle',
             parent=styles['Normal'],
@@ -3487,7 +3487,7 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
             emp = item['employee']
             dt = item['date']
             lt = item['leave_type_deducted']
-            
+
             if lt:
                 bal = LeaveBalance.objects.filter(employee=emp, leave_type=lt, year=dt.year).first()
                 if bal:
@@ -3529,7 +3529,7 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
 
         elements.append(table)
         elements.append(Spacer(1, 20))
-        
+
         footer_style = ParagraphStyle(
             'FooterStyle',
             parent=styles['Normal'],
@@ -3563,9 +3563,9 @@ class AdminAddLeaveView(AdminRequiredMixin, CreateView):
     def form_valid(self, form):
         form.instance.reviewed_by = self.request.user
         form.instance.reviewed_at = timezone.now()
-        
+
         response = super().form_valid(form)
-        
+
         messages.success(
             self.request,
             f"Leave record for {form.instance.employee.full_name} added successfully."
@@ -3797,7 +3797,7 @@ from .forms import AdminLeaveBalanceForm, AdminAttendanceForm
 
 class AdminCRUDPermissionMixin:
     codename = None
-    
+
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_superuser:
             res = PermissionEngine.evaluate(request.user, self.codename)
@@ -3810,11 +3810,11 @@ class AdminLeaveRequestCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
     model = LeaveRequest
     codename = 'leave.create'
     template_name = 'admin_panel/leave/crud/create_modal.html'
-    
+
     def get_form_class(self):
         from apps.leave.forms import AdminAddLeaveForm
         return AdminAddLeaveForm
-        
+
     def form_valid(self, form):
         instance = form.save(commit=False)
         instance.reviewed_by = self.request.user
@@ -3836,11 +3836,11 @@ class AdminLeaveRequestUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
     model = LeaveRequest
     codename = 'leave.edit'
     template_name = 'admin_panel/leave/crud/edit_modal.html'
-    
+
     def get_form_class(self):
         from apps.leave.forms import AdminAddLeaveForm
         return AdminAddLeaveForm
-        
+
     def form_valid(self, form):
         instance = form.save(commit=False)
         instance.reviewed_by = self.request.user
@@ -3860,7 +3860,7 @@ class AdminLeaveRequestUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
 
 class AdminLeaveRequestDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, View):
     codename = 'leave.delete'
-    
+
     def post(self, request, pk):
         instance = get_object_or_404(LeaveRequest, pk=pk)
         log_audit(
@@ -3880,10 +3880,10 @@ class AdminLeaveBalanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
     model = LeaveBalance
     codename = 'leave.edit'
     template_name = 'admin_panel/leave/crud/balance_edit_modal.html'
-    
+
     def get_form_class(self):
         return AdminLeaveBalanceForm
-        
+
     def form_valid(self, form):
         instance = form.save()
         log_audit(
@@ -3902,10 +3902,10 @@ class AdminAttendanceCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Cr
     model = Attendance
     codename = 'attendance.create'
     template_name = 'admin_panel/attendance/crud/create_modal.html'
-    
+
     def get_form_class(self):
         return AdminAttendanceForm
-        
+
     def form_valid(self, form):
         instance = form.save()
         log_audit(
@@ -3924,10 +3924,10 @@ class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Up
     model = Attendance
     codename = 'attendance.edit'
     template_name = 'admin_panel/attendance/crud/edit_modal.html'
-    
+
     def get_form_class(self):
         return AdminAttendanceForm
-        
+
     def form_valid(self, form):
         instance = form.save()
         log_audit(
@@ -3944,7 +3944,7 @@ class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Up
 
 class AdminAttendanceDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, View):
     codename = 'attendance.delete'
-    
+
     def post(self, request, pk):
         instance = get_object_or_404(Attendance, pk=pk)
         log_audit(

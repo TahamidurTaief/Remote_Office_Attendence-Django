@@ -38,7 +38,7 @@ class EmployeeListView(AdminRequiredMixin, ListView):
     template_name = 'employees/employee_list.html'
     context_object_name = 'employees'
     paginate_by = 20
-    
+
     def get_queryset(self):
         queryset = super().get_queryset().exclude(master_employee__is_trashed=True).select_related(
             'branch', 'user', 'master_employee', 'master_employee__department', 'master_employee__designation'
@@ -50,21 +50,21 @@ class EmployeeListView(AdminRequiredMixin, ListView):
 
         if search_query:
             queryset = queryset.filter(
-                Q(full_name__icontains=search_query) | 
+                Q(full_name__icontains=search_query) |
                 Q(employee_id__icontains=search_query)
             )
-            
+
         if department_filter:
             queryset = queryset.filter(department=department_filter)
-            
+
         if branch_filter:
             queryset = queryset.filter(branch_id=branch_filter)
-            
+
         if status_filter == 'active':
             queryset = queryset.filter(is_active=True)
         elif status_filter == 'inactive':
             queryset = queryset.filter(is_active=False)
-            
+
         return queryset.order_by('full_name', 'employee_id')
 
     def get_context_data(self, **kwargs):
@@ -73,7 +73,7 @@ class EmployeeListView(AdminRequiredMixin, ListView):
         context['department'] = self.request.GET.get('department', '')
         context['branch_id'] = self.request.GET.get('branch', '')
         context['status'] = self.request.GET.get('status', '')
-        
+
         context['departments'] = EmployeeProfile.objects.values_list('department', flat=True).distinct().exclude(department='')
         from apps.branches.utils import get_cached_branches
         context['branches'] = get_cached_branches()
@@ -110,7 +110,7 @@ class EmployeeCreateView(AdminRequiredMixin, CreateView):
         response = super().form_valid(form)
         from apps.leave.models import LeaveType, LeaveBalance
         from .models import EmployeeLeaveRule
-        
+
         leave_types = LeaveType.objects.all()
         for lt in leave_types:
             post_key = f'leave_override_{lt.id}'
@@ -163,7 +163,7 @@ class EmployeeEditView(AdminRequiredMixin, UpdateView):
         from apps.leave.models import LeaveType
         from .models import EmployeeLeaveRule
         leave_types = LeaveType.objects.all().order_by('name')
-        
+
         if self.request.method == 'POST':
             context['leave_types_with_overrides'] = [
                 {
@@ -177,7 +177,7 @@ class EmployeeEditView(AdminRequiredMixin, UpdateView):
             ]
         else:
             overrides = {
-                rule.leave_type_id: rule.days_per_year 
+                rule.leave_type_id: rule.days_per_year
                 for rule in EmployeeLeaveRule.objects.filter(employee=self.object)
             }
             context['leave_types_with_overrides'] = [
@@ -196,7 +196,7 @@ class EmployeeEditView(AdminRequiredMixin, UpdateView):
         response = super().form_valid(form)
         from apps.leave.models import LeaveType, LeaveBalance
         from .models import EmployeeLeaveRule
-        
+
         leave_types = LeaveType.objects.all()
         for lt in leave_types:
             post_key = f'leave_override_{lt.id}'
@@ -290,7 +290,7 @@ class EmployeeDocumentVerifyView(RoleRequiredMixin, View):
     def post(self, request, pk):
         doc = get_object_or_404(EmployeeDocument, pk=pk)
         employee_pk = doc.employee_master_id or doc.employee_id
-        
+
         if doc.is_verified:
             doc.is_verified = False
             doc.verified_by = None
@@ -301,7 +301,7 @@ class EmployeeDocumentVerifyView(RoleRequiredMixin, View):
             doc.verified_by = request.user
             doc.verified_at = timezone.now()
             action_str = "verified"
-            
+
         doc.save()
         log_audit(
             actor=request.user,
@@ -310,7 +310,7 @@ class EmployeeDocumentVerifyView(RoleRequiredMixin, View):
             summary=f"Marked document {doc.title} ({doc.get_document_type_display()}) as {action_str}"
         )
         messages.success(request, f"Document has been successfully {action_str}.")
-        
+
         if request.headers.get('HX-Request'):
             res = render(request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:master_detail', kwargs={'pk': employee_pk})})
             res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': employee_pk})
@@ -325,10 +325,10 @@ class EmployeeDocumentArchiveView(RoleRequiredMixin, View):
     def post(self, request, pk):
         doc = get_object_or_404(EmployeeDocument, pk=pk)
         employee_pk = doc.employee_master_id or doc.employee_id
-        
+
         doc.is_archived = not doc.is_archived
         doc.save()
-        
+
         action_str = "archived" if doc.is_archived else "restored"
         log_audit(
             actor=request.user,
@@ -337,7 +337,7 @@ class EmployeeDocumentArchiveView(RoleRequiredMixin, View):
             summary=f"Marked document {doc.title} ({doc.get_document_type_display()}) as {action_str}"
         )
         messages.success(request, f"Document has been successfully {action_str}.")
-        
+
         if request.headers.get('HX-Request'):
             res = render(request, 'employees/partials/form_success_htmx.html', {'redirect_url': reverse('employees:master_detail', kwargs={'pk': employee_pk})})
             res['HX-Redirect'] = reverse('employees:master_detail', kwargs={'pk': employee_pk})
@@ -384,7 +384,7 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
             queryset = queryset.filter(status=status_filter)
         else:
             queryset = queryset.exclude(status=EmployeeStatus.ARCHIVED)
-            
+
         if dept_filter:
             queryset = queryset.filter(department_id=dept_filter)
         if branch_filter:
@@ -444,13 +444,13 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
         context['asset_assignments'] = self.object.asset_assignments.select_related('asset').all()
         context['active_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
         context['historical_asset_assignments'] = self.object.asset_assignments.filter(returned_date__isnull=False).select_related('asset', 'reassigned_to__employee')
-        
+
         # Payroll gating check
         from apps.accounts.engine import PermissionEngine
         user = self.request.user
         can_view_payroll = user.is_superuser or PermissionEngine.evaluate(user, 'employees.view_payroll').allowed or getattr(user, 'role', '') in ('admin', 'hr', 'hr_manager', 'hr_admin')
         context['can_view_payroll'] = can_view_payroll
-        
+
         return context
 
 
@@ -556,7 +556,7 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
                 # Format FKs or objects nicely
                 old_str = str(old_val) if old_val is not None else ""
                 new_str = str(new_val) if new_val is not None else ""
-                
+
                 if field in ('reporting_manager', 'branch', 'department', 'designation', 'user'):
                     old_str = old_val.get_full_name() if (field == 'reporting_manager' and old_val) else (old_val.name if (field in ('branch', 'department', 'designation') and old_val) else (old_val.email or old_val.phone if (field == 'user' and old_val) else str(old_val or "")))
                     new_str = new_val.get_full_name() if (field == 'reporting_manager' and new_val) else (new_val.name if (field in ('branch', 'department', 'designation') and new_val) else (new_val.email or new_val.phone if (field == 'user' and new_val) else str(new_val or "")))
@@ -604,7 +604,7 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
         employee = get_object_or_404(Employee, pk=pk)
         old_status = employee.status
         TrashService.soft_delete(employee, actor=request.user, reason='Archived via Admin Action', request=request)
-        
+
         EmploymentHistory.objects.create(
             employee=employee,
             field_changed='status',
@@ -946,13 +946,13 @@ class AssetReassignView(RoleRequiredMixin, View):
         form = AssetReassignForm(request.POST, current_assignment=assignment)
         if form.is_valid():
             from django.db import transaction
-            
+
             with transaction.atomic():
                 assignment.returned_date = form.cleaned_data['returned_date']
                 assignment.condition_at_return = form.cleaned_data['condition_at_return']
                 assignment.notes = form.cleaned_data['return_notes']
                 assignment.save()
-                
+
                 new_assignment = AssetAssignment.objects.create(
                     asset=assignment.asset,
                     employee=form.cleaned_data['new_employee'],
@@ -961,7 +961,7 @@ class AssetReassignView(RoleRequiredMixin, View):
                     notes=form.cleaned_data['new_notes'],
                     assigned_by=request.user
                 )
-                
+
                 assignment.reassigned_to = new_assignment
                 assignment.save()
 
@@ -1082,10 +1082,10 @@ def _apply_transition(employee, req_obj, actor):
         start_date = getattr(req_obj, 'suspension_start_date', None) or tz.now().date()
         end_date = getattr(req_obj, 'suspension_end_date', None)
         auto_react = getattr(req_obj, 'auto_reactivate', False)
-        
+
         # Deactivate existing active suspensions just in case
         EmployeeSuspension.objects.filter(employee=employee, is_active=True).update(is_active=False)
-        
+
         EmployeeSuspension.objects.create(
             employee=employee,
             suspension_start_date=start_date,
@@ -1788,7 +1788,7 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
         events.sort(key=lambda x: x['timestamp'], reverse=True)
         start_idx = (page - 1) * page_size
         end_idx = page * page_size
-        
+
         context['timeline_events'] = events[start_idx:end_idx]
         context['has_next'] = len(events) > end_idx
         context['next_page'] = page + 1
@@ -1879,7 +1879,7 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
         )
 
         messages.success(request, f"Employee has been successfully {action_str.lower()}ed.")
-        
+
         if request.headers.get('HX-Request'):
             from django.urls import reverse
             response = render(request, 'employees/partials/form_success_htmx.html', {
@@ -1887,7 +1887,7 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
             })
             response['HX-Redirect'] = reverse('employees:employee_detail', kwargs={'pk': employee.pk})
             return response
-            
+
         return redirect('employees:employee_detail', pk=employee.pk)
 
 
@@ -1898,7 +1898,7 @@ class EmployeeSuspendModalView(AdminRequiredMixin, View):
         title = "Un-suspend employee?" if employee.is_suspended else "Suspend employee?"
         action_label = "Un-suspend Profile" if employee.is_suspended else "Suspend Profile"
         message = f"Are you sure you want to change the suspension status for {employee.get_full_name()}?"
-        
+
         return render(request, 'employees/partials/confirmation_modal.html', {
             'title': title,
             'endpoint': reverse('employees:employee_suspend_toggle', kwargs={'pk': employee.pk}),
@@ -2005,7 +2005,7 @@ class ManagerDelegationEndView(AdminRequiredMixin, View):
         delg.is_active = False
         delg.end_date = timezone.localdate()
         delg.save(update_fields=['is_active', 'end_date'])
-        
+
         log_audit(
             actor=request.user,
             action='delegation_ended',
@@ -2024,7 +2024,7 @@ class EmployeeReportsView(AdminRequiredMixin, TemplateView):
         from datetime import timedelta
         context = super().get_context_data(**kwargs)
         today = timezone.localdate()
-        
+
         # 1. Lifecycle Status Report
         status_counts = Employee.objects.exclude(status='archived').values('status').annotate(count=Count('id')).order_by('status')
         status_list = []
@@ -2043,13 +2043,13 @@ class EmployeeReportsView(AdminRequiredMixin, TemplateView):
             is_archived=False,
             expiry_date__isnull=False
         ).select_related('employee_master', 'employee').order_by('expiry_date')
-        
+
         # 3. Asset Allocation Report
         context['asset_assignments'] = AssetAssignment.objects.filter(
             returned_date__isnull=True
         ).select_related('asset', 'employee', 'assigned_by').order_by('assigned_date')
         context['all_assets'] = Asset.objects.all().prefetch_related('assignments__employee')
-        
+
         return context
 
 
@@ -2172,13 +2172,13 @@ class DepartmentExportCSVView(AdminRequiredMixin, View):
     def get(self, request):
         import csv
         departments = Department.objects.prefetch_related('branches').all().order_by('name')
-        
+
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="departments.csv"'
-        
+
         writer = csv.writer(response)
         writer.writerow(['Name', 'Code', 'Description', 'Is Global', 'Branches', 'Is Active'])
-        
+
         for dept in departments:
             branches_str = ",".join([b.name for b in dept.branches.all()]) if not dept.is_global else 'All'
             writer.writerow([
@@ -2189,7 +2189,7 @@ class DepartmentExportCSVView(AdminRequiredMixin, View):
                 branches_str,
                 'True' if dept.is_active else 'False'
             ])
-            
+
         return response
 
 
@@ -2202,35 +2202,35 @@ class DepartmentImportCSVView(AdminRequiredMixin, View):
         if not csv_file:
             messages.error(request, 'No file uploaded.')
             return redirect('employees:department_list')
-        
+
         if not csv_file.name.endswith('.csv'):
             messages.error(request, 'Please upload a CSV file.')
             return redirect('employees:department_list')
-        
+
         try:
             file_data = csv_file.read().decode('utf-8')
             csv_reader = csv.reader(io.StringIO(file_data))
             header = next(csv_reader) # Skip header
-            
+
             created_count = 0
             updated_count = 0
-            
+
             for row in csv_reader:
                 if not row or len(row) < 1:
                     continue
                 name = row[0].strip()
                 if not name:
                     continue
-                
+
                 code = row[1].strip() if len(row) > 1 else ''
                 description = row[2].strip() if len(row) > 2 else ''
                 is_global_str = row[3].strip().lower() if len(row) > 3 else 'true'
                 is_global = is_global_str in ['true', '1', 'yes']
-                
+
                 branches_str = row[4].strip() if len(row) > 4 else ''
                 is_active_str = row[5].strip().lower() if len(row) > 5 else 'true'
                 is_active = is_active_str in ['true', '1', 'yes']
-                
+
                 dept, created = Department.objects.get_or_create(
                     name=name,
                     defaults={
@@ -2240,7 +2240,7 @@ class DepartmentImportCSVView(AdminRequiredMixin, View):
                         'is_active': is_active
                     }
                 )
-                
+
                 if not created:
                     dept.code = code
                     dept.description = description
@@ -2250,7 +2250,7 @@ class DepartmentImportCSVView(AdminRequiredMixin, View):
                     updated_count += 1
                 else:
                     created_count += 1
-                
+
                 if not is_global and branches_str and branches_str.lower() != 'all':
                     dept.branches.clear()
                     branch_names = [b.strip() for b in branches_str.split(',') if b.strip()]
@@ -2258,7 +2258,7 @@ class DepartmentImportCSVView(AdminRequiredMixin, View):
                         branch = Branch.objects.filter(name__iexact=b_name).first()
                         if branch:
                             dept.branches.add(branch)
-                            
+
             messages.success(request, f'Successfully imported departments. Created: {created_count}, Updated: {updated_count}')
             log_audit(
                 actor=request.user,
@@ -2268,7 +2268,7 @@ class DepartmentImportCSVView(AdminRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f'Failed to parse CSV file: {str(e)}')
-            
+
         return redirect('employees:department_list')
 
 
@@ -2406,20 +2406,20 @@ class DesignationExportCSVView(AdminRequiredMixin, View):
     def get(self, request):
         import csv
         designations = Designation.objects.select_related('department').all().order_by('name')
-        
+
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="designations.csv"'
-        
+
         writer = csv.writer(response)
         writer.writerow(['Name', 'Code', 'Department'])
-        
+
         for des in designations:
             writer.writerow([
                 des.name,
                 des.code or '',
                 des.department.name if des.department else ''
             ])
-            
+
         return response
 
 
@@ -2431,33 +2431,33 @@ class DesignationImportCSVView(AdminRequiredMixin, View):
         if not csv_file:
             messages.error(request, 'No file uploaded.')
             return redirect('employees:designation_list')
-        
+
         if not csv_file.name.endswith('.csv'):
             messages.error(request, 'Please upload a CSV file.')
             return redirect('employees:designation_list')
-        
+
         try:
             file_data = csv_file.read().decode('utf-8')
             csv_reader = csv.reader(io.StringIO(file_data))
             header = next(csv_reader) # Skip header
-            
+
             created_count = 0
             updated_count = 0
-            
+
             for row in csv_reader:
                 if not row or len(row) < 1:
                     continue
                 name = row[0].strip()
                 if not name:
                     continue
-                
+
                 code = row[1].strip() if len(row) > 1 else ''
                 dept_name = row[2].strip() if len(row) > 2 else ''
-                
+
                 dept = None
                 if dept_name:
                     dept = Department.objects.filter(name__iexact=dept_name).first()
-                
+
                 desig, created = Designation.objects.get_or_create(
                     name=name,
                     defaults={
@@ -2465,7 +2465,7 @@ class DesignationImportCSVView(AdminRequiredMixin, View):
                         'department': dept
                     }
                 )
-                
+
                 if not created:
                     desig.code = code
                     desig.department = dept
@@ -2473,7 +2473,7 @@ class DesignationImportCSVView(AdminRequiredMixin, View):
                     updated_count += 1
                 else:
                     created_count += 1
-                            
+
             messages.success(request, f'Successfully imported designations. Created: {created_count}, Updated: {updated_count}')
             log_audit(
                 actor=request.user,
@@ -2483,7 +2483,7 @@ class DesignationImportCSVView(AdminRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f'Failed to parse CSV file: {str(e)}')
-            
+
         return redirect('employees:designation_list')
 
 
@@ -2491,13 +2491,13 @@ class EmployeeExportCSVView(AdminRequiredMixin, View):
     def get(self, request):
         import csv
         employees = Employee.objects.select_related('branch', 'department', 'designation', 'user').all().order_by('first_name', 'last_name')
-        
+
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="employees.csv"'
-        
+
         writer = csv.writer(response)
         writer.writerow(['First Name', 'Last Name', 'Email', 'Phone', 'Employee Number', 'Branch', 'Department', 'Designation', 'Status', 'Joined Date'])
-        
+
         for emp in employees:
             writer.writerow([
                 emp.first_name,
@@ -2511,7 +2511,7 @@ class EmployeeExportCSVView(AdminRequiredMixin, View):
                 emp.status,
                 emp.joined_date.isoformat() if emp.joined_date else ''
             ])
-            
+
         return response
 
 
@@ -2522,24 +2522,24 @@ class EmployeeImportCSVView(AdminRequiredMixin, View):
         from apps.branches.models import Branch
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        
+
         csv_file = request.FILES.get('file')
         if not csv_file:
             messages.error(request, 'No file uploaded.')
             return redirect('employees:master_list')
-        
+
         if not csv_file.name.endswith('.csv'):
             messages.error(request, 'Please upload a CSV file.')
             return redirect('employees:master_list')
-        
+
         try:
             file_data = csv_file.read().decode('utf-8')
             csv_reader = csv.reader(io.StringIO(file_data))
             header = next(csv_reader) # Skip header
-            
+
             created_count = 0
             updated_count = 0
-            
+
             for row in csv_reader:
                 if not row or len(row) < 5:
                     continue
@@ -2553,14 +2553,14 @@ class EmployeeImportCSVView(AdminRequiredMixin, View):
                 desig_name = row[7].strip() if len(row) > 7 else ''
                 status = row[8].strip().lower() if len(row) > 8 else 'active'
                 joined_date_str = row[9].strip() if len(row) > 9 else ''
-                
+
                 if not first_name or not last_name or not emp_number:
                     continue
-                
+
                 branch = Branch.objects.filter(name__iexact=branch_name).first() if branch_name else None
                 dept = Department.objects.filter(name__iexact=dept_name).first() if dept_name else None
                 desig = Designation.objects.filter(name__iexact=desig_name).first() if desig_name else None
-                
+
                 user = None
                 if email:
                     user = User.objects.filter(email__iexact=email).first()
@@ -2571,7 +2571,7 @@ class EmployeeImportCSVView(AdminRequiredMixin, View):
                             role='staff',
                             is_active=True
                         )
-                
+
                 emp, created = Employee.objects.get_or_create(
                     employee_number=emp_number,
                     defaults={
@@ -2585,7 +2585,7 @@ class EmployeeImportCSVView(AdminRequiredMixin, View):
                         'status': status,
                     }
                 )
-                
+
                 if not created:
                     emp.first_name = first_name
                     emp.last_name = last_name
@@ -2600,7 +2600,7 @@ class EmployeeImportCSVView(AdminRequiredMixin, View):
                     updated_count += 1
                 else:
                     created_count += 1
-                            
+
             messages.success(request, f'Successfully imported employees. Created: {created_count}, Updated: {updated_count}')
             log_audit(
                 actor=request.user,
@@ -2610,6 +2610,6 @@ class EmployeeImportCSVView(AdminRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f'Failed to parse CSV file: {str(e)}')
-            
+
         return redirect('employees:master_list')
 

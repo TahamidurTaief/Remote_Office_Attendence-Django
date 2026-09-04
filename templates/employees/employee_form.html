@@ -13,7 +13,7 @@
         <c-card>
             <form method="POST" enctype="multipart/form-data" class="space-y-6">
                 {% csrf_token %}
-                
+
                 {% if form.errors %}
                 <div class="rounded-btn bg-red-50 p-4 border border-red-200 dark:bg-red-950 dark:border-red-900">
                     <h3 class="text-xs font-semibold text-red-800 dark:text-red-200">Please fix the errors below.</h3>
@@ -29,7 +29,7 @@
                         {% if form.email.errors %}<p class="ft-error-text">{{ form.email.errors.0 }}</p>{% endif %}
                     </div>
                     {% endif %}
-                    
+
                     <div class="sm:col-span-6">
                         <c-employee-roles-picker :field="form.roles" required="true" help_text="Select one or more authorized dynamic roles for this employee."></c-employee-roles-picker>
                         <div class="hidden">
@@ -201,7 +201,7 @@
                     <p class="ft-help-text mb-3">
                         Specify custom yearly leave allowances for this employee to override global settings.
                     </p>
-                    
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-btn border" style="background:var(--surface-2); border-color:var(--border)">
                         {% for item in leave_types_with_overrides %}
                         <div class="flex items-center justify-between p-2.5 rounded-btn border gap-3" style="background:var(--surface); border-color:var(--border)">
@@ -211,8 +211,8 @@
                             </div>
                             <div class="w-24 shrink-0 relative">
                                 <input id="leave_override_{{ item.id }}"
-                                       type="number" 
-                                       name="leave_override_{{ item.id }}" 
+                                       type="number"
+                                       name="leave_override_{{ item.id }}"
                                        value="{{ item.override_days }}"
                                        placeholder="{{ item.default_days }}"
                                        min="0"

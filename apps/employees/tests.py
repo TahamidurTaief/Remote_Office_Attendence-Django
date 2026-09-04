@@ -24,6 +24,14 @@ class EmployeeProfileTests(TestCase):
             radius_meters=100
         )
         self.password = 'testpassword123'
+        self.admin_user = User.objects.create_superuser(
+            email='admin@test.local',
+            password='AdminPassword123!'
+        )
+        self.staff_role, _ = Role.objects.get_or_create(
+            code='staff',
+            defaults={'name': 'Staff', 'is_active': True}
+        )
 
     def test_create_employee_without_department_designation(self):
         # Prepare form data leaving department and designation blank
@@ -35,26 +43,26 @@ class EmployeeProfileTests(TestCase):
             'joined_date': date.today(),
             'is_active': True,
             'tracking_interval': 0,
-            'role': 'staff',
+            'roles': [self.staff_role.id],
             'password1': self.password,
             'password2': self.password,
         }
-        
-        form = EmployeeCreateForm(data=form_data)
+
+        form = EmployeeCreateForm(data=form_data, actor=self.admin_user)
         self.assertTrue(form.is_valid(), form.errors.as_data())
-        
+
         # Save profile and associated User
         profile = form.save()
-        
+
         # Verify nullable fields in database are None or empty
         self.assertIsNone(profile.department)
         self.assertIsNone(profile.designation)
-        
+
         # Verify custom user is created with matching phone number
         user = profile.user
         self.assertEqual(user.phone, '+8801799999999')
         self.assertIsNone(user.email)
-        
+
         # Verify authentication by phone number
         authenticated_user = authenticate(username='+8801799999999', password=self.password)
         self.assertIsNotNone(authenticated_user)
@@ -77,12 +85,12 @@ class EmployeeProfileTests(TestCase):
             joined_date=date.today(),
             branch=self.branch
         )
-        
+
         # 2. Use edit form to clear department and designation
         form_data = {
             'employee_id': 'EMP-2026-888',
             'full_name': 'Jane Doe',
-            'role': 'staff',
+            'roles': [self.staff_role.id],
             'department': '',  # clear it
             'designation': '', # clear it
             'branch': self.branch.id,
@@ -93,10 +101,10 @@ class EmployeeProfileTests(TestCase):
             'new_password': '',
             'confirm_password': '',
         }
-        
-        form = EmployeeEditForm(data=form_data, instance=profile)
+
+        form = EmployeeEditForm(data=form_data, instance=profile, actor=self.admin_user)
         self.assertTrue(form.is_valid(), form.errors.as_data())
-        
+
         saved_profile = form.save()
         self.assertIn(saved_profile.department, [None, ''])
         self.assertIn(saved_profile.designation, [None, ''])
@@ -105,14 +113,14 @@ class EmployeeProfileTests(TestCase):
         from io import BytesIO
         from PIL import Image
         from django.core.files.uploadedfile import SimpleUploadedFile
-        
+
         # Create a valid BMP image (which is not in our allowed types: jpeg, png, webp)
         file_obj = BytesIO()
         image = Image.new("RGBA", size=(1, 1), color=(0, 0, 0, 0))
         image.save(file_obj, "bmp")
         file_obj.seek(0)
         invalid_file = SimpleUploadedFile("test.bmp", file_obj.read(), content_type="image/bmp")
-        
+
         form_data = {
             'employee_id': 'EMP-2026-999',
             'full_name': 'John Doe',
@@ -121,11 +129,11 @@ class EmployeeProfileTests(TestCase):
             'joined_date': date.today(),
             'is_active': True,
             'tracking_interval': 0,
-            'role': 'staff',
+            'roles': [self.staff_role.id],
             'password1': self.password,
             'password2': self.password,
         }
-        form = EmployeeCreateForm(data=form_data, files={'profile_photo': invalid_file})
+        form = EmployeeCreateForm(data=form_data, files={'profile_photo': invalid_file}, actor=self.admin_user)
         self.assertFalse(form.is_valid())
         self.assertIn('profile_photo', form.errors)
         self.assertIn('Invalid file type', form.errors['profile_photo'][0])
@@ -134,7 +142,7 @@ class EmployeeProfileTests(TestCase):
         from io import BytesIO
         from PIL import Image
         from django.core.files.uploadedfile import SimpleUploadedFile
-        
+
         # Create a valid PNG image and pad it to be 6MB
         file_obj = BytesIO()
         image = Image.new("RGBA", size=(1, 1), color=(0, 0, 0, 0))
@@ -143,7 +151,7 @@ class EmployeeProfileTests(TestCase):
         img_bytes = file_obj.read()
         padded_bytes = img_bytes + b"0" * (6 * 1024 * 1024 - len(img_bytes))
         large_file = SimpleUploadedFile("test.png", padded_bytes, content_type="image/png")
-        
+
         form_data = {
             'employee_id': 'EMP-2026-999',
             'full_name': 'John Doe',
@@ -152,11 +160,11 @@ class EmployeeProfileTests(TestCase):
             'joined_date': date.today(),
             'is_active': True,
             'tracking_interval': 0,
-            'role': 'staff',
+            'roles': [self.staff_role.id],
             'password1': self.password,
             'password2': self.password,
         }
-        form = EmployeeCreateForm(data=form_data, files={'profile_photo': large_file})
+        form = EmployeeCreateForm(data=form_data, files={'profile_photo': large_file}, actor=self.admin_user)
         self.assertFalse(form.is_valid())
         self.assertIn('profile_photo', form.errors)
         self.assertIn('File too large', form.errors['profile_photo'][0])
@@ -171,12 +179,12 @@ class EmployeeProfileTests(TestCase):
             'joined_date': date.today(),
             'is_active': True,
             'tracking_interval': 0,
-            'role': 'staff',
+            'roles': [self.staff_role.id],
             'password1': self.password,
             'password2': self.password,
             'is_project_manager': True,
         }
-        form = EmployeeCreateForm(data=form_data)
+        form = EmployeeCreateForm(data=form_data, actor=self.admin_user)
         self.assertTrue(form.is_valid(), form.errors.as_data())
         profile = form.save()
         self.assertTrue(profile.is_project_manager)
@@ -185,7 +193,7 @@ class EmployeeProfileTests(TestCase):
         edit_data = {
             'employee_id': 'EMP-2026-777',
             'full_name': 'Project Manager One',
-            'role': 'staff',
+            'roles': [self.staff_role.id],
             'branch': self.branch.id,
             'phone': '+8801777777777',
             'joined_date': date.today(),
@@ -195,7 +203,7 @@ class EmployeeProfileTests(TestCase):
             'confirm_password': '',
             'is_project_manager': False,
         }
-        edit_form = EmployeeEditForm(data=edit_data, instance=profile)
+        edit_form = EmployeeEditForm(data=edit_data, instance=profile, actor=self.admin_user)
         self.assertTrue(edit_form.is_valid(), edit_form.errors.as_data())
         profile = edit_form.save()
         self.assertFalse(profile.is_project_manager)
@@ -247,14 +255,14 @@ class EmployeeDocumentTests(TestCase):
 
     def test_document_expiry_alert_cron(self):
         today = timezone.localdate()
-        
+
         # 1. Document expiring in 10 days (should trigger alert)
         doc1 = EmployeeDocument.objects.create(
             employee=self.employee,
             document_type='Visa',
             expiry_date=today + datetime.timedelta(days=10)
         )
-        
+
         # 2. Document expiring in 40 days (should NOT trigger alert)
         doc2 = EmployeeDocument.objects.create(
             employee=self.employee,
@@ -275,7 +283,7 @@ class EmployeeDocumentTests(TestCase):
         admin_notifications = Notification.objects.filter(recipient=self.admin)
         self.assertEqual(admin_notifications.count(), 1)
         self.assertEqual(admin_notifications.first().title, f"Document Expiring: {self.employee.full_name} (Visa)")
-        
+
         # Check notifications for HR
         hr_notifications = Notification.objects.filter(recipient=self.hr)
         self.assertEqual(hr_notifications.count(), 1)
@@ -287,7 +295,7 @@ class EmployeeDocumentTests(TestCase):
 
     def test_document_crud_access_control(self):
         url_add = reverse('employees:document_add', kwargs={'employee_pk': self.employee.pk})
-        
+
         # Staff cannot add document
         self.client.force_login(self.staff_user)
         UserSession.objects.create(user=self.staff_user, session_key=self.client.session.session_key, is_active=True)
@@ -315,20 +323,20 @@ class EmployeeDocumentTests(TestCase):
         from django.core import mail
         from django.core.management import call_command
         from apps.employees.models import EmployeeDocument
-        
+
         # Clear outbox
         mail.outbox = []
-        
+
         # Create a document expiring in 5 days
         EmployeeDocument.objects.create(
             employee=self.employee,
             document_type='Visa',
             expiry_date=date.today() + datetime.timedelta(days=5)
         )
-        
+
         # Call management command
         call_command('check_expiring_documents')
-        
+
         # Should have sent an email to the active admin user
         self.assertGreaterEqual(len(mail.outbox), 1)
         emails_to_admin = [m for m in mail.outbox if self.admin.email in m.to]
@@ -943,7 +951,7 @@ class SuspensionTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email='suspend_admin@test.com', password='password123', role='admin')
         self.staff_user = User.objects.create_user(email='suspend_staff@test.com', password='password123', role='staff')
-        
+
         from apps.employees.models import Employee, EmployeeStatus
         self.employee = Employee.objects.create(
             employee_number='EMP-SUS-001',
@@ -966,7 +974,7 @@ class SuspensionTests(TestCase):
     def test_suspension_blocks_login_middleware(self):
         self.employee.is_suspended = True
         self.employee.save()
-        
+
         self.client.force_login(self.staff_user)
         response = self.client.get(reverse('employees:employee_list'))
         self.assertEqual(response.status_code, 302)
@@ -975,7 +983,7 @@ class SuspensionTests(TestCase):
     def test_suspension_blocks_attendance_clock_in(self):
         self.employee.is_suspended = True
         self.employee.save()
-        
+
         # Test normal request redirects (302)
         self.client.force_login(self.staff_user)
         response = self.client.post(reverse('attendance:check_in'), {
@@ -996,11 +1004,11 @@ class SuspensionTests(TestCase):
     def test_suspension_blocks_leave_submission(self):
         self.employee.is_suspended = True
         self.employee.save()
-        
+
         self.client.force_login(self.staff_user)
         from apps.leave.models import LeaveType
         lt = LeaveType.objects.create(name='Casual', default_days_per_year=10, category='casual')
-        
+
         # Test normal request redirects (302)
         response = self.client.post(reverse('leave:staff_request_create'), {
             'leave_type': lt.pk,
@@ -1023,15 +1031,15 @@ class SuspensionTests(TestCase):
     def test_suspend_action_toggle_and_history(self):
         self.client.force_login(self.admin)
         url = reverse('employees:employee_suspend_toggle', kwargs={'pk': self.employee.pk})
-        
+
         self.assertFalse(self.employee.is_suspended)
-        
+
         response = self.client.post(url, {'reason': 'Violation of policy'})
         self.assertEqual(response.status_code, 302)
-        
+
         self.employee.refresh_from_db()
         self.assertTrue(self.employee.is_suspended)
-        
+
         from apps.employees.models import EmploymentHistory
         hist = EmploymentHistory.objects.filter(employee=self.employee, field_changed='is_suspended').first()
         self.assertIsNotNone(hist)
@@ -1043,7 +1051,7 @@ class ActivityLogTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email='activity_admin@test.com', password='password123', role='admin')
         self.staff_user = User.objects.create_user(email='activity_staff@test.com', password='password123', role='staff')
-        
+
         from apps.employees.models import Employee, EmployeeStatus
         self.employee = Employee.objects.create(
             employee_number='EMP-ACT-001',
@@ -1056,7 +1064,7 @@ class ActivityLogTests(TestCase):
     def test_activity_log_on_edit(self):
         self.client.force_login(self.admin)
         url = reverse('employees:master_edit', kwargs={'pk': self.employee.pk})
-        
+
         response = self.client.post(url, {
             'first_name': 'UpdatedName',
             'last_name': 'User',
@@ -1092,7 +1100,7 @@ class AuditLogTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email='audit_admin@test.com', password='password123', role='admin')
         self.staff_user = User.objects.create_user(email='audit_staff@test.com', password='password123', role='staff')
-        
+
         from apps.employees.models import Employee, EmployeeStatus
         self.employee = Employee.objects.create(
             employee_number='EMP-AUD-001',
@@ -1105,7 +1113,7 @@ class AuditLogTests(TestCase):
     def test_audit_log_immutability(self):
         from apps.employees.models import EmployeeAuditLog
         from django.core.exceptions import ValidationError
-        
+
         log = EmployeeAuditLog.objects.create(
             employee=self.employee,
             old_value={"first_name": "OldName"},
@@ -1115,7 +1123,7 @@ class AuditLogTests(TestCase):
         log.old_value = {"first_name": "Hack"}
         with self.assertRaises(ValidationError):
             log.save()
-            
+
         with self.assertRaises(ValidationError):
             log.delete()
 
@@ -1123,10 +1131,10 @@ class AuditLogTests(TestCase):
         from apps.employees.admin import EmployeeAuditLogAdmin
         from apps.employees.models import EmployeeAuditLog
         from django.contrib.admin.sites import AdminSite
-        
+
         site = AdminSite()
         admin_obj = EmployeeAuditLogAdmin(EmployeeAuditLog, site)
-        
+
         self.assertFalse(admin_obj.has_add_permission(None))
         self.assertFalse(admin_obj.has_change_permission(None))
         self.assertFalse(admin_obj.has_delete_permission(None))
@@ -1134,7 +1142,7 @@ class AuditLogTests(TestCase):
     def test_audit_log_written_on_edit(self):
         self.client.force_login(self.admin)
         url = reverse('employees:master_edit', kwargs={'pk': self.employee.pk})
-        
+
         response = self.client.post(url, {
             'first_name': 'NewAuditName',
             'last_name': 'User',
@@ -1158,9 +1166,9 @@ class AuditLogTests(TestCase):
 class DeviceLifecycleTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email='dev_admin@test.com', password='password123', role='admin')
-        
+
         from apps.employees.models import Employee, EmployeeStatus, Asset, AssetType, AssetCondition, AssetAssignment
-        
+
         self.emp1 = Employee.objects.create(
             employee_number='EMP-DEV-001',
             first_name='Device',
@@ -1191,7 +1199,7 @@ class DeviceLifecycleTests(TestCase):
     def test_asset_reassignment(self):
         self.client.force_login(self.admin)
         url = reverse('employees:asset_reassign', kwargs={'pk': self.assignment.pk})
-        
+
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Reassign Asset')
@@ -1211,7 +1219,7 @@ class DeviceLifecycleTests(TestCase):
         self.assertEqual(str(self.assignment.returned_date), '2026-07-15')
         self.assertEqual(self.assignment.condition_at_return, 'good')
         self.assertEqual(self.assignment.notes, 'Returned for upgrade')
-        
+
         self.assertIsNotNone(self.assignment.reassigned_to)
         new_assign = self.assignment.reassigned_to
         self.assertEqual(new_assign.employee, self.emp2)
@@ -1224,7 +1232,7 @@ class DeviceLifecycleTests(TestCase):
 class DocumentLifecycleTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email='doc_admin@test.com', password='password123', role='admin')
-        
+
         from apps.employees.models import Employee, EmployeeStatus, EmployeeDocument, DocumentType
         self.employee = Employee.objects.create(
             employee_number='EMP-DOC-001',
@@ -1242,10 +1250,10 @@ class DocumentLifecycleTests(TestCase):
     def test_document_verification(self):
         self.client.force_login(self.admin)
         url = reverse('employees:document_verify', kwargs={'pk': self.document.pk})
-        
+
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
-        
+
         self.document.refresh_from_db()
         self.assertTrue(self.document.is_verified)
         self.assertEqual(self.document.verified_by, self.admin)
@@ -1253,7 +1261,7 @@ class DocumentLifecycleTests(TestCase):
 
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
-        
+
         self.document.refresh_from_db()
         self.assertFalse(self.document.is_verified)
         self.assertIsNone(self.document.verified_by)
@@ -1262,16 +1270,16 @@ class DocumentLifecycleTests(TestCase):
     def test_document_archiving(self):
         self.client.force_login(self.admin)
         url = reverse('employees:document_archive', kwargs={'pk': self.document.pk})
-        
+
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
-        
+
         self.document.refresh_from_db()
         self.assertTrue(self.document.is_archived)
 
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
-        
+
         self.document.refresh_from_db()
         self.assertFalse(self.document.is_archived)
 
@@ -1280,9 +1288,9 @@ class ReportingManagerChainTests(TestCase):
     def setUp(self):
         self.manager_user = User.objects.create_user(email='chain_manager@test.com', password='password123', role='manager')
         self.staff_user = User.objects.create_user(email='chain_staff@test.com', password='password123', role='staff')
-        
+
         from apps.employees.models import Employee, EmployeeStatus, EmployeeProfile
-        
+
         self.manager_master = Employee.objects.create(
             employee_number='EMP-MGR-001',
             first_name='Chain',
@@ -1317,19 +1325,19 @@ class ReportingManagerChainTests(TestCase):
         )
 
         from apps.accounts.rbac_models import Permission as RBACPermission, Role as RBACRole, UserRoleAssignment, RolePermission, Module, Action
-        
+
         self.role_obj = RBACRole.objects.create(name='manager_role', code='manager_role')
-        
+
         self.mod_leave = Module.objects.create(name='Leave', code='leave')
         self.act_approve = Action.objects.create(name='Approve', code='approve')
-        
+
         self.perm_leave = RBACPermission.objects.create(
             module=self.mod_leave,
             action=self.act_approve,
             codename='leave.approve',
             name='Approve Leave'
         )
-        
+
         self.mod_expense = Module.objects.create(name='Expense', code='expense')
         self.perm_expense = RBACPermission.objects.create(
             module=self.mod_expense,
@@ -1337,10 +1345,10 @@ class ReportingManagerChainTests(TestCase):
             codename='expense.approve',
             name='Approve Expense'
         )
-        
+
         RolePermission.objects.create(role=self.role_obj, permission=self.perm_leave, data_scope='team')
         RolePermission.objects.create(role=self.role_obj, permission=self.perm_expense, data_scope='team')
-        
+
         UserRoleAssignment.objects.create(user=self.manager_user, role=self.role_obj)
 
         from apps.leave.models import LeaveType, LeaveRequest
@@ -1368,20 +1376,20 @@ class ReportingManagerChainTests(TestCase):
     def test_leave_approval_via_reporting_manager(self):
         self.client.force_login(self.manager_user)
         url = reverse('leave:approve_request', kwargs={'pk': self.leave_request.pk})
-        
+
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
-        
+
         self.leave_request.refresh_from_db()
         self.assertEqual(self.leave_request.status, 'approved')
 
     def test_expense_approval_via_reporting_manager(self):
         self.client.force_login(self.manager_user)
         url = reverse('expense:approve_expense', kwargs={'pk': self.expense.pk})
-        
+
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
-        
+
         self.expense.refresh_from_db()
         self.assertEqual(self.expense.status, 'pending_finance')
 
@@ -1482,7 +1490,7 @@ class EmployeeTimelineEngineTests(TestCase):
 class OrgHierarchyTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email='admin_h@example.com', password='pass123', role='admin')
-        
+
         # Create hierarchy: CEO -> Director -> Manager -> Employee
         self.ceo = Employee.objects.create(
             employee_number='CEO-001',
@@ -1514,29 +1522,29 @@ class OrgHierarchyTests(TestCase):
 
     def test_hierarchy_service_traversal(self):
         from apps.employees.hierarchy_services import OrgHierarchyService
-        
+
         # CEO reports
         self.assertEqual(list(OrgHierarchyService.get_direct_reports(self.ceo)), [self.director])
-        
+
         # CEO all subordinates
         subordinates = list(OrgHierarchyService.get_all_subordinates(self.ceo))
         self.assertIn(self.director, subordinates)
         self.assertIn(self.manager, subordinates)
         self.assertIn(self.emp, subordinates)
-        
+
         # Management chain of Employee
         chain = OrgHierarchyService.get_management_chain(self.emp)
         self.assertEqual(chain, [self.manager, self.director, self.ceo])
-        
+
         # Depths
         self.assertEqual(OrgHierarchyService.get_reporting_depth(self.ceo), 1)
         self.assertEqual(OrgHierarchyService.get_reporting_depth(self.emp), 4)
-        
+
         # Manager checks
         self.assertTrue(OrgHierarchyService.is_manager_of(self.ceo, self.emp))
         self.assertTrue(OrgHierarchyService.is_manager_of(self.director, self.emp))
         self.assertFalse(OrgHierarchyService.is_manager_of(self.emp, self.ceo))
-        
+
         # Scoped queryset
         scoped = list(OrgHierarchyService.get_subordinate_scoped_queryset(self.manager).values_list('id', flat=True))
         self.assertIn(self.manager.id, scoped)
@@ -1550,7 +1558,7 @@ class OrgHierarchyTests(TestCase):
 
     def test_get_all_subordinates_query_count_scales_with_depth_not_total_employees(self):
         from apps.employees.hierarchy_services import OrgHierarchyService
-        
+
         # 1. Measure queries for the original chain (depth = 4)
         with self.assertNumQueries(5):
             subordinates_1 = list(OrgHierarchyService.get_all_subordinates(self.ceo))
@@ -1574,7 +1582,7 @@ class OrgHierarchyTests(TestCase):
         from apps.accounts.rbac_models import Permission as RBACPermission, Role as RBACRole, UserRoleAssignment, RolePermission, Module, Action
         from apps.accounts.models import DataScope
         from apps.accounts.engine import PermissionEngine
-        
+
         # Setup a manager user for the director employee
         director_user = get_user_model().objects.create_user(
             phone='+8801700000201',
@@ -1590,7 +1598,7 @@ class OrgHierarchyTests(TestCase):
             user=director_user, full_name='Director User', employee_id='DIR-001',
             master_employee=self.director, joined_date='2026-07-01', phone='01700000201'
         )
-        
+
         manager_user = get_user_model().objects.create_user(phone='+8801700000202', password='testpassword123', role='staff')
         self.manager.user = manager_user
         self.manager.save()
@@ -1598,7 +1606,7 @@ class OrgHierarchyTests(TestCase):
             user=manager_user, full_name='Manager User', employee_id='MGR-001',
             master_employee=self.manager, joined_date='2026-07-01', phone='01700000202'
         )
-        
+
         emp_user = get_user_model().objects.create_user(phone='+8801700000203', password='testpassword123', role='staff')
         self.emp.user = emp_user
         self.emp.save()
@@ -1641,7 +1649,7 @@ class OrgHierarchyTests(TestCase):
         filtered_qs = PermissionEngine.filter_by_data_scope(
             director_user, LeaveRequest.objects.all(), 'employees.view', employee_field='employee'
         )
-        
+
         filtered_list = list(filtered_qs)
         self.assertIn(req_director, filtered_list)
         self.assertIn(req_manager, filtered_list)
@@ -1668,7 +1676,7 @@ class ManagerDelegationTests(TestCase):
     def test_delegation_validation(self):
         from apps.employees.models import ManagerDelegation
         from django.core.exceptions import ValidationError
-        
+
         # Self-delegation error
         with self.assertRaises(ValidationError):
             ManagerDelegation.objects.create(
@@ -1677,7 +1685,7 @@ class ManagerDelegationTests(TestCase):
                 start_date=date.today(),
                 end_date=date.today()
             )
-            
+
         # Date order error
         with self.assertRaises(ValidationError):
             ManagerDelegation.objects.create(
@@ -1689,7 +1697,7 @@ class ManagerDelegationTests(TestCase):
 
     def test_delegation_views(self):
         self.client.force_login(self.admin)
-        
+
         # Create via view
         url_create = reverse('employees:delegation_create')
         data = {
@@ -1701,24 +1709,24 @@ class ManagerDelegationTests(TestCase):
         }
         res = self.client.post(url_create, data=data)
         self.assertEqual(res.status_code, 302)
-        
+
         from apps.employees.models import ManagerDelegation
         delg = ManagerDelegation.objects.get(manager=self.manager)
         self.assertEqual(delg.delegate_to, self.delegate)
         self.assertEqual(delg.reason, 'Vacation')
         self.assertTrue(delg.is_active)
-        
+
         # List view
         url_list = reverse('employees:delegation_list')
         res_list = self.client.get(url_list)
         self.assertEqual(res_list.status_code, 200)
         self.assertContains(res_list, 'Vacation')
-        
+
         # End delegation via view
         url_end = reverse('employees:delegation_end', kwargs={'pk': delg.pk})
         res_end = self.client.post(url_end)
         self.assertEqual(res_end.status_code, 302)
-        
+
         delg.refresh_from_db()
         self.assertFalse(delg.is_active)
 
@@ -1732,7 +1740,7 @@ class SubordinateAPITests(TestCase):
 
         self.branch1 = Branch.objects.create(name='Branch 1', latitude=23.8, longitude=90.4, radius_meters=100)
         self.branch2 = Branch.objects.create(name='Branch 2', latitude=23.9, longitude=90.5, radius_meters=100)
-        
+
         self.dept = Department.objects.create(name='Engineering', code='ENG')
         self.desig = Designation.objects.create(name='Developer', code='DEV')
 
@@ -1763,7 +1771,7 @@ class SubordinateAPITests(TestCase):
         module = Module.objects.create(name='EmployeesModule', code='employees')
         action = Action.objects.create(name='View', code='view')
         perm = RBACPermission.objects.create(module=module, action=action, codename='employees.view', name='View Employees')
-        
+
         self.role_manager = RBACRole.objects.create(name='ManagerRole', code='manager')
         UserRoleAssignment.objects.create(user=self.manager_user, role=self.role_manager)
         RolePermission.objects.create(role=self.role_manager, permission=perm, data_scope=DataScope.TEAM)
@@ -1846,7 +1854,7 @@ class HRMasterReadinessTests(TestCase):
         self.desig = Designation.objects.create(name='Senior SSOT Engineer')
 
         self.user = User.objects.create_user(phone='+8801755556666', password='pass', role='staff')
-        
+
         self.legacy_profile = EmployeeProfile.objects.create(
             user=self.user,
             employee_id='LEGACY-001',
@@ -1916,21 +1924,21 @@ class HRHardeningRegressionTests(TestCase):
     def test_asset_assignment_clean_validation(self):
         from apps.employees.models import Employee, Asset, AssetAssignment, AssetType, AssetCondition, EmployeeStatus
         from django.core.exceptions import ValidationError
-        
+
         emp1 = Employee.objects.create(
             employee_number='EMP-H-01', first_name='Test', last_name='One', branch=self.branch, status=EmployeeStatus.ACTIVE
         )
         emp2 = Employee.objects.create(
             employee_number='EMP-H-02', first_name='Test', last_name='Two', branch=self.branch, status=EmployeeStatus.ACTIVE
         )
-        
+
         asset = Asset.objects.create(
             asset_type=AssetType.LAPTOP, asset_tag='TAG-H-01', name='H Laptop', condition=AssetCondition.GOOD
         )
-        
+
         # First assignment
         AssetAssignment.objects.create(asset=asset, employee=emp1, assigned_date=timezone.localdate())
-        
+
         # Second active assignment should fail clean/save
         assign2 = AssetAssignment(asset=asset, employee=emp2, assigned_date=timezone.localdate())
         with self.assertRaises(ValidationError):
@@ -1939,7 +1947,7 @@ class HRHardeningRegressionTests(TestCase):
     def test_form_auto_creates_profile(self):
         from apps.employees.models import Employee, EmployeeProfile, EmployeeStatus
         from apps.employees.forms import EmployeeMasterForm
-        
+
         master = Employee.objects.create(
             employee_number='EMP-H-03',
             first_name='Auto',
@@ -1948,9 +1956,9 @@ class HRHardeningRegressionTests(TestCase):
             branch=self.branch,
             status=EmployeeStatus.ACTIVE
         )
-        
+
         self.assertFalse(EmployeeProfile.objects.filter(master_employee=master).exists())
-        
+
         # Save via form which simulates the admin panel edit flow
         data = {
             'employee_number': master.employee_number,
@@ -1964,7 +1972,7 @@ class HRHardeningRegressionTests(TestCase):
         form = EmployeeMasterForm(data=data, instance=master)
         self.assertTrue(form.is_valid(), form.errors)
         form.save()
-        
+
         self.assertTrue(EmployeeProfile.objects.filter(master_employee=master).exists())
         prof = EmployeeProfile.objects.get(master_employee=master)
         self.assertEqual(prof.user, self.user)
@@ -2013,7 +2021,7 @@ class HRHardeningTests(TestCase):
         from apps.employees.views import _apply_transition
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        
+
         user = User.objects.create_user(phone='+8801700000004', password='password', role='staff')
         master = Employee.objects.create(
             employee_number='EMP-004', first_name='John', last_name='Doe',
@@ -2034,10 +2042,10 @@ class HRHardeningTests(TestCase):
             new_designation = None
 
         _apply_transition(master, FakeReq(), self.admin_user)
-        
+
         master.refresh_from_db()
         profile.refresh_from_db()
-        
+
         self.assertEqual(master.status, 'suspended')
         self.assertTrue(master.is_suspended)
         self.assertFalse(profile.is_active)
@@ -2061,7 +2069,7 @@ class HRHardeningTests(TestCase):
             title='Passport', expiry_date=timezone.localdate() - timedelta(days=1),
             is_active=True, is_archived=False
         )
-        
+
         self.assertEqual(master.get_completion_percentage(), 40)
 
 
@@ -2074,7 +2082,7 @@ class EmployeeLifecycleTests(TestCase):
         self.desig = Designation.objects.create(name='Engineer', code='ENG_DES')
         self.admin = User.objects.create_superuser(email='lifecycle_admin@example.com', phone='+8801700000001', password='password123', role='admin')
         self.staff_user = User.objects.create_user(email='lifecycle_staff@example.com', phone='+8801700000002', password='password123', role='staff')
-        
+
         from apps.employees.models import Employee
         self.employee = Employee.objects.create(
             employee_number='EMP-LIFE-001',
@@ -2093,7 +2101,7 @@ class EmployeeLifecycleTests(TestCase):
             to_status = 'inactive'
             effective_date = timezone.now().date()
             reason = 'Temporary inactive reason'
-        
+
         _apply_transition(self.employee, FakeReq(), self.admin)
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.status, 'inactive')
@@ -2105,7 +2113,7 @@ class EmployeeLifecycleTests(TestCase):
             to_status = 'inactive'
             effective_date = timezone.now().date()
             reason = ''
-        
+
         with self.assertRaises(ValidationError):
             _apply_transition(self.employee, FakeReq(), self.admin)
 
@@ -2113,12 +2121,12 @@ class EmployeeLifecycleTests(TestCase):
         from apps.employees.views import _apply_transition
         self.employee.status = 'inactive'
         self.employee.save()
-        
+
         class FakeReq:
             to_status = 'active'
             effective_date = timezone.now().date()
             reason = 'Reactivating employee'
-            
+
         _apply_transition(self.employee, FakeReq(), self.admin)
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.status, 'active')
@@ -2133,7 +2141,7 @@ class EmployeeLifecycleTests(TestCase):
             suspension_start_date = timezone.now().date()
             suspension_end_date = timezone.now().date() + timedelta(days=5)
             auto_reactivate = True
-            
+
         _apply_transition(self.employee, FakeReq(), self.admin)
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.status, 'suspended')
@@ -2163,12 +2171,12 @@ class EmployeeLifecycleTests(TestCase):
     def test_suspension_expiry_auto_reactivation(self):
         from apps.employees.models import EmployeeSuspension
         from django.core.management import call_command
-        
+
         # Suspend the employee with expiry yesterday
         self.employee.status = 'suspended'
         self.employee.is_suspended = True
         self.employee.save()
-        
+
         EmployeeSuspension.objects.create(
             employee=self.employee,
             suspension_start_date=timezone.now().date() - timedelta(days=5),
@@ -2187,11 +2195,11 @@ class EmployeeLifecycleTests(TestCase):
     def test_manual_reactivation_clears_suspension(self):
         from apps.employees.models import EmployeeSuspension
         from apps.employees.views import _apply_transition
-        
+
         self.employee.status = 'suspended'
         self.employee.is_suspended = True
         self.employee.save()
-        
+
         susp = EmployeeSuspension.objects.create(
             employee=self.employee,
             suspension_start_date=timezone.now().date(),
@@ -2209,7 +2217,7 @@ class EmployeeLifecycleTests(TestCase):
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.status, 'active')
         self.assertFalse(self.employee.is_suspended)
-        
+
         susp.refresh_from_db()
         self.assertFalse(susp.is_active)
 
@@ -2240,7 +2248,7 @@ class EmployeeLifecycleTests(TestCase):
         from apps.audit.models import TrashEntry, AuditEvent
         from apps.attendance.models import Attendance
         from django.utils import timezone
-        
+
         self.client.force_login(self.admin)
         url = reverse('employees:master_delete', kwargs={'pk': self.employee.pk})
 
@@ -2331,16 +2339,16 @@ class DepartmentCRUDTests(TestCase):
         User = get_user_model()
         self.branch = Branch.objects.create(name='CRUD Branch', latitude=23.8, longitude=90.4, radius_meters=100)
         self.admin = User.objects.create_superuser(email='crud_admin@example.com', phone='+8801700000003', password='password123', role='admin')
-        
+
     def test_department_create_and_edit_drawer(self):
         self.client.force_login(self.admin)
         create_url = reverse('employees:department_create')
-        
+
         # Get create form drawer
         response = self.client.get(create_url, HTTP_HX_REQUEST='true')
         self.assertContains(response, 'dept-drawer')
         self.assertContains(response, 'New Department')
-        
+
         # Post create
         response = self.client.post(create_url, data={
             'name': 'Test Dev',
@@ -2350,17 +2358,17 @@ class DepartmentCRUDTests(TestCase):
             'is_active': 'on'
         }, HTTP_HX_REQUEST='true')
         self.assertEqual(response.status_code, 204)
-        
+
         dept = Department.objects.get(name='Test Dev')
         self.assertTrue(dept.is_global)
         self.assertTrue(dept.is_active)
-        
+
         # Get edit form drawer
         edit_url = reverse('employees:department_edit', kwargs={'pk': dept.pk})
         response = self.client.get(edit_url, HTTP_HX_REQUEST='true')
         self.assertContains(response, 'dept-drawer')
         self.assertContains(response, 'Edit Department')
-        
+
         # Post edit
         response = self.client.post(edit_url, data={
             'name': 'Test Dev Updated',
@@ -2371,7 +2379,7 @@ class DepartmentCRUDTests(TestCase):
             'is_active': 'on'
         }, HTTP_HX_REQUEST='true')
         self.assertEqual(response.status_code, 204)
-        
+
         dept.refresh_from_db()
         self.assertEqual(dept.name, 'Test Dev Updated')
         self.assertFalse(dept.is_global)
@@ -2381,7 +2389,7 @@ class DepartmentCRUDTests(TestCase):
         self.client.force_login(self.admin)
         dept = Department.objects.create(name='Delete Dept', code='DEL')
         delete_url = reverse('employees:department_delete', kwargs={'pk': dept.pk})
-        
+
         response = self.client.post(delete_url, HTTP_HX_REQUEST='true')
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Department.objects.filter(pk=dept.pk).exists())
@@ -2392,30 +2400,30 @@ class DepartmentCRUDTests(TestCase):
         dept1 = Department.objects.create(name='Export 1', code='EX1', is_global=True)
         dept2 = Department.objects.create(name='Export 2', code='EX2', is_global=False)
         dept2.branches.add(self.branch)
-        
+
         # Test Export
         export_url = reverse('employees:department_export_csv')
         response = self.client.get(export_url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/csv')
-        
+
         content = response.content.decode('utf-8')
         self.assertIn('Export 1', content)
         self.assertIn('Export 2', content)
-        
+
         # Test Import
         import_url = reverse('employees:department_import_csv')
-        
+
         import_csv_content = (
             "Name,Code,Description,Is Global,Branches,Is Active\n"
             "Imported Dept 1,IMP1,Description 1,True,All,True\n"
             f"Imported Dept 2,IMP2,Description 2,False,{self.branch.name},True\n"
         )
-        
+
         import_file = SimpleUploadedFile("imported_depts.csv", import_csv_content.encode('utf-8'), content_type="text/csv")
         response = self.client.post(import_url, {'file': import_file})
         self.assertEqual(response.status_code, 302)
-        
+
         self.assertTrue(Department.objects.filter(name='Imported Dept 1').exists())
         imp_dept2 = Department.objects.get(name='Imported Dept 2')
         self.assertFalse(imp_dept2.is_global)
@@ -2658,7 +2666,7 @@ class DynamicRBACEmployeeWorkflowTests(TestCase):
             phone='+8801911111111',
             role='admin'
         )
-        
+
         # Modules & Permissions
         self.mod_acc = Module.objects.create(name='Accounts Module', code='accounts')
         self.mod_att = Module.objects.create(name='Attendance Module', code='attendance')
@@ -2840,7 +2848,7 @@ class DynamicRBACEmployeeWorkflowTests(TestCase):
     def test_atomic_rollback_on_role_assignment_failure(self):
         initial_users = User.objects.count()
         initial_profiles = EmployeeProfile.objects.count()
-        
+
         # Test direct call to RoleAssignmentService where authority failure triggers transaction rollback
         try:
             with transaction.atomic():
@@ -2908,3 +2916,134 @@ class DynamicRBACEmployeeWorkflowTests(TestCase):
             UserRoleAssignment.objects.filter(user=user).values_list('role__code', flat=True)
         )
         self.assertEqual(active_role_codes, {'super_admin', 'project_supervisor'})
+
+    def test_actor_none_rejection(self):
+        """Service and forms fail closed when actor is None."""
+        u = User.objects.create_user(email='actor_none@example.com', password='Password123!')
+        self.assertEqual(RoleAssignmentService.get_assignable_roles_queryset(actor=None).count(), 0)
+
+        with self.assertRaises(PermissionDenied):
+            RoleAssignmentService.sync_user_roles(
+                user=u,
+                target_roles=[self.role_staff],
+                actor=None
+            )
+
+        form_data = {
+            'employee_id': 'EMP-NONE-1',
+            'full_name': 'No Actor User',
+            'branch': self.branch.id,
+            'roles': [self.role_staff.id],
+            'password1': 'Password123!',
+            'password2': 'Password123!',
+        }
+        form = EmployeeCreateForm(data=form_data, actor=None)
+        self.assertFalse(form.is_valid())
+        self.assertIn('roles', form.errors)
+
+    def test_unauthenticated_actor_rejection(self):
+        """Unauthenticated actor cannot view or assign roles."""
+        from django.contrib.auth.models import AnonymousUser
+        anon = AnonymousUser()
+        u = User.objects.create_user(email='anon_target@example.com', password='Password123!')
+
+        self.assertEqual(RoleAssignmentService.get_assignable_roles_queryset(actor=anon).count(), 0)
+
+        with self.assertRaises(PermissionDenied):
+            RoleAssignmentService.sync_user_roles(
+                user=u,
+                target_roles=[self.role_staff],
+                actor=anon
+            )
+
+    def test_inactive_role_rejection(self):
+        """Inactive roles cannot be assigned."""
+        inactive_role = Role.objects.create(name='Inactive Role', code='inactive_role', is_active=False)
+        u = User.objects.create_user(email='inactive_target@example.com', password='Password123!')
+
+        with self.assertRaises(ValidationError):
+            RoleAssignmentService.sync_user_roles(
+                user=u,
+                target_roles=[inactive_role],
+                actor=self.superuser
+            )
+
+        form_data = {
+            'employee_id': 'EMP-INACT-1',
+            'full_name': 'Inactive Role Test',
+            'branch': self.branch.id,
+            'roles': [inactive_role.id],
+            'password1': 'Password123!',
+            'password2': 'Password123!',
+        }
+        form = EmployeeCreateForm(data=form_data, actor=self.superuser)
+        self.assertFalse(form.is_valid())
+        self.assertIn('roles', form.errors)
+
+    def test_unauthorized_high_role_removal_rejected(self):
+        """Non-superuser cannot remove roles outside their authority."""
+        u = User.objects.create_user(email='high_role@example.com', password='Password123!')
+        UserRoleAssignment.objects.create(user=u, role=self.role_super_admin)
+
+        with self.assertRaises(PermissionDenied):
+            RoleAssignmentService.validate_role_removal_authority(self.admin_user, self.role_super_admin)
+
+        with self.assertRaises(PermissionDenied):
+            RoleAssignmentService.sync_user_roles(
+                user=u,
+                target_roles=[self.role_staff],
+                actor=self.admin_user,
+                preserve_protected=False
+            )
+
+    def test_groups_payload_ignored_and_existing_groups_preserved(self):
+        """Submitting groups in POST is ignored and does not overwrite existing database groups."""
+        from django.contrib.auth.models import Group
+        grp = Group.objects.create(name="Legacy Department Group")
+
+        target_user = User.objects.create_user(email='grp_target@example.com', password='Password123!')
+        target_user.groups.add(grp)
+        profile = EmployeeProfile.objects.create(
+            user=target_user,
+            employee_id='EMP-GRP-1',
+            full_name='Group Employee',
+            branch=self.branch,
+            joined_date=date.today()
+        )
+        UserRoleAssignment.objects.create(user=target_user, role=self.role_staff)
+
+        # Edit employee, POST contains spurious groups or empty groups
+        form_data = {
+            'employee_id': 'EMP-GRP-1',
+            'full_name': 'Group Employee',
+            'branch': self.branch.id,
+            'phone': '+8801755556677',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'roles': [self.role_staff.id],
+            'groups': [99999],
+        }
+        form = EmployeeEditForm(data=form_data, instance=profile, actor=self.admin_user)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+
+        # Database group membership remains untouched
+        self.assertEqual(list(target_user.groups.all()), [grp])
+
+    def test_compatibility_persona_calculation(self):
+        """CustomUser.role persona maps accurately without custom role leakage."""
+        role_mgr = Role.objects.create(name='Branch Manager', code='manager')
+        self.assertEqual(RoleAssignmentService.compute_compatibility_persona([self.role_owner]), 'admin')
+        self.assertEqual(RoleAssignmentService.compute_compatibility_persona([self.role_super_admin]), 'admin')
+        self.assertEqual(RoleAssignmentService.compute_compatibility_persona([self.role_admin]), 'admin')
+        self.assertEqual(RoleAssignmentService.compute_compatibility_persona([role_mgr]), 'manager')
+        self.assertEqual(RoleAssignmentService.compute_compatibility_persona([self.role_staff]), 'staff')
+        self.assertEqual(
+            RoleAssignmentService.compute_compatibility_persona([self.role_staff, role_mgr]),
+            'manager'
+        )
+        self.assertEqual(
+            RoleAssignmentService.compute_compatibility_persona([self.role_staff, self.role_admin]),
+            'admin'
+        )

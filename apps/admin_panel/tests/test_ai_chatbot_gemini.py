@@ -90,6 +90,11 @@ class AIChatbotGeminiServiceTests(TestCase):
 
     def test_duplicate_submission_prevention(self):
         """Identical queries within 5 seconds must be blocked."""
+        try:
+            import google.genai
+        except (ImportError, AttributeError):
+            self.skipTest("google-genai SDK not installed")
+
         with patch('apps.admin_panel.ai_service.GeminiClientService.get_api_key', return_value='dummy-key'):
             with patch('google.genai.Client') as mock_client_cls:
                 mock_instance = MagicMock()
@@ -120,6 +125,11 @@ class AIChatbotGeminiServiceTests(TestCase):
 
     def test_mocked_gemini_success_view(self):
         """AIChatbotResponseView renders valid Cotton partial with escaped HTML."""
+        try:
+            import google.genai
+        except (ImportError, AttributeError):
+            self.skipTest("google-genai SDK not installed")
+
         url = reverse('admin_panel:ai_chatbot_response')
 
         with patch('apps.admin_panel.ai_service.GeminiClientService.get_api_key', return_value='dummy-key'):

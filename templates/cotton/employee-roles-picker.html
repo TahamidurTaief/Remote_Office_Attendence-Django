@@ -7,7 +7,7 @@
    - help_text: explanatory string
 {% endcomment %}
 
-<div 
+<div
   x-data="{
     selectedRoles: [
       {% if field.value %}
@@ -68,7 +68,7 @@
     <!-- Primary Persona Badge -->
     <div class="flex items-center gap-1.5 self-start sm:self-auto">
       <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Primary Persona:</span>
-      <span 
+      <span
         class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all"
         :class="{
           'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800': activePersona === 'admin',
@@ -76,7 +76,7 @@
           'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700': activePersona === 'staff'
         }"
       >
-        <span 
+        <span
           class="w-1.5 h-1.5 rounded-full"
           :class="{
             'bg-purple-500': activePersona === 'admin',
@@ -90,7 +90,7 @@
   </div>
 
   <!-- Active Assigned Role Badges Pills -->
-  <div class="flex flex-wrap items-center gap-1.5 min-h-[30px] p-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+  <div class="flex flex-wrap items-center gap-1.5 min-h-[36px] p-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
     <span class="text-[11px] text-slate-400 dark:text-slate-500 select-none mr-1" x-show="selectedRoles.length === 0">
       No roles selected. Choose one or more roles below.
     </span>
@@ -98,14 +98,14 @@
       <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20 shadow-2xs transition-all">
         <i data-lucide="shield" class="w-3 h-3 text-primary shrink-0"></i>
         <span x-text="rolesMeta[rId]?.name || ('Role #' + rId)"></span>
-        <button 
-          type="button" 
-          @click.stop="toggleRole(rId)"
-          class="text-primary/70 hover:text-primary transition-colors cursor-pointer ml-0.5"
-          title="Remove role"
+        <c-button
+          variant="ghost"
+          size="sm"
+          extra_class="!p-0 !h-auto text-primary/70 hover:text-primary min-w-0"
+          attrs="@click.stop='toggleRole(rId)' title='Remove role'"
         >
           <i data-lucide="x" class="w-3 h-3"></i>
-        </button>
+        </c-button>
       </span>
     </template>
   </div>
@@ -113,28 +113,33 @@
   <!-- Grid of Selectable Role Cards -->
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
     {% for role in field.field.queryset %}
-    <label 
-      class="group relative flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all select-none shadow-2xs hover:shadow-xs"
-      :class="isSelected('{{ role.pk }}') 
-        ? 'border-primary bg-primary-50/40 dark:bg-primary-950/20 ring-1 ring-primary/30' 
+    <div
+      role="checkbox"
+      tabindex="0"
+      :aria-checked="isSelected('{{ role.pk }}')"
+      @click="toggleRole('{{ role.pk }}')"
+      @keydown.space.prevent="toggleRole('{{ role.pk }}')"
+      @keydown.enter.prevent="toggleRole('{{ role.pk }}')"
+      class="group relative flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all select-none shadow-2xs hover:shadow-xs min-h-[44px] focus:outline-hidden focus:ring-2 focus:ring-primary/40"
+      :class="isSelected('{{ role.pk }}')
+        ? 'border-primary bg-primary-50/40 dark:bg-primary-950/20 ring-1 ring-primary/30'
         : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-primary/40'"
     >
-      <input 
-        type="checkbox" 
-        name="{{ field.html_name }}" 
-        value="{{ role.pk }}" 
-        :checked="isSelected('{{ role.pk }}')"
-        @change="toggleRole('{{ role.pk }}')"
-        class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary/20 accent-primary shrink-0"
-      >
+      <c-checkbox
+        name="{{ field.html_name }}"
+        value="{{ role.pk }}"
+        x_model="selectedRoles"
+        extra_class="mt-0.5 shrink-0"
+        attrs="@click.stop"
+      ></c-checkbox>
       <div class="flex-1 min-w-0">
         <div class="flex items-center justify-between gap-1">
-          <span 
+          <span
             class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors truncate"
           >
             {{ role.name }}
           </span>
-          <span class="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800">
+          <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800">
             {{ role.code }}
           </span>
         </div>
@@ -144,7 +149,7 @@
         </p>
         {% endif %}
       </div>
-    </label>
+    </div>
     {% endfor %}
   </div>
 
