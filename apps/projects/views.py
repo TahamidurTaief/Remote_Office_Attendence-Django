@@ -396,7 +396,8 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
     def get_success_url(self):
         return reverse_lazy('projects:project_detail', kwargs={'pk': self.kwargs['project_id']})
 
-class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
+class ProjectTaskUpdateView(RoleRequiredMixin, UpdateView):
+    allowed_roles = ['admin', 'system_owner', 'manager']
     # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
     model = ProjectTask
     form_class = ProjectTaskForm
@@ -473,7 +474,26 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
                 )
 
         messages.success(self.request, 'Task updated successfully.')
+        if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest' or self.request.headers.get('HX-Request') == 'true':
+            return JsonResponse({
+                'success': True,
+                'message': 'Task updated successfully.',
+                'task': {
+                    'id': new_task.id,
+                    'activity': new_task.activity,
+                    'status': new_task.status,
+                    'responsible_person_name': new_task.responsible_person.full_name if new_task.responsible_person else 'Unassigned',
+                }
+            })
         return response
+
+    def form_invalid(self, form):
+        if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest' or self.request.headers.get('HX-Request') == 'true':
+            errors = {}
+            for field, err_list in form.errors.items():
+                errors[field] = [str(e) for e in err_list]
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
+        return super().form_invalid(form)
 
     def get_success_url(self):
         if self.object.project:
@@ -1817,13 +1837,19 @@ def task_detail_api(request, pk):
 
     data = {
         'id': task.id,
+        'order': task.order,
         'activity': task.activity,
+        'project_id': task.project_id,
         'project_name': task.project.name if task.project else 'Standalone Task',
         'branch_name': task.project.branch.name if task.project and task.project.branch else 'Global Workspace',
+        'responsible_person_id': task.responsible_person_id,
         'responsible_person_name': task.responsible_person.full_name if task.responsible_person else 'Unassigned',
         'planned_start': task.planned_start.strftime('%d/%m/%Y') if task.planned_start else '—',
         'planned_finish': task.planned_finish.strftime('%d/%m/%Y') if task.planned_finish else '—',
+        'raw_planned_start': task.planned_start.strftime('%Y-%m-%d') if task.planned_start else '',
+        'raw_planned_finish': task.planned_finish.strftime('%Y-%m-%d') if task.planned_finish else '',
         'duration_days': f"{task.duration_days} days" if task.duration_days else '—',
+        'raw_duration_days': task.duration_days or '',
         'status': task.status,
         'points': task.points,
         'remarks': task.remarks or '',

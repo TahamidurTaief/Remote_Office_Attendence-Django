@@ -2045,6 +2045,61 @@ class StaffTaskCompletePermissionsTests(TestCase):
         self.assigned_task_a.refresh_from_db()
         self.assertEqual(self.assigned_task_a.status, 'Completed')
 
+    def test_task_detail_api_includes_drawer_fields(self):
+        """Task detail API returns raw fields required for right-side drawer editing."""
+        self.client.login(username='+8801700000888', password=self.password)
+        detail_url = reverse('projects:task_detail_api', kwargs={'pk': self.assigned_task_a.pk})
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['order'], self.assigned_task_a.order)
+        self.assertEqual(data['responsible_person_id'], self.staff_profile_a.id)
+        self.assertIn('raw_planned_start', data)
+        self.assertIn('raw_planned_finish', data)
+        self.assertIn('raw_duration_days', data)
+
+    def test_task_update_via_ajax_succeeds(self):
+        """Admin/manager can update a task via AJAX (used by the right-side drawer)."""
+        self.client.login(username='+8801700000888', password=self.password)
+        edit_url = reverse('projects:project_task_edit', kwargs={'pk': self.assigned_task_a.pk})
+        response = self.client.post(
+            edit_url,
+            data={
+                'order': 5,
+                'activity': 'Updated Activity via Drawer',
+                'responsible_person': self.staff_profile_b.id,
+                'status': 'In Progress',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['task']['activity'], 'Updated Activity via Drawer')
+        self.assigned_task_a.refresh_from_db()
+        self.assertEqual(self.assigned_task_a.order, 5)
+        self.assertEqual(self.assigned_task_a.activity, 'Updated Activity via Drawer')
+        self.assertEqual(self.assigned_task_a.status, 'In Progress')
+        self.assertEqual(self.assigned_task_a.responsible_person, self.staff_profile_b)
+
+    def test_task_update_via_ajax_validation_error(self):
+        """AJAX task update returns structured field errors on invalid submission."""
+        self.client.login(username='+8801700000888', password=self.password)
+        edit_url = reverse('projects:project_task_edit', kwargs={'pk': self.assigned_task_a.pk})
+        response = self.client.post(
+            edit_url,
+            data={
+                'order': 1,
+                'activity': '',  # Activity is required
+                'status': 'Not Started',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('activity', data['errors'])
+
 
 class ProjectLogIdempotencyTests(TestCase):
     def setUp(self):

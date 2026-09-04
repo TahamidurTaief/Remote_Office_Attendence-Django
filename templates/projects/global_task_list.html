@@ -1,578 +1,827 @@
 <c-app-shell page_title="Task Management | FieldTrack" active_href="{{ request.path }}">
     <c-slot name="sidebar">
-        <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
         <c-topbar title="Task Management">
             <c-slot name="actions">
-                <c-button href="{% url 'projects:global_task_add' %}" variant="accent" icon="plus" label="Create Individual Task" ></c-button>
+                <c-button href="{% url 'projects:global_task_add' %}" variant="accent" icon="plus" label="Create Individual Task"></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
 
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
+        activeTab: localStorage.getItem('global_task_list_tab') || 'individual',
+        expandedProject: null,
+        showDrawer: false,
+        drawerMode: 'view',
+        drawerTaskId: null,
+        loadingDetail: false,
+        savingTask: false,
+        saveError: null,
+        saveSuccess: null,
+        detailedTask: null,
+        newReplyMessage: '',
+        submittingReply: false,
+        activeFileIndex: 0,
+        editForm: {
+            activity: '',
+            order: 1,
+            responsible_person: '',
+            planned_start: '',
+            planned_finish: '',
+            duration_days: '',
+            status: 'Not Started',
+            remarks: ''
+        },
 
-<div class="flex flex-col h-full space-y-4" x-data="{
-    activeTab: localStorage.getItem('global_task_list_tab') || 'individual',
-    expandedProject: null,
-    showDetailModal: false,
-    loadingDetail: false,
-    detailedTask: null,
-    newReplyMessage: '',
-    submittingReply: false,
-    activeFileIndex: 0,
-    
-    viewTaskDetails(taskId) {
-        this.showDetailModal = true;
-        this.loadingDetail = true;
-        this.detailedTask = null;
-        this.activeFileIndex = 0;
-        this.newReplyMessage = '';
-        
-        fetch(`/projects/tasks/${taskId}/detail-api/`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) {
-                alert(data.error);
-                this.showDetailModal = false;
-            } else {
-                this.detailedTask = data;
-                this.$nextTick(() => {
-                    if (window.lucide) {
-                        window.lucide.createIcons();
+        openDrawer(taskId, mode = 'view') {
+            this.drawerTaskId = taskId;
+            this.drawerMode = mode;
+            this.showDrawer = true;
+            this.loadingDetail = true;
+            this.detailedTask = null;
+            this.saveError = null;
+            this.saveSuccess = null;
+            this.activeFileIndex = 0;
+            this.newReplyMessage = '';
+
+            fetch(`/projects/tasks/${taskId}/detail-api/`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    this.showDrawer = false;
+                } else {
+                    this.detailedTask = data;
+                    this.editForm = {
+                        activity: data.activity || '',
+                        order: data.order || 1,
+                        responsible_person: data.responsible_person_id ? String(data.responsible_person_id) : '',
+                        planned_start: data.raw_planned_start || '',
+                        planned_finish: data.raw_planned_finish || '',
+                        duration_days: data.raw_duration_days || '',
+                        status: data.status || 'Not Started',
+                        remarks: data.remarks || ''
+                    };
+                    this.$nextTick(() => {
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+                        const el = document.getElementById('drawer-replies-scroll');
+                        if (el) el.scrollTop = el.scrollHeight;
+                    });
+                }
+            })
+            .catch(err => {
+                alert('Failed to load task details.');
+                this.showDrawer = false;
+            })
+            .finally(() => {
+                this.loadingDetail = false;
+            });
+        },
+
+        closeDrawer() {
+            this.showDrawer = false;
+            this.drawerTaskId = null;
+            this.saveError = null;
+            this.saveSuccess = null;
+        },
+
+        setDrawerMode(mode) {
+            this.drawerMode = mode;
+            this.saveError = null;
+            this.saveSuccess = null;
+            this.$nextTick(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+                if (mode === 'view') {
+                    const el = document.getElementById('drawer-replies-scroll');
+                    if (el) el.scrollTop = el.scrollHeight;
+                }
+            });
+        },
+
+        calculateDuration() {
+            if (this.editForm.planned_start && this.editForm.planned_finish) {
+                const s = new Date(this.editForm.planned_start);
+                const f = new Date(this.editForm.planned_finish);
+                if (!isNaN(s) && !isNaN(f)) {
+                    if (f >= s) {
+                        const diffTime = Math.abs(f - s);
+                        this.editForm.duration_days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                    } else {
+                        this.editForm.duration_days = 1;
                     }
-                    const el = document.getElementById('replies-scroll-container');
-                    if (el) el.scrollTop = el.scrollHeight;
-                });
+                }
             }
-        })
-        .catch(err => {
-            alert('Failed to load task details.');
-            this.showDetailModal = false;
-        })
-        .finally(() => {
-            this.loadingDetail = false;
-        });
-    },
-    
-    submitReply() {
-        if (!this.newReplyMessage.trim()) return;
-        this.submittingReply = true;
-        
-        const formData = new FormData();
-        formData.append('message', this.newReplyMessage);
-        
-        fetch(`/projects/tasks/${this.detailedTask.id}/reply-api/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                this.detailedTask.replies = data.replies;
-                this.newReplyMessage = '';
-                this.$nextTick(() => {
-                    const el = document.getElementById('replies-scroll-container');
-                    if (el) el.scrollTop = el.scrollHeight;
-                });
-            } else {
-                alert(data.error || 'Failed to submit reply.');
+        },
+
+        saveTaskChanges() {
+            if (!this.editForm.activity.trim()) {
+                this.saveError = 'Activity description is required.';
+                return;
             }
-        })
-        .catch(err => {
-            alert('Error submitting reply.');
-        })
-        .finally(() => {
-            this.submittingReply = false;
-        });
-    },
-    
-    approveTask(taskId) {
-        if (!confirm('Are you sure you want to approve this task and mark it as completed?')) return;
-        fetch(`/projects/tasks/${taskId}/approve-api/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
+            if (this.editForm.planned_start && this.editForm.planned_finish && this.editForm.planned_finish < this.editForm.planned_start) {
+                this.saveError = 'Planned finish date cannot be before planned start date.';
+                return;
             }
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                this.detailedTask.status = data.status;
-                window.location.reload();
-            } else {
-                alert(data.error || 'Failed to approve task.');
+
+            this.savingTask = true;
+            this.saveError = null;
+            this.saveSuccess = null;
+
+            const formData = new FormData();
+            formData.append('order', this.editForm.order || 1);
+            formData.append('activity', this.editForm.activity);
+            if (this.editForm.responsible_person) {
+                formData.append('responsible_person', this.editForm.responsible_person);
             }
-        })
-        .catch(err => {
-            alert('Error approving task.');
-        });
-    }
-}">
-    <!-- Header Summary & Actions -->
-    <c-card padding="md" extra_class="mb-4">
-        <c-slot name="header">
-            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 w-full">
-                <div>
-                    <h2 class="text-[16px] font-bold text-gray-800 leading-none">Task Assignment Control</h2>
-                    <p class="text-[11px] text-gray-400 mt-1">Monitor, filter, and assign tasks across all active workspaces.</p>
+            if (this.editForm.planned_start) {
+                formData.append('planned_start', this.editForm.planned_start);
+            }
+            if (this.editForm.planned_finish) {
+                formData.append('planned_finish', this.editForm.planned_finish);
+            }
+            if (this.editForm.duration_days) {
+                formData.append('duration_days', this.editForm.duration_days);
+            }
+            formData.append('status', this.editForm.status);
+            formData.append('remarks', this.editForm.remarks || '');
+
+            const fileInput = document.getElementById('drawer_assignment_attachments');
+            if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('assignment_attachments', fileInput.files[i]);
+                }
+            }
+
+            fetch(`/projects/tasks/${this.drawerTaskId}/edit/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.saveSuccess = 'Task updated successfully!';
+                    fetch(`/projects/tasks/${this.drawerTaskId}/detail-api/`)
+                    .then(r => r.json())
+                    .then(updated => {
+                        this.detailedTask = updated;
+                        setTimeout(() => {
+                            this.drawerMode = 'view';
+                            this.saveSuccess = null;
+                            window.location.reload();
+                        }, 700);
+                    });
+                } else {
+                    let errText = 'Failed to save changes.';
+                    if (data.errors) {
+                        const messages = Object.entries(data.errors).map(([f, errs]) => `${f}: ${errs.join(', ')}`);
+                        errText = messages.join(' | ');
+                    }
+                    this.saveError = errText;
+                }
+            })
+            .catch(err => {
+                this.saveError = 'Network error while saving changes.';
+            })
+            .finally(() => {
+                this.savingTask = false;
+            });
+        },
+
+        submitReply() {
+            if (!this.newReplyMessage.trim()) return;
+            this.submittingReply = true;
+
+            const formData = new FormData();
+            formData.append('message', this.newReplyMessage);
+
+            fetch(`/projects/tasks/${this.detailedTask.id}/reply-api/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.detailedTask.replies = data.replies;
+                    this.newReplyMessage = '';
+                    this.$nextTick(() => {
+                        const el = document.getElementById('drawer-replies-scroll');
+                        if (el) el.scrollTop = el.scrollHeight;
+                    });
+                } else {
+                    alert(data.error || 'Failed to submit reply.');
+                }
+            })
+            .catch(err => {
+                alert('Error submitting reply.');
+            })
+            .finally(() => {
+                this.submittingReply = false;
+            });
+        },
+
+        approveTask(taskId) {
+            if (!confirm('Are you sure you want to approve this task and mark it as completed?')) return;
+            fetch(`/projects/tasks/${taskId}/approve-api/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.detailedTask.status = data.status;
+                    window.location.reload();
+                } else {
+                    alert(data.error || 'Failed to approve task.');
+                }
+            })
+            .catch(err => {
+                alert('Error approving task.');
+            });
+        }
+    }">
+        <!-- Header Summary & Actions -->
+        <c-card padding="md" extra_class="mb-4">
+            <c-slot name="header">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 w-full">
+                    <div>
+                        <h2 class="text-sm font-bold text-gray-800 leading-none">Task Assignment Control</h2>
+                        <p class="text-[11px] text-gray-400 mt-1">Monitor, filter, and assign tasks across all active workspaces.</p>
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <c-button href="{% url 'projects:global_task_add' %}" variant="primary" icon="plus" label="Create Individual Task" size="sm"></c-button>
+                    </div>
                 </div>
-                <div class="flex gap-2 shrink-0">
-                    <c-button href="{% url 'projects:global_task_add' %}" variant="primary" icon="plus" label="Create Individual Task" size="sm"></c-button>
+            </c-slot>
+        </c-card>
+
+        <!-- Filters Section -->
+        <c-card padding="md">
+            <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
+                <!-- Filter Employee -->
+                <c-select name="employee" label="Employee" value="{{ selected_employee }}" id="filter_employee" extra_class="w-full">
+                    <option value="">-- All Employees --</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if selected_employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <!-- Filter Project -->
+                <c-select name="project" label="Project" value="{{ selected_project }}" id="filter_project" extra_class="w-full">
+                    <option value="">-- All Projects --</option>
+                    {% for proj in projects %}
+                    <option value="{{ proj.id }}" {% if selected_project == proj.id|stringformat:"s" %}selected{% endif %}>{{ proj.name }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <!-- Filter Status -->
+                <c-select name="status" label="Status" value="{{ selected_status }}" id="filter_status" extra_class="w-full">
+                    <option value="">-- All Statuses --</option>
+                    {% for st_val, st_lbl in statuses %}
+                    <option value="{{ st_val }}" {% if selected_status == st_val %}selected{% endif %}>{{ st_lbl }}</option>
+                    {% endfor %}
+                </c-select>
+
+                <!-- Date Range: Start -->
+                <c-input type="date" name="date_start" label="Planned Start From" value="{{ selected_date_start }}" id="filter_date_start" extra_class="w-full"></c-input>
+
+                <!-- Date Range: End -->
+                <div class="flex items-end gap-2 w-full">
+                    <c-input type="date" name="date_end" label="Planned Finish To" value="{{ selected_date_end }}" id="filter_date_end" extra_class="flex-1"></c-input>
+                    <div class="shrink-0 flex gap-1.5 mb-[1px]">
+                        <c-button type="submit" variant="primary" icon="search" extra_class="!p-2.5 !h-[34px] !w-[34px] flex items-center justify-center" title="Apply Filters"></c-button>
+                        <c-button href="{% url 'projects:global_task_list' %}" variant="secondary" icon="rotate-ccw" extra_class="!p-2.5 !h-[34px] !w-[34px] flex items-center justify-center" title="Reset Filters"></c-button>
+                    </div>
                 </div>
+            </form>
+        </c-card>
+
+        <!-- Tab Buttons -->
+        <div class="bg-white border border-gray-150 rounded-xl p-1 shadow-sm flex">
+            <c-tab-button label="Individual Tasks ({{ individual_tasks|length }})"
+                          ::active="activeTab === 'individual'"
+                          @click="activeTab = 'individual'; localStorage.setItem('global_task_list_tab', 'individual')"
+                          extra_class="flex-1 text-center justify-center py-2 text-xs font-semibold rounded-lg transition-all"></c-tab-button>
+            <c-tab-button label="Project-based Tasks ({{ project_list|length }} Projects)"
+                          ::active="activeTab === 'project'"
+                          @click="activeTab = 'project'; localStorage.setItem('global_task_list_tab', 'project')"
+                          extra_class="flex-1 text-center justify-center py-2 text-xs font-semibold rounded-lg transition-all"></c-tab-button>
+        </div>
+
+        <!-- Active Tab Panel Content -->
+        <div>
+            <!-- TAB 1: INDIVIDUAL TASKS -->
+            <div x-show="activeTab === 'individual'" class="min-h-[300px]">
+                <c-table extra_class="bg-white border border-gray-150 rounded-xl shadow-sm overflow-hidden">
+                    <c-slot name="header">
+                        <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Seq</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Activity</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Assignee</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Planned Dates</th>
+                        <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                    </c-slot>
+
+                    {% for task in individual_tasks %}
+                    <tr class="hover:bg-slate-50/50 transition-colors">
+                        <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-500 font-semibold">
+                            #{{ task.order }}
+                        </td>
+                        <td class="px-4 py-3.5 text-[12px] text-gray-900 font-medium">
+                            {{ task.activity }}
+                        </td>
+                        <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-700">
+                            {% if task.responsible_person %}
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
+                                    <span class="font-semibold">{{ task.responsible_person.full_name }}</span>
+                                </div>
+                            {% else %}
+                                <span class="text-gray-400 font-medium italic">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3.5 whitespace-nowrap text-[11px] text-gray-500">
+                            {{ task.planned_start|date:"d/m/Y"|default:"—" }} to {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
+                            {% if task.duration_days %}
+                            <span class="font-bold text-gray-400 ml-1">({{ task.duration_days }}d)</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3.5 whitespace-nowrap text-[11px]">
+                            {% if task.status == 'Not Started' %}
+                                <c-badge variant="neutral" label="Not Started"></c-badge>
+                            {% elif task.status == 'In Progress' %}
+                                <c-badge variant="info" label="In Progress"></c-badge>
+                            {% elif task.status == 'Delayed' %}
+                                <c-badge variant="danger" label="Delayed"></c-badge>
+                            {% elif task.status == 'Under Review' %}
+                                <c-badge variant="warning" label="Under Review"></c-badge>
+                            {% elif task.status == 'Completed' %}
+                                <c-badge variant="success" label="Completed"></c-badge>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold space-x-2">
+                            <button type="button" @click="openDrawer({{ task.pk }}, 'view')" class="text-primary-600 hover:text-primary-800 transition-colors">View</button>
+                            <button type="button" @click="openDrawer({{ task.pk }}, 'edit')" class="text-slate-600 hover:text-slate-900 transition-colors">Edit</button>
+                            <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this individual task checklist item permanently?', () => $el.submit())">
+                                {% csrf_token %}
+                                <button type="submit" class="text-red-600 hover:text-red-800 transition-colors">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <c-slot name="empty">
+                        <c-empty-state icon="check-square" title="No individual tasks" description="No individual tasks match the selected filters."></c-empty-state>
+                    </c-slot>
+                    {% endfor %}
+                </c-table>
             </div>
-        </c-slot>
-    </c-card>
 
-    <!-- Filters Section -->
-    <c-card padding="md">
-        <form method="GET" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 items-end">
-            <!-- Filter Employee -->
-            <c-select name="employee" label="Employee" value="{{ selected_employee }}" id="filter_employee" extra_class="w-full">
-                <option value="">-- All Employees --</option>
-                {% for emp in employees %}
-                <option value="{{ emp.id }}" {% if selected_employee == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.full_name }}</option>
-                {% endfor %}
-            </c-select>
-
-            <!-- Filter Project -->
-            <c-select name="project" label="Project" value="{{ selected_project }}" id="filter_project" extra_class="w-full">
-                <option value="">-- All Projects --</option>
-                {% for proj in projects %}
-                <option value="{{ proj.id }}" {% if selected_project == proj.id|stringformat:"s" %}selected{% endif %}>{{ proj.name }}</option>
-                {% endfor %}
-            </c-select>
-
-            <!-- Filter Status -->
-            <c-select name="status" label="Status" value="{{ selected_status }}" id="filter_status" extra_class="w-full">
-                <option value="">-- All Statuses --</option>
-                {% for st_val, st_lbl in statuses %}
-                <option value="{{ st_val }}" {% if selected_status == st_val %}selected{% endif %}>{{ st_lbl }}</option>
-                {% endfor %}
-            </c-select>
-
-            <!-- Date Range: Start -->
-            <c-input type="date" name="date_start" label="Planned Start From" value="{{ selected_date_start }}" id="filter_date_start" extra_class="w-full"></c-input>
-
-            <!-- Date Range: End -->
-            <div class="flex items-end gap-2 w-full">
-                <c-input type="date" name="date_end" label="Planned Finish To" value="{{ selected_date_end }}" id="filter_date_end" extra_class="flex-1"></c-input>
-                <div class="shrink-0 flex gap-1.5 mb-[1px]">
-                    <c-button type="submit" variant="primary" icon="search" extra_class="!p-2.5 !h-[34px] !w-[34px] flex items-center justify-center" title="Apply Filters"></c-button>
-                    <c-button href="{% url 'projects:global_task_list' %}" variant="secondary" icon="rotate-ccw" extra_class="!p-2.5 !h-[34px] !w-[34px] flex items-center justify-center" title="Reset Filters"></c-button>
-                </div>
-            </div>
-        </form>
-    </c-card>
-
-    <!-- Tab Buttons -->
-    <div class="bg-white border border-gray-150 rounded-xl p-1 shadow-sm flex">
-        <c-tab-button label="Individual Tasks ({{ individual_tasks|length }})"
-                      ::active="activeTab === 'individual'"
-                      @click="activeTab = 'individual'; localStorage.setItem('global_task_list_tab', 'individual')"
-                      extra_class="flex-1 text-center justify-center py-2 text-xs font-semibold rounded-lg transition-all"></c-tab-button>
-        <c-tab-button label="Project-based Tasks ({{ project_list|length }} Projects)"
-                      ::active="activeTab === 'project'"
-                      @click="activeTab = 'project'; localStorage.setItem('global_task_list_tab', 'project')"
-                      extra_class="flex-1 text-center justify-center py-2 text-xs font-semibold rounded-lg transition-all"></c-tab-button>
-    </div>
-
-    <!-- Active Tab Panel Content -->
-    <div>
-        <!-- TAB 1: INDIVIDUAL TASKS -->
-        <div x-show="activeTab === 'individual'" class="min-h-[300px]">
-            <c-table extra_class="bg-white border border-gray-150 rounded-xl shadow-sm overflow-hidden">
-                <c-slot name="header">
-                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Seq</th>
-                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Activity</th>
-                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Assignee</th>
-                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Planned Dates</th>
-                    <th scope="col" class="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" class="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-                </c-slot>
-                
-                {% for task in individual_tasks %}
-                <tr class="hover:bg-slate-50/50 transition-colors">
-                    <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-500 font-semibold">
-                        #{{ task.order }}
-                    </td>
-                    <td class="px-4 py-3.5 text-[12px] text-gray-900 font-medium">
-                        {{ task.activity }}
-                    </td>
-                    <td class="px-4 py-3.5 whitespace-nowrap text-[12px] text-gray-700">
-                        {% if task.responsible_person %}
-                            <div class="flex items-center gap-1.5">
-                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
-                                <span class="font-semibold">{{ task.responsible_person.full_name }}</span>
+            <!-- TAB 2: PROJECT-BASED TASKS -->
+            <div x-show="activeTab === 'project'" class="space-y-3 min-h-[300px]">
+                {% for item in project_list %}
+                <c-card padding="none" extra_class="overflow-hidden mb-3">
+                    <!-- Project Card Header -->
+                    <div @click="expandedProject = (expandedProject === 'proj-{{ forloop.index }}' ? null : 'proj-{{ forloop.index }}')"
+                         class="p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-3 cursor-pointer hover:bg-slate-50/50 select-none">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-sm font-bold text-gray-900 truncate">{{ item.project.name }}</h3>
+                                <c-badge variant="primary" label="{{ item.total_tasks }} task{{ item.total_tasks|pluralize }}"></c-badge>
                             </div>
-                        {% else %}
-                            <span class="text-gray-400 font-medium italic">Unassigned</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-3.5 whitespace-nowrap text-[11px] text-gray-500">
-                        {{ task.planned_start|date:"d/m/Y"|default:"—" }} to {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
-                        {% if task.duration_days %}
-                        <span class="font-bold text-gray-400 ml-1">({{ task.duration_days }}d)</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-3.5 whitespace-nowrap text-[11px]">
-                        {% if task.status == 'Not Started' %}
-                            <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-bold border border-gray-200">Not Started</span>
-                        {% elif task.status == 'In Progress' %}
-                            <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200">In Progress</span>
-                        {% elif task.status == 'Delayed' %}
-                            <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-bold border border-red-200 animate-pulse">Delayed</span>
-                        {% elif task.status == 'Under Review' %}
-                            <span class="px-2 py-0.5 rounded-full bg-amber-55 text-amber-800 font-bold border border-amber-200 animate-pulse">Under Review</span>
-                        {% elif task.status == 'Completed' %}
-                            <span class="px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-bold border border-green-200">Completed</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold space-x-2">
-                        <button type="button" @click="viewTaskDetails({{ task.pk }})" class="text-indigo-605 hover:underline">View</button>
-                        <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:underline">Edit</a>
-                        <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this individual task checklist item permanently?', () => $el.submit())">
-                            {% csrf_token %}
-                            <button type="submit" class="text-red-650 hover:underline">Delete</button>
-                        </form>
-                    </td>
-                </tr>
+                            <p class="text-[11px] text-gray-500 mt-1 truncate">
+                                Client: <span class="font-semibold text-gray-700">{{ item.project.client_name }}</span> | Location: <span class="font-semibold text-gray-700">{{ item.project.location }}</span>
+                            </p>
+                        </div>
+
+                        <!-- Progress & Actions -->
+                        <div class="flex items-center gap-4 shrink-0">
+                            <c-progress-bar value="{{ item.progress_percent }}" size="sm" extra_class="w-28 sm:w-36 hidden sm:flex"></c-progress-bar>
+
+                            <!-- Dropdown Button and Quick Action -->
+                            <div class="flex items-center gap-2">
+                                <c-button href="{% url 'projects:project_task_add' item.project.pk %}" variant="secondary" size="xs" icon="plus" label="Add Task" @click.stop=""></c-button>
+                                <div class="p-1 text-gray-400 hover:text-gray-700 rounded-lg pointer-events-none">
+                                    <i data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200" :class="expandedProject === 'proj-{{ forloop.index }}' ? 'rotate-180' : ''"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Expanded Checklist List -->
+                    <div x-show="expandedProject === 'proj-{{ forloop.index }}'" x-collapse class="border-t border-gray-100 bg-slate-50/30">
+                        <div class="overflow-x-auto custom-scrollbar">
+                            <table class="min-w-full divide-y divide-gray-100">
+                                <thead class="bg-gray-50/50">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Seq</th>
+                                        <th scope="col" class="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Activity</th>
+                                        <th scope="col" class="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Assignee</th>
+                                        <th scope="col" class="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Planned Dates</th>
+                                        <th scope="col" class="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                                        <th scope="col" class="px-4 py-2 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 bg-white">
+                                    {% for task in item.tasks %}
+                                    <tr class="hover:bg-slate-50/30 transition-colors">
+                                        <td class="px-4 py-2.5 whitespace-nowrap text-[11px] text-gray-500 font-semibold">
+                                            #{{ task.order }}
+                                        </td>
+                                        <td class="px-4 py-2.5 text-[11px] text-gray-900 font-medium">
+                                            {{ task.activity }}
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap text-[11px] text-gray-700">
+                                            {% if task.responsible_person %}
+                                                <span class="font-medium text-gray-800">{{ task.responsible_person.full_name }}</span>
+                                            {% else %}
+                                                <span class="text-gray-400 italic">Unassigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap text-[10px] text-gray-500">
+                                            {{ task.planned_start|date:"d/m/Y"|default:"—" }} to {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap text-[10px]">
+                                            {% if task.status == 'Not Started' %}
+                                                <c-badge variant="neutral" label="Not Started"></c-badge>
+                                            {% elif task.status == 'In Progress' %}
+                                                <c-badge variant="info" label="In Progress"></c-badge>
+                                            {% elif task.status == 'Delayed' %}
+                                                <c-badge variant="danger" label="Delayed"></c-badge>
+                                            {% elif task.status == 'Under Review' %}
+                                                <c-badge variant="warning" label="Under Review"></c-badge>
+                                            {% elif task.status == 'Completed' %}
+                                                <c-badge variant="success" label="Completed"></c-badge>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap text-right text-[10px] font-semibold space-x-2">
+                                            <button type="button" @click="openDrawer({{ task.pk }}, 'view')" class="text-primary-600 hover:text-primary-800 transition-colors">View</button>
+                                            <button type="button" @click="openDrawer({{ task.pk }}, 'edit')" class="text-slate-600 hover:text-slate-900 transition-colors">Edit</button>
+                                            <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this project task checklist item permanently?', () => $el.submit())">
+                                                {% csrf_token %}
+                                                <button type="submit" class="text-red-600 hover:text-red-800 transition-colors">Delete</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </c-card>
                 {% empty %}
-                <c-slot name="empty">
-                    <c-empty-state icon="check-square" title="No individual tasks" description="No individual tasks match the selected filters."></c-empty-state>
-                </c-slot>
+                <c-card padding="md" extra_class="text-center text-gray-400 text-xs italic">
+                    No project tasks matching search criteria.
+                </c-card>
                 {% endfor %}
-            </c-table>
+            </div>
         </div>
 
-        <!-- TAB 2: PROJECT-BASED TASKS -->
-        <div x-show="activeTab === 'project'" class="space-y-3 min-h-[300px]">
-            {% for item in project_list %}
-            <div class="bg-white border border-gray-150 rounded-xl shadow-sm overflow-hidden transition-all duration-200">
-                <!-- Project Card Header -->
-                <div @click="expandedProject = (expandedProject === 'proj-{{ forloop.index }}' ? null : 'proj-{{ forloop.index }}')"
-                     class="p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-3 cursor-pointer hover:bg-slate-50/50 select-none">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                            <h3 class="text-sm font-bold text-gray-900 truncate">{{ item.project.name }}</h3>
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-150">
-                                {{ item.total_tasks }} task{{ item.total_tasks|pluralize }}
-                            </span>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mt-1 truncate">
-                            Client: <span class="font-semibold text-gray-700">{{ item.project.client_name }}</span> | Location: <span class="font-semibold text-gray-700">{{ item.project.location }}</span>
-                        </p>
+        <!-- Professional Interactive Right-Side Slide-Over Drawer -->
+        <!-- Backdrop -->
+        <div x-show="showDrawer"
+             x-transition:enter="transition-opacity ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @click="closeDrawer()"
+             class="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm"
+             x-cloak></div>
+
+        <!-- Drawer Panel -->
+        <div x-show="showDrawer"
+             x-transition:enter="transform transition ease-in-out duration-300"
+             x-transition:enter-start="translate-x-full"
+             x-transition:enter-end="translate-x-0"
+             x-transition:leave="transform transition ease-in-out duration-300"
+             x-transition:leave-start="translate-x-0"
+             x-transition:leave-end="translate-x-full"
+             class="fixed inset-y-0 right-0 z-[65] w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-800"
+             x-cloak>
+
+            <!-- Drawer Header -->
+            <div class="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 shrink-0">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 truncate" x-text="detailedTask ? detailedTask.project_name : 'Loading...'"></span>
+                        <template x-if="detailedTask">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                                  :class="{
+                                      'bg-green-100 text-green-800': detailedTask.status === 'Completed',
+                                      'bg-amber-100 text-amber-800': detailedTask.status === 'Under Review',
+                                      'bg-blue-100 text-blue-800': detailedTask.status === 'In Progress',
+                                      'bg-red-100 text-red-800': detailedTask.status === 'Delayed',
+                                      'bg-slate-100 text-slate-700': detailedTask.status === 'Not Started'
+                                  }"
+                                  x-text="detailedTask.status"></span>
+                        </template>
                     </div>
 
-                    <!-- Progress & Actions -->
-                    <div class="flex items-center gap-4 shrink-0">
-                        <div class="w-24 sm:w-32 hidden sm:block">
-                            <div class="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
-                                <span>Progress</span>
-                                <span class="font-bold text-gray-700">{{ item.progress_percent }}%</span>
-                            </div>
-                            <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                <div class="bg-primary h-1.5 rounded-full" style="width: {{ item.progress_percent }}%"></div>
-                            </div>
-                        </div>
-
-                        <!-- Dropdown Button and Quick Action -->
-                        <div class="flex items-center gap-2">
-                            <a href="{% url 'projects:project_task_add' item.project.pk %}" @click.stop class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-indigo-700 font-semibold bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors" title="Add Task to this project">
-                                <i data-lucide="plus" class="w-3 h-3"></i> Add Task
-                            </a>
-                            <div class="p-1 text-gray-400 hover:text-gray-700 rounded-lg pointer-events-none">
-                                <i data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200" :class="expandedProject === 'proj-{{ forloop.index }}' ? 'rotate-180' : ''"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Expanded Checklist List -->
-                <div x-show="expandedProject === 'proj-{{ forloop.index }}'" x-collapse class="border-t border-gray-100 bg-slate-50/30">
-                    <div class="overflow-x-auto custom-scrollbar">
-                        <table class="min-w-full divide-y divide-gray-100">
-                            <thead class="bg-gray-50/50">
-                                <tr>
-                                    <th scope="col" class="px-4 py-2 text-left text-[9px] font-bold text-gray-400 uppercase tracking-wider">Seq</th>
-                                    <th scope="col" class="px-4 py-2 text-left text-[9px] font-bold text-gray-400 uppercase tracking-wider">Activity</th>
-                                    <th scope="col" class="px-4 py-2 text-left text-[9px] font-bold text-gray-400 uppercase tracking-wider">Assignee</th>
-                                    <th scope="col" class="px-4 py-2 text-left text-[9px] font-bold text-gray-400 uppercase tracking-wider">Planned Dates</th>
-                                    <th scope="col" class="px-4 py-2 text-left text-[9px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                                    <th scope="col" class="px-4 py-2 text-right text-[9px] font-bold text-gray-400 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 bg-white">
-                                {% for task in item.tasks %}
-                                <tr class="hover:bg-slate-50/30 transition-colors">
-                                    <td class="px-4 py-2.5 whitespace-nowrap text-[11px] text-gray-500 font-semibold">
-                                        #{{ task.order }}
-                                    </td>
-                                    <td class="px-4 py-2.5 text-[11px] text-gray-900 font-medium">
-                                        {{ task.activity }}
-                                    </td>
-                                    <td class="px-4 py-2.5 whitespace-nowrap text-[11px] text-gray-700">
-                                        {% if task.responsible_person %}
-                                            <span class="font-medium text-gray-800">{{ task.responsible_person.full_name }}</span>
-                                        {% else %}
-                                            <span class="text-gray-400 italic">Unassigned</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-4 py-2.5 whitespace-nowrap text-[10px] text-gray-500">
-                                        {{ task.planned_start|date:"d/m/Y"|default:"—" }} to {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
-                                    </td>
-                                    <td class="px-4 py-2.5 whitespace-nowrap text-[10px]">
-                                        {% if task.status == 'Not Started' %}
-                                            <span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-semibold border border-gray-150">Not Started</span>
-                                        {% elif task.status == 'In Progress' %}
-                                            <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-150">In Progress</span>
-                                        {% elif task.status == 'Delayed' %}
-                                            <span class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold border border-red-150">Delayed</span>
-                                        {% elif task.status == 'Under Review' %}
-                                            <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-150">Under Review</span>
-                                        {% elif task.status == 'Completed' %}
-                                            <span class="px-1.5 py-0.5 rounded bg-green-50 text-green-700 font-semibold border border-green-150">Completed</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-4 py-2.5 whitespace-nowrap text-right text-[10px] font-semibold space-x-2">
-                                        <button type="button" @click="viewTaskDetails({{ task.pk }})" class="text-indigo-605 hover:underline">View</button>
-                                        <a href="{% url 'projects:project_task_edit' task.pk %}" class="text-primary-600 hover:underline">Edit</a>
-                                        <form action="{% url 'projects:project_task_delete' task.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this project task checklist item permanently?', () => $el.submit())">
-                                            {% csrf_token %}
-                                            <button type="submit" class="text-red-650 hover:underline">Delete</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            {% empty %}
-            <div class="bg-white border border-gray-150 rounded-xl p-8 text-center text-gray-400 text-[12px] italic shadow-sm">
-                No project tasks matching search criteria.
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <!-- Beautiful Task Details, Discussion & File Viewer Modal -->
-    <div x-show="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak x-transition>
-        <div class="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden" @click.outside="showDetailModal = false">
-            <!-- Modal Header -->
-            <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
-                <div class="min-w-0">
-                    <span class="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full" x-text="detailedTask ? detailedTask.project_name : 'Loading...'"></span>
-                    <h3 class="text-sm font-bold text-slate-800 truncate mt-1" x-text="detailedTask ? detailedTask.activity : 'Task Details'"></h3>
-                </div>
-                <button @click="showDetailModal = false" class="p-1.5 hover:bg-slate-200 text-slate-450 hover:text-slate-700 rounded-lg transition-colors">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <!-- Modal Body -->
-            <div class="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-150">
-                <!-- Loader -->
-                <div x-show="loadingDetail" class="flex-1 flex flex-col items-center justify-center gap-2">
-                    <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-xs text-slate-400 font-medium">Fetching details & discussion...</span>
-                </div>
-
-                <template x-if="detailedTask">
-                    <!-- Left: Metadata & Status Details (Width 2/5 on large screen) -->
-                    <div class="w-full md:w-2/5 p-4 overflow-y-auto custom-scrollbar flex flex-col space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Status</span>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-1"
-                                      :class="{
-                                          'bg-green-100 text-green-800 border border-green-200': detailedTask.status === 'Completed',
-                                          'bg-amber-100 text-amber-800 border border-amber-200': detailedTask.status === 'Under Review',
-                                          'bg-blue-100 text-blue-800 border border-blue-200': detailedTask.status === 'In Progress',
-                                          'bg-red-100 text-red-800 border border-red-200': detailedTask.status === 'Delayed',
-                                          'bg-slate-100 text-slate-700 border border-slate-200': detailedTask.status === 'Not Started'
-                                      }"
-                                      x-text="detailedTask.status"></span>
-                            </div>
-                            <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Points</span>
-                                <span class="text-xs font-bold text-slate-800 mt-1 block" x-text="detailedTask.points"></span>
-                            </div>
-                            <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Assignee</span>
-                                <span class="text-xs font-bold text-slate-850 mt-1 block" x-text="detailedTask.responsible_person_name"></span>
-                            </div>
-                            <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Branch</span>
-                                <span class="text-xs font-medium text-slate-600 mt-1 block" x-text="detailedTask.branch_name"></span>
-                            </div>
-                            <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Planned Timeline</span>
-                                <span class="text-xs font-medium text-slate-800 mt-1 block" x-text="detailedTask.planned_start + ' to ' + detailedTask.planned_finish"></span>
-                            </div>
-                            <div>
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider block">Duration</span>
-                                <span class="text-xs font-medium text-slate-800 mt-1 block" x-text="detailedTask.duration_days"></span>
-                            </div>
-                        </div>
-
-                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.completed_at && detailedTask.completed_at !== '—'">
-                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Completed At</span>
-                            <span class="text-xs font-medium text-green-700 mt-1 block" x-text="detailedTask.completed_at"></span>
-                        </div>
-
-                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.remarks">
-                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Manager Remarks / Feedback</span>
-                            <p class="text-xs text-slate-600 mt-1 italic whitespace-pre-line bg-slate-50 border border-slate-100 p-2.5 rounded-lg" x-text="detailedTask.remarks"></p>
-                        </div>
-
-                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.employee_note">
-                            <span class="text-[10px] text-slate-405 font-bold uppercase block">Employee Completion Note</span>
-                            <p class="text-xs text-slate-600 mt-1 italic whitespace-pre-line bg-emerald-50/50 border border-emerald-100 p-2.5 rounded-lg" x-text="detailedTask.employee_note"></p>
-                        </div>
-
-                        <!-- Approve Button for Managers/Admins -->
-                        {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'manager' or 'projects.edit' in request.user.resolved_permissions %}
-                        <div class="border-t border-slate-100 pt-3" x-show="detailedTask.status !== 'Completed'">
-                            <button type="button" @click="approveTask(detailedTask.id)" class="w-full inline-flex justify-center items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors">
-                                <i data-lucide="check-circle" class="w-4 h-4"></i> Approve Task (Mark Completed)
+                    <!-- Right Controls: View/Edit Switcher & Close -->
+                    <div class="flex items-center gap-2 shrink-0">
+                        <div class="inline-flex items-center p-0.5 bg-slate-200/80 dark:bg-slate-800 rounded-lg text-xs font-semibold">
+                            <button type="button"
+                                    @click="setDrawerMode('view')"
+                                    class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1"
+                                    :class="drawerMode === 'view' ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 dark:text-slate-400'">
+                                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                <span>View</span>
+                            </button>
+                            <button type="button"
+                                    @click="setDrawerMode('edit')"
+                                    class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1"
+                                    :class="drawerMode === 'edit' ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 dark:text-slate-400'">
+                                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                <span>Edit</span>
                             </button>
                         </div>
-                        {% endif %}
+                        <button type="button" @click="closeDrawer()" class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg transition-colors" title="Close Drawer">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
                     </div>
-                </template>
+                </div>
 
-                <template x-if="detailedTask">
-                    <!-- Right: Discussion Replies Board & File Viewer (Width 3/5) -->
-                    <div class="w-full md:w-3/5 flex flex-col min-h-0 bg-slate-50/40">
-                        <!-- Upper half: File Viewer & Reader (if there are attachments) -->
-                        <div class="p-4 border-b border-slate-150 flex flex-col min-h-0 shrink-0 bg-white" x-show="detailedTask.attachments && detailedTask.attachments.length > 0">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-[10px] text-slate-405 font-bold uppercase tracking-wider">File Viewer & Reader</span>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[11px] text-slate-500 font-medium">Select File:</span>
-                                    <select x-model="activeFileIndex" class="text-xs border border-slate-200 rounded p-1 bg-white focus:outline-none max-w-[200px]">
-                                        <template x-for="(file, idx) in detailedTask.attachments">
-                                            <option :value="idx" x-text="file.name + ' (' + file.type + ')'"></option>
-                                        </template>
-                                    </select>
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white truncate mt-2" x-text="detailedTask ? detailedTask.activity : 'Loading task details...'"></h3>
+            </div>
+
+            <!-- Drawer Body -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+                <!-- Loader State -->
+                <div x-show="loadingDetail" class="h-64 flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <div class="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-xs font-medium">Fetching task details & activity...</span>
+                </div>
+
+                <!-- Content when loaded -->
+                <template x-if="!loadingDetail && detailedTask">
+                    <div>
+                        <!-- MODE 1: VIEW DETAILS -->
+                        <div x-show="drawerMode === 'view'" class="space-y-5">
+                            <!-- Quick Meta Grid -->
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-800 text-xs">
+                                <div>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Assignee</span>
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5 block" x-text="detailedTask.responsible_person_name"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Planned Dates</span>
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5 block" x-text="detailedTask.planned_start + ' to ' + detailedTask.planned_finish"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Duration</span>
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5 block" x-text="detailedTask.duration_days"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Points</span>
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5 block" x-text="detailedTask.points || '—'"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Branch / Workspace</span>
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5 block" x-text="detailedTask.branch_name"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Completed Date</span>
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5 block" x-text="detailedTask.completed_at"></span>
                                 </div>
                             </div>
 
-                            <template x-if="detailedTask.attachments[activeFileIndex]">
-                                <div class="border border-slate-150 rounded-xl bg-slate-50 flex flex-col p-3 space-y-3">
-                                    <!-- File Preview Container (Click to Open) -->
-                                    <div @click="window.open(detailedTask.attachments[activeFileIndex].url, '_blank')" 
-                                         class="cursor-pointer border border-slate-200 bg-white rounded-lg overflow-hidden flex items-center justify-center p-2 min-h-[180px] max-h-[300px] hover:border-indigo-450 transition-colors group relative"
-                                         title="Click to open in new tab">
-                                        <!-- Overlay hover hint -->
-                                        <div class="absolute inset-0 bg-slate-900/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <span class="bg-slate-950/80 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                                                <i data-lucide="external-link" class="w-3 h-3"></i> Click to Open
-                                            </span>
-                                        </div>
+                            <!-- Remarks & Notes -->
+                            <div x-show="detailedTask.remarks" class="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-800">
+                                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Manager Remarks / Instructions</span>
+                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-line italic" x-text="detailedTask.remarks"></p>
+                            </div>
 
-                                        <!-- Image Preview -->
-                                        <template x-if="detailedTask.attachments[activeFileIndex].is_image">
-                                            <img :src="detailedTask.attachments[activeFileIndex].url" class="max-w-full max-h-[260px] object-contain rounded-md shadow-sm">
-                                        </template>
-                                        
-                                        <!-- PDF Reader -->
-                                        <template x-if="detailedTask.attachments[activeFileIndex].is_pdf">
-                                            <div class="flex flex-col items-center justify-center py-6 space-y-3">
-                                                <div class="w-14 h-14 bg-red-50 text-red-650 rounded-2xl flex items-center justify-center shadow-sm">
-                                                    <i data-lucide="file-text" class="w-8 h-8"></i>
-                                                </div>
-                                                <div class="text-center">
-                                                    <span class="text-xs font-bold text-slate-800 block truncate max-w-[240px]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
-                                                    <span class="text-[10px] text-slate-450 mt-1 block">Click to read PDF in new tab</span>
-                                                </div>
-                                            </div>
-                                        </template>
-                                        
-                                        <!-- Other Formats -->
-                                        <template x-if="!detailedTask.attachments[activeFileIndex].is_image && !detailedTask.attachments[activeFileIndex].is_pdf">
-                                            <div class="flex flex-col items-center justify-center py-6 space-y-3">
-                                                <div class="w-14 h-14 bg-slate-100 text-slate-500 rounded-2xl flex items-center justify-center shadow-sm">
-                                                    <i data-lucide="file" class="w-8 h-8"></i>
-                                                </div>
-                                                <div class="text-center">
-                                                    <span class="text-xs font-semibold text-slate-800 block truncate max-w-[240px]" x-text="detailedTask.attachments[activeFileIndex].name"></span>
-                                                    <span class="text-[10px] text-slate-450 mt-1 block">Click to open file in new tab</span>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    
-                                    <!-- Download and Details Bar (Fully Visible) -->
-                                    <div class="flex items-center justify-between gap-3 bg-white border border-slate-150 rounded-lg p-2.5 shadow-sm">
-                                        <div class="min-w-0 flex-1">
-                                            <span class="text-xs font-bold text-slate-700 block truncate" x-text="detailedTask.attachments[activeFileIndex].name"></span>
-                                            <span class="text-[9px] text-slate-400 block uppercase tracking-wider mt-0.5" x-text="detailedTask.attachments[activeFileIndex].type + ' File'"></span>
-                                        </div>
-                                        <a :href="detailedTask.attachments[activeFileIndex].url" download target="_blank" 
-                                           class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors shadow shrink-0">
-                                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
-                                        </a>
+                            <div x-show="detailedTask.employee_note" class="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider block">Employee Completion Note</span>
+                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-line italic" x-text="detailedTask.employee_note"></p>
+                            </div>
+
+                            <!-- Quick Action: Approve Task (For Admins/Managers) -->
+                            {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'manager' or 'projects.edit' in request.user.resolved_permissions %}
+                            <div x-show="detailedTask.status !== 'Completed'" class="pt-1">
+                                <button type="button" @click="approveTask(detailedTask.id)" class="w-full inline-flex justify-center items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors">
+                                    <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                    <span>Approve Task (Mark Completed)</span>
+                                </button>
+                            </div>
+                            {% endif %}
+
+                            <!-- File Viewer & Attachments Section -->
+                            <div x-show="detailedTask.attachments && detailedTask.attachments.length > 0" class="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Attachments (<span x-text="detailedTask.attachments ? detailedTask.attachments.length : 0"></span>)</span>
+                                    <div class="flex items-center gap-2" x-show="detailedTask.attachments && detailedTask.attachments.length > 1">
+                                        <span class="text-[11px] text-slate-400">File:</span>
+                                        <select x-model="activeFileIndex" class="text-xs border border-slate-200 dark:border-slate-700 rounded p-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none">
+                                            <template x-for="(file, idx) in detailedTask.attachments">
+                                                <option :value="idx" x-text="file.name"></option>
+                                            </template>
+                                        </select>
                                     </div>
                                 </div>
-                            </template>
+
+                                <template x-if="detailedTask.attachments && detailedTask.attachments[activeFileIndex]">
+                                    <div class="border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-850 p-3 space-y-2.5">
+                                        <!-- Preview Box -->
+                                        <div @click="window.open(detailedTask.attachments[activeFileIndex].url, '_blank')"
+                                             class="cursor-pointer border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center p-2 min-h-[160px] max-h-[260px] hover:border-primary transition-colors group relative">
+                                            <div class="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <span class="bg-slate-900/90 text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow">
+                                                    <i data-lucide="external-link" class="w-3 h-3"></i> Open Full View
+                                                </span>
+                                            </div>
+
+                                            <template x-if="detailedTask.attachments[activeFileIndex].is_image">
+                                                <img :src="detailedTask.attachments[activeFileIndex].url" class="max-w-full max-h-[240px] object-contain rounded">
+                                            </template>
+
+                                            <template x-if="detailedTask.attachments[activeFileIndex].is_pdf">
+                                                <div class="flex flex-col items-center justify-center py-4 space-y-2 text-red-500">
+                                                    <i data-lucide="file-text" class="w-10 h-10"></i>
+                                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                                    <span class="text-[10px] text-slate-400">Click to preview PDF in new tab</span>
+                                                </div>
+                                            </template>
+
+                                            <template x-if="!detailedTask.attachments[activeFileIndex].is_image && !detailedTask.attachments[activeFileIndex].is_pdf">
+                                                <div class="flex flex-col items-center justify-center py-4 space-y-2 text-slate-400">
+                                                    <i data-lucide="paperclip" class="w-10 h-10"></i>
+                                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                                    <span class="text-[10px] text-slate-400">Click to open document</span>
+                                                </div>
+                                            </template>
+                                        </div>
+
+                                        <!-- Attachment Info & Download -->
+                                        <div class="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-2">
+                                            <div class="min-w-0 flex-1">
+                                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 block truncate" x-text="detailedTask.attachments[activeFileIndex].name"></span>
+                                                <span class="text-[10px] text-slate-400 block uppercase" x-text="detailedTask.attachments[activeFileIndex].type + ' attachment'"></span>
+                                            </div>
+                                            <a :href="detailedTask.attachments[activeFileIndex].url" download target="_blank" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md transition-colors shrink-0">
+                                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+                                            </a>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Discussion / Collaborative Replies Stream -->
+                            <div class="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+                                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Collaborative Discussion & Updates</span>
+
+                                <div id="drawer-replies-scroll" class="max-h-60 overflow-y-auto custom-scrollbar space-y-2.5 pr-1">
+                                    <template x-if="!detailedTask.replies || detailedTask.replies.length === 0">
+                                        <div class="text-center py-6 text-slate-400 text-xs italic">
+                                            No comments or notes on this task yet.
+                                        </div>
+                                    </template>
+
+                                    <template x-for="r in detailedTask.replies">
+                                        <div class="flex items-start gap-2.5">
+                                            <div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                                <template x-if="r.author_photo_url">
+                                                    <img :src="r.author_photo_url" class="w-full h-full object-cover">
+                                                </template>
+                                                <template x-if="!r.author_photo_url">
+                                                    <span x-text="r.author_name.charAt(0).toUpperCase()"></span>
+                                                </template>
+                                            </div>
+                                            <div class="flex-1 min-w-0 bg-slate-50 dark:bg-slate-850 border border-slate-150 dark:border-slate-800 rounded-xl p-2.5">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div class="flex items-baseline gap-1.5 min-w-0">
+                                                        <span class="text-[11px] font-bold text-slate-900 dark:text-white truncate" x-text="r.author_name"></span>
+                                                        <span class="text-[9px] text-primary-600 dark:text-primary-400 font-semibold uppercase shrink-0" x-text="r.author_role"></span>
+                                                    </div>
+                                                    <span class="text-[9px] text-slate-400 shrink-0" x-text="r.created_at"></span>
+                                                </div>
+                                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-wrap" x-text="r.message"></p>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <!-- Reply input -->
+                                <form @submit.prevent="submitReply()" class="flex gap-2 items-end pt-2">
+                                    <div class="flex-1">
+                                        <textarea x-model="newReplyMessage" rows="1" @keydown.enter.prevent="if($event.ctrlKey || $event.metaKey) { newReplyMessage += '\n' } else { submitReply() }" class="w-full text-xs p-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white" placeholder="Write a comment... (Enter to send, Ctrl+Enter for newline)"></textarea>
+                                    </div>
+                                    <button type="submit" :disabled="submittingReply" class="px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-colors shrink-0 flex items-center gap-1.5">
+                                        <template x-if="submittingReply">
+                                            <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        </template>
+                                        <span>Send</span>
+                                    </button>
+                                </form>
+                            </div>
                         </div>
 
-                        <!-- Lower half / Full: Replies / Discussion Board -->
-                        <div class="flex-1 min-h-0 flex flex-col p-4">
-                            <span class="text-[10px] text-slate-450 font-bold uppercase tracking-wider block mb-2 shrink-0">Collaborative replies & discussion</span>
-                            
-                            <!-- Replies List -->
-                            <div id="replies-scroll-container" class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1.5 mb-3 min-h-0">
-                                <template x-if="!detailedTask.replies || detailedTask.replies.length === 0">
-                                    <div class="h-full flex flex-col items-center justify-center text-slate-400 text-xs italic py-8">
-                                        No comments or replies on this task yet.
-                                    </div>
-                                </template>
-                                
-                                <template x-for="r in detailedTask.replies">
-                                    <div class="flex items-start gap-2.5">
-                                        <div class="w-7 h-7 rounded-full bg-slate-200 overflow-hidden shrink-0 shadow-sm border border-slate-200">
-                                            <template x-if="r.author_photo_url">
-                                                <img :src="r.author_photo_url" class="w-full h-full object-cover">
-                                            </template>
-                                            <template x-if="!r.author_photo_url">
-                                                <div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-500 bg-slate-100" x-text="r.author_name.charAt(0).toUpperCase()"></div>
-                                            </template>
-                                        </div>
-                                        <div class="flex-1 min-w-0 bg-white border border-slate-150 rounded-xl p-2.5 shadow-sm">
-                                            <div class="flex items-center justify-between gap-2">
-                                                <div class="flex items-baseline gap-1.5 min-w-0">
-                                                    <span class="text-[11px] font-bold text-slate-800 truncate" x-text="r.author_name"></span>
-                                                    <span class="text-[9px] text-indigo-600 font-semibold uppercase tracking-wider shrink-0" x-text="r.author_role"></span>
-                                                </div>
-                                                <span class="text-[9px] text-slate-405 shrink-0" x-text="r.created_at"></span>
-                                            </div>
-                                            <p class="text-xs text-slate-700 mt-1 whitespace-pre-wrap leading-relaxed" x-text="r.message"></p>
-                                        </div>
-                                    </div>
-                                </template>
+                        <!-- MODE 2: EDIT TASK FORM -->
+                        <div x-show="drawerMode === 'edit'" class="space-y-4">
+                            <!-- Notification Messages -->
+                            <div x-show="saveSuccess" class="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                                <i data-lucide="check" class="w-4 h-4 shrink-0"></i>
+                                <span x-text="saveSuccess"></span>
                             </div>
 
-                            <!-- Reply Form -->
-                            <form @submit.prevent="submitReply()" class="flex gap-2 items-end border-t border-slate-150 pt-3 shrink-0">
-                                <div class="flex-1">
-                                    <textarea x-model="newReplyMessage" rows="1" @keydown.enter.prevent="if($event.ctrlKey || $event.metaKey) { newReplyMessage += '\n' } else { submitReply() }" class="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white" placeholder="Write a reply... (Press Enter to send, Ctrl+Enter for new line)"></textarea>
+                            <div x-show="saveError" class="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-300 text-xs font-semibold flex items-center gap-2">
+                                <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+                                <span x-text="saveError"></span>
+                            </div>
+
+                            <form @submit.prevent="saveTaskChanges()" class="space-y-4">
+                                <!-- Activity Description -->
+                                <div>
+                                    <label class="ft-label mb-1">Activity Description <span class="text-red-500">*</span></label>
+                                    <input type="text" x-model="editForm.activity" required class="ft-input p-2 text-xs w-full" placeholder="e.g. Duct Installation & Insulation">
                                 </div>
-                                <button type="submit" :disabled="submittingReply" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white text-[12px] font-bold rounded-lg shadow-sm transition-colors shrink-0 flex items-center gap-1.5">
-                                    <template x-if="submittingReply">
-                                        <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    </template>
-                                    <span>Send</span>
-                                </button>
+
+                                <!-- Sequence Order -->
+                                <div>
+                                    <label class="ft-label mb-1">Sequence Order <span class="text-red-500">*</span></label>
+                                    <input type="number" x-model="editForm.order" min="1" required class="ft-input p-2 text-xs w-full">
+                                </div>
+
+                                <!-- Assignee Selection -->
+                                <div>
+                                    <label class="ft-label mb-1">Responsible Person (Assignee)</label>
+                                    <select x-model="editForm.responsible_person" class="ft-select p-2 text-xs w-full">
+                                        <option value="">-- Unassigned --</option>
+                                        {% for emp in employees %}
+                                        <option value="{{ emp.id }}">{{ emp.full_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <!-- Planned Dates -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="ft-label mb-1">Planned Start Date</label>
+                                        <input type="date" x-model="editForm.planned_start" @change="calculateDuration()" class="ft-input p-2 text-xs w-full">
+                                    </div>
+                                    <div>
+                                        <label class="ft-label mb-1">Planned Finish Date</label>
+                                        <input type="date" x-model="editForm.planned_finish" @change="calculateDuration()" class="ft-input p-2 text-xs w-full">
+                                    </div>
+                                </div>
+
+                                <!-- Duration & Status -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="ft-label mb-1">Duration (Days)</label>
+                                        <input type="number" x-model="editForm.duration_days" min="1" class="ft-input p-2 text-xs w-full">
+                                    </div>
+                                    <div>
+                                        <label class="ft-label mb-1">Status <span class="text-red-500">*</span></label>
+                                        <select x-model="editForm.status" class="ft-select p-2 text-xs w-full">
+                                            {% for st_val, st_lbl in statuses %}
+                                            <option value="{{ st_val }}">{{ st_lbl }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Remarks -->
+                                <div>
+                                    <label class="ft-label mb-1">Manager Remarks / Instructions</label>
+                                    <textarea x-model="editForm.remarks" rows="3" class="ft-input p-2 text-xs w-full" placeholder="Add instructions, remarks or feedback..."></textarea>
+                                </div>
+
+                                <!-- New Attachment -->
+                                <div>
+                                    <label class="ft-label mb-1">Attach Reference File(s)</label>
+                                    <input type="file" id="drawer_assignment_attachments" multiple class="ft-input p-2 text-xs w-full cursor-pointer">
+                                    <p class="mt-1 text-[11px] text-gray-400">Allowed types: JPG, PNG, PDF. Max 10MB per file.</p>
+                                </div>
+
+                                <!-- Form Footer Actions -->
+                                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-150 dark:border-slate-800">
+                                    <button type="button" @click="setDrawerMode('view')" class="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
+                                    <button type="submit" :disabled="savingTask" class="px-4 py-2 bg-primary hover:bg-primary-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1.5">
+                                        <template x-if="savingTask">
+                                            <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        </template>
+                                        <span x-text="savingTask ? 'Saving...' : 'Save Changes'"></span>
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -580,8 +829,4 @@
             </div>
         </div>
     </div>
-        </div>
-    </div>
-</div>
 </c-app-shell>
-
