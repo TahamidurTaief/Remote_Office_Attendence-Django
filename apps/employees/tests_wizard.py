@@ -333,3 +333,125 @@ class EmployeeWizardFullTestSuite(TestCase):
         # Verify rollback: status must STILL be DRAFT
         emp.refresh_from_db()
         self.assertEqual(emp.status, EmployeeStatus.DRAFT)
+
+    def test_step_8_stepper_click_navigates_without_triggering_approval(self):
+        """Clicking a step counter from Step 8 navigates to target step without activating employee."""
+        emp = Employee.objects.create(
+            employee_number='EMP-NAV8-001',
+            first_name='NavFrom8',
+            last_name='Tester',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s8 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 8})
+        response = self.client.post(url_s8, {
+            'target_step': '2'
+        }, HTTP_HX_REQUEST='true')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'employees/wizard/wizard_content.html')
+        self.assertIn('HX-Push-Url', response.headers)
+        self.assertIn('/step/2/', response.headers['HX-Push-Url'])
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, EmployeeStatus.DRAFT)
+
+    def test_step_5_and_7_stepper_click_navigates_to_target(self):
+        """Clicking stepper counters from Step 5 or 7 navigates directly to target step."""
+        emp = Employee.objects.create(
+            employee_number='EMP-NAV5-001',
+            first_name='NavFrom5',
+            last_name='Tester',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s5 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 5})
+        res5 = self.client.post(url_s5, {
+            'target_step': '3',
+            'action_type': 'upload'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res5.status_code, 200)
+        self.assertIn('/step/3/', res5.headers.get('HX-Push-Url', ''))
+
+        url_s7 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 7})
+        res7 = self.client.post(url_s7, {
+            'target_step': '4',
+            'action_type': 'assign'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res7.status_code, 200)
+        self.assertIn('/step/4/', res7.headers.get('HX-Push-Url', ''))
+
+    def test_htmx_approval_sets_hx_redirect_header(self):
+        """Final approval over HTMX returns redirect with HX-Redirect header."""
+        emp = Employee.objects.create(
+            employee_number='EMP-HXRED-001',
+            first_name='HxRed',
+            last_name='User',
+            personal_email='hxred@example.com',
+            phone='+8801711000088',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s8 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 8})
+        response = self.client.post(url_s8, {'action': 'approve'}, HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('HX-Redirect', response.headers)
+        self.assertIn(f"/employees/{emp.pk}/", response.headers['HX-Redirect'])
+
+    def test_step_6_emergency_contact_persisted_on_finalize(self):
+        """Emergency contact details from Step 6 draft are saved into employee model upon approval."""
+        emp = Employee.objects.create(
+            employee_number='EMP-EMERG-001',
+            first_name='Emerg',
+            last_name='Contact',
+            personal_email='emerg@example.com',
+            phone='+8801711000089',
+            status=EmployeeStatus.DRAFT
+        )
+        session = self.client.session
+        session[DRAFT_SESSION_KEY] = {
+            f"emp_{emp.uuid}": {
+                'user_id': self.admin_user.id,
+                'updated_at': time.time(),
+                'step_data': {
+                    '6': {
+                        'emergency_contact_name': 'Jane Doe',
+                        'emergency_contact_relation': 'Spouse',
+                        'emergency_contact_phone': '+8801711000099',
+                        'emergency_contact_address': '123 Main St'
+                    }
+                },
+                'step_statuses': {'6': 'complete'},
+                'step_errors': {}
+            }
+        }
+        session.save()
+
+        url_s8 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 8})
+        res = self.client.post(url_s8, {'action': 'approve'})
+        self.assertEqual(res.status_code, 302)
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, EmployeeStatus.ACTIVE)
+        self.assertEqual(emp.emergency_contact_name, 'Jane Doe')
+        self.assertEqual(emp.emergency_contact_phone, '+8801711000099')
+
+    def test_duplicate_employee_id_explicit_validation_error(self):
+        """Submitting duplicate employee_number raises validation error without silently replacing input."""
+        Employee.objects.create(
+            employee_number='EMP-DUP-001',
+            first_name='First',
+            last_name='Holder',
+            personal_email='first@example.com',
+            phone='+8801711000091'
+        )
+        url = reverse('employees:employee_wizard')
+        response = self.client.post(url, {
+            'employee_number': 'EMP-DUP-001',
+            'first_name': 'Second',
+            'last_name': 'Attempt',
+            'personal_email': 'second@example.com',
+            'phone': '+8801711000092',
+            'target_step': '2'
+        }, HTTP_HX_REQUEST='true')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Employee.objects.filter(personal_email='second@example.com').exists())
+        self.assertIn(response.context['step_statuses'].get(1), ('incomplete', 'error'))

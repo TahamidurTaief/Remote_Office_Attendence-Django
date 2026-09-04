@@ -768,7 +768,13 @@ class WizardStep1Form(forms.ModelForm):
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            return generate_employee_id()
+            raise forms.ValidationError("An employee with this Employee ID already exists.")
+        from apps.employees.models import EmployeeProfile
+        qs_prof = EmployeeProfile.objects.filter(employee_id=emp_num)
+        if self.instance and self.instance.pk and hasattr(self.instance, 'legacy_profile') and self.instance.legacy_profile:
+            qs_prof = qs_prof.exclude(pk=self.instance.legacy_profile.pk)
+        if qs_prof.exists():
+            raise forms.ValidationError("An employee profile with this Employee ID already exists.")
         return emp_num
 
     def clean_personal_email(self):
@@ -789,6 +795,12 @@ class WizardStep1Form(forms.ModelForm):
                 qs = qs.exclude(pk=self.instance.pk)
             if qs.exists():
                 raise forms.ValidationError("An employee with this phone number already exists.")
+            from apps.employees.models import EmployeeProfile
+            qs_prof = EmployeeProfile.objects.filter(phone=phone)
+            if self.instance and self.instance.pk and hasattr(self.instance, 'legacy_profile') and self.instance.legacy_profile:
+                qs_prof = qs_prof.exclude(pk=self.instance.legacy_profile.pk)
+            if qs_prof.exists():
+                raise forms.ValidationError("An employee profile with this phone number already exists.")
         return phone
 
 

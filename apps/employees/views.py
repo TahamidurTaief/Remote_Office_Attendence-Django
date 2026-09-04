@@ -1374,6 +1374,19 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 employee = Employee.objects.filter(uuid=draft.get('employee_uuid')).first()
 
         step_statuses = WizardDraftManager.compute_all_statuses(request, employee)
+        draft = WizardDraftManager.get_draft(request, request.user.id, uuid or (employee.uuid if employee else None))
+        step_errors = []
+        if draft and not draft.get('expired'):
+            d_errs = draft.get('step_errors', {}).get(str(step), {})
+            if isinstance(d_errs, dict):
+                for f_name, errs in d_errs.items():
+                    if isinstance(errs, list):
+                        for e in errs:
+                            step_errors.append(f"{f_name}: {e}")
+                    else:
+                        step_errors.append(f"{f_name}: {errs}")
+            elif isinstance(d_errs, list):
+                step_errors = d_errs
 
         ctx = {
             'step': step,
@@ -1382,6 +1395,7 @@ class EmployeeWizardView(AdminRequiredMixin, View):
             'completion_pct': employee.get_completion_percentage() if employee else 0,
             'step_template': f'employees/wizard/step_{step}.html',
             'step_statuses': step_statuses,
+            'step_errors': step_errors,
             'draft_expired': draft_expired,
         }
 
@@ -1437,7 +1451,7 @@ class EmployeeWizardView(AdminRequiredMixin, View):
 
         target_step = request.POST.get('target_step') or request.POST.get('next_step')
 
-        if step == 8:
+        if step == 8 and not request.POST.get('target_step'):
             action = request.POST.get('action', 'approve')
             if action == 'approve':
                 success, errors = WizardDraftManager.finalize_approval(request, employee)
@@ -1459,10 +1473,18 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                     return response
                 else:
                     messages.success(request, f"Employee {employee.get_full_name()} successfully activated!")
-                    return redirect('employees:employee_detail', pk=employee.pk if hasattr(employee, 'legacy_profile') else employee.pk)
+                    redirect_url = reverse('employees:employee_detail', kwargs={'pk': employee.pk if hasattr(employee, 'legacy_profile') else employee.pk})
+                    response = redirect(redirect_url)
+                    if request.headers.get('HX-Request'):
+                        response['HX-Redirect'] = redirect_url
+                    return response
             else:
                 messages.info(request, f"Employee wizard saved in {employee.status if employee else 'Draft'} state.")
-                return redirect('employees:employee_list')
+                redirect_url = reverse('employees:employee_list')
+                response = redirect(redirect_url)
+                if request.headers.get('HX-Request'):
+                    response['HX-Redirect'] = redirect_url
+                return response
 
         # Steps 1 to 7 saving & navigation
         if step in (1, 2, 3, 4, 6):
@@ -1487,42 +1509,48 @@ class EmployeeWizardView(AdminRequiredMixin, View):
             target_step = int(target_step) if target_step else (step + 1)
 
         elif step == 5:
-            action_type = request.POST.get('action_type', 'upload')
-            if action_type == 'upload':
-                if employee:
-                    doc_form = EmployeeDocumentForm(request.POST, request.FILES)
-                    if doc_form.is_valid():
-                        doc = doc_form.save(commit=False)
-                        doc.employee_master = employee
-                        doc.uploaded_by = request.user
-                        doc.save()
-                        messages.success(request, f"Document '{doc.get_document_type_display()}' uploaded successfully.")
-                    else:
-                        messages.error(request, "Failed to upload document. Please select a valid file.")
-                else:
-                    messages.error(request, "Please create employee record before uploading documents.")
-                target_step = 5
+            if request.POST.get('target_step'):
+                target_step = int(request.POST.get('target_step'))
             else:
-                target_step = int(target_step) if target_step else 6
+                action_type = request.POST.get('action_type', 'upload')
+                if action_type == 'upload':
+                    if employee:
+                        doc_form = EmployeeDocumentForm(request.POST, request.FILES)
+                        if doc_form.is_valid():
+                            doc = doc_form.save(commit=False)
+                            doc.employee_master = employee
+                            doc.uploaded_by = request.user
+                            doc.save()
+                            messages.success(request, f"Document '{doc.get_document_type_display()}' uploaded successfully.")
+                        else:
+                            messages.error(request, "Failed to upload document. Please select a valid file.")
+                    else:
+                        messages.error(request, "Please create employee record before uploading documents.")
+                    target_step = 5
+                else:
+                    target_step = int(target_step) if target_step else 6
 
         elif step == 7:
-            action_type = request.POST.get('action_type', 'assign')
-            if action_type == 'assign':
-                if employee:
-                    asset_form = AssetAssignmentForm(request.POST)
-                    if asset_form.is_valid():
-                        assign = asset_form.save(commit=False)
-                        assign.employee = employee
-                        assign.assigned_by = request.user
-                        assign.save()
-                        messages.success(request, f"Asset '{assign.asset.name}' assigned successfully.")
-                    else:
-                        messages.error(request, "Could not assign asset. Check if asset is available.")
-                else:
-                    messages.error(request, "Please create employee record before assigning assets.")
-                target_step = 7
+            if request.POST.get('target_step'):
+                target_step = int(request.POST.get('target_step'))
             else:
-                target_step = int(target_step) if target_step else 8
+                action_type = request.POST.get('action_type', 'assign')
+                if action_type == 'assign':
+                    if employee:
+                        asset_form = AssetAssignmentForm(request.POST)
+                        if asset_form.is_valid():
+                            assign = asset_form.save(commit=False)
+                            assign.employee = employee
+                            assign.assigned_by = request.user
+                            assign.save()
+                            messages.success(request, f"Asset '{assign.asset.name}' assigned successfully.")
+                        else:
+                            messages.error(request, "Could not assign asset. Check if asset is available.")
+                    else:
+                        messages.error(request, "Please create employee record before assigning assets.")
+                    target_step = 7
+                else:
+                    target_step = int(target_step) if target_step else 8
 
         # Calculate destination URL
         target_step = int(target_step) if target_step else 1

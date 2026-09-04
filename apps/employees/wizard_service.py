@@ -404,8 +404,10 @@ class WizardDraftManager:
                 forms[2].save()
             if forms.get(3):
                 forms[3].save()
-            if forms.get(4) and not getattr(employee, 'user_id', None):
+            if forms.get(4):
                 forms[4].save()
+            if forms.get(6):
+                forms[6].save()
 
             old_status = employee.status
             employee.status = EmployeeStatus.ACTIVE
@@ -420,6 +422,18 @@ class WizardDraftManager:
                 profile.full_name = employee.get_full_name()
                 profile.branch = employee.branch
                 profile.save()
+            elif employee.user:
+                from apps.employees.models import EmployeeProfile
+                EmployeeProfile.objects.create(
+                    user=employee.user,
+                    master_employee=employee,
+                    employee_id=employee.employee_number,
+                    full_name=employee.get_full_name(),
+                    phone=employee.phone or employee.user.phone or f"+8801000000{employee.pk}",
+                    joined_date=employee.joined_date or timezone.localdate(),
+                    branch=employee.branch,
+                    is_active=True
+                )
 
             log_audit(
                 actor=request.user,
