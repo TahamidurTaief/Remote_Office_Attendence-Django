@@ -156,13 +156,7 @@
                     <!-- Employee -->
                     <td>
                         <div class="flex items-center gap-2.5">
-                            {% if att.employee.profile_photo %}
-                            <img src="{{ att.employee.profile_photo.url }}" class="w-7 h-7 rounded-full object-cover shrink-0">
-                            {% else %}
-                            <div class="w-7 h-7 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-[10px] shrink-0">
-                                {{ att.employee.full_name|first|upper }}
-                            </div>
-                            {% endif %}
+                            <c-avatar src="{% if att.employee.profile_photo %}{{ att.employee.profile_photo.url }}{% endif %}" size="sm"></c-avatar>
                             <div class="min-w-0">
                                 <p class="text-[12px] font-bold truncate" style="color:var(--text)">{{ att.employee.full_name }}</p>
                                 <p class="text-[10px] truncate" style="color:var(--text-muted)">{{ att.employee.branch.name|default:"Unassigned" }}</p>

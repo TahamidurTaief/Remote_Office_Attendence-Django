@@ -75,14 +75,7 @@
                 <!-- Employee -->
                 <td class="px-6 py-2.5">
                     <div class="flex items-center gap-3">
-                        {% if row.employee.profile_photo %}
-                        <img src="{{ row.employee.profile_photo.url }}" alt=""
-                             class="w-8 h-8 rounded-full object-cover shrink-0">
-                        {% else %}
-                        <div class="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-sm font-bold shrink-0">
-                            {{ row.employee.full_name|first|upper }}
-                        </div>
-                        {% endif %}
+                        <c-avatar src="{% if row.employee.profile_photo %}{{ row.employee.profile_photo.url }}{% endif %}" size="md"></c-avatar>
                         <span class="text-sm font-medium text-gray-900">{{ row.employee.full_name }}</span>
                     </div>
                 </td>

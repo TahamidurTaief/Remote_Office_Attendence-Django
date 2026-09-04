@@ -388,13 +388,7 @@
                             <td class="px-4 py-2.5 whitespace-nowrap text-[12px]">
                                 {% if task.responsible_person %}
                                 <div class="flex items-center gap-2.5">
-                                    {% if task.responsible_person.profile_photo %}
-                                    <img src="{{ task.responsible_person.profile_photo.url }}" class="w-8 h-8 rounded-full object-cover">
-                                    {% else %}
-                                    <div class="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[10px]">
-                                        {{ task.responsible_person.full_name|slice:":2"|upper }}
-                                    </div>
-                                    {% endif %}
+                                    <c-avatar src="{% if task.responsible_person.profile_photo %}{{ task.responsible_person.profile_photo.url }}{% endif %}" size="md"></c-avatar>
                                     <div class="min-w-0">
                                         <div class="font-semibold text-gray-900 leading-none truncate max-w-[140px]">{{ task.responsible_person.full_name }}</div>
                                         <div class="text-[9px] text-gray-450 uppercase font-semibold mt-1 leading-none truncate max-w-[140px]">{{ task.responsible_person.designation|default:"Staff" }}</div>

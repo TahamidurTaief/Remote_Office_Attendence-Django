@@ -64,13 +64,7 @@
                             {% for emp in employees %}
                             <li data-value="{{ emp.id }}" data-search="{{ emp.full_name|lower }} {{ emp.employee_id|lower }}" class="px-4 py-3 hover:bg-primary-50 cursor-pointer flex items-center justify-between text-sm transition-colors group">
                                 <div class="flex items-center gap-3">
-                                    {% if emp.profile_photo %}
-                                    <img src="{{ emp.profile_photo.url }}" class="w-8 h-8 rounded-full object-cover shrink-0">
-                                    {% else %}
-                                    <div class="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                                        {{ emp.full_name|first }}
-                                    </div>
-                                    {% endif %}
+                                    <c-avatar src="{% if emp.profile_photo %}{{ emp.profile_photo.url }}{% endif %}" size="md"></c-avatar>
                                     <div>
                                         <p class="font-medium text-gray-950 group-hover:text-primary-800">{{ emp.full_name }}</p>
                                         <p class="text-xs text-gray-500">ID: {{ emp.employee_id }} | {{ emp.branch.name|default:"No Branch" }}</p>

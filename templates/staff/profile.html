@@ -6,13 +6,7 @@
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 text-center relative overflow-hidden">
         <div class="absolute top-0 left-0 w-full h-16 bg-primary-50"></div>
         <div class="relative">
-            {% if employee.profile_photo %}
-            <img class="h-24 w-24 rounded-full mx-auto object-cover border-4 border-white shadow-sm mb-4" src="{{ employee.profile_photo.url }}" alt="">
-            {% else %}
-            <div class="h-24 w-24 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold text-3xl mx-auto border-4 border-white shadow-sm mb-4">
-                {{ employee.full_name|make_list|first|upper }}
-            </div>
-            {% endif %}
+            <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}" extra_class="!w-24 !h-24 mx-auto border-4 border-white shadow-sm mb-4"></c-avatar>
             
             <h2 class="text-xl font-bold text-gray-900">{{ employee.full_name }}</h2>
             <p class="text-sm text-primary-500 font-medium mb-1">{{ employee.employee_id }}</p>

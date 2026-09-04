@@ -1,4 +1,4 @@
-<div class="flex gap-1.5 flex-wrap px-4 py-3 border-b" style="border-color:var(--border)">
+<div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-4 py-3 border-b" style="border-color:var(--border)">
     <c-tab-button href="?status=all" hx-get="?status=all" hx-target="#leave-request-container" hx-push-url="true" active="{% if current_status == 'all' or not current_status %}true{% endif %}" label="All" color="blue"></c-tab-button>
     <c-tab-button href="?status=pending" hx-get="?status=pending" hx-target="#leave-request-container" hx-push-url="true" active="{% if current_status == 'pending' %}true{% endif %}" label="Pending" color="amber"></c-tab-button>
     <c-tab-button href="?status=approved" hx-get="?status=approved" hx-target="#leave-request-container" hx-push-url="true" active="{% if current_status == 'approved' %}true{% endif %}" label="Approved" color="emerald"></c-tab-button>

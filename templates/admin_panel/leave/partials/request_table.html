@@ -1,39 +1,39 @@
 {% if requests %}
 <c-table x-data="{ expandedRows: {} }">
     <c-slot name="header">
-        <th>Employee</th>
-        <th>Leave Type</th>
-        <th>Duration</th>
-        <th class="text-center">Days</th>
-        <th>Reason</th>
-        <th>Status</th>
-        <th class="text-right">Actions</th>
+        <th class="whitespace-nowrap min-w-[170px]">Employee</th>
+        <th class="whitespace-nowrap min-w-[110px]">Leave Type</th>
+        <th class="whitespace-nowrap min-w-[150px]">Duration</th>
+        <th class="text-center whitespace-nowrap min-w-[65px]">Days</th>
+        <th class="min-w-[150px] max-w-xs">Reason</th>
+        <th class="whitespace-nowrap min-w-[90px]">Status</th>
+        <th class="text-right whitespace-nowrap min-w-[140px]">Actions</th>
     </c-slot>
 
     {% for req in requests %}
     <tr class="hover:bg-slate-50/30 transition-colors">
-        <td>
+        <td class="whitespace-nowrap">
             <div class="flex items-center gap-3">
                 <c-avatar src="{% if req.employee.profile_photo %}{{ req.employee.profile_photo.url }}{% endif %}" initials="{{ req.employee.full_name|make_list|first|upper }}" size="sm" ></c-avatar>
-                <div>
-                    <a href="{% url 'employees:employee_detail' req.employee.pk %}" class="font-semibold hover:underline" style="color:var(--text)">{{ req.employee.full_name }}</a>
-                    <div class="text-[11px]" style="color:var(--text-muted)">{{ req.employee.department }}</div>
+                <div class="min-w-0">
+                    <a href="{% url 'employees:employee_detail' req.employee.pk %}" class="font-semibold hover:underline truncate block" style="color:var(--text)">{{ req.employee.full_name }}</a>
+                    <div class="text-[11px] truncate" style="color:var(--text-muted)">{{ req.employee.department }}</div>
                 </div>
             </div>
         </td>
-        <td>
+        <td class="whitespace-nowrap">
             <span class="font-medium text-xs" style="color:var(--text)">{{ req.leave_type.name }}</span>
         </td>
-        <td>
+        <td class="whitespace-nowrap">
             <div class="text-xs" style="color:var(--text)">{{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}</div>
         </td>
-        <td class="text-center">
+        <td class="text-center whitespace-nowrap">
             <c-badge variant="neutral" label="{{ req.total_days }}d" ></c-badge>
         </td>
-        <td>
-            <span class="text-xs truncate max-w-xs block" style="color:var(--text-muted)">{{ req.reason|default:"-" }}</span>
+        <td class="max-w-xs">
+            <span class="text-xs truncate block" title="{{ req.reason|default:'' }}" style="color:var(--text-muted)">{{ req.reason|default:"-" }}</span>
         </td>
-        <td>
+        <td class="whitespace-nowrap">
             {% if req.status == 'APPROVED' or req.status == 'approved' %}
                 <c-status-pill status="approved" ></c-status-pill>
             {% elif req.status == 'REJECTED' or req.status == 'rejected' %}
@@ -44,22 +44,22 @@
                 <c-status-pill status="pending" ></c-status-pill>
             {% endif %}
         </td>
-        <td class="text-right">
-            <div class="flex items-center justify-end gap-1.5 flex-wrap">
+        <td class="text-right whitespace-nowrap">
+            <div class="inline-flex items-center justify-end gap-1 flex-nowrap shrink-0">
                 {% if req.status == 'pending' or req.status == 'PENDING' %}
-                <form action="{% url 'leave:approve_request' req.pk %}" method="POST" class="inline">
+                <form action="{% url 'leave:approve_request' req.pk %}" method="POST" class="inline-flex m-0 p-0">
                     {% csrf_token %}
-                    <c-button type="submit" variant="accent" size="sm" label="Approve" ></c-button>
+                    <c-button type="submit" variant="ghost" size="sm" icon="check" title="Approve" extra_class="!w-7 !h-7 !p-0 !min-w-0 text-emerald-600 hover:text-emerald-700 hover:!bg-emerald-50 dark:hover:!bg-emerald-950/40"></c-button>
                 </form>
-                <form action="{% url 'leave:reject_request' req.pk %}" method="POST" class="inline">
+                <form action="{% url 'leave:reject_request' req.pk %}" method="POST" class="inline-flex m-0 p-0">
                     {% csrf_token %}
-                    <c-button type="submit" variant="danger" size="sm" label="Reject" ></c-button>
+                    <c-button type="submit" variant="ghost" size="sm" icon="x" title="Reject" extra_class="!w-7 !h-7 !p-0 !min-w-0 text-rose-600 hover:text-rose-700 hover:!bg-rose-50 dark:hover:!bg-rose-950/40"></c-button>
                 </form>
                 {% endif %}
                 
-                <c-button type="button" @click="expandedRows[{{ req.pk }}] = !expandedRows[{{ req.pk }}]" variant="secondary" size="sm" icon="clock" title="View Journey"></c-button>
-                <c-button hx-get="{% url 'admin_panel:leave_request_edit' req.pk %}" hx-target="#modal-container" variant="secondary" size="sm" icon="edit-3" title="Edit"></c-button>
-                <c-button hx-post="{% url 'admin_panel:leave_request_delete' req.pk %}" hx-confirm="Are you sure you want to delete this leave request?" hx-swap="none" variant="danger" size="sm" icon="trash-2" title="Delete"></c-button>
+                <c-button type="button" @click="expandedRows[{{ req.pk }}] = !expandedRows[{{ req.pk }}]" variant="ghost" size="sm" icon="clock" title="View Journey" extra_class="!w-7 !h-7 !p-0 !min-w-0 text-slate-400 hover:text-slate-700 hover:!bg-slate-100 dark:hover:!bg-slate-800"></c-button>
+                <c-button hx-get="{% url 'admin_panel:leave_request_edit' req.pk %}" hx-target="#modal-container" variant="ghost" size="sm" icon="edit-3" title="Edit" extra_class="!w-7 !h-7 !p-0 !min-w-0 text-slate-400 hover:text-blue-600 hover:!bg-blue-50 dark:hover:!bg-blue-950/40"></c-button>
+                <c-button hx-post="{% url 'admin_panel:leave_request_delete' req.pk %}" hx-confirm="Are you sure you want to delete this leave request?" hx-swap="none" variant="ghost" size="sm" icon="trash-2" title="Delete" extra_class="!w-7 !h-7 !p-0 !min-w-0 text-slate-400 hover:text-rose-600 hover:!bg-rose-50 dark:hover:!bg-rose-950/40"></c-button>
             </div>
         </td>
     </tr>

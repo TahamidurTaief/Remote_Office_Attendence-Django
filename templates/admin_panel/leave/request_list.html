@@ -11,9 +11,9 @@
 
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <div class="p-3 sm:p-4 max-w-7xl mx-auto space-y-4">
         <!-- Stats grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <c-kpi-widget label="Pending Requests" value="{{ pending_count }}" icon="clock" color="warning" ></c-kpi-widget>
             <c-kpi-widget label="Approved Requests" value="{{ approved_count }}" icon="check-circle" color="accent" ></c-kpi-widget>
             <c-kpi-widget label="Rejected Requests" value="{{ rejected_count }}" icon="x-circle" color="danger" ></c-kpi-widget>
@@ -21,7 +21,7 @@
 
         <!-- Table Card -->
         <c-card padding="none">
-            <div id="leave-request-container">
+            <div id="leave-request-container" class="overflow-x-auto w-full">
                 {% include 'admin_panel/leave/partials/request_list_partial.html' %}
             </div>
         </c-card>

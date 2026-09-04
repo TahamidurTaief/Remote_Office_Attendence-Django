@@ -32,7 +32,7 @@ Props:
     {{ initials|upper|truncatechars:2 }}
   </span>
   {% else %}
-  <img src="{% static 'icons/ai_icon.png' %}" alt="Taief Lab Logo"
+  <img src="{% static 'icons/low_bg_icon.png' %}" alt="{{ name|default:'Profile' }}"
     class="w-full h-full object-cover {% if variant == 'square' %}rounded-btn{% else %}rounded-full{% endif %} shadow-xs">
   {% endif %}
 

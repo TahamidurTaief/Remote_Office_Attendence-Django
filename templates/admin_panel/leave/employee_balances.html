@@ -41,13 +41,7 @@
                     <td>
                         <div class="flex items-center gap-3 cursor-pointer group"
                              @click="$dispatch('open-modal', {id: 'emp-modal-{{ emp.id }}'})">
-                            {% if emp.profile_photo %}
-                            <img src="{{ emp.profile_photo.url }}" class="w-8 h-8 rounded-full object-cover shrink-0">
-                            {% else %}
-                            <div class="w-8 h-8 rounded-full bg-primary-50 text-primary-600 font-bold flex items-center justify-center text-[12px] shrink-0">
-                                {{ emp.full_name|first|upper }}
-                            </div>
-                            {% endif %}
+                            <c-avatar src="{% if emp.profile_photo %}{{ emp.profile_photo.url }}{% endif %}" size="md"></c-avatar>
                             <div class="min-w-0">
                                 <p class="text-[13px] font-bold group-hover:text-primary transition-colors truncate" style="color:var(--text)">
                                     {{ emp.full_name }}
@@ -123,11 +117,7 @@
         <!-- Employee Info Bar -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border" style="background:var(--surface-hover); border-color:var(--border)">
             <div class="flex items-center gap-3 min-w-0">
-                {% if emp.profile_photo %}
-                <c-avatar :src="emp.profile_photo.url" size="md" ></c-avatar>
-                {% else %}
-                <c-avatar :initials="emp.full_name|first" size="md" ></c-avatar>
-                {% endif %}
+                <c-avatar src="{% if emp.profile_photo %}{{ emp.profile_photo.url }}{% endif %}" size="md"></c-avatar>
                 <div class="min-w-0">
                     <h3 class="text-sm font-bold truncate" style="color:var(--text)">{{ emp.full_name }}</h3>
                     <p class="text-xs text-primary font-semibold">{{ emp.employee_id }}</p>

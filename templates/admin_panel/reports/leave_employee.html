@@ -4,13 +4,7 @@
     <!-- Breadcrumb + Header -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4" style="border-color: var(--border);">
       <div class="flex items-center gap-4">
-        <div class="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center text-xl overflow-hidden shadow-sm border border-indigo-200 dark:border-indigo-800">
-          {% if employee.profile_photo %}
-            <img src="{{ employee.profile_photo.url }}" alt="{{ employee.full_name }}" class="w-full h-full object-cover">
-          {% else %}
-            {{ employee.full_name|slice:":2"|upper }}
-          {% endif %}
-        </div>
+        <c-avatar src="{% if employee.profile_photo %}{{ employee.profile_photo.url }}{% endif %}" size="xl" variant="square" extra_class="!w-14 !h-14 shadow-sm border border-indigo-200 dark:border-indigo-800"></c-avatar>
         <div>
           <c-breadcrumb page1_href="/admin-panel/reports/" page1_label="Reports Hub" page2_href="/admin-panel/reports/leave/monthly/" page2_label="Monthly Leave" current="{{ employee.full_name }}" ></c-breadcrumb>
           <h1 class="text-xl font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">

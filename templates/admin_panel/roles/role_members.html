@@ -146,15 +146,7 @@
                     <tr class="hover:bg-gray-50/80 transition-colors">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
-                                <div class="flex-shrink-0 h-10 w-10">
-                                    {% if member.employee_profile.profile_photo %}
-                                    <img class="h-10 w-10 rounded-full object-cover"
-                                        src="{{ member.employee_profile.profile_photo.url }}" alt="">
-                                    {% else %}
-                                    <!-- prettier-ignore -->
-                                    <div class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold">{{ member.employee_profile.full_name|default:member.email|make_list|first|upper }}</div>
-                                    {% endif %}
-                                </div>
+                                <c-avatar src="{% if member.employee_profile and member.employee_profile.profile_photo %}{{ member.employee_profile.profile_photo.url }}{% endif %}" size="lg"></c-avatar>
                                 <div class="ml-4">
                                     <div class="text-sm font-medium text-gray-900">
                                         {% if member.employee_profile %}
