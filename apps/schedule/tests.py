@@ -751,3 +751,119 @@ class CalendarHolidayAndPermissionScopingTests(TestCase):
                 if day['date'] == target_date:
                     return day['all_events']
         return []
+
+
+class ScheduleCottonModernizationTests(TestCase):
+    def setUp(self):
+        self.password = 'SuperPassword123!'
+        self.admin = User.objects.create_superuser(
+            email='schedule_cotton_admin@test.com',
+            phone='+8801700000099',
+            password=self.password,
+            role='admin'
+        )
+        self.branch = Branch.objects.create(
+            name='Modern Branch',
+            latitude=23.81,
+            longitude=90.41,
+            radius_meters=100
+        )
+        self.emp_user = User.objects.create_user(
+            email='modern_emp@test.com',
+            phone='+8801700000098',
+            password=self.password,
+            role='employee'
+        )
+        self.profile = EmployeeProfile.objects.create(
+            user=self.emp_user,
+            branch=self.branch,
+            employee_id='EMP-MODERN-01',
+            full_name='Modern Employee',
+            phone='+8801700000098',
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
+        self.holiday = Holiday.objects.create(
+            name='National Independence Day',
+            date=date(2026, 3, 26),
+            branch=None
+        )
+        self.event = ScheduleEvent.objects.create(
+            title='Executive Strategy Meeting',
+            description='Strategic roadmap alignment',
+            date=date(2026, 3, 26),
+            start_time=time(10, 0),
+            end_time=time(11, 30),
+            event_type='Meeting',
+            created_by=self.admin
+        )
+        self.event.assigned_to.add(self.profile)
+
+    def test_mobile_agenda_view_data_contract(self):
+        """Verify mobile agenda view receives is_current_month, all_events, and badge_label."""
+        self.client.force_login(self.admin)
+        url = reverse('schedule:month_view') + '?year=2026&month=3'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        weeks_data = response.context['weeks_data']
+        mar_26 = None
+        for week in weeks_data:
+            for day in week:
+                if day['date'] == date(2026, 3, 26):
+                    mar_26 = day
+                    break
+        self.assertIsNotNone(mar_26)
+        self.assertTrue(mar_26['is_current_month'])
+        self.assertEqual(mar_26['badge_label'], 'Govt Holiday')
+        self.assertTrue(len(mar_26['all_events']) >= 2)
+
+        content = response.content.decode()
+        # Verify rendered mobile agenda HTML contract
+        self.assertIn('Govt Holiday', content)
+        self.assertIn('Executive Strategy Meeting', content)
+        self.assertIn('National Independence Day', content)
+
+    def test_event_create_and_edit_cotton_form_rendering(self):
+        """Verify event create and edit views render with Cotton components and closed DOM."""
+        self.client.force_login(self.admin)
+
+        # 1. Create Event View
+        create_url = reverse('schedule:create') + '?date=2026-03-26'
+        res_create = self.client.get(create_url)
+        self.assertEqual(res_create.status_code, 200)
+        content_create = res_create.content.decode()
+        self.assertIn('id_title', content_create)
+        self.assertIn('id_event_type', content_create)
+        self.assertIn('id_date', content_create)
+        self.assertIn('id_start_time', content_create)
+        self.assertIn('id_end_time', content_create)
+        self.assertIn('Schedule New Event', content_create)
+        self.assertIn('</form>', content_create)
+
+        # 2. Edit Event View
+        edit_url = reverse('schedule:edit', args=[self.event.pk])
+        res_edit = self.client.get(edit_url)
+        self.assertEqual(res_edit.status_code, 200)
+        content_edit = res_edit.content.decode()
+        self.assertIn('Modify "Executive Strategy Meeting"', content_edit)
+        self.assertIn('Delete Event', content_edit)
+        self.assertIn(f'value="{self.event.version}"', content_edit)
+        self.assertIn('</form>', content_edit)
+
+    def test_shift_schedule_htmx_partial_swap(self):
+        """Verify Shift Schedule HTMX partial swap returns partial content with SPA push-url."""
+        self.client.force_login(self.admin)
+        url = reverse('schedule:shift_schedule') + f'?branch_id={self.branch.id}&partial=true'
+        res = self.client.get(url, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        content = res.content.decode()
+        # Partial should contain shift pattern cards and branch selector
+        self.assertIn('Modern Branch', content)
+        self.assertIn('Shift Schedule', content)
+        # Should not contain the full app shell slot wrappers
+        self.assertNotIn('<c-app-shell', content)
+        self.assertIn('hx-get=', content)
+        self.assertIn('hx-push-url="true"', content)
+

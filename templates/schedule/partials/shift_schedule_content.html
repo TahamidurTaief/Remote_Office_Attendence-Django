@@ -1,10 +1,6 @@
 <div class="space-y-4"
      x-data="{
-        selectedBranchId: '{{ selected_branch.id|default:'' }}',
-        switchBranch(newId) {
-            if (!newId) return;
-            window.location.href = '?branch_id=' + newId;
-        }
+        selectedBranchId: '{{ selected_branch.id|default:'' }}'
      }">
 
     {# 1. Top Header & Toolbar #}
@@ -32,10 +28,15 @@
             {# Branch Selector for Admin / Manager #}
             {% if is_admin_or_manager and branches %}
             <div class="w-48 sm:w-56">
-                <c-select name="branch_selector"
+                <c-select name="branch_id"
                           id="branch_selector"
                           value="{{ selected_branch.id|default:'' }}"
-                          attrs="x-on:change='switchBranch($event.target.value)'">
+                          hx-get="{% url 'schedule:shift_schedule' %}?partial=true"
+                          hx-trigger="change"
+                          hx-target="#shift-schedule-view-container"
+                          hx-swap="innerHTML"
+                          hx-push-url="true"
+                          hx-on::after-swap="if(window.lucide) window.lucide.createIcons();">
                     {% for b in branches %}
                     <option value="{{ b.id }}" {% if selected_branch and selected_branch.id == b.id %}selected{% endif %}>
                         {{ b.name }}

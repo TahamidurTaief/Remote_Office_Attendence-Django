@@ -28,7 +28,7 @@ Props:
     {# Nav buttons #}
     <div class="inline-flex items-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-0.5">
       <c-button href="?year={{ prev_year }}&month={{ prev_month }}"
-                hx-get="?year={{ prev_year }}&month={{ prev_month }}"
+                hx-get="?year={{ prev_year }}&month={{ prev_month }}&partial=true"
                 hx-target="#calendar-view-container"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -38,7 +38,7 @@ Props:
                 extra_class="min-h-[36px] min-w-[36px] p-1.5"
                 title="Previous Month"></c-button>
       <c-button href="?year={{ today_year }}&month={{ today_month }}"
-                hx-get="?year={{ today_year }}&month={{ today_month }}"
+                hx-get="?year={{ today_year }}&month={{ today_month }}&partial=true"
                 hx-target="#calendar-view-container"
                 hx-swap="innerHTML"
                 hx-push-url="true"
@@ -48,7 +48,7 @@ Props:
                 extra_class="min-h-[36px] px-2.5 text-[11px] font-semibold"
                 title="Go to Today"></c-button>
       <c-button href="?year={{ next_year }}&month={{ next_month }}"
-                hx-get="?year={{ next_year }}&month={{ next_month }}"
+                hx-get="?year={{ next_year }}&month={{ next_month }}&partial=true"
                 hx-target="#calendar-view-container"
                 hx-swap="innerHTML"
                 hx-push-url="true"

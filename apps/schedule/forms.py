@@ -4,14 +4,14 @@ from apps.employees.models import EmployeeProfile
 from apps.projects.models import Project
 
 TEXT_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded text-sm text-gray-800 "
-    "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent "
-    "placeholder:text-gray-400 transition-colors"
+    "w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 "
+    "bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 "
+    "placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
 )
 
 SELECT_INPUT = (
-    "w-full px-3 py-1.5 border border-gray-200 rounded text-sm text-gray-800 bg-white "
-    "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+    "w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 "
+    "bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 transition-colors"
 )
 
 class ScheduleEventForm(forms.ModelForm):

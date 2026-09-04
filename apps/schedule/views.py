@@ -304,12 +304,15 @@ class CalendarMonthView(RoleRequiredMixin, View):
                 # Day cell styling for Google Calendar-style full day prominence:
                 day_tint_class = ""
                 day_badge_class = ""
+                badge_label = ""
                 if has_gov_holiday:
                     day_tint_class = "bg-rose-50/70 dark:bg-rose-950/25 border-rose-200/60 dark:border-rose-900/40"
                     day_badge_class = "bg-rose-600 text-white font-bold"
+                    badge_label = "Govt Holiday"
                 elif has_office_holiday:
                     day_tint_class = "bg-amber-50/70 dark:bg-amber-950/25 border-amber-200/60 dark:border-amber-900/40"
                     day_badge_class = "bg-amber-600 text-white font-bold"
+                    badge_label = "Office Holiday"
 
                 week_data.append({
                     'date': day,
@@ -325,6 +328,7 @@ class CalendarMonthView(RoleRequiredMixin, View):
                     'has_office_holiday': has_office_holiday,
                     'day_tint_class': day_tint_class,
                     'day_badge_class': day_badge_class,
+                    'badge_label': badge_label,
                     'events_count': len(day_events),
                 })
             weeks_data.append(week_data)
@@ -363,7 +367,11 @@ class CalendarMonthView(RoleRequiredMixin, View):
             'user_branch': user_branch,
         }
 
-        if request.headers.get('HX-Request') and request.GET.get('partial') == 'true':
+        if request.headers.get('HX-Request') and (
+            request.GET.get('partial') == 'true' or
+            request.headers.get('HX-Target') == 'calendar-view-container' or
+            not request.headers.get('HX-Boosted')
+        ):
             return render(request, 'schedule/partials/calendar_content.html', context)
 
         return render(request, 'schedule/calendar_month.html', context)
@@ -444,7 +452,11 @@ class ShiftScheduleView(RoleRequiredMixin, View):
             'user_branch': user_branch,
         }
 
-        if request.headers.get('HX-Request') and request.GET.get('partial') == 'true':
+        if request.headers.get('HX-Request') and (
+            request.GET.get('partial') == 'true' or
+            request.headers.get('HX-Target') == 'shift-schedule-view-container' or
+            not request.headers.get('HX-Boosted')
+        ):
             return render(request, 'schedule/partials/shift_schedule_content.html', context)
 
         return render(request, 'schedule/shift_schedule.html', context)

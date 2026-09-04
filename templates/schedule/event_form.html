@@ -1,134 +1,173 @@
-<c-app-shell page_title="{% if object %}Edit Event{% else %}Create Event{% endif %} | FieldTrack" active_href="{{ request.path }}">
-<div class="max-w-2xl mx-auto">
-    <!-- Breadcrumb / Back to Calendar -->
-    <div class="mb-3">
-        <a href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}" 
-           class="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-primary-600 transition-colors font-medium">
-            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Calendar
-        </a>
-    </div>
+<c-app-shell page_title="{% if object %}Edit Event{% else %}Create Event{% endif %} | FieldTrack" active_href="{% url 'schedule:month_view' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'schedule:month_view' %}"></c-sidebar>
+    </c-slot>
 
-    <!-- Main Card -->
-    <div class="bg-white border border-gray-150 rounded shadow-sm overflow-hidden">
-        <div class="p-4 border-b border-gray-150 bg-gray-50 flex items-center justify-between">
-            <h3 class="text-[14px] font-bold text-gray-800">
-                {% if object %}Modify "{{ object.title }}"{% else %}Schedule New Event{% endif %}
-            </h3>
-            
-            {% if object %}
-            <!-- Delete Event Form -->
-            <form action="{% url 'schedule:delete' object.pk %}" 
-                  method="POST" 
-                  class="inline-block"
-                  x-data 
-                  @submit.prevent="window.confirmAction('Are you sure you want to permanently delete this event?', () => $el.submit())">
-                {% csrf_token %}
-                <input type="hidden" name="version" value="{{ object.version }}">
+    <c-slot name="topbar">
+        <c-topbar title="{% if object %}Edit Event{% else %}New Event{% endif %}">
+            <c-slot name="actions">
+                <c-button href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}"
+                          variant="ghost"
+                          size="sm"
+                          icon="arrow-left"
+                          label="Back to Calendar"></c-button>
+            </c-slot>
+        </c-topbar>
+    </c-slot>
 
-                <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-semibold rounded transition-colors">
-                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete Event
-                </button>
-            </form>
-            {% endif %}
-        </div>
+    <c-command-palette></c-command-palette>
 
-        <form method="POST" class="p-4 space-y-4">
-            {% csrf_token %}
-            {% if object %}
-            <input type="hidden" name="version" value="{{ object.version }}">
-            {% endif %}
-
-
-            {% if form.non_field_errors %}
-            <div class="p-3 bg-red-50 border border-red-200 text-red-800 text-[12px] rounded space-y-1">
-                {% for error in form.non_field_errors %}
-                <p>{{ error }}</p>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            <!-- Title -->
+    <c-page-container>
+        <div class="max-w-2xl mx-auto space-y-4">
+            <!-- Breadcrumb / Back to Calendar -->
             <div>
-                <label for="{{ form.title.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Event Title *</label>
-                {{ form.title }}
-                {% if form.title.errors %}
-                <p class="text-red-600 text-[11px] mt-1">{{ form.title.errors.as_text }}</p>
-                {% endif %}
-            </div>
-
-            <!-- Event Type & Date Row -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="{{ form.event_type.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Event Type *</label>
-                    {{ form.event_type }}
-                    {% if form.event_type.errors %}
-                    <p class="text-red-600 text-[11px] mt-1">{{ form.event_type.errors.as_text }}</p>
-                    {% endif %}
-                </div>
-                <div>
-                    <label for="{{ form.date.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Date *</label>
-                    {{ form.date }}
-                    {% if form.date.errors %}
-                    <p class="text-red-600 text-[11px] mt-1">{{ form.date.errors.as_text }}</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Start Time & End Time Row -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="{{ form.start_time.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Start Time (optional)</label>
-                    {{ form.start_time }}
-                    <span class="text-[10px] text-gray-400 mt-1 block">Leave empty for an all-day event.</span>
-                    {% if form.start_time.errors %}
-                    <p class="text-red-600 text-[11px] mt-1">{{ form.start_time.errors.as_text }}</p>
-                    {% endif %}
-                </div>
-                <div>
-                    <label for="{{ form.end_time.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">End Time (optional)</label>
-                    {{ form.end_time }}
-                    {% if form.end_time.errors %}
-                    <p class="text-red-600 text-[11px] mt-1">{{ form.end_time.errors.as_text }}</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Project -->
-            <div>
-                <label for="{{ form.project.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Project (optional)</label>
-                {{ form.project }}
-                {% if form.project.errors %}
-                <p class="text-red-600 text-[11px] mt-1">{{ form.project.errors.as_text }}</p>
-                {% endif %}
-            </div>
-
-            <!-- Description -->
-            <div>
-                <label for="{{ form.description.id_for_label }}" class="block text-[11px] font-semibold text-gray-600 mb-1">Description (optional)</label>
-                {{ form.description }}
-                {% if form.description.errors %}
-                <p class="text-red-600 text-[11px] mt-1">{{ form.description.errors.as_text }}</p>
-                {% endif %}
-            </div>
-
-            <!-- Assigned Employees -->
-            <div>
-                <c-employee-picker label="Assign Employees (optional)">
-                    {{ form.assigned_to }}
-                </c-employee-picker>
-                {% if form.assigned_to.errors %}
-                <p class="text-red-600 text-[11px] mt-1">{{ form.assigned_to.errors.as_text }}</p>
-                {% endif %}
-            </div>
-
-            <!-- Form Actions -->
-            <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-150">
-                <a href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}" 
-                   class="px-3.5 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 text-[12px] font-semibold rounded transition-colors">
-                    Cancel
+                <a href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}"
+                   class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Calendar
                 </a>
-                <button type="submit" class="px-3.5 py-2 bg-primary text-white text-[12px] font-semibold rounded shadow-sm hover:opacity-90 transition-opacity">
-                    {% if object %}Save Changes{% else %}Create Event{% endif %}
-                </button>
             </div>
+
+            <!-- Main Form Card -->
+            <c-card>
+                <c-slot name="header">
+                    <div class="flex items-center justify-between w-full pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center text-primary-600 dark:text-primary-400 shrink-0">
+                                <i data-lucide="calendar" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+                                    {% if object %}Modify "{{ object.title }}"{% else %}Schedule New Event{% endif %}
+                                </h2>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                    Configure event details, timeline, and participant assignees.
+                                </p>
+                            </div>
+                        </div>
+
+                        {% if object %}
+                        <!-- Delete Event Form -->
+                        <form action="{% url 'schedule:delete' object.pk %}"
+                              method="POST"
+                              class="inline-block"
+                              x-data
+                              @submit.prevent="window.confirmAction('Are you sure you want to permanently delete this event?', () => $el.submit())">
+                            {% csrf_token %}
+                            <input type="hidden" name="version" value="{{ object.version }}">
+                            <c-button type="submit"
+                                      variant="danger"
+                                      size="sm"
+                                      icon="trash-2"
+                                      label="Delete Event"></c-button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </c-slot>
+
+                <form method="POST" class="space-y-4 pt-1" novalidate>
+                    {% csrf_token %}
+                    {% if object %}
+                    <input type="hidden" name="version" value="{{ object.version }}">
+                    {% endif %}
+
+                    {% if form.non_field_errors %}
+                    <c-form-error-summary :errors="form.non_field_errors"></c-form-error-summary>
+                    {% endif %}
+
+                    <!-- Title -->
+                    <c-input name="title"
+                             id="id_title"
+                             label="Event Title"
+                             value="{{ form.title.value|default:'' }}"
+                             required="true"
+                             placeholder="Event Title"
+                             error="{{ form.title.errors.0 }}"
+                             icon="calendar"></c-input>
+
+                    <!-- Event Type & Date Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <c-select name="event_type"
+                                  id="id_event_type"
+                                  label="Event Type"
+                                  required="true"
+                                  value="{{ form.event_type.value|default:'Other' }}"
+                                  error="{{ form.event_type.errors.0 }}">
+                            {% for val, lbl in form.fields.event_type.choices %}
+                            <option value="{{ val }}" {% if form.event_type.value == val %}selected{% endif %}>{{ lbl }}</option>
+                            {% endfor %}
+                        </c-select>
+
+                        <c-datepicker name="date"
+                                      id="id_date"
+                                      label="Date"
+                                      value="{{ form.date.value|date:'Y-m-d'|default:form.date.value|default:'' }}"
+                                      required="true"
+                                      error="{{ form.date.errors.0 }}"></c-datepicker>
+                    </div>
+
+                    <!-- Start Time & End Time Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <c-time-picker name="start_time"
+                                       id="id_start_time"
+                                       label="Start Time (optional)"
+                                       value="{{ form.start_time.value|time:'H:i'|default:form.start_time.value|default:'' }}"></c-time-picker>
+
+                        <c-time-picker name="end_time"
+                                       id="id_end_time"
+                                       label="End Time (optional)"
+                                       value="{{ form.end_time.value|time:'H:i'|default:form.end_time.value|default:'' }}"></c-time-picker>
+                    </div>
+                    <span class="text-[10px] text-slate-400 dark:text-slate-500 block -mt-2">Leave empty for an all-day event.</span>
+                    {% if form.start_time.errors or form.end_time.errors %}
+                    <div class="text-red-500 text-[11px] space-y-0.5">
+                        {% for err in form.start_time.errors %}<p>{{ err }}</p>{% endfor %}
+                        {% for err in form.end_time.errors %}<p>{{ err }}</p>{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Project -->
+                    <c-select name="project"
+                              id="id_project"
+                              label="Project (optional)"
+                              value="{{ form.project.value|default:'' }}"
+                              error="{{ form.project.errors.0 }}">
+                        <option value="">None / General Task</option>
+                        {% for p in form.fields.project.queryset %}
+                        <option value="{{ p.pk }}" {% if form.project.value|stringformat:'s' == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </c-select>
+
+                    <!-- Description -->
+                    <c-textarea name="description"
+                                id="id_description"
+                                label="Description (optional)"
+                                placeholder="Description (optional)"
+                                rows="3"
+                                value="{{ form.description.value|default:'' }}"
+                                error="{{ form.description.errors.0 }}"></c-textarea>
+
+                    <!-- Assigned Employees -->
+                    <div class="space-y-1">
+                        <c-employee-picker label="Assign Employees (optional)">
+                            {{ form.assigned_to }}
+                        </c-employee-picker>
+                        {% if form.assigned_to.errors %}
+                        <p class="text-red-500 text-[11px] mt-1">{{ form.assigned_to.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <c-button href="{% if object %}{% url 'schedule:month_view' %}?year={{ object.date.year }}&month={{ object.date.month }}{% elif request.GET.date %}{% url 'schedule:month_view' %}?year={{ request.GET.date|slice:':4' }}&month={{ request.GET.date|slice:'5:7' }}{% else %}{% url 'schedule:month_view' %}{% endif %}"
+                                  variant="secondary"
+                                  label="Cancel"></c-button>
+                        <c-button type="submit"
+                                  variant="primary"
+                                  icon="check"
+                                  label="{% if object %}Save Changes{% else %}Create Event{% endif %}"></c-button>
+                    </div>
+                </form>
+            </c-card>
+        </div>
+    </c-page-container>
 </c-app-shell>

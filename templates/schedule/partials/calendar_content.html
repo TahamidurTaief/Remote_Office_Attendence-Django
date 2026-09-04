@@ -168,41 +168,41 @@
     <div class="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
         {% for week in weeks_data %}
         {% for day in week %}
-        {% if day.in_month %}
+        {% if day.is_current_month %}
         <div class="p-3.5 space-y-2 {% if day.day_tint_class %}{{ day.day_tint_class }}{% elif day.is_today %}bg-primary-50/20 dark:bg-primary-950/10{% endif %}"
              x-data="{
                 dayData: {
                     date_str: '{{ day.date_str }}',
+                    date_formatted: '{{ day.date_formatted|escapejs }}',
                     all_events: [
-                        {% for event in day.events %}
+                        {% for event in day.all_events %}
                         {
                             id: '{{ event.id }}',
                             title: '{{ event.title|escapejs }}',
                             raw_title: '{{ event.raw_title|escapejs }}',
                             source_type: '{{ event.source_type }}',
+                            is_holiday: {{ event.is_holiday|yesno:'true,false' }},
+                            is_gov_holiday: {{ event.is_gov_holiday|yesno:'true,false' }},
                             category_label: '{{ event.category_label|escapejs }}',
                             edit_url: '{{ event.edit_url }}',
-                            delete_url: '{{ event.delete_url }}',
-                            time_str: '{{ event.time_str }}',
-                            is_holiday: {% if event.source_type == 'gov_holiday' or event.source_type == 'office_holiday' %}true{% else %}false{% endif %},
-                            is_gov_holiday: {% if event.source_type == 'gov_holiday' %}true{% else %}false{% endif %},
+                            time_str: '{{ event.time_str|escapejs }}',
                             color_classes: '{{ event.color_classes }}',
                             dot_color_class: '{{ event.dot_color_class }}',
-                            description: '{{ event.description|default:""|escapejs }}',
-                            location: '{{ event.location|default:""|escapejs }}',
-                            assigned_to: '{{ event.assigned_to|default:""|escapejs }}',
-                            project_name: '{{ event.project_name|default:""|escapejs }}',
-                            project_url: '{{ event.project_url|default:"" }}',
-                            employee_name: '{{ event.employee_name|default:""|escapejs }}',
-                            leave_type: '{{ event.leave_type|default:""|escapejs }}',
-                            supervisor_name: '{{ event.supervisor_name|default:""|escapejs }}',
-                            planned_work: '{{ event.planned_work|default:""|escapejs }}',
-                            completed_work: '{{ event.completed_work|default:""|escapejs }}',
-                            manpower_count: '{{ event.manpower_count|default:"" }}',
-                            status: '{{ event.status|default:""|escapejs }}',
-                            planned_dates: '{{ event.planned_dates|default:""|escapejs }}',
-                            date_range: '{{ event.date_range|default:""|escapejs }}',
-                            is_all_day: {% if event.is_all_day %}true{% else %}false{% endif %}
+                            description: '{{ event.description|escapejs }}',
+                            date_str: '{{ event.date_str }}',
+                            assigned_employees: '{{ event.assigned_employees|escapejs }}',
+                            project_name: '{{ event.project_name|escapejs }}',
+                            project_url: '{{ event.project_url }}',
+                            responsible_person: '{{ event.responsible_person|escapejs }}',
+                            status: '{{ event.status|escapejs }}',
+                            planned_dates: '{{ event.planned_dates|escapejs }}',
+                            employee_name: '{{ event.employee_name|escapejs }}',
+                            leave_type: '{{ event.leave_type|escapejs }}',
+                            date_range: '{{ event.date_range|escapejs }}',
+                            supervisor_name: '{{ event.supervisor_name|escapejs }}',
+                            planned_work: '{{ event.planned_work|escapejs }}',
+                            completed_work: '{{ event.completed_work|escapejs }}',
+                            manpower_count: '{{ event.manpower_count }}'
                         }{% if not forloop.last %},{% endif %}
                         {% endfor %}
                     ]
