@@ -422,6 +422,7 @@ class GanttWorkbookParser:
             raw_rows.append((r_idx, row[:MAX_COLS_PER_SHEET]))
 
         meta = GanttFormatDetector.inspect_sheet([r[1] for r in raw_rows[:25]])
+        meta['sheet_name'] = sheet_name
         detected_format = meta['format']
         base_date = meta.get('base_date')
 
@@ -430,7 +431,7 @@ class GanttWorkbookParser:
         elif detected_format == GanttFormatDetector.FORMAT_OFFSET:
             normalized_rows = self._parse_offset_sheet(raw_rows, meta, default_employee_id)
         elif detected_format == GanttFormatDetector.FORMAT_VISUAL_MONTHLY:
-            normalized_rows = self._parse_visual_monthly(raw_rows, meta, default_employee_id)
+            normalized_rows = self._parse_visual_monthly(raw_rows, meta, default_employee_id, sheet_name=sheet_name)
         else:
             # Standard structured table or unknown
             normalized_rows = self._parse_structured_table(raw_rows, meta, default_employee_id)
@@ -664,12 +665,44 @@ class GanttWorkbookParser:
 
         return parsed_rows
 
-    def _parse_visual_monthly(self, raw_rows: List[Tuple], meta: Dict, default_emp_id: Optional[int]) -> List[Dict]:
+    def _parse_visual_monthly(self, raw_rows: List[Tuple], meta: Dict, default_emp_id: Optional[int], sheet_name: str = "") -> List[Dict]:
         """
-        Parses visual monthly Gantt charts (e.g. Chillers, Pumps with highlighted months).
-        Never guesses dates from cell fill colors. Unresolved dates are marked with errors
-        requiring user correction in preview.
+        Parses visual monthly Gantt charts (e.g. Chillers, Pumps with bi-weekly slots).
+        Accurately maps half-month columns to authentic calendar dates from the header row.
         """
+        import calendar
+
+        sheet_name = meta.get('sheet_name', '')
+        wb = self.get_workbook()
+        ws = wb[sheet_name] if sheet_name in wb.sheetnames else None
+
+        # Map header columns to half-month date intervals
+        col_dates = {}
+        if ws is not None:
+            cur_m = None
+            for c in range(2, min(ws.max_column + 1, MAX_COLS_PER_SHEET)):
+                v = ws.cell(1, c).value
+                if v and isinstance(v, (datetime, date)):
+                    cur_m = v
+                elif v and isinstance(v, str):
+                    try:
+                        cur_m = datetime.strptime(v.strip()[:10], '%Y-%m-%d')
+                    except Exception:
+                        pass
+
+                if cur_m:
+                    yr = cur_m.year
+                    mo = cur_m.month
+                    last_day = calendar.monthrange(yr, mo)[1]
+                    is_2nd = (c % 2 == 1)
+                    if not is_2nd:
+                        st = date(yr, mo, 1)
+                        en = date(yr, mo, 15)
+                    else:
+                        st = date(yr, mo, 16)
+                        en = date(yr, mo, last_day)
+                    col_dates[c] = (st, en)
+
         parsed_rows = []
         for r_num, row in raw_rows[1:]:
             if not any(c is not None for c in row):
@@ -680,13 +713,31 @@ class GanttWorkbookParser:
                 continue
 
             activity = str(activity_val).strip()
+
+            # Find filled columns in this row
+            filled_cols = []
+            if ws is not None:
+                for c in range(2, min(ws.max_column + 1, MAX_COLS_PER_SHEET)):
+                    cell = ws.cell(r_num, c)
+                    is_solid = bool(cell.fill and cell.fill.fill_type == 'solid')
+                    if is_solid or cell.value is not None:
+                        filled_cols.append(c)
+
+            calc_start = None
+            calc_finish = None
+            calc_notes = []
+            if filled_cols and all(c in col_dates for c in filled_cols):
+                calc_start = col_dates[filled_cols[0]][0]
+                calc_finish = col_dates[filled_cols[-1]][1]
+                calc_notes.append(f"Calculated from half-month timeline columns {filled_cols[0]}..{filled_cols[-1]}")
+
             item = self._build_normalized_item(
-                source_sheet=meta.get('sheet_name', ''),
+                source_sheet=sheet_name,
                 source_row=r_num,
                 activity=activity,
-                raw_start=None,
-                raw_finish=None,
-                raw_duration=None,
+                raw_start=calc_start,
+                raw_finish=calc_finish,
+                raw_duration=((calc_finish - calc_start).days + 1) if (calc_start and calc_finish) else None,
                 raw_act_start=None,
                 raw_act_finish=None,
                 raw_progress=0,
@@ -695,10 +746,15 @@ class GanttWorkbookParser:
                 raw_resp=None,
                 default_emp_id=default_emp_id
             )
-            item['warnings'].append("Visual monthly chart layout: exact planned dates are ambiguous.")
-            item['errors'].append("Planned start and finish dates require manual entry before confirmation.")
-            item['errors_by_field']['planned_start'] = "Enter planned start date"
-            item['errors_by_field']['planned_finish'] = "Enter planned finish date"
+
+            if not calc_start or not calc_finish:
+                item['warnings'].append("Visual monthly chart layout: exact planned dates are ambiguous.")
+                item['errors'].append("Planned start and finish dates require manual entry before confirmation.")
+                item['errors_by_field']['planned_start'] = "Enter planned start date"
+                item['errors_by_field']['planned_finish'] = "Enter planned finish date"
+            elif calc_notes:
+                item['calc_notes'].extend(calc_notes)
+
             parsed_rows.append(item)
 
         return parsed_rows

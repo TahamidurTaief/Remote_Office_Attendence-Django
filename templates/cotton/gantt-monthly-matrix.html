@@ -1,0 +1,132 @@
+{% comment %} c-gantt-monthly-matrix component
+   Renders the exact 21-Month Bi-Weekly visual Gantt chart timeline matching 'GANTT CHART (2).xlsx'.
+   Features 42 half-month slots across 21 months, 32 authentic activities, phase groups,
+   custom theme-colored span bars, and embedded badges ('PSI', 'DG SECT', 'FULL PROJECT', 'DG').
+{% endcomment %}
+<div class="space-y-4">
+  {# Phase quick filter & summary bar #}
+  <div class="flex items-center justify-between gap-2 flex-wrap text-[11px] text-gray-600 dark:text-gray-300">
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <span class="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500">Filter Phase:</span>
+      <button type="button"
+              class="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors"
+              :class="activeMonthlyPhase === 'all' ? 'bg-[#1F497D] text-white font-semibold' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'"
+              @click="activeMonthlyPhase = 'all'">
+        All Phases (32)
+      </button>
+      <template x-for="phase in monthlyPhases" :key="phase.name">
+        <button type="button"
+                class="px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors"
+                :class="activeMonthlyPhase === phase.name ? 'bg-[#1F497D] text-white font-semibold' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'"
+                @click="activeMonthlyPhase = phase.name">
+          <span x-text="phase.name"></span>
+          <span class="text-[10px] opacity-75" x-text="'(' + phase.task_count + ')'"></span>
+        </button>
+      </template>
+    </div>
+
+    <div class="flex items-center gap-3 text-[11px] font-mono text-gray-500 dark:text-gray-400">
+      <span>Timeline: <strong class="text-gray-800 dark:text-gray-200">May 2024 &ndash; Jan 2026</strong></span>
+      <span>&bull;</span>
+      <span>Total: <strong class="text-gray-800 dark:text-gray-200">21 Months (42 Slots)</strong></span>
+    </div>
+  </div>
+
+  {# Master Timeline Grid #}
+  <div class="overflow-x-auto w-full rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+    <table class="w-full border-collapse text-left select-none text-[11px]">
+      <thead>
+        {# Row 1: Month Super-Headers (colspan=2 per month) #}
+        <tr class="bg-[#1F497D] text-white border-b border-[#16365C]">
+          <th rowspan="2" class="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider sticky left-0 z-30 bg-[#1F497D] min-w-[240px] max-w-[240px] border-r border-[#16365C]">
+            DESCRIPTION
+          </th>
+          <template x-for="m in monthlyMonths" :key="m.label">
+            <th colspan="2" class="py-2 px-1 text-[10px] font-bold uppercase text-center border-r border-[#16365C] min-w-[72px]"
+                x-text="m.label">
+            </th>
+          </template>
+        </tr>
+
+        {# Row 2: Half-Month Slots (1st: 1-15, 2nd: 16-end) #}
+        <tr class="bg-[#DCE6F1] dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">
+          <template x-for="(slot, idx) in monthlySlots" :key="'slot-'+idx">
+            <th class="py-1 px-0.5 text-[9px] font-semibold text-center border-r border-gray-200 dark:border-slate-700 min-w-[36px] w-9"
+                :class="slot.is_second_half ? 'bg-slate-200/60 dark:bg-slate-800/90' : ''"
+                :title="slot.month_label + ' (' + slot.date_range + ')'">
+              <span x-text="slot.half_label"></span>
+            </th>
+          </template>
+        </tr>
+      </thead>
+
+      <tbody class="divide-y divide-gray-100 dark:divide-slate-800 font-mono">
+        <template x-for="(task, tIndex) in filteredMonthlyTasks" :key="'mt-'+task.id">
+          <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+              :class="task.is_group_header ? 'bg-sky-50/40 dark:bg-sky-950/20 font-bold' : (tIndex % 2 === 1 ? 'bg-slate-50/30 dark:bg-slate-900/30' : '')">
+
+            {# Sticky Left Activity Name #}
+            <td class="py-2 px-3 text-[11px] text-gray-800 dark:text-gray-200 sticky left-0 z-20 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 font-sans truncate max-w-[240px]">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-[10px] text-gray-400 font-mono shrink-0 w-5 text-right" x-text="'#'+task.order"></span>
+                <span class="truncate" :class="task.is_group_header ? 'font-bold text-[#1F497D] dark:text-sky-300 uppercase tracking-wide' : 'font-medium'" x-text="task.activity"></span>
+              </div>
+            </td>
+
+            {# 42 Half-Month Timeline Cells #}
+            <template x-for="(cell, cIndex) in task.cells" :key="'cell-'+task.id+'-'+cIndex">
+              <td class="p-0.5 text-center border-r border-gray-100 dark:border-slate-800 h-7 transition-colors min-w-[36px] w-9"
+                  :class="monthlySlots[cIndex] && monthlySlots[cIndex].is_second_half ? 'bg-slate-50/40 dark:bg-slate-900/40' : ''">
+
+                <template x-if="cell.has_bar">
+                  <div class="w-full h-5.5 flex items-center justify-center text-[9px] font-bold tracking-tight shadow-2xs transition-transform"
+                       :class="[
+                         cell.color_class,
+                         cell.is_start ? 'rounded-l-sm' : '',
+                         cell.is_end ? 'rounded-r-sm' : ''
+                       ]"
+                       :title="task.activity + ' &bull; ' + (monthlySlots[cIndex] ? monthlySlots[cIndex].month_label + ' (' + monthlySlots[cIndex].date_range + ')' : '')">
+                    <template x-if="cell.badge">
+                      <span class="px-1 py-0.2 rounded-xs bg-white/90 text-slate-900 text-[8px] font-extrabold uppercase shadow-xs whitespace-nowrap"
+                            x-text="cell.badge"></span>
+                    </template>
+                  </div>
+                </template>
+
+                <template x-if="!cell.has_bar">
+                  <div class="w-full h-5"></div>
+                </template>
+              </td>
+            </template>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  {# Visual Timeline Legend #}
+  <c-card padding="sm">
+    <div class="flex items-center justify-between gap-4 flex-wrap text-[11px] text-gray-600 dark:text-gray-400">
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-[10px] font-bold uppercase text-gray-400">Theme Legend:</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#156082] inline-block shadow-2xs"></span>Pre-Construction</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#E97132] inline-block shadow-2xs"></span>Procurement (Heavy Equipment)</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#196B24] inline-block shadow-2xs"></span>Piping, Duct & Terminals</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#0F9ED5] inline-block shadow-2xs"></span>Engineering & Drawings</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#80397B] inline-block shadow-2xs"></span>Pipeline & Duct Install</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#4EA72E] inline-block shadow-2xs"></span>Equipment Installation</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#3B82F6] inline-block shadow-2xs"></span>Electrical Connections</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-2.5 rounded-xs bg-[#DC2626] inline-block shadow-2xs"></span>Testing & Commissioning</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span class="px-1.5 py-0.5 rounded-xs bg-gray-100 dark:bg-slate-800 text-[10px] font-mono border border-gray-200 dark:border-slate-700">
+          PSI: Pre-Shipment Inspection
+        </span>
+        <span class="px-1.5 py-0.5 rounded-xs bg-gray-100 dark:bg-slate-800 text-[10px] font-mono border border-gray-200 dark:border-slate-700">
+          DG: Diesel Generator Sector
+        </span>
+      </div>
+    </div>
+  </c-card>
+</div>

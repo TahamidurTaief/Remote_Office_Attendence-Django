@@ -14,7 +14,14 @@
 
         <div class="flex items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-slate-800 flex-wrap">
             {# Mode switcher #}
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <c-tab-button
+                    label="Monthly Master Timeline"
+                    icon="calendar-range"
+                    active_condition="activeViewMode === 'monthly'"
+                    @click="activeViewMode = 'monthly'">
+                </c-tab-button>
+
                 <c-tab-button
                     label="Excel Planner View"
                     icon="table"
@@ -23,17 +30,17 @@
                 </c-tab-button>
 
                 <c-tab-button
-                    label="Timeline Bars"
-                    icon="bar-chart-2"
-                    active_condition="activeViewMode === 'bars'"
-                    @click="activeViewMode = 'bars'">
-                </c-tab-button>
-
-                <c-tab-button
                     label="Zone Schedule Matrix"
                     icon="layers"
                     active_condition="activeViewMode === 'zones'"
                     @click="activeViewMode = 'zones'">
+                </c-tab-button>
+
+                <c-tab-button
+                    label="Timeline Bars"
+                    icon="bar-chart-2"
+                    active_condition="activeViewMode === 'bars'"
+                    @click="activeViewMode = 'bars'">
                 </c-tab-button>
             </div>
 
@@ -75,6 +82,21 @@
             </div>
         </div>
 
+        {# Monthly Timeline Legend #}
+        <div x-show="activeViewMode === 'monthly'" class="pt-2.5 flex items-center justify-between gap-3 text-[11px] text-gray-500 dark:text-gray-400 border-t border-gray-50 dark:border-slate-800/60 flex-wrap">
+            <div class="flex items-center gap-2.5 flex-wrap">
+                <span class="text-[10px] font-bold uppercase text-gray-400">Master Schedule:</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#156082] inline-block shadow-2xs"></span>Pre-Construction</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#E97132] inline-block shadow-2xs"></span>Import Products Order</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#0F9ED5] inline-block shadow-2xs"></span>Engineering & Approvals</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#80397B] inline-block shadow-2xs"></span>Installation Work</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#DC2626] inline-block shadow-2xs"></span>Testing & Commissioning</span>
+            </div>
+            <div class="text-[10px] text-gray-400 font-mono">
+                Source: GANTT CHART (2).xlsx &bull; 21 Months / 42 Half-Month Stages
+            </div>
+        </div>
+
         {# Excel Planner Legend & Explanations #}
         <div x-show="activeViewMode === 'planner'" class="pt-2.5 flex items-center justify-between gap-3 text-[11px] text-gray-500 dark:text-gray-400 border-t border-gray-50 dark:border-slate-800/60 flex-wrap">
             <div class="flex items-center gap-2.5 flex-wrap">
@@ -100,7 +122,12 @@
         </div>
     </c-card>
 
-    {# ── VIEW MODE 1: Excel Planner Matrix ────────────────────────────── #}
+    {# ── VIEW MODE 1: Monthly Master Timeline (GANTT CHART (2).xlsx) ────── #}
+    <div x-show="activeViewMode === 'monthly'" class="space-y-4">
+        <c-gantt-monthly-matrix></c-gantt-monthly-matrix>
+    </div>
+
+    {# ── VIEW MODE 2: Excel Planner Matrix (PROJECT SCHEDULE GANTT CHART.xlsx) ── #}
     <div x-show="activeViewMode === 'planner'" class="space-y-4">
         <c-gantt-planner-matrix></c-gantt-planner-matrix>
     </div>
@@ -225,10 +252,15 @@
 <script>
 function ganttChart() {
     return {
-        activeViewMode: 'planner',
+        activeViewMode: 'monthly',
         highlightPeriod: 1,
         allTasks: {{ gantt_tasks_json|safe|default:"[]" }},
         rulerMonths: {{ ruler_months_json|safe|default:"[]" }},
+        monthlySchedule: {{ monthly_schedule_json|safe|default:"[]" }},
+        monthlySlots: {{ monthly_slots_json|safe|default:"[]" }},
+        monthlyMonths: {{ monthly_months_json|safe|default:"[]" }},
+        monthlyPhases: {{ monthly_phases_json|safe|default:"[]" }},
+        activeMonthlyPhase: 'all',
         todayPct: {{ today_pct|default:"null" }},
         totalDays: {{ total_days|default:0 }},
         activeFilter: 'all',
@@ -242,6 +274,11 @@ function ganttChart() {
             this.$nextTick(() => {
                 if (window.lucide) lucide.createIcons();
             });
+        },
+
+        get filteredMonthlyTasks() {
+            if (this.activeMonthlyPhase === 'all') return this.monthlySchedule;
+            return this.monthlySchedule.filter(t => t.phase === this.activeMonthlyPhase);
         },
 
         get filteredTasks() {
