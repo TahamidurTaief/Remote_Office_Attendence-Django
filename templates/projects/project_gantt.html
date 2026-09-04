@@ -19,21 +19,21 @@
                     label="Excel Planner View"
                     icon="table"
                     active_condition="activeViewMode === 'planner'"
-                    attrs="@click=&quot;activeViewMode = 'planner'&quot;">
+                    @click="activeViewMode = 'planner'">
                 </c-tab-button>
 
                 <c-tab-button
                     label="Timeline Bars"
                     icon="bar-chart-2"
                     active_condition="activeViewMode === 'bars'"
-                    attrs="@click=&quot;activeViewMode = 'bars'&quot;">
+                    @click="activeViewMode = 'bars'">
                 </c-tab-button>
 
                 <c-tab-button
                     label="Zone Schedule Matrix"
                     icon="layers"
                     active_condition="activeViewMode === 'zones'"
-                    attrs="@click=&quot;activeViewMode = 'zones'&quot;">
+                    @click="activeViewMode = 'zones'">
                 </c-tab-button>
             </div>
 
@@ -42,35 +42,35 @@
                 <template x-if="activeViewMode === 'planner'">
                     <div class="flex items-center gap-1.5 bg-gray-50 dark:bg-slate-800/70 border border-gray-200 dark:border-slate-700/60 rounded-lg px-2 py-1">
                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Highlight Day:</span>
-                        <c-input name="highlight_day" type="number" attrs="min='1' :max='plannerDays.length' x-model.number='highlightPeriod'" input_class="w-14 text-center font-mono py-0.5 text-[11px]"></c-input>
+                        <c-input name="highlight_day" type="number" min="1" x-bind:max="plannerDays.length" x-model.number="highlightPeriod" input_class="w-14 text-center font-mono py-0.5 text-[11px]"></c-input>
                     </div>
                 </template>
 
                 <c-filter-button
                     label="All"
                     active_condition="activeFilter === 'all'"
-                    attrs="@click=&quot;toggleFilter('all')&quot;">
+                    @click="toggleFilter('all')">
                 </c-filter-button>
 
                 <c-filter-button
                     label="Delayed"
                     variant="danger"
                     active_condition="activeFilter === 'delayed'"
-                    attrs="@click=&quot;toggleFilter('delayed')&quot;">
+                    @click="toggleFilter('delayed')">
                 </c-filter-button>
 
                 <c-filter-button
                     label="In Progress"
                     variant="info"
                     active_condition="activeFilter === 'in_progress'"
-                    attrs="@click=&quot;toggleFilter('in_progress')&quot;">
+                    @click="toggleFilter('in_progress')">
                 </c-filter-button>
 
                 <c-filter-button
                     label="Completed"
                     variant="success"
                     active_condition="activeFilter === 'completed'"
-                    attrs="@click=&quot;toggleFilter('completed')&quot;">
+                    @click="toggleFilter('completed')">
                 </c-filter-button>
             </div>
         </div>
@@ -227,10 +227,10 @@ function ganttChart() {
     return {
         activeViewMode: 'planner',
         highlightPeriod: 1,
-        allTasks: {{ gantt_tasks_json|safe }},
-        rulerMonths: {{ ruler_months_json|safe }},
+        allTasks: {{ gantt_tasks_json|safe|default:"[]" }},
+        rulerMonths: {{ ruler_months_json|safe|default:"[]" }},
         todayPct: {{ today_pct|default:"null" }},
-        totalDays: {{ total_days }},
+        totalDays: {{ total_days|default:0 }},
         activeFilter: 'all',
         plannerDays: {{ planner_days_json|safe|default:"[]" }},
         plannerTasks: {{ planner_tasks_json|safe|default:"[]" }},
@@ -268,6 +268,23 @@ function ganttChart() {
                 });
             });
             return deps;
+        },
+
+        get zoneSubHeaders() {
+            const list = [];
+            (this.zoneStages || []).forEach(stage => {
+                list.push({ stage, type: 'start', label: 'START' });
+                list.push({ stage, type: 'end', label: 'END' });
+            });
+            return list;
+        },
+
+        cellStateTitle(state) {
+            if (state === 'progress') return 'In Progress / Completed Portion';
+            if (state === 'plan') return 'Planned Duration';
+            if (state === 'actual') return 'Actual Start Day';
+            if (state === 'beyond') return 'Actual Extended Beyond Plan';
+            return '';
         },
 
         toggleFilter(f) {

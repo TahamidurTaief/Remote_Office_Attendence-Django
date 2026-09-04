@@ -1973,9 +1973,9 @@ class ProjectGanttView(LoginRequiredMixin, View):
                 project.project_members.filter(pk=profile.pk).exists()
             )
             if not is_assigned:
-                raise PermissionDenied("You do not have permission to view this project's Gantt chart.")
+                return redirect('/staff/home/')
         elif not is_admin:
-            raise PermissionDenied("Administrative permission required.")
+            return redirect('/staff/home/')
 
         tasks = list(project.tasks.all())
 
@@ -2238,9 +2238,9 @@ class ProjectGanttExportView(LoginRequiredMixin, View):
                 project.project_members.filter(pk=profile.pk).exists()
             )
             if not is_assigned:
-                raise PermissionDenied("You do not have permission to export this project's Gantt schedule.")
+                return redirect('/staff/home/')
         elif not is_admin:
-            raise PermissionDenied("Administrative permission required.")
+            return redirect('/staff/home/')
 
         xlsx_bytes = GanttExcelExportService.export_project_workbook(project)
         slug = slugify(project.name) or f"project_{project.pk}"

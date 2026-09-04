@@ -20,11 +20,9 @@
 
         {# Row 2: START / END sub-headers #}
         <tr class="bg-[#DCE6F1] dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">
-          <template x-for="stage in zoneStages" :key="'sub-'+stage">
-            <template x-data="{}" x-fragment>
-              <th class="py-1 px-1 text-[9px] font-bold uppercase text-center border-r border-gray-200 dark:border-slate-700 min-w-[65px]">START</th>
-              <th class="py-1 px-1 text-[9px] font-bold uppercase text-center border-r border-gray-200 dark:border-slate-700 min-w-[65px]">END</th>
-            </template>
+          <template x-for="(sub, idx) in zoneSubHeaders" :key="'sub-'+idx">
+            <th class="py-1 px-1 text-[9px] font-bold uppercase text-center border-r border-gray-200 dark:border-slate-700 min-w-[65px]"
+                x-text="sub.label"></th>
           </template>
         </tr>
       </thead>
@@ -36,13 +34,9 @@
             <td class="py-2 px-3 text-[11px] font-bold text-gray-800 dark:text-gray-200 sticky left-0 z-20 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 font-sans truncate max-w-[220px]"
                 x-text="zone.name"></td>
 
-            <template x-for="stage in zoneStages" :key="zone.name + '-' + stage">
-              <template x-data="{}" x-fragment>
-                <td class="py-1.5 px-1 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
-                    x-text="zone.stages[stage] ? zone.stages[stage].start : '—'"></td>
-                <td class="py-1.5 px-1 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
-                    x-text="zone.stages[stage] ? zone.stages[stage].end : '—'"></td>
-              </template>
+            <template x-for="(sub, idx) in zoneSubHeaders" :key="zone.name + '-' + idx">
+              <td class="py-1.5 px-1 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
+                  x-text="zone.stages[sub.stage] ? zone.stages[sub.stage][sub.type] : '—'"></td>
             </template>
           </tr>
         </template>
