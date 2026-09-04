@@ -6,18 +6,24 @@
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
       <div class="flex items-center gap-2">
-        <a href="{% url 'admin_panel:role_list' %}" class="text-xs text-[var(--text-muted)] hover:text-primary">Roles</a>
+        <a href="{% url 'admin_panel:role_list' %}" class="text-xs text-[var(--text-muted)] hover:text-primary transition-colors">Roles</a>
         <span class="text-xs text-[var(--text-muted)]">/</span>
         <span class="text-xs font-semibold text-[var(--text)]">{{ role.name }}</span>
       </div>
-      <h1 class="text-xl font-bold text-[var(--text)] mt-1">Permission Matrix — {{ role.name }}</h1>
-      <p class="text-xs text-[var(--text-muted)] mt-0.5">Configure module permissions and data scoping levels for this role.</p>
+      <h1 class="text-lg font-bold text-[var(--text)] mt-1">Permission Matrix — {{ role.name }}</h1>
+      <p class="text-xs text-[var(--text-muted)] mt-0.5">
+        Configure granular module permissions and enforced data scoping levels for this role.
+      </p>
     </div>
 
     <div class="flex items-center gap-2">
-      <a href="{% url 'admin_panel:role_list' %}" class="ft-btn ft-btn-secondary ft-btn-sm">
-        Back to Roles
-      </a>
+      <c-button
+        href="{% url 'admin_panel:role_list' %}"
+        variant="secondary"
+        size="sm"
+        icon="arrow-left"
+        label="Back to Roles"
+      ></c-button>
     </div>
   </div>
 
@@ -29,6 +35,8 @@
     :perm_scope_map="perm_scope_map"
     :total_permissions_count="total_permissions_count"
     :data_scope_choices="data_scope_choices"
+    :is_superuser="is_superuser"
+    :can_edit="can_edit"
   ></c-role-matrix-builder>
 </div>
 {% endblock %}

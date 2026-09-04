@@ -2,13 +2,19 @@
    Props:
    - role: Role object
    - modules_with_perms: list of dicts [{ 'module': Module, 'permissions': [...] }]
+   - role_perm_ids: set of permission IDs assigned to role
+   - perm_scope_map: dict of perm_id -> data_scope
+   - total_permissions_count: total permission count
+   - data_scope_choices: tuple of DataScope choices
+   - is_superuser: boolean
+   - can_edit: boolean
 {% endcomment %}
 
 <div x-data="{
        search: '',
        selectedModule: 'all',
-       bulkMode: false,
-       selectedPerms: [],
+       errorMessage: '',
+       showError: false,
 
        matchPerm(name, code, modCode) {
          if (this.selectedModule !== 'all' && modCode !== this.selectedModule) return false;
@@ -26,10 +32,35 @@
          });
        }
      }"
+     @htmx:response-error="
+       try {
+         const data = JSON.parse($event.detail.xhr.responseText);
+         errorMessage = data.message || 'Permission denied or invalid scope.';
+       } catch(e) {
+         errorMessage = 'Failed to update permission: operation rejected by security policy.';
+       }
+       showError = true;
+       setTimeout(() => { showError = false; }, 6000);
+     "
+     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
      class="space-y-4">
 
+  <!-- Privilege Rejection Toast / Banner -->
+  <div x-show="showError"
+       x-transition
+       x-cloak
+       class="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs flex items-center justify-between gap-3 shadow-xs">
+    <div class="flex items-center gap-2">
+      <i data-lucide="shield-alert" class="w-4 h-4 text-red-600 dark:text-red-400 shrink-0"></i>
+      <span class="font-medium" x-text="errorMessage"></span>
+    </div>
+    <button type="button" @click="showError = false" class="text-red-500 hover:text-red-700">
+      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+
   <!-- Search & Filter Control Bar -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[var(--surface)] border border-[var(--border)] rounded-card shadow-xs">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xs">
     <div class="relative flex-1 max-w-md">
       <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-[var(--text-muted)]"></i>
       <input type="text"
@@ -62,8 +93,8 @@
       <div x-show="selectedModule === 'all' || selectedModule === '{{ item.module.code }}'"
            data-module="{{ item.module.code }}"
            x-data="{ open: true }"
-           class="border border-[var(--border)] rounded-card bg-[var(--surface)] shadow-xs overflow-hidden">
-        
+           class="border border-[var(--border)] rounded-xl bg-[var(--surface)] shadow-xs overflow-hidden">
+
         <!-- Module Header -->
         <div class="flex items-center justify-between px-4 py-3 bg-[var(--surface-2)] border-b border-[var(--border)]">
           <div class="flex items-center gap-2.5 cursor-pointer" @click="open = !open">
@@ -73,17 +104,23 @@
           </div>
 
           <div class="flex items-center gap-2">
-            <button type="button"
-                    @click="toggleAllInModule('{{ item.module.code }}', true)"
-                    class="ft-btn ft-btn-ghost ft-btn-xs text-[11px] text-primary">
-              Grant All
-            </button>
-            <button type="button"
-                    @click="toggleAllInModule('{{ item.module.code }}', false)"
-                    class="ft-btn ft-btn-ghost ft-btn-xs text-[11px] text-[var(--text-muted)]">
-              Revoke All
-            </button>
-            <button type="button" @click="open = !open" class="text-[var(--text-muted)] hover:text-[var(--text)]">
+            {% if can_edit and role.code != 'system_owner' %}
+              <button
+                type="button"
+                @click="toggleAllInModule('{{ item.module.code }}', true)"
+                class="ft-btn ft-btn-ghost ft-btn-xs text-[11px] text-primary hover:text-primary-600">
+                Grant All
+              </button>
+
+              <button
+                type="button"
+                @click="toggleAllInModule('{{ item.module.code }}', false)"
+                class="ft-btn ft-btn-ghost ft-btn-xs text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]">
+                Revoke All
+              </button>
+            {% endif %}
+
+            <button type="button" @click="open = !open" class="text-[var(--text-muted)] hover:text-[var(--text)] p-1">
               <i data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''"></i>
             </button>
           </div>
@@ -94,26 +131,27 @@
           <div class="overflow-x-auto">
             <table class="ft-table w-full text-left text-xs">
               <thead>
-                <tr class="bg-[var(--surface)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider">
-                  <th class="py-2 px-4 w-12 text-center">Status</th>
-                  <th class="py-2 px-4">Action</th>
-                  <th class="py-2 px-4">Codename</th>
-                  <th class="py-2 px-4 w-48">Data Scope</th>
+                <tr class="bg-[var(--surface)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider border-b border-[var(--border)]">
+                  <th class="py-2.5 px-4 w-12 text-center">Status</th>
+                  <th class="py-2.5 px-4">Action</th>
+                  <th class="py-2.5 px-4">Codename</th>
+                  <th class="py-2.5 px-4 w-48">Data Scope</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-[var(--border)]">
                 {% for perm in item.permissions %}
                   <tr x-show="matchPerm('{{ perm.name|escapejs }}', '{{ perm.codename|escapejs }}', '{{ item.module.code }}')"
                       class="hover:bg-[var(--surface-2)] transition-colors">
-                    
+
                     <td class="py-2.5 px-4 text-center">
                       <input type="checkbox"
                              id="perm-toggle-{{ perm.id }}"
                              {% if perm.id in role_perm_ids %}checked{% endif %}
+                             {% if not can_edit or role.code == 'system_owner' %}disabled{% endif %}
                              hx-post="{% url 'admin_panel:role_perm_toggle' role.id perm.id %}"
                              hx-trigger="change"
                              hx-swap="none"
-                             class="ft-checkbox h-4 w-4 rounded text-primary border-[var(--border)] focus:ring-primary">
+                             class="ft-checkbox h-4 w-4 rounded text-primary border-[var(--border)] focus:ring-primary disabled:opacity-50">
                     </td>
 
                     <td class="py-2.5 px-4 font-medium text-[var(--text)]">
@@ -132,7 +170,8 @@
                               hx-trigger="change"
                               hx-swap="none"
                               name="data_scope"
-                              class="ft-select text-xs py-1 px-2 w-full">
+                              {% if not can_edit or role.code == 'system_owner' %}disabled{% endif %}
+                              class="ft-select text-xs py-1 px-2 w-full disabled:opacity-50">
                         {% for scope_key, scope_label in data_scope_choices %}
                           <option value="{{ scope_key }}" {% if perm.id in role_perm_ids and perm_scope_map|get_item:perm.id == scope_key %}selected{% endif %}>
                             {{ scope_label }}
