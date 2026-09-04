@@ -1,7 +1,10 @@
 <form 
-  hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}"
+  id="wizard-step-form"
+  hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}{% else %}{% url 'employees:employee_wizard_create_step' step=6 %}{% endif %}"
   hx-target="#wizard-root"
   hx-swap="outerHTML"
+  hx-indicator="#wizard-global-loader"
+  hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
   class="space-y-6"
 >
   {% csrf_token %}
@@ -12,39 +15,45 @@
       <h2 class="text-lg font-bold text-slate-900 dark:text-white">Step 6: Emergency Contact Information</h2>
       <p class="text-xs text-slate-500 dark:text-slate-400">Contact details for emergency notifications and next of kin.</p>
     </div>
-    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-      Optional Completion Tier
-    </span>
+    <c-badge variant="neutral" label="Optional Completion Tier"></c-badge>
   </div>
 
-  {% if form.non_field_errors %}
-    <div class="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200 dark:border-rose-800">
-      {% for err in form.non_field_errors %}<p>{{ err }}</p>{% endfor %}
-    </div>
-  {% endif %}
+  <c-form-error-summary :form="form"></c-form-error-summary>
 
   <c-card padding="lg">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <c-input name="emergency_contact_name" label="Contact Name" placeholder="Contact Name" value="{{ form.emergency_contact_name.value|default:'' }}" error="{{ form.emergency_contact_name.errors.0 }}" ></c-input>
+        <c-input name="emergency_contact_name" id="id_emergency_contact_name" label="Contact Name" placeholder="Contact Name" value="{{ form.emergency_contact_name.value|default:'' }}" error="{{ form.emergency_contact_name.errors.0 }}"></c-input>
       </div>
 
       <div>
-        <c-input name="emergency_contact_relation" label="Relation" placeholder="Relation (e.g. Spouse, Parent)" value="{{ form.emergency_contact_relation.value|default:'' }}" error="{{ form.emergency_contact_relation.errors.0 }}" ></c-input>
+        <c-input name="emergency_contact_relation" id="id_emergency_contact_relation" label="Relation" placeholder="Relation (e.g. Spouse, Parent)" value="{{ form.emergency_contact_relation.value|default:'' }}" error="{{ form.emergency_contact_relation.errors.0 }}"></c-input>
       </div>
 
       <div>
-        <c-input name="emergency_contact_phone" label="Phone Number" placeholder="Phone Number" value="{{ form.emergency_contact_phone.value|default:'' }}" error="{{ form.emergency_contact_phone.errors.0 }}" ></c-input>
+        <c-input name="emergency_contact_phone" id="id_emergency_contact_phone" label="Phone Number" placeholder="Phone Number" value="{{ form.emergency_contact_phone.value|default:'' }}" error="{{ form.emergency_contact_phone.errors.0 }}"></c-input>
       </div>
 
       <div>
-        <c-input name="emergency_contact_address" label="Address" placeholder="Address" value="{{ form.emergency_contact_address.value|default:'' }}" error="{{ form.emergency_contact_address.errors.0 }}" ></c-input>
+        <c-input name="emergency_contact_address" id="id_emergency_contact_address" label="Address" placeholder="Address" value="{{ form.emergency_contact_address.value|default:'' }}" error="{{ form.emergency_contact_address.errors.0 }}"></c-input>
       </div>
     </div>
   </c-card>
 
   <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=5 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 5"></c-button>
+    <c-button 
+      type="button" 
+      variant="secondary" 
+      hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}{% else %}{% url 'employees:employee_wizard_create_step' step=6 %}{% endif %}"
+      hx-vals='{"target_step": "5"}'
+      hx-include="#wizard-step-form"
+      hx-target="#wizard-root" 
+      hx-swap="outerHTML" 
+      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=5 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=5 %}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      label="Back to Step 5"
+    ></c-button>
     <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 7"></c-button>
   </div>
 </form>

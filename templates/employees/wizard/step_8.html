@@ -7,108 +7,160 @@
     </div>
     <div class="flex items-center space-x-2">
       <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Status:</span>
-      <c-status-pill status="{{ employee.business_status }}" label="{{ employee.business_status_display }}"></c-status-pill>
+      {% if employee %}
+        <c-status-pill status="{{ employee.business_status }}" label="{{ employee.business_status_display }}"></c-status-pill>
+      {% else %}
+        <c-status-pill status="inactive" label="Draft"></c-status-pill>
+      {% endif %}
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <!-- Step 1: Basic Information -->
-    <c-card padding="md" extra_class="space-y-2">
-      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">1. Basic Information</h3>
-        <span class="text-xs font-bold text-primary font-mono">ID: {{ employee.employee_number }}</span>
-      </div>
-      <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Full Name:</span> {{ employee.get_full_name }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Email:</span> {{ employee.personal_email|default:"N/A" }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Phone:</span> {{ employee.phone|default:"N/A" }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">DOB / Gender:</span> {{ employee.dob|default:"N/A" }} / {{ employee.get_gender_display|default:"N/A" }}</p>
-      </div>
-    </c-card>
+  {% if validation_errors %}
+    <c-form-error-summary :errors="validation_errors" title="Cannot activate: The following wizard steps require completion:"></c-form-error-summary>
+  {% endif %}
 
-    <!-- Step 2: Organization Information -->
-    <c-card padding="md" extra_class="space-y-2">
-      <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">2. Organization & Schedule</h3>
-      </div>
-      <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Branch:</span> {{ employee.branch.name|default:"Unassigned" }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Department:</span> {{ employee.department.name|default:"Unassigned" }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Designation:</span> {{ employee.designation.name|default:"Unassigned" }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Reporting Manager:</span> {{ employee.reporting_manager.get_full_name|default:"None" }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Joined Date / Type:</span> {{ employee.joined_date|default:"N/A" }} ({{ employee.get_employment_type_display }})</p>
-      </div>
+  {% if not employee %}
+    <c-card padding="lg">
+      <c-empty-state 
+        icon="user-x" 
+        title="Employee Record Not Initialized" 
+        description="Please return to Step 1 (Basic Information) to establish core employee details before final approval."
+      >
+        <div class="pt-2 flex justify-center">
+          <c-button 
+            type="button" 
+            variant="primary" 
+            size="sm" 
+            hx-get="{% url 'employees:employee_wizard' %}" 
+            hx-target="#wizard-root" 
+            hx-swap="outerHTML" 
+            label="Start with Step 1"
+          ></c-button>
+        </div>
+      </c-empty-state>
     </c-card>
+  {% else %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Step 1: Basic Information -->
+      <c-card padding="md" extra_class="space-y-2">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">1. Basic Information</h3>
+          <span class="text-xs font-bold text-primary font-mono">ID: {{ employee.employee_number }}</span>
+        </div>
+        <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Full Name:</span> {{ employee.get_full_name }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Email:</span> {{ employee.personal_email|default:"N/A" }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Phone:</span> {{ employee.phone|default:"N/A" }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">DOB / Gender:</span> {{ employee.dob|default:"N/A" }} / {{ employee.get_gender_display|default:"N/A" }}</p>
+        </div>
+      </c-card>
 
-    <!-- Step 3: Payroll Information -->
-    <c-card padding="md" extra_class="space-y-2">
-      <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">3. Payroll & Benefits</h3>
-      </div>
-      <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Basic Salary:</span> ৳{{ employee.basic_salary|default:"0.00" }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Bank / Account:</span> {{ employee.bank_name|default:"N/A" }} ({{ employee.bank_account|default:"N/A" }})</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Payment Method:</span> {{ employee.get_payment_method_display }}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Provident Fund (PF):</span> {% if employee.pf_enabled %}<span class="text-emerald-600 font-semibold">Enabled</span>{% else %}Disabled{% endif %}</p>
-      </div>
-    </c-card>
+      <!-- Step 2: Organization Information -->
+      <c-card padding="md" extra_class="space-y-2">
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">2. Organization & Schedule</h3>
+        </div>
+        <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Branch:</span> {{ employee.branch.name|default:"Unassigned" }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Department:</span> {{ employee.department.name|default:"Unassigned" }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Designation:</span> {{ employee.designation.name|default:"Unassigned" }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Reporting Manager:</span> {{ employee.reporting_manager.get_full_name|default:"None" }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Joined Date / Type:</span> {{ employee.joined_date|default:"N/A" }} ({{ employee.get_employment_type_display }})</p>
+        </div>
+      </c-card>
 
-    <!-- Step 4: Security & User Roles -->
-    <c-card padding="md" extra_class="space-y-2">
-      <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">4. Security & Roles</h3>
-      </div>
-      <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">User Account:</span> {% if user_account %}<span class="text-primary font-semibold">{{ user_account.email }}</span>{% else %}<span class="text-amber-600 italic">No User Account</span>{% endif %}</p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Assigned Roles:</span> 
-          {% for r in user_roles %}
-            <span class="inline-block px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium mr-1">{{ r.role.name }}</span>
+      <!-- Step 3: Payroll Information -->
+      <c-card padding="md" extra_class="space-y-2">
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">3. Payroll & Benefits</h3>
+        </div>
+        <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Basic Salary:</span> ৳{{ employee.basic_salary|default:"0.00" }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Bank / Account:</span> {{ employee.bank_name|default:"N/A" }} ({{ employee.bank_account|default:"N/A" }})</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Payment Method:</span> {{ employee.get_payment_method_display }}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Provident Fund (PF):</span> {% if employee.pf_enabled %}<span class="text-emerald-600 font-semibold">Enabled</span>{% else %}Disabled{% endif %}</p>
+        </div>
+      </c-card>
+
+      <!-- Step 4: Security & User Roles -->
+      <c-card padding="md" extra_class="space-y-2">
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">4. Security & Roles</h3>
+        </div>
+        <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">User Account:</span> {% if user_account %}<span class="text-primary font-semibold">{{ user_account.email }}</span>{% else %}<span class="text-amber-600 italic">No User Account</span>{% endif %}</p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Assigned Roles:</span> 
+            {% for r in user_roles %}
+              <span class="inline-block px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium mr-1">{{ r.role.name }}</span>
+            {% empty %}
+              <span class="text-slate-400">None</span>
+            {% endfor %}
+          </p>
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Data Scope:</span> {{ employee.get_data_scope_display }}</p>
+        </div>
+      </c-card>
+
+      <!-- Step 5: Documents -->
+      <c-card padding="md" extra_class="space-y-2">
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">5. Documents ({{ documents|length }})</h3>
+        </div>
+        <div class="text-xs space-y-1 text-slate-800 dark:text-slate-200">
+          {% for doc in documents %}
+            <div class="flex items-center justify-between py-0.5">
+              <span>{{ doc.get_document_type_display }} (v{{ doc.version }})</span>
+              {% if doc.is_sensitive %}<span class="text-[10px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded">Sensitive</span>{% endif %}
+            </div>
           {% empty %}
-            <span class="text-slate-400">None</span>
+            <p class="text-slate-400 italic">No documents uploaded.</p>
           {% endfor %}
-        </p>
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Data Scope:</span> {{ employee.get_data_scope_display }}</p>
-      </div>
-    </c-card>
+        </div>
+      </c-card>
 
-    <!-- Step 5: Documents -->
-    <c-card padding="md" extra_class="space-y-2">
-      <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">5. Documents ({{ documents|length }})</h3>
-      </div>
-      <div class="text-xs space-y-1 text-slate-800 dark:text-slate-200">
-        {% for doc in documents %}
-          <div class="flex items-center justify-between py-0.5">
-            <span>{{ doc.get_document_type_display }} (v{{ doc.version }})</span>
-            {% if doc.is_sensitive %}<span class="text-[10px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded">Sensitive</span>{% endif %}
-          </div>
-        {% empty %}
-          <p class="text-slate-400 italic">No documents uploaded.</p>
-        {% endfor %}
-      </div>
-    </c-card>
-
-    <!-- Step 6 & 7: Emergency & Assets -->
-    <c-card padding="md" extra_class="space-y-2">
-      <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
-        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">6 & 7. Emergency & Assigned Assets</h3>
-      </div>
-      <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
-        <p><span class="font-medium text-slate-500 dark:text-slate-400">Emergency Contact:</span> {{ employee.emergency_contact_name|default:"N/A" }} ({{ employee.emergency_contact_relation|default:"N/A" }}) - {{ employee.emergency_contact_phone|default:"N/A" }}</p>
-        <p class="font-medium text-slate-500 dark:text-slate-400 mt-2">Active Assets ({{ assets|length }}):</p>
-        {% for a in assets %}
-          <span class="inline-block px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded font-mono text-[11px] mr-1">{{ a.asset.name }} ({{ a.asset.asset_tag }})</span>
-        {% empty %}
-          <span class="text-slate-400 italic">No active assets</span>
-        {% endfor %}
-      </div>
-    </c-card>
-  </div>
+      <!-- Step 6 & 7: Emergency & Assets -->
+      <c-card padding="md" extra_class="space-y-2">
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">6 & 7. Emergency & Assigned Assets</h3>
+        </div>
+        <div class="text-xs space-y-1.5 text-slate-800 dark:text-slate-200">
+          <p><span class="font-medium text-slate-500 dark:text-slate-400">Emergency Contact:</span> {{ employee.emergency_contact_name|default:"N/A" }} ({{ employee.emergency_contact_relation|default:"N/A" }}) - {{ employee.emergency_contact_phone|default:"N/A" }}</p>
+          <p class="font-medium text-slate-500 dark:text-slate-400 mt-2">Active Assets ({{ assets|length }}):</p>
+          {% for a in assets %}
+            <span class="inline-block px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded font-mono text-[11px] mr-1">{{ a.asset.name }} ({{ a.asset.asset_tag }})</span>
+          {% empty %}
+            <span class="text-slate-400 italic">No active assets</span>
+          {% endfor %}
+        </div>
+      </c-card>
+    </div>
+  {% endif %}
 
   <!-- Approval Action Form Footer -->
-  <form action="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=8 %}" method="post" class="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-800">
+  <form 
+    id="wizard-step-form"
+    {% if employee %}
+      hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=8 %}"
+    {% else %}
+      hx-post="{% url 'employees:employee_wizard_create_step' step=8 %}"
+    {% endif %}
+    hx-target="#wizard-root"
+    hx-swap="outerHTML"
+    hx-indicator="#wizard-global-loader"
+    hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+    class="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-800"
+  >
     {% csrf_token %}
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 7"></c-button>
+    <c-button 
+      type="button" 
+      variant="secondary" 
+      hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}{% else %}{% url 'employees:employee_wizard_create_step' step=7 %}{% endif %}" 
+      hx-target="#wizard-root" 
+      hx-swap="outerHTML" 
+      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=7 %}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      label="Back to Step 7"
+    ></c-button>
 
     <div class="flex items-center space-x-3">
       <c-button type="submit" name="action" value="save_draft" variant="secondary" label="Keep in Draft Status"></c-button>

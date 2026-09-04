@@ -50,6 +50,7 @@ urlpatterns = [
     path('lifecycle-requests/<int:req_pk>/review/', views.LifecycleReviewView.as_view(), name='lifecycle_review'),
 
     path('wizard/', views.EmployeeWizardView.as_view(), name='employee_wizard'),
+    path('wizard/step/<int:step>/', views.EmployeeWizardView.as_view(), name='employee_wizard_create_step'),
     path('wizard/<uuid:uuid>/step/<int:step>/', views.EmployeeWizardView.as_view(), name='employee_wizard_step'),
     path('master/<int:pk>/timeline/', views.EmployeeTimelineView.as_view(), name='employee_timeline'),
 

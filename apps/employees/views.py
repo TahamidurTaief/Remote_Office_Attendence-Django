@@ -1,6 +1,6 @@
 from datetime import datetime, time
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, CreateView, DetailView, UpdateView, View
 from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib import messages
@@ -1344,10 +1344,13 @@ from apps.employees.forms import (
     WizardStep6Form, EmployeeDocumentForm, AssetAssignmentForm
 )
 
+from apps.employees.wizard_service import WizardDraftManager
+
 class EmployeeWizardView(AdminRequiredMixin, View):
     """
     Multi-Step Wizard for Employee Creation and Edition (Steps 1 to 8).
-    Supports progressive saving, HTMX step navigation, and full lifecycle activation.
+    Supports progressive saving, direct step counter navigation, HTMX partial swaps,
+    session draft preservation/restoration, and atomic activation.
     """
     def get_form_class(self, step):
         mapping = {
@@ -1357,11 +1360,20 @@ class EmployeeWizardView(AdminRequiredMixin, View):
             4: WizardStep4Form,
             6: WizardStep6Form,
         }
-        return mapping.get(step)
+        return mapping.get(int(step))
 
-    def get_context_data(self, request, uuid=None, step=1, form=None):
+    def get_context_data(self, request, uuid=None, step=1, form=None, draft_expired=False):
         step = int(step)
-        employee = get_object_or_404(Employee, uuid=uuid) if uuid else None
+        employee = None
+        if uuid:
+            employee = get_object_or_404(Employee, uuid=uuid)
+        else:
+            # Check if active draft has an employee record
+            draft = WizardDraftManager.get_draft(request, request.user.id)
+            if draft and not draft.get('expired') and draft.get('employee_uuid'):
+                employee = Employee.objects.filter(uuid=draft.get('employee_uuid')).first()
+
+        step_statuses = WizardDraftManager.compute_all_statuses(request, employee)
 
         ctx = {
             'step': step,
@@ -1369,18 +1381,15 @@ class EmployeeWizardView(AdminRequiredMixin, View):
             'employee': employee,
             'completion_pct': employee.get_completion_percentage() if employee else 0,
             'step_template': f'employees/wizard/step_{step}.html',
+            'step_statuses': step_statuses,
+            'draft_expired': draft_expired,
         }
 
         form_cls = self.get_form_class(step)
-        if form is None and form_cls:
-            if step == 4:
-                ctx['form'] = form_cls(employee=employee, actor=request.user)
-            elif employee:
-                ctx['form'] = form_cls(instance=employee)
-            else:
-                ctx['form'] = form_cls()
-        elif form:
+        if form is not None:
             ctx['form'] = form
+        elif form_cls:
+            ctx['form'] = WizardDraftManager.get_step_form(request, step, employee=employee)
 
         if step == 5 and employee:
             ctx['doc_form'] = EmployeeDocumentForm()
@@ -1388,179 +1397,153 @@ class EmployeeWizardView(AdminRequiredMixin, View):
         elif step == 7 and employee:
             ctx['asset_form'] = AssetAssignmentForm()
             ctx['assigned_assets'] = employee.asset_assignments.select_related('asset', 'assigned_by').order_by('-assigned_date')
-        elif step == 8 and employee:
-            ctx['user_account'] = employee.user
-            if employee.user:
-                ctx['user_roles'] = UserRoleAssignment.objects.filter(user=employee.user).select_related('role')
+        elif step == 8:
+            if employee:
+                ctx['user_account'] = employee.user
+                if employee.user:
+                    ctx['user_roles'] = UserRoleAssignment.objects.filter(user=employee.user).select_related('role')
+                else:
+                    ctx['user_roles'] = []
+                ctx['documents'] = employee.documents.filter(is_active=True)
+                ctx['assets'] = employee.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
             else:
+                ctx['user_account'] = None
                 ctx['user_roles'] = []
-            ctx['documents'] = employee.documents.filter(is_active=True)
-            ctx['assets'] = employee.asset_assignments.filter(returned_date__isnull=True).select_related('asset')
+                ctx['documents'] = []
+                ctx['assets'] = []
 
         return ctx
 
     def get(self, request, uuid=None, step=1):
         step = int(step)
-        ctx = self.get_context_data(request, uuid, step)
+        # Check draft security & expiration
+        draft = WizardDraftManager.get_draft(request, request.user.id, uuid)
+        draft_expired = bool(draft and draft.get('expired'))
+
+        ctx = self.get_context_data(request, uuid=uuid, step=step, draft_expired=draft_expired)
         if request.headers.get('HX-Request'):
             return render(request, 'employees/wizard/wizard_content.html', ctx)
         return render(request, 'employees/employee_wizard.html', ctx)
 
     def post(self, request, uuid=None, step=1):
         step = int(step)
-        employee = get_object_or_404(Employee, uuid=uuid) if uuid else None
+        employee = None
+        if uuid:
+            employee = get_object_or_404(Employee, uuid=uuid)
+        else:
+            draft = WizardDraftManager.get_draft(request, request.user.id)
+            if draft and not draft.get('expired') and draft.get('employee_uuid'):
+                employee = Employee.objects.filter(uuid=draft.get('employee_uuid')).first()
 
-        if step == 1:
-            form = WizardStep1Form(request.POST, request.FILES, instance=employee)
-            if form.is_valid():
-                emp = form.save(commit=False)
-                if not emp.pk:
-                    emp.status = EmployeeStatus.DRAFT
-                emp.save()
-                messages.success(request, f"Step 1 saved. Employee ID {emp.employee_number} created in Draft status.")
-                next_step = int(request.POST.get('next_step', 2))
-                if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, uuid=emp.uuid, step=next_step)
-                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{emp.uuid}/step/{next_step}/"
-                    return response
-                return redirect('employees:employee_wizard_step', uuid=emp.uuid, step=next_step)
-            else:
-                ctx = self.get_context_data(request, uuid=uuid, step=1, form=form)
-                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+        target_step = request.POST.get('target_step') or request.POST.get('next_step')
 
-        elif step == 2:
-            form = WizardStep2Form(request.POST, instance=employee)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Step 2 (Organization Info) saved successfully.")
-                next_step = int(request.POST.get('next_step', 3))
-                if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
-                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
-                    return response
-                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
-            else:
-                ctx = self.get_context_data(request, uuid=employee.uuid, step=2, form=form)
-                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
-
-        elif step == 3:
-            form = WizardStep3Form(request.POST, instance=employee)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Step 3 (Payroll Info) saved successfully.")
-                next_step = int(request.POST.get('next_step', 4))
-                if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
-                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
-                    return response
-                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
-            else:
-                ctx = self.get_context_data(request, uuid=employee.uuid, step=3, form=form)
-                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
-
-        elif step == 4:
-            form = WizardStep4Form(request.POST, employee=employee, actor=request.user)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Step 4 (Security Account & Role Assignment) saved successfully.")
-                next_step = int(request.POST.get('next_step', 5))
-                if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
-                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
-                    return response
-                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
-            else:
-                ctx = self.get_context_data(request, uuid=employee.uuid, step=4, form=form)
-                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
-
-        elif step == 5:
-            # Document Upload
-            action_type = request.POST.get('action_type', 'upload')
-            if action_type == 'upload':
-                doc_form = EmployeeDocumentForm(request.POST, request.FILES)
-                if doc_form.is_valid():
-                    doc = doc_form.save(commit=False)
-                    doc.employee_master = employee
-                    doc.uploaded_by = request.user
-                    doc.save()
-                    messages.success(request, f"Document '{doc.get_document_type_display()}' uploaded successfully.")
-                else:
-                    messages.error(request, "Failed to upload document. Please select a valid file.")
-                next_step = 5
-            else:
-                next_step = 6
-
-            ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
-            if request.headers.get('HX-Request'):
-                response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
-                return response
-            return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
-
-        elif step == 6:
-            form = WizardStep6Form(request.POST, instance=employee)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Step 6 (Emergency Contact) saved successfully.")
-                next_step = int(request.POST.get('next_step', 7))
-                if request.headers.get('HX-Request'):
-                    ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
-                    response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                    response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
-                    return response
-                return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
-            else:
-                ctx = self.get_context_data(request, uuid=employee.uuid, step=6, form=form)
-                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
-
-        elif step == 7:
-            # Asset Assignment
-            action_type = request.POST.get('action_type', 'assign')
-            if action_type == 'assign':
-                asset_form = AssetAssignmentForm(request.POST)
-                if asset_form.is_valid():
-                    assign = asset_form.save(commit=False)
-                    assign.employee = employee
-                    assign.assigned_by = request.user
-                    assign.save()
-                    messages.success(request, f"Asset '{assign.asset.name}' assigned successfully.")
-                else:
-                    messages.error(request, "Could not assign asset. Check if asset is available.")
-                next_step = 7
-            else:
-                next_step = 8
-
-            ctx = self.get_context_data(request, uuid=employee.uuid, step=next_step)
-            if request.headers.get('HX-Request'):
-                response = render(request, 'employees/wizard/wizard_content.html', ctx)
-                response['HX-Push-Url'] = f"/employees/wizard/{employee.uuid}/step/{next_step}/"
-                return response
-            return redirect('employees:employee_wizard_step', uuid=employee.uuid, step=next_step)
-
-        elif step == 8:
-            # Final Approval step
+        if step == 8:
             action = request.POST.get('action', 'approve')
             if action == 'approve':
-                old_status = employee.status
-                employee.status = EmployeeStatus.ACTIVE
-                employee.save()
-                log_audit(
-                    actor=request.user,
-                    action='employee_wizard_approval',
-                    target=employee,
-                    summary=f"Approved employee wizard: {employee.get_full_name()} status changed from {old_status} to Active."
-                )
-                messages.success(request, f"Employee {employee.get_full_name()} successfully activated!")
-                return redirect('employees:employee_detail', pk=employee.pk if hasattr(employee, 'legacy_profile') else employee.pk)
+                success, errors = WizardDraftManager.finalize_approval(request, employee)
+                if not success:
+                    ctx = self.get_context_data(request, uuid=employee.uuid if employee else None, step=8)
+                    flat_errors = []
+                    for s_idx, err_dict in errors.items():
+                        if isinstance(err_dict, dict):
+                            for f_name, f_errs in err_dict.items():
+                                flat_errors.append(f"Step {s_idx} ({f_name}): {', '.join(f_errs) if isinstance(f_errs, list) else f_errs}")
+                        elif isinstance(err_dict, list):
+                            for e in err_dict:
+                                flat_errors.append(f"Step {s_idx}: {e}")
+                        else:
+                            flat_errors.append(f"Step {s_idx}: {err_dict}")
+                    ctx['validation_errors'] = flat_errors
+                    messages.error(request, "Cannot activate: please complete all required wizard steps.")
+                    response = render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+                    return response
+                else:
+                    messages.success(request, f"Employee {employee.get_full_name()} successfully activated!")
+                    return redirect('employees:employee_detail', pk=employee.pk if hasattr(employee, 'legacy_profile') else employee.pk)
             else:
-                messages.info(request, f"Employee wizard saved in {employee.status} state.")
+                messages.info(request, f"Employee wizard saved in {employee.status if employee else 'Draft'} state.")
                 return redirect('employees:employee_list')
 
-        return redirect('employees:employee_list')
+        # Steps 1 to 7 saving & navigation
+        if step in (1, 2, 3, 4, 6):
+            is_valid, emp, field_errors = WizardDraftManager.save_step(
+                request, step, request.POST, request.FILES, employee=employee
+            )
+            if emp:
+                employee = emp
+
+            # If user clicked Save/Continue without target_step and validation failed, stay on step
+            if not request.POST.get('target_step') and not is_valid:
+                form_cls = self.get_form_class(step)
+                if step == 4:
+                    form = form_cls(request.POST, employee=employee, actor=request.user)
+                elif step == 1:
+                    form = form_cls(request.POST, request.FILES, instance=employee)
+                else:
+                    form = form_cls(request.POST, instance=employee)
+                ctx = self.get_context_data(request, uuid=employee.uuid if employee else None, step=step, form=form)
+                return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
+
+            target_step = int(target_step) if target_step else (step + 1)
+
+        elif step == 5:
+            action_type = request.POST.get('action_type', 'upload')
+            if action_type == 'upload':
+                if employee:
+                    doc_form = EmployeeDocumentForm(request.POST, request.FILES)
+                    if doc_form.is_valid():
+                        doc = doc_form.save(commit=False)
+                        doc.employee_master = employee
+                        doc.uploaded_by = request.user
+                        doc.save()
+                        messages.success(request, f"Document '{doc.get_document_type_display()}' uploaded successfully.")
+                    else:
+                        messages.error(request, "Failed to upload document. Please select a valid file.")
+                else:
+                    messages.error(request, "Please create employee record before uploading documents.")
+                target_step = 5
+            else:
+                target_step = int(target_step) if target_step else 6
+
+        elif step == 7:
+            action_type = request.POST.get('action_type', 'assign')
+            if action_type == 'assign':
+                if employee:
+                    asset_form = AssetAssignmentForm(request.POST)
+                    if asset_form.is_valid():
+                        assign = asset_form.save(commit=False)
+                        assign.employee = employee
+                        assign.assigned_by = request.user
+                        assign.save()
+                        messages.success(request, f"Asset '{assign.asset.name}' assigned successfully.")
+                    else:
+                        messages.error(request, "Could not assign asset. Check if asset is available.")
+                else:
+                    messages.error(request, "Please create employee record before assigning assets.")
+                target_step = 7
+            else:
+                target_step = int(target_step) if target_step else 8
+
+        # Calculate destination URL
+        target_step = int(target_step) if target_step else 1
+        emp_uuid = employee.uuid if employee else None
+        if not emp_uuid:
+            draft = WizardDraftManager.get_draft(request, request.user.id)
+            if draft and not draft.get('expired') and draft.get('employee_uuid'):
+                emp_uuid = draft.get('employee_uuid')
+
+        if emp_uuid:
+            target_url = reverse('employees:employee_wizard_step', kwargs={'uuid': emp_uuid, 'step': target_step})
+        else:
+            target_url = reverse('employees:employee_wizard_create_step', kwargs={'step': target_step})
+
+        if request.headers.get('HX-Request'):
+            ctx = self.get_context_data(request, uuid=emp_uuid, step=target_step)
+            response = render(request, 'employees/wizard/wizard_content.html', ctx)
+            response['HX-Push-Url'] = target_url
+            return response
+
+        return redirect(target_url)
 
 
 from django.contrib.auth.mixins import LoginRequiredMixin

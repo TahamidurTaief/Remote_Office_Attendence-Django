@@ -1,7 +1,10 @@
 <form
-  hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}"
+  id="wizard-step-form"
+  hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
   hx-target="#wizard-root"
   hx-swap="outerHTML"
+  hx-indicator="#wizard-global-loader"
+  hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
   class="space-y-6"
   x-data="{
     genPassword() {
@@ -25,16 +28,10 @@
       <h2 class="text-lg font-bold text-slate-900 dark:text-white">Step 4: Security & User Role Assignment</h2>
       <p class="text-xs text-slate-500 dark:text-slate-400">Creates User Login Account and assigns dynamic RBAC roles via UserRoleAssignment.</p>
     </div>
-    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-      PermissionEngine RBAC Gated
-    </span>
+    <c-badge variant="success" label="PermissionEngine RBAC Gated"></c-badge>
   </div>
 
-  {% if form.non_field_errors %}
-    <div class="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200 dark:border-rose-800">
-      {% for err in form.non_field_errors %}<p>{{ err }}</p>{% endfor %}
-    </div>
-  {% endif %}
+  <c-form-error-summary :form="form"></c-form-error-summary>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
     <div class="md:col-span-2">
@@ -44,15 +41,13 @@
     <div>
       <div class="flex items-center justify-between mb-1">
         <label class="ft-label">Password</label>
-        <button type="button" @click="genPassword()" class="text-xs font-semibold text-primary hover:text-primary/80">
-          Generate Strong Password
-        </button>
+        <c-button type="button" variant="ghost" size="sm" label="Generate Strong Password" attrs="@click='genPassword()'"></c-button>
       </div>
-      <c-input type="password" name="password1" x-ref="pass1" placeholder="Set password" error="{{ form.password1.errors.0 }}"></c-input>
+      <c-input type="password" name="password1" id="id_password1" placeholder="Set password" error="{{ form.password1.errors.0 }}" attrs="x-ref='pass1'"></c-input>
     </div>
 
     <div>
-      <c-input type="password" name="password2" x-ref="pass2" label="Confirm Password" placeholder="Repeat password" error="{{ form.password2.errors.0 }}"></c-input>
+      <c-input type="password" name="password2" id="id_password2" label="Confirm Password" placeholder="Repeat password" error="{{ form.password2.errors.0 }}" attrs="x-ref='pass2'"></c-input>
     </div>
 
     <!-- DYNAMIC ROLE ASSIGNMENT SECTION -->
@@ -72,14 +67,25 @@
       </div>
 
       <div class="flex items-center gap-2 pt-6">
-        <input type="checkbox" name="mfa_required" id="id_mfa_required" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 dark:border-slate-700 rounded" {% if form.mfa_required.value %}checked{% endif %}>
-        <label for="id_mfa_required" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Require Multi-Factor Authentication (MFA)</label>
+        <c-checkbox name="mfa_required" id="id_mfa_required" label="Require Multi-Factor Authentication (MFA)" checked="{% if form.mfa_required.value %}true{% endif %}"></c-checkbox>
       </div>
     </div>
   </div>
 
   <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 3"></c-button>
+    <c-button 
+      type="button" 
+      variant="secondary" 
+      hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
+      hx-vals='{"target_step": "3"}'
+      hx-include="#wizard-step-form"
+      hx-target="#wizard-root" 
+      hx-swap="outerHTML" 
+      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=3 %}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      label="Back to Step 3"
+    ></c-button>
     <c-button type="submit" variant="primary" icon_right="arrow-right" label="Save & Continue to Step 5"></c-button>
   </div>
 </form>

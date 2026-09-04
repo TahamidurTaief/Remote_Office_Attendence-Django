@@ -5,163 +5,202 @@
       <h2 class="text-lg font-bold text-slate-900 dark:text-white">Step 5: Employee Documents</h2>
       <p class="text-xs text-slate-500 dark:text-slate-400">Versioned uploads for NID, Passport, CV, and Contracts with expiry monitoring.</p>
     </div>
-    <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-      Optional Completion Tier
-    </span>
+    <c-badge variant="neutral" label="Optional Completion Tier"></c-badge>
   </div>
 
-  <!-- Upload Document Section with Drag and Drop -->
-  <c-card padding="lg">
-    <form 
-      hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=5 %}"
-      hx-target="#wizard-root"
-      hx-swap="outerHTML"
-      enctype="multipart/form-data"
-      class="space-y-4"
-      x-data="{
-        isDragging: false,
-        fileName: '',
-        handleFileSelect(e) {
-          const files = e.target.files || e.dataTransfer.files;
-          if (files.length > 0) {
-            this.fileName = files[0].name;
-            this.$refs.fileInput.files = files;
-          }
-        }
-      }"
-    >
-      {% csrf_token %}
-      <input type="hidden" name="action_type" value="upload">
-      
-      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-          <i data-lucide="upload-cloud" class="w-4 h-4 text-primary"></i>
-          Upload New Document Version
-        </h3>
-        <span class="text-[11px] text-slate-400">Supports PDF, PNG, JPG, DOCX (Max 10MB)</span>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label class="ft-label">Document Type <span class="text-rose-500">*</span></label>
-          <c-select name="document_type" id="id_document_type" is_django_form="true">
-            {% for val, label in doc_form.document_type.field.choices %}
-              <option value="{{ val }}" {% if doc_form.document_type.value == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </c-select>
-        </div>
-
-        <div>
-          <c-input name="title" label="Title / Description" placeholder="e.g. Passport 2026-2036" value="{{ doc_form.title.value|default:'' }}" ></c-input>
-        </div>
-
-        <div>
-          <c-datepicker name="expiry_date" label="Expiry Date (Optional)" placeholder="YYYY-MM-DD" value="{{ doc_form.expiry_date.value|default:'' }}" ></c-datepicker>
-        </div>
-      </div>
-
-      <!-- Drag & Drop Upload Zone -->
-      <div 
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="isDragging = false; handleFileSelect($event)"
-        :class="isDragging ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 hover:border-primary/60'"
-        class="border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer relative"
-        @click="$refs.fileInput.click()"
+  {% if not employee %}
+    <c-card padding="lg">
+      <c-empty-state 
+        icon="file-x" 
+        title="Employee Record Required" 
+        description="Please complete Step 1 (Basic Information) first to register the employee draft before uploading documents."
       >
-        <input 
-          type="file" 
-          name="file" 
-          x-ref="fileInput" 
-          @change="handleFileSelect($event)" 
-          class="hidden" 
-          required
-        >
-
-        <div class="flex flex-col items-center justify-center space-y-2">
-          <div class="p-3 bg-primary/10 rounded-full text-primary">
-            <i data-lucide="file-up" class="w-6 h-6"></i>
-          </div>
-          <template x-if="!fileName">
-            <div>
-              <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
-                Click to browse <span class="font-normal text-slate-500">or drag & drop your document here</span>
-              </p>
-              <p class="text-[11px] text-slate-400 mt-0.5">NID, Passport, Academic Certificate, CV, or Appointment Letter</p>
-            </div>
-          </template>
-          <template x-if="fileName">
-            <div class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-              <span class="text-xs font-bold font-mono" x-text="fileName"></span>
-            </div>
-          </template>
+        <div class="pt-2 flex justify-center">
+          <c-button 
+            type="button" 
+            variant="primary" 
+            size="sm" 
+            hx-get="{% url 'employees:employee_wizard' %}" 
+            hx-target="#wizard-root" 
+            hx-swap="outerHTML" 
+            label="Go to Step 1"
+          ></c-button>
         </div>
-      </div>
+      </c-empty-state>
+    </c-card>
+  {% else %}
+    <!-- Upload Document Section with Drag and Drop -->
+    <c-card padding="lg">
+      <form 
+        id="wizard-step-form"
+        hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=5 %}"
+        hx-target="#wizard-root"
+        hx-swap="outerHTML"
+        hx-indicator="#wizard-global-loader"
+        hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+        enctype="multipart/form-data"
+        class="space-y-4"
+        x-data="{
+          isDragging: false,
+          fileName: '',
+          handleFileSelect(e) {
+            const files = e.target.files || e.dataTransfer.files;
+            if (files.length > 0) {
+              this.fileName = files[0].name;
+              this.$refs.fileInput.files = files;
+            }
+          }
+        }"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="action_type" value="upload">
+        
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+          <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="upload-cloud" class="w-4 h-4 text-primary"></i>
+            Upload New Document Version
+          </h3>
+          <span class="text-[11px] text-slate-400">Supports PDF, PNG, JPG, DOCX (Max 10MB)</span>
+        </div>
 
-      <div class="flex justify-end pt-1">
-        <c-button type="submit" variant="primary" icon="upload" label="Upload Document" extra_class="text-xs font-semibold" ></c-button>
-      </div>
-    </form>
-  </c-card>
-
-  <!-- Uploaded Documents List Card -->
-  <c-card padding="lg">
-    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
-      <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-        <i data-lucide="folder-check" class="w-4 h-4 text-emerald-600"></i>
-        Uploaded Documents ({{ documents|length }})
-      </h3>
-    </div>
-
-    {% if documents %}
-      <div class="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-        {% for doc in documents %}
-          <div class="p-3.5 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-            <div class="flex items-center gap-3">
-              <div class="p-2.5 bg-slate-100 dark:bg-slate-800 text-primary rounded-xl shrink-0">
-                <i data-lucide="file-text" class="w-5 h-5"></i>
-              </div>
-              <div>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ doc.get_document_type_display }}</span>
-                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">v{{ doc.version }}</span>
-                  {% if doc.is_sensitive %}
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 font-semibold">
-                      Sensitive RBAC Gated
-                    </span>
-                  {% endif %}
-                </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {% if doc.title %}{{ doc.title }} • {% endif %}
-                  Uploaded {{ doc.uploaded_at|date:"M d, Y" }}
-                  {% if doc.expiry_date %}
-                    • Expires: <span class="{% if doc.is_expired %}text-rose-600 font-bold{% elif doc.is_expiring_soon %}text-amber-600 font-semibold{% else %}text-slate-500 dark:text-slate-400{% endif %}">{{ doc.expiry_date }}</span>
-                  {% endif %}
-                </p>
-              </div>
-            </div>
-            
-            <c-button href="{% url 'employees:document_download' pk=doc.pk %}" target="_blank" variant="secondary" size="sm" icon="download" label="Download" extra_class="text-xs shrink-0" ></c-button>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="ft-label">Document Type <span class="text-rose-500">*</span></label>
+            <c-select name="document_type" id="id_document_type" is_django_form="true">
+              {% for val, label in doc_form.document_type.field.choices %}
+                <option value="{{ val }}" {% if doc_form.document_type.value == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </c-select>
           </div>
-        {% endfor %}
+
+          <div>
+            <c-input name="title" id="id_title" label="Title / Description" placeholder="e.g. Passport 2026-2036" value="{{ doc_form.title.value|default:'' }}"></c-input>
+          </div>
+
+          <div>
+            <c-datepicker name="expiry_date" id="id_expiry_date" label="Expiry Date (Optional)" placeholder="YYYY-MM-DD" value="{{ doc_form.expiry_date.value|default:'' }}"></c-datepicker>
+          </div>
+        </div>
+
+        <!-- Drag & Drop Upload Zone -->
+        <div 
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="isDragging = false; handleFileSelect($event)"
+          :class="isDragging ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 hover:border-primary/60'"
+          class="border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer relative"
+          @click="$refs.fileInput.click()"
+        >
+          <input 
+            type="file" 
+            name="file" 
+            x-ref="fileInput" 
+            @change="handleFileSelect($event)" 
+            class="hidden" 
+            required
+          >
+
+          <div class="flex flex-col items-center justify-center space-y-2">
+            <div class="p-3 bg-primary/10 rounded-full text-primary">
+              <i data-lucide="file-up" class="w-6 h-6"></i>
+            </div>
+            <template x-if="!fileName">
+              <div>
+                <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Click to browse <span class="font-normal text-slate-500">or drag & drop your document here</span>
+                </p>
+                <p class="text-[11px] text-slate-400 mt-0.5">NID, Passport, Academic Certificate, CV, or Appointment Letter</p>
+              </div>
+            </template>
+            <template x-if="fileName">
+              <div class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                <span class="text-xs font-bold font-mono" x-text="fileName"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-1">
+          <c-button type="submit" variant="primary" icon="upload" label="Upload Document" extra_class="text-xs font-semibold"></c-button>
+        </div>
+      </form>
+    </c-card>
+
+    <!-- Uploaded Documents List Card -->
+    <c-card padding="lg">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <i data-lucide="folder-check" class="w-4 h-4 text-emerald-600"></i>
+          Uploaded Documents ({{ documents|length }})
+        </h3>
       </div>
-    {% else %}
-      <div class="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
-        <i data-lucide="file-x-2" class="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600"></i>
-        No documents uploaded yet. You can drag and drop files above or complete later.
-      </div>
-    {% endif %}
-  </c-card>
+
+      {% if documents %}
+        <div class="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          {% for doc in documents %}
+            <div class="p-3.5 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+              <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-slate-100 dark:bg-slate-800 text-primary rounded-xl shrink-0">
+                  <i data-lucide="file-text" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ doc.get_document_type_display }}</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">v{{ doc.version }}</span>
+                    {% if doc.is_sensitive %}
+                      <c-badge variant="danger" label="Sensitive RBAC Gated"></c-badge>
+                    {% endif %}
+                  </div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {% if doc.title %}{{ doc.title }} • {% endif %}
+                    Uploaded {{ doc.uploaded_at|date:"M d, Y" }}
+                    {% if doc.expiry_date %}
+                      • Expires: <span class="{% if doc.is_expired %}text-rose-600 font-bold{% elif doc.is_expiring_soon %}text-amber-600 font-semibold{% else %}text-slate-500 dark:text-slate-400{% endif %}">{{ doc.expiry_date }}</span>
+                    {% endif %}
+                  </p>
+                </div>
+              </div>
+              
+              <c-button href="{% url 'employees:document_download' pk=doc.pk %}" target="_blank" variant="secondary" size="sm" icon="download" label="Download" extra_class="text-xs shrink-0"></c-button>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <c-empty-state 
+          icon="file-x-2" 
+          title="No documents uploaded yet" 
+          description="You can upload documents using the form above or skip to the next step."
+        ></c-empty-state>
+      {% endif %}
+    </c-card>
+  {% endif %}
 
   <!-- Step Navigation Footer -->
   <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-    <c-button type="button" variant="secondary" hx-get="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}" hx-target="#wizard-root" hx-swap="outerHTML" label="Back to Step 4"></c-button>
+    <c-button 
+      type="button" 
+      variant="secondary" 
+      hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}" 
+      hx-target="#wizard-root" 
+      hx-swap="outerHTML" 
+      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=4 %}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      label="Back to Step 4"
+    ></c-button>
 
-    <form hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=5 %}" hx-target="#wizard-root" hx-swap="outerHTML">
-      {% csrf_token %}
-      <input type="hidden" name="action_type" value="next">
-      <c-button type="submit" variant="primary" icon_right="arrow-right" label="Continue to Step 6"></c-button>
-    </form>
+    <c-button 
+      type="button" 
+      variant="primary" 
+      hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}{% else %}{% url 'employees:employee_wizard_create_step' step=6 %}{% endif %}" 
+      hx-target="#wizard-root" 
+      hx-swap="outerHTML" 
+      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=6 %}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      icon_right="arrow-right" 
+      label="Continue to Step 6"
+    ></c-button>
   </div>
 </div>

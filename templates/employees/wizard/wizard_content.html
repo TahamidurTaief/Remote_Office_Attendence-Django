@@ -1,12 +1,31 @@
-<div id="wizard-root" class="max-w-6xl mx-auto px-4 py-6 space-y-6" x-data="{ activeStep: {{ step|default:1 }} }">
-  
+<div id="wizard-root" class="max-w-6xl mx-auto px-4 py-6 space-y-6" x-data="{ hxError: false }">
+
+  {# Floating HTMX Activity Indicator #}
+  <div id="wizard-global-loader" class="htmx-indicator fixed top-5 right-5 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border border-slate-200 dark:border-slate-800 shadow-xl rounded-2xl px-4 py-2.5 flex items-center gap-3 transition-all duration-200">
+    <c-loading-spinner size="sm" color="primary"></c-loading-spinner>
+    <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Saving & loading step...</span>
+  </div>
+
+  {# Recoverable HTMX Error State #}
+  <div x-show="hxError" x-cloak class="transition-all duration-300">
+    <c-alert variant="danger" title="Communication Error" message="A connection issue occurred while saving or navigating. Your entered data has been preserved locally.">
+      <div class="pt-2 flex items-center gap-2">
+        <c-button variant="secondary" size="sm" icon="refresh-cw" label="Retry" attrs="@click='window.location.reload()'"></c-button>
+      </div>
+    </c-alert>
+  </div>
+
+  {% if draft_expired %}
+    <c-alert variant="warning" title="Previous Draft Expired" message="A previous draft session reached the 24-hour expiration limit. A fresh wizard session has been started without overwriting existing data."></c-alert>
+  {% endif %}
+
   {# Header Banner #}
   {% include "employees/wizard/header.html" %}
 
   {# Stepper Header Component #}
   {% include "employees/wizard/stepper_wrapper.html" %}
 
-  {# Step Content Container (HTMX Target inside a Card) #}
+  {# Step Content Container #}
   <c-card padding="lg">
     <div id="wizard-step-container">
       {% include step_template %}

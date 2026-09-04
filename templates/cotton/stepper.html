@@ -1,208 +1,512 @@
 {% comment %} c-stepper component
    Multi-step progress indicator pipeline.
+   Supports both static display and interactive, directly clickable HTMX navigation.
+   Props:
+   - current: current active step index (1-based)
+   - step_count: total step count (default 8)
+   - step1 to step8: labels for each step
+   - step1_status to step8_status: 'complete' | 'incomplete' | 'error' | 'pending'
+   - step1_url to step8_url: target URLs for browser history / direct access
+   - clickable: 'true' | 'false' (default 'false')
+   - hx_post_base: URL to submit current form to before switching steps
+   - hx_include: form selector to include (default '#wizard-step-form')
+   - hx_target: target container (default '#wizard-root')
+   - hx_swap: swap strategy (default 'outerHTML')
 {% endcomment %}
+<c-vars 
+  current="1" 
+  step_count="8" 
+  clickable="false" 
+  hx_post_base="" 
+  hx_include="#wizard-step-form" 
+  hx_target="#wizard-root" 
+  hx_swap="outerHTML"
+  step1="Basic Info" step2="Organization" step3="Payroll" step4="Security"
+  step5="Documents" step6="Emergency" step7="Assets" step8="Review"
+  step1_status="" step2_status="" step3_status="" step4_status=""
+  step5_status="" step6_status="" step7_status="" step8_status=""
+  step1_url="" step2_url="" step3_url="" step4_url=""
+  step5_url="" step6_url="" step7_url="" step8_url=""
+></c-vars>
 
-{% with cur=current|add:"0" cnt=step_count|default:8|add:"0" %}
+{% with cur=current|add:"0" cnt=step_count|default:8|add:"0" is_click=clickable %}
 <div class="w-full py-2 overflow-x-auto scrollbar-hide">
   <div class="flex items-center justify-between min-w-[680px] w-full px-2">
     
-    {# Step 1 #}
+    {# ── Step 1 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 1: {{ step1 }} (Status: {{ step1_status|default:'pending' }})"
+      {% if cur == 1 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "1"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step1_url %}hx-push-url="{{ step1_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 1 %}
+        {% if cur == 1 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step1_status == 'error' or step1_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step1_status == 'complete' or cur > 1 %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 1 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 1 %}
+        {% if cur == 1 %}
+          1
+        {% elif step1_status == 'error' or step1_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step1_status == 'complete' or cur > 1 %}
           <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
         {% else %}
           1
         {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 1 %}
           text-[#1877F2] dark:text-blue-400 font-bold
-        {% elif cur > 1 %}
+        {% elif step1_status == 'error' or step1_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step1_status == 'complete' or cur > 1 %}
           text-emerald-700 dark:text-emerald-400
         {% else %}
-          text-gray-400 dark:text-gray-500
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
         {{ step1|default:"Basic Info" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
 
     {# Connector 1-2 #}
     {% if cnt >= 2 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if cur > 1 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
-    
-    {# Step 2 #}
+      {% if step1_status == 'complete' or cur > 1 %} bg-emerald-500 {% elif step1_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+
+    {# ── Step 2 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 2: {{ step2 }} (Status: {{ step2_status|default:'pending' }})"
+      {% if cur == 2 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "2"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step2_url %}hx-push-url="{{ step2_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 2 %}
+        {% if cur == 2 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step2_status == 'error' or step2_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step2_status == 'complete' or cur > 2 %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 2 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 2 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}2{% endif %}
+        {% if cur == 2 %}
+          2
+        {% elif step2_status == 'error' or step2_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step2_status == 'complete' or cur > 2 %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          2
+        {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
-        {% if cur == 2 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 2 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
+        {% if cur == 2 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif step2_status == 'error' or step2_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step2_status == 'complete' or cur > 2 %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
+        {% endif %}">
         {{ step2|default:"Organization" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 2-3 #}
     {% if cnt >= 3 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if cur > 2 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
-    
-    {# Step 3 #}
+      {% if step2_status == 'complete' or cur > 2 %} bg-emerald-500 {% elif step2_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+
+    {# ── Step 3 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 3: {{ step3 }} (Status: {{ step3_status|default:'pending' }})"
+      {% if cur == 3 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "3"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step3_url %}hx-push-url="{{ step3_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 3 %}
+        {% if cur == 3 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step3_status == 'error' or step3_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step3_status == 'complete' or cur > 3 %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 3 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 3 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}3{% endif %}
+        {% if cur == 3 %}
+          3
+        {% elif step3_status == 'error' or step3_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step3_status == 'complete' or cur > 3 %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          3
+        {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
-        {% if cur == 3 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 3 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
+        {% if cur == 3 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif step3_status == 'error' or step3_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step3_status == 'complete' or cur > 3 %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
+        {% endif %}">
         {{ step3|default:"Payroll" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 3-4 #}
     {% if cnt >= 4 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if cur > 3 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
-    
-    {# Step 4 #}
+      {% if step3_status == 'complete' or cur > 3 %} bg-emerald-500 {% elif step3_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+
+    {# ── Step 4 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 4: {{ step4 }} (Status: {{ step4_status|default:'pending' }})"
+      {% if cur == 4 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "4"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step4_url %}hx-push-url="{{ step4_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 4 %}
+        {% if cur == 4 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step4_status == 'error' or step4_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step4_status == 'complete' or cur > 4 %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 4 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 4 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}4{% endif %}
+        {% if cur == 4 %}
+          4
+        {% elif step4_status == 'error' or step4_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step4_status == 'complete' or cur > 4 %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          4
+        {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
-        {% if cur == 4 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 4 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
+        {% if cur == 4 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif step4_status == 'error' or step4_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step4_status == 'complete' or cur > 4 %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
+        {% endif %}">
         {{ step4|default:"Security" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 4-5 #}
     {% if cnt >= 5 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if cur > 4 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
-    
-    {# Step 5 #}
+      {% if step4_status == 'complete' or cur > 4 %} bg-emerald-500 {% elif step4_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+
+    {# ── Step 5 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 5: {{ step5 }} (Status: {{ step5_status|default:'pending' }})"
+      {% if cur == 5 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "5"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step5_url %}hx-push-url="{{ step5_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 5 %}
+        {% if cur == 5 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step5_status == 'error' or step5_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step5_status == 'complete' or cur > 5 %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 5 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 5 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}5{% endif %}
+        {% if cur == 5 %}
+          5
+        {% elif step5_status == 'error' or step5_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step5_status == 'complete' or cur > 5 %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          5
+        {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
-        {% if cur == 5 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 5 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
+        {% if cur == 5 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif step5_status == 'error' or step5_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step5_status == 'complete' or cur > 5 %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
+        {% endif %}">
         {{ step5|default:"Documents" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 5-6 #}
     {% if cnt >= 6 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if cur > 5 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
-    
-    {# Step 6 #}
+      {% if step5_status == 'complete' or cur > 5 %} bg-emerald-500 {% elif step5_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+
+    {# ── Step 6 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 6: {{ step6 }} (Status: {{ step6_status|default:'pending' }})"
+      {% if cur == 6 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "6"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step6_url %}hx-push-url="{{ step6_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 6 %}
+        {% if cur == 6 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step6_status == 'error' or step6_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step6_status == 'complete' or cur > 6 %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 6 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 6 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}6{% endif %}
+        {% if cur == 6 %}
+          6
+        {% elif step6_status == 'error' or step6_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step6_status == 'complete' or cur > 6 %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          6
+        {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
-        {% if cur == 6 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 6 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
+        {% if cur == 6 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif step6_status == 'error' or step6_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step6_status == 'complete' or cur > 6 %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
+        {% endif %}">
         {{ step6|default:"Emergency" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 6-7 #}
     {% if cnt >= 7 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if cur > 6 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
-    
-    {# Step 7 #}
+      {% if step6_status == 'complete' or cur > 6 %} bg-emerald-500 {% elif step6_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+
+    {# ── Step 7 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 7: {{ step7 }} (Status: {{ step7_status|default:'pending' }})"
+      {% if cur == 7 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "7"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step7_url %}hx-push-url="{{ step7_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 7 %}
+        {% if cur == 7 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step7_status == 'error' or step7_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step7_status == 'complete' or cur > 7 %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 7 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 7 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}7{% endif %}
+        {% if cur == 7 %}
+          7
+        {% elif step7_status == 'error' or step7_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step7_status == 'complete' or cur > 7 %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          7
+        {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
-        {% if cur == 7 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 7 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
+        {% if cur == 7 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif step7_status == 'error' or step7_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step7_status == 'complete' or cur > 7 %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
+        {% endif %}">
         {{ step7|default:"Assets" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 7-8 #}
     {% if cnt >= 8 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if cur > 7 %} bg-emerald-500 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
-    
-    {# Step 8 #}
+      {% if step7_status == 'complete' or cur > 7 %} bg-emerald-500 {% elif step7_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+
+    {# ── Step 8 ── #}
+    {% if is_click == "true" %}
+    <button 
+      type="button"
+      tabindex="0"
+      aria-label="Step 8: {{ step8 }} (Status: {{ step8_status|default:'pending' }})"
+      {% if cur == 8 %}aria-current="step"{% endif %}
+      hx-post="{{ hx_post_base }}"
+      hx-vals='{"target_step": "8"}'
+      hx-include="{{ hx_include }}"
+      hx-target="{{ hx_target }}"
+      hx-swap="{{ hx_swap }}"
+      {% if step8_url %}hx-push-url="{{ step8_url }}"{% endif %}
+      hx-indicator="#wizard-global-loader"
+      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+    >
+    {% else %}
     <div class="flex flex-col items-center relative z-10 group">
+    {% endif %}
       <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
-        {% if cur > 8 %}
+        {% if cur == 8 %}
+          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+        {% elif step8_status == 'error' or step8_status == 'incomplete' %}
+          bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
+        {% elif step8_status == 'complete' %}
           bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
-        {% elif cur == 8 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/20 scale-110 shadow-indigo-500/30
         {% else %}
-          bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700
+          bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
-        {% if cur > 8 %}<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>{% else %}8{% endif %}
+        {% if cur == 8 %}
+          8
+        {% elif step8_status == 'error' or step8_status == 'incomplete' %}
+          <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
+        {% elif step8_status == 'complete' %}
+          <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+        {% else %}
+          8
+        {% endif %}
       </div>
-      <span class="mt-2 text-xs font-semibold tracking-tight transition-colors duration-200
-        {% if cur == 8 %}text-[#1877F2] dark:text-blue-400 font-bold{% elif cur > 8 %}text-emerald-700 dark:text-emerald-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">
+      <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
+        {% if cur == 8 %}
+          text-[#1877F2] dark:text-blue-400 font-bold
+        {% elif step8_status == 'error' or step8_status == 'incomplete' %}
+          text-rose-600 dark:text-rose-400 font-semibold
+        {% elif step8_status == 'complete' %}
+          text-emerald-700 dark:text-emerald-400
+        {% else %}
+          text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
+        {% endif %}">
         {{ step8|default:"Review" }}
       </span>
-    </div>
+    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
   </div>
 </div>
 {% endwith %}
-
