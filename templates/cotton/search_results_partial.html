@@ -1,20 +1,23 @@
-{% if not results %}
-  <div class="px-4 py-10 text-center text-[12px]" style="color: var(--text-muted)">
-    No results for "<span>{{ query }}</span>"
+{% if error_message %}
+  <div class="p-3">
+    <c-alert variant="danger" title="Search Error" message="{{ error_message }}"></c-alert>
   </div>
+{% elif not results %}
+  <c-empty-state
+    icon="search-x"
+    title="No results found"
+    description="No matching records or destinations found. Try searching for roles, permissions, matrix, modules, or menus in English or বাংলা."
+  ></c-empty-state>
 {% else %}
-  {% for item in results %}
-    <a href="{{ item.href }}"
-       @click="closePalette()"
-       class="search-result-item flex items-center gap-3 px-3 py-2 mx-1.5 rounded-md transition-all cursor-pointer text-slate-600 dark:text-slate-300"
-       style="text-decoration: none">
-      <div class="search-icon-box w-6 h-6 rounded flex items-center justify-center flex-shrink-0 bg-slate-100 text-primary dark:bg-slate-700">
-        <i data-lucide="{{ item.icon }}" class="w-3.5 h-3.5"></i>
-      </div>
-      <div class="flex-1 min-w-0">
-        <p class="text-[12px] font-medium truncate">{{ item.label }}</p>
-      </div>
-      <span class="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-400">{{ item.group }}</span>
-    </a>
-  {% endfor %}
+  <div class="py-1" role="listbox" aria-label="Search suggestions">
+    {% for item in results %}
+      <c-search-result-row
+        href="{{ item.href }}"
+        icon="{{ item.icon|default:'arrow-right' }}"
+        label="{{ item.label }}"
+        group="{{ item.group }}"
+        description="{{ item.description|default:'' }}"
+      ></c-search-result-row>
+    {% endfor %}
+  </div>
 {% endif %}

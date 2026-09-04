@@ -3652,6 +3652,21 @@ class GlobalSearchView(RoleRequiredMixin, View):
                 Q(leave_type__name__icontains=query)
             ).order_by('-start_date')[:5]
 
+        nav_results = []
+        if query:
+            from apps.accounts.search_service import GlobalSearchService
+            try:
+                raw_nav = GlobalSearchService.search(request.user, query)
+                # Filter out operational data since admin_panel shows employees/attendance/expenses separately
+                nav_results = [
+                    item for item in raw_nav
+                    if item.get('group') in ('Roles', 'Roles & Access', 'Permissions', 'Modules', 'Navigation', 'System', 'Operations', 'Account', 'Overview', 'Work', 'Administration')
+                ][:10]
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Error getting navigation results in admin_panel: %s", e)
+                nav_results = []
+
         if request.headers.get('HX-Request'):
             return render(request, 'admin_panel/partials/global_search_results.html', {
                 'query': query,
@@ -3660,10 +3675,12 @@ class GlobalSearchView(RoleRequiredMixin, View):
                 'attendance_results': attendance_results,
                 'expense_results': expense_results,
                 'leave_results': leave_results,
+                'nav_results': nav_results,
             })
 
         return JsonResponse({
             'query': query,
+            'nav_results': nav_results,
             'results': [
                 {
                     'id': emp.pk,

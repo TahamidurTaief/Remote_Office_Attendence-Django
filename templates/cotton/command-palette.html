@@ -1,6 +1,7 @@
 {% comment %} c-command-palette — Global Ctrl/Cmd+K fuzzy search modal
-   Ultra-minimal: search pages, menus, submenus, modules, actions, input fields & labels.
-   Fully dark/light mode responsive.
+   Searches system roles, permissions, matrix, modules, submodules, menus, submenus,
+   as well as employees, projects, tasks, and operational entities.
+   Fully accessible, zero inline styles, design token compliant.
 {% endcomment %}
 
 <div x-data="{
@@ -34,7 +35,6 @@
            const inp = this.$el.querySelector('#ft-cmd-input');
            if (inp) {
              inp.focus();
-             // Trigger initial search load via HTMX
              htmx.trigger(inp, 'keyup');
            }
            if (window.lucide) lucide.createIcons();
@@ -71,11 +71,11 @@
          items.forEach((item, idx) => {
            if (idx === this.selectedIndex) {
              item.classList.add('bg-primary-light', 'text-primary');
-             item.classList.remove('text-slate-600', 'dark:text-slate-300');
+             item.classList.remove('text-slate-700', 'dark:text-slate-200');
              item.scrollIntoView({ block: 'nearest' });
            } else {
              item.classList.remove('bg-primary-light', 'text-primary');
-             item.classList.add('text-slate-600', 'dark:text-slate-300');
+             item.classList.add('text-slate-700', 'dark:text-slate-200');
            }
          });
        }
@@ -97,8 +97,7 @@
        x-cloak>
 
     {# Command box #}
-    <div class="ft-command-box border"
-         style="background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-lg);"
+    <div class="ft-command-box border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl"
          @click.stop
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
@@ -111,50 +110,50 @@
          @keydown.arrow-up.prevent="moveUp()"
          @keydown.enter.prevent="navigate()">
 
-      {# Search row — ultra minimal #}
-      <div class="flex items-center gap-2.5 px-4 py-3.5 border-b"
-           style="border-color: var(--border)">
-        <i data-lucide="search" class="w-4 h-4 flex-shrink-0" style="color: var(--text-muted)"></i>
+      {# Search row #}
+      <div class="flex items-center gap-2.5 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-transparent">
+        <i data-lucide="search" class="w-4 h-4 flex-shrink-0 text-slate-400"></i>
         <input id="ft-cmd-input"
                name="query"
                type="text"
                x-model="query"
                hx-get="{% url 'accounts:global_search' %}"
-               hx-trigger="keyup changed delay:250ms"
-               hx-target="next #search-results-list"
-               placeholder="Search menus, submenus, fields, modules, employees, tasks, payroll..."
-               class="flex-1 bg-transparent outline-none text-[13px] border-0 p-0 ring-0 shadow-none font-normal"
-               style="color: var(--text)">
+               hx-trigger="keyup changed delay:200ms"
+               hx-target="#search-results-list"
+               hx-sync="this:replace"
+               hx-indicator="#search-loading-indicator"
+               placeholder="Search roles, permissions, matrix, modules, employees, tasks..."
+               class="flex-1 bg-transparent outline-none text-[13px] border-0 p-0 ring-0 shadow-none font-normal text-slate-900 dark:text-slate-100 placeholder-slate-400">
+        <div id="search-loading-indicator" class="htmx-indicator flex items-center justify-center">
+          <c-loading-spinner size="sm"></c-loading-spinner>
+        </div>
         <button type="button" @click="closePalette()"
-                class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                style="background: var(--surface-2); color: var(--text-muted); border: none; cursor:pointer">
+                class="px-2 py-1 rounded text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer border-0">
           ESC
         </button>
       </div>
 
       {# Results list #}
-      <div id="search-results-list" class="py-1.5 max-h-72 overflow-y-auto scrollbar-hide">
-        <div class="px-4 py-10 text-center text-[12px]" style="color: var(--text-muted)">
-          Start typing to search...
-        </div>
+      <div id="search-results-list" class="py-1.5 max-h-80 overflow-y-auto scrollbar-hide">
+        <c-empty-state
+          icon="search"
+          title="Global Search"
+          description="Type to find roles, access matrix, permissions, modules, menus, staff, or tasks..."
+        ></c-empty-state>
       </div>
 
-      {# Footer hint — borderless, minimal #}
-      <div class="px-4 py-2 flex items-center gap-3 text-[10px] border-t"
-           style="border-color: var(--border); color: var(--text-muted)">
+      {# Footer hint #}
+      <div class="px-4 py-2 flex items-center gap-3 text-[11px] border-t border-slate-200 dark:border-slate-800 text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
         <span class="flex items-center gap-1">
-          <kbd class="px-1 py-0.5 rounded text-[9px]"
-               style="background: var(--surface-2); color: var(--text-muted)">↑↓</kbd>
+          <kbd class="px-1.5 py-0.5 rounded text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">↑↓</kbd>
           Navigate
         </span>
         <span class="flex items-center gap-1">
-          <kbd class="px-1 py-0.5 rounded text-[9px]"
-               style="background: var(--surface-2); color: var(--text-muted)">↵</kbd>
+          <kbd class="px-1.5 py-0.5 rounded text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">↵</kbd>
           Open
         </span>
         <span class="flex items-center gap-1">
-          <kbd class="px-1 py-0.5 rounded text-[9px]"
-               style="background: var(--surface-2); color: var(--text-muted)">ESC</kbd>
+          <kbd class="px-1.5 py-0.5 rounded text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">ESC</kbd>
           Close
         </span>
       </div>

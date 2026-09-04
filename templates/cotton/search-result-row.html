@@ -1,0 +1,28 @@
+<c-vars
+  href="#"
+  icon="circle"
+  label=""
+  group=""
+  description=""
+  extra_class=""
+></c-vars>
+
+<a href="{{ href }}"
+   @click="closePalette()"
+   class="search-result-item group/item flex items-center gap-3 px-3 py-2.5 mx-1.5 rounded-lg transition-colors cursor-pointer min-h-[44px] text-slate-700 dark:text-slate-200 hover:bg-primary-light hover:text-primary {{ extra_class }}"
+   role="option">
+  <div class="search-icon-box w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover/item:bg-primary/10 group-hover/item:text-primary transition-colors">
+    <i data-lucide="{{ icon|default:'arrow-right' }}" class="w-3.5 h-3.5"></i>
+  </div>
+  <div class="flex-1 min-w-0">
+    <p class="text-[12px] font-medium leading-snug truncate">{{ label }}</p>
+    {% if description %}
+      <p class="text-[11px] text-slate-400 dark:text-slate-500 leading-tight truncate mt-0.5">{{ description }}</p>
+    {% endif %}
+  </div>
+  {% if group %}
+    <span class="text-[10px] px-2 py-0.5 rounded font-medium bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 flex-shrink-0 group-hover/item:bg-primary/10 group-hover/item:text-primary transition-colors">
+      {{ group }}
+    </span>
+  {% endif %}
+</a>

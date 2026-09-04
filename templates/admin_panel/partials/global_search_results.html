@@ -1,4 +1,28 @@
 <div class="space-y-1">
+    {% if nav_results %}
+    <div class="mb-2">
+        <h5 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-1">Roles, Permissions & Navigation</h5>
+        {% for item in nav_results %}
+        <a href="{{ item.href }}" class="flex items-center justify-between p-2.5 hover:bg-indigo-50/60 rounded-xl transition-colors text-decoration-none">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <i data-lucide="{{ item.icon|default:'compass' }}" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-gray-900">{{ item.label }}</div>
+                    {% if item.description %}
+                    <div class="text-[11px] text-gray-400">{{ item.description }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <c-badge variant="primary" label="{{ item.group }}" ></c-badge>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     {% for emp in results %}
     <a href="{% url 'employees:master_detail' emp.pk %}" class="flex items-center justify-between p-3 hover:bg-indigo-50/60 rounded-xl transition-colors text-decoration-none">
         <div class="flex items-center space-x-3">
@@ -18,7 +42,7 @@
         </div>
     </a>
     {% empty %}
-    {% if not asset_results %}
+    {% if not asset_results and not attendance_results and not expense_results and not nav_results %}
     <div class="p-6 text-center text-xs text-gray-400">
         No records found matching "<span class="font-medium text-gray-700">{{ query }}</span>"
     </div>
