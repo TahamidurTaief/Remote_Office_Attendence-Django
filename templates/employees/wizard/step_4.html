@@ -55,45 +55,10 @@
       <c-input type="password" name="password2" x-ref="pass2" label="Confirm Password" placeholder="Repeat password" error="{{ form.password2.errors.0 }}"></c-input>
     </div>
 
-    <!-- OPEN SPACE ROLE ASSIGNMENT SECTION WITH CHECKBOX CARDS -->
+    <!-- DYNAMIC ROLE ASSIGNMENT SECTION -->
     <div class="md:col-span-2">
-      <c-card padding="md" extra_class="!bg-slate-50/60 dark:!bg-slate-900/40 !border-slate-200 dark:!border-slate-800 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-2.5">
-          <div>
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-2">
-              <i data-lucide="shield-check" class="w-4 h-4 text-primary"></i>
-              Role Assignment (UserRoleAssignment) <span class="text-rose-500">*</span>
-            </h4>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Select one or more active RBAC system roles to grant system permissions.</p>
-          </div>
-          <span class="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
-            Multi-role Checkboxes
-          </span>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-          {% for val, label in form.roles.field.choices %}
-            <label class="group relative flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-primary/50 dark:hover:border-primary/50 cursor-pointer transition-all shadow-2xs hover:shadow-xs">
-              <input type="checkbox"
-                     name="roles"
-                     value="{{ val }}"
-                     {% if val in form.roles.value or val|stringformat:"s" in form.roles.value %}checked{% endif %}
-                     class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary/20 accent-primary shrink-0">
-              <div class="flex-1 min-w-0">
-                <span class="block text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors">
-                  {{ label }}
-                </span>
-                <span class="block text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
-                  ID: {{ val }}
-                </span>
-              </div>
-            </label>
-          {% endfor %}
-        </div>
-
-        {% if form.roles.errors %}
-          <p class="text-xs text-rose-500 font-medium mt-1">{{ form.roles.errors.0 }}</p>
-        {% endif %}
+      <c-card padding="md" extra_class="!bg-slate-50/60 dark:!bg-slate-900/40 !border-slate-200 dark:!border-slate-800">
+        <c-employee-roles-picker :field="form.roles" required="true" help_text="Select one or more active RBAC system roles to grant system permissions."></c-employee-roles-picker>
       </c-card>
     </div>
 

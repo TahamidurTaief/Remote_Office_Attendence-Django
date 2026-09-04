@@ -85,6 +85,11 @@ class EmployeeCreateView(AdminRequiredMixin, CreateView):
     template_name = 'employees/employee_form.html'
     success_url = reverse_lazy('employees:employee_list')
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['actor'] = self.request.user
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from apps.leave.models import LeaveType
@@ -147,6 +152,11 @@ class EmployeeEditView(AdminRequiredMixin, UpdateView):
     form_class = EmployeeEditForm
     template_name = 'employees/employee_form.html'
     success_url = reverse_lazy('employees:employee_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['actor'] = self.request.user
+        return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1364,7 +1374,7 @@ class EmployeeWizardView(AdminRequiredMixin, View):
         form_cls = self.get_form_class(step)
         if form is None and form_cls:
             if step == 4:
-                ctx['form'] = form_cls(employee=employee)
+                ctx['form'] = form_cls(employee=employee, actor=request.user)
             elif employee:
                 ctx['form'] = form_cls(instance=employee)
             else:
@@ -1452,7 +1462,7 @@ class EmployeeWizardView(AdminRequiredMixin, View):
                 return render(request, 'employees/wizard/wizard_content.html' if request.headers.get('HX-Request') else 'employees/employee_wizard.html', ctx)
 
         elif step == 4:
-            form = WizardStep4Form(request.POST, employee=employee)
+            form = WizardStep4Form(request.POST, employee=employee, actor=request.user)
             if form.is_valid():
                 form.save()
                 messages.success(request, "Step 4 (Security Account & Role Assignment) saved successfully.")

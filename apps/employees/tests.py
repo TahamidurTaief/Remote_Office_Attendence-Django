@@ -1,9 +1,16 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model, authenticate
 from django.urls import reverse
-from apps.employees.models import EmployeeProfile
-from apps.employees.forms import EmployeeCreateForm, EmployeeEditForm
+from apps.employees.models import EmployeeProfile, Employee, EmployeeStatus
+from apps.employees.forms import EmployeeCreateForm, EmployeeEditForm, WizardStep4Form
 from apps.branches.models import Branch
+from apps.accounts.rbac_models import (
+    Module, Action, Permission, Role, RolePermission, UserRoleAssignment, DataScope
+)
+from apps.accounts.engine import PermissionEngine
+from apps.accounts.services import RoleAssignmentService
+from django.db import transaction
+from django.core.exceptions import PermissionDenied
 from datetime import date
 
 User = get_user_model()
@@ -2622,3 +2629,282 @@ class EmployeeMoveToTrashWorkflowTests(TestCase):
         self.assertEqual(res2.status_code, 200)
 
         self.assertEqual(TrashEntry.objects.filter(object_id=str(self.employee.pk)).count(), 1)
+
+
+class DynamicRBACEmployeeWorkflowTests(TestCase):
+    def setUp(self):
+        from apps.accounts.rbac_models import (
+            Module, Action, Permission, Role, RolePermission, UserRoleAssignment, DataScope
+        )
+        from apps.accounts.engine import PermissionEngine
+        from apps.employees.models import Employee, EmployeeStatus, EmployeeProfile
+        from apps.accounts.services import RoleAssignmentService
+        from django.db import transaction
+
+        self.branch = Branch.objects.create(
+            name='Test Tech Branch',
+            latitude=23.8103,
+            longitude=90.4125,
+            radius_meters=100
+        )
+        self.superuser = User.objects.create_superuser(
+            email='sys_owner@example.com',
+            password='Password123!',
+            phone='+8801900000000'
+        )
+        self.admin_user = User.objects.create_user(
+            email='normal_admin@example.com',
+            password='Password123!',
+            phone='+8801911111111',
+            role='admin'
+        )
+        
+        # Modules & Permissions
+        self.mod_acc = Module.objects.create(name='Accounts Module', code='accounts')
+        self.mod_att = Module.objects.create(name='Attendance Module', code='attendance')
+        self.act_view = Action.objects.create(name='View Action', code='view')
+        self.act_edit = Action.objects.create(name='Edit Action', code='edit')
+
+        self.perm_acc_view = Permission.objects.create(module=self.mod_acc, action=self.act_view, codename='accounts.view')
+        self.perm_acc_edit = Permission.objects.create(module=self.mod_acc, action=self.act_edit, codename='accounts.edit')
+        self.perm_att_view = Permission.objects.create(module=self.mod_att, action=self.act_view, codename='attendance.view')
+        self.perm_att_edit = Permission.objects.create(module=self.mod_att, action=self.act_edit, codename='attendance.edit')
+
+        # Roles
+        self.role_owner = Role.objects.create(name='System Owner', code='system_owner', is_system_protected=True)
+        self.role_super_admin = Role.objects.create(name='Super Admin', code='super_admin')
+        self.role_staff = Role.objects.create(name='Staff', code='staff')
+        self.role_supervisor = Role.objects.create(name='Project Supervisor', code='project_supervisor')
+        self.role_finance = Role.objects.create(name='Finance', code='finance')
+
+        # Role permissions
+        RolePermission.objects.create(role=self.role_staff, permission=self.perm_att_view, data_scope=DataScope.OWN)
+        RolePermission.objects.create(role=self.role_supervisor, permission=self.perm_att_edit, data_scope=DataScope.BRANCH)
+        RolePermission.objects.create(role=self.role_finance, permission=self.perm_acc_view, data_scope=DataScope.COMPANY)
+
+        # Admin permissions: accounts.view and attendance.view
+        self.role_admin = Role.objects.create(name='Admin', code='admin')
+        RolePermission.objects.create(role=self.role_admin, permission=self.perm_acc_view, data_scope=DataScope.BRANCH)
+        RolePermission.objects.create(role=self.role_admin, permission=self.perm_att_view, data_scope=DataScope.BRANCH)
+        RolePermission.objects.create(role=self.role_admin, permission=self.perm_att_edit, data_scope=DataScope.BRANCH)
+        UserRoleAssignment.objects.create(user=self.admin_user, role=self.role_admin)
+
+    def test_example_1_admin_creates_rahim_with_staff_and_supervisor(self):
+        form_data = {
+            'employee_id': 'EMP-2026-RAHIM',
+            'full_name': 'Rahim Khan',
+            'branch': self.branch.id,
+            'phone': '+8801711112233',
+            'email': 'rahim@example.com',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'roles': [self.role_staff.id, self.role_supervisor.id],
+            'password1': 'RahimPass123!',
+            'password2': 'RahimPass123!',
+        }
+        form = EmployeeCreateForm(data=form_data, actor=self.admin_user)
+        self.assertTrue(form.is_valid(), form.errors)
+        profile = form.save()
+        user = profile.user
+
+        # Assertions
+        assignments = list(UserRoleAssignment.objects.filter(user=user))
+        self.assertEqual(len(assignments), 2)
+        assigned_role_codes = {a.role.code for a in assignments}
+        self.assertEqual(assigned_role_codes, {'staff', 'project_supervisor'})
+
+        # CustomUser.role remains compatibility persona 'staff'
+        self.assertEqual(user.role, 'staff')
+
+        # PermissionEngine resolves union of both roles
+        resolved = PermissionEngine.get_user_resolved_permissions(user)
+        self.assertIn('attendance.view', resolved)
+        self.assertIn('attendance.edit', resolved)
+        self.assertEqual(resolved['attendance.view']['scope'], DataScope.OWN)
+        self.assertEqual(resolved['attendance.edit']['scope'], DataScope.BRANCH)
+
+    def test_example_2_system_owner_creates_super_admin_and_finance(self):
+        form_data = {
+            'employee_id': 'EMP-2026-SUPFIN',
+            'full_name': 'Super Finance User',
+            'branch': self.branch.id,
+            'phone': '+8801722223344',
+            'email': 'supfin@example.com',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'roles': [self.role_super_admin.id, self.role_finance.id],
+            'password1': 'SupFinPass123!',
+            'password2': 'SupFinPass123!',
+        }
+        form = EmployeeCreateForm(data=form_data, actor=self.superuser)
+        self.assertTrue(form.is_valid(), form.errors)
+        profile = form.save()
+        user = profile.user
+
+        assignments = list(UserRoleAssignment.objects.filter(user=user))
+        self.assertEqual(len(assignments), 2)
+        assigned_role_codes = {a.role.code for a in assignments}
+        self.assertEqual(assigned_role_codes, {'super_admin', 'finance'})
+
+        # Compatibility persona is 'admin', is_superuser remains False
+        self.assertEqual(user.role, 'admin')
+        self.assertFalse(user.is_superuser)
+
+    def test_edge_case_1_normal_admin_forging_super_admin_rejected(self):
+        initial_user_count = User.objects.count()
+        initial_profile_count = EmployeeProfile.objects.count()
+        initial_assignment_count = UserRoleAssignment.objects.count()
+
+        form_data = {
+            'employee_id': 'EMP-2026-FORGER',
+            'full_name': 'Hacker Impostor',
+            'branch': self.branch.id,
+            'phone': '+8801733334455',
+            'email': 'forger@example.com',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'roles': [self.role_super_admin.id],
+            'password1': 'HackerPass123!',
+            'password2': 'HackerPass123!',
+        }
+        form = EmployeeCreateForm(data=form_data, actor=self.admin_user)
+        self.assertFalse(form.is_valid())
+        self.assertIn('roles', form.errors)
+
+        # Zero rows created
+        self.assertEqual(User.objects.count(), initial_user_count)
+        self.assertEqual(EmployeeProfile.objects.count(), initial_profile_count)
+        self.assertEqual(UserRoleAssignment.objects.count(), initial_assignment_count)
+
+    def test_edge_case_1_normal_admin_forging_system_owner_rejected(self):
+        form_data = {
+            'employee_id': 'EMP-2026-OWNFORGE',
+            'full_name': 'Owner Impostor',
+            'branch': self.branch.id,
+            'phone': '+8801744445566',
+            'email': 'ownforge@example.com',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'roles': [self.role_owner.id],
+            'password1': 'OwnerPass123!',
+            'password2': 'OwnerPass123!',
+        }
+        form = EmployeeCreateForm(data=form_data, actor=self.admin_user)
+        self.assertFalse(form.is_valid())
+        self.assertIn('roles', form.errors)
+
+    def test_edge_case_2_edit_removes_one_role_preserves_others_and_protected(self):
+        # Create user with super_admin (protected for admin), staff, and supervisor
+        target_user = User.objects.create_user(
+            email='edit_target@example.com',
+            phone='+8801755556677',
+            password='TargetPass123!'
+        )
+        profile = EmployeeProfile.objects.create(
+            user=target_user,
+            employee_id='EMP-2026-TARGET',
+            full_name='Target Employee',
+            branch=self.branch,
+            phone='+8801755556677',
+            joined_date=date.today()
+        )
+        UserRoleAssignment.objects.create(user=target_user, role=self.role_super_admin)
+        UserRoleAssignment.objects.create(user=target_user, role=self.role_staff)
+        UserRoleAssignment.objects.create(user=target_user, role=self.role_supervisor)
+
+        # Admin user edits target: submits only 'role_staff'
+        form_data = {
+            'employee_id': 'EMP-2026-TARGET',
+            'full_name': 'Target Employee Updated',
+            'branch': self.branch.id,
+            'phone': '+8801755556677',
+            'joined_date': date.today(),
+            'is_active': True,
+            'tracking_interval': 0,
+            'roles': [self.role_staff.id],
+        }
+        form = EmployeeEditForm(data=form_data, instance=profile, actor=self.admin_user)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+
+        # Check final assignments: supervisor removed, staff retained, super_admin preserved
+        remaining_roles = set(
+            UserRoleAssignment.objects.filter(user=target_user).values_list('role__code', flat=True)
+        )
+        self.assertEqual(remaining_roles, {'super_admin', 'staff'})
+
+    def test_atomic_rollback_on_role_assignment_failure(self):
+        initial_users = User.objects.count()
+        initial_profiles = EmployeeProfile.objects.count()
+        
+        # Test direct call to RoleAssignmentService where authority failure triggers transaction rollback
+        try:
+            with transaction.atomic():
+                u = User.objects.create_user(email='fail_target@example.com', password='Password123!')
+                EmployeeProfile.objects.create(
+                    user=u,
+                    employee_id='EMP-FAIL',
+                    full_name='Fail',
+                    branch=self.branch,
+                    joined_date=date.today()
+                )
+                RoleAssignmentService.sync_user_roles(
+                    user=u,
+                    target_roles=[self.role_super_admin],
+                    actor=self.admin_user
+                )
+        except PermissionDenied:
+            pass
+
+        self.assertEqual(User.objects.count(), initial_users)
+        self.assertEqual(EmployeeProfile.objects.count(), initial_profiles)
+
+    def test_wizard_step_4_multi_role_diffing_and_protected_retention(self):
+        emp = Employee.objects.create(
+            employee_number='EMP-2026-WIZ',
+            first_name='Wizard',
+            last_name='Worker',
+            personal_email='wizard@example.com',
+            phone='+8801766667788',
+            branch=self.branch,
+            status=EmployeeStatus.ACTIVE
+        )
+        # Create account via Step 4
+        form_data = {
+            'login_email': 'wizard.login@example.com',
+            'password1': 'WizardPass123!',
+            'password2': 'WizardPass123!',
+            'roles': [self.role_staff.id, self.role_supervisor.id],
+            'data_scope': 'branch',
+            'mfa_required': False,
+        }
+        form = WizardStep4Form(data=form_data, employee=emp, actor=self.admin_user)
+        self.assertTrue(form.is_valid(), form.errors)
+        user = form.save()
+
+        self.assertEqual(UserRoleAssignment.objects.filter(user=user).count(), 2)
+        self.assertEqual(user.role, 'staff')
+
+        # Add protected super_admin to user
+        UserRoleAssignment.objects.create(user=user, role=self.role_super_admin)
+
+        # Wizard step 4 edit: submit only supervisor role
+        form_data_edit = {
+            'login_email': 'wizard.login@example.com',
+            'roles': [self.role_supervisor.id],
+            'data_scope': 'branch',
+            'mfa_required': False,
+        }
+        form_edit = WizardStep4Form(data=form_data_edit, employee=emp, actor=self.admin_user)
+        self.assertTrue(form_edit.is_valid(), form_edit.errors)
+        form_edit.save()
+
+        # super_admin preserved, supervisor retained, staff removed
+        active_role_codes = set(
+            UserRoleAssignment.objects.filter(user=user).values_list('role__code', flat=True)
+        )
+        self.assertEqual(active_role_codes, {'super_admin', 'project_supervisor'})

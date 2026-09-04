@@ -30,24 +30,12 @@
                     </div>
                     {% endif %}
                     
-                    <div class="sm:col-span-3">
-                        <c-select name="role" label="System Role" value="{{ form.role.value }}" is_django_form="true">
-                            {{ form.role }}
-                        </c-select>
-                        {% if form.role.errors %}<p class="ft-error-text">{{ form.role.errors.0 }}</p>{% endif %}
-                    </div>
-
                     <div class="sm:col-span-6">
-                        <label class="ft-label block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-1">Roles / Groups</label>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-1">
-                            {% for val, label in form.groups.field.choices %}
-                            <label class="group relative flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-primary/50 cursor-pointer transition-all shadow-2xs">
-                                <input type="checkbox" name="groups" value="{{ val }}" {% if val in form.groups.value or val|stringformat:"s" in form.groups.value %}checked{% endif %} class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary/20 accent-primary shrink-0">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors">{{ label }}</span>
-                            </label>
-                            {% endfor %}
+                        <c-employee-roles-picker :field="form.roles" required="true" help_text="Select one or more authorized dynamic roles for this employee."></c-employee-roles-picker>
+                        <div class="hidden">
+                            {{ form.groups }}
+                            {{ form.role }}
                         </div>
-                        {% if form.groups.errors %}<p class="ft-error-text mt-1">{{ form.groups.errors.0 }}</p>{% endif %}
                     </div>
 
                     <div class="sm:col-span-3">

@@ -1,8 +1,12 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 from apps.employees.models import EmployeeProfile, EmployeeDocument
 from apps.branches.models import Branch
+from apps.accounts.rbac_models import Role, UserRoleAssignment
+from apps.accounts.services import RoleAssignmentService
+from django.db import transaction
 import random
 import string
 from datetime import date
@@ -50,7 +54,16 @@ def generate_random_password(length=10):
 
 class EmployeeCreateForm(forms.ModelForm):
     email = forms.EmailField(required=False, label="Email Address (Optional)")
-    role = forms.ChoiceField(choices=[('staff', 'Staff'), ('manager', 'Manager')], initial='staff')
+    roles = forms.ModelMultipleChoiceField(
+        queryset=Role.objects.none(),
+        required=False,
+        label="Roles"
+    )
+    role = forms.ChoiceField(
+        choices=[('staff', 'Staff'), ('manager', 'Manager')],
+        required=False,
+        widget=forms.HiddenInput()
+    )
     groups = forms.ModelMultipleChoiceField(queryset=Group.objects.all(), required=False, widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT}), label="Roles / Groups")
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     password1 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Set login password', 'class': TEXT_INPUT}), label="Password", required=True)
@@ -75,12 +88,22 @@ class EmployeeCreateForm(forms.ModelForm):
             'is_project_manager': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor=None, **kwargs):
+        self.actor = actor
         super().__init__(*args, **kwargs)
         if not self.initial.get('employee_id'):
             self.initial['employee_id'] = generate_employee_id()
         if not self.initial.get('joined_date'):
             self.initial['joined_date'] = date.today()
+
+        assignable_qs = RoleAssignmentService.get_assignable_roles_queryset(actor=self.actor)
+        self.fields['roles'].queryset = assignable_qs
+
+        # Set default role initial selection (e.g. staff role)
+        if not self.initial.get('roles'):
+            default_role = assignable_qs.filter(code='staff').first()
+            if default_role:
+                self.initial['roles'] = [default_role.pk]
         
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
@@ -131,6 +154,30 @@ class EmployeeCreateForm(forms.ModelForm):
                 raise forms.ValidationError("File too large. Profile photo must be less than 5MB.")
         return photo
 
+    def clean_roles(self):
+        roles = list(self.cleaned_data.get('roles') or [])
+        # Fallback to legacy 'role' field if no roles selected in 'roles'
+        if not roles and self.data.get('role'):
+            role_code = self.data.get('role')
+            role_obj = Role.objects.filter(code=role_code, is_active=True).first()
+            if role_obj:
+                roles = [role_obj]
+
+        if not roles:
+            # Default to active staff role if available
+            staff_role = Role.objects.filter(code='staff', is_active=True).first()
+            if staff_role:
+                roles = [staff_role]
+
+        # Authority validation check
+        if self.actor:
+            try:
+                RoleAssignmentService.validate_role_authority(self.actor, roles)
+            except PermissionDenied as e:
+                raise forms.ValidationError(str(e))
+
+        return roles
+
     def clean(self):
         cleaned_data = super().clean()
         password1 = cleaned_data.get('password1')
@@ -142,10 +189,17 @@ class EmployeeCreateForm(forms.ModelForm):
                 raise forms.ValidationError("Password must be at least 8 characters")
         return cleaned_data
 
+    @transaction.atomic
     def save(self, commit=True):
         profile = super().save(commit=False)
         email = self.cleaned_data.get('email')
-        role = self.cleaned_data['role']
+        roles = self.cleaned_data.get('roles') or []
+        legacy_role = self.cleaned_data.get('role')
+        if not roles and legacy_role:
+            r_obj = Role.objects.filter(code=legacy_role, is_active=True).first()
+            if r_obj:
+                roles = [r_obj]
+
         password = self.cleaned_data['password1']
         phone = self.cleaned_data.get('phone')
         
@@ -155,19 +209,36 @@ class EmployeeCreateForm(forms.ModelForm):
                 email = None
         else:
             email = None
-            
-        user = User.objects.create_user(email=email, phone=phone, password=password, role=role)
+
+        compat_role = RoleAssignmentService.compute_compatibility_persona(roles)
+        user = User.objects.create_user(email=email, phone=phone, password=password, role=compat_role)
         user.groups.set(self.cleaned_data.get('groups', []))
         profile.user = user
         
         if commit:
             profile.save()
-            # If send_email is True, you would implement email sending here
+
+        # Perform atomic role assignment sync
+        RoleAssignmentService.sync_user_roles(
+            user=user,
+            target_roles=roles,
+            actor=self.actor,
+            preserve_protected=True
+        )
             
         return profile
 
 class EmployeeEditForm(forms.ModelForm):
-    role = forms.ChoiceField(choices=[('staff', 'Staff'), ('manager', 'Manager')], widget=forms.Select(attrs={'class': SELECT_INPUT}), label="Role", required=True)
+    roles = forms.ModelMultipleChoiceField(
+        queryset=Role.objects.none(),
+        required=False,
+        label="Roles"
+    )
+    role = forms.ChoiceField(
+        choices=[('staff', 'Staff'), ('manager', 'Manager')],
+        required=False,
+        widget=forms.HiddenInput()
+    )
     groups = forms.ModelMultipleChoiceField(queryset=Group.objects.all(), required=False, widget=forms.SelectMultiple(attrs={'class': SELECT_INPUT}), label="Roles / Groups")
     new_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Leave blank to keep current'}), label="New Password", required=False)
     confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat new password', 'class': TEXT_INPUT}), label="Confirm Password", required=False)
@@ -191,14 +262,29 @@ class EmployeeEditForm(forms.ModelForm):
             'is_project_manager': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor=None, **kwargs):
+        self.actor = actor
         super().__init__(*args, **kwargs)
+
+        assignable_qs = RoleAssignmentService.get_assignable_roles_queryset(actor=self.actor)
+        self.fields['roles'].queryset = assignable_qs
+
         if self.instance and self.instance.user:
+            user_role_ids = list(
+                UserRoleAssignment.objects.filter(user=self.instance.user).values_list('role_id', flat=True)
+            )
+            self.fields['roles'].initial = user_role_ids
+
             assignment = self.instance.user.role_assignments.select_related('role').first()
             if assignment:
                 self.fields['role'].initial = assignment.role.code
             else:
                 self.fields['role'].initial = self.instance.user.role
+        elif not self.initial.get('roles'):
+            default_role = assignable_qs.filter(code='staff').first()
+            if default_role:
+                self.initial['roles'] = [default_role.pk]
+
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.update({'class': CHECKBOX_INPUT})
@@ -233,6 +319,27 @@ class EmployeeEditForm(forms.ModelForm):
                 raise forms.ValidationError("File too large. Profile photo must be less than 5MB.")
         return photo
 
+    def clean_roles(self):
+        roles = list(self.cleaned_data.get('roles') or [])
+        if not roles and self.data.get('role'):
+            role_code = self.data.get('role')
+            role_obj = Role.objects.filter(code=role_code, is_active=True).first()
+            if role_obj:
+                roles = [role_obj]
+
+        if not roles and not (self.instance and self.instance.user and self.instance.user.role_assignments.exists()):
+            staff_role = Role.objects.filter(code='staff', is_active=True).first()
+            if staff_role:
+                roles = [staff_role]
+
+        if self.actor:
+            try:
+                RoleAssignmentService.validate_role_authority(self.actor, roles)
+            except PermissionDenied as e:
+                raise forms.ValidationError(str(e))
+
+        return roles
+
     def clean(self):
         cleaned_data = super().clean()
         new_password = cleaned_data.get('new_password')
@@ -244,32 +351,39 @@ class EmployeeEditForm(forms.ModelForm):
                 raise forms.ValidationError("Password must be at least 8 characters")
         return cleaned_data
         
+    @transaction.atomic
     def save(self, commit=True):
         profile = super().save(commit=False)
         new_password = self.cleaned_data.get('new_password')
         phone = self.cleaned_data.get('phone')
-        role = self.cleaned_data.get('role')
+        roles = self.cleaned_data.get('roles')
+        legacy_role = self.cleaned_data.get('role')
+        if roles is None and legacy_role:
+            r_obj = Role.objects.filter(code=legacy_role, is_active=True).first()
+            if r_obj:
+                roles = [r_obj]
         
-        # Sync phone and role to CustomUser and UserRoleAssignment
+        # Sync phone to CustomUser
         user = profile.user
         if phone:
             phone = phone.strip()
         user.phone = phone
-        if role:
-            user.role = role
-            from apps.accounts.rbac_models import Role, UserRoleAssignment
-            role_obj = Role.objects.filter(code=role).first()
-            if role_obj:
-                UserRoleAssignment.objects.update_or_create(
-                    user=user,
-                    defaults={'role': role_obj}
-                )
         user.save()
         user.groups.set(self.cleaned_data.get('groups', []))
         
         if new_password:
             user.set_password(new_password)
             user.save()
+
+        # Perform atomic role assignment diff sync
+        if roles is not None:
+            RoleAssignmentService.sync_user_roles(
+                user=user,
+                target_roles=roles,
+                actor=self.actor,
+                preserve_protected=True
+            )
+
         if commit:
             profile.save()
         return profile
@@ -808,15 +922,24 @@ class WizardStep4Form(forms.Form):
         label="Require Multi-Factor Authentication (MFA)"
     )
 
-    def __init__(self, *args, employee=None, **kwargs):
+    def __init__(self, *args, employee=None, actor=None, **kwargs):
         self.employee = employee
+        self.actor = actor
         super().__init__(*args, **kwargs)
+
+        assignable_qs = RoleAssignmentService.get_assignable_roles_queryset(actor=self.actor)
+        self.fields['roles'].queryset = assignable_qs
+
         if employee and employee.user:
             self.fields['login_email'].initial = employee.user.email
             self.fields['data_scope'].initial = employee.data_scope
             self.fields['mfa_required'].initial = employee.mfa_required
             assigned_role_ids = UserRoleAssignment.objects.filter(user=employee.user).values_list('role_id', flat=True)
-            self.fields['roles'].initial = assigned_role_ids
+            self.fields['roles'].initial = list(assigned_role_ids)
+        elif not self.initial.get('roles'):
+            default_role = assignable_qs.filter(code='staff').first()
+            if default_role:
+                self.initial['roles'] = [default_role.pk]
 
     def clean_login_email(self):
         email = self.cleaned_data.get('login_email', '').strip()
@@ -826,6 +949,17 @@ class WizardStep4Form(forms.Form):
         if qs.exists():
             raise forms.ValidationError("A user account with this login email already exists.")
         return email
+
+    def clean_roles(self):
+        roles = list(self.cleaned_data.get('roles') or [])
+        if not roles:
+            raise forms.ValidationError("Please select at least one authorized role.")
+        if self.actor:
+            try:
+                RoleAssignmentService.validate_role_authority(self.actor, roles)
+            except PermissionDenied as e:
+                raise forms.ValidationError(str(e))
+        return roles
 
     def clean(self):
         cleaned_data = super().clean()
@@ -841,6 +975,7 @@ class WizardStep4Form(forms.Form):
                 self.add_error('password1', "Password must be at least 8 characters long.")
         return cleaned_data
 
+    @transaction.atomic
     def save(self):
         cleaned_data = self.cleaned_data
         email = cleaned_data['login_email']
@@ -848,6 +983,8 @@ class WizardStep4Form(forms.Form):
         roles = cleaned_data['roles']
         data_scope = cleaned_data['data_scope']
         mfa_required = cleaned_data['mfa_required']
+
+        compat_role = RoleAssignmentService.compute_compatibility_persona(roles)
 
         user = self.employee.user if self.employee else None
         if not user:
@@ -858,11 +995,14 @@ class WizardStep4Form(forms.Form):
             user = User.objects.create_user(
                 email=email,
                 phone=self.employee.phone or None,
-                password=p1
+                password=p1,
+                role=compat_role
             )
-        elif p1:
-            user.set_password(p1)
-            user.save()
+        else:
+            if p1:
+                user.set_password(p1)
+                user.save()
+
         # Update Employee fields
         self.employee.user = user
         self.employee.data_scope = data_scope
@@ -886,10 +1026,13 @@ class WizardStep4Form(forms.Form):
                 branch=self.employee.branch
             )
 
-        # Sync UserRoleAssignment — zero direct CustomUser.role write
-        UserRoleAssignment.objects.filter(user=user).delete()
-        for r in roles:
-            UserRoleAssignment.objects.create(user=user, role=r, assigned_by=None)
+        # Atomic role diff assignment preserving protected roles
+        RoleAssignmentService.sync_user_roles(
+            user=user,
+            target_roles=roles,
+            actor=self.actor,
+            preserve_protected=True
+        )
 
         return user
 
