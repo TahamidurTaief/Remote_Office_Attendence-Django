@@ -105,7 +105,7 @@
             <c-pagination
                 current_page="{{ page_obj.number }}"
                 total_pages="{{ page_obj.paginator.num_pages }}"
-                page_obj="{{ page_obj }}"
+                :page_obj="page_obj"
                 base_url="{% url 'payroll:payroll_run_grid_partial' run.pk %}?search={{ search|urlencode }}&department={{ selected_dept|default:'' }}&branch={{ selected_branch|default:'' }}&payment_mode={{ selected_mode|default:'' }}&page="
                 hx_target="#payroll-grid-container"
                 hx_swap="outerHTML">

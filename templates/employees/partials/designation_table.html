@@ -55,7 +55,7 @@
     </div>
     {% if page_obj.has_other_pages %}
     <div class="px-4 py-3 border-t border-gray-100">
-        <c-pagination page_obj="{{ page_obj }}"></c-pagination>
+        <c-pagination :page_obj="page_obj"></c-pagination>
     </div>
     {% endif %}
 </c-card>
