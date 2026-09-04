@@ -5,13 +5,13 @@
     <!-- Header -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-            <h1 class="text-[18px] font-bold text-gray-900">Employee Leave Balances</h1>
-            <p class="text-[12px] text-gray-500 mt-0.5">Directory of employee leave limits, usage, and remaining allowances.</p>
+            <h1 class="text-[18px] font-bold" style="color:var(--text)">Employee Leave Balances</h1>
+            <p class="text-[12px] mt-0.5" style="color:var(--text-muted)">Directory of employee leave limits, usage, and remaining allowances.</p>
         </div>
         <div class="flex items-center gap-3">
             <!-- Year Selector Form -->
             <form method="GET" class="flex items-center gap-2">
-                <label class="text-[11px] font-semibold text-gray-500 uppercase">Year:</label>
+                <label class="text-[11px] font-semibold uppercase" style="color:var(--text-muted)">Year:</label>
                 <select name="year" onchange="this.form.submit()" class="ft-select text-[12px]">
                     {% for y in available_years %}
                     <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
@@ -23,7 +23,7 @@
     </div>
 
     <!-- Employee Balances Cotton Table -->
-    <div class="ft-card overflow-hidden bg-white">
+    <div class="ft-card overflow-hidden" style="background:var(--surface)">
         <table class="ft-table">
             <thead>
                 <tr>
@@ -49,10 +49,10 @@
                             </div>
                             {% endif %}
                             <div class="min-w-0">
-                                <p class="text-[13px] font-bold text-gray-900 group-hover:text-primary transition-colors truncate">
+                                <p class="text-[13px] font-bold group-hover:text-primary transition-colors truncate" style="color:var(--text)">
                                     {{ emp.full_name }}
                                 </p>
-                                <p class="text-[11px] text-gray-500 truncate">
+                                <p class="text-[11px] truncate" style="color:var(--text-muted)">
                                     {{ emp.designation|default:"Staff" }} • {{ emp.employee_id }}
                                 </p>
                             </div>
@@ -70,14 +70,14 @@
                     <td>
                         <div class="flex flex-wrap gap-1.5">
                             {% for balance in employee_balances|dictget:emp.id %}
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-gray-100 border border-gray-200 text-gray-700">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border" style="background:var(--surface-hover); border-color:var(--border); color:var(--text-secondary)">
                                 <span class="font-semibold">{{ balance.type.name }}:</span>
-                                <span class="{% if balance.remaining < 0 %}text-red-600 font-bold{% else %}text-gray-900 font-medium{% endif %}">
+                                <span class="{% if balance.remaining < 0 %}text-red-600 font-bold{% else %}font-medium{% endif %}" style="{% if balance.remaining >= 0 %}color:var(--text){% endif %}">
                                     {{ balance.remaining }}/{{ balance.total }}
                                 </span>
                             </span>
                             {% empty %}
-                            <span class="text-[11px] text-gray-400">None</span>
+                            <span class="text-[11px]" style="color:var(--text-muted)">None</span>
                             {% endfor %}
                         </div>
                     </td>
@@ -121,7 +121,7 @@
     <div class="space-y-4">
 
         <!-- Employee Info Bar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gray-50/80 border border-gray-150">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border" style="background:var(--surface-hover); border-color:var(--border)">
             <div class="flex items-center gap-3 min-w-0">
                 {% if emp.profile_photo %}
                 <c-avatar :src="emp.profile_photo.url" size="md" ></c-avatar>
@@ -129,16 +129,16 @@
                 <c-avatar :initials="emp.full_name|first" size="md" ></c-avatar>
                 {% endif %}
                 <div class="min-w-0">
-                    <h3 class="text-sm font-bold text-gray-900 truncate">{{ emp.full_name }}</h3>
-                    <p class="text-xs text-[#1877F2] font-semibold">{{ emp.employee_id }}</p>
-                    <p class="text-[11px] text-gray-500 truncate">
+                    <h3 class="text-sm font-bold truncate" style="color:var(--text)">{{ emp.full_name }}</h3>
+                    <p class="text-xs text-primary font-semibold">{{ emp.employee_id }}</p>
+                    <p class="text-[11px] truncate" style="color:var(--text-muted)">
                         {{ emp.designation|default:"Staff" }} • {{ emp.department|default:"Unassigned" }}
                     </p>
                 </div>
             </div>
-            <div class="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-200/60 flex sm:block justify-between items-center">
-                <span class="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Leave Left</span>
-                <span class="text-lg font-extrabold {% if total_left < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
+            <div class="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 flex sm:block justify-between items-center" style="border-color:var(--border)">
+                <span class="text-[10px] uppercase font-bold block tracking-wider" style="color:var(--text-muted)">Leave Left</span>
+                <span class="text-lg font-extrabold {% if total_left < 0 %}text-[#f42a41]{% endif %}" style="{% if total_left >= 0 %}color:var(--text){% endif %}">
                     {{ total_left }} days
                 </span>
             </div>
@@ -146,26 +146,26 @@
 
         <!-- Leave Allowances Grid -->
         <div>
-            <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2.5">Leave Allowances ({{ year }})</h4>
+            <h4 class="text-xs font-bold uppercase tracking-wider mb-2.5" style="color:var(--text-muted)">Leave Allowances ({{ year }})</h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {% for balance in employee_balances|dictget:emp.id %}
                 <c-card padding="md" extra_class="!p-3 space-y-2">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-gray-800">{{ balance.type.name }}</span>
-                        <span class="text-[11px] text-gray-400">{{ balance.used }}/{{ balance.total }} used</span>
+                        <span class="text-xs font-bold" style="color:var(--text)">{{ balance.type.name }}</span>
+                        <span class="text-[11px]" style="color:var(--text-muted)">{{ balance.used }}/{{ balance.total }} used</span>
                     </div>
                     <div class="flex justify-between items-baseline">
-                        <span class="text-xl font-extrabold {% if balance.remaining < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
+                        <span class="text-xl font-extrabold {% if balance.remaining < 0 %}text-[#f42a41]{% endif %}" style="{% if balance.remaining >= 0 %}color:var(--text){% endif %}">
                             {{ balance.remaining }}
                         </span>
-                        <span class="text-[11px] text-gray-500 font-medium">days left</span>
+                        <span class="text-[11px] font-medium" style="color:var(--text-muted)">days left</span>
                     </div>
-                    <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden flex">
-                        <div class="bg-[#1877F2] h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
+                    <div class="w-full h-1.5 rounded-full overflow-hidden flex" style="background:var(--border)">
+                        <div class="bg-primary h-full rounded-full" style="width: {% widthratio balance.used balance.total 100 %}%"></div>
                     </div>
                 </c-card>
                 {% empty %}
-                <div class="col-span-2 text-center text-xs text-gray-400 py-3">
+                <div class="col-span-2 text-center text-xs py-3" style="color:var(--text-muted)">
                     No leave types configured.
                 </div>
                 {% endfor %}

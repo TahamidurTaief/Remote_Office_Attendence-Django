@@ -21,23 +21,16 @@ staticfiles/
 .django_tailwind_cli
 ./.django_tailwind_cli
 
-# ── DATABASE FILES ────────────────────────────────────────────────────────────
-# db.sqlite3 tracked as requested
-db.sqlite3-shm
-db.sqlite3-wal
-db.sqlite3.*
-*.sqlite3.bak
-*.sqlite3.bak*
-*.db
+
 
 # ── MEDIA / USER UPLOADS (NEVER COMMIT) ──────────────────────────────────────
 media/*
 !media/.gitkeep
 
 # ── ENVIRONMENT / SECRETS ────────────────────────────────────────────────────
-.env
-.env.*
-!.env.example
+
+
+
 *.key
 *.pem
 *.keystore
@@ -75,3 +68,7 @@ backups/*.tar
 backups/*.tar.gz
 backups/*.dump
 *.dump
+
+
+.zip
+*.zip

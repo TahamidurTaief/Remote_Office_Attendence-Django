@@ -2,14 +2,14 @@ import json
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View, TemplateView
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.contrib import messages
 from apps.attendance.sync_utils import parse_and_validate_client_time
 from apps.accounts.mixins import AdminRequiredMixin, StaffRequiredMixin, RoleRequiredMixin
 from apps.employees.models import EmployeeProfile
 from .models import LeaveType, LeaveBalance, LeaveRequest
-from .forms import LeaveRequestForm, LeaveTypeForm
+from .forms import LeaveRequestForm, LeaveTypeForm, AdminLeaveRequestRescheduleForm
 
 def _get_profile(user):
     if not user or not user.is_authenticated:
@@ -231,14 +231,15 @@ class AdminEmployeeBalanceDetailView(AdminRequiredMixin, DetailView):
             year = timezone.localdate().year
 
         leave_types = LeaveType.objects.all()
+        balances_map = {b.leave_type_id: b for b in LeaveBalance.objects.filter(employee=self.object, year=year).select_related('leave_type')}
+        from apps.employees.models import EmployeeLeaveRule
+        rules_map = {r.leave_type_id: r for r in EmployeeLeaveRule.objects.filter(employee=self.object)}
         balances = []
         for lt in leave_types:
-            balance = LeaveBalance.objects.filter(employee=self.object, leave_type=lt, year=year).first()
-            if balance:
-                balances.append(balance)
+            if lt.id in balances_map:
+                balances.append(balances_map[lt.id])
             else:
-                from apps.employees.models import EmployeeLeaveRule
-                rule = EmployeeLeaveRule.objects.filter(employee=self.object, leave_type=lt).first()
+                rule = rules_map.get(lt.id)
                 limit = rule.days_per_year if rule else lt.default_days_per_year
                 balances.append({
                     'leave_type': lt,
@@ -250,6 +251,7 @@ class AdminEmployeeBalanceDetailView(AdminRequiredMixin, DetailView):
         history = LeaveRequest.objects.filter(employee=self.object).select_related('leave_type').order_by('-requested_at')
 
         context.update({
+            'back_url': reverse('leave:admin_balances'),
             'balances': balances,
             'history': history,
             'year': year,
@@ -458,31 +460,6 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
 
         messages.success(self.request, "Your leave request has been submitted successfully.")
         return response
-
-
-from django import forms
-from apps.leave.forms import SELECT_INPUT, TEXT_INPUT, TEXTAREA_INPUT
-
-class AdminLeaveRequestRescheduleForm(forms.ModelForm):
-    class Meta:
-        model = LeaveRequest
-        fields = ['leave_type', 'start_date', 'end_date', 'reason']
-        widgets = {
-            'leave_type': forms.Select(attrs={'class': SELECT_INPUT}),
-            'start_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
-            'end_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': TEXT_INPUT}),
-            'reason': forms.Textarea(attrs={'rows': 3, 'class': TEXTAREA_INPUT, 'placeholder': 'Reason for reschedule...'}),
-        }
-
-    def clean(self):
-        cleaned_data = super().clean()
-        start_date = cleaned_data.get('start_date')
-        end_date = cleaned_data.get('end_date')
-
-        if start_date and end_date:
-            if end_date < start_date:
-                raise forms.ValidationError("End date cannot be before start date.")
-        return cleaned_data
 
 
 class RescheduleLeaveRequestView(AdminRequiredMixin, UpdateView):

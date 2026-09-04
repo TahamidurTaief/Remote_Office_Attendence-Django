@@ -2,20 +2,21 @@ from django import forms
 from .models import LeaveRequest, LeaveType, LeaveBalance
 
 TEXT_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 "
-    "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent "
-    "placeholder:text-gray-400 transition-colors"
+    "w-full px-3 py-2.5 border rounded-xl text-sm transition-colors "
+    "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent "
+    "bg-[var(--surface)] text-[var(--text)] border-[var(--border)] placeholder:[var(--text-muted)]"
 )
 
 SELECT_INPUT = (
-    "w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white "
-    "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+    "w-full px-3 py-2 border rounded-xl text-sm transition-colors "
+    "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent "
+    "bg-[var(--surface)] text-[var(--text)] border-[var(--border)]"
 )
 
 TEXTAREA_INPUT = (
-    "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 "
-    "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent "
-    "placeholder:text-gray-400 resize-none"
+    "w-full px-3 py-2.5 border rounded-xl text-sm transition-colors resize-none "
+    "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent "
+    "bg-[var(--surface)] text-[var(--text)] border-[var(--border)] placeholder:[var(--text-muted)]"
 )
 
 def validate_leave_overlap(employee, start_date, end_date, instance=None, error_msg="This employee has an existing leave request that overlaps with these dates."):
@@ -72,7 +73,6 @@ class LeaveRequestForm(forms.ModelForm):
         )
 
         if start_date and end_date:
-            number_of_days = (end_date - start_date).days + 1
             year = start_date.year
 
             if self.employee and leave_type:
@@ -84,14 +84,26 @@ class LeaveRequestForm(forms.ModelForm):
                     )
                     remaining = balance.remaining_days
                 except LeaveBalance.DoesNotExist:
-                    remaining = leave_type.default_days_per_year
+                    from apps.employees.models import EmployeeLeaveRule
+                    rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=leave_type).first()
+                    if rule and rule.custom_max_days is not None:
+                        remaining = rule.custom_max_days
+                    else:
+                        remaining = leave_type.default_days_per_year
 
                 # Check if this is an edit of an existing approved request
-                # (though usually employees only edit pending requests)
                 if self.instance and self.instance.pk and self.instance.status == 'approved':
                     remaining += self.instance.number_of_days
 
-                self.projected_remaining = remaining - number_of_days
+                temp_req = LeaveRequest(
+                    employee=self.employee,
+                    leave_type=leave_type,
+                    start_date=start_date,
+                    end_date=end_date,
+                    pk=self.instance.pk if self.instance else None
+                )
+                deductible_days = temp_req.calculate_deductible_days()
+                self.projected_remaining = remaining - deductible_days
         return cleaned_data
 
 from apps.employees.models import EmployeeProfile

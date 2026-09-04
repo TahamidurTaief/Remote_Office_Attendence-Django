@@ -582,8 +582,9 @@ def process_forgot_checkout(request, pk):
         result = AttendanceLifecycleService.process_forgot_checkout(request.user, pk, action, rejection_reason)
         
         if request.headers.get('hx-request'):
-            label = 'Approved' if result['status'] == 'approved' else ('Rejected' if result['status'] == 'rejected' else 'Pending HR Approval')
-            return render_htmx_status_badge(result['status'], label)
+            from apps.attendance.models import ForgotCheckoutRequest
+            req = get_object_or_404(ForgotCheckoutRequest.objects.select_related('attendance__employee'), pk=pk)
+            return render(request, 'admin_panel/attendance/partials/request_row_forgot.html', {'req': req})
         return JsonResponse(result)
     except AttendanceLifecycleError as e:
         if request.headers.get('hx-request') and e.status_code in (403, 400):
@@ -617,8 +618,9 @@ def process_attendance_correction(request, pk):
         result = AttendanceLifecycleService.process_attendance_correction(request.user, pk, action, rejection_reason)
         
         if request.headers.get('hx-request'):
-            label = 'Approved' if result['status'] == 'approved' else 'Rejected'
-            return render_htmx_status_badge(result['status'], label)
+            from apps.attendance.models import AttendanceCorrectionRequest
+            req = get_object_or_404(AttendanceCorrectionRequest.objects.select_related('attendance__employee'), pk=pk)
+            return render(request, 'admin_panel/attendance/partials/request_row_correction.html', {'req': req})
         return JsonResponse(result)
     except AttendanceLifecycleError as e:
         if request.headers.get('hx-request') and e.status_code in (403, 400):
@@ -662,9 +664,9 @@ def process_overtime(request, pk):
                 return JsonResponse({'success': False, 'error': 'Request already processed.'}, status=400)
 
         ot_req.refresh_from_db()
-        status_label = ot_req.get_status_display() if hasattr(ot_req, 'get_status_display') else ot_req.status
         if request.headers.get('hx-request'):
-            return render_htmx_status_badge(ot_req.status, status_label)
+            ot_req = get_object_or_404(OvertimeRequest.objects.select_related('employee', 'attendance'), pk=pk)
+            return render(request, 'admin_panel/attendance/partials/request_row_ot.html', {'req': ot_req})
         return JsonResponse({'success': True, 'status': ot_req.status, 'message': f'Overtime {action}d successfully.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -674,7 +676,7 @@ from django.views.generic import ListView
 from apps.accounts.mixins import RoleRequiredMixin
 
 class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
-    allowed_roles = ['admin', 'manager']
+    allowed_roles = ['admin', 'manager', 'system_owner', 'hr']
     template_name = 'admin_panel/attendance/requests_list.html'
     context_object_name = 'forgot_checkouts'
     
@@ -683,8 +685,9 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
         from apps.attendance.models import ForgotCheckoutRequest
         qs = ForgotCheckoutRequest.objects.filter(status__in=['pending_manager', 'pending_hr']).select_related('attendance__employee')
         
-        # Scoping check: managers only see their team
-        if getattr(user, 'role', '') == 'manager' and not user.is_superuser:
+        # Scoping check: non-admin managers only see their reporting team
+        user_roles = [a.role.code for a in user.role_assignments.select_related('role').filter(role__is_active=True)] or [str(getattr(user, 'role', ''))]
+        if 'manager' in user_roles and not user.is_superuser and not any(r in ('admin', 'system_owner', 'hr') for r in user_roles):
             qs = qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
         return qs
         
@@ -693,15 +696,18 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
         user = self.request.user
         from apps.attendance.models import AttendanceCorrectionRequest, OvertimeRequest
         
+        user_roles = [a.role.code for a in user.role_assignments.select_related('role').filter(role__is_active=True)] or [str(getattr(user, 'role', ''))]
+        is_scoped_manager = 'manager' in user_roles and not user.is_superuser and not any(r in ('admin', 'system_owner', 'hr') for r in user_roles)
+
         # Corrections
         corr_qs = AttendanceCorrectionRequest.objects.filter(status='pending').select_related('attendance__employee')
-        if getattr(user, 'role', '') == 'manager' and not user.is_superuser:
+        if is_scoped_manager:
             corr_qs = corr_qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
         context['corrections'] = corr_qs
         
         # Overtime Requests (Workflow-backed)
         ot_qs = OvertimeRequest.objects.filter(status__in=['pending', 'manager_approved']).select_related('employee', 'attendance')
-        if getattr(user, 'role', '') == 'manager' and not user.is_superuser:
+        if is_scoped_manager:
             ot_qs = ot_qs.filter(employee__master_employee__reporting_manager__user=user)
         context['overtimes'] = ot_qs
         

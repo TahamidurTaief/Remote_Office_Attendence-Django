@@ -168,17 +168,15 @@ def is_employee_holiday(employee, target_date):
         employee_holidays = [d.strip().lower() for d in master_employee.weekly_holiday_policy.split(',') if d.strip()]
         if day_name in employee_holidays:
             return True
-            
-    # 2. Branch level weekly holiday policy
-    schedule = get_branch_schedule(employee)
-    if schedule:
+    elif (schedule := get_branch_schedule(employee)) and schedule.working_days:
+        # 2. Branch level weekly holiday policy
         if day_name not in schedule.working_days:
             return True
-            
-    # 3. Company level weekly holiday policy
-    working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
-    if target_date.weekday() not in working_days:
-        return True
+    else:
+        # 3. Company level weekly holiday policy
+        working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
+        if target_date.weekday() not in working_days:
+            return True
         
     # 4. Public / Branch Holidays
     from apps.branches.models import Holiday
@@ -229,7 +227,11 @@ def calculate_overtime(check_out_time, schedule, employee, session_date=None):
         else:
             session_date = check_out_time.date()
             
-    end_time = datetime.combine(session_date, schedule.office_end_time)
+    end_date = session_date
+    if schedule.office_end_time < schedule.office_start_time:
+        end_date = session_date + timedelta(days=1)
+
+    end_time = datetime.combine(end_date, schedule.office_end_time)
     if timezone.is_aware(check_out_time):
         end_time = timezone.make_aware(end_time, timezone.get_current_timezone())
         
@@ -257,7 +259,11 @@ def calculate_early_checkout(check_out_time, schedule, session_date=None):
         return False
         
     threshold_time = schedule.get_early_checkout_threshold()
-    threshold = datetime.combine(session_date, threshold_time)
+    end_date = session_date
+    if schedule.office_end_time < schedule.office_start_time:
+        end_date = session_date + timedelta(days=1)
+
+    threshold = datetime.combine(end_date, threshold_time)
     if timezone.is_aware(check_out_time):
         threshold = timezone.make_aware(threshold, timezone.get_current_timezone())
         

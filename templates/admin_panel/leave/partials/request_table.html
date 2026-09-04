@@ -1,6 +1,6 @@
 {% if requests %}
-<c-table x-data="{ expandedRows: new Set() }">
-    <x-slot name="header">
+<c-table x-data="{ expandedRows: {} }">
+    <c-slot name="header">
         <th>Employee</th>
         <th>Leave Type</th>
         <th>Duration</th>
@@ -8,7 +8,7 @@
         <th>Reason</th>
         <th>Status</th>
         <th class="text-right">Actions</th>
-    </x-slot>
+    </c-slot>
 
     {% for req in requests %}
     <tr class="hover:bg-slate-50/30 transition-colors">
@@ -57,14 +57,14 @@
                 </form>
                 {% endif %}
                 
-                <c-button type="button" @click="expandedRows.has({{ req.pk }}) ? expandedRows.delete({{ req.pk }}) : expandedRows.add({{ req.pk }})" variant="secondary" size="sm" icon="clock" title="View Journey"></c-button>
+                <c-button type="button" @click="expandedRows[{{ req.pk }}] = !expandedRows[{{ req.pk }}]" variant="secondary" size="sm" icon="clock" title="View Journey"></c-button>
                 <c-button hx-get="{% url 'admin_panel:leave_request_edit' req.pk %}" hx-target="#modal-container" variant="secondary" size="sm" icon="edit-3" title="Edit"></c-button>
                 <c-button hx-post="{% url 'admin_panel:leave_request_delete' req.pk %}" hx-confirm="Are you sure you want to delete this leave request?" hx-swap="none" variant="danger" size="sm" icon="trash-2" title="Delete"></c-button>
             </div>
         </td>
     </tr>
-    <tr x-show="expandedRows.has({{ req.pk }})" x-cloak>
-        <td colspan="7" class="p-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+    <tr x-show="expandedRows[{{ req.pk }}]" x-cloak>
+        <td colspan="7" class="p-4 border-b" style="background: var(--surface-hover); border-color: var(--border);">
             <div class="max-w-2xl mx-auto text-left">
                 <c-timeline :timeline_data="req.workflow_timeline"></c-timeline>
             </div>

@@ -54,30 +54,14 @@ class Command(BaseCommand):
         deducted_count = 0
 
         from apps.attendance.models import get_default_deduction_leave_type
-        from apps.attendance.schedule_utils import get_branch_schedule
+        from apps.attendance.schedule_utils import is_employee_holiday
 
         for emp in active_employees:
             leave_type = get_default_deduction_leave_type(emp)
-            # Check if working day for this employee's branch schedule
-            schedule = get_branch_schedule(emp)
-            if schedule:
-                day_name = target_date.strftime('%A').lower()
-                if day_name not in schedule.working_days:
-                    skipped_weekend += 1
-                    self.stdout.write(f'Employee {emp.full_name} is off today (Branch Schedule). Skipping.')
-                    continue
-            else:
-                working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
-                if target_date.weekday() not in working_days:
-                    skipped_weekend += 1
-                    self.stdout.write(f'Employee {emp.full_name} is off today (Global Settings). Skipping.')
-                    continue
-            # Check if today is a Holiday (branch-specific or company-wide)
-            from django.db.models import Q
-            from apps.branches.models import Holiday
-            if Holiday.objects.filter(date=target_date).filter(Q(branch=emp.branch) | Q(branch__isnull=True)).exists():
+            # Check if today is a weekly off or holiday (employee policy, branch schedule, or public holiday)
+            if is_employee_holiday(emp, target_date):
                 skipped_holiday += 1
-                self.stdout.write(f'Employee {emp.full_name} is on Holiday today. Skipping.')
+                self.stdout.write(f'Employee {emp.full_name} is on holiday or scheduled off today. Skipping.')
                 continue
 
             # Check if attendance exists

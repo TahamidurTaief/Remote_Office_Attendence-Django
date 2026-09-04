@@ -96,21 +96,15 @@ class LeaveRequest(models.Model):
             ('approve_leaverequest', 'Can approve or reject leave requests'),
         ]
 
+    @property
+    def total_days(self):
+        return self.number_of_days
+
     def overlapping_days_in(self, period_start, period_end):
         from decimal import Decimal
         from datetime import timedelta
-        from django.db.models import Q
-        from apps.branches.models import Holiday
+        from apps.attendance.schedule_utils import is_employee_holiday
         from apps.attendance.models import Attendance
-
-        master = getattr(self.employee, 'master_employee', None)
-        branch = master.branch if master else self.employee.branch
-        policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
-        policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
-
-        from apps.attendance.schedule_utils import get_branch_schedule
-        schedule = get_branch_schedule(self.employee)
-        working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
 
         start = max(self.start_date, period_start)
         end = min(self.end_date, period_end)
@@ -121,26 +115,7 @@ class LeaveRequest(models.Model):
         deductible_days = Decimal('0.0')
         curr = start
         while curr <= end:
-            day_name = curr.strftime('%A').lower()
-            if policy:
-                if day_name in policy:
-                    curr += timedelta(days=1)
-                    continue
-            elif schedule:
-                if day_name not in schedule.working_days:
-                    curr += timedelta(days=1)
-                    continue
-            else:
-                if curr.weekday() not in working_days:
-                    curr += timedelta(days=1)
-                    continue
-
-            holiday_qs = Holiday.objects.filter(date=curr)
-            if branch:
-                holiday_qs = holiday_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
-            else:
-                holiday_qs = holiday_qs.filter(branch__isnull=True)
-            if holiday_qs.exists():
+            if is_employee_holiday(self.employee, curr):
                 curr += timedelta(days=1)
                 continue
 
@@ -166,67 +141,7 @@ class LeaveRequest(models.Model):
         return deductible_days
 
     def calculate_deductible_days(self):
-        from decimal import Decimal
-        from datetime import timedelta
-        from django.db.models import Q
-        from apps.branches.models import Holiday
-        from apps.attendance.models import Attendance
-        
-        master = getattr(self.employee, 'master_employee', None)
-        branch = master.branch if master else self.employee.branch
-        policy_str = master.weekly_holiday_policy if (master and master.weekly_holiday_policy) else ''
-        policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
-        
-        from apps.attendance.schedule_utils import get_branch_schedule
-        schedule = get_branch_schedule(self.employee)
-        working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
-        
-        deductible_days = Decimal('0.0')
-        curr = self.start_date
-        while curr <= self.end_date:
-            day_name = curr.strftime('%A').lower()
-            if policy:
-                if day_name in policy:
-                    curr += timedelta(days=1)
-                    continue
-            elif schedule:
-                if day_name not in schedule.working_days:
-                    curr += timedelta(days=1)
-                    continue
-            else:
-                if curr.weekday() not in working_days:
-                    curr += timedelta(days=1)
-                    continue
-            
-            holiday_qs = Holiday.objects.filter(date=curr)
-            if branch:
-                holiday_qs = holiday_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
-            else:
-                holiday_qs = holiday_qs.filter(branch__isnull=True)
-            if holiday_qs.exists():
-                curr += timedelta(days=1)
-                continue
-                
-            if Attendance.objects.filter(employee=self.employee, date=curr).exists():
-                curr += timedelta(days=1)
-                continue
-                
-            approved_leaves = LeaveRequest.objects.filter(
-                employee=self.employee,
-                status='approved',
-                start_date__lte=curr,
-                end_date__gte=curr
-            )
-            if self.pk:
-                approved_leaves = approved_leaves.exclude(pk=self.pk)
-            if approved_leaves.exists():
-                curr += timedelta(days=1)
-                continue
-
-            deductible_days += Decimal('1.0')
-            curr += timedelta(days=1)
-            
-        return deductible_days
+        return self.overlapping_days_in(self.start_date, self.end_date)
 
     def save(self, *args, **kwargs):
         # Autocalculate number of days excluding weekends, holidays, and active attendance days

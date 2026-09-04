@@ -1,29 +1,29 @@
 <div id="attendance-list-container" class="w-full">
-    <div class="bg-white rounded-xl shadow-sm p-4 mb-6 mx-4 -mt-10 grid grid-cols-4 gap-2 text-center relative z-10">
+    <div class="rounded-xl shadow-sm p-4 mb-6 mx-4 -mt-10 grid grid-cols-4 gap-2 text-center relative z-10 border" style="background:var(--surface); border-color:var(--border)">
         <div>
-            <p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Present</p>
-            <p class="text-xl font-bold text-gray-900">{{ stats.present }}</p>
+            <p class="text-[10px] font-medium uppercase tracking-wide" style="color:var(--text-muted)">Present</p>
+            <p class="text-xl font-bold" style="color:var(--text)">{{ stats.present }}</p>
         </div>
         <div>
-            <p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Absent</p>
-            <p class="text-xl font-bold text-gray-900">{{ stats.absent }}</p>
+            <p class="text-[10px] font-medium uppercase tracking-wide" style="color:var(--text-muted)">Absent</p>
+            <p class="text-xl font-bold" style="color:var(--text)">{{ stats.absent }}</p>
         </div>
         <div>
-            <p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Late</p>
-            <p class="text-xl font-bold text-gray-900">{{ stats.late }}</p>
+            <p class="text-[10px] font-medium uppercase tracking-wide" style="color:var(--text-muted)">Late</p>
+            <p class="text-xl font-bold" style="color:var(--text)">{{ stats.late }}</p>
         </div>
         <div>
-            <p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Field</p>
-            <p class="text-xl font-bold text-gray-900">{{ stats.field }}</p>
+            <p class="text-[10px] font-medium uppercase tracking-wide" style="color:var(--text-muted)">Field</p>
+            <p class="text-xl font-bold" style="color:var(--text)">{{ stats.field }}</p>
         </div>
     </div>
     
     <!-- Mobile Card View -->
     <div class="px-4 space-y-3 pb-6 md:hidden">
         {% for record in attendances %}
-        <div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex flex-col">
-            <div class="flex justify-between items-center border-b border-gray-50 pb-2 mb-2">
-                <span class="font-bold text-gray-900">{{ record.date|date:"d/m/Y" }}</span>
+        <div class="rounded-xl border p-4 shadow-sm flex flex-col" style="background:var(--surface); border-color:var(--border)">
+            <div class="flex justify-between items-center border-b pb-2 mb-2" style="border-color:var(--border)">
+                <span class="font-bold" style="color:var(--text)">{{ record.date|date:"d/m/Y" }}</span>
                 <div>
                     {% if record.leave_info %}
                         {% if record.leave_info.status == 'approved' %}
@@ -64,12 +64,12 @@
             <div class="flex justify-between items-end">
                 <div class="flex space-x-4">
                     <div>
-                        <p class="text-[10px] text-gray-400 font-medium uppercase">Check In</p>
-                        <p class="text-sm font-bold text-gray-800">{{ record.check_in_time|time:"H:i"|default:"--" }}</p>
+                        <p class="text-[10px] font-medium uppercase" style="color:var(--text-muted)">Check In</p>
+                        <p class="text-sm font-bold" style="color:var(--text)">{{ record.check_in_time|time:"H:i"|default:"--" }}</p>
                     </div>
                     <div>
-                        <p class="text-[10px] text-gray-400 font-medium uppercase">Check Out</p>
-                        <p class="text-sm font-bold text-gray-800">{{ record.check_out_time|time:"H:i"|default:"--" }}</p>
+                        <p class="text-[10px] font-medium uppercase" style="color:var(--text-muted)">Check Out</p>
+                        <p class="text-sm font-bold" style="color:var(--text)">{{ record.check_out_time|time:"H:i"|default:"--" }}</p>
                     </div>
                 </div>
                 <div class="text-right">
@@ -129,25 +129,25 @@
 
      <!-- Desktop Table View -->
     <div class="hidden md:block px-4 pb-6">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-150 overflow-hidden">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+        <div class="rounded-xl shadow-sm border overflow-hidden" style="background:var(--surface); border-color:var(--border)">
+            <table class="min-w-full divide-y" style="border-color:var(--border)">
+                <thead style="background:var(--surface-hover)">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Check In</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Check Out</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Hours</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Check In</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Check Out</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Hours</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Status</th>
+                        <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody class="divide-y" style="background:var(--surface); border-color:var(--border)">
                     {% for record in attendances %}
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-gray-900">{{ record.date|date:"d/m/Y" }}</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-800">{{ record.check_in_time|time:"h:i A"|default:"--" }}</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-800">{{ record.check_out_time|time:"h:i A"|default:"--" }}</td>
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold" style="color:var(--text)">{{ record.date|date:"d/m/Y" }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm" style="color:var(--text-secondary)">{{ record.check_in_time|time:"h:i A"|default:"--" }}</td>
+                        <td class="px-6 py-2.5 whitespace-nowrap text-sm" style="color:var(--text-secondary)">{{ record.check_out_time|time:"h:i A"|default:"--" }}</td>
                         <td class="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-primary-500">
                             {{ record.total_hours|default:"0.00" }}h
                             {% if record.overtime_minutes and record.ot_status == 'approved' %}
@@ -179,7 +179,7 @@
                                 {% if record.status == 'on_time' %}
                                 <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i>On Time</span>
                                 {% elif record.status == 'late' %}
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-green-700"><i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>Late</span>
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>Late</span>
                                 {% else %}
                                 <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i>Absent</span>
                                 {% endif %}

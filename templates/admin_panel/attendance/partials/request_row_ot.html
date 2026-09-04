@@ -1,0 +1,56 @@
+<tr id="ot-row-{{ req.pk }}" class="hover:bg-slate-50/40 dark:hover:bg-slate-800/40 transition-colors">
+    <td>
+        <div class="flex items-center gap-3">
+            <c-avatar initials="{{ req.employee.full_name|make_list|first|upper }}" size="sm"></c-avatar>
+            <div>
+                <span class="font-semibold block" style="color:var(--text)">{{ req.employee.full_name }}</span>
+                <span class="text-[10px]" style="color:var(--text-muted)">{{ req.employee.department|default:"Unassigned" }}</span>
+            </div>
+        </div>
+    </td>
+    <td><span class="text-xs" style="color:var(--text)">{{ req.date|date:"d/m/Y" }}</span></td>
+    <td>
+        <span class="text-xs font-mono" style="color:var(--text)">
+            {% if req.attendance and req.attendance.check_in_time and req.attendance.check_out_time %}
+                {{ req.attendance.check_in_time|time:"h:i A" }} - {{ req.attendance.check_out_time|time:"h:i A" }}
+            {% else %}
+                -
+            {% endif %}
+        </span>
+    </td>
+    <td><span class="text-xs font-semibold" style="color:var(--text)">{% if req.attendance and req.attendance.total_hours %}{{ req.attendance.total_hours }}h{% else %}-{% endif %}</span></td>
+    <td><span class="text-xs font-bold" style="color:var(--primary)">{{ req.ot_minutes }}m</span></td>
+    <td>
+        {% if req.status == 'approved' %}
+            <c-badge variant="success" label="Approved"></c-badge>
+        {% elif req.status == 'rejected' %}
+            <c-badge variant="danger" label="Rejected"></c-badge>
+        {% elif req.status == 'manager_approved' %}
+            <c-badge variant="warning" label="Pending HR Final Approval"></c-badge>
+        {% else %}
+            <c-badge variant="warning" label="Pending Manager Review"></c-badge>
+        {% endif %}
+    </td>
+    <td class="text-right">
+        {% if req.status in 'pending,manager_approved' %}
+        <div class="flex items-center justify-end gap-1.5">
+            <button hx-post="{% url 'attendance:process_overtime' req.pk %}"
+                    hx-vals='{"action": "approve"}'
+                    hx-target="#ot-row-{{ req.pk }}"
+                    hx-swap="outerHTML"
+                    class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                Approve
+            </button>
+            <button hx-post="{% url 'attendance:process_overtime' req.pk %}"
+                    hx-vals='{"action": "reject"}'
+                    hx-target="#ot-row-{{ req.pk }}"
+                    hx-swap="outerHTML"
+                    class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                Reject
+            </button>
+        </div>
+        {% else %}
+        <span class="text-xs font-medium" style="color:var(--text-muted)">Processed</span>
+        {% endif %}
+    </td>
+</tr>

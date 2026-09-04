@@ -164,21 +164,21 @@
                             </div>
                             {% endif %}
                             <div class="min-w-0">
-                                <p class="text-[12px] font-bold text-gray-900 truncate">{{ att.employee.full_name }}</p>
-                                <p class="text-[10px] text-gray-500 truncate">{{ att.employee.branch.name|default:"Unassigned" }}</p>
+                                <p class="text-[12px] font-bold truncate" style="color:var(--text)">{{ att.employee.full_name }}</p>
+                                <p class="text-[10px] truncate" style="color:var(--text-muted)">{{ att.employee.branch.name|default:"Unassigned" }}</p>
                             </div>
                         </div>
                     </td>
 
                     <!-- Date -->
-                    <td class="font-medium text-gray-700 text-[11px]">
+                    <td class="font-medium text-[11px]" style="color:var(--text-secondary)">
                         {{ att.date|date:"Y-m-d" }}
                     </td>
 
                     <!-- Time (In / Out) -->
                     <td>
-                        <div class="text-[11px] font-bold text-gray-900">{{ att.check_in_time|time:"h:i A"|default:"-" }}</div>
-                        <div class="text-[10px] text-gray-500">{{ att.check_out_time|time:"h:i A"|default:"-" }}</div>
+                        <div class="text-[11px] font-bold" style="color:var(--text)">{{ att.check_in_time|time:"h:i A"|default:"-" }}</div>
+                        <div class="text-[10px]" style="color:var(--text-muted)">{{ att.check_out_time|time:"h:i A"|default:"-" }}</div>
                     </td>
 
                     <!-- Hours -->
@@ -190,10 +190,11 @@
                     <td>
                         {% if att.photo %}
                         <img src="{{ att.photo.url }}"
-                             class="w-8 h-8 rounded object-cover cursor-pointer hover:scale-105 transition-transform border border-gray-200"
+                             class="w-8 h-8 rounded object-cover cursor-pointer hover:scale-105 transition-transform border"
+                             style="border-color:var(--border)"
                              @click="$dispatch('open-modal', {id: 'photo-modal-{{ att.id }}'})">
                         {% else %}
-                        <span class="text-gray-300 text-[11px]">—</span>
+                        <span class="text-[11px]" style="color:var(--text-muted)">—</span>
                         {% endif %}
                     </td>
 

@@ -1,0 +1,48 @@
+<tr id="forgot-checkout-row-{{ req.pk }}" class="hover:bg-slate-50/40 dark:hover:bg-slate-800/40 transition-colors">
+    <td>
+        <div class="flex items-center gap-3">
+            <c-avatar initials="{{ req.attendance.employee.full_name|make_list|first|upper }}" size="sm"></c-avatar>
+            <div>
+                <span class="font-semibold block" style="color:var(--text)">{{ req.attendance.employee.full_name }}</span>
+                <span class="text-[10px]" style="color:var(--text-muted)">{{ req.attendance.employee.department|default:"Unassigned" }}</span>
+            </div>
+        </div>
+    </td>
+    <td><span class="text-xs" style="color:var(--text)">{{ req.attendance.date|date:"d/m/Y" }}</span></td>
+    <td><span class="text-xs font-mono" style="color:var(--text)">{{ req.attendance.check_in_time|time:"h:i A" }}</span></td>
+    <td><span class="text-xs font-mono font-semibold" style="color:var(--primary)">{{ req.check_out_time|time:"h:i A" }}</span></td>
+    <td><span class="text-xs block max-w-xs truncate" style="color:var(--text-secondary)" title="{{ req.reason }}">{{ req.reason }}</span></td>
+    <td>
+        {% if req.status == 'approved' %}
+            <c-badge variant="success" label="Approved"></c-badge>
+        {% elif req.status == 'rejected' %}
+            <c-badge variant="danger" label="Rejected"></c-badge>
+        {% elif req.status == 'pending_hr' %}
+            <c-badge variant="warning" label="Pending HR"></c-badge>
+        {% else %}
+            <c-badge variant="warning" label="Pending Manager"></c-badge>
+        {% endif %}
+    </td>
+    <td class="text-right">
+        {% if req.status in 'pending_manager,pending_hr' %}
+        <div class="flex items-center justify-end gap-1.5">
+            <button hx-post="{% url 'attendance:process_forgot_checkout' req.pk %}"
+                    hx-vals='{"action": "approve"}'
+                    hx-target="#forgot-checkout-row-{{ req.pk }}"
+                    hx-swap="outerHTML"
+                    class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                Approve
+            </button>
+            <button hx-post="{% url 'attendance:process_forgot_checkout' req.pk %}"
+                    hx-vals='{"action": "reject"}'
+                    hx-target="#forgot-checkout-row-{{ req.pk }}"
+                    hx-swap="outerHTML"
+                    class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                Reject
+            </button>
+        </div>
+        {% else %}
+        <span class="text-xs font-medium" style="color:var(--text-muted)">Processed</span>
+        {% endif %}
+    </td>
+</tr>

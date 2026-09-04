@@ -1,5 +1,5 @@
 import calendar as cal_mod
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from collections import defaultdict
 from django.utils import timezone
 from django.conf import settings
@@ -36,8 +36,8 @@ def _get_working_days(year, month, schedule=None):
 class OptimizedSchedule:
     def __init__(self, employee, policies_by_branch, global_policy):
         self.employee = employee
-        self.office_start_time = datetime.time(datetime.today().replace(hour=9, minute=0))
-        self.office_end_time = datetime.time(datetime.today().replace(hour=18, minute=0))
+        self.office_start_time = time(9, 0)
+        self.office_end_time = time(18, 0)
         self.late_after_minutes = 15
         self.early_checkout_before_minutes = 30
         self.overtime_after_minutes = 0

@@ -7,7 +7,7 @@
             <div>
                 {% url 'leave:admin_balances' as balances_url %}
                 <c-breadcrumb page1_href="{{ balances_url }}" page1_label="Leave Balances" current="{{ employee.full_name }}" ></c-breadcrumb>
-                <h1 class="text-[14px] font-semibold text-gray-900 mt-1">{{ employee.full_name }} — Leave Profile</h1>
+                <h1 class="text-[14px] font-semibold mt-1" style="color:var(--text)">{{ employee.full_name }} — Leave Profile</h1>
             </div>
             <div class="flex items-center gap-2">
                 <c-button href="{% url 'audit:activity_list' %}?module=leave&object_id={{ employee.pk }}" variant="ghost" size="md" icon="history" label="History" ></c-button>
@@ -24,9 +24,9 @@
                 <c-avatar :initials="employee.full_name|first" size="lg" ></c-avatar>
                 {% endif %}
                 <div class="text-center sm:text-left min-w-0 flex-1">
-                    <h2 class="text-[15px] font-bold text-gray-900">{{ employee.full_name }}</h2>
-                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-1 text-sm text-gray-500">
-                        <span>ID: <strong class="text-gray-700">{{ employee.employee_id }}</strong></span>
+                    <h2 class="text-[15px] font-bold" style="color:var(--text)">{{ employee.full_name }}</h2>
+                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-1 text-sm" style="color:var(--text-muted)">
+                        <span>ID: <strong style="color:var(--text)">{{ employee.employee_id }}</strong></span>
                         <span>•</span>
                         <span>{{ employee.designation|default:"Staff" }}</span>
                         <span>•</span>
@@ -44,7 +44,7 @@
                 <c-card title="Balances Summary" padding="lg">
                     <c-slot name="actions">
                         <form method="GET" class="flex items-center gap-1.5">
-                            <select name="year" onchange="this.form.submit()" class="px-2.5 py-1 border border-gray-200 rounded-lg text-xs bg-white text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1877F2]">
+                            <select name="year" onchange="this.form.submit()" class="px-2.5 py-1 border rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary" style="background:var(--surface); border-color:var(--border); color:var(--text)">
                                 {% for y in available_years %}
                                 <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
                                 {% endfor %}
@@ -55,10 +55,10 @@
                     {% with total_left=employee.total_leave_left_by_year|dictget:year %}
                     <c-card padding="md" extra_class="bg-blue-50/60 !border-blue-200 mb-4 flex justify-between items-center">
                         <div>
-                            <p class="text-xs font-bold text-[#1877F2] uppercase tracking-wider">Total Leave Left</p>
-                            <p class="text-[10px] text-blue-600/80 mt-0.5">Across all leave types</p>
+                            <p class="text-xs font-bold text-primary uppercase tracking-wider">Total Leave Left</p>
+                            <p class="text-[10px] mt-0.5" style="color:var(--text-muted)">Across all leave types</p>
                         </div>
-                        <span class="text-2xl font-black {% if total_left < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
+                        <span class="text-2xl font-black {% if total_left < 0 %}text-[#f42a41]{% endif %}" style="{% if total_left >= 0 %}color:var(--text){% endif %}">
                             {{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}
                         </span>
                     </c-card>
@@ -66,39 +66,39 @@
 
                     <div class="space-y-3">
                         {% for balance in balances %}
-                        <c-card padding="md" extra_class="!p-4 bg-gray-50/70 border-gray-150">
+                        <c-card padding="md" extra_class="!p-4 border" style="background:var(--surface-hover); border-color:var(--border)">
                             <div class="flex items-center justify-between">
-                                <span class="text-sm font-bold text-gray-800">
+                                <span class="text-sm font-bold" style="color:var(--text)">
                                     {% if balance.leave_type %}{{ balance.leave_type.name }}{% else %}{{ balance.name }}{% endif %}
                                 </span>
-                                <span class="text-xs text-gray-400">Year: {{ year }}</span>
+                                <span class="text-xs" style="color:var(--text-muted)">Year: {{ year }}</span>
                             </div>
                             <div class="flex justify-between items-baseline mt-2">
-                                <span class="text-2xl font-extrabold {% if balance.remaining_days < 0 %}text-[#f42a41]{% else %}text-gray-900{% endif %}">
+                                <span class="text-2xl font-extrabold {% if balance.remaining_days < 0 %}text-[#f42a41]{% endif %}" style="{% if balance.remaining_days >= 0 %}color:var(--text){% endif %}">
                                     {{ balance.remaining_days }}
                                 </span>
-                                <span class="text-xs text-gray-500 font-medium">
+                                <span class="text-xs font-medium" style="color:var(--text-muted)">
                                     remaining of {{ balance.total_days }}
                                 </span>
                             </div>
-                            <div class="w-full bg-gray-200/70 h-2 rounded-full mt-2.5 overflow-hidden flex">
-                                <div class="bg-[#1877F2] h-full rounded-full" style="width: {% widthratio balance.used_days balance.total_days 100 %}%"></div>
+                            <div class="w-full h-2 rounded-full mt-2.5 overflow-hidden flex" style="background:var(--border)">
+                                <div class="bg-primary h-full rounded-full" style="width: {% widthratio balance.used_days balance.total_days 100 %}%"></div>
                             </div>
-                            <div class="flex justify-between items-center text-xs text-gray-500 mt-3 pt-2 border-t border-gray-200/60">
-                                <span>Used: <strong>{{ balance.used_days }}</strong> days</span>
-                                <span>Limit: <strong>{{ balance.total_days }}</strong> days</span>
+                            <div class="flex justify-between items-center text-xs mt-3 pt-2 border-t" style="border-color:var(--border); color:var(--text-muted)">
+                                <span>Used: <strong style="color:var(--text)">{{ balance.used_days }}</strong> days</span>
+                                <span>Limit: <strong style="color:var(--text)">{{ balance.total_days }}</strong> days</span>
                                 {% if balance.id %}
                                 <c-button hx-get="{% url 'admin_panel:leave_balance_edit' balance.id %}"
                                           hx-target="#modal-container"
                                           variant="ghost"
                                           size="sm"
                                           label="Adjust"
-                                          extra_class="!text-[#1877F2] hover:!text-[#166FE5] !p-0 font-bold" ></c-button>
+                                          extra_class="!text-primary hover:opacity-80 !p-0 font-bold" ></c-button>
                                 {% endif %}
                             </div>
                         </c-card>
                         {% empty %}
-                        <div class="text-center text-xs text-gray-400 py-6">
+                        <div class="text-center text-xs py-6" style="color:var(--text-muted)">
                             No leave types configured.
                         </div>
                         {% endfor %}
@@ -112,28 +112,28 @@
                     {% if history %}
                     <c-table>
                         <c-slot name="header">
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Leave Type</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Dates</th>
-                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Days</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Reason</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color:var(--text-muted)">Leave Type</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color:var(--text-muted)">Dates</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color:var(--text-muted)">Days</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color:var(--text-muted)">Reason</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color:var(--text-muted)">Status</th>
                         </c-slot>
 
                         {% for req in history %}
-                        <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="px-4 py-3 font-bold text-sm text-gray-900">
+                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td class="px-4 py-3 font-bold text-sm" style="color:var(--text)">
                                 {{ req.leave_type.name }}
                             </td>
-                            <td class="px-4 py-3 text-xs text-gray-700">
+                            <td class="px-4 py-3 text-xs" style="color:var(--text-secondary)">
                                 <div>
-                                    <span class="font-medium text-gray-900">{{ req.start_date|date:"d/m/Y" }}</span>
-                                    <span class="text-gray-400">to {{ req.end_date|date:"d/m/Y" }}</span>
+                                    <span class="font-medium" style="color:var(--text)">{{ req.start_date|date:"d/m/Y" }}</span>
+                                    <span style="color:var(--text-muted)">to {{ req.end_date|date:"d/m/Y" }}</span>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-center text-xs font-bold text-gray-900">
+                            <td class="px-4 py-3 text-center text-xs font-bold" style="color:var(--text)">
                                 {{ req.number_of_days }}
                             </td>
-                            <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title="{{ req.reason }}">
+                            <td class="px-4 py-3 text-xs max-w-xs truncate" style="color:var(--text-muted)" title="{{ req.reason }}">
                                 {{ req.reason }}
                             </td>
                             <td class="px-4 py-3">
@@ -150,11 +150,11 @@
                     </c-table>
                     {% else %}
                     <div class="py-16 text-center">
-                        <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <i data-lucide="calendar" class="w-6 h-6 text-gray-400"></i>
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style="background:var(--surface-hover)">
+                            <i data-lucide="calendar" class="w-6 h-6" style="color:var(--text-muted)"></i>
                         </div>
-                        <p class="font-bold text-gray-900 text-sm">No requests found</p>
-                        <p class="text-xs text-gray-400 mt-1">No leave requests submitted yet.</p>
+                        <p class="font-bold text-sm" style="color:var(--text)">No requests found</p>
+                        <p class="text-xs mt-1" style="color:var(--text-muted)">No leave requests submitted yet.</p>
                     </div>
                     {% endif %}
                 </c-card>

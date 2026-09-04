@@ -355,9 +355,10 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         status = self.request.GET.get('status')
         
         # Enforce Manager branch limits
-        role_name = self.request.user.role.name if hasattr(self.request.user.role, 'name') else self.request.user.role
-        can_view_all = (role_name == 'admin')
-        profile = getattr(self.request.user, 'employee_profile', None)
+        user = self.request.user
+        role_name = user.role.name if hasattr(user.role, 'name') else str(getattr(user, 'role', ''))
+        can_view_all = user.is_superuser or role_name in ('admin', 'system_owner')
+        profile = getattr(user, 'employee_profile', None)
         
         if not can_view_all and role_name == 'manager':
             if profile and profile.branch:
@@ -413,9 +414,10 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         status = self.request.GET.get('status')
         
         # Enforce Manager branch limits
-        role_name = self.request.user.role.name if hasattr(self.request.user.role, 'name') else self.request.user.role
-        can_view_all = (role_name == 'admin')
-        profile = getattr(self.request.user, 'employee_profile', None)
+        user = self.request.user
+        role_name = user.role.name if hasattr(user.role, 'name') else str(getattr(user, 'role', ''))
+        can_view_all = user.is_superuser or role_name in ('admin', 'system_owner')
+        profile = getattr(user, 'employee_profile', None)
         
         if not can_view_all and role_name == 'manager':
             if profile and profile.branch:
@@ -480,7 +482,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         context['total_late'] = total_late
         context['total_field'] = total_field
         
-        context['employees'] = EmployeeProfile.objects.all()
+        context['employees'] = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
         from apps.branches.utils import get_cached_branches
         context['branches'] = get_cached_branches()
         
@@ -797,8 +799,9 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
                 schedule_cache[emp.branch_id] = _get_employee_schedule(emp)
             schedule = schedule_cache[emp.branch_id]
 
-            # Skip non-working days for this employee's branch schedule
-            if not _is_working_day(curr_date, schedule):
+            # Skip holidays (weekly offs, branch schedule, and public holidays)
+            from apps.attendance.schedule_utils import is_employee_holiday
+            if is_employee_holiday(emp, curr_date):
                 continue
 
             # Don't mark future dates as absent
