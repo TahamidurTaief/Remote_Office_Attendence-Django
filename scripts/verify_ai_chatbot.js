@@ -146,7 +146,7 @@ const exampleAdminOutput = {
   role: 'admin',
   query: 'Summarize attendance, projects, leave, and payroll anomalies for the last 30 days',
   response: {
-    status: 'FieldTrack AI Intelligence',
+    status: 'TaiefLab Ai',
     reportingPeriod: 'Last 30 Days (2026-08-04 to 2026-09-03)',
     summary: 'Across all active branches, attendance on-time rate averaged 94.8% with 14 late check-ins flagged. Two HVAC installation projects have upcoming milestone deadlines this Friday. Approved leaves total 6 requests, with zero pending payroll disputes.',
     privacyNotice: 'Confidential employee salaries omitted from context.',
