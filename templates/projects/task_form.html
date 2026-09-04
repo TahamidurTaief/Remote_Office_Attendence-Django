@@ -6,9 +6,17 @@
                 <h2 class="text-sm font-bold text-gray-900">
                     {% if object %}Edit Task: {{ object.activity }}{% else %}Add New Task{% endif %}
                 </h2>
-                <p class="mt-0.5 text-xs text-gray-500">Project: <span class="font-semibold text-gray-700">{{ project.name }}</span></p>
+                {% if project %}
+                    <p class="mt-0.5 text-xs text-gray-500">Project: <span class="font-semibold text-gray-700">{{ project.name }}</span></p>
+                {% else %}
+                    <p class="mt-0.5 text-xs text-gray-500"><span class="font-semibold text-gray-700">Standalone Task</span></p>
+                {% endif %}
             </div>
-            <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Project"></c-button>
+            {% if project %}
+                <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Project"></c-button>
+            {% else %}
+                <c-button href="{% url 'projects:global_task_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Tasks"></c-button>
+            {% endif %}
         </div>
 
         <!-- Main Card Component -->
@@ -120,7 +128,11 @@
 
                 <!-- Form Actions -->
                 <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-150 mt-4">
-                    <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" label="Cancel"></c-button>
+                    {% if project %}
+                        <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" label="Cancel"></c-button>
+                    {% else %}
+                        <c-button href="{% url 'projects:global_task_list' %}" variant="secondary" label="Cancel"></c-button>
+                    {% endif %}
                     <c-button type="submit" variant="primary" icon="check" label="{% if object %}Save Changes{% else %}Add Task{% endif %}"></c-button>
                 </div>
             </form>

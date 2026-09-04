@@ -444,10 +444,11 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
             if new_task.responsible_person.user:
                 from apps.notifications.dispatch import log_activity
                 subject = f"Task Assigned: {new_task.activity}"
-                notif_msg = f"You have been assigned to task '{new_task.activity}' for project '{new_task.project.name}'."
+                proj_name = new_task.project.name if new_task.project else "Standalone"
+                notif_msg = f"You have been assigned to task '{new_task.activity}' for project '{proj_name}'."
                 email_msg = (
                     f"Hello {new_task.responsible_person.full_name},\n\n"
-                    f"You have been assigned to the following task in project '{new_task.project.name}':\n"
+                    f"You have been assigned to the following task in project '{proj_name}':\n"
                     f"Task: {new_task.activity}\n"
                     f"Planned: {new_task.planned_start or '—'} to {new_task.planned_finish or '—'}\n"
                     f"Status: {new_task.status}\n\n"
@@ -475,17 +476,21 @@ class ProjectTaskUpdateView(AdminRequiredMixin, UpdateView):
         return response
 
     def get_success_url(self):
-        return reverse_lazy('projects:project_detail', kwargs={'pk': self.object.project.pk})
+        if self.object.project:
+            return reverse_lazy('projects:project_detail', kwargs={'pk': self.object.project.pk})
+        return reverse_lazy('projects:global_task_list')
 
 class ProjectTaskDeleteView(AdminRequiredMixin, View):
     def post(self, request, pk):
         # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
         task = get_object_or_404(ProjectTask, pk=pk)
-        project_pk = task.project.pk
+        project_pk = task.project.pk if task.project else None
         task_activity = task.activity
         task.delete()
         messages.success(request, f'Task "{task_activity}" deleted successfully.')
-        return redirect('projects:project_detail', pk=project_pk)
+        if project_pk:
+            return redirect('projects:project_detail', pk=project_pk)
+        return redirect('projects:global_task_list')
 
 
 class ProjectTaskReorderView(AdminRequiredMixin, View):
@@ -1412,7 +1417,9 @@ class ProjectTaskShiftSubsequentView(AdminRequiredMixin, View):
             else:
                 messages.error(request, 'Invalid form data.')
                 
-            return redirect('projects:project_detail', pk=task.project.pk)
+            if task.project:
+                return redirect('projects:project_detail', pk=task.project.pk)
+            return redirect('projects:global_task_list')
         except Exception as e:
             import traceback
             traceback.print_exc()

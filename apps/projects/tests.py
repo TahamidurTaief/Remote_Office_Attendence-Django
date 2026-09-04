@@ -1375,6 +1375,33 @@ class ProjectTaskShiftTests(TestCase):
         self.task3.refresh_from_db()
         self.assertEqual(self.task3.planned_start, date(2026, 7, 11))
 
+    def test_standalone_task_edit_view(self):
+        self.client.login(username='admin@example.com', password=self.password)
+        standalone_task = ProjectTask.objects.create(
+            project=None,
+            order=99,
+            activity='Standalone Maintenance Activity',
+            status='Pending'
+        )
+        url = reverse('projects:project_task_edit', kwargs={'pk': standalone_task.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Standalone Task')
+        self.assertContains(response, reverse('projects:global_task_list'))
+
+        # Post update
+        post_data = {
+            'order': 99,
+            'activity': 'Standalone Maintenance Activity Updated',
+            'status': 'In Progress',
+        }
+        res_post = self.client.post(url, data=post_data)
+        self.assertEqual(res_post.status_code, 302)
+        self.assertRedirects(res_post, reverse('projects:global_task_list'))
+        standalone_task.refresh_from_db()
+        self.assertEqual(standalone_task.activity, 'Standalone Maintenance Activity Updated')
+        self.assertEqual(standalone_task.status, 'In Progress')
+
 
 class ProjectNotificationEmailTests(TestCase):
     def setUp(self):
