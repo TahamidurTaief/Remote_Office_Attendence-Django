@@ -146,7 +146,18 @@
     </div>
 
     {# ── Nav ─────────────────────────────────────────────────────────── #}
-    <nav class="flex-1 py-1 overflow-y-auto scrollbar-hide" aria-label="Sidebar Navigation">
+    <nav id="ft-sidebar-nav"
+         class="flex-1 py-1 overflow-y-auto scrollbar-hide"
+         aria-label="Sidebar Navigation"
+         @scroll.passive="sessionStorage.setItem('ft_sidebar_scroll', $el.scrollTop)"
+         x-init="$nextTick(() => { const s = sessionStorage.getItem('ft_sidebar_scroll'); if (s) $el.scrollTop = parseInt(s, 10); })">
+      <script>
+        (function(){
+          var nav = document.getElementById('ft-sidebar-nav');
+          var s = sessionStorage.getItem('ft_sidebar_scroll');
+          if (nav && s) { nav.scrollTop = parseInt(s, 10); }
+        })();
+      </script>
 
       {% firstof active_href request.path '' as path %}
       {% firstof request.GET.type '' as req_get_type %}
@@ -676,4 +687,17 @@
       </a>
     </div>
   </aside>
+  <script>
+    window.addEventListener('beforeunload', function() {
+      var nav = document.getElementById('ft-sidebar-nav');
+      if (nav) { sessionStorage.setItem('ft_sidebar_scroll', nav.scrollTop); }
+    });
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+      if (evt.detail && evt.detail.target && evt.detail.target.id === 'ft-sidebar') {
+        var nav = document.getElementById('ft-sidebar-nav');
+        var s = sessionStorage.getItem('ft_sidebar_scroll');
+        if (nav && s) { nav.scrollTop = parseInt(s, 10); }
+      }
+    });
+  </script>
 </div>

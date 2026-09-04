@@ -165,7 +165,10 @@ class UserSession(models.Model):
             parsed = parse_user_agent(self.browser)
             if parsed and parsed != "Unknown Device":
                 return parsed
-        return f"Device ({self.device_id[:8]})"
+        if self.device_id:
+            clean_dev = self.device_id.replace('verify_ui_', '').replace('_', ' ').strip().title()
+            return f"Device ({clean_dev[:15]})" if clean_dev else "Desktop Device"
+        return "Desktop Browser"
 
     def __str__(self):
         return f"{self.user} ({self.device_id[:8]}) - {'Active' if self.is_active else 'Expired'}"

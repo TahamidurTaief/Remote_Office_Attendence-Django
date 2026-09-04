@@ -5,4 +5,4 @@
   <c-tab-button href="?status=locked" hx-get="?status=locked" hx-target="#login-activity-container" hx-push-url="true" active="{% if status_filter == 'locked' %}true{% endif %}" label="Locked" color="rose"></c-tab-button>
 </div>
 
-<c-audit-table type="login" logs="{{ activities }}"></c-audit-table>
+<c-audit-table type="login" :logs="activities"></c-audit-table>

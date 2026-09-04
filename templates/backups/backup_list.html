@@ -1,248 +1,260 @@
-<c-app-shell page_title="Backup & Restore | FieldTrack Admin" active_href="{{ request.path }}">
-<div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{ showSettings: false }">
+<c-app-shell page_title="Backup &amp; Restore | FieldTrack Admin" active_href="{{ request.path }}">
+  <c-slot name="sidebar">
+    <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
+  </c-slot>
+
+  <c-slot name="topbar">
+    <c-topbar title="Backup &amp; Restore Management" ></c-topbar>
+  </c-slot>
+
+  <c-command-palette></c-command-palette>
+
+  <div class="p-4 max-w-7xl mx-auto space-y-5" x-data="{ showSettings: false }">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-            <h1 class="text-[14px] font-semibold text-gray-900">Backup & Restore</h1>
-            <p class="text-sm text-gray-500 mt-1">Create JSON snapshots, schedule automatic backups, and sync to Google Drive.</p>
-        </div>
-        <div class="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
-            Local files: <span class="font-semibold text-gray-700">/backups/files</span>
-        </div>
+      <div>
+        <h1 class="text-xl font-bold" style="color:var(--text)">Backup &amp; Disaster Recovery</h1>
+        <p class="text-xs mt-1" style="color:var(--text-muted)">Create JSON snapshots, schedule automatic backups, and sync securely to Google Drive.</p>
+      </div>
+      <div class="text-xs px-3 py-1.5 rounded-lg border font-mono" style="background:var(--surface-2); border-color:var(--border); color:var(--text-muted)">
+        Storage: <span class="font-semibold" style="color:var(--text)">/backups/files</span>
+      </div>
     </div>
 
+    {# ── Overview KPI Cards ────────────────────────────────────────── #}
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <c-backup-stat-card type="emerald" icon="database" badge_text="Manual" title="Create Backup">
+        <p class="text-xs mt-1 text-emerald-800 dark:text-emerald-300">Generate and download instantaneous JSON snapshot.</p>
+        <form method="POST" action="{% url 'backups:create_backup' %}" class="mt-4">
+          {% csrf_token %}
+          <button type="submit" class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm">
+            <i data-lucide="database" class="w-3.5 h-3.5"></i>
+            Create Now
+          </button>
+        </form>
+      </c-backup-stat-card>
 
-
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <c-backup-stat-card type="emerald" icon="database" badge_text="Manual" title="Create Backup">
-            <p class="text-sm text-emerald-800 mt-1">Download JSON + upload to Drive.</p>
-            <form method="POST" action="{% url 'backups:create_backup' %}" class="mt-5">
-                {% csrf_token %}
-                <button type="submit" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-xl transition-colors">
-                    <i data-lucide="database" class="w-4 h-4"></i>
-                    Create Now
-                </button>
-            </form>
-        </c-backup-stat-card>
-
-        <c-backup-stat-card type="sky" icon="clock" badge_text="Latest" title="Last Backup">
-            {% if stats.last_backup %}
-            <p class="text-sm text-sky-800 mt-1">{{ stats.last_backup.created_at|timesince }} ago</p>
-            <div class="mt-4 flex items-center justify-between text-sm">
-                <span class="text-sky-700 font-semibold">{{ stats.last_backup.file_size|filesizeformat }}</span>
-                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium {% if stats.last_backup.status == 'completed' %}bg-emerald-100 text-emerald-700{% elif stats.last_backup.status == 'failed' %}bg-red-100 text-red-700{% else %}bg-amber-100 text-amber-700{% endif %}">
-                    {{ stats.last_backup.get_status_display }}
-                </span>
-            </div>
-            {% else %}
-            <p class="text-sm text-sky-800 mt-1">No backups created yet.</p>
-            <div class="mt-4 text-xs text-sky-700">Create your first backup above.</div>
-            {% endif %}
-        </c-backup-stat-card>
-
-        <c-backup-stat-card type="fuchsia" icon="refresh-cw" badge_text="Auto" title="Auto Backup">
-            <div class="mt-2 space-y-1 text-sm text-fuchsia-800">
-                <div>Daily: <span class="font-semibold">{% if config.auto_daily_enabled %}ON{% else %}OFF{% endif %}</span></div>
-                <div>3-Day: <span class="font-semibold">{% if config.auto_3day_enabled %}ON{% else %}OFF{% endif %}</span></div>
-                <div>Drive Upload: <span class="font-semibold">{% if config.auto_upload_to_drive %}ON{% else %}OFF{% endif %}</span></div>
-            </div>
-        </c-backup-stat-card>
-
-        <c-backup-stat-card type="primary" icon="cloud" badge_text="Drive" title="Google Drive">
-            <p class="text-sm text-primary-700 mt-1">
-                {% if config.is_enabled and config.service_account_json %}
-                Configured and ready.
-                {% else %}
-                Not configured.
-                {% endif %}
-            </p>
-            <button type="button" @click="showSettings = true" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
-                <i data-lucide="settings" class="w-4 h-4"></i>
-                Configure
-            </button>
-        </c-backup-stat-card>
-    </div>
-
-    <!-- Google Drive Settings -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <button type="button" @click="showSettings = !showSettings" class="w-full flex items-center justify-between px-6 py-2.5 text-left">
-            <span class="text-sm font-bold text-gray-800 flex items-center gap-2">
-                <i data-lucide="settings" class="w-4 h-4 text-gray-500"></i>
-                Google Drive Settings
+      <c-backup-stat-card type="sky" icon="clock" badge_text="Latest" title="Last Backup">
+        {% if stats.last_backup %}
+          <p class="text-xs mt-1 text-sky-800 dark:text-sky-300">{{ stats.last_backup.created_at|timesince }} ago</p>
+          <div class="mt-4 flex items-center justify-between text-xs">
+            <span class="font-mono font-semibold text-sky-700 dark:text-sky-300">{{ stats.last_backup.file_size|filesizeformat }}</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {% if stats.last_backup.status == 'completed' %}bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30{% elif stats.last_backup.status == 'failed' %}bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30{% else %}bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30{% endif %}">
+              {{ stats.last_backup.get_status_display }}
             </span>
-            <span class="text-xs text-gray-500" x-text="showSettings ? 'Hide' : 'Show'"></span>
-        </button>
-        <div x-show="showSettings" x-cloak class="border-t border-gray-100 px-6 py-6">
-            <form id="drive-settings-form" method="POST" action="{% url 'backups:save_drive_config' %}" class="space-y-6">
-                {% csrf_token %}
+          </div>
+        {% else %}
+          <p class="text-xs mt-1 text-sky-800 dark:text-sky-300">No backups created yet.</p>
+          <div class="mt-4 text-xs text-sky-600 dark:text-sky-400">Create your first backup above.</div>
+        {% endif %}
+      </c-backup-stat-card>
 
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h4 class="text-sm font-bold text-gray-800">Enable Google Drive</h4>
-                        <p class="text-xs text-gray-500">Turn on Drive uploads and connection tests.</p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="is_enabled" class="sr-only peer" {% if config.is_enabled %}checked{% endif %}>
-                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-emerald-500 transition-colors"></div>
-                        <div class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
-                    </label>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Service Account JSON</label>
-                    <textarea name="service_account_json" rows="8" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder:text-gray-400 resize-none" placeholder="Paste your Google Service Account JSON key here...">{{ config.service_account_json }}</textarea>
-                    <p class="text-xs text-gray-500 mt-2">Create a Service Account in Google Cloud Console, download the JSON key, and paste it here.</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Drive Folder ID</label>
-                    <input type="text" name="folder_id" value="{{ config.folder_id }}" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-                    <p class="text-xs text-gray-500 mt-2">The ID from your Google Drive folder URL.</p>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-                        <span class="text-sm font-semibold text-gray-700">Auto Daily Backup</span>
-                        <input type="checkbox" name="auto_daily_enabled" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500" {% if config.auto_daily_enabled %}checked{% endif %}>
-                    </label>
-                    <label class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-                        <span class="text-sm font-semibold text-gray-700">Auto 3-Day Backup</span>
-                        <input type="checkbox" name="auto_3day_enabled" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500" {% if config.auto_3day_enabled %}checked{% endif %}>
-                    </label>
-                    <label class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-                        <span class="text-sm font-semibold text-gray-700">Auto Upload to Drive</span>
-                        <input type="checkbox" name="auto_upload_to_drive" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500" {% if config.auto_upload_to_drive %}checked{% endif %}>
-                    </label>
-                    <div class="bg-gray-50 rounded-xl px-4 py-3">
-                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Keep Local Copies</label>
-                        <input type="number" name="keep_local_copies" value="{{ config.keep_local_copies }}" min="1" class="w-full px-3 py-2.5 border border-gray-150 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap gap-3 items-center">
-                    <button type="button"
-                            hx-post="{% url 'backups:test_drive' %}"
-                            hx-target="#drive-test-result"
-                            hx-swap="innerHTML"
-                            hx-include="#drive-settings-form"
-                            class="flex items-center gap-2 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                        Test Connection
-                    </button>
-                    <div id="drive-test-result" class="text-xs text-gray-600"></div>
-                    <button type="submit" class="ml-auto flex items-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors">
-                        <i data-lucide="save" class="w-4 h-4"></i>
-                        Save Settings
-                    </button>
-                </div>
-            </form>
+      <c-backup-stat-card type="fuchsia" icon="refresh-cw" badge_text="Auto" title="Auto Backup">
+        <div class="mt-2 space-y-1 text-xs text-fuchsia-900 dark:text-fuchsia-300">
+          <div>Daily: <span class="font-semibold font-mono">{% if config.auto_daily_enabled %}ON{% else %}OFF{% endif %}</span></div>
+          <div>3-Day: <span class="font-semibold font-mono">{% if config.auto_3day_enabled %}ON{% else %}OFF{% endif %}</span></div>
+          <div>Drive Upload: <span class="font-semibold font-mono">{% if config.auto_upload_to_drive %}ON{% else %}OFF{% endif %}</span></div>
         </div>
+      </c-backup-stat-card>
+
+      <c-backup-stat-card type="primary" icon="cloud" badge_text="Drive" title="Google Drive">
+        <p class="text-xs mt-1" style="color:var(--text-muted)">
+          {% if config.is_enabled and config.service_account_json %}
+            <span class="text-emerald-600 dark:text-emerald-400 font-medium">Configured &amp; synced.</span>
+          {% else %}
+            <span>Not configured.</span>
+          {% endif %}
+        </p>
+        <button type="button" @click="showSettings = !showSettings" class="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-medium transition-colors" style="border-color:var(--border); background:var(--surface); color:var(--text)">
+          <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+          Configure
+        </button>
+      </c-backup-stat-card>
     </div>
+
+    {# ── Google Drive Settings Expandable Card ─────────────────────── #}
+    <c-card title="Google Drive Settings" subtitle="Configure automated offsite cloud snapshot uploads via Service Account.">
+      <div class="space-y-4">
+        <button type="button" @click="showSettings = !showSettings" class="w-full flex items-center justify-between text-xs font-semibold py-1" style="color:var(--text)">
+          <span class="flex items-center gap-2">
+            <i data-lucide="cloud" class="w-4 h-4 text-primary"></i>
+            Cloud Synchronization Configuration
+          </span>
+          <span class="text-[11px] px-2 py-0.5 rounded border" style="border-color:var(--border); background:var(--surface-2); color:var(--text-muted)" x-text="showSettings ? 'Hide Panel' : 'Show Panel'"></span>
+        </button>
+
+        <div x-show="showSettings" x-cloak class="border-t pt-4 space-y-5" style="border-color:var(--border)">
+          <form id="drive-settings-form" method="POST" action="{% url 'backups:save_drive_config' %}" class="space-y-5">
+            {% csrf_token %}
+
+            <div class="flex items-center justify-between p-3 rounded-xl border" style="background:var(--surface-2); border-color:var(--border)">
+              <div>
+                <h4 class="text-xs font-bold" style="color:var(--text)">Enable Google Drive Storage</h4>
+                <p class="text-[11px]" style="color:var(--text-muted)">Activate automated cloud replication and connection health tests.</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" name="is_enabled" class="sr-only peer" {% if config.is_enabled %}checked{% endif %}>
+                <div class="w-10 h-5 bg-slate-300 dark:bg-slate-700 rounded-full peer peer-checked:bg-emerald-500 transition-colors"></div>
+                <div class="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-5"></div>
+              </label>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium mb-1.5" style="color:var(--text)">Service Account JSON Credentials</label>
+              <textarea name="service_account_json" rows="6" class="ft-input w-full font-mono text-[11px] resize-none" placeholder="Paste your Google Service Account JSON key here...">{{ config.service_account_json }}</textarea>
+              <p class="text-[11px] mt-1" style="color:var(--text-muted)">Service account key must have Drive file write access.</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium mb-1.5" style="color:var(--text)">Drive Destination Folder ID</label>
+              <input type="text" name="folder_id" value="{{ config.folder_id }}" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" class="ft-input w-full text-xs font-mono">
+              <p class="text-[11px] mt-1" style="color:var(--text-muted)">The folder ID string extracted from the destination Google Drive URL.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label class="flex items-center justify-between p-3 rounded-xl border cursor-pointer" style="background:var(--surface-2); border-color:var(--border)">
+                <span class="text-xs font-medium" style="color:var(--text)">Auto Daily Backup</span>
+                <input type="checkbox" name="auto_daily_enabled" class="rounded border-gray-300 text-primary h-4 w-4" {% if config.auto_daily_enabled %}checked{% endif %}>
+              </label>
+              <label class="flex items-center justify-between p-3 rounded-xl border cursor-pointer" style="background:var(--surface-2); border-color:var(--border)">
+                <span class="text-xs font-medium" style="color:var(--text)">Auto 3-Day Backup</span>
+                <input type="checkbox" name="auto_3day_enabled" class="rounded border-gray-300 text-primary h-4 w-4" {% if config.auto_3day_enabled %}checked{% endif %}>
+              </label>
+              <label class="flex items-center justify-between p-3 rounded-xl border cursor-pointer" style="background:var(--surface-2); border-color:var(--border)">
+                <span class="text-xs font-medium" style="color:var(--text)">Auto Upload to Drive</span>
+                <input type="checkbox" name="auto_upload_to_drive" class="rounded border-gray-300 text-primary h-4 w-4" {% if config.auto_upload_to_drive %}checked{% endif %}>
+              </label>
+              <div class="p-3 rounded-xl border" style="background:var(--surface-2); border-color:var(--border)">
+                <label class="block text-xs font-medium mb-1" style="color:var(--text)">Keep Local Copies</label>
+                <input type="number" name="keep_local_copies" value="{{ config.keep_local_copies }}" min="1" class="ft-input w-full text-xs">
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-3 items-center pt-2">
+              <button type="button"
+                      hx-post="{% url 'backups:test_drive' %}"
+                      hx-target="#drive-test-result"
+                      hx-swap="innerHTML"
+                      hx-include="#drive-settings-form"
+                      class="ft-btn ft-btn-secondary ft-btn-sm text-xs flex items-center gap-1.5">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                Test Connection
+              </button>
+              <div id="drive-test-result" class="text-xs font-medium"></div>
+              <button type="submit" class="ml-auto ft-btn ft-btn-primary ft-btn-sm text-xs flex items-center gap-1.5">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                Save Cloud Settings
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </c-card>
 
     {# ── Encryption Settings ────────────────────────────────────────────── #}
     <c-encryption-config-card :config="config"></c-encryption-config-card>
 
-    <!-- Backup History -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-6 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <h3 class="text-lg font-bold text-gray-900">Backup History</h3>
-            <div class="text-xs text-gray-500">Total: <span class="font-semibold text-gray-700">{{ stats.total }}</span></div>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date/Time</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Records</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Size</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Encrypted</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Drive</th>
-                        <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    {% for backup in backups %}
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-700">{{ backup.created_at|date:"d/m/Y H:i" }}</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-600">
-                                <i data-lucide="database" class="w-3 h-3"></i>
-                                {{ backup.get_backup_type_display }}
-                            </span>
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
-                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium {% if backup.status == 'completed' %}bg-emerald-100 text-emerald-700{% elif backup.status == 'failed' %}bg-red-100 text-red-700{% else %}bg-amber-100 text-amber-700{% endif %}">
-                                {% if backup.status == 'completed' %}
-                                <i data-lucide="check-circle" class="w-3 h-3"></i>
-                                {% elif backup.status == 'failed' %}
-                                <i data-lucide="x-circle" class="w-3 h-3"></i>
-                                {% else %}
-                                <i data-lucide="alert-circle" class="w-3 h-3"></i>
-                                {% endif %}
-                                {{ backup.get_status_display }}
-                            </span>
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-700">{{ backup.record_count }}</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm text-gray-700">{{ backup.file_size|filesizeformat }}</td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
-                            {% if backup.is_encrypted %}
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                <i data-lucide="lock" class="w-3 h-3"></i> Yes
-                            </span>
-                            {% else %}
-                            <span class="text-gray-400 text-xs">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-sm">
-                            {% if backup.gdrive_uploaded %}
-                                <a href="{{ backup.gdrive_link }}" target="_blank" class="inline-flex items-center gap-1 text-emerald-700 font-semibold hover:underline">
-                                    <i data-lucide="check-circle" class="w-4 h-4"></i>
-                                    Uploaded
-                                </a>
-                            {% else %}
-                                <span class="inline-flex items-center gap-1 text-gray-400">
-                                    <i data-lucide="x-circle" class="w-4 h-4"></i>
-                                    Not uploaded
-                                </span>
-                                {% if backup.file_path %}
-                                <form method="POST" action="{% url 'backups:upload_to_drive' backup.id %}" class="inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="ml-2 inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-xl transition-colors">
-                                        <i data-lucide="cloud-upload" class="w-3 h-3"></i>
-                                        Upload
-                                    </button>
-                                </form>
-                                {% else %}
-                                <span class="ml-2 text-xs text-gray-400">Local file removed</span>
-                                {% endif %}
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-2.5 whitespace-nowrap text-right text-sm font-medium">
-                            {% if backup.file_path %}
-                            <a href="{% url 'backups:download_backup' backup.id %}" class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-xl transition-colors">
-                                <i data-lucide="download" class="w-3 h-3"></i>
-                                Download
-                            </a>
-                            {% else %}
-                            <span class="text-gray-400">Download</span>
-                            {% endif %}
-                            <form method="POST" action="{% url 'backups:delete_backup' backup.id %}" class="inline">
-                                {% csrf_token %}
-                                <button type="submit" class="ml-3 inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-xl transition-colors">
-                                    <i data-lucide="trash-2" class="w-3 h-3"></i>
-                                    Delete
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="px-6 py-14 text-center text-gray-500">
-                            No backups yet. Create your first backup above.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    {# ── Backup History ─────────────────────────────────────────────────── #}
+    <c-card title="Backup History" subtitle="Chronological ledger of local and cloud disaster recovery snapshots.">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b" style="border-color:var(--border); color:var(--text-secondary)">
+              <th class="py-3 px-3 font-semibold">Date / Time</th>
+              <th class="py-3 px-3 font-semibold">Type</th>
+              <th class="py-3 px-3 font-semibold">Status</th>
+              <th class="py-3 px-3 font-semibold">Records</th>
+              <th class="py-3 px-3 font-semibold">Size</th>
+              <th class="py-3 px-3 font-semibold">Encrypted</th>
+              <th class="py-3 px-3 font-semibold">Drive Status</th>
+              <th class="py-3 px-3 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" style="border-color:var(--border)">
+            {% for backup in backups %}
+              <tr class="hover:bg-slate-500/5">
+                <td class="py-3 px-3 font-mono text-[11px] whitespace-nowrap" style="color:var(--text)">
+                  {{ backup.created_at|date:"d/m/Y H:i" }}
+                </td>
+                <td class="py-3 px-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                    <i data-lucide="database" class="w-3 h-3"></i>
+                    {{ backup.get_backup_type_display }}
+                  </span>
+                </td>
+                <td class="py-3 px-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {% if backup.status == 'completed' %}bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25{% elif backup.status == 'failed' %}bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25{% else %}bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25{% endif %}">
+                    {% if backup.status == 'completed' %}
+                      <i data-lucide="check-circle" class="w-3 h-3"></i>
+                    {% elif backup.status == 'failed' %}
+                      <i data-lucide="x-circle" class="w-3 h-3"></i>
+                    {% else %}
+                      <i data-lucide="alert-circle" class="w-3 h-3"></i>
+                    {% endif %}
+                    {{ backup.get_status_display }}
+                  </span>
+                </td>
+                <td class="py-3 px-3 font-mono text-xs" style="color:var(--text)">
+                  {{ backup.record_count }}
+                </td>
+                <td class="py-3 px-3 font-mono text-xs whitespace-nowrap" style="color:var(--text-muted)">
+                  {{ backup.file_size|filesizeformat }}
+                </td>
+                <td class="py-3 px-3 whitespace-nowrap">
+                  {% if backup.is_encrypted %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                      <i data-lucide="lock" class="w-3 h-3"></i> Yes
+                    </span>
+                  {% else %}
+                    <span class="text-xs" style="color:var(--text-muted)">No</span>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-3 whitespace-nowrap">
+                  {% if backup.gdrive_uploaded %}
+                    <a href="{{ backup.gdrive_link }}" target="_blank" class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold hover:underline">
+                      <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                      Uploaded
+                    </a>
+                  {% else %}
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs" style="color:var(--text-muted)">Not synced</span>
+                      {% if backup.file_path %}
+                        <form method="POST" action="{% url 'backups:upload_to_drive' backup.id %}" class="inline">
+                          {% csrf_token %}
+                          <button type="submit" class="ft-btn ft-btn-secondary ft-btn-sm text-[10px] py-0.5 px-2">
+                            Upload
+                          </button>
+                        </form>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-3 text-right space-x-1 whitespace-nowrap">
+                  {% if backup.file_path %}
+                    <a href="{% url 'backups:download_backup' backup.id %}" class="ft-btn ft-btn-secondary ft-btn-sm text-[10px] py-1 px-2.5 inline-flex items-center gap-1">
+                      <i data-lucide="download" class="w-3 h-3"></i>
+                      Download
+                    </a>
+                  {% endif %}
+                  <form method="POST" action="{% url 'backups:delete_backup' backup.id %}" class="inline" onsubmit="return confirm('Permanently delete this backup snapshot?');">
+                    {% csrf_token %}
+                    <button type="submit" class="ft-btn ft-btn-accent ft-btn-sm text-[10px] py-1 px-2.5 inline-flex items-center gap-1 text-rose-500">
+                      <i data-lucide="trash-2" class="w-3 h-3"></i>
+                      Delete
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="8" class="py-10 text-center text-xs" style="color:var(--text-muted)">
+                  No backups yet. Create your first backup snapshot above.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </c-card>
+
+  </div>
 </c-app-shell>

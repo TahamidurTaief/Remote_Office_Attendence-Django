@@ -18,6 +18,17 @@ TRACKED_MODEL_PATHS = [
     ("apps.leave.models", "LeaveRequest"),
     ("apps.expense.models", "Expense"),
     ("apps.branches.models", "Branch"),
+    # Settings, Security & Governance models
+    ("apps.accounts.models", "Role"),
+    ("apps.accounts.models", "RolePermission"),
+    ("apps.accounts.models", "UserRoleAssignment"),
+    ("apps.accounts.models", "UserPermissionOverride"),
+    ("apps.accounts.models", "SecurityPolicy"),
+    ("apps.accounts.models", "UserSecurityProfile"),
+    ("apps.branches.models", "OfficeSchedule"),
+    ("apps.attendance.models", "AttendancePolicy"),
+    ("apps.backups.models", "GoogleDriveConfig"),
+    ("apps.backups.models", "BackupRecord"),
 ]
 
 

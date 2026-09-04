@@ -2,20 +2,24 @@
 
 <div class="p-3 rounded-lg border flex items-center justify-between text-xs" style="background:var(--surface-2); border-color:var(--border)">
   <div class="flex items-center gap-3">
-    <div class="p-2 rounded-lg" style="background:var(--surface); color:var(--text)">
-      <i data-lucide="smartphone" class="w-4 h-4"></i>
+    <div class="p-2 rounded-lg shrink-0" style="background:var(--surface); color:var(--text)">
+      {% if 'Mobile' in sess.browser or 'Android' in sess.browser or 'iPhone' in sess.browser %}
+        <i data-lucide="smartphone" class="w-4 h-4"></i>
+      {% else %}
+        <i data-lucide="laptop" class="w-4 h-4"></i>
+      {% endif %}
     </div>
     <div>
       <div class="flex items-center gap-2">
         <span class="font-medium" style="color:var(--text)">
-          {{ sess.device_display_name }}
+          {{ sess.device_display_name|default:"Desktop Browser" }}
         </span>
         {% if sess.session_key == current_session_key %}
           <span class="px-1.5 py-0.5 text-[10px] rounded bg-primary/20 text-primary font-semibold">Current Device</span>
         {% endif %}
       </div>
       <p class="text-[11px] truncate max-w-xs mt-0.5" style="color:var(--text-muted)">
-        IP: {{ sess.ip|default:"Unknown" }} • Login: {{ sess.login_time|date:"d/m/Y g:i A" }}
+        IP: {{ sess.ip|default:"127.0.0.1 (Local)" }} • Login: {{ sess.login_time|date:"d/m/Y g:i A"|default:"Active session" }}
       </p>
     </div>
   </div>

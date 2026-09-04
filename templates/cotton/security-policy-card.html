@@ -3,14 +3,17 @@
 <c-card title="{{ policy.role|title }} Policy" subtitle="Configured security rules for {{ policy.role }} role.">
   <form hx-post="{% url 'accounts:admin_security_policies' %}"
         hx-swap="none"
+        x-data="{ saving: false, saved: false }"
+        @htmx:before-request="saving = true; saved = false"
+        @htmx:after-request="saving = false; saved = true; setTimeout(() => saved = false, 2500)"
         class="space-y-4 pt-2">
     {% csrf_token %}
     <input type="hidden" name="role" value="{{ policy.role }}">
 
-    <div class="p-3 rounded-lg border bg-opacity-5 flex items-center justify-between" style="border-color: var(--border); background-color: var(--surface-2);">
+    <div class="p-3 rounded-lg border flex items-center justify-between" style="border-color: var(--border); background-color: var(--surface-2);">
       <div class="space-y-0.5">
         <span class="text-xs font-semibold" style="color:var(--text)">Require TOTP MFA</span>
-        <p class="text-[11px] text-gray-400">Forces users in this role to configure Google Authenticator MFA at login.</p>
+        <p class="text-[11px]" style="color:var(--text-muted)">Forces users in this role to configure Google Authenticator MFA at login.</p>
       </div>
       <input type="checkbox" name="mfa_required" value="true" {% if policy.mfa_required %}checked{% endif %} class="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4">
     </div>
@@ -28,6 +31,12 @@
 
     <c-input type="number" name="idle_timeout_minutes" value="{{ policy.idle_timeout_minutes|default:30 }}" label="Idle Lock Timeout (Minutes)" help="Inactivity minutes before workspace locks (1-240)."></c-input>
 
-    <c-button type="submit" label="Save Policy" extra_class="w-full"></c-button>
+    <div class="flex items-center justify-between gap-2 pt-1">
+      <span x-show="saved" x-cloak class="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+        <i data-lucide="check" class="w-3.5 h-3.5"></i> Saved
+      </span>
+      <span x-show="!saved"></span>
+      <c-button type="submit" variant="primary" size="sm" label="Save Policy" ::disabled="saving"></c-button>
+    </div>
   </form>
 </c-card>

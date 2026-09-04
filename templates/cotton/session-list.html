@@ -21,7 +21,7 @@
   {% if sessions %}
     <div class="space-y-3">
       {% for sess in sessions %}
-        <c-session-row sess="{{ sess }}" current_session_key="{{ current_session_key }}"></c-session-row>
+        <c-session-row :sess="sess" :current_session_key="current_session_key"></c-session-row>
       {% endfor %}
     </div>
   {% else %}

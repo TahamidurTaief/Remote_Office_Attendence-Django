@@ -12,12 +12,12 @@
     <div class="p-3 max-w-7xl mx-auto space-y-6">
         <!-- Global Default Attendance Policy Card -->
         <c-card>
-            <x-slot name="header">
+            <c-slot name="header">
                 <div class="flex justify-between items-center w-full pb-3 border-b border-indigo-100 dark:border-slate-800">
                     <h2 class="text-sm font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Global Default Policy Settings</h2>
                     <c-badge variant="info" label="System Wide Default"></c-badge>
                 </div>
-            </x-slot>
+            </c-slot>
 
             <form method="POST" action="{% url 'admin_panel:schedule_settings' %}" class="space-y-4 mt-3">
                 {% csrf_token %}
@@ -65,14 +65,14 @@
             {% for item in schedules %}
             {% with schedule=item.schedule branch=item.branch policy=item.policy %}
             <c-card>
-                <x-slot name="header">
+                <c-slot name="header">
                     <div class="flex justify-between items-center w-full pb-2 border-b" style="border-color:var(--border-subtle)">
-                        <h2 class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">{{ branch.name }} Settings & Policies</h2>
+                        <h2 class="text-xs font-bold text-[var(--text)] uppercase tracking-wider">{{ branch.name }} Settings &amp; Policies</h2>
                         <span class="text-[11px] font-medium text-[var(--text-muted)]">
                             Shift: {{ schedule.office_start_time|time:"g:i A" }} - {{ schedule.office_end_time|time:"g:i A" }}
                         </span>
                     </div>
-                </x-slot>
+                </c-slot>
 
                 <form method="POST" action="{% url 'admin_panel:schedule_settings' %}" class="space-y-4 mt-2">
                     {% csrf_token %}

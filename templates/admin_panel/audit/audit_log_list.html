@@ -13,31 +13,46 @@
     <c-card title="System Security & Sensitive Action Audit Log" subtitle="Comprehensive immutable audit record of sensitive administrative and security events.">
 
       {# ── Filter & Search Bar ───────────────────────────────────────────── #}
-      <div class="flex items-center justify-between mb-4 gap-3 flex-wrap border-b pb-4" style="border-color:var(--border)">
+      <div id="audit-filter-bar" class="flex items-center justify-between mb-4 gap-3 flex-wrap border-b pb-4" style="border-color:var(--border)">
         <div class="flex items-center gap-2 flex-1 min-w-[240px]">
           <c-input type="text"
                    name="q"
                    id="search-input"
-                   placeholder="Search actor, action, or summary..."
+                   placeholder="Search actor, action, target, or details..."
                    value="{{ search_query }}"
                    icon="search"
                    hx-get="{% url 'admin_panel:admin_audit_logs' %}"
+                   hx-include="#audit-filter-bar"
                    hx-target="#audit-log-table-container"
                    hx-swap="outerHTML"
                    hx-trigger="keyup changed delay:300ms, search"
                    extra_class="w-full max-w-md" ></c-input>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <select name="module"
+                  hx-get="{% url 'admin_panel:admin_audit_logs' %}"
+                  hx-include="#audit-filter-bar"
+                  hx-target="#audit-log-table-container"
+                  hx-swap="outerHTML"
+                  hx-trigger="change"
+                  class="ft-input text-xs py-1.5 px-3 rounded-lg border">
+            <option value="">All Modules</option>
+            {% for mod in modules %}
+              <option value="{{ mod }}" {% if module_filter == mod %}selected{% endif %}>{{ mod|upper }}</option>
+            {% endfor %}
+          </select>
+
           <select name="action"
                   hx-get="{% url 'admin_panel:admin_audit_logs' %}"
+                  hx-include="#audit-filter-bar"
                   hx-target="#audit-log-table-container"
                   hx-swap="outerHTML"
                   hx-trigger="change"
                   class="ft-input text-xs py-1.5 px-3 rounded-lg border">
             <option value="">All Action Types</option>
             {% for act in action_types %}
-              <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act }}</option>
+              <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act|upper }}</option>
             {% endfor %}
           </select>
         </div>

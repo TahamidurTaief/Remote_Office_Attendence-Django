@@ -124,25 +124,29 @@
           {% for log in recent_security_logs %}
             <tr class="hover:bg-slate-500/5">
               <td class="py-2 px-3 font-medium" style="color:var(--text)">
-                {% if log.actor %}
+                {% if log.actor_user %}
+                  {{ log.actor_user.email|default:log.actor_user.phone }}
+                {% elif log.actor %}
                   {{ log.actor.email|default:log.actor.phone }}
+                {% elif log.actor_role %}
+                  {{ log.actor_role|title }}
                 {% else %}
                   System
                 {% endif %}
               </td>
               <td class="py-2 px-3">
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-500/10 text-primary border border-slate-500/20">
-                  {{ log.action }}
+                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary border border-primary/20">
+                  {{ log.action|upper }}
                 </span>
               </td>
               <td class="py-2 px-3 text-xs" style="color:var(--text-muted)">
-                {{ log.summary }}
+                {{ log.object_label|default:log.summary|default:log.reason_note|default:"—" }}
               </td>
               <td class="py-2 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
-                {{ log.ip_address|default:"-" }}
+                {{ log.ip_address|default:log.ip|default:"—" }}
               </td>
-              <td class="py-2 px-3 text-[11px]" style="color:var(--text-muted)">
-                {{ log.timestamp|date:"d/m/Y g:i:s A" }}
+              <td class="py-2 px-3 text-[11px] whitespace-nowrap" style="color:var(--text-muted)">
+                {{ log.created_at|default:log.timestamp|date:"d/m/Y g:i:s A" }}
               </td>
             </tr>
           {% empty %}

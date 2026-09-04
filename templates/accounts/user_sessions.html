@@ -10,6 +10,6 @@
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 w-full max-w-4xl mx-auto space-y-4">
-        {% include "cotton/session-list.html" %}
+        <c-session-list :sessions="sessions" :current_session_key="current_session_key"></c-session-list>
     </div>
 </c-app-shell>

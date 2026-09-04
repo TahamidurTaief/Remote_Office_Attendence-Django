@@ -163,7 +163,7 @@
     <c-workspace-password-setup-card :sec_prof="sec_prof" :policy="policy"></c-workspace-password-setup-card>
 
     {# ── Active Device Sessions Card ────────────────────────────────────────── #}
-    {% include "cotton/session-list.html" %}
+    <c-session-list :sessions="sessions" :current_session_key="current_session_key"></c-session-list>
 
   </div>{# /max-w-3xl #}
 

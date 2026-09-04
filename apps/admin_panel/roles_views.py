@@ -542,33 +542,45 @@ class UserPermissionOverrideSaveView(RBACRoleAdminMixin, View):
 
 
 from django.db.models import Q
+from apps.audit.models import AuditEvent
 from apps.notifications.models import AuditLog
 
 
 class AdminAuditLogView(AdminRequiredMixin, View):
     def get(self, request):
         action_filter = request.GET.get('action', '').strip()
+        module_filter = request.GET.get('module', '').strip()
         search_query = request.GET.get('q', '').strip()
 
-        logs = AuditLog.objects.select_related('actor').order_by('-timestamp')
+        logs = AuditEvent.objects.select_related('actor_user').order_by('-created_at')
 
+        if module_filter:
+            logs = logs.filter(module__iexact=module_filter)
         if action_filter:
-            logs = logs.filter(action=action_filter)
+            logs = logs.filter(action__iexact=action_filter)
         if search_query:
             logs = logs.filter(
-                Q(actor__email__icontains=search_query) |
-                Q(actor__phone__icontains=search_query) |
-                Q(summary__icontains=search_query) |
-                Q(action__icontains=search_query)
+                Q(actor_user__email__icontains=search_query) |
+                Q(actor_user__phone__icontains=search_query) |
+                Q(actor_role__icontains=search_query) |
+                Q(object_label__icontains=search_query) |
+                Q(object_type__icontains=search_query) |
+                Q(object_id__icontains=search_query) |
+                Q(reason_note__icontains=search_query) |
+                Q(action__icontains=search_query) |
+                Q(module__icontains=search_query)
             )
 
-        action_types = AuditLog.objects.values_list('action', flat=True).distinct()
+        action_types = AuditEvent.objects.values_list('action', flat=True).distinct()
+        modules = AuditEvent.objects.values_list('module', flat=True).distinct()
 
         context = {
             'logs': logs[:150],
             'action_filter': action_filter,
+            'module_filter': module_filter,
             'search_query': search_query,
-            'action_types': action_types
+            'action_types': sorted([a for a in action_types if a]),
+            'modules': sorted([m for m in modules if m]),
         }
 
         if request.headers.get('HX-Request') == 'true':
@@ -576,19 +588,7 @@ class AdminAuditLogView(AdminRequiredMixin, View):
         return render(request, 'admin_panel/audit/audit_log_list.html', context)
 
     def post(self, request):
-        ids = request.POST.getlist('ids') or request.POST.get('ids', '').split(',')
-        ids = [i for i in ids if str(i).isdigit()]
-        if ids:
-            from apps.notifications.models import log_audit
-            deleted_count, _ = AuditLog.objects.filter(id__in=ids).delete()
-            log_audit(request.user, 'bulk_audit_log_delete', summary=f"Bulk deleted {deleted_count} AuditLog entries", ip=request.META.get('REMOTE_ADDR'))
-            messages.success(request, f"Successfully deleted {deleted_count} audit log entries.")
-
-        logs = AuditLog.objects.select_related('actor').order_by('-timestamp')[:150]
-        action_types = AuditLog.objects.values_list('action', flat=True).distinct()
-        context = {'logs': logs, 'action_types': action_types}
-        if request.headers.get('HX-Request') == 'true':
-            return render(request, 'admin_panel/audit/audit_log_list_partial.html', context)
+        messages.info(request, "Compliance Notice: AuditEvent records are immutable enterprise records and cannot be purged.")
         return redirect('admin_panel:admin_audit_logs')
 
 
@@ -609,7 +609,7 @@ class AdminSecurityDashboardView(AdminRequiredMixin, View):
 
         active_sessions = UserSession.objects.filter(is_active=True).select_related('user').order_by('-login_time')[:15]
         locked_entries = LoginProtection.objects.filter(locked_until__gt=now).select_related('user').order_by('-locked_until')
-        recent_security_logs = AuditLog.objects.select_related('actor').order_by('-timestamp')[:25]
+        recent_security_logs = AuditEvent.objects.select_related('actor_user').order_by('-created_at')[:25]
 
         context = {
             'active_sessions_count': active_sessions_count,
