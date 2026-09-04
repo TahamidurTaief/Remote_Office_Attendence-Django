@@ -22,6 +22,7 @@
                 <c-button href="{% url 'projects:project_list' %}" variant="secondary" size="sm" icon="arrow-left" label="Projects"></c-button>
                 <c-button href="{% url 'projects:export_pdf' project.pk %}" variant="secondary" size="sm" icon="file-text" label="Work Plan (PDF)"></c-button>
                 <c-button href="{% url 'projects:project_gantt' project.pk %}" variant="secondary" size="sm" icon="bar-chart-2" label="Gantt"></c-button>
+                <c-button href="{% url 'projects:project_gantt_export' project.pk %}" variant="secondary" size="sm" icon="download" label="Export Gantt (.xlsx)"></c-button>
                 <c-button href="{% url 'audit:activity_list' %}?module=projects&object_id={{ project.pk }}" variant="secondary" size="sm" icon="history" label="History"></c-button>
                 <c-button href="{% url 'projects:project_edit' project.pk %}" variant="primary" size="sm" icon="edit" label="Edit Project"></c-button>
                 <c-button type="button" @click="$dispatch('open-modal', {id: 'delete-project-modal'})" variant="danger" size="sm" icon="trash-2" label="Delete"></c-button>

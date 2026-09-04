@@ -11,6 +11,7 @@ from django.contrib import messages
 from apps.attendance.sync_utils import parse_and_validate_client_time
 from django.db.models import Q
 from datetime import date, timedelta
+from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
 from apps.branches.models import Branch
 from apps.employees.models import EmployeeProfile
@@ -1935,14 +1936,13 @@ def task_approve_api(request, pk):
 # Gantt View (G2)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProjectGanttView(AdminRequiredMixin, View):
+class ProjectGanttView(LoginRequiredMixin, View):
     """
-    Renders an Alpine.js-driven Gantt chart for a single project.
-    Tasks are serialised to JSON and injected into the template; Alpine.js
-    computes bar widths and offsets from the date span so no external chart
-    library is required.
-    Desktop: horizontal bar Gantt with dependency lines (SVG overlay).
-    Mobile:  compact task timeline list (table rows with date pills).
+    Renders an Alpine.js-driven dynamic Gantt chart for a single project.
+    Provides live interactive view switching between:
+    1. Excel Project Planner Live Matrix View (same-to-same layout with daily cell highlights)
+    2. Interactive SVG Bar Timeline View (with dependencies, milestones, today line)
+    3. Multi-Zone / Activity Schedule Matrix View
     """
 
     def get(self, request, pk):
@@ -1953,7 +1953,7 @@ class ProjectGanttView(AdminRequiredMixin, View):
         project = get_object_or_404(
             Project.objects.select_related('branch', 'project_type')
             .prefetch_related(
-                'project_managers', 'site_engineers',
+                'project_managers', 'site_engineers', 'project_members',
                 Prefetch(
                     'tasks',
                     queryset=ProjectTask.objects.select_related('responsible_person')
@@ -1963,6 +1963,19 @@ class ProjectGanttView(AdminRequiredMixin, View):
             ),
             pk=pk
         )
+
+        is_admin = getattr(request.user, 'is_superuser', False) or getattr(request.user, 'role', '') in ('admin', 'hr')
+        if not is_admin and hasattr(request.user, 'employee_profile'):
+            profile = request.user.employee_profile
+            is_assigned = (
+                project.project_managers.filter(pk=profile.pk).exists() or
+                project.site_engineers.filter(pk=profile.pk).exists() or
+                project.project_members.filter(pk=profile.pk).exists()
+            )
+            if not is_assigned:
+                raise PermissionDenied("You do not have permission to view this project's Gantt chart.")
+        elif not is_admin:
+            raise PermissionDenied("Administrative permission required.")
 
         tasks = list(project.tasks.all())
 
@@ -1990,7 +2003,6 @@ class ProjectGanttView(AdminRequiredMixin, View):
             chart_start = project.start_date or today
             chart_end = (project.completion_date or today + timedelta(days=30))
 
-        # Ensure chart spans at least 1 day
         if chart_end <= chart_start:
             chart_end = chart_start + timedelta(days=1)
 
@@ -2062,10 +2074,136 @@ class ProjectGanttView(AdminRequiredMixin, View):
 
         today_pct = to_pct(today) if chart_start <= today <= chart_end else None
 
+        # Build daily planner matrix dataset (matching Excel Project Planner)
+        display_days = min(total_days, 60)
+        planner_days = []
+        for i in range(display_days):
+            d = chart_start + timedelta(days=i)
+            planner_days.append({
+                'day_num': i + 1,
+                'weekday': d.strftime('%a').upper(),
+                'date_str': d.strftime('%d-%b'),
+                'iso': d.isoformat(),
+            })
+
+        planner_tasks = []
+        for t in tasks:
+            dur = t.duration_days
+            if not dur and t.planned_start and t.planned_finish:
+                dur = max(1, (t.planned_finish - t.planned_start).days + 1)
+            dur = dur or 1
+
+            p_start = t.planned_start
+            p_finish = t.planned_finish or (p_start + timedelta(days=dur - 1) if p_start else None)
+            pct = t.progress_percent or 0
+            completed_days = round((pct / 100.0) * dur) if dur else 0
+
+            # Compute day-by-day cell states
+            cells = []
+            for d_info in planner_days:
+                d_obj = chart_start + timedelta(days=d_info['day_num'] - 1)
+                in_plan = bool(p_start and p_finish and p_start <= d_obj <= p_finish)
+                in_progress = bool(in_plan and p_start and (d_obj - p_start).days < completed_days)
+                is_act = bool(t.actual_start and d_obj == t.actual_start)
+                is_beyond = bool(t.actual_finish and p_finish and p_finish < d_obj <= t.actual_finish)
+
+                if in_progress:
+                    cells.append('progress')
+                elif in_plan:
+                    cells.append('plan')
+                elif is_beyond:
+                    cells.append('beyond')
+                elif is_act:
+                    cells.append('actual')
+                else:
+                    cells.append('empty')
+
+            act_dur = None
+            if t.actual_start and t.actual_finish:
+                act_dur = max(1, (t.actual_finish - t.actual_start).days + 1)
+            elif t.actual_start:
+                act_dur = max(1, (today - t.actual_start).days + 1)
+
+            planner_tasks.append({
+                'id': t.id,
+                'order': t.order,
+                'activity': t.activity,
+                'is_milestone': t.is_milestone,
+                'is_delayed': t.is_delayed,
+                'status': t.status,
+                'plan_start': t.planned_start.strftime('%Y-%m-%d') if t.planned_start else '—',
+                'plan_duration': dur,
+                'plan_end': p_finish.strftime('%Y-%m-%d') if p_finish else '—',
+                'actual_start': t.actual_start.strftime('%Y-%m-%d') if t.actual_start else '—',
+                'actual_duration': act_dur or '—',
+                'progress_percent': t.progress_percent,
+                'cells': cells,
+            })
+
+        # Build Multi-Zone / Activity Schedule dataset (matching Excel Schedule (2) / DATE)
+        zone_stages = [
+            "CEILING/ ACP OPENING",
+            "MARKING",
+            "SUPPORT WORK",
+            "COPPER PIPING",
+            "PRESSURE TESTING-1",
+            "DRAIN PIPE",
+            "NETWORKING",
+            "AIR DUCT",
+            "INDOOR INSTALLATION",
+            "OUTDOOR INSTALLATION",
+            "COMMISSIONING",
+        ]
+        standard_zones = [
+            "KNITTING & MAINT WORKSHOP",
+            "CUTTING & MAINTENANCE WORKSHOP",
+            "ENGINEERING WORKSHOP GF",
+            "PROCUREMENT & HR SECTION GF",
+            "CANTEEN & SUBSTATION",
+            "PROCUREMENT & HR SECTION MF",
+            "SEWING CANTEEN & OFFICE MZ",
+            "COLOR SERVICE ZONE",
+            "SPARE PARTS WAREHOUSE",
+            "CANTEEN & OFFICE",
+            "SEWING FLOOR",
+        ]
+        zone_rows = []
+        for zone in standard_zones:
+            stage_map = {}
+            for stage in zone_stages:
+                matched = [t for t in tasks if stage.lower() in t.activity.lower() and (zone.lower() in t.activity.lower() or len(standard_zones) <= len(tasks))]
+                if matched and matched[0].planned_start:
+                    m = matched[0]
+                    stage_map[stage] = {
+                        'start': m.planned_start.strftime('%Y-%m-%d'),
+                        'end': m.planned_finish.strftime('%Y-%m-%d') if m.planned_finish else '—',
+                    }
+                else:
+                    stage_map[stage] = None
+            zone_rows.append({
+                'name': zone,
+                'stages': stage_map,
+            })
+
+        project_milestones = [
+            {'name': 'Site Assessment', 'date': project.start_date.strftime('%d %b %Y') if project.start_date else 'TBD'},
+            {'name': 'Technical Discussion', 'date': (project.start_date + timedelta(days=3)).strftime('%d %b %Y') if project.start_date else 'TBD'},
+            {'name': 'Drawing Approval', 'date': (project.start_date + timedelta(days=5)).strftime('%d %b %Y') if project.start_date else 'TBD'},
+            {'name': 'Material Delivery', 'date': (project.start_date + timedelta(days=12)).strftime('%d %b %Y') if project.start_date else 'TBD'},
+            {'name': 'Site Mobilization', 'date': (project.start_date + timedelta(days=10)).strftime('%d %b %Y') if project.start_date else 'TBD'},
+            {'name': 'Installation Start', 'date': (project.start_date + timedelta(days=13)).strftime('%d %b %Y') if project.start_date else 'TBD'},
+            {'name': 'Testing & Handover', 'date': project.completion_date.strftime('%d %b %Y') if project.completion_date else 'TBD'},
+        ]
+
         context = {
             'project': project,
             'gantt_tasks_json': json.dumps(gantt_tasks),
             'ruler_months_json': json.dumps(ruler_months),
+            'planner_days_json': json.dumps(planner_days),
+            'planner_tasks_json': json.dumps(planner_tasks),
+            'zone_stages_json': json.dumps(zone_stages),
+            'zone_rows_json': json.dumps(zone_rows),
+            'project_milestones_json': json.dumps(project_milestones),
             'chart_start': chart_start,
             'chart_end': chart_end,
             'today': today,
@@ -2073,6 +2211,47 @@ class ProjectGanttView(AdminRequiredMixin, View):
             'total_days': total_days,
         }
         return render(request, 'projects/project_gantt.html', context)
+
+
+class ProjectGanttExportView(LoginRequiredMixin, View):
+    """
+    Downloads a professionally formatted multi-sheet Excel workbook (.xlsx)
+    for the project's Gantt schedule, matching the exact format of the
+    reference Project Schedule and Planner spreadsheets.
+    """
+
+    def get(self, request, pk):
+        from apps.projects.services.gantt_export import GanttExcelExportService
+        from django.utils.text import slugify
+
+        project = get_object_or_404(
+            Project.objects.prefetch_related('tasks__responsible_person'),
+            pk=pk
+        )
+
+        is_admin = getattr(request.user, 'is_superuser', False) or getattr(request.user, 'role', '') in ('admin', 'hr')
+        if not is_admin and hasattr(request.user, 'employee_profile'):
+            profile = request.user.employee_profile
+            is_assigned = (
+                project.project_managers.filter(pk=profile.pk).exists() or
+                project.site_engineers.filter(pk=profile.pk).exists() or
+                project.project_members.filter(pk=profile.pk).exists()
+            )
+            if not is_assigned:
+                raise PermissionDenied("You do not have permission to export this project's Gantt schedule.")
+        elif not is_admin:
+            raise PermissionDenied("Administrative permission required.")
+
+        xlsx_bytes = GanttExcelExportService.export_project_workbook(project)
+        slug = slugify(project.name) or f"project_{project.pk}"
+        filename = f"{slug}_gantt_schedule.xlsx"
+
+        response = HttpResponse(
+            xlsx_bytes,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────

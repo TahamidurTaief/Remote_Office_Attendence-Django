@@ -63,8 +63,9 @@ urlpatterns = [
     path('<int:project_id>/request-signoff/', views.ProjectRequestSignOffView.as_view(), name='request_signoff'),
     path('<int:project_id>/export-pdf/', views.ProjectExportPDFView.as_view(), name='export_pdf'),
 
-    # Gantt Chart (G2) & Excel Import
+    # Gantt Chart (G2), Export & Excel Import
     path('<int:pk>/gantt/', views.ProjectGanttView.as_view(), name='project_gantt'),
+    path('<int:pk>/gantt/export/', views.ProjectGanttExportView.as_view(), name='project_gantt_export'),
     path('<int:pk>/gantt/import/', views.ProjectGanttImportView.as_view(), name='project_gantt_import'),
     path('<int:pk>/gantt/import/<uuid:batch_id>/', views.ProjectGanttImportPreviewView.as_view(), name='project_gantt_import_preview'),
     path('<int:pk>/gantt/import/<uuid:batch_id>/confirm/', views.ProjectGanttImportConfirmView.as_view(), name='project_gantt_import_confirm'),

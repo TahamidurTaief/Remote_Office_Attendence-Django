@@ -7,22 +7,45 @@
         <c-section-header title="Gantt: {{ project.name }}" subtitle="{{ chart_start|date:'d M Y' }} &ndash; {{ chart_end|date:'d M Y' }} ({{ total_days }} days)">
             <c-slot name="actions">
                 <c-button href="{% url 'projects:project_detail' project.pk %}" variant="secondary" size="sm" icon="arrow-left" label="Back to Project"></c-button>
+                <c-button href="{% url 'projects:project_gantt_export' project.pk %}" variant="secondary" size="sm" icon="download" label="Download Gantt (.xlsx)"></c-button>
                 <c-button href="{% url 'projects:project_gantt_import' project.pk %}" variant="primary" size="sm" icon="upload" label="Import Gantt Excel"></c-button>
             </c-slot>
         </c-section-header>
 
         <div class="flex items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-slate-800 flex-wrap">
-            {# Legend #}
-            <div class="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5 border border-gray-100 dark:border-slate-700/60 flex-wrap">
-                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-primary inline-block"></span>Planned</span>
-                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-gray-300 dark:bg-gray-600 inline-block border border-dashed border-gray-400"></span>Baseline</span>
-                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-emerald-500 inline-block"></span>Actual</span>
-                <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-red-400 inline-block"></span>Delayed</span>
-                <span class="flex items-center gap-1.5"><span class="w-2 h-2 rotate-45 bg-amber-500 inline-block"></span>Milestone</span>
+            {# Mode switcher #}
+            <div class="flex items-center gap-1.5">
+                <c-tab-button
+                    label="Excel Planner View"
+                    icon="table"
+                    active_condition="activeViewMode === 'planner'"
+                    attrs="@click=&quot;activeViewMode = 'planner'&quot;">
+                </c-tab-button>
+
+                <c-tab-button
+                    label="Timeline Bars"
+                    icon="bar-chart-2"
+                    active_condition="activeViewMode === 'bars'"
+                    attrs="@click=&quot;activeViewMode = 'bars'&quot;">
+                </c-tab-button>
+
+                <c-tab-button
+                    label="Zone Schedule Matrix"
+                    icon="layers"
+                    active_condition="activeViewMode === 'zones'"
+                    attrs="@click=&quot;activeViewMode = 'zones'&quot;">
+                </c-tab-button>
             </div>
 
-            {# Filter toggles #}
-            <div class="flex items-center gap-1.5">
+            {# Filter toggles & Period Highlight #}
+            <div class="flex items-center gap-2 flex-wrap">
+                <template x-if="activeViewMode === 'planner'">
+                    <div class="flex items-center gap-1.5 bg-gray-50 dark:bg-slate-800/70 border border-gray-200 dark:border-slate-700/60 rounded-lg px-2 py-1">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Highlight Day:</span>
+                        <c-input name="highlight_day" type="number" attrs="min='1' :max='plannerDays.length' x-model.number='highlightPeriod'" input_class="w-14 text-center font-mono py-0.5 text-[11px]"></c-input>
+                    </div>
+                </template>
+
                 <c-filter-button
                     label="All"
                     active_condition="activeFilter === 'all'"
@@ -51,10 +74,41 @@
                 </c-filter-button>
             </div>
         </div>
+
+        {# Excel Planner Legend & Explanations #}
+        <div x-show="activeViewMode === 'planner'" class="pt-2.5 flex items-center justify-between gap-3 text-[11px] text-gray-500 dark:text-gray-400 border-t border-gray-50 dark:border-slate-800/60 flex-wrap">
+            <div class="flex items-center gap-2.5 flex-wrap">
+                <span class="text-[10px] font-bold uppercase text-gray-400">Legend:</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#B8CCE4] inline-block shadow-2xs"></span>Plan Duration</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#548DD4] inline-block shadow-2xs"></span>Actual Start</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#366092] inline-block shadow-2xs"></span>% Complete / Progress</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-2.5 rounded-xs bg-[#C00000] inline-block shadow-2xs"></span>Actual beyond plan</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rotate-45 bg-amber-500 inline-block"></span>Milestone</span>
+            </div>
+            <div class="text-[10px] text-gray-400 font-mono">
+                Formula: Plan End = Plan Start + Plan Dur - 1
+            </div>
+        </div>
+
+        {# Timeline Bar Legend #}
+        <div x-show="activeViewMode === 'bars'" class="pt-2.5 flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 border-t border-gray-50 dark:border-slate-800/60 flex-wrap">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-primary inline-block"></span>Planned</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-gray-300 dark:bg-gray-600 inline-block border border-dashed border-gray-400"></span>Baseline</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-emerald-500 inline-block"></span>Actual</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-red-400 inline-block"></span>Delayed</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rotate-45 bg-amber-500 inline-block"></span>Milestone</span>
+        </div>
     </c-card>
 
-    {# ── Desktop Gantt ────────────────────────────────────────────────── #}
-    <div class="hidden md:block">
+    {# ── VIEW MODE 1: Excel Planner Matrix ────────────────────────────── #}
+    <div x-show="activeViewMode === 'planner'" class="space-y-4">
+        <c-gantt-planner-matrix></c-gantt-planner-matrix>
+    </div>
+
+    {# ── VIEW MODE 2: Timeline Bars ───────────────────────────────────── #}
+    <div x-show="activeViewMode === 'bars'" class="space-y-4">
+        {# ── Desktop Gantt ────────────────────────────────────────────────── #}
+        <div class="hidden md:block">
         <c-card padding="none">
             <div class="flex min-h-[80px]">
                 {# Task label column #}
@@ -159,17 +213,30 @@
             </div>
         </template>
     </c-card>
+    </div>
+
+    {# ── VIEW MODE 3: Zone Schedule Matrix ────────────────────────────── #}
+    <div x-show="activeViewMode === 'zones'" class="space-y-4">
+        <c-gantt-zone-matrix></c-gantt-zone-matrix>
+    </div>
 
 </c-page-container>
 
 <script>
 function ganttChart() {
     return {
+        activeViewMode: 'planner',
+        highlightPeriod: 1,
         allTasks: {{ gantt_tasks_json|safe }},
         rulerMonths: {{ ruler_months_json|safe }},
         todayPct: {{ today_pct|default:"null" }},
         totalDays: {{ total_days }},
         activeFilter: 'all',
+        plannerDays: {{ planner_days_json|safe|default:"[]" }},
+        plannerTasks: {{ planner_tasks_json|safe|default:"[]" }},
+        zoneStages: {{ zone_stages_json|safe|default:"[]" }},
+        zoneRows: {{ zone_rows_json|safe|default:"[]" }},
+        projectMilestones: {{ project_milestones_json|safe|default:"[]" }},
 
         init() {
             this.$nextTick(() => {
@@ -183,6 +250,14 @@ function ganttChart() {
             if (this.activeFilter === 'in_progress') return this.allTasks.filter(t => t.status === 'In Progress' && !t.is_delayed);
             if (this.activeFilter === 'completed') return this.allTasks.filter(t => t.status === 'Completed');
             return this.allTasks;
+        },
+
+        get filteredPlannerTasks() {
+            if (this.activeFilter === 'all') return this.plannerTasks;
+            if (this.activeFilter === 'delayed') return this.plannerTasks.filter(t => t.is_delayed);
+            if (this.activeFilter === 'in_progress') return this.plannerTasks.filter(t => t.status === 'In Progress' && !t.is_delayed);
+            if (this.activeFilter === 'completed') return this.plannerTasks.filter(t => t.status === 'Completed');
+            return this.plannerTasks;
         },
 
         get allDependencies() {

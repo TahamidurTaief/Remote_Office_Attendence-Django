@@ -1,0 +1,65 @@
+{% comment %} c-gantt-zone-matrix component
+   Renders the Work / Zone Matrix schedule matching 'PROJECT SCHEDULE GANTT CHART.xlsx' Schedule (2) / DATE.
+   Encapsulates all multi-stage zone mapping with zero inline styles in the parent template.
+{% endcomment %}
+<div class="space-y-4">
+  <div class="overflow-x-auto w-full rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+    <table class="w-full border-collapse text-left select-none text-[11px]">
+      <thead>
+        {# Row 1: Zone & Stage Group Headers #}
+        <tr class="bg-[#1F497D] text-white border-b border-[#16365C]">
+          <th rowspan="2" class="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider sticky left-0 z-30 bg-[#1F497D] min-w-[220px] border-r border-[#16365C]">
+            WORK / ZONE
+          </th>
+          <template x-for="stage in zoneStages" :key="stage">
+            <th colspan="2" class="py-2 px-2 text-[10px] font-bold uppercase text-center border-r border-[#16365C] whitespace-nowrap"
+                x-text="stage">
+            </th>
+          </template>
+        </tr>
+
+        {# Row 2: START / END sub-headers #}
+        <tr class="bg-[#DCE6F1] dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">
+          <template x-for="stage in zoneStages" :key="'sub-'+stage">
+            <template x-data="{}" x-fragment>
+              <th class="py-1 px-1 text-[9px] font-bold uppercase text-center border-r border-gray-200 dark:border-slate-700 min-w-[65px]">START</th>
+              <th class="py-1 px-1 text-[9px] font-bold uppercase text-center border-r border-gray-200 dark:border-slate-700 min-w-[65px]">END</th>
+            </template>
+          </template>
+        </tr>
+      </thead>
+
+      <tbody class="divide-y divide-gray-100 dark:divide-slate-800 font-mono">
+        <template x-for="(zone, zIndex) in zoneRows" :key="zone.name">
+          <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+              :class="zIndex % 2 === 1 ? 'bg-slate-50/30 dark:bg-slate-900/30' : ''">
+            <td class="py-2 px-3 text-[11px] font-bold text-gray-800 dark:text-gray-200 sticky left-0 z-20 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 font-sans truncate max-w-[220px]"
+                x-text="zone.name"></td>
+
+            <template x-for="stage in zoneStages" :key="zone.name + '-' + stage">
+              <template x-data="{}" x-fragment>
+                <td class="py-1.5 px-1 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
+                    x-text="zone.stages[stage] ? zone.stages[stage].start : '—'"></td>
+                <td class="py-1.5 px-1 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
+                    x-text="zone.stages[stage] ? zone.stages[stage].end : '—'"></td>
+              </template>
+            </template>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  {# Key Project Milestones Section #}
+  <c-card padding="sm">
+    <c-section-header title="Key Project Milestones" subtitle="Critical delivery checkpoints and target completion dates" icon="flag"></c-section-header>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-3">
+      <template x-for="m in projectMilestones" :key="m.name">
+        <div class="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 flex flex-col justify-between">
+          <span class="text-[10px] font-bold text-gray-700 dark:text-gray-300 truncate" x-text="m.name"></span>
+          <span class="text-[11px] font-mono font-semibold text-primary mt-1" x-text="m.date"></span>
+        </div>
+      </template>
+    </div>
+  </c-card>
+</div>

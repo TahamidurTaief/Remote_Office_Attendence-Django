@@ -105,7 +105,15 @@
             <span class="text-[10px] text-gray-400 font-semibold uppercase">Project Management</span>
             <h2 class="text-sm font-bold text-gray-900 mt-0.5">{{ project.name }}</h2>
         </div>
-        <div class="flex gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+            <a href="{% url 'projects:project_gantt' project.pk %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-lg text-xs transition-colors">
+                <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-primary"></i>
+                Gantt Chart
+            </a>
+            <a href="{% url 'projects:project_gantt_export' project.pk %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-lg text-xs transition-colors">
+                <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-600"></i>
+                Export (.xlsx)
+            </a>
             <button type="button" @click="openAddTaskModal('', '')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white font-bold rounded-lg text-xs hover:opacity-90 transition-opacity">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                 Add Task

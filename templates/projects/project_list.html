@@ -113,6 +113,7 @@
                             <td class="text-right">
                                 <div class="flex items-center justify-end gap-1" @click.stop>
                                     <c-button href="{% url 'projects:project_detail' project.pk %}" variant="ghost" size="sm" icon="eye" title="View Details" ></c-button>
+                                    <c-button href="{% url 'projects:project_gantt' project.pk %}" variant="ghost" size="sm" icon="bar-chart-2" title="Gantt Schedule" ></c-button>
                                     <c-button href="{% url 'projects:project_edit' project.pk %}" variant="ghost" size="sm" icon="pencil" title="Edit" ></c-button>
                                     <form action="{% url 'projects:project_delete' project.pk %}" method="POST" class="inline" x-data @submit.prevent="window.confirmAction('Delete this project?', () => $el.submit())">
                                         {% csrf_token %}

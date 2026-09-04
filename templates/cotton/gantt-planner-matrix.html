@@ -1,0 +1,148 @@
+{% comment %} c-gantt-planner-matrix component
+   Renders the exact Excel Project Planner matrix layout matching
+   the user reference spreadsheet (Gantt Chart (2).xlsx and Project Schedule Gantt Chart.xlsx).
+   Encapsulates all cell state styling and dynamic period highlights with zero inline styles in the parent template.
+{% endcomment %}
+<div class="overflow-x-auto w-full rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+  <table class="w-full border-collapse text-left select-none">
+    <thead>
+      {# Row 1: Main Section Headers #}
+      <tr class="bg-[#1F497D] text-white border-b border-[#16365C]">
+        <th class="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider sticky left-0 z-30 bg-[#1F497D] min-w-[200px] border-r border-[#16365C]">
+          ACTIVITY
+        </th>
+        <th class="py-2.5 px-2 text-[10px] font-bold uppercase text-center min-w-[80px] border-r border-[#16365C]">
+          PLAN START
+        </th>
+        <th class="py-2.5 px-2 text-[10px] font-bold uppercase text-center min-w-[70px] border-r border-[#16365C]">
+          PLAN DUR
+        </th>
+        <th class="py-2.5 px-2 text-[10px] font-bold uppercase text-center min-w-[80px] border-r border-[#16365C]">
+          PLAN END
+        </th>
+        <th class="py-2.5 px-2 text-[10px] font-bold uppercase text-center min-w-[80px] border-r border-[#16365C]">
+          ACT START
+        </th>
+        <th class="py-2.5 px-2 text-[10px] font-bold uppercase text-center min-w-[70px] border-r border-[#16365C]">
+          ACT DUR
+        </th>
+        <th class="py-2.5 px-2 text-[10px] font-bold uppercase text-center min-w-[85px] border-r-2 border-[#16365C]">
+          % COMPLETE
+        </th>
+
+        {# Timeline Day Columns #}
+        <template x-for="col in plannerDays" :key="'h1-'+col.day_num">
+          <th class="py-1 px-0.5 text-[10px] font-bold text-center min-w-[32px] w-8 border-r border-[#16365C]/60"
+              :class="highlightPeriod === col.day_num ? 'bg-amber-500 text-slate-950 font-extrabold' : ''"
+              x-text="col.day_num">
+          </th>
+        </template>
+      </tr>
+
+      {# Row 2: Weekday Abbreviations #}
+      <tr class="bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-slate-800">
+        <th colspan="7" class="py-1 px-3 text-[10px] font-medium tracking-wide sticky left-0 z-30 bg-gray-100 dark:bg-slate-800 border-r-2 border-gray-200 dark:border-slate-700">
+          DAILY TIMELINE SCHEDULE
+        </th>
+        <template x-for="col in plannerDays" :key="'h2-'+col.day_num">
+          <th class="py-1 px-0.5 text-[9px] font-semibold text-center border-r border-gray-200 dark:border-slate-800"
+              :class="highlightPeriod === col.day_num ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 font-bold' : ''"
+              x-text="col.weekday">
+          </th>
+        </template>
+      </tr>
+
+      {# Row 3: Dates #}
+      <tr class="bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-slate-800">
+        <th colspan="7" class="py-1 px-3 text-[9px] font-mono sticky left-0 z-30 bg-gray-50 dark:bg-slate-800/50 border-r-2 border-gray-200 dark:border-slate-700">
+          DATE &bull; CALENDAR DAY
+        </th>
+        <template x-for="col in plannerDays" :key="'h3-'+col.day_num">
+          <th class="py-1 px-0.5 text-[8px] font-mono text-center border-r border-gray-200 dark:border-slate-800"
+              :class="highlightPeriod === col.day_num ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400 font-bold' : ''"
+              x-text="col.date_str">
+          </th>
+        </template>
+      </tr>
+    </thead>
+
+    <tbody class="divide-y divide-gray-100 dark:divide-slate-800 font-mono">
+      <template x-for="(task, tIndex) in filteredPlannerTasks" :key="task.id">
+        <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+            :class="tIndex % 2 === 1 ? 'bg-slate-50/30 dark:bg-slate-900/30' : ''">
+
+          {# Col B: Activity Name #}
+          <td class="py-2 px-3 text-[11px] font-medium text-gray-800 dark:text-gray-200 sticky left-0 z-20 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 truncate max-w-[220px]">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-[10px] text-gray-400 font-mono shrink-0 w-4 text-right" x-text="'#'+task.order"></span>
+              <template x-if="task.is_milestone">
+                <span class="w-2 h-2 rotate-45 bg-amber-500 shrink-0 inline-block"></span>
+              </template>
+              <span class="truncate font-sans" :class="task.is_milestone ? 'font-bold text-amber-600 dark:text-amber-400' : ''" x-text="task.activity"></span>
+            </div>
+          </td>
+
+          {# Col C: Plan Start #}
+          <td class="py-2 px-2 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
+              x-text="task.plan_start"></td>
+
+          {# Col D: Plan Duration #}
+          <td class="py-2 px-2 text-[10px] text-center text-gray-700 dark:text-gray-300 font-semibold border-r border-gray-100 dark:border-slate-800"
+              x-text="task.plan_duration + 'd'"></td>
+
+          {# Col E: Plan End #}
+          <td class="py-2 px-2 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
+              x-text="task.plan_end"></td>
+
+          {# Col F: Actual Start #}
+          <td class="py-2 px-2 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
+              x-text="task.actual_start"></td>
+
+          {# Col G: Actual Duration #}
+          <td class="py-2 px-2 text-[10px] text-center text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-slate-800"
+              x-text="task.actual_duration !== '—' ? task.actual_duration + 'd' : '—'"></td>
+
+          {# Col H: Percent Complete #}
+          <td class="py-2 px-2 text-[10px] text-center font-bold border-r-2 border-gray-200 dark:border-slate-700"
+              :class="task.progress_percent === 100 ? 'text-emerald-600 dark:text-emerald-400' : (task.progress_percent > 0 ? 'text-primary' : 'text-gray-400')">
+            <span x-text="task.progress_percent + '%'"></span>
+          </td>
+
+          {# Daily Matrix Cells #}
+          <template x-for="(cellState, dIndex) in task.cells" :key="task.id + '-c-' + dIndex">
+            <td class="p-0.5 text-center border-r border-gray-100 dark:border-slate-800 transition-colors h-7"
+                :class="highlightPeriod === (dIndex + 1) ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''">
+              <template x-if="cellState === 'progress'">
+                <div class="w-full h-5 rounded-xs bg-[#366092] flex items-center justify-center shadow-2xs"
+                     title="In Progress / Completed Portion"></div>
+              </template>
+              <template x-if="cellState === 'plan'">
+                <div class="w-full h-5 rounded-xs bg-[#B8CCE4] dark:bg-slate-700 flex items-center justify-center shadow-2xs"
+                     title="Planned Duration"></div>
+              </template>
+              <template x-if="cellState === 'actual'">
+                <div class="w-full h-5 rounded-xs bg-[#548DD4] flex items-center justify-center shadow-2xs"
+                     title="Actual Start Day"></div>
+              </template>
+              <template x-if="cellState === 'beyond'">
+                <div class="w-full h-5 rounded-xs bg-[#C00000] flex items-center justify-center shadow-2xs"
+                     title="Actual Extended Beyond Plan"></div>
+              </template>
+              <template x-if="cellState === 'empty'">
+                <div class="w-full h-5"></div>
+              </template>
+            </td>
+          </template>
+        </tr>
+      </template>
+
+      <template x-if="filteredPlannerTasks.length === 0">
+        <tr>
+          <td :colspan="7 + plannerDays.length" class="py-8 text-center text-gray-400 dark:text-gray-500 text-[12px]">
+            No tasks match the active filter criteria.
+          </td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>

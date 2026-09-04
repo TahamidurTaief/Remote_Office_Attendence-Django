@@ -3127,3 +3127,96 @@ class GlobalTaskTwoModeFormTests(TestCase):
         })
         self.assertIn('Project-based Task', assignment_choice_html)
         self.assertIn('Single Employee Task', assignment_choice_html)
+
+
+class ProjectGanttExportTests(TestCase):
+    def setUp(self):
+        self.password = 'testpass123'
+        self.admin_user = User.objects.create_user(
+            email='gantt_admin@example.com',
+            phone='+8801799990100',
+            password=self.password,
+            role='admin'
+        )
+        self.staff_user = User.objects.create_user(
+            email='gantt_staff@example.com',
+            phone='+8801799990200',
+            password=self.password,
+            role='staff'
+        )
+        self.branch = Branch.objects.create(
+            name='Test Branch',
+            address='Dhaka',
+            latitude=23.8,
+            longitude=90.4,
+            radius_meters=100
+        )
+        self.project_type, _ = ProjectType.objects.get_or_create(name='HVAC Installation')
+        self.project = Project.objects.create(
+            name='Gantt Export Demo Project',
+            project_type=self.project_type,
+            client_name='Premier Client',
+            location='Banani, Dhaka',
+            system_type='VRF',
+            start_date=date(2026, 8, 1),
+            completion_date=date(2026, 9, 30),
+            branch=self.branch,
+            created_by=self.admin_user,
+            progress_percent=45,
+            status='In Progress'
+        )
+        # Create a couple of tasks
+        ProjectTask.objects.create(
+            project=self.project,
+            activity='Site Survey & Marking',
+            order=1,
+            planned_start=date(2026, 8, 1),
+            planned_finish=date(2026, 8, 5),
+            actual_start=date(2026, 8, 1),
+            actual_finish=date(2026, 8, 5),
+            status='Completed',
+            progress_percent=100
+        )
+        ProjectTask.objects.create(
+            project=self.project,
+            activity='Copper Piping Work',
+            order=2,
+            planned_start=date(2026, 8, 6),
+            planned_finish=date(2026, 8, 20),
+            actual_start=date(2026, 8, 7),
+            status='In Progress',
+            progress_percent=50
+        )
+
+    def test_gantt_page_renders_with_new_modes_and_export_link(self):
+        self.client.login(username='+8801799990100', password=self.password)
+        url = reverse('projects:project_gantt', kwargs={'pk': self.project.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Excel Planner View')
+        self.assertContains(response, 'Timeline Bars')
+        self.assertContains(response, 'Zone Schedule Matrix')
+        self.assertContains(response, reverse('projects:project_gantt_export', kwargs={'pk': self.project.pk}))
+
+    def test_gantt_export_excel_endpoint_produces_valid_xlsx(self):
+        import io
+        import openpyxl
+        self.client.login(username='+8801799990100', password=self.password)
+        export_url = reverse('projects:project_gantt_export', kwargs={'pk': self.project.pk})
+        response = self.client.get(export_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        self.assertIn('attachment; filename=', response['Content-Disposition'])
+
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+        self.assertIn('Project Planner', wb.sheetnames)
+        self.assertIn('Schedule', wb.sheetnames)
+        self.assertIn('Monthly Overview', wb.sheetnames)
+
+        planner_ws = wb['Project Planner']
+        self.assertEqual(planner_ws['B3'].value, 'ACTIVITY')
+        self.assertEqual(planner_ws['C3'].value, 'PLAN START')
+        self.assertEqual(planner_ws['H3'].value, 'PERCENT COMPLETE')
