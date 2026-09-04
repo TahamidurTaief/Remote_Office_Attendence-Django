@@ -455,3 +455,90 @@ class EmployeeWizardFullTestSuite(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Employee.objects.filter(personal_email='second@example.com').exists())
         self.assertIn(response.context['step_statuses'].get(1), ('incomplete', 'error'))
+
+    def test_wizard_step_4_custom_permissions_override_persistence(self):
+        """Step 4 processes custom_permissions JSON and creates/syncs UserPermissionOverride records."""
+        import json
+        from apps.accounts.rbac_models import UserPermissionOverride, Permission
+        from apps.accounts.rbac_registry import RBACRegistryService
+
+        emp = Employee.objects.create(
+            employee_number='EMP-OVERRIDE-001',
+            first_name='Perm',
+            last_name='Tester',
+            personal_email='perm_test@example.com',
+            phone='+8801711999991',
+            status=EmployeeStatus.DRAFT
+        )
+
+        perm1 = RBACRegistryService.ensure_permission('attendance.add')
+        perm2 = RBACRegistryService.ensure_permission('leave.delete')
+
+        custom_perms_payload = [
+            {
+                'permission_id': perm1.id,
+                'codename': 'attendance.add',
+                'name': 'Add Attendance',
+                'is_granted': True,
+                'data_scope': 'branch'
+            },
+            {
+                'permission_id': perm2.id,
+                'codename': 'leave.delete',
+                'name': 'Delete Leave',
+                'is_granted': False,
+                'data_scope': 'own'
+            }
+        ]
+
+        url_s4 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 4})
+        data = {
+            'login_email': 'perm_user@example.com',
+            'password1': 'StrongPass123!@#',
+            'password2': 'StrongPass123!@#',
+            'roles': [self.role.pk],
+            'data_scope': 'branch',
+            'custom_permissions': json.dumps(custom_perms_payload),
+            'target_step': '5'
+        }
+        res = self.client.post(url_s4, data, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        emp.refresh_from_db()
+        self.assertIsNotNone(emp.user)
+
+        # Check UserPermissionOverride records
+        overrides = UserPermissionOverride.objects.filter(user=emp.user)
+        self.assertEqual(overrides.count(), 2)
+
+        ov1 = overrides.get(permission__codename='attendance.add')
+        self.assertTrue(ov1.is_granted)
+        self.assertEqual(ov1.data_scope, 'branch')
+
+        ov2 = overrides.get(permission__codename='leave.delete')
+        self.assertFalse(ov2.is_granted)
+        self.assertEqual(ov2.data_scope, 'own')
+
+    def test_wizard_step_4_ui_elements_and_dropdown(self):
+        """Step 4 template renders role dropdown and custom permissions elements."""
+        emp = Employee.objects.create(
+            employee_number='EMP-UI-001',
+            first_name='UI',
+            last_name='Tester',
+            personal_email='ui_test@example.com',
+            phone='+8801711999992',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s4 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 4})
+        res = self.client.get(url_s4, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+        content = res.content.decode('utf-8')
+
+        # Verify Authorized Dynamic Roles header
+        self.assertIn('Authorized Dynamic Roles', content)
+        # Verify role dropdown picker is present
+        self.assertIn('role_dropdown_select', content)
+        # Verify Direct Custom Permissions section is present
+        self.assertIn('Direct Custom Permissions (Overrides)', content)
+        self.assertIn('custom_permissions', content)
+

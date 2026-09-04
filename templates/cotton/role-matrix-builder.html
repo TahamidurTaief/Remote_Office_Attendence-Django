@@ -47,11 +47,9 @@
          this.childrenMap = this.bundle.children_map || {};
          this.descendantsMap = this.bundle.descendants_map || {};
 
-         // Expand root modules by default
+         // Expand all nodes with children by default so the entire hierarchy is immediately visible
          for (const nid in this.childrenMap) {
-           if (nid.startsWith('mod_')) {
-             this.expanded[nid] = true;
-           }
+           this.expanded[nid] = true;
          }
 
          this.initialStateJson = JSON.stringify({ selections: this.selections, scopes: this.scopes });
@@ -239,7 +237,7 @@
          return count;
        },
 
-       isNodeVisible(nodeId, nodeName, nodeCode, nodeRoute, nodeDesc) {
+       isNodeVisible(nodeId) {
          if (this.selectedModule !== 'all') {
            let topMod = nodeId;
            let curr = nodeId;
@@ -263,22 +261,32 @@
          }
 
          const q = this.search.toLowerCase().trim();
-         const matchSelf = (nodeName && nodeName.toLowerCase().includes(q)) ||
-                           (nodeCode && nodeCode.toLowerCase().includes(q)) ||
-                           (nodeRoute && nodeRoute.toLowerCase().includes(q)) ||
-                           (nodeDesc && nodeDesc.toLowerCase().includes(q));
-         if (matchSelf) return true;
+         const el = document.getElementById(`row-${nodeId}`);
+         if (el) {
+           const txt = (el.getAttribute('data-search-text') || '').toLowerCase();
+           if (txt.includes(q)) return true;
+         }
 
-         // Check if any child matches
+         // Check if any descendant matches
          const desc = this.descendantsMap[nodeId] || [];
-         return desc.some(cid => {
-           const el = document.getElementById(`row-${cid}`);
-           if (el) {
-             const txt = el.getAttribute('data-search-text') || '';
-             return txt.toLowerCase().includes(q);
+         if (desc.some(cid => {
+           const childEl = document.getElementById(`row-${cid}`);
+           return childEl && (childEl.getAttribute('data-search-text') || '').toLowerCase().includes(q);
+         })) {
+           return true;
+         }
+
+         // Check if any ancestor matches
+         let pId = this.parentMap[nodeId];
+         while (pId) {
+           const pel = document.getElementById(`row-${pId}`);
+           if (pel && (pel.getAttribute('data-search-text') || '').toLowerCase().includes(q)) {
+             return true;
            }
-           return false;
-         });
+           pId = this.parentMap[pId];
+         }
+
+         return false;
        },
 
        hasAnyVisibleRows() {
@@ -409,9 +417,9 @@
             <c-badge variant="success" size="sm" dot="true" label="All Changes Saved"></c-badge>
           </template>
 
-          <span class="text-[11px] font-mono px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)]">
+          <c-badge variant="neutral" size="sm">
             <span x-text="countGrantedPermissions()"></span> Active Perms
-          </span>
+          </c-badge>
         </div>
 
         {% if can_edit and role.code != 'system_owner' and not role.is_system_protected %}

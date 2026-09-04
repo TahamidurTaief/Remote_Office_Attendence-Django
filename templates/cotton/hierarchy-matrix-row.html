@@ -7,7 +7,9 @@
 {% endcomment %}
 <c-vars node="" can_edit="" is_system_protected="" data_scope_choices="" extra_class="" ></c-vars>
 
-<tr x-show="isNodeVisible({{ node.id }})"
+<tr id="row-{{ node.id }}"
+    x-show="isNodeVisible('{{ node.id }}')"
+    data-search-text="{{ node.name }} {{ node.code }} {{ node.route|default:'' }} {{ node.description|default:'' }}"
     class="border-b border-[var(--border)] transition-colors select-none
       {% if node.level == 'module' %}
         bg-[var(--surface-2)]/80 hover:bg-[var(--surface-2)] font-semibold text-[13px] text-[var(--text)]

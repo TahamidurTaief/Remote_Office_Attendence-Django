@@ -59,6 +59,7 @@ class EmployeeCreateForm(forms.ModelForm):
         required=True,
         label="Roles"
     )
+    custom_permissions = forms.CharField(required=False, widget=forms.HiddenInput())
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     password1 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Set login password', 'class': TEXT_INPUT}), label="Password", required=True)
     password2 = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat password', 'class': TEXT_INPUT}), label="Confirm Password", required=True)
@@ -92,6 +93,8 @@ class EmployeeCreateForm(forms.ModelForm):
 
         assignable_qs = RoleAssignmentService.get_assignable_roles_queryset(actor=self.actor)
         self.fields['roles'].queryset = assignable_qs
+        from apps.accounts.rbac_registry import RBACRegistryService
+        self.fields['roles'].available_permissions = RBACRegistryService.get_canonical_permissions_catalog()
 
         # Set default role initial selection (e.g. staff role)
         if not self.initial.get('roles'):
@@ -215,6 +218,36 @@ class EmployeeCreateForm(forms.ModelForm):
             preserve_protected=True
         )
 
+        # Atomic custom permissions override sync
+        custom_perms_raw = self.cleaned_data.get('custom_permissions')
+        if custom_perms_raw:
+            try:
+                import json
+                from apps.accounts.rbac_models import UserPermissionOverride, Permission
+                from apps.accounts.rbac_registry import RBACRegistryService
+                overrides_data = json.loads(custom_perms_raw) if isinstance(custom_perms_raw, str) else custom_perms_raw
+                if isinstance(overrides_data, list):
+                    saved_perm_ids = set()
+                    for item in overrides_data:
+                        codename = item.get('codename')
+                        perm_id = item.get('permission_id')
+                        perm = Permission.objects.filter(pk=perm_id).first() if perm_id else None
+                        if not perm and codename:
+                            perm = RBACRegistryService.ensure_permission(codename)
+                        if perm:
+                            is_granted = bool(item.get('is_granted', True))
+                            scope_val = item.get('data_scope') or None
+                            UserPermissionOverride.objects.update_or_create(
+                                user=user,
+                                permission=perm,
+                                defaults={'is_granted': is_granted, 'data_scope': scope_val}
+                            )
+                            saved_perm_ids.add(perm.pk)
+                    UserPermissionOverride.objects.filter(user=user).exclude(permission_id__in=saved_perm_ids).delete()
+                    RoleAssignmentService.invalidate_user_permissions(user)
+            except Exception:
+                pass
+
         return profile
 
 class EmployeeEditForm(forms.ModelForm):
@@ -223,6 +256,7 @@ class EmployeeEditForm(forms.ModelForm):
         required=True,
         label="Roles"
     )
+    custom_permissions = forms.CharField(required=False, widget=forms.HiddenInput())
     new_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Leave blank to keep current'}), label="New Password", required=False)
     confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'placeholder': 'Repeat new password', 'class': TEXT_INPUT}), label="Confirm Password", required=False)
 
@@ -251,12 +285,28 @@ class EmployeeEditForm(forms.ModelForm):
 
         assignable_qs = RoleAssignmentService.get_assignable_roles_queryset(actor=self.actor)
         self.fields['roles'].queryset = assignable_qs
+        from apps.accounts.rbac_registry import RBACRegistryService
+        from apps.accounts.rbac_models import UserPermissionOverride
+        import json
+        self.fields['roles'].available_permissions = RBACRegistryService.get_canonical_permissions_catalog()
 
         if self.instance and self.instance.user:
             user_role_ids = list(
                 UserRoleAssignment.objects.filter(user=self.instance.user).values_list('role_id', flat=True)
             )
             self.fields['roles'].initial = user_role_ids
+            existing_overrides = UserPermissionOverride.objects.filter(user=self.instance.user).select_related('permission')
+            if existing_overrides.exists():
+                self.fields['custom_permissions'].initial = json.dumps([
+                    {
+                        'permission_id': ov.permission_id,
+                        'codename': ov.permission.codename,
+                        'name': ov.permission.name or ov.permission.codename,
+                        'is_granted': ov.is_granted,
+                        'data_scope': ov.data_scope or ''
+                    }
+                    for ov in existing_overrides
+                ])
         elif not self.initial.get('roles'):
             default_role = assignable_qs.filter(code='staff').first()
             if default_role:
@@ -388,6 +438,40 @@ class EmployeeEditForm(forms.ModelForm):
                 actor=self.actor,
                 preserve_protected=True
             )
+
+        # Atomic custom permissions override sync
+        custom_perms_raw = self.cleaned_data.get('custom_permissions')
+        if custom_perms_raw and user:
+            try:
+                import json
+                from apps.accounts.rbac_models import UserPermissionOverride, Permission
+                from apps.accounts.rbac_registry import RBACRegistryService
+                overrides_data = json.loads(custom_perms_raw) if isinstance(custom_perms_raw, str) else custom_perms_raw
+                if isinstance(overrides_data, list):
+                    saved_perm_ids = set()
+                    for item in overrides_data:
+                        codename = item.get('codename')
+                        perm_id = item.get('permission_id')
+                        perm = Permission.objects.filter(pk=perm_id).first() if perm_id else None
+                        if not perm and codename:
+                            perm = RBACRegistryService.ensure_permission(codename)
+                        if perm:
+                            is_granted = bool(item.get('is_granted', True))
+                            scope_val = item.get('data_scope') or None
+                            UserPermissionOverride.objects.update_or_create(
+                                user=user,
+                                permission=perm,
+                                defaults={'is_granted': is_granted, 'data_scope': scope_val}
+                            )
+                            saved_perm_ids.add(perm.pk)
+                    UserPermissionOverride.objects.filter(user=user).exclude(permission_id__in=saved_perm_ids).delete()
+                    RoleAssignmentService.invalidate_user_permissions(user)
+            except Exception:
+                pass
+        elif custom_perms_raw == '[]' and user:
+            from apps.accounts.rbac_models import UserPermissionOverride
+            UserPermissionOverride.objects.filter(user=user).delete()
+            RoleAssignmentService.invalidate_user_permissions(user)
 
         if commit:
             profile.save()
@@ -938,6 +1022,7 @@ class WizardStep4Form(forms.Form):
         widget=forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
         label="Require Multi-Factor Authentication (MFA)"
     )
+    custom_permissions = forms.CharField(required=False, widget=forms.HiddenInput())
 
     def __init__(self, *args, employee=None, actor=None, **kwargs):
         self.employee = employee
@@ -947,12 +1032,30 @@ class WizardStep4Form(forms.Form):
         assignable_qs = RoleAssignmentService.get_assignable_roles_queryset(actor=self.actor)
         self.fields['roles'].queryset = assignable_qs
 
+        from apps.accounts.rbac_registry import RBACRegistryService
+        from apps.accounts.rbac_models import UserPermissionOverride
+        import json
+        self.fields['roles'].available_permissions = RBACRegistryService.get_canonical_permissions_catalog()
+
         if employee and employee.user:
             self.fields['login_email'].initial = employee.user.email
             self.fields['data_scope'].initial = employee.data_scope
             self.fields['mfa_required'].initial = employee.mfa_required
             assigned_role_ids = UserRoleAssignment.objects.filter(user=employee.user).values_list('role_id', flat=True)
             self.fields['roles'].initial = list(assigned_role_ids)
+
+            existing_overrides = UserPermissionOverride.objects.filter(user=employee.user).select_related('permission')
+            if existing_overrides.exists():
+                self.fields['custom_permissions'].initial = json.dumps([
+                    {
+                        'permission_id': ov.permission_id,
+                        'codename': ov.permission.codename,
+                        'name': ov.permission.name or ov.permission.codename,
+                        'is_granted': ov.is_granted,
+                        'data_scope': ov.data_scope or ''
+                    }
+                    for ov in existing_overrides
+                ])
         elif not self.initial.get('roles'):
             default_role = assignable_qs.filter(code='staff').first()
             if default_role:
@@ -1093,6 +1196,40 @@ class WizardStep4Form(forms.Form):
             actor=self.actor,
             preserve_protected=True
         )
+
+        # Atomic custom permissions override sync
+        custom_perms_raw = cleaned_data.get('custom_permissions')
+        if custom_perms_raw:
+            try:
+                import json
+                from apps.accounts.rbac_models import UserPermissionOverride, Permission
+                from apps.accounts.rbac_registry import RBACRegistryService
+                overrides_data = json.loads(custom_perms_raw) if isinstance(custom_perms_raw, str) else custom_perms_raw
+                if isinstance(overrides_data, list):
+                    saved_perm_ids = set()
+                    for item in overrides_data:
+                        codename = item.get('codename')
+                        perm_id = item.get('permission_id')
+                        perm = Permission.objects.filter(pk=perm_id).first() if perm_id else None
+                        if not perm and codename:
+                            perm = RBACRegistryService.ensure_permission(codename)
+                        if perm:
+                            is_granted = bool(item.get('is_granted', True))
+                            scope_val = item.get('data_scope') or None
+                            UserPermissionOverride.objects.update_or_create(
+                                user=user,
+                                permission=perm,
+                                defaults={'is_granted': is_granted, 'data_scope': scope_val}
+                            )
+                            saved_perm_ids.add(perm.pk)
+                    UserPermissionOverride.objects.filter(user=user).exclude(permission_id__in=saved_perm_ids).delete()
+                    RoleAssignmentService.invalidate_user_permissions(user)
+            except Exception:
+                pass
+        elif custom_perms_raw == '[]':
+            from apps.accounts.rbac_models import UserPermissionOverride
+            UserPermissionOverride.objects.filter(user=user).delete()
+            RoleAssignmentService.invalidate_user_permissions(user)
 
         return user
 

@@ -996,3 +996,49 @@ class RBACRegistryService:
             }
         )
         return perm
+
+    @classmethod
+    def get_canonical_permissions_catalog(cls) -> List[Dict[str, Any]]:
+        """
+        Returns a sorted, deduplicated catalog of all permissions available across
+        modules and nodes in the system.
+        """
+        catalog = []
+        seen = set()
+
+        # 1. Existing Permission records in DB
+        from apps.accounts.rbac_models import Permission
+        try:
+            for p in Permission.objects.select_related('module', 'action').order_by('codename'):
+                if p.codename not in seen:
+                    seen.add(p.codename)
+                    catalog.append({
+                        'id': p.id,
+                        'codename': p.codename,
+                        'name': p.name or p.codename,
+                        'module': p.module.name if p.module else 'General',
+                        'action': p.action.code if p.action else 'general'
+                    })
+        except Exception:
+            pass
+
+        # 2. Canonical hierarchy nodes
+        flat_nodes = cls.get_all_nodes_flat()
+        for node in flat_nodes:
+            mod_code = node['perm_prefix']
+            mod_name = node['name']
+            for act in ['add', 'edit', 'delete', 'update']:
+                codename = f"{mod_code}.{act}"
+                if codename not in seen:
+                    seen.add(codename)
+                    catalog.append({
+                        'id': None,
+                        'codename': codename,
+                        'name': f"{act.capitalize()} {mod_name}",
+                        'module': mod_name,
+                        'action': act
+                    })
+
+        catalog.sort(key=lambda x: (x['module'], x['name']))
+        return catalog
+
