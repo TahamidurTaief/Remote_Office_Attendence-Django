@@ -1,3 +1,4 @@
+{% load static %}
 {# User Question Bubble #}
 {% if user_message %}
 <div class="flex flex-col gap-1 items-end my-1">
@@ -13,11 +14,11 @@
   <div class="max-w-[85%] px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border {% if is_error %}border-rose-300 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20{% else %}border-slate-200 dark:border-slate-700{% endif %} text-slate-800 dark:text-slate-100 text-[12px] leading-relaxed shadow-sm">
     <div class="flex items-center gap-1.5 mb-1 text-[10px] font-semibold {% if is_error %}text-rose-600 dark:text-rose-400{% else %}text-[#F97316]{% endif %}">
       {% if is_error %}
-        <span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-        <span>FieldTrack AI Notice ({{ error_type|default:"System" }})</span>
+        <img src="{% static 'icons/low_bg_icon.png' %}" alt="TaiefLab Ai" class="w-3.5 h-3.5 object-contain rounded-full shrink-0">
+        <span>TaiefLab Ai Notice ({{ error_type|default:"System" }})</span>
       {% else %}
-        <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-        <span>FieldTrack AI Intelligence</span>
+        <img src="{% static 'icons/low_bg_icon.png' %}" alt="TaiefLab Ai" class="w-3.5 h-3.5 object-contain rounded-full shrink-0">
+        <span>TaiefLab Ai</span>
       {% endif %}
     </div>
     <div class="whitespace-pre-wrap leading-relaxed text-[12px] text-slate-700 dark:text-slate-200">{{ ai_message|escape }}</div>
@@ -30,4 +31,3 @@
     {% endif %}
   </span>
 </div>
-

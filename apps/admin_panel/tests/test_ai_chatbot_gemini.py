@@ -147,7 +147,7 @@ class AIChatbotGeminiServiceTests(TestCase):
                 content = response.content.decode('utf-8')
                 self.assertIn("Summarize field visits", content)
                 self.assertIn("All 12 HVAC field visits completed on time today.", content)
-                self.assertIn("FieldTrack AI Intelligence", content)
+                self.assertIn("TaiefLab Ai", content)
 
     def test_metadata_only_audit_logging(self):
         """Audit log must contain metadata only without message text or secrets."""
