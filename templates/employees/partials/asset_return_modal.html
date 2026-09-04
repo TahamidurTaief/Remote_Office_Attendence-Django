@@ -1,6 +1,6 @@
 <c-modal id="htmxFormModal" title="Return Asset: {{ assignment.asset.asset_tag }}" size="md">
     <form hx-post="{% url 'employees:asset_return' assignment.pk %}"
-          hx-target="#form-modal-container"
+          hx-target="#modal-container"
           class="space-y-4">
         {% csrf_token %}
         <div class="space-y-3">
@@ -21,9 +21,9 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
-            <button type="button" @click="$dispatch('close-modal', {id: 'htmxFormModal'})" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-200">Cancel</button>
-            <button type="submit" class="px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-semibold hover:bg-amber-700">Confirm Return</button>
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <c-button type="button" variant="ghost" label="Cancel" @click="$dispatch('close-modal', {id: 'htmxFormModal'})"></c-button>
+            <c-button type="submit" variant="warning" label="Confirm Return" icon="corner-down-left"></c-button>
         </div>
     </form>
 </c-modal>

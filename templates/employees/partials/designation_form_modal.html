@@ -57,8 +57,8 @@
 </c-modal>
 
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
+  (function() {
     window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'desig-form' } }));
     if (window.lucide) lucide.createIcons();
-  });
+  })();
 </script>

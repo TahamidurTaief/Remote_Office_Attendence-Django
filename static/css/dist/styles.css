@@ -5897,6 +5897,11 @@ textarea.ft-input {
   padding-bottom: 32px;
 }
 
+.\!py-0\.5 {
+  padding-top: 0.125rem !important;
+  padding-bottom: 0.125rem !important;
+}
+
 .pb-0 {
   padding-bottom: 0px;
 }
@@ -9590,6 +9595,10 @@ html.dark {
 
 .dark\:hover\:bg-teal-900\/40:hover:is(.dark *) {
   background-color: rgb(19 78 74 / 0.4);
+}
+
+.dark\:hover\:bg-slate-800\/60:hover:is(.dark *) {
+  background-color: rgb(30 41 59 / 0.6);
 }
 
 .dark\:hover\:text-gray-200:hover:is(.dark *) {

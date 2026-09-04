@@ -13,7 +13,7 @@
             <c-textarea name="reason" required rows="3" placeholder="Enter reason..."></c-textarea>
         </div>
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <c-button type="button" onclick="document.getElementById('suspend-modal').remove()" variant="secondary" label="Cancel"></c-button>
+            <c-button type="button" @click="$dispatch('close-modal', {id: 'suspend-modal'})" variant="secondary" label="Cancel"></c-button>
             <c-button type="submit" variant="{% if employee.is_suspended %}success{% else %}danger{% endif %}" label="Confirm"></c-button>
         </div>
     </form>

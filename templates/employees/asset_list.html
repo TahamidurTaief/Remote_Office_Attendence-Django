@@ -1,68 +1,61 @@
-<c-app-shell page_title="Asset Registry | FieldTrack ERP">
+<c-app-shell page_title="Asset Registry | FieldTrack ERP" active_href="{{ request.path }}">
     <c-slot name="sidebar">
         <c-sidebar active_href="{{ request.path }}" ></c-sidebar>
     </c-slot>
 
     <c-slot name="topbar">
-        <c-topbar title="Hardware & Asset Registry" ></c-topbar>
+        <c-topbar title="Hardware & Asset Registry">
+            <c-slot name="actions">
+                <c-button hx-get="{% url 'employees:asset_create' %}"
+                          hx-target="#modal-container"
+                          hx-swap="innerHTML"
+                          variant="primary"
+                          icon="plus"
+                          label="Add New Asset"></c-button>
+            </c-slot>
+        </c-topbar>
     </c-slot>
 
+    <c-command-palette></c-command-palette>
+
     <div class="p-4 max-w-7xl mx-auto space-y-4">
-        <div class="flex justify-between items-center">
-            <div>
-                <h1 class="text-[14px] font-semibold" style="color:var(--text)">Asset Registry</h1>
-                <p class="text-xs mt-0.5" style="color:var(--text-muted)">Manage laptops, devices, SIM cards, and hardware assignments.</p>
-            </div>
-            <button type="button"
-                    hx-get="{% url 'employees:asset_create' %}"
-                    hx-target="#form-modal-container"
-                    class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm inline-flex items-center gap-1.5 transition-colors">
-                <i data-lucide="plus" class="w-4 h-4"></i> Add New Asset
-            </button>
-        </div>
+        <c-table id="asset-registry-table">
+            <c-slot name="header">
+                <th class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Asset Tag</th>
+                <th class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+                <th class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                <th class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Condition</th>
+                <th class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Currently Assigned To</th>
+            </c-slot>
 
-        <c-card padding="sm">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold">
-                        <tr>
-                            <th class="p-3">Asset Tag</th>
-                            <th class="p-3">Name</th>
-                            <th class="p-3">Type</th>
-                            <th class="p-3">Condition</th>
-                            <th class="p-3">Currently Assigned To</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100">
-                        {% for asset in assets %}
-                        <tr class="hover:bg-gray-50">
-                            <td class="p-3 font-mono font-bold text-indigo-600">{{ asset.asset_tag }}</td>
-                            <td class="p-3 font-medium text-gray-900">{{ asset.name }}</td>
-                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_asset_type_display }}" ></c-badge></td>
-                            <td class="p-3"><c-badge variant="neutral" label="{{ asset.get_condition_display }}" ></c-badge></td>
-                            <td class="p-3">
-                                {% with assign=asset.current_assignment %}
-                                {% if assign %}
-                                <a href="{% url 'employees:master_detail' assign.employee.pk %}" class="text-indigo-600 font-semibold hover:underline flex items-center gap-1.5">
-                                    <c-avatar name="{{ assign.employee.get_full_name }}" size="xs" ></c-avatar>
-                                    {{ assign.employee.get_full_name }}
-                                </a>
-                                {% else %}
-                                <span class="text-gray-400 font-medium">Unassigned / In Inventory</span>
-                                {% endif %}
-                                {% endwith %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" class="p-6 text-center text-gray-400">No assets registered yet.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </c-card>
+            <c-slot name="body">
+                {% for asset in assets %}
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors text-xs">
+                    <td class="font-mono font-bold text-indigo-600 dark:text-indigo-400">{{ asset.asset_tag }}</td>
+                    <td class="font-medium text-slate-800 dark:text-slate-100">{{ asset.name }}</td>
+                    <td><c-badge variant="neutral" label="{{ asset.get_asset_type_display }}"></c-badge></td>
+                    <td><c-badge variant="neutral" label="{{ asset.get_condition_display }}"></c-badge></td>
+                    <td>
+                        {% with assign=asset.current_assignment %}
+                        {% if assign %}
+                        <a href="{% url 'employees:master_detail' assign.employee.pk %}" class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline flex items-center gap-1.5">
+                            <c-avatar name="{{ assign.employee.get_full_name }}" size="xs"></c-avatar>
+                            <span>{{ assign.employee.get_full_name }}</span>
+                        </a>
+                        {% else %}
+                        <span class="text-slate-400 dark:text-slate-500 font-medium">Unassigned / In Inventory</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                        <c-empty-state icon="monitor" title="No Assets Registered" description="Add devices, laptops, SIM cards, and hardware assignments here."></c-empty-state>
+                    </td>
+                </tr>
+                {% endfor %}
+            </c-slot>
+        </c-table>
     </div>
-
-    <div id="form-modal-container" @open-modal.window="$nextTick(() => { const m = document.getElementById($event.detail.id); if (m) m.__x.$data.open = true; })"></div>
 </c-app-shell>

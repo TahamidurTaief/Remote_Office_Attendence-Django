@@ -11,23 +11,11 @@
 
     <div class="p-4 lg:p-6 w-full space-y-6" x-data="{ activeTab: 'lifecycle' }">
         <!-- Navigation Tabs -->
-        <div class="border-b border-gray-200 dark:border-gray-700">
-            <nav class="flex space-x-6" aria-label="Tabs">
-                <button @click="activeTab = 'lifecycle'"
-                        :class="activeTab === 'lifecycle' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
-                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
-                    Employee Lifecycle Status
-                </button>
-                <button @click="activeTab = 'expiry'"
-                        :class="activeTab === 'expiry' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
-                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
-                    Document Expiry
-                </button>
-                <button @click="activeTab = 'assets'"
-                        :class="activeTab === 'assets' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
-                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all">
-                    Asset Allocation
-                </button>
+        <div class="border-b border-gray-200 dark:border-gray-700 pb-2">
+            <nav class="flex items-center gap-1 overflow-x-auto scrollbar-hide" aria-label="Tabs">
+                <c-tab-button @click="activeTab = 'lifecycle'" active_condition="activeTab === 'lifecycle'" label="Employee Lifecycle Status" icon="activity"></c-tab-button>
+                <c-tab-button @click="activeTab = 'expiry'" active_condition="activeTab === 'expiry'" label="Document Expiry" icon="file-text"></c-tab-button>
+                <c-tab-button @click="activeTab = 'assets'" active_condition="activeTab === 'assets'" label="Asset Allocation" icon="monitor"></c-tab-button>
             </nav>
         </div>
 

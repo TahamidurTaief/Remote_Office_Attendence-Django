@@ -12,31 +12,26 @@
                 <!-- Vertical line up to parent -->
                 <div class="w-0.5 h-6 bg-gray-300 -mt-4 mb-2"></div>
                 
-                <div class="bg-white border border-gray-200 rounded-xl shadow-xs p-3 w-64 flex flex-col items-center transition-transform hover:scale-[1.01] duration-150 relative">
-                    <div class="w-12 h-12 rounded-full bg-gray-100 text-gray-700 font-bold flex items-center justify-center text-sm shadow-inner mb-2 overflow-hidden border border-gray-200">
-                        {% if child.legacy_profile and child.legacy_profile.profile_photo %}
-                            <img src="{{ child.legacy_profile.profile_photo.url }}" alt="{{ child.get_full_name }}" class="w-full h-full object-cover">
-                        {% else %}
-                            {{ child.first_name|slice:":1" }}{{ child.last_name|slice:":1" }}
-                        {% endif %}
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs p-3 w-64 flex flex-col items-center transition-transform hover:scale-[1.01] duration-150 relative">
+                    <div class="mb-2">
+                        <c-avatar src="{% if child.profile_photo %}{{ child.profile_photo.url }}{% endif %}" initials="{{ child.first_name|slice:':1' }}{{ child.last_name|slice:':1' }}" size="lg"></c-avatar>
                     </div>
-                    <h5 class="font-bold text-gray-900 text-sm mb-0.5">{{ child.get_full_name }}</h5>
-                    <p class="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1">{{ child.designation.name }}</p>
-                    <span class="px-1.5 py-0.5 rounded bg-gray-50 text-[9px] text-gray-600 font-medium">{{ child.department.name }}</span>
+                    <h5 class="font-bold text-slate-900 dark:text-white text-sm mb-0.5">{{ child.get_full_name }}</h5>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider mb-1">{{ child.designation.name|default:"No Designation" }}</p>
+                    <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] text-slate-600 dark:text-slate-300 font-medium">{{ child.department.name|default:"No Department" }}</span>
 
-                    <div class="mt-3 flex space-x-2">
-                        <a href="{% url 'employees:master_detail' child.pk %}" class="px-2 py-0.5 bg-white border border-gray-200 text-[10px] font-bold text-gray-700 rounded hover:bg-gray-50 transition-colors shadow-sm text-decoration-none">
-                            Profile
-                        </a>
+                    <div class="mt-3 flex items-center gap-1.5">
+                        <c-button href="{% url 'employees:master_detail' child.pk %}" variant="secondary" size="sm" label="Profile" extra_class="text-[10px] !px-2 !py-0.5"></c-button>
                         {% if child.direct_reports.exists %}
-                            <button 
+                            <c-button 
                                 hx-get="{% url 'employees:org_chart_node' child.id %}"
                                 hx-target="#reports-of-{{ child.id }}"
                                 hx-swap="innerHTML"
                                 onclick="this.remove()"
-                                class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-[10px] font-bold text-white rounded transition-colors shadow-sm">
-                                Expand
-                            </button>
+                                variant="primary"
+                                size="sm"
+                                label="Expand"
+                                extra_class="text-[10px] !px-2 !py-0.5"></c-button>
                         {% endif %}
                     </div>
                 </div>

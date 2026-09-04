@@ -122,28 +122,4 @@
         <!-- Employee Table container -->
         {% include "employees/partials/master_table.html" %}
     </div>
-
-    <!-- Container for HTMX loaded modals -->
-    <div id="modal-container"></div>
-
-    <script>
-    // After HTMX injects a c-modal into #modal-container, Alpine must init
-    // the new component tree BEFORE the open-modal event is dispatched.
-    document.body.addEventListener('htmx:afterSwap', function (evt) {
-        var container = document.getElementById('modal-container');
-        if (!container || !evt.target || !container.contains(evt.target)) return;
-        // Let Alpine initialise the freshly injected component tree
-        if (window.Alpine) {
-            Alpine.initTree(container);
-        }
-        // Dispatch open-modal for the first c-modal found inside the container
-        var modal = container.querySelector('[id^="modal-"]');
-        if (modal) {
-            // Use slice to strip the 'modal-' prefix only from the start,
-            // preventing corruption of IDs like 'modal-lifecycle-action-modal'
-            var modalId = modal.id.slice('modal-'.length);
-            window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: modalId } }));
-        }
-    });
-    </script>
 </c-app-shell>

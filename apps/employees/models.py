@@ -600,6 +600,13 @@ class Employee(models.Model):
     def __str__(self):
         return f"{self.employee_number} - {self.get_full_name()}"
 
+    @property
+    def profile_photo(self):
+        legacy = getattr(self, 'legacy_profile', None)
+        if legacy and legacy.profile_photo:
+            return legacy.profile_photo
+        return None
+
     def is_login_allowed(self):
         return (not self.is_trashed) and self.status in ALLOWED_LOGIN_STATUSES
 

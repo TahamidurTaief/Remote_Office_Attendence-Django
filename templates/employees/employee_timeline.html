@@ -3,65 +3,60 @@
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
 
-  <div class="flex items-center justify-between bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-    <div class="space-y-1">
-      <div class="flex items-center space-x-3">
-        <h1 class="text-2xl font-bold text-gray-900">
-          Employee Timeline & Employment History
-        </h1>
-        <c-status-pill status="{{ employee.business_status }}" label="{{ employee.business_status_display }}"></c-status-pill>
+  <c-card padding="lg">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="space-y-1">
+        <div class="flex items-center gap-3">
+          <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
+            Employee Timeline & Employment History
+          </h1>
+          <c-status-pill status="{{ employee.business_status }}" label="{{ employee.business_status_display }}"></c-status-pill>
+        </div>
+        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+          Unified chronological timeline tracking HR, Lifecycle, Leave, Attendance, Assets, and Documents for {{ employee.get_full_name }}.
+        </p>
       </div>
-      <p class="text-sm text-gray-500">
-        Unified chronological timeline tracking HR, Lifecycle, Leave, Attendance, Assets, and Documents for {{ employee.get_full_name }}.
-      </p>
+      <c-button href="{% url 'employees:master_detail' pk=employee.pk %}" variant="secondary" icon="arrow-left" label="Back to Profile" size="sm"></c-button>
     </div>
-    <a href="{% url 'employees:master_detail' pk=employee.pk %}" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold">
-      Back to Profile
-    </a>
-  </div>
+  </c-card>
 
   {# Filter Bar #}
-  <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+  <c-card padding="md">
     <form hx-get="{% url 'employees:employee_timeline' employee.pk %}"
           hx-target="#timeline-events-container"
           hx-swap="innerHTML"
           hx-trigger="change"
-          class="flex flex-wrap items-center gap-4">
+          class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       
-      <div class="flex flex-col">
-        <label class="text-xs font-semibold text-gray-500 mb-1">Category</label>
-        <select name="category" class="rounded-xl border-gray-200 text-sm focus:ring-primary focus:border-primary">
+      <div>
+        <c-select name="category" label="Category">
           <option value="all" {% if category_filter == 'all' %}selected{% endif %}>All Events</option>
           <option value="hr" {% if category_filter == 'hr' %}selected{% endif %}>HR & Lifecycle</option>
           <option value="leave" {% if category_filter == 'leave' %}selected{% endif %}>Leave Request</option>
           <option value="asset" {% if category_filter == 'asset' %}selected{% endif %}>Asset Assignment</option>
           <option value="document" {% if category_filter == 'document' %}selected{% endif %}>Document Upload</option>
           <option value="attendance" {% if category_filter == 'attendance' %}selected{% endif %}>Attendance Session</option>
-        </select>
+        </c-select>
       </div>
 
-      <div class="flex flex-col">
-        <label class="text-xs font-semibold text-gray-500 mb-1">Start Date</label>
-        <input type="date" name="start_date" value="{{ start_date|default:'' }}"
-               class="rounded-xl border-gray-200 text-sm focus:ring-primary focus:border-primary">
+      <div>
+        <c-datepicker name="start_date" label="Start Date" value="{{ start_date|default:'' }}" placeholder="Filter from date"></c-datepicker>
       </div>
 
-      <div class="flex flex-col">
-        <label class="text-xs font-semibold text-gray-500 mb-1">End Date</label>
-        <input type="date" name="end_date" value="{{ end_date|default:'' }}"
-               class="rounded-xl border-gray-200 text-sm focus:ring-primary focus:border-primary">
+      <div>
+        <c-datepicker name="end_date" label="End Date" value="{{ end_date|default:'' }}" placeholder="Filter to date"></c-datepicker>
       </div>
       
     </form>
-  </div>
+  </c-card>
 
-  <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+  <c-card padding="lg">
     <c-timeline>
       <div id="timeline-events-container">
         {% include 'employees/partials/timeline_events_rows.html' %}
       </div>
     </c-timeline>
-  </div>
+  </c-card>
 
 </div>
 {% endblock %}

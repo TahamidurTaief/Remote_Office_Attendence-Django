@@ -1,6 +1,6 @@
 <c-modal id="htmxFormModal" title="Upload Document for {{ employee.get_full_name }}" size="md">
     <form hx-post="{% url 'employees:document_upload' employee.pk %}"
-          hx-target="#form-modal-container"
+          hx-target="#modal-container"
           enctype="multipart/form-data"
           class="space-y-4">
         {% csrf_token %}

@@ -32,7 +32,7 @@
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <c-button type="button" onclick="document.getElementById('delete-confirm-modal').remove()" variant="secondary" label="Cancel"></c-button>
+            <c-button type="button" @click="$dispatch('close-modal', {id: 'delete-confirm-modal'})" variant="secondary" label="Cancel"></c-button>
             <c-button type="submit" variant="danger" icon="trash-2" label="{% if is_soft_delete %}Move To Trash{% else %}Delete Permanently{% endif %}"></c-button>
         </div>
     </form>

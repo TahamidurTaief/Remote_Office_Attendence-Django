@@ -238,7 +238,4 @@
             </div>
         </div>
     </div>
- 
-    <div id="modal-container" @open-modal.window="$nextTick(() => { const m = document.getElementById($event.detail.id); if (m) m.__x.$data.open = true; })"></div>
-    <div id="form-modal-container" @open-modal.window="$nextTick(() => { const m = document.getElementById($event.detail.id); if (m) m.__x.$data.open = true; })"></div>
 </c-app-shell>

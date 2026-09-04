@@ -134,6 +134,13 @@
     </a>
     {% endif %}
 
+    {# Actions slot for page CTA buttons #}
+    {% if actions %}
+    <div class="flex items-center gap-2">
+      {{ actions }}
+    </div>
+    {% endif %}
+
     {# User avatar menu #}
     <div class="relative" x-data="{ open: false }">
       <button type="button"

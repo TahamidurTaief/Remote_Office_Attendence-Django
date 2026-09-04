@@ -6,10 +6,10 @@
     <c-slot name="topbar">
         <c-topbar title="Organization Chart">
             <c-slot name="actions">
-                <a href="{% url 'employees:delegation_list' %}" class="inline-flex items-center space-x-1.5 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium text-sm rounded-xl transition-colors shadow-sm text-decoration-none">
-                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                    <span>Manage Delegations</span>
-                </a>
+                <c-button href="{% url 'employees:delegation_list' %}"
+                          variant="secondary"
+                          icon="users"
+                          label="Manage Delegations"></c-button>
             </c-slot>
         </c-topbar>
     </c-slot>
@@ -17,11 +17,11 @@
     <c-command-palette></c-command-palette>
 
     <div class="p-4 lg:p-6 w-full space-y-6">
-        <c-card>
-            <div class="p-2 border-b border-gray-100 flex justify-between items-center">
+        <c-card padding="md">
+            <div class="pb-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <div>
-                    <h3 class="text-lg font-bold text-gray-900">Organization Directory Structure</h3>
-                    <p class="text-sm text-gray-500">Interactive organizational tree. Expand nodes to view reporting structures.</p>
+                    <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100">Organization Directory Structure</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Interactive organizational tree. Expand nodes to view reporting structures.</p>
                 </div>
             </div>
 
@@ -31,31 +31,25 @@
                     <div class="space-y-8 w-full max-w-4xl">
                         {% for root in roots %}
                             <div class="flex flex-col items-center">
-                                <div class="bg-gradient-to-br from-indigo-50 to-white border-2 border-indigo-500 rounded-2xl shadow-sm p-4 w-72 flex flex-col items-center relative transition-transform hover:scale-[1.02] duration-200">
-                                    <div class="w-16 h-16 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xl shadow-inner mb-3 overflow-hidden border border-indigo-200">
-                                        {% if root.legacy_profile and root.legacy_profile.profile_photo %}
-                                            <img src="{{ root.legacy_profile.profile_photo.url }}" alt="{{ root.get_full_name }}" class="w-full h-full object-cover">
-                                        {% else %}
-                                            {{ root.first_name|slice:":1" }}{{ root.last_name|slice:":1" }}
-                                        {% endif %}
+                                <div class="bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-2xl shadow-sm p-4 w-72 flex flex-col items-center relative transition-transform hover:scale-[1.02] duration-200">
+                                    <div class="mb-3">
+                                        <c-avatar src="{% if root.profile_photo %}{{ root.profile_photo.url }}{% endif %}" initials="{{ root.first_name|slice:':1' }}{{ root.last_name|slice:':1' }}" size="xl"></c-avatar>
                                     </div>
-                                    <h4 class="font-bold text-gray-900 text-base">{{ root.get_full_name }}</h4>
-                                    <p class="text-xs text-indigo-650 font-semibold uppercase tracking-wider mb-1">{{ root.designation.name }}</p>
-                                    <span class="px-2 py-0.5 rounded bg-gray-100 text-[10px] text-gray-600 font-medium">{{ root.department.name }}</span>
+                                    <h4 class="font-bold text-slate-900 dark:text-white text-base">{{ root.get_full_name }}</h4>
+                                    <p class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wider mb-1">{{ root.designation.name|default:"No Designation" }}</p>
+                                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 font-medium">{{ root.department.name|default:"No Department" }}</span>
 
-                                    <div class="mt-4 flex space-x-2">
-                                        <a href="{% url 'employees:master_detail' root.pk %}" class="px-3 py-1 bg-white border border-gray-200 text-xs font-bold text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm text-decoration-none">
-                                            View Profile
-                                        </a>
+                                    <div class="mt-4 flex items-center gap-2">
+                                        <c-button href="{% url 'employees:master_detail' root.pk %}" variant="secondary" size="sm" label="Profile"></c-button>
                                         {% if root.direct_reports.exists %}
-                                            <button 
+                                            <c-button 
                                                 hx-get="{% url 'employees:org_chart_node' root.id %}"
                                                 hx-target="#reports-of-{{ root.id }}"
                                                 hx-swap="innerHTML"
                                                 onclick="this.remove()"
-                                                class="px-3 py-1 bg-indigo-600 hover:bg-indigo-750 text-xs font-bold text-white rounded-lg transition-colors shadow-sm">
-                                                Show Team
-                                            </button>
+                                                variant="primary"
+                                                size="sm"
+                                                label="Show Team"></c-button>
                                         {% endif %}
                                     </div>
                                 </div>
