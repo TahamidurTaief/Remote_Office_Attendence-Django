@@ -24,9 +24,10 @@
   </div>
   <span class="text-[10px] text-slate-400 font-mono">
     {% if is_error %}
-      System Notice &bull; Truthful State
+      System Notice &bull; Truthful State{% if provider_info and provider_info != 'None' %} &bull; {{ provider_info }}{% endif %}
     {% else %}
-      AI Assistant &bull; Scoped Operational Data
+      AI Assistant &bull; Scoped Operational Data{% if provider_info %} &bull; {{ provider_info }}{% endif %}
     {% endif %}
   </span>
 </div>
+

@@ -1,3 +1,4 @@
+{% load static %}
 {% comment %}
 c-staff-dashboard component
 Shared responsive Django Cotton composition for canonical staff landing page (< 768px mobile app, >= 768px desktop dashboard)
@@ -39,6 +40,12 @@ Props:
       {% else %}
         <c-badge label="Off-duty" variant="soft" status_color="slate"></c-badge>
       {% endif %}
+      <button type="button"
+              @click="$dispatch('open-ai-chatbot')"
+              class="ft-btn ft-btn-ghost ft-btn-sm min-h-[34px] text-[#F97316] border border-orange-500/30 hover:bg-orange-500/10">
+        <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-3.5 h-3.5 object-contain">
+        <span>AI Assistant</span>
+      </button>
       <a href="{% url 'staff:check_in' %}" class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px]">
         <i data-lucide="clock" class="w-3.5 h-3.5"></i>
         <span>Attendance</span>
@@ -74,7 +81,7 @@ Props:
   </div>
 
   {# ── 4. Quick Actions Grid (< 768px mobile grid, compact horizontal desktop) ─── #}
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
     <c-quick-action-tile title="{% if active_session %}Check Out{% else %}Check In{% endif %}"
                          subtitle="Office / Field"
                          icon="log-in"
@@ -98,6 +105,53 @@ Props:
                          icon="receipt"
                          href="{% url 'expense:staff_expense_create' %}"
                          color="neutral"></c-quick-action-tile>
+
+    <div type="button"
+         @click="$dispatch('open-ai-chatbot')"
+         class="ft-card p-3 rounded-xl hover:border-orange-300 dark:hover:border-orange-800 transition-all cursor-pointer select-none flex flex-col justify-between group">
+      <div class="flex items-center justify-between gap-1 mb-2">
+        <div class="w-8 h-8 rounded-lg bg-orange-500/10 text-[#F97316] flex items-center justify-center shrink-0">
+          <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 object-contain">
+        </div>
+        <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI</span>
+      </div>
+      <div>
+        <h4 class="text-[12px] font-bold text-slate-800 dark:text-white group-hover:text-[#F97316] transition-colors">AI Assistant</h4>
+        <p class="text-[10px] text-slate-500 dark:text-slate-400">Ask & get smart info</p>
+      </div>
+    </div>
+  </div>
+
+  {# ── 4b. AI Employee Assistant Feature Banner ─── #}
+  <div class="p-4 rounded-xl border border-orange-500/20 bg-orange-50/40 dark:bg-orange-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 border border-orange-500/20">
+        <img src="{% static 'icons/ai_icon.png' %}" alt="AI Assistant" class="w-5 h-5 object-contain">
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h3 class="text-[13px] font-bold text-slate-900 dark:text-white">AI Workplace Assistant</h3>
+          <span class="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI POWERED</span>
+        </div>
+        <p class="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+          Ask questions about your attendance, leave policy, pending tasks, or company guidelines anytime.
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
+      <button type="button"
+              @click="$dispatch('open-ai-chatbot', { message: 'How many leave days do I have left?' })"
+              class="ft-btn ft-btn-ghost ft-btn-sm text-[11px] text-slate-700 dark:text-slate-300">
+        <i data-lucide="help-circle" class="w-3.5 h-3.5 text-[#F97316]"></i>
+        <span>Check Leaves</span>
+      </button>
+      <button type="button"
+              @click="$dispatch('open-ai-chatbot')"
+              class="ft-btn ft-btn-primary ft-btn-sm min-h-[34px] bg-[#F97316] hover:bg-orange-600 text-white border-none">
+        <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-3.5 h-3.5 object-contain">
+        <span>Launch Assistant</span>
+      </button>
+    </div>
   </div>
 
   {# ── 5. Main Dashboard Grid (Progressive 2-column layout on desktop) ─── #}

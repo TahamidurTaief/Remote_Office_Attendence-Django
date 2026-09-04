@@ -193,7 +193,7 @@
         </div>
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
-            <h3 class="text-[12px] font-bold text-slate-800 dark:text-slate-100 truncate">FieldTrack AI Assistant</h3>
+            <h3 class="text-[12px] font-bold text-slate-800 dark:text-slate-100 truncate">TaiefLab AI</h3>
             <span class="px-1 py-0.2 text-[9px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">Local</span>
           </div>
           <p class="text-[10px] text-slate-400">Deterministic Intelligence &bull; Offline Ready</p>
@@ -211,7 +211,7 @@
         <button type="button"
                 @click="open = false; minimized = false;"
                 class="w-7 h-7 p-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
-                title="Close AI Assistant">
+                title="Close TaiefLab AI">
           <i data-lucide="x" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -315,16 +315,18 @@
       </form>
 
       {# Modal Footer: Attribution #}
-      <div class="mt-2 pt-1 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-400">
-        <span id="ai-chat-spinner" class="htmx-indicator flex items-center gap-1 text-[#F97316]">
-          <i data-lucide="loader" class="w-3 h-3 animate-spin"></i>
-          <span>Processing locally...</span>
-        </span>
-        <span class="htmx-indicator-none">Encrypted &bull; No External API</span>
+      <div class="mt-2 pt-1 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-400 w-full">
+        <div class="flex items-center gap-1 min-w-0">
+          <span id="ai-chat-spinner" class="htmx-indicator flex items-center gap-1 text-[#F97316]">
+            <i data-lucide="loader" class="w-3 h-3 animate-spin"></i>
+            <span>Processing locally...</span>
+          </span>
+          <span class="htmx-indicator-none truncate">Encrypted &bull; No External API</span>
+        </div>
         <a href="https://www.taieflab.com"
            target="_blank"
            rel="noopener noreferrer"
-           class="hover:text-[#F97316] transition-colors font-medium">
+           class="hover:text-[#F97316] transition-colors font-medium shrink-0 ml-2">
           Powered by TaiefLab
         </a>
       </div>

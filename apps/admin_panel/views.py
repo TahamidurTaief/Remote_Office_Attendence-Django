@@ -3959,7 +3959,7 @@ class AdminAttendanceDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, Vi
 
 class AIWorkspaceView(RoleRequiredMixin, TemplateView):
     """
-    AI Workspace placeholder view for AI submodules.
+    AI Workspace view for AI submodules.
     Fully responsive Cotton template with zero raw controls and zero inline styles.
     """
     allowed_roles = ['admin', 'manager']
@@ -3982,19 +3982,127 @@ class AIWorkspaceView(RoleRequiredMixin, TemplateView):
             'project-insights': 'Predictive task completion dates, critical path analysis, and material bottleneck alerts.',
             'payroll-insights': 'Overtime anomaly audits, payroll variance detection, and compensation ratio metrics.',
             'smart-reports': 'AI-assisted executive summaries and deterministic natural language report synthesis.',
-            'settings': 'Configure intelligence models, telemetry retention, and privacy boundaries.',
+            'settings': 'Configure AI behavior, custom instructions, primary model, and fallback API keys.',
         }
         context['submodule_key'] = submodule
         context['page_title'] = titles.get(submodule, 'AI Intelligence Workspace')
         context['submodule_title'] = titles.get(submodule, 'AI Workspace')
         context['submodule_description'] = descriptions.get(submodule, 'Local intelligence analytics and deterministic workspace tools.')
+
+        # If on settings submodule, provide active AISetting data
+        if submodule == 'settings':
+            from .models import AISetting
+            ai_setting = AISetting.get_settings()
+            context['ai_setting'] = ai_setting
+            context['provider_choices'] = AISetting.PROVIDER_CHOICES
+            context['fallback_configs'] = ai_setting.fallback_configs or []
+
         return context
+
+
+class AISettingsSaveView(RoleRequiredMixin, View):
+    """
+    Saves AI behavior configuration (system instructions, temperature, tokens, context toggle)
+    and primary + multiple fallback API keys.
+    """
+    allowed_roles = ['admin', 'system_owner']
+
+    def post(self, request, *args, **kwargs):
+        import json
+        from .models import AISetting
+        from apps.audit.models import AuditEvent
+
+        ai_setting = AISetting.get_settings()
+
+        # Update behavior
+        system_prompt = request.POST.get('system_prompt', '').strip()
+        if system_prompt:
+            ai_setting.system_prompt = system_prompt
+
+        temperature_val = request.POST.get('temperature', '').strip()
+        if temperature_val:
+            try:
+                ai_setting.temperature = max(0.0, min(1.0, float(temperature_val)))
+            except ValueError:
+                pass
+
+        max_tokens_val = request.POST.get('max_tokens', '').strip()
+        if max_tokens_val:
+            try:
+                ai_setting.max_tokens = max(100, min(4096, int(max_tokens_val)))
+            except ValueError:
+                pass
+
+        ai_setting.include_operational_context = (request.POST.get('include_operational_context') == 'on' or request.POST.get('include_operational_context') == 'true')
+
+        # Update primary provider
+        primary_provider = request.POST.get('primary_provider', 'gemini').strip()
+        if primary_provider:
+            ai_setting.primary_provider = primary_provider
+
+        primary_model = request.POST.get('primary_model', '').strip()
+        if primary_model:
+            ai_setting.primary_model = primary_model
+
+        primary_api_key = request.POST.get('primary_api_key', '').strip()
+        # Only overwrite key if user provided a non-masked value
+        if primary_api_key and not primary_api_key.startswith('••••'):
+            ai_setting.primary_api_key = primary_api_key
+
+        # Process fallback configs
+        fallback_json = request.POST.get('fallback_configs_json', '').strip()
+        if fallback_json:
+            try:
+                parsed_fallbacks = json.loads(fallback_json)
+                if isinstance(parsed_fallbacks, list):
+                    clean_fallbacks = []
+                    for idx, fb in enumerate(parsed_fallbacks):
+                        fb_key = fb.get('api_key', '').strip()
+                        # If masked, preserve existing key if available
+                        if fb_key.startswith('••••') and idx < len(ai_setting.fallback_configs):
+                            fb_key = ai_setting.fallback_configs[idx].get('api_key', '')
+
+                        clean_fallbacks.append({
+                            'provider': fb.get('provider', 'groq'),
+                            'model': fb.get('model', ''),
+                            'api_key': fb_key,
+                            'label': fb.get('label', f"Fallback #{idx + 1}"),
+                            'is_active': fb.get('is_active', True)
+                        })
+                    ai_setting.fallback_configs = clean_fallbacks
+            except Exception as e:
+                logger.warning(f"Error parsing fallback configs JSON: {e}")
+
+        ai_setting.updated_by = request.user
+        ai_setting.save()
+
+        # Audit event
+        try:
+            AuditEvent.objects.create(
+                actor_user=request.user,
+                actor_role='admin',
+                module='ai_settings',
+                object_type='ai_configuration',
+                object_id=str(ai_setting.id),
+                object_label='AI Settings Updated',
+                action='update',
+                after_data={
+                    'primary_provider': ai_setting.primary_provider,
+                    'fallback_count': len(ai_setting.fallback_configs),
+                    'include_operational_context': ai_setting.include_operational_context,
+                }
+            )
+        except Exception:
+            pass
+
+        messages.success(request, "AI configuration & fallback API keys saved successfully.")
+        return redirect('admin_panel:ai_settings')
 
 
 class AIChatbotResponseView(RoleRequiredMixin, View):
     """
-    Production-grade Gemini AI endpoint for the FieldTrack Assistant.
-    - Connects to Google AI Studio via official google-genai SDK
+    Production-grade AI endpoint for the FieldTrack Assistant.
+    - Connects via FieldTrackAIService with automatic multi-provider fallback
     - Allowlisted, read-only ORM operational data extraction
     - Strict RBAC: admin (company aggregates), manager (branch/team), staff/employee (self only)
     - Prompt injection defense & confidentiality protection
@@ -4004,7 +4112,7 @@ class AIChatbotResponseView(RoleRequiredMixin, View):
     allowed_roles = ['admin', 'manager', 'staff', 'employee', 'system_owner']
 
     def post(self, request, *args, **kwargs):
-        from .ai_service import GeminiClientService
+        from .ai_service import FieldTrackAIService
 
         user_message = request.POST.get('message', '').strip()
         if not user_message:
@@ -4013,16 +4121,19 @@ class AIChatbotResponseView(RoleRequiredMixin, View):
                 'ai_message': 'Please enter a message to begin inquiry.',
                 'is_error': True,
                 'error_type': 'Input Required',
+                'provider_info': 'Validation',
             })
 
-        # Query Gemini with scoped operational context
-        ai_reply, is_error, error_type = GeminiClientService.query_gemini(request.user, user_message)
+        # Query FieldTrack AI with scoped operational context & fallback chain
+        from .ai_service import GeminiClientService
+        ai_reply, is_error, error_type, provider_info = GeminiClientService.query_ai(request.user, user_message)
 
         return render(request, 'cotton/ai-chat-response.html', {
             'user_message': user_message,
             'ai_message': ai_reply,
             'is_error': is_error,
             'error_type': error_type,
+            'provider_info': provider_info,
         })
 
 

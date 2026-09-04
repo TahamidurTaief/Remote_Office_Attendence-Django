@@ -27,79 +27,313 @@
     </div>
 
     {# Submodules Quick Navigator Tabs #}
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-700">
-      <c-tab-button label="AI Assistant" href="{% url 'admin_panel:ai_assistant' %}" is_active="{% if submodule_key == 'assistant' %}true{% endif %}"></c-tab-button>
-      <c-tab-button label="Attendance Insights" href="{% url 'admin_panel:ai_attendance_insights' %}" is_active="{% if submodule_key == 'attendance-insights' %}true{% endif %}"></c-tab-button>
-      <c-tab-button label="Project Insights" href="{% url 'admin_panel:ai_project_insights' %}" is_active="{% if submodule_key == 'project-insights' %}true{% endif %}"></c-tab-button>
-      <c-tab-button label="HR & Payroll Insights" href="{% url 'admin_panel:ai_payroll_insights' %}" is_active="{% if submodule_key == 'payroll-insights' %}true{% endif %}"></c-tab-button>
-      <c-tab-button label="Smart Reports" href="{% url 'admin_panel:ai_smart_reports' %}" is_active="{% if submodule_key == 'smart-reports' %}true{% endif %}"></c-tab-button>
-      <c-tab-button label="AI Settings" href="{% url 'admin_panel:ai_settings' %}" is_active="{% if submodule_key == 'settings' %}true{% endif %}"></c-tab-button>
+    <div class="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 dark:border-slate-700 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <c-tab-button label="AI Assistant" icon="bot" href="{% url 'admin_panel:ai_assistant' %}" is_active="{% if submodule_key == 'assistant' %}true{% endif %}"></c-tab-button>
+      <c-tab-button label="Attendance Insights" icon="calendar-check" href="{% url 'admin_panel:ai_attendance_insights' %}" is_active="{% if submodule_key == 'attendance-insights' %}true{% endif %}"></c-tab-button>
+      <c-tab-button label="Project Insights" icon="folder-kanban" href="{% url 'admin_panel:ai_project_insights' %}" is_active="{% if submodule_key == 'project-insights' %}true{% endif %}"></c-tab-button>
+      <c-tab-button label="HR & Payroll Insights" icon="calculator" href="{% url 'admin_panel:ai_payroll_insights' %}" is_active="{% if submodule_key == 'payroll-insights' %}true{% endif %}"></c-tab-button>
+      <c-tab-button label="Smart Reports" icon="file-bar-chart" href="{% url 'admin_panel:ai_smart_reports' %}" is_active="{% if submodule_key == 'smart-reports' %}true{% endif %}"></c-tab-button>
+      <c-tab-button label="AI Settings" icon="sliders" href="{% url 'admin_panel:ai_settings' %}" is_active="{% if submodule_key == 'settings' %}true{% endif %}"></c-tab-button>
     </div>
 
     {# Main Content Grid #}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="md:col-span-2 space-y-4">
-        <c-card padding="md">
-          <c-section-header title="{{ submodule_title }} Overview" subtitle="Deterministic analytics synthesized from local operational telemetry">
-            <c-slot name="actions">
-              <c-badge variant="neutral" size="sm" label="Status: Operational"></c-badge>
-            </c-slot>
-          </c-section-header>
-          <div class="space-y-3 pt-2">
-            <div class="p-3 rounded-card bg-orange-500/5 border border-orange-500/15 flex items-start gap-3">
-              <div class="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-[#F97316]"></i>
-              </div>
-              <div class="space-y-1">
-                <h4 class="text-[12px] font-semibold text-slate-800 dark:text-slate-200">Continuous Local Processing</h4>
-                <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Workforce activity, branch logs, and operational milestones are monitored deterministically without transmitting sensitive enterprise records to public external APIs.
-                </p>
-              </div>
-            </div>
+        {% if submodule_key == 'settings' %}
+          {# AI Settings & Behavior Configuration Form #}
+          <form method="post" action="{% url 'admin_panel:ai_settings_save' %}" class="space-y-4"
+                x-data="{
+                  fallbacks: {{ fallback_configs|default:'[]'|safe }},
+                  newProvider: 'groq',
+                  newModel: 'llama-3.3-70b-versatile',
+                  newApiKey: '',
+                  newLabel: '',
+                  addFallback() {
+                    if (!this.newApiKey.trim()) {
+                      alert('Please provide an API key for the fallback provider.');
+                      return;
+                    }
+                    this.fallbacks.push({
+                      provider: this.newProvider,
+                      model: this.newModel.trim(),
+                      api_key: this.newApiKey.trim(),
+                      label: this.newLabel.trim() || ('Fallback #' + (this.fallbacks.length + 1) + ' (' + this.newProvider.toUpperCase() + ')'),
+                      is_active: true
+                    });
+                    this.newApiKey = '';
+                    this.newLabel = '';
+                    if (this.newProvider === 'groq') this.newModel = 'llama-3.3-70b-versatile';
+                    else if (this.newProvider === 'gemini') this.newModel = 'gemini-2.5-flash';
+                    else if (this.newProvider === 'openai') this.newModel = 'gpt-4o-mini';
+                    else if (this.newProvider === 'openrouter') this.newModel = 'meta-llama/llama-3.3-70b-instruct:free';
+                    else if (this.newProvider === 'anthropic') this.newModel = 'claude-3-5-haiku-20241022';
+                  },
+                  removeFallback(index) {
+                    this.fallbacks.splice(index, 1);
+                  },
+                  updateDefaultModel() {
+                    if (this.newProvider === 'groq') this.newModel = 'llama-3.3-70b-versatile';
+                    else if (this.newProvider === 'gemini') this.newModel = 'gemini-2.5-flash';
+                    else if (this.newProvider === 'openai') this.newModel = 'gpt-4o-mini';
+                    else if (this.newProvider === 'openrouter') this.newModel = 'meta-llama/llama-3.3-70b-instruct:free';
+                    else if (this.newProvider === 'anthropic') this.newModel = 'claude-3-5-haiku-20241022';
+                  }
+                }">
+            {% csrf_token %}
+            <input type="hidden" name="fallback_configs_json" :value="JSON.stringify(fallbacks)">
 
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
-              <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
-                <span class="text-[10px] uppercase font-semibold text-slate-400">Response SLA</span>
-                <p class="text-[13px] font-bold text-slate-700 dark:text-slate-200 mt-0.5">&lt; 15 ms</p>
-              </div>
-              <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
-                <span class="text-[10px] uppercase font-semibold text-slate-400">Model Engine</span>
-                <p class="text-[13px] font-bold text-[#F97316] mt-0.5">Local Rule-Base</p>
-              </div>
-              <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
-                <span class="text-[10px] uppercase font-semibold text-slate-400">Privacy Scope</span>
-                <p class="text-[13px] font-bold text-emerald-600 mt-0.5">Zero Outbound</p>
-              </div>
-              <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
-                <span class="text-[10px] uppercase font-semibold text-slate-400">Telemetry Status</span>
-                <p class="text-[13px] font-bold text-slate-700 dark:text-slate-200 mt-0.5">Synchronized</p>
-              </div>
-            </div>
-          </div>
-        </c-card>
+            {# Card 1: AI Persona & Behavior #}
+            <c-card padding="md">
+              <c-section-header title="AI Persona & Behavioral Instructions" subtitle="Define how the AI answers workforce queries and tone of responses">
+                <c-slot name="actions">
+                  <c-badge variant="info" size="sm" label="Configurable Persona"></c-badge>
+                </c-slot>
+              </c-section-header>
 
-        {# Interactive Exploration Card #}
-        <c-card padding="md">
-          <c-section-header title="Operational Recommendations" subtitle="Actionable items extracted from latest operational data"></c-section-header>
-          <div class="space-y-2 pt-2">
-            <div class="p-3 rounded-card bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-              <div class="flex items-center gap-2.5">
-                <i data-lucide="calendar" class="w-4 h-4 text-[#F97316]"></i>
-                <span class="text-[12px] text-slate-700 dark:text-slate-300">Evaluate delayed task dependencies on Alpha Tower HVAC project</span>
+              <div class="space-y-3 pt-2">
+                <div>
+                  <label class="ft-label block mb-1">System Prompt / Assistant Persona</label>
+                  <textarea name="system_prompt"
+                            rows="4"
+                            class="ft-input w-full text-[12px] leading-relaxed"
+                            placeholder="Enter behavioral guidelines, system role, and constraints...">{{ ai_setting.system_prompt }}</textarea>
+                  <p class="text-[10px] text-slate-400 mt-1">This instruction guides tone, persona, role boundaries, and output formatting across all inquiries.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label class="ft-label block mb-1">Sampling Temperature (0.0 - 1.0)</label>
+                    <input type="number"
+                           step="0.05"
+                           min="0"
+                           max="1"
+                           name="temperature"
+                           value="{{ ai_setting.temperature|default:'0.30' }}"
+                           class="ft-input w-full text-[12px]">
+                    <p class="text-[10px] text-slate-400 mt-0.5">Lower = deterministic & factual. Higher = varied & creative.</p>
+                  </div>
+                  <div>
+                    <label class="ft-label block mb-1">Max Response Tokens</label>
+                    <input type="number"
+                           step="50"
+                           min="100"
+                           max="4096"
+                           name="max_tokens"
+                           value="{{ ai_setting.max_tokens|default:'800' }}"
+                           class="ft-input w-full text-[12px]">
+                    <p class="text-[10px] text-slate-400 mt-0.5">Recommended: 400 - 1200 for concise answers.</p>
+                  </div>
+                </div>
+
+                <div class="pt-2">
+                  <c-checkbox name="include_operational_context"
+                              label="Inject Scoped Operational Context"
+                              checked="{% if ai_setting.include_operational_context %}true{% endif %}">
+                  </c-checkbox>
+                  <p class="text-[10px] text-slate-400 ml-6 mt-0.5">Automatically aggregates allowlisted, read-only database metrics (attendance, project deadlines, leaves) strictly scoped by user role.</p>
+                </div>
               </div>
-              <c-button variant="secondary" size="sm" label="Review" href="{% url 'projects:project_list' %}"></c-button>
-            </div>
-            <div class="p-3 rounded-card bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-              <div class="flex items-center gap-2.5">
-                <i data-lucide="users" class="w-4 h-4 text-[#EF4444]"></i>
-                <span class="text-[12px] text-slate-700 dark:text-slate-300">Review attendance anomalies across remote site engineers</span>
+            </c-card>
+
+            {# Card 2: Primary AI Provider & API Key #}
+            <c-card padding="md">
+              <c-section-header title="Primary AI Engine & API Key" subtitle="Primary provider invoked first for inquiries">
+                <c-slot name="actions">
+                  <c-badge variant="primary" size="sm" label="Primary Engine"></c-badge>
+                </c-slot>
+              </c-section-header>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label class="ft-label block mb-1">Primary Provider</label>
+                  <select name="primary_provider" class="ft-input w-full text-[12px]">
+                    {% for code, label in provider_choices %}
+                      <option value="{{ code }}" {% if ai_setting.primary_provider == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="ft-label block mb-1">Model Name</label>
+                  <input type="text"
+                         name="primary_model"
+                         value="{{ ai_setting.primary_model|default:'gemini-2.5-flash' }}"
+                         placeholder="e.g. gemini-2.5-flash, gpt-4o-mini"
+                         class="ft-input w-full text-[12px]">
+                </div>
               </div>
-              <c-button variant="secondary" size="sm" label="Inspect" href="{% url 'admin_panel:attendance_list' %}"></c-button>
+
+              <div class="mt-3" x-data="{ showKey: false }">
+                <label class="ft-label block mb-1">Primary API Key</label>
+                <div class="relative flex items-center">
+                  <input :type="showKey ? 'text' : 'password'"
+                         name="primary_api_key"
+                         value="{% if ai_setting.primary_api_key %}••••••••••••••••{% endif %}"
+                         placeholder="Paste primary API key (leave masked to keep unchanged)"
+                         class="ft-input w-full pr-10 text-[12px] font-mono">
+                  <button type="button"
+                          @click="showKey = !showKey"
+                          class="absolute right-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i :data-lucide="showKey ? 'eye-off' : 'eye'" class="w-4 h-4"></i>
+                  </button>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">If blank, the server will check environment variables (e.g. <code>GOOGLE_AI_API_KEY</code>).</p>
+              </div>
+            </c-card>
+
+            {# Card 3: Multiple Fallback APIs Manager #}
+            <c-card padding="md">
+              <c-section-header title="Multiple Fallback APIs (Automatic Failover)" subtitle="If the primary provider hits quota limit (429), errors, or times out, FieldTrack tries these in order">
+                <c-slot name="actions">
+                  <span class="text-[11px] font-medium text-slate-500" x-text="fallbacks.length + ' configured'"></span>
+                </c-slot>
+              </c-section-header>
+
+              {# Fallback List Table #}
+              <div class="mt-2 space-y-2">
+                <template x-if="fallbacks.length === 0">
+                  <div class="p-3 text-center rounded-card bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 text-slate-500 text-[11px]">
+                    No fallback APIs added yet. If the primary API runs out of quota, requests will be blocked. Add fallbacks below.
+                  </div>
+                </template>
+
+                <template x-for="(fb, idx) in fallbacks" :key="idx">
+                  <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-orange-500/10 text-[#F97316] border border-orange-500/20 shrink-0" x-text="'#' + (idx + 1)"></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <h5 class="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate" x-text="fb.label || (fb.provider.toUpperCase() + ' Fallback')"></h5>
+                          <span class="text-[10px] px-1.5 py-0.2 rounded font-mono uppercase bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" x-text="fb.provider"></span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 font-mono mt-0.5 truncate" x-text="'Model: ' + (fb.model || 'Default') + ' • Key: ••••••••'"></p>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                      <label class="flex items-center gap-1 text-[11px] text-slate-500 cursor-pointer">
+                        <input type="checkbox" x-model="fb.is_active" class="rounded border-slate-300 text-orange-500">
+                        <span>Active</span>
+                      </label>
+                      <button type="button"
+                              @click="removeFallback(idx)"
+                              class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                              title="Delete Fallback">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              {# Add Fallback Row #}
+              <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                <h5 class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Add New Fallback Provider</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label class="ft-label text-[11px] block mb-1">Provider</label>
+                    <select x-model="newProvider" @change="updateDefaultModel()" class="ft-input w-full text-[11px]">
+                      <option value="groq">Groq (High-Speed Llama)</option>
+                      <option value="gemini">Google Gemini</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="openrouter">OpenRouter (Universal)</option>
+                      <option value="anthropic">Anthropic Claude</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="ft-label text-[11px] block mb-1">Model Name</label>
+                    <input type="text" x-model="newModel" class="ft-input w-full text-[11px]" placeholder="e.g. llama-3.3-70b-versatile">
+                  </div>
+                  <div>
+                    <label class="ft-label text-[11px] block mb-1">Custom Label (Optional)</label>
+                    <input type="text" x-model="newLabel" class="ft-input w-full text-[11px]" placeholder="e.g. Backup Groq API">
+                  </div>
+                </div>
+                <div>
+                  <label class="ft-label text-[11px] block mb-1">API Key</label>
+                  <div class="flex items-center gap-2">
+                    <input type="password" x-model="newApiKey" class="ft-input flex-1 text-[11px] font-mono" placeholder="Paste fallback API key...">
+                    <button type="button"
+                            @click="addFallback()"
+                            class="ft-btn ft-btn-secondary ft-btn-sm shrink-0 flex items-center gap-1">
+                      <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                      <span>Add Fallback</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </c-card>
+
+            {# Save Button Bar #}
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <c-button variant="secondary" size="sm" label="Cancel" href="{% url 'admin_panel:ai_assistant' %}"></c-button>
+              <c-button variant="primary" size="sm" type="submit" icon="save" label="Save AI Settings & Fallbacks"></c-button>
             </div>
-          </div>
-        </c-card>
+          </form>
+        {% else %}
+          {# Overview card for other submodules #}
+          <c-card padding="md">
+            <c-section-header title="{{ submodule_title }} Overview" subtitle="Deterministic analytics synthesized from local operational telemetry">
+              <c-slot name="actions">
+                <c-badge variant="neutral" size="sm" label="Status: Operational"></c-badge>
+              </c-slot>
+            </c-section-header>
+            <div class="space-y-3 pt-2">
+              <div class="p-3 rounded-card bg-orange-500/5 border border-orange-500/15 flex items-start gap-3">
+                <div class="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5 text-[#F97316]"></i>
+                </div>
+                <div class="space-y-1">
+                  <h4 class="text-[12px] font-semibold text-slate-800 dark:text-slate-200">Continuous Operational Processing</h4>
+                  <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Workforce activity, branch logs, and operational milestones are monitored with privacy-first operational context and configurable multi-provider failover.
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
+                  <span class="text-[10px] uppercase font-semibold text-slate-400">Response SLA</span>
+                  <p class="text-[13px] font-bold text-slate-700 dark:text-slate-200 mt-0.5">&lt; 15 ms</p>
+                </div>
+                <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
+                  <span class="text-[10px] uppercase font-semibold text-slate-400">Model Engine</span>
+                  <p class="text-[13px] font-bold text-[#F97316] mt-0.5">Active</p>
+                </div>
+                <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
+                  <span class="text-[10px] uppercase font-semibold text-slate-400">Privacy Scope</span>
+                  <p class="text-[13px] font-bold text-emerald-600 mt-0.5">RBAC Scoped</p>
+                </div>
+                <div class="p-2.5 rounded-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-center">
+                  <span class="text-[10px] uppercase font-semibold text-slate-400">Telemetry Status</span>
+                  <p class="text-[13px] font-bold text-slate-700 dark:text-slate-200 mt-0.5">Synchronized</p>
+                </div>
+              </div>
+            </div>
+          </c-card>
+
+          {# Interactive Exploration Card #}
+          <c-card padding="md">
+            <c-section-header title="Operational Recommendations" subtitle="Actionable items extracted from latest operational data"></c-section-header>
+            <div class="space-y-2 pt-2">
+              <div class="p-3 rounded-card bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <i data-lucide="calendar" class="w-4 h-4 text-[#F97316]"></i>
+                  <span class="text-[12px] text-slate-700 dark:text-slate-300">Evaluate delayed task dependencies on Alpha Tower HVAC project</span>
+                </div>
+                <c-button variant="secondary" size="sm" label="Review" href="{% url 'projects:project_list' %}"></c-button>
+              </div>
+              <div class="p-3 rounded-card bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <i data-lucide="users" class="w-4 h-4 text-[#EF4444]"></i>
+                  <span class="text-[12px] text-slate-700 dark:text-slate-300">Review attendance anomalies across remote site engineers</span>
+                </div>
+                <c-button variant="secondary" size="sm" label="Inspect" href="{% url 'admin_panel:attendance_list' %}"></c-button>
+              </div>
+            </div>
+          </c-card>
+        {% endif %}
       </div>
+
 
       {# Right Sidebar Column #}
       <div class="space-y-4">

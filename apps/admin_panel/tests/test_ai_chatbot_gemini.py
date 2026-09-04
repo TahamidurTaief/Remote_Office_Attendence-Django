@@ -149,3 +149,84 @@ class AIChatbotGeminiServiceTests(TestCase):
             self.assertEqual(latest_event.actor_user, self.admin_user)
             self.assertNotIn("Inquiry about payroll", str(latest_event.after_data))
             self.assertIn("status_code", latest_event.after_data)
+
+    def test_ai_settings_model_and_save_view(self):
+        """Administrator can configure system prompt, temperature, primary API, and fallbacks."""
+        from apps.admin_panel.models import AISetting
+        import json
+
+        self.client.force_login(self.admin_user)
+        save_url = reverse('admin_panel:ai_settings_save')
+
+        fallback_payload = json.dumps([
+            {
+                "provider": "groq",
+                "model": "llama-3.3-70b-versatile",
+                "api_key": "gsk_test_fallback_1",
+                "label": "Groq Failover",
+                "is_active": True
+            },
+            {
+                "provider": "openrouter",
+                "model": "meta-llama/llama-3.3-70b-instruct:free",
+                "api_key": "sk_test_fallback_2",
+                "label": "OpenRouter Free",
+                "is_active": True
+            }
+        ])
+
+        response = self.client.post(save_url, {
+            'system_prompt': 'Custom executive concise persona for FieldTrack.',
+            'temperature': '0.2',
+            'max_tokens': '600',
+            'include_operational_context': 'on',
+            'primary_provider': 'gemini',
+            'primary_model': 'gemini-2.5-flash',
+            'primary_api_key': 'test_primary_key_abc',
+            'fallback_configs_json': fallback_payload,
+        })
+
+        self.assertEqual(response.status_code, 302)
+
+        setting = AISetting.get_settings()
+        self.assertEqual(setting.system_prompt, 'Custom executive concise persona for FieldTrack.')
+        self.assertEqual(setting.temperature, 0.2)
+        self.assertEqual(setting.max_tokens, 600)
+        self.assertTrue(setting.include_operational_context)
+        self.assertEqual(setting.primary_api_key, 'test_primary_key_abc')
+        self.assertEqual(len(setting.fallback_configs), 2)
+        self.assertEqual(setting.fallback_configs[0]['provider'], 'groq')
+        self.assertEqual(setting.fallback_configs[1]['provider'], 'openrouter')
+
+    def test_multi_fallback_automatic_failover(self):
+        """When primary provider fails (e.g. 429 quota), engine automatically fails over to fallback key."""
+        from apps.admin_panel.ai_service import FieldTrackAIService
+        from apps.admin_panel.models import AISetting
+
+        setting = AISetting.get_settings()
+        setting.primary_provider = 'gemini'
+        setting.primary_api_key = 'failing_primary_key'
+        setting.fallback_configs = [
+            {
+                "provider": "groq",
+                "model": "llama-3.3-70b-versatile",
+                "api_key": "working_groq_key",
+                "label": "Backup Groq",
+                "is_active": True
+            }
+        ]
+        setting.save()
+
+        # Mock _dispatch_provider_call: fail on gemini, succeed on groq
+        def mock_dispatch(provider, model, api_key, system_prompt, user_message, temperature, max_tokens):
+            if provider == 'gemini':
+                raise RuntimeError("429 Resource Exhausted Quota exceeded")
+            elif provider == 'groq':
+                return "Successfully answered by Fallback Groq Llama 3.3."
+            raise ValueError(f"Unexpected provider: {provider}")
+
+        with patch.object(FieldTrackAIService, '_dispatch_provider_call', side_effect=mock_dispatch):
+            reply, is_error, error_type, provider_info = FieldTrackAIService.query_ai(self.admin_user, "Check workforce status")
+            self.assertFalse(is_error)
+            self.assertEqual(reply, "Successfully answered by Fallback Groq Llama 3.3.")
+            self.assertEqual(provider_info, "Backup Groq")

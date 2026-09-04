@@ -75,5 +75,6 @@ urlpatterns = [
     path('ai/payroll-insights/', views.AIWorkspaceView.as_view(), {'submodule': 'payroll-insights'}, name='ai_payroll_insights'),
     path('ai/smart-reports/', views.AIWorkspaceView.as_view(), {'submodule': 'smart-reports'}, name='ai_smart_reports'),
     path('ai/settings/', views.AIWorkspaceView.as_view(), {'submodule': 'settings'}, name='ai_settings'),
+    path('ai/settings/save/', views.AISettingsSaveView.as_view(), name='ai_settings_save'),
     path('ai/chatbot/dummy-response/', views.AIChatbotDummyResponseView.as_view(), name='ai_chatbot_response'),
 ]

@@ -197,56 +197,7 @@
         </div>
       </div>
 
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
 
-      {# ════════════════════ SECTION: AI WORKSPACE ════════════════════ #}
-      <div x-show="!collapsed && (matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings'))" x-cloak>
-        <div class="ft-group-header flex items-center gap-1.5">
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
-          <span class="text-[#F97316] font-semibold tracking-wider">AI INTELLIGENCE</span>
-        </div>
-      </div>
-
-      {# Menu: AI Workspace dropdown #}
-      <div x-show="matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings')">
-        <button type="button"
-                @click="toggleSubmenu('ai_workspace')"
-                class="ft-nav-item w-full flex items-center justify-between group/ai transition-colors"
-                :title="collapsed ? 'AI Workspace' : ''"
-                :class="{
-                  'justify-center px-0 mx-auto w-9': collapsed,
-                  'bg-orange-500/10 text-[#F97316] dark:bg-orange-950/30': isSubmenuOpen('ai_workspace')
-                }">
-          <div class="flex items-center gap-2 min-w-0">
-            <img src="{% static 'icons/ai_icon.png' %}"
-                 alt="AI Assistant"
-                 width="16"
-                 height="16"
-                 loading="eager"
-                 class="w-4 h-4 shrink-0 object-contain rounded-sm">
-            <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Workspace</span>
-          </div>
-          <div class="flex items-center gap-1" x-show="!collapsed" x-cloak>
-            <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI</span>
-            <i data-lucide="chevron-down"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('ai_workspace') ? 'rotate-180' : ''"></i>
-          </div>
-        </button>
-
-        {# Submenu #}
-        <div x-show="(isSubmenuOpen('ai_workspace') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'admin_panel:ai_assistant' %}" label="AI Assistant" key="ai_assistant" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/assistant/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_attendance_insights' %}" label="Attendance Insights" key="ai_attendance" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/attendance-insights/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_project_insights' %}" label="Project Insights" key="ai_projects" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/project-insights/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_payroll_insights' %}" label="HR & Payroll Insights" key="ai_payroll" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/payroll-insights/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_smart_reports' %}" label="Smart Reports" key="ai_reports" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/smart-reports/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_settings' %}" label="AI Settings" key="ai_settings" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/settings/' %}true{% endif %}"></c-sidebar-link>
-        </div>
-      </div>
 
       <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
 
@@ -644,6 +595,57 @@
           {% endif %}
           <c-sidebar-link href="{% url 'accounts:user_sessions' %}" label="User Sessions" key="user_sessions" :pinned_keys="pinned_keys" is_active="{% if '/account/sessions/' in path %}true{% endif %}"></c-sidebar-link>
           <c-sidebar-link href="{% url 'backups:backup_list' %}" label="Backups" key="backup_list" :pinned_keys="pinned_keys" is_active="{% if '/backups/' in path %}true{% endif %}"></c-sidebar-link>
+        </div>
+      </div>
+
+      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+
+      {# ════════════════════ SECTION: AI WORKSPACE ════════════════════ #}
+      <div x-show="!collapsed && (matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings'))" x-cloak>
+        <div class="ft-group-header flex items-center gap-1.5">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
+          <span class="text-[#F97316] font-semibold tracking-wider">AI INTELLIGENCE</span>
+        </div>
+      </div>
+
+      {# Menu: AI Workspace dropdown #}
+      <div x-show="matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings')">
+        <button type="button"
+                @click="toggleSubmenu('ai_workspace')"
+                class="ft-nav-item w-full flex items-center justify-between group/ai transition-colors"
+                :title="collapsed ? 'AI Workspace' : ''"
+                :class="{
+                  'justify-center px-0 mx-auto w-9': collapsed,
+                  'bg-orange-500/10 text-[#F97316] dark:bg-orange-950/30': isSubmenuOpen('ai_workspace')
+                }">
+          <div class="flex items-center gap-2 min-w-0">
+            <img src="{% static 'icons/ai_icon.png' %}"
+                 alt="AI Assistant"
+                 width="16"
+                 height="16"
+                 loading="eager"
+                 class="w-4 h-4 shrink-0 object-contain rounded-sm">
+            <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Workspace</span>
+          </div>
+          <div class="flex items-center gap-1" x-show="!collapsed" x-cloak>
+            <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI</span>
+            <i data-lucide="chevron-down"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('ai_workspace') ? 'rotate-180' : ''"></i>
+          </div>
+        </button>
+
+        {# Submenu #}
+        <div x-show="(isSubmenuOpen('ai_workspace') || search) && !collapsed"
+             x-collapse.duration.200ms
+             class="pl-4 pr-1 py-0.5 space-y-0.5"
+             x-cloak>
+          <c-sidebar-link href="{% url 'admin_panel:ai_assistant' %}" label="AI Assistant" key="ai_assistant" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/assistant/' %}true{% endif %}"></c-sidebar-link>
+          <c-sidebar-link href="{% url 'admin_panel:ai_attendance_insights' %}" label="Attendance Insights" key="ai_attendance" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/attendance-insights/' %}true{% endif %}"></c-sidebar-link>
+          <c-sidebar-link href="{% url 'admin_panel:ai_project_insights' %}" label="Project Insights" key="ai_projects" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/project-insights/' %}true{% endif %}"></c-sidebar-link>
+          <c-sidebar-link href="{% url 'admin_panel:ai_payroll_insights' %}" label="HR & Payroll Insights" key="ai_payroll" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/payroll-insights/' %}true{% endif %}"></c-sidebar-link>
+          <c-sidebar-link href="{% url 'admin_panel:ai_smart_reports' %}" label="Smart Reports" key="ai_reports" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/smart-reports/' %}true{% endif %}"></c-sidebar-link>
+          <c-sidebar-link href="{% url 'admin_panel:ai_settings' %}" label="AI Settings" key="ai_settings" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/settings/' %}true{% endif %}"></c-sidebar-link>
         </div>
       </div>
 

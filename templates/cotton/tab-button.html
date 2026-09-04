@@ -3,43 +3,42 @@ Props:
 - label: tab text
 - count: optional badge count
 - icon: optional Lucide icon name
+- is_active: boolean/string
+- active: boolean/string
 - active_condition: AlpineJS boolean expression for active state
 - href: optional link
 - variant: pill | underline (default: underline)
 - extra_class: extra CSS classes
 - attrs: passed to button or anchor
 {% endcomment %}
+<c-vars label="" count="" icon="" is_active="" active="" active_condition="" href="" variant="underline" extra_class="" attrs="" />
 
 {% if href %}
 <a href="{{ href }}"
-  class="px-3 py-2 text-[12px] font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] sm:min-h-[30px] select-none {{ extra_class }}"
-  {% if variant == 'pill' %}
-  :class="{{ active_condition|default:'false' }} ? 'bg-sky-50 text-blue-600 dark:bg-sky-950/40 dark:text-blue-400 font-bold rounded-lg' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200 rounded-lg'"
-  {% else %}
-  :class="{{ active_condition|default:'false' }} ? 'border-b-2 border-primary text-primary font-bold' : 'border-b-2 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
+  class="px-3.5 py-2 text-[12px] font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] sm:min-h-[32px] select-none {% if is_active == 'true' or is_active == True or active == 'true' or active == True %}{% if variant == 'pill' %}bg-primary/10 text-primary font-bold rounded-lg{% else %}border-b-2 border-[#F97316] text-[#F97316] font-bold{% endif %}{% else %}{% if variant == 'pill' %}bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 rounded-lg{% else %}border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200{% endif %}{% endif %} {{ extra_class }}"
+  {% if active_condition %}
+  :class="{{ active_condition }} ? '{% if variant == 'pill' %}bg-primary/10 text-primary font-bold rounded-lg{% else %}border-b-2 border-[#F97316] text-[#F97316] font-bold{% endif %}' : '{% if variant == 'pill' %}bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 rounded-lg{% else %}border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200{% endif %}'"
   {% endif %}
   {{ attrs }}>
-  {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>{% endif %}
+  {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5 shrink-0"></i>{% endif %}
   {% if label %}<span>{{ label }}</span>{% endif %}
   {{ slot }}
   {% if count is not None and count != '' %}
-    <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono text-gray-600 dark:text-gray-400">{{ count }}</span>
+    <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 font-mono text-slate-600 dark:text-slate-400">{{ count }}</span>
   {% endif %}
 </a>
 {% else %}
 <button type="button"
-  class="px-3 py-2 text-[12px] font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] sm:min-h-[30px] select-none {{ extra_class }}"
-  {% if variant == 'pill' %}
-  :class="{{ active_condition|default:'false' }} ? 'bg-sky-50 text-blue-600 dark:bg-sky-950/40 dark:text-blue-400 font-bold rounded-lg' : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200 rounded-lg'"
-  {% else %}
-  :class="{{ active_condition|default:'false' }} ? 'border-b-2 border-primary text-primary font-bold' : 'border-b-2 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
+  class="px-3.5 py-2 text-[12px] font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] sm:min-h-[32px] select-none {% if is_active == 'true' or is_active == True or active == 'true' or active == True %}{% if variant == 'pill' %}bg-primary/10 text-primary font-bold rounded-lg{% else %}border-b-2 border-[#F97316] text-[#F97316] font-bold{% endif %}{% else %}{% if variant == 'pill' %}bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 rounded-lg{% else %}border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200{% endif %}{% endif %} {{ extra_class }}"
+  {% if active_condition %}
+  :class="{{ active_condition }} ? '{% if variant == 'pill' %}bg-primary/10 text-primary font-bold rounded-lg{% else %}border-b-2 border-[#F97316] text-[#F97316] font-bold{% endif %}' : '{% if variant == 'pill' %}bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 rounded-lg{% else %}border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200{% endif %}'"
   {% endif %}
   {{ attrs }}>
-  {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>{% endif %}
+  {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5 shrink-0"></i>{% endif %}
   {% if label %}<span>{{ label }}</span>{% endif %}
   {{ slot }}
   {% if count is not None and count != '' %}
-    <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 font-mono text-gray-600 dark:text-gray-400">{{ count }}</span>
+    <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 font-mono text-slate-600 dark:text-slate-400">{{ count }}</span>
   {% endif %}
 </button>
 {% endif %}

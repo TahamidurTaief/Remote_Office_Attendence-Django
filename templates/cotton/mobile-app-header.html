@@ -1,3 +1,4 @@
+{% load static %}
 {% comment %}
 c-mobile-app-header component
 Compact mobile-first app header (< 768px)
@@ -31,6 +32,16 @@ Props:
         Off-duty
       </span>
     {% endif %}
+
+    <button type="button"
+            @click="$dispatch('open-ai-chatbot')"
+            class="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-xl text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors relative select-none"
+            aria-label="Open AI Assistant"
+            title="Ask AI Assistant">
+      <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 object-contain">
+      <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#EF4444] animate-ping"></span>
+      <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#EF4444]"></span>
+    </button>
 
     <button type="button"
             @click="$dispatch('open-drawer-notifications')"

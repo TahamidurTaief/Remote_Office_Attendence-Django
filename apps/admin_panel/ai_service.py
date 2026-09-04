@@ -452,41 +452,87 @@ class OperationalContextService:
         }
 
 
-class GeminiClientService:
+class FieldTrackAIService:
     """
-    Server-side Gemini service using official google-genai SDK.
-    Handles timeout, rate limiting, bounded retries, and truthful error translation.
+    Unified AI service supporting:
+    - Dynamic system prompt, persona, temperature, and token limits configured via AISetting
+    - Scoped operational context grounding (RBAC enforced)
+    - Primary provider + multiple ordered fallback providers (failover on 429, auth error, timeout)
+    - Supported providers: Google Gemini, OpenAI, Groq, Anthropic, OpenRouter
+    - Prompt injection interception, rate limiting, duplicate prevention, and metadata audit logging
     """
-
-    MAX_RETRIES = 2
-    TIMEOUT_SECONDS = 10.0
+    MAX_RETRIES = 1
+    TIMEOUT_SECONDS = 12.0
     RATE_LIMIT_PER_MINUTE = 10
 
     @classmethod
-    def get_api_key(cls) -> Optional[str]:
+    def get_settings_obj(cls):
+        """Fetches active AISetting model instance."""
+        try:
+            from .models import AISetting
+            return AISetting.get_settings()
+        except Exception as e:
+            logger.debug(f"Unable to load AISetting: {e}")
+            return None
+
+    @classmethod
+    def get_api_key(cls, provider: str = 'gemini') -> Optional[str]:
         """
-        Accepts key ONLY from runtime environment variable GOOGLE_AI_API_KEY.
-        Fails closed if missing or empty.
+        Retrieves API key for the provider from DB setting or environment variables.
         """
-        key = os.environ.get('GOOGLE_AI_API_KEY') or getattr(settings, 'GOOGLE_AI_API_KEY', None)
-        if key and isinstance(key, str) and key.strip():
-            return key.strip()
+        settings_obj = cls.get_settings_obj()
+        if settings_obj and settings_obj.primary_provider == provider and settings_obj.primary_api_key:
+            return settings_obj.primary_api_key.strip()
+
+        # Fallback to environment variables
+        env_map = {
+            'gemini': ['GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'],
+            'openai': ['OPENAI_API_KEY'],
+            'groq': ['GROQ_API_KEY'],
+            'anthropic': ['ANTHROPIC_API_KEY'],
+            'openrouter': ['OPENROUTER_API_KEY'],
+        }
+        for var in env_map.get(provider, []):
+            val = os.environ.get(var) or getattr(settings, var, None)
+            if val and isinstance(val, str) and val.strip():
+                return val.strip()
+
+        # Check in fallback configs if primary was different
+        if settings_obj and settings_obj.fallback_configs:
+            for item in settings_obj.fallback_configs:
+                if item.get('provider') == provider and item.get('api_key') and item.get('is_active', True):
+                    return item['api_key'].strip()
+
         return None
 
     @classmethod
     def is_configured(cls) -> bool:
-        return cls.get_api_key() is not None
+        """Checks if at least one API key is available."""
+        settings_obj = cls.get_settings_obj()
+        if settings_obj and settings_obj.primary_api_key:
+            return True
+        if cls.get_api_key('gemini') or cls.get_api_key('openai') or cls.get_api_key('groq'):
+            return True
+        return False
 
     @classmethod
-    def get_model_name(cls) -> str:
-        return os.environ.get('GEMINI_MODEL') or getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash')
+    def get_model_name(cls, provider: str = 'gemini') -> str:
+        settings_obj = cls.get_settings_obj()
+        if settings_obj and settings_obj.primary_provider == provider and settings_obj.primary_model:
+            return settings_obj.primary_model.strip()
+
+        default_models = {
+            'gemini': os.environ.get('GEMINI_MODEL') or getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash'),
+            'openai': 'gpt-4o-mini',
+            'groq': 'llama-3.3-70b-versatile',
+            'anthropic': 'claude-3-5-haiku-20241022',
+            'openrouter': 'meta-llama/llama-3.3-70b-instruct:free',
+        }
+        return default_models.get(provider, 'gemini-2.5-flash')
 
     @classmethod
     def check_rate_limit(cls, user_id: int) -> Tuple[bool, int]:
-        """
-        Checks rate limiting per user using Django cache.
-        Returns: (is_allowed, remaining_quota)
-        """
+        """Checks rate limiting per user using Django cache."""
         cache_key = f"ft_ai_ratelimit_{user_id}"
         current = cache.get(cache_key, 0)
         if current >= cls.RATE_LIMIT_PER_MINUTE:
@@ -496,10 +542,7 @@ class GeminiClientService:
 
     @classmethod
     def check_duplicate(cls, user_id: int, message: str) -> bool:
-        """
-        Prevents duplicate submits within 5 seconds.
-        Returns True if duplicate detected.
-        """
+        """Prevents duplicate submits within 5 seconds."""
         msg_hash = hashlib.sha256(message.strip().lower().encode()).hexdigest()[:16]
         cache_key = f"ft_ai_dup_{user_id}_{msg_hash}"
         if cache.get(cache_key):
@@ -509,85 +552,228 @@ class GeminiClientService:
 
     @classmethod
     def check_prompt_injection(cls, query: str) -> bool:
-        """
-        Detects adversarial prompt injection phrases.
-        """
+        """Detects adversarial prompt injection phrases."""
         q = query.lower()
         for pattern in PROMPT_INJECTION_PATTERNS:
             if pattern in q:
                 return True
         return False
 
+    # ── Multi-Provider Execution Adapters ──────────────────────────────
+
     @classmethod
-    def query_gemini(cls, user, user_message: str) -> Tuple[str, bool, str]:
+    def _call_gemini(cls, api_key: str, model: str, system_prompt: str, user_message: str, temperature: float, max_tokens: int) -> str:
+        """Invokes Google Gemini via official google-genai SDK or REST API."""
+        full_prompt = f"{system_prompt}\n\nUser Query: {user_message}\nAssistant:"
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=model,
+                contents=full_prompt,
+            )
+            if response and hasattr(response, 'text') and response.text:
+                return response.text.strip()
+        except ImportError:
+            pass
+
+        # Fallback to direct REST API if SDK not available or custom endpoint
+        import urllib.request
+        import urllib.error
+        import json
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": full_prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens
+            }
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode('utf-8'),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=cls.TIMEOUT_SECONDS) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            candidates = data.get('candidates', [])
+            if candidates:
+                parts = candidates[0].get('content', {}).get('parts', [])
+                if parts and 'text' in parts[0]:
+                    return parts[0]['text'].strip()
+
+        raise RuntimeError("No response returned from Gemini.")
+
+    @classmethod
+    def _call_openai_compatible(cls, endpoint: str, api_key: str, model: str, system_prompt: str, user_message: str, temperature: float, max_tokens: int, extra_headers: Optional[Dict[str, str]] = None) -> str:
+        """Invokes OpenAI, Groq, or OpenRouter via OpenAI-compatible chat completions."""
+        import urllib.request
+        import urllib.error
+        import json
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        if extra_headers:
+            headers.update(extra_headers)
+
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode('utf-8'),
+            headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=cls.TIMEOUT_SECONDS) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            choices = data.get('choices', [])
+            if choices:
+                return choices[0].get('message', {}).get('content', '').strip()
+
+        raise RuntimeError(f"No response returned from {endpoint}.")
+
+    @classmethod
+    def _call_anthropic(cls, api_key: str, model: str, system_prompt: str, user_message: str, temperature: float, max_tokens: int) -> str:
+        """Invokes Anthropic Messages API."""
+        import urllib.request
+        import urllib.error
+        import json
+
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        }
+        payload = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system_prompt,
+            "messages": [
+                {"role": "user", "content": user_message}
+            ]
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode('utf-8'),
+            headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=cls.TIMEOUT_SECONDS) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            content = data.get('content', [])
+            if content and 'text' in content[0]:
+                return content[0]['text'].strip()
+
+        raise RuntimeError("No response returned from Anthropic.")
+
+    @classmethod
+    def _dispatch_provider_call(cls, provider: str, model: str, api_key: str, system_prompt: str, user_message: str, temperature: float, max_tokens: int) -> str:
+        """Dispatches request to appropriate provider handler."""
+        p = provider.lower().strip()
+        if p == 'gemini':
+            return cls._call_gemini(api_key, model, system_prompt, user_message, temperature, max_tokens)
+        elif p == 'openai':
+            return cls._call_openai_compatible(
+                "https://api.openai.com/v1/chat/completions",
+                api_key, model, system_prompt, user_message, temperature, max_tokens
+            )
+        elif p == 'groq':
+            return cls._call_openai_compatible(
+                "https://api.groq.com/openai/v1/chat/completions",
+                api_key, model, system_prompt, user_message, temperature, max_tokens
+            )
+        elif p == 'openrouter':
+            return cls._call_openai_compatible(
+                "https://openrouter.ai/api/v1/chat/completions",
+                api_key, model, system_prompt, user_message, temperature, max_tokens,
+                extra_headers={"HTTP-Referer": "https://fieldtrack.local", "X-Title": "FieldTrack"}
+            )
+        elif p == 'anthropic':
+            return cls._call_anthropic(api_key, model, system_prompt, user_message, temperature, max_tokens)
+        else:
+            raise ValueError(f"Unsupported AI provider: '{provider}'")
+
+    # ── Pipeline & Failover Orchestrator ──────────────────────────────
+
+    @classmethod
+    def query_ai(cls, user, user_message: str) -> Tuple[str, bool, str, str]:
         """
-        Primary execution pipeline:
-        1. Validates input & checks prompt injection
-        2. Enforces duplicate submit & rate limits
-        3. Retrieves operational context via allowlisted ORM service
-        4. Invokes official google-genai client with bounded retry & timeout
-        5. Logs metadata-only audit record
-        Returns: (response_text, is_error, error_type)
+        Primary execution pipeline with automatic multi-provider fallback.
+        Returns: (response_text, is_error, error_type, provider_info)
         """
         start_time = time.time()
         user_id = user.id if user and user.is_authenticated else 0
         role = resolve_user_role(user)
 
-        # 1. Check prompt injection
+        # 1. Prompt Injection Defense
         if cls.check_prompt_injection(user_message):
             logger.warning(f"Security: Prompt injection attempt blocked for user {user_id}")
             cls._log_audit(user, role, success=False, status_code="INJECTION_BLOCKED", duration_ms=0)
             return (
                 "Permission Refusal: Your inquiry contains restricted instruction patterns. FieldTrack AI cannot execute privilege overrides or disclose confidential records.",
                 True,
-                "Security Policy"
+                "Security Policy",
+                "Guardrails"
             )
 
-        # 2. Check duplicate submission
+        # 2. Duplicate submission prevention
         if cls.check_duplicate(user_id, user_message):
             return (
                 "Duplicate request detected. Please wait a moment before sending the same inquiry again.",
                 True,
-                "Duplicate Prevention"
+                "Duplicate Prevention",
+                "Local Cache"
             )
 
-        # 3. Check rate limit
+        # 3. Rate limiting check
         allowed, _ = cls.check_rate_limit(user_id)
         if not allowed:
             cls._log_audit(user, role, success=False, status_code="RATE_LIMITED", duration_ms=0)
             return (
                 f"Rate limit reached ({cls.RATE_LIMIT_PER_MINUTE} requests per minute). Please try again shortly.",
                 True,
-                "Rate Limit"
+                "Rate Limit",
+                "Rate Limiter"
             )
 
-        # 4. Check API key configuration (Fail Closed)
-        api_key = cls.get_api_key()
-        if not api_key:
-            logger.info("FieldTrack AI: GOOGLE_AI_API_KEY is not set in environment.")
-            cls._log_audit(user, role, success=False, status_code="KEY_MISSING", duration_ms=0)
-            return (
-                "FieldTrack AI Assistant is currently offline. A server runtime secret (GOOGLE_AI_API_KEY) must be configured to enable live operational intelligence. No simulated statistics are returned.",
-                True,
-                "Service Offline"
-            )
+        # 4. Load configured AI Settings (behavior + primary + fallbacks)
+        settings_obj = cls.get_settings_obj()
+        custom_persona = settings_obj.system_prompt if settings_obj and settings_obj.system_prompt else (
+            "You are FieldTrack AI Assistant, the operational intelligence assistant for the FieldTrack workforce platform."
+        )
+        temperature = float(settings_obj.temperature) if settings_obj and settings_obj.temperature is not None else 0.3
+        max_tokens = int(settings_obj.max_tokens) if settings_obj and settings_obj.max_tokens else 800
+        include_context = getattr(settings_obj, 'include_operational_context', True)
 
-        # 5. Extract scoped context
-        try:
-            scoped_data = OperationalContextService.get_scoped_context(user, role)
-        except Exception as e:
-            logger.error(f"Failed to generate operational context: {e}")
-            scoped_data = {"role": role, "note": "Operational context generation encountered an issue"}
+        # 5. Extract scoped context (if enabled)
+        scoped_data = ""
+        if include_context:
+            try:
+                scoped_data = OperationalContextService.get_scoped_context(user, role)
+            except Exception as e:
+                logger.error(f"Failed to generate operational context: {e}")
+                scoped_data = {"role": role, "note": "Operational context generation encountered an issue"}
 
-        # 6. Assemble prompt with strict system instructions
+        # 6. Assemble complete system instructions
         system_instructions = (
-            "You are FieldTrack AI Assistant, the operational intelligence assistant for the FieldTrack workforce platform. "
-            f"The user has the authenticated role '{role}'. "
+            f"{custom_persona}\n"
+            f"The authenticated user has the role '{role}'.\n"
             "STRICT PRIVACY RULES:\n"
-            "1. ONLY answer using the PERMITTED OPERATIONAL DATA supplied below.\n"
+            "1. ONLY answer using the PERMITTED OPERATIONAL DATA supplied below when relevant.\n"
             "2. DO NOT fabricate or assume numbers or metrics not present in the data.\n"
             "3. NEVER reveal confidential salary values, credentials, or personal passwords.\n"
-            "4. For staff/employees, do not expose coworker details or company-wide payroll.\n"
+            "4. For staff/employees, do not expose coworker personal details or company-wide payroll.\n"
             "5. If requested data is restricted or omitted, state that clearly and truthfully.\n"
             "6. Answer concisely and professionally in 2 to 4 sentences.\n\n"
             f"=== PERMITTED OPERATIONAL DATA ===\n"
@@ -595,71 +781,125 @@ class GeminiClientService:
             f"=== END OPERATIONAL DATA ===\n"
         )
 
-        full_prompt = f"{system_instructions}\nUser Query: {user_message}\nAssistant:"
+        # 7. Build Execution Chain: [Primary, Fallback 1, Fallback 2, ...]
+        chain = []
 
-        # 7. Invoke Gemini via official google-genai SDK
-        model_name = cls.get_model_name()
-        last_exception = None
+        # Primary config
+        primary_provider = settings_obj.primary_provider if settings_obj else 'gemini'
+        primary_model = settings_obj.primary_model if settings_obj else cls.get_model_name(primary_provider)
+        primary_key = cls.get_api_key(primary_provider)
+        if primary_key:
+            chain.append({
+                "provider": primary_provider,
+                "model": primary_model,
+                "api_key": primary_key,
+                "label": f"Primary ({primary_provider.capitalize()})"
+            })
 
-        for attempt in range(cls.MAX_RETRIES + 1):
+        # Fallback configs
+        if settings_obj and settings_obj.fallback_configs:
+            for idx, fb in enumerate(settings_obj.fallback_configs):
+                if fb.get('is_active', True) and fb.get('api_key'):
+                    fb_provider = fb.get('provider', 'gemini')
+                    fb_model = fb.get('model') or cls.get_model_name(fb_provider)
+                    fb_label = fb.get('label') or f"Fallback #{idx + 1} ({fb_provider.capitalize()})"
+                    chain.append({
+                        "provider": fb_provider,
+                        "model": fb_model,
+                        "api_key": fb.get('api_key').strip(),
+                        "label": fb_label
+                    })
+
+        # Fallback to server env var if chain is still empty
+        if not chain:
+            env_gemini_key = os.environ.get('GOOGLE_AI_API_KEY') or getattr(settings, 'GOOGLE_AI_API_KEY', None)
+            if env_gemini_key and env_gemini_key.strip():
+                chain.append({
+                    "provider": "gemini",
+                    "model": cls.get_model_name("gemini"),
+                    "api_key": env_gemini_key.strip(),
+                    "label": "Environment Key (Gemini)"
+                })
+
+        if not chain:
+            logger.info("FieldTrack AI: No API keys configured in AI Settings or environment.")
+            cls._log_audit(user, role, success=False, status_code="KEY_MISSING", duration_ms=0)
+            return (
+                "FieldTrack AI Assistant is currently offline. A server runtime secret (GOOGLE_AI_API_KEY) must be configured to enable live operational intelligence. No simulated statistics are returned.",
+                True,
+                "Service Offline",
+                "None"
+            )
+
+        # 8. Attempt execution down the chain
+        last_error_type = "API Failure"
+        last_error_msg = ""
+        attempted_providers = []
+
+        for item in chain:
+            provider = item['provider']
+            model = item['model']
+            api_key = item['api_key']
+            label = item['label']
+            attempted_providers.append(label)
+
             try:
-                from google import genai
-                client = genai.Client(api_key=api_key)
-                
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=full_prompt,
+                reply = cls._dispatch_provider_call(
+                    provider=provider,
+                    model=model,
+                    api_key=api_key,
+                    system_prompt=system_instructions,
+                    user_message=user_message,
+                    temperature=temperature,
+                    max_tokens=max_tokens
                 )
-
-                if response and hasattr(response, 'text') and response.text:
+                if reply:
                     elapsed = int((time.time() - start_time) * 1000)
                     cls._log_audit(user, role, success=True, status_code="SUCCESS", duration_ms=elapsed)
-                    return response.text.strip(), False, ""
-                else:
-                    return "No analysis could be derived from the available permitted data.", False, ""
-
+                    return reply, False, "", label
             except Exception as e:
-                last_exception = e
                 err_str = str(e).lower()
-                logger.warning(f"FieldTrack AI attempt {attempt + 1} failed: {e}")
+                logger.warning(f"FieldTrack AI [{label}] invocation failed: {e}")
 
-                # Detect quota / rate limiting from Google
                 if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                    elapsed = int((time.time() - start_time) * 1000)
-                    cls._log_audit(user, role, success=False, status_code="QUOTA_EXHAUSTED", duration_ms=elapsed)
-                    return (
-                        "Google AI API quota limit reached. Please retry in a few moments.",
-                        True,
-                        "API Quota Exceeded"
-                    )
+                    last_error_type = "API Quota Exceeded"
+                    last_error_msg = f"{label} quota limit reached."
+                elif "401" in err_str or "403" in err_str or "api_key_invalid" in err_str or "unauthorized" in err_str:
+                    last_error_type = "Authentication Error"
+                    last_error_msg = f"{label} authentication failed."
+                elif "timeout" in err_str or "timed out" in err_str:
+                    last_error_type = "Timeout / Offline"
+                    last_error_msg = f"{label} connection timed out."
+                else:
+                    last_error_type = "Provider Error"
+                    last_error_msg = f"{label} error: {e}"
 
-                # Detect authentication rejection
-                if "401" in err_str or "403" in err_str or "api_key_invalid" in err_str:
-                    elapsed = int((time.time() - start_time) * 1000)
-                    cls._log_audit(user, role, success=False, status_code="AUTH_FAILED", duration_ms=elapsed)
-                    return (
-                        "Google AI authentication failed. The configured API key was rejected or expired.",
-                        True,
-                        "Authentication Error"
-                    )
+                # Proceed to next fallback in chain
+                continue
 
-                time.sleep(0.5 * (attempt + 1))
-
-        # Failed after retries
+        # All configured providers failed
         elapsed = int((time.time() - start_time) * 1000)
-        cls._log_audit(user, role, success=False, status_code="TIMEOUT_OR_NETWORK", duration_ms=elapsed)
+        cls._log_audit(user, role, success=False, status_code="ALL_PROVIDERS_FAILED", duration_ms=elapsed)
+
+        fallback_trail = " -> ".join(attempted_providers)
+        if last_error_type == "API Quota Exceeded" and len(chain) == 1:
+            return (
+                "Google AI API quota limit reached. Please retry in a few moments.",
+                True,
+                "API Quota Exceeded",
+                fallback_trail
+            )
+
         return (
-            "FieldTrack AI request timed out or experienced a temporary connectivity error. Please retry shortly.",
+            f"All configured AI providers failed ({fallback_trail}). Last error: {last_error_msg or 'Request failed'}. Please check your API keys or quota.",
             True,
-            "Timeout / Offline"
+            last_error_type,
+            fallback_trail
         )
 
     @classmethod
     def _log_audit(cls, user, role: str, success: bool, status_code: str, duration_ms: int):
-        """
-        Records metadata-only audit events.
-        NEVER stores user messages, API secrets, salaries, or PII.
-        """
+        """Records metadata-only audit events."""
         try:
             from apps.audit.models import AuditEvent
             AuditEvent.objects.create(
@@ -668,7 +908,7 @@ class GeminiClientService:
                 module="ai_assistant",
                 object_type="operational_inquiry",
                 object_id=str(int(time.time())),
-                object_label="Gemini AI Analysis",
+                object_label="AI Intelligence Query",
                 action="query_processed" if success else "query_failed",
                 after_data={
                     "status_code": status_code,
@@ -678,3 +918,15 @@ class GeminiClientService:
             )
         except Exception as e:
             logger.debug(f"Audit event logging skipped: {e}")
+
+
+class GeminiClientService(FieldTrackAIService):
+    """
+    Backward-compatibility alias wrapping FieldTrackAIService.
+    Guarantees that all existing tests and callers continue working seamlessly.
+    """
+    @classmethod
+    def query_gemini(cls, user, user_message: str) -> Tuple[str, bool, str]:
+        reply, is_err, err_type, _ = cls.query_ai(user, user_message)
+        return reply, is_err, err_type
+
