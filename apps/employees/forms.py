@@ -5,6 +5,11 @@ from django.core.exceptions import PermissionDenied
 import re
 from apps.employees.models import EmployeeProfile, EmployeeDocument, Bank, BankBranch, EmployeeBankAccount, Employee
 from apps.employees.bank_crypto import normalize_account_number
+from apps.employees.bank_registry import (
+    BANGLADESH_BANK_CHOICES,
+    BANGLADESH_BANK_GROUPS,
+    resolve_canonical_bank_name,
+)
 from django.db.models import Q
 from apps.branches.models import Branch
 from apps.accounts.rbac_models import Role, UserRoleAssignment
@@ -525,7 +530,7 @@ class EmployeeMasterForm(forms.ModelForm):
             'weekly_holiday_policy': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'basic_salary': forms.NumberInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. 50000.00'}),
             'salary_structure': forms.TextInput(attrs={'class': TEXT_INPUT}),
-            'bank_name': forms.TextInput(attrs={'class': TEXT_INPUT}),
+            'bank_name': forms.Select(choices=BANGLADESH_BANK_CHOICES, attrs={'class': SELECT_INPUT}),
             'bank_account': forms.TextInput(attrs={'class': TEXT_INPUT}),
             'payment_method': forms.Select(attrs={'class': SELECT_INPUT}),
             'tax_profile': forms.TextInput(attrs={'class': TEXT_INPUT}),
@@ -986,6 +991,10 @@ class WizardStep3Form(forms.ModelForm):
         empty_label="-- Choose Bank --",
         widget=forms.Select(attrs={'class': SELECT_INPUT})
     )
+    bank_name = forms.CharField(
+        required=False,
+        widget=forms.Select(choices=BANGLADESH_BANK_CHOICES, attrs={'class': SELECT_INPUT})
+    )
     branch = forms.ModelChoiceField(
         queryset=BankBranch.objects.filter(is_active=True).select_related('bank'),
         required=False,
@@ -1003,6 +1012,10 @@ class WizardStep3Form(forms.ModelForm):
         widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'readonly': 'readonly', 'placeholder': '9-digit routing number'})
     )
 
+    @property
+    def bank_groups(self):
+        return BANGLADESH_BANK_GROUPS
+
     class Meta:
         model = Employee
         fields = [
@@ -1012,7 +1025,7 @@ class WizardStep3Form(forms.ModelForm):
         widgets = {
             'basic_salary': forms.NumberInput(attrs={'class': TEXT_INPUT, 'step': '0.01', 'placeholder': '0.00'}),
             'salary_structure': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Executive Grade B'}),
-            'bank_name': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. City Bank Ltd'}),
+            'bank_name': forms.Select(choices=BANGLADESH_BANK_CHOICES, attrs={'class': SELECT_INPUT}),
             'bank_account': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Account Number'}),
             'payment_method': forms.Select(attrs={'class': SELECT_INPUT}),
             'tax_profile': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'TIN / Tax Region'}),
@@ -1029,11 +1042,16 @@ class WizardStep3Form(forms.ModelForm):
                 self.fields['branch'].initial = primary_acc.branch_id
                 self.fields['account_holder_name'].initial = primary_acc.account_holder_name
                 self.fields['routing_number'].initial = primary_acc.routing_number
+                if not self.initial.get('bank_name'):
+                    self.fields['bank_name'].initial = resolve_canonical_bank_name(primary_acc.bank.name)
                 if not self.initial.get('bank_account'):
                     self.fields['bank_account'].initial = primary_acc.get_account_number()
             elif self.instance.bank_name:
+                canonical = resolve_canonical_bank_name(self.instance.bank_name)
+                self.fields['bank_name'].initial = canonical
                 matched_bank = Bank.objects.filter(
                     Q(name__iexact=self.instance.bank_name) |
+                    Q(name__iexact=canonical) |
                     Q(short_name__iexact=self.instance.bank_name) |
                     Q(code__iexact=self.instance.bank_name)
                 ).first()
@@ -1047,7 +1065,10 @@ class WizardStep3Form(forms.ModelForm):
         payment_method = cleaned_data.get('payment_method') or 'bank'
         bank = cleaned_data.get('bank')
         branch = cleaned_data.get('branch')
-        bank_name = cleaned_data.get('bank_name') or ''
+        raw_bank_name = cleaned_data.get('bank_name') or ''
+        bank_name = resolve_canonical_bank_name(raw_bank_name)
+        if bank_name:
+            cleaned_data['bank_name'] = bank_name
         bank_account = cleaned_data.get('bank_account') or ''
         holder_name = cleaned_data.get('account_holder_name') or ''
 
@@ -1060,7 +1081,7 @@ class WizardStep3Form(forms.ModelForm):
                 is_active=True
             ).first()
             if not matched_bank:
-                tokens = bank_name.lower().replace("ltd", "").replace("plc", "").replace("bank", "").strip()
+                tokens = bank_name.lower().replace("ltd", "").replace("limited", "").replace("plc", "").replace("bank", "").strip()
                 if tokens:
                     matched_bank = Bank.objects.filter(name__icontains=tokens, is_active=True).first()
             if matched_bank:
@@ -1074,8 +1095,13 @@ class WizardStep3Form(forms.ModelForm):
         if payment_method in ('bank', 'split'):
             if not bank and not bank_name:
                 self.add_error('bank', 'Bank selection is required for bank transfer disbursements.')
+                self.add_error('bank_name', 'Bank selection is required for bank transfer disbursements.')
             if bank and not branch:
-                self.add_error('branch', 'Branch selection is required for bank transfer disbursements.')
+                branch = bank.branches.filter(is_active=True).first()
+                if branch:
+                    cleaned_data['branch'] = branch
+                else:
+                    self.add_error('branch', 'Branch selection is required for bank transfer disbursements.')
             if not bank_account:
                 self.add_error('bank_account', 'Account number is required for bank transfer disbursements.')
 
@@ -1085,7 +1111,8 @@ class WizardStep3Form(forms.ModelForm):
                 self.add_error('branch', 'Selected branch does not belong to the submitted bank.')
             # Canonical derivation of routing number from database record
             cleaned_data['routing_number'] = branch.routing_number
-            cleaned_data['bank_name'] = bank.name
+            if not cleaned_data.get('bank_name'):
+                cleaned_data['bank_name'] = bank.name
 
         if bank_account:
             cleaned_acc = normalize_account_number(bank_account)

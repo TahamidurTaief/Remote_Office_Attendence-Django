@@ -296,11 +296,11 @@ assert.ok(branchPickerHtml.includes('x-data="{'), 'c-branch-picker must use Alpi
 assert.ok(branchPickerHtml.includes('routing'), 'c-branch-picker must display branch routing number');
 assert.ok(branchPickerHtml.includes('bank-changed'), 'c-branch-picker must react to bank change events');
 
-assert.ok(step3Html.includes('<c-bank-picker'), 'Wizard Step 3 must use <c-bank-picker>');
-assert.ok(step3Html.includes('<c-branch-picker'), 'Wizard Step 3 must use <c-branch-picker>');
+assert.ok(step3Html.includes('<c-select name="bank_name"'), 'Wizard Step 3 must use minimal <c-select name="bank_name">');
+assert.ok(step3Html.includes('name="bank_account"'), 'Wizard Step 3 must capture bank_account');
 assert.ok(step3Html.includes('name="account_holder_name"'), 'Step 3 must capture account holder name');
-assert.ok(step3Html.includes('name="routing_number"'), 'Step 3 must include routing number display');
-console.log('  ✓ Contract 7.1 Passed: Cotton components & Wizard Step 3 adhere to design token standards');
+assert.ok(!step3Html.includes('bg-slate-50/50'), 'Step 3 bank section must NOT have extra card/box containers');
+console.log('  ✓ Contract 7.1 Passed: Ultra-minimal Cotton c-select form verified in Wizard Step 3');
 
 // ---------------------------------------------------------------------------
 // Example Output Presentation

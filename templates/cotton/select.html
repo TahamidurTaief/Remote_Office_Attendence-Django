@@ -45,6 +45,7 @@
       this.options = Array.from(select.options).map((opt, index) => ({
         value: opt.value,
         label: opt.text.trim(),
+        group: (opt.parentElement && opt.parentElement.tagName === 'OPTGROUP') ? (opt.parentElement.getAttribute('label') || '') : '',
         index: index
       }));
       this.selectedValue = select.value;
@@ -199,22 +200,29 @@
       <!-- Options List -->
       <div x-ref="listContainer" class="overflow-y-auto max-h-48 py-1">
         <template x-for="(opt, idx) in filteredOptions" :key="opt.value + '_' + idx">
-          <button
-            type="button"
-            @click="selectOption(opt.value)"
-            class="w-full text-left px-3 py-1.5 text-[12px] flex items-center justify-between cursor-pointer transition-colors"
-            :style="selectedValue === opt.value
-              ? 'background: var(--primary-light); color: var(--primary); font-weight: 600;'
-              : activeIndex === idx
-                ? 'background: var(--surface-2); color: var(--text);'
-                : 'color: var(--text);'"
-            :data-active="activeIndex === idx"
-          >
-            <span x-text="opt.label" class="truncate"></span>
-            <svg x-show="selectedValue === opt.value" class="w-3.5 h-3.5 flex-shrink-0" style="color: var(--primary)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </button>
+          <div>
+            <div 
+              x-show="opt.group && (idx === 0 || filteredOptions[idx - 1].group !== opt.group)" 
+              class="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 bg-slate-50/80 dark:bg-slate-800/40 select-none border-y border-slate-100 dark:border-slate-800"
+              x-text="opt.group"
+            ></div>
+            <button
+              type="button"
+              @click="selectOption(opt.value)"
+              class="w-full text-left px-3 py-1.5 text-[12px] flex items-center justify-between cursor-pointer transition-colors"
+              :style="selectedValue === opt.value
+                ? 'background: var(--primary-light); color: var(--primary); font-weight: 600;'
+                : activeIndex === idx
+                  ? 'background: var(--surface-2); color: var(--text);'
+                  : 'color: var(--text);'"
+              :data-active="activeIndex === idx"
+            >
+              <span x-text="opt.label" class="truncate"></span>
+              <svg x-show="selectedValue === opt.value" class="w-3.5 h-3.5 flex-shrink-0" style="color: var(--primary)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          </div>
         </template>
         
         <!-- Empty State -->
