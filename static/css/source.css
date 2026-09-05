@@ -400,16 +400,15 @@ html.dark {
         gap: var(--space-2);
         height: 38px;
         padding: 6px 10px;
-        margin: 3px var(--space-1);
+        margin: 2px var(--space-1);
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
-        background: #FFFFFF;
-        color: #1E293B;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+        background: transparent;
+        color: #334155;
+        border: 1px solid transparent;
         font-size: 14px !important;
-        font-weight: 600;
+        font-weight: 500;
         white-space: nowrap !important;
         overflow: hidden;
         transition: all var(--transition-fast);
@@ -417,34 +416,32 @@ html.dark {
     }
 
     .ft-nav-item:hover {
-        background: #F8FAFC;
+        background: #F1F5F9;
         color: #1877F2;
-        border-color: #CBD5E1;
     }
 
     .ft-nav-item.active {
-        background: #FFFFFF !important;
+        background: #EFF6FF !important;
         color: #1877F2 !important;
-        border-color: #93C5FD !important;
+        border-color: #DBEAFE !important;
         font-weight: 600;
-        box-shadow: 0 1px 3px 0 rgba(24, 119, 242, 0.08);
     }
 
     html.dark .ft-nav-item {
-        background: #1E293B;
-        color: #F1F5F9;
-        border-color: #334155;
+        background: transparent;
+        color: #94A3B8;
+        border-color: transparent;
     }
 
     html.dark .ft-nav-item:hover {
-        background: #334155;
+        background: #1E293B;
         color: #60A5FA;
     }
 
     html.dark .ft-nav-item.active {
-        background: #1E293B !important;
+        background: rgba(59, 130, 246, 0.15) !important;
         color: #60A5FA !important;
-        border-color: #3B82F6 !important;
+        border-color: rgba(59, 130, 246, 0.3) !important;
         font-weight: 600;
     }
 
@@ -474,15 +471,15 @@ html.dark {
     }
 
     .ft-sidebar.collapsed .ft-nav-item.active {
-        background: #FFFFFF !important;
+        background: #EFF6FF !important;
         color: #1877F2 !important;
-        border-color: #1877F2 !important;
+        border-color: #DBEAFE !important;
     }
 
     html.dark .ft-sidebar.collapsed .ft-nav-item.active {
-        background: #1E293B !important;
+        background: rgba(59, 130, 246, 0.2) !important;
         color: #60A5FA !important;
-        border-color: #3B82F6 !important;
+        border-color: rgba(59, 130, 246, 0.35) !important;
     }
 
     .ft-nav-item .ft-icon {
@@ -506,15 +503,15 @@ html.dark {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        height: 35px;
-        padding: 5px 8px;
+        height: 34px;
+        padding: 4px 8px;
         margin: 1px 0;
         border-radius: var(--radius-btn);
         cursor: pointer;
-        background: #FFFFFF;
-        color: #334155;
-        border: 1px solid #F1F5F9;
-        font-size: 14px !important;
+        background: transparent;
+        color: #475569;
+        border: 1px solid transparent;
+        font-size: 13.5px !important;
         font-weight: 500;
         white-space: nowrap !important;
         overflow: hidden;
@@ -525,20 +522,19 @@ html.dark {
     .ft-menu-item:hover {
         background: #F8FAFC;
         color: #1877F2;
-        border-color: #CBD5E1;
     }
 
     .ft-menu-item.active {
-        background: #FFFFFF !important;
+        background: #EFF6FF !important;
         color: #1877F2 !important;
-        border-color: #93C5FD !important;
+        border-color: #DBEAFE !important;
         font-weight: 600;
     }
 
     html.dark .ft-menu-item {
-        background: #0F172A;
-        color: #CBD5E1;
-        border-color: #1E293B;
+        background: transparent;
+        color: #94A3B8;
+        border-color: transparent;
     }
 
     html.dark .ft-menu-item:hover {
@@ -547,9 +543,9 @@ html.dark {
     }
 
     html.dark .ft-menu-item.active {
-        background: #0F172A !important;
+        background: rgba(59, 130, 246, 0.15) !important;
         color: #60A5FA !important;
-        border-color: #3B82F6 !important;
+        border-color: rgba(59, 130, 246, 0.3) !important;
     }
 
     /* ── Phase 3: Submenu Nav Items ───────────────────────────────────────── */

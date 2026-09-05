@@ -217,6 +217,7 @@ AUTHENTICATION_BACKENDS = [
 
 # ── TAILWIND & ASSET COMPILATION ─────────────────────────────────────────────
 
+TAILWIND_CLI_VERSION = '3.4.13'
 _cli_bin = 'tailwindcss-3.4.13.exe' if os.name == 'nt' else 'tailwindcss-3.4.13'
 TAILWIND_CLI_PATH = BASE_DIR / '.django_tailwind_cli' / _cli_bin
 TAILWIND_CLI_SRC_CSS = 'static/css/source.css'
