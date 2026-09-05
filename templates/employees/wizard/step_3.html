@@ -34,19 +34,64 @@
     </div>
 
     <div>
-      <c-input type="text" name="bank_name" id="id_bank_name" label="Bank Name" placeholder="e.g. City Bank Ltd" value="{{ form.bank_name.value|default:'' }}" error="{{ form.bank_name.errors.0 }}"></c-input>
-    </div>
-
-    <div>
-      <c-input type="text" name="bank_account" id="id_bank_account" label="Bank Account Number" placeholder="Account Number" value="{{ form.bank_account.value|default:'' }}" error="{{ form.bank_account.errors.0 }}"></c-input>
-    </div>
-
-    <div>
       <c-select name="payment_method" id="id_payment_method" label="Payment Method" value="{{ form.payment_method.value|default:'' }}" error="{{ form.payment_method.errors.0 }}">
         {% for val, label in form.payment_method.field.choices %}
           <option value="{{ val }}" {% if form.payment_method.value == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </c-select>
+    </div>
+
+    <!-- Bank Details Section (Canonical Directory & Account) -->
+    <div class="md:col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-4 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Disbursement Bank Account (BEFTN / NPSB)</h3>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">Canonical Bangladesh Bank directory routing and validated beneficiary account.</p>
+        </div>
+        <c-badge variant="neutral" size="sm" label="Encrypted at Rest"></c-badge>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <c-bank-picker name="bank" id="id_bank" label="Bank" value="{{ form.bank.value|default:'' }}" error="{{ form.bank.errors.0 }}">
+            {% for bank in form.bank.field.queryset %}
+              <option value="{{ bank.pk }}" data-logo="{{ bank.logo_url }}" data-code="{{ bank.code }}" {% if form.bank.value|stringformat:"s" == bank.pk|stringformat:"s" %}selected{% endif %}>
+                {{ bank.name }}
+              </option>
+            {% endfor %}
+          </c-bank-picker>
+          <input type="hidden" name="bank_name" id="id_bank_name" value="{{ form.bank_name.value|default:'' }}">
+        </div>
+
+        <div>
+          <c-branch-picker name="branch" id="id_branch" label="Branch" value="{{ form.branch.value|default:'' }}" error="{{ form.branch.errors.0 }}">
+            {% for br in form.branch.field.queryset %}
+              <option value="{{ br.pk }}" data-bank="{{ br.bank_id }}" data-routing="{{ br.routing_number }}" data-district="{{ br.district }}" {% if form.branch.value|stringformat:"s" == br.pk|stringformat:"s" %}selected{% endif %}>
+                {{ br.name }}
+              </option>
+            {% endfor %}
+          </c-branch-picker>
+        </div>
+
+        <div>
+          <c-input type="text" name="account_holder_name" id="id_account_holder_name" label="Account Holder Name" placeholder="e.g. As registered with bank" value="{{ form.account_holder_name.value|default:'' }}" error="{{ form.account_holder_name.errors.0 }}"></c-input>
+        </div>
+
+        <div>
+          <c-input type="text" name="bank_account" id="id_bank_account" label="Bank Account Number" placeholder="e.g. 15012012345678" value="{{ form.bank_account.value|default:'' }}" error="{{ form.bank_account.errors.0 }}"></c-input>
+        </div>
+
+        <div>
+          <c-input type="text" name="routing_number" id="id_routing_number" label="Canonical Routing Number" placeholder="Auto-fills from branch selection" value="{{ form.routing_number.value|default:'' }}" error="{{ form.routing_number.errors.0 }}" extra_class="bg-slate-100 dark:bg-slate-800 cursor-not-allowed" attrs="readonly"></c-input>
+        </div>
+
+        <div class="flex items-center">
+          <div class="p-2.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 text-xs text-indigo-700 dark:text-indigo-300 w-full">
+            <span class="font-semibold block">Beneficiary Verification State</span>
+            <span class="text-[11px] text-slate-500 dark:text-slate-400">Account status transitions to <strong>Pending Verification</strong> upon save. Verification requires review by authorized HR/finance personnel before live payouts.</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div>

@@ -83,5 +83,10 @@ urlpatterns = [
     # HTMX cascade APIs
     path('api/departments-for-branch/', views.DepartmentsForBranchAPIView.as_view(), name='api_departments_for_branch'),
     path('api/designations-for-department/', views.DesignationsForDepartmentAPIView.as_view(), name='api_designations_for_department'),
+
+    # Bank Directory & Account Verification Routes
+    path('api/banks/<int:bank_id>/branches/', views.BankBranchesAPIView.as_view(), name='api_bank_branches'),
+    path('bank-accounts/<int:pk>/verify/', views.BankAccountVerifyView.as_view(), name='bank_account_verify'),
 ]
+
 

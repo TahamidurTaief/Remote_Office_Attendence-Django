@@ -2,7 +2,10 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
-from apps.employees.models import EmployeeProfile, EmployeeDocument
+import re
+from apps.employees.models import EmployeeProfile, EmployeeDocument, Bank, BankBranch, EmployeeBankAccount, Employee
+from apps.employees.bank_crypto import normalize_account_number
+from django.db.models import Q
 from apps.branches.models import Branch
 from apps.accounts.rbac_models import Role, UserRoleAssignment
 from apps.accounts.services import RoleAssignmentService
@@ -977,6 +980,29 @@ class WizardStep2Form(forms.ModelForm):
 
 
 class WizardStep3Form(forms.ModelForm):
+    bank = forms.ModelChoiceField(
+        queryset=Bank.objects.filter(is_active=True),
+        required=False,
+        empty_label="-- Choose Bank --",
+        widget=forms.Select(attrs={'class': SELECT_INPUT})
+    )
+    branch = forms.ModelChoiceField(
+        queryset=BankBranch.objects.filter(is_active=True).select_related('bank'),
+        required=False,
+        empty_label="-- Choose Branch --",
+        widget=forms.Select(attrs={'class': SELECT_INPUT})
+    )
+    account_holder_name = forms.CharField(
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Account Holder Name as in Bank Record'})
+    )
+    routing_number = forms.CharField(
+        max_length=9,
+        required=False,
+        widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'readonly': 'readonly', 'placeholder': '9-digit routing number'})
+    )
+
     class Meta:
         model = Employee
         fields = [
@@ -993,6 +1019,104 @@ class WizardStep3Form(forms.ModelForm):
             'pf_enabled': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
             'overtime_policy': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Standard 1.5x'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            primary_acc = getattr(self.instance, 'primary_bank_account', None)
+            if primary_acc:
+                self.fields['bank'].initial = primary_acc.bank_id
+                self.fields['branch'].initial = primary_acc.branch_id
+                self.fields['account_holder_name'].initial = primary_acc.account_holder_name
+                self.fields['routing_number'].initial = primary_acc.routing_number
+                if not self.initial.get('bank_account'):
+                    self.fields['bank_account'].initial = primary_acc.get_account_number()
+            elif self.instance.bank_name:
+                matched_bank = Bank.objects.filter(
+                    Q(name__iexact=self.instance.bank_name) |
+                    Q(short_name__iexact=self.instance.bank_name) |
+                    Q(code__iexact=self.instance.bank_name)
+                ).first()
+                if matched_bank:
+                    self.fields['bank'].initial = matched_bank.pk
+            if not self.fields['account_holder_name'].initial and hasattr(self.instance, 'get_full_name'):
+                self.fields['account_holder_name'].initial = self.instance.get_full_name()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        payment_method = cleaned_data.get('payment_method') or 'bank'
+        bank = cleaned_data.get('bank')
+        branch = cleaned_data.get('branch')
+        bank_name = cleaned_data.get('bank_name') or ''
+        bank_account = cleaned_data.get('bank_account') or ''
+        holder_name = cleaned_data.get('account_holder_name') or ''
+
+        # Auto-match legacy bank_name if bank not explicitly selected
+        if not bank and bank_name:
+            matched_bank = Bank.objects.filter(
+                Q(name__iexact=bank_name) |
+                Q(short_name__iexact=bank_name) |
+                Q(code__iexact=bank_name),
+                is_active=True
+            ).first()
+            if not matched_bank:
+                tokens = bank_name.lower().replace("ltd", "").replace("plc", "").replace("bank", "").strip()
+                if tokens:
+                    matched_bank = Bank.objects.filter(name__icontains=tokens, is_active=True).first()
+            if matched_bank:
+                bank = matched_bank
+                cleaned_data['bank'] = bank
+                if not branch:
+                    branch = bank.branches.filter(is_active=True).first()
+                    cleaned_data['branch'] = branch
+
+        # Enforce server-side validation for bank transfers
+        if payment_method in ('bank', 'split'):
+            if not bank and not bank_name:
+                self.add_error('bank', 'Bank selection is required for bank transfer disbursements.')
+            if bank and not branch:
+                self.add_error('branch', 'Branch selection is required for bank transfer disbursements.')
+            if not bank_account:
+                self.add_error('bank_account', 'Account number is required for bank transfer disbursements.')
+
+        if bank and branch:
+            # Server-side security check: branch must belong to submitted bank
+            if branch.bank_id != bank.id:
+                self.add_error('branch', 'Selected branch does not belong to the submitted bank.')
+            # Canonical derivation of routing number from database record
+            cleaned_data['routing_number'] = branch.routing_number
+            cleaned_data['bank_name'] = bank.name
+
+        if bank_account:
+            cleaned_acc = normalize_account_number(bank_account)
+            if payment_method in ('bank', 'split'):
+                if len(cleaned_acc) < 6 or len(cleaned_acc) > 30:
+                    self.add_error('bank_account', 'Bank account number must be between 6 and 30 characters.')
+                if not re.match(r"^[A-Za-z0-9]+$", cleaned_acc):
+                    self.add_error('bank_account', 'Bank account number must contain only alphanumeric characters.')
+            cleaned_data['bank_account'] = cleaned_acc
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        employee = super().save(commit=commit)
+        bank = self.cleaned_data.get('bank')
+        branch = self.cleaned_data.get('branch')
+        account_number = self.cleaned_data.get('bank_account')
+        holder_name = (self.cleaned_data.get('account_holder_name') or employee.get_full_name()).strip()
+
+        if commit and employee.pk and bank and branch and account_number:
+            from apps.employees.bank_service import BankService
+            BankService.save_employee_bank_account(
+                employee=employee,
+                bank=bank,
+                branch=branch,
+                account_holder_name=holder_name,
+                account_number=account_number,
+                is_primary=True,
+            )
+        return employee
+
 
 
 class WizardStep4Form(forms.Form):

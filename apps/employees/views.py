@@ -2717,3 +2717,42 @@ class EmployeeImportCSVView(AdminRequiredMixin, View):
 
         return redirect('employees:master_list')
 
+
+class BankBranchesAPIView(View):
+    def get(self, request, bank_id):
+        from apps.employees.models import BankBranch
+        branches = BankBranch.objects.filter(bank_id=bank_id, is_active=True).order_by('district', 'name')
+        data = [
+            {
+                'id': b.id,
+                'name': b.name,
+                'district': b.district,
+                'routing_number': b.routing_number,
+                'branch_code': b.branch_code,
+            }
+            for b in branches
+        ]
+        return JsonResponse(data, safe=False)
+
+
+class BankAccountVerifyView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        from apps.employees.models import EmployeeBankAccount
+        from apps.employees.bank_service import BankService, can_verify_bank_account
+        account = get_object_or_404(EmployeeBankAccount, pk=pk)
+        if not can_verify_bank_account(request.user):
+            raise PermissionDenied("Only authorized HR or Finance personnel can verify bank accounts.")
+        note = request.POST.get('note', '').strip()
+        account = BankService.verify_bank_account(account, actor=request.user, note=note)
+        if request.headers.get('HX-Request'):
+            return HttpResponse(
+                f'<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300">Verified ({account.verified_at.strftime("%Y-%m-%d")})</span>'
+            )
+        return JsonResponse({
+            'status': 'verified',
+            'verified_at': account.verified_at.isoformat() if account.verified_at else None,
+            'verified_by': getattr(account.verified_by, 'username', ''),
+            'is_payout_ready': account.is_payout_ready,
+        })
+
+

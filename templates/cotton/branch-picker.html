@@ -1,0 +1,263 @@
+{% comment %} c-branch-picker component
+   Dependent branch picker showing routing number automatically.
+   Props:
+   - name: form input name (default: "branch")
+   - id: input id (defaults to name)
+   - label: label text (default: "Select Branch")
+   - value: selected branch ID
+   - routing_value: initial routing number (if any)
+   - error: error message string
+   - required: boolean
+   - disabled: boolean
+   - extra_class: additional wrapper classes
+{% endcomment %}
+
+<div
+  x-data="{
+    open: false,
+    search: '',
+    branches: [],
+    selectedId: '{{ value|default:''|escapejs }}',
+    selectedBranch: null,
+    currentBankId: '',
+    activeIndex: -1,
+
+    init() {
+      this.parseBranches();
+      this.updateSelectedBranch();
+
+      // Listen for bank change from c-bank-picker or outer form
+      window.addEventListener('bank-changed', (e) => {
+        this.currentBankId = e.detail ? String(e.detail.bankId || '') : '';
+        this.filterByBank(this.currentBankId);
+      });
+    },
+
+    parseBranches() {
+      const select = this.$refs.rawSelect;
+      if (select && select.options) {
+        this.branches = Array.from(select.options)
+          .filter(opt => opt.value)
+          .map(opt => ({
+            id: String(opt.value),
+            name: opt.text.trim(),
+            bankId: opt.getAttribute('data-bank') || '',
+            routing: opt.getAttribute('data-routing') || '',
+            district: opt.getAttribute('data-district') || ''
+          }));
+      }
+    },
+
+    updateSelectedBranch() {
+      this.selectedBranch = this.branches.find(b => String(b.id) === String(this.selectedId)) || null;
+      if (this.selectedBranch) {
+        this.currentBankId = this.selectedBranch.bankId;
+        this.syncRoutingField(this.selectedBranch.routing);
+      }
+    },
+
+    filterByBank(bankId) {
+      if (!bankId) {
+        this.selectBranch(null);
+        return;
+      }
+      // If current selected branch doesn't belong to new bank, reset selection
+      if (this.selectedBranch && String(this.selectedBranch.bankId) !== String(bankId)) {
+        this.selectBranch(null);
+      }
+    },
+
+    get availableBranches() {
+      let list = this.branches;
+      if (this.currentBankId) {
+        list = list.filter(b => String(b.bankId) === String(this.currentBankId));
+      }
+      if (this.search) {
+        const q = this.search.toLowerCase();
+        list = list.filter(b => b.name.toLowerCase().includes(q) || b.district.toLowerCase().includes(q) || b.routing.includes(q));
+      }
+      return list;
+    },
+
+    selectBranch(branch) {
+      this.selectedId = branch ? String(branch.id) : '';
+      this.selectedBranch = branch;
+      if (this.$refs.rawSelect) {
+        this.$refs.rawSelect.value = this.selectedId;
+        this.$refs.rawSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      this.syncRoutingField(branch ? branch.routing : '');
+      this.open = false;
+      this.search = '';
+      this.activeIndex = -1;
+    },
+
+    syncRoutingField(routing) {
+      const routingInput = document.getElementById('id_routing_number') || document.querySelector('[name=\"routing_number\"]');
+      if (routingInput) {
+        routingInput.value = routing || '';
+      }
+      this.$dispatch('branch-changed', { branchId: this.selectedId, branch: this.selectedBranch, routing: routing });
+    },
+
+    navigate(dir) {
+      const list = this.availableBranches;
+      if (!list.length) return;
+      if (dir === 'down') {
+        this.activeIndex = (this.activeIndex + 1) % list.length;
+      } else if (dir === 'up') {
+        this.activeIndex = (this.activeIndex - 1 + list.length) % list.length;
+      }
+      this.$nextTick(() => {
+        const el = this.$refs.dropdownList?.querySelector('[data-active=\'true\']');
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      });
+    },
+
+    selectActive() {
+      const list = this.availableBranches;
+      if (this.activeIndex >= 0 && this.activeIndex < list.length) {
+        this.selectBranch(list[this.activeIndex]);
+      }
+    }
+  }"
+  @click.outside="open = false"
+  @keydown.escape="open = false"
+  class="flex flex-col gap-1 relative {{ extra_class }}"
+>
+  {% if label %}
+    <label for="{{ id|default:name }}" class="ft-label block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-0.5">
+      {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+  {% endif %}
+
+  <!-- Hidden native select for standard form POST / HTMX serialization -->
+  <select
+    x-ref="rawSelect"
+    name="{{ name|default:'branch' }}"
+    id="{{ id|default:name }}"
+    {% if required %}required{% endif %}
+    {% if disabled %}disabled{% endif %}
+    class="absolute inset-0 w-full h-full opacity-0 pointer-events-none -z-10"
+  >
+    <option value="">-- Choose Branch --</option>
+    {{ slot }}
+  </select>
+
+  <!-- Visible Trigger / Selected State Card -->
+  <div class="relative">
+    <button
+      type="button"
+      @click="open = !open"
+      @keydown.arrow-down.prevent="open = true; navigate('down')"
+      @keydown.arrow-up.prevent="open = true; navigate('up')"
+      @keydown.enter.prevent="if(open) { selectActive(); } else { open = true; }"
+      class="w-full flex items-center justify-between px-3 py-2 text-left rounded-lg border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 {% if error %}border-red-500 bg-red-50/20 dark:bg-red-950/20{% else %}border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900{% endif %}"
+      aria-haspopup="listbox"
+      :aria-expanded="open"
+    >
+      <template x-if="selectedBranch">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-7 h-7 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 border border-indigo-100 dark:border-indigo-900">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l2-4h14l2 4M5 21V10.85M19 21V10.85M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4"/></svg>
+          </div>
+          <div class="truncate">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-slate-900 dark:text-white truncate" x-text="selectedBranch.name"></span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium" x-text="selectedBranch.district"></span>
+            </div>
+            <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+              <span>Routing:</span>
+              <span class="font-mono font-bold text-indigo-600 dark:text-indigo-400" x-text="selectedBranch.routing"></span>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="!selectedBranch">
+        <div class="flex items-center gap-2 text-slate-400 dark:text-slate-500">
+          <svg class="w-5 h-5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l2-4h14l2 4M5 21V10.85M19 21V10.85M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4"/></svg>
+          <span class="text-sm" x-text="currentBankId ? 'Select branch...' : 'Select a bank first...'"></span>
+        </div>
+      </template>
+
+      <div class="flex items-center gap-1.5 pl-2 text-slate-400">
+        <button
+          type="button"
+          x-show="selectedBranch"
+          @click.stop="selectBranch(null)"
+          class="p-1 hover:text-slate-600 dark:hover:text-slate-200 rounded"
+          title="Clear branch"
+        >
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+        <svg class="w-4 h-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </button>
+
+    <!-- Dropdown Menu -->
+    <div
+      x-show="open"
+      x-transition:enter="transition ease-out duration-100"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition ease-in duration-75"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+      class="absolute left-0 right-0 top-full mt-1.5 z-50 max-h-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden flex flex-col"
+      style="display: none;"
+    >
+      <!-- Search Filter -->
+      <div class="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850/50">
+        <div class="relative">
+          <input
+            type="text"
+            x-model="search"
+            @keydown.arrow-down.prevent="navigate('down')"
+            @keydown.arrow-up.prevent="navigate('up')"
+            @keydown.enter.prevent="selectActive()"
+            placeholder="Search branch name, district, routing..."
+            class="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            autofocus
+          />
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+      </div>
+
+      <!-- Branch Options List -->
+      <div x-ref="dropdownList" class="overflow-y-auto max-h-56 p-1 space-y-0.5">
+        <template x-for="(br, index) in availableBranches" :key="br.id">
+          <div
+            @click="selectBranch(br)"
+            @mouseenter="activeIndex = index"
+            :data-active="activeIndex === index"
+            class="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-xs transition-colors"
+            :class="{
+              'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200': selectedId === br.id,
+              'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white': activeIndex === index && selectedId !== br.id,
+              'text-slate-700 dark:text-slate-300': selectedId !== br.id && activeIndex !== index
+            }"
+          >
+            <div class="min-w-0 pr-2">
+              <span class="font-medium block truncate" x-text="br.name"></span>
+              <span class="text-[10px] text-slate-400 block" x-text="br.district"></span>
+            </div>
+            <div class="text-right flex-shrink-0">
+              <span class="font-mono text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded" x-text="br.routing"></span>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="availableBranches.length === 0">
+          <div class="px-3 py-6 text-center text-xs text-slate-400">
+            <span x-text="currentBankId ? 'No branches found for this bank.' : 'Please select a bank first.'"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  {% if error %}
+    <p class="ft-error-text text-xs text-red-600 dark:text-red-400 mt-1">{{ error }}</p>
+  {% endif %}
+</div>

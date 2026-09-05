@@ -1,0 +1,231 @@
+{% comment %} c-bank-picker component
+   Searchable canonical Bangladesh bank selector with local SVG logos and safe fallback.
+   Props:
+   - name: form input name (default: "bank")
+   - id: input id (defaults to name)
+   - label: label text (default: "Select Bank")
+   - value: currently selected bank ID
+   - error: error message string
+   - required: boolean
+   - disabled: boolean
+   - extra_class: additional wrapper classes
+{% endcomment %}
+
+<div
+  x-data="{
+    open: false,
+    search: '',
+    banks: [],
+    selectedId: '{{ value|default:''|escapejs }}',
+    selectedBank: null,
+    activeIndex: -1,
+
+    init() {
+      this.loadBanks();
+      this.$watch('selectedId', (val) => {
+        this.updateSelectedBank();
+        this.$dispatch('bank-changed', { bankId: val, bank: this.selectedBank });
+      });
+    },
+
+    loadBanks() {
+      const select = this.$refs.rawSelect;
+      if (select && select.options) {
+        this.banks = Array.from(select.options)
+          .filter(opt => opt.value)
+          .map(opt => ({
+            id: String(opt.value),
+            name: opt.text.trim(),
+            logo: opt.getAttribute('data-logo') || '/static/images/banks/default_bank.svg',
+            code: opt.getAttribute('data-code') || ''
+          }));
+      }
+      this.updateSelectedBank();
+    },
+
+    updateSelectedBank() {
+      this.selectedBank = this.banks.find(b => String(b.id) === String(this.selectedId)) || null;
+    },
+
+    get filteredBanks() {
+      if (!this.search) return this.banks;
+      const q = this.search.toLowerCase();
+      return this.banks.filter(b => b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q));
+    },
+
+    selectBank(bank) {
+      this.selectedId = bank ? String(bank.id) : '';
+      this.selectedBank = bank;
+      if (this.$refs.rawSelect) {
+        this.$refs.rawSelect.value = this.selectedId;
+        this.$refs.rawSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      this.open = false;
+      this.search = '';
+      this.activeIndex = -1;
+    },
+
+    navigate(dir) {
+      const list = this.filteredBanks;
+      if (!list.length) return;
+      if (dir === 'down') {
+        this.activeIndex = (this.activeIndex + 1) % list.length;
+      } else if (dir === 'up') {
+        this.activeIndex = (this.activeIndex - 1 + list.length) % list.length;
+      }
+      this.$nextTick(() => {
+        const el = this.$refs.dropdownList?.querySelector('[data-active=\'true\']');
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      });
+    },
+
+    selectActive() {
+      const list = this.filteredBanks;
+      if (this.activeIndex >= 0 && this.activeIndex < list.length) {
+        this.selectBank(list[this.activeIndex]);
+      }
+    }
+  }"
+  @click.outside="open = false"
+  @keydown.escape="open = false"
+  class="flex flex-col gap-1 relative {{ extra_class }}"
+>
+  {% if label %}
+    <label for="{{ id|default:name }}" class="ft-label block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-0.5">
+      {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+  {% endif %}
+
+  <!-- Hidden native select for standard form POST / HTMX serialization -->
+  <select
+    x-ref="rawSelect"
+    name="{{ name|default:'bank' }}"
+    id="{{ id|default:name }}"
+    {% if required %}required{% endif %}
+    {% if disabled %}disabled{% endif %}
+    class="absolute inset-0 w-full h-full opacity-0 pointer-events-none -z-10"
+  >
+    <option value="">-- Choose Bank --</option>
+    {{ slot }}
+  </select>
+
+  <!-- Visible Trigger / Selected State Card -->
+  <div class="relative">
+    <button
+      type="button"
+      @click="open = !open"
+      @keydown.arrow-down.prevent="open = true; navigate('down')"
+      @keydown.arrow-up.prevent="open = true; navigate('up')"
+      @keydown.enter.prevent="if(open) { selectActive(); } else { open = true; }"
+      class="w-full flex items-center justify-between px-3 py-2 text-left rounded-lg border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 {% if error %}border-red-500 bg-red-50/20 dark:bg-red-950/20{% else %}border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900{% endif %}"
+      aria-haspopup="listbox"
+      :aria-expanded="open"
+    >
+      <template x-if="selectedBank">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <img
+            :src="selectedBank.logo"
+            :alt="selectedBank.name"
+            class="w-7 h-7 rounded object-contain flex-shrink-0 bg-slate-50 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700"
+            onerror="this.onerror=null;this.src='/static/images/banks/default_bank.svg';"
+          />
+          <div class="truncate">
+            <span class="text-sm font-semibold text-slate-900 dark:text-white block truncate" x-text="selectedBank.name"></span>
+            <span class="text-xs text-slate-500 dark:text-slate-400 block" x-text="selectedBank.code"></span>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="!selectedBank">
+        <div class="flex items-center gap-2 text-slate-400 dark:text-slate-500">
+          <img src="/static/images/banks/default_bank.svg" alt="Default Bank" class="w-6 h-6 rounded opacity-60" />
+          <span class="text-sm">Select bank...</span>
+        </div>
+      </template>
+
+      <div class="flex items-center gap-1.5 pl-2 text-slate-400">
+        <button
+          type="button"
+          x-show="selectedBank"
+          @click.stop="selectBank(null)"
+          class="p-1 hover:text-slate-600 dark:hover:text-slate-200 rounded"
+          title="Clear bank"
+        >
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+        <svg class="w-4 h-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </button>
+
+    <!-- Searchable Dropdown Menu -->
+    <div
+      x-show="open"
+      x-transition:enter="transition ease-out duration-100"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition ease-in duration-75"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+      class="absolute left-0 right-0 top-full mt-1.5 z-50 max-h-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden flex flex-col"
+      style="display: none;"
+    >
+      <!-- Search Filter -->
+      <div class="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850/50">
+        <div class="relative">
+          <input
+            type="text"
+            x-model="search"
+            @keydown.arrow-down.prevent="navigate('down')"
+            @keydown.arrow-up.prevent="navigate('up')"
+            @keydown.enter.prevent="selectActive()"
+            placeholder="Search bank name or code..."
+            class="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            autofocus
+          />
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+      </div>
+
+      <!-- Bank Options List -->
+      <div x-ref="dropdownList" class="overflow-y-auto max-h-56 p-1 space-y-0.5">
+        <template x-for="(bank, index) in filteredBanks" :key="bank.id">
+          <div
+            @click="selectBank(bank)"
+            @mouseenter="activeIndex = index"
+            :data-active="activeIndex === index"
+            class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-xs transition-colors"
+            :class="{
+              'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200': selectedId === bank.id,
+              'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white': activeIndex === index && selectedId !== bank.id,
+              'text-slate-700 dark:text-slate-300': selectedId !== bank.id && activeIndex !== index
+            }"
+          >
+            <img
+              :src="bank.logo"
+              :alt="bank.name"
+              class="w-6 h-6 rounded object-contain flex-shrink-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-0.5"
+              onerror="this.onerror=null;this.src='/static/images/banks/default_bank.svg';"
+            />
+            <div class="flex-1 min-w-0">
+              <span class="font-medium block truncate" x-text="bank.name"></span>
+              <span class="text-[10px] text-slate-400 block" x-text="bank.code"></span>
+            </div>
+            <template x-if="selectedId === bank.id">
+              <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </template>
+          </div>
+        </template>
+
+        <template x-if="filteredBanks.length === 0">
+          <div class="px-3 py-6 text-center text-xs text-slate-400">
+            No matching banks found in directory.
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  {% if error %}
+    <p class="ft-error-text text-xs text-red-600 dark:text-red-400 mt-1">{{ error }}</p>
+  {% endif %}
+</div>

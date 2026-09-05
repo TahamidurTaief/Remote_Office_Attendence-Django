@@ -533,6 +533,10 @@ class Employee(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def primary_bank_account(self):
+        return self.bank_accounts.filter(is_active=True, is_primary=True).select_related('bank', 'branch').first()
+
     def get_completion_percentage(self) -> int:
         score = 0
         # Step 1: Basic info
@@ -949,6 +953,195 @@ class EmployeeSuspension(models.Model):
 
     def __str__(self):
         return f"Suspension for {self.employee.get_full_name()} starting {self.suspension_start_date}"
+
+
+# ── CANONICAL BANGLADESH BANK DIRECTORY & EMPLOYEE BANK ACCOUNTS ─────────────
+
+class Bank(models.Model):
+    BANK_TYPE_CHOICES = (
+        ('commercial', 'Scheduled Commercial Bank'),
+        ('islamic', 'Islamic Shariah-Based Bank'),
+        ('state_owned', 'State-Owned Commercial Bank'),
+        ('specialized', 'Specialized Development Bank'),
+        ('foreign', 'Foreign Commercial Bank'),
+    )
+
+    code = models.CharField(
+        max_length=30,
+        unique=True,
+        db_index=True,
+        help_text="Stable canonical identifier (e.g. DBBL, BRAC, CITY)"
+    )
+    name = models.CharField(
+        max_length=150,
+        unique=True,
+        help_text="Official institution name registered with Bangladesh Bank"
+    )
+    short_name = models.CharField(max_length=50, blank=True)
+    bank_type = models.CharField(max_length=30, choices=BANK_TYPE_CHOICES, default='commercial')
+    logo = models.CharField(
+        max_length=255,
+        default='images/banks/default_bank.svg',
+        help_text="Relative static path to local SVG/PNG logo asset"
+    )
+    swift_code = models.CharField(max_length=20, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    source_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Originating authority metadata (e.g. Bangladesh Bank directory release)"
+    )
+    display_order = models.IntegerField(default=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'name']
+        verbose_name = 'Bank Directory'
+        verbose_name_plural = 'Bank Directories'
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def logo_url(self):
+        from django.templatetags.static import static
+        if self.logo:
+            return static(self.logo)
+        return static('images/banks/default_bank.svg')
+
+
+class BankBranch(models.Model):
+    bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='branches', db_index=True)
+    name = models.CharField(max_length=150, help_text="Branch name")
+    branch_code = models.CharField(max_length=30, blank=True)
+    routing_number = models.CharField(
+        max_length=9,
+        db_index=True,
+        help_text="9-digit Bangladesh Bank canonical routing number"
+    )
+    district = models.CharField(max_length=100, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    source_metadata = models.JSONField(default=dict, blank=True)
+    display_order = models.IntegerField(default=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['district', 'name']
+        unique_together = [('bank', 'routing_number')]
+        verbose_name = 'Bank Branch'
+        verbose_name_plural = 'Bank Branches'
+
+    def __str__(self):
+        return f"{self.name} ({self.district}) - {self.routing_number}"
+
+
+class EmployeeBankAccount(models.Model):
+    class VerificationStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending Verification'
+        VERIFIED = 'verified', 'Verified'
+        REJECTED = 'rejected', 'Rejected'
+
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='bank_accounts',
+        db_index=True
+    )
+    account_holder_name = models.CharField(max_length=255)
+    account_number_encrypted = models.TextField(help_text="Fernet encrypted bank account number")
+    account_number_last4 = models.CharField(max_length=4, db_index=True)
+    bank = models.ForeignKey(Bank, on_delete=models.PROTECT, related_name='employee_accounts')
+    branch = models.ForeignKey(BankBranch, on_delete=models.PROTECT, related_name='employee_accounts')
+    routing_number = models.CharField(
+        max_length=9,
+        db_index=True,
+        help_text="Canonical branch routing number"
+    )
+    is_primary = models.BooleanField(default=True)
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.PENDING,
+        db_index=True
+    )
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_bank_accounts'
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verification_note = models.TextField(blank=True)
+    provider_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Provider reference for future licensed beneficiary verification API"
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_primary', '-created_at']
+        verbose_name = 'Employee Bank Account'
+        verbose_name_plural = 'Employee Bank Accounts'
+
+    def __str__(self):
+        return f"{self.account_holder_name} - {self.bank.name} (•••• {self.account_number_last4})"
+
+    def clean(self):
+        super().clean()
+        if self.branch_id and self.bank_id:
+            if self.branch.bank_id != self.bank_id:
+                raise ValidationError({"branch": "Selected branch does not belong to the selected bank."})
+            # Canonical server derivation of routing number from branch record
+            self.routing_number = self.branch.routing_number
+
+    def set_account_number(self, raw_number: str):
+        from .bank_crypto import encrypt_account_number, normalize_account_number
+        cleaned = normalize_account_number(raw_number)
+        if not cleaned:
+            raise ValidationError("Account number cannot be empty.")
+        self.account_number_encrypted = encrypt_account_number(cleaned)
+        self.account_number_last4 = cleaned[-4:] if len(cleaned) >= 4 else cleaned
+
+    def get_account_number(self) -> str:
+        from .bank_crypto import decrypt_account_number
+        return decrypt_account_number(self.account_number_encrypted)
+
+    @property
+    def masked_account_number(self) -> str:
+        if self.account_number_last4:
+            return f"•••• •••• •••• {self.account_number_last4}"
+        return "••••••••"
+
+    @property
+    def is_payout_ready(self) -> bool:
+        """Beneficiary payout requires active status AND verified state by authorized HR/finance."""
+        return self.is_active and self.verification_status == self.VerificationStatus.VERIFIED
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        if self.is_primary and self.employee_id:
+            # Set other bank accounts of this employee to non-primary
+            EmployeeBankAccount.objects.filter(
+                employee_id=self.employee_id,
+                is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)
+            
+            # Sync backward-compatible Employee fields
+            if self.bank_id:
+                self.employee.bank_name = self.bank.name
+            raw_acc = self.get_account_number()
+            if raw_acc:
+                self.employee.bank_account = raw_acc
+            self.employee.save(update_fields=['bank_name', 'bank_account', 'updated_at'])
+            
+        super().save(*args, **kwargs)
+
 
 
 
