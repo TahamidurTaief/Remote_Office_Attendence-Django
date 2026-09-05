@@ -1,94 +1,29 @@
-<c-vars href="" label="" key="" pinned_keys="" search_match="" is_active="false" is_primary="false" icon="" icon_img="" badge="" badge_live="false" badge_text=""></c-vars>
+<c-vars href="" label="" key="" pinned_keys="" search_match="" is_active="false"></c-vars>
 
-{% if is_primary %}
-  {# Top-level primary navigation item #}
-  <div class="ft-nav-item group/menu-item w-full relative {% if is_active %}active{% endif %}"
-       :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''"
-       :title="collapsed ? '{{ label }}' : ''"
-       x-show="matchSearch('{{ search_match|default:label }}')"
-       @click="if (!$event.target.closest('button')) { const a = $el.querySelector('a'); if (a) a.click(); }">
-    <a href="{{ href }}"
-       class="flex items-center gap-2.5 flex-1 min-w-0 h-full text-inherit no-underline select-none"
-       :class="collapsed ? 'justify-center px-0' : ''">
-      {% if icon_img %}
-        <img src="{{ icon_img }}" alt="{{ label }}" class="w-4 h-4 shrink-0 object-contain rounded-sm" loading="eager">
-      {% elif icon %}
-        <i data-lucide="{{ icon }}" class="ft-icon"></i>
-      {% endif %}
-      <span class="ft-nav-label text-[14px]" x-show="!collapsed" x-cloak>{{ label }}</span>
-      {% if badge_live %}
-        <span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" x-show="!collapsed" x-cloak>Live</span>
-      {% elif badge_text %}
-        <span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" x-show="!collapsed" x-cloak>{{ badge_text }}</span>
-      {% elif badge %}
-        <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ badge }}</span>
-      {% endif %}
-    </a>
-
-    {% if key and request.user.is_authenticated %}
-      {% if key in pinned_keys %}
-        <button type="button"
-                class="p-1 mr-1 rounded transition-all text-primary hover:text-red-500 dark:hover:text-red-400 hover:bg-blue-50 dark:hover:bg-slate-800 opacity-70 hover:opacity-100"
-                title="Unpin {{ label }}"
-                aria-label="Unpin {{ label }}"
-                @click.stop.prevent="window.confirmAction('Unpin {{ label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
-          <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
-        </button>
-      {% else %}
-        <button type="button"
-                class="p-1 mr-1 rounded transition-all text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 opacity-50 hover:opacity-100"
-                title="Pin {{ label }}"
-                aria-label="Pin {{ label }}"
-                @click.stop.prevent="window.confirmAction('Pin {{ label }}? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
-          <i data-lucide="pin" class="w-3.5 h-3.5"></i>
-        </button>
-      {% endif %}
+<div class="ft-submenu-item group/menu-item w-full {% if is_active %}active{% endif %}"
+     x-show="matchSearch('{{ search_match|default:label }}')"
+     onclick="if (!event.target.closest('button')) { const a = this.querySelector('a'); if (a) a.click(); }">
+  <a href="{{ href }}"
+     class="flex items-center gap-2 flex-1 min-w-0 h-full py-1.5 pl-2 text-inherit no-underline select-none">
+    <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+    <span class="ft-nav-label">{{ label }}</span>
+  </a>
+  
+  {% if key and request.user.is_authenticated %}
+    {% if key in pinned_keys %}
+      <button type="button"
+              class="p-1 mr-1 rounded transition-all {% if is_active %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %}"
+              title="Unpin {{ label }}"
+              onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin {{ label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
+        <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
+      </button>
+    {% else %}
+      <button type="button"
+              class="p-1 mr-1 rounded transition-all {% if is_active %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %}"
+              title="Pin {{ label }}"
+              onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin {{ label }}? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
+        <i data-lucide="pin" class="w-3.5 h-3.5"></i>
+      </button>
     {% endif %}
-
-    {# Accessible tooltip in collapsed desktop mode #}
-    <div x-show="collapsed"
-         role="tooltip"
-         class="ft-tooltip left-[calc(100%+6px)] top-1/2 -translate-y-1/2 bottom-auto hidden group-hover/menu-item:block"
-         x-cloak>
-      {{ label }}
-    </div>
-  </div>
-{% else %}
-  {# Submenu navigation item #}
-  <div class="ft-submenu-item group/menu-item w-full {% if is_active %}active{% endif %}"
-       x-show="matchSearch('{{ search_match|default:label }}')"
-       @click="if (!$event.target.closest('button')) { const a = $el.querySelector('a'); if (a) a.click(); }">
-    <a href="{{ href }}"
-       class="flex items-center gap-2 flex-1 min-w-0 h-full py-1.5 pl-2 text-inherit no-underline select-none">
-      {% if icon %}
-        <i data-lucide="{{ icon }}" class="w-3.5 h-3.5 shrink-0 opacity-70"></i>
-      {% else %}
-        <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-70"></i>
-      {% endif %}
-      <span class="ft-nav-label text-[14px]">{{ label }}</span>
-      {% if badge %}
-        <span class="ft-badge-pill mr-1">{{ badge }}</span>
-      {% endif %}
-    </a>
-
-    {% if key and request.user.is_authenticated %}
-      {% if key in pinned_keys %}
-        <button type="button"
-                class="p-1 mr-1 rounded transition-all text-primary hover:text-red-500 dark:hover:text-red-400 hover:bg-blue-50 dark:hover:bg-slate-800 opacity-70 hover:opacity-100"
-                title="Unpin {{ label }}"
-                aria-label="Unpin {{ label }}"
-                @click.stop.prevent="window.confirmAction('Unpin {{ label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
-          <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
-        </button>
-      {% else %}
-        <button type="button"
-                class="p-1 mr-1 rounded transition-all text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 opacity-50 hover:opacity-100"
-                title="Pin {{ label }}"
-                aria-label="Pin {{ label }}"
-                @click.stop.prevent="window.confirmAction('Pin {{ label }}? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: '{{ key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
-          <i data-lucide="pin" class="w-3.5 h-3.5"></i>
-        </button>
-      {% endif %}
-    {% endif %}
-  </div>
-{% endif %}
+  {% endif %}
+</div>

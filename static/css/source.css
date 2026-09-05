@@ -393,94 +393,53 @@ html.dark {
         margin-left: var(--sidebar-w-collapsed);
     }
 
-    /* ── Nav Items (Phase 1: Module Menu) ────────────────────────────────── */
+    /* ── Nav Items ───────────────────────────────────────────────────────── */
     .ft-nav-item {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: var(--space-2);
-        height: 38px;
-        padding: 6px 12px;
-        margin: 4px var(--space-1);
+        height: 32px;
+        padding: 4px 8px;
+        margin: 1px var(--space-1);
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
-        background: #EFF6FF;
-        color: #1877F2;
-        border: 1px solid #BFDBFE;
-        box-shadow: 0 1px 2px 0 rgba(24, 119, 242, 0.04);
-        font-size: 14px !important;
-        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 12px; /* 12px per spec */
+        font-weight: 400;
         white-space: nowrap !important;
         overflow: hidden;
-        transition: all var(--transition-fast);
+        transition: background var(--transition-fast), color var(--transition-fast);
         position: relative;
     }
 
     .ft-nav-item:hover {
-        background: #DBEAFE;
-        color: #1D4ED8;
-        border-color: #93C5FD;
+        background: var(--hover-overlay);
+        color: var(--text);
     }
 
     .ft-nav-item.active {
-        background: #EFF6FF !important;
-        color: #1877F2 !important;
-        border-color: #3B82F6 !important;
+        background: #1F2937 !important;
+        color: #FFFFFF !important;
         font-weight: 600;
-        box-shadow: 0 1px 3px 0 rgba(24, 119, 242, 0.12);
-    }
-
-    html.dark .ft-nav-item {
-        background: rgba(30, 58, 138, 0.25);
-        color: #93C5FD;
-        border-color: rgba(59, 130, 246, 0.35);
-    }
-
-    html.dark .ft-nav-item:hover {
-        background: rgba(30, 58, 138, 0.4);
-        color: #BFDBFE;
-        border-color: rgba(59, 130, 246, 0.55);
     }
 
     html.dark .ft-nav-item.active {
-        background: rgba(30, 58, 138, 0.35) !important;
-        color: #60A5FA !important;
-        border-color: #3B82F6 !important;
+        background: #4B5563 !important;
+        color: #FFFFFF !important;
         font-weight: 600;
-    }
-
-    .ft-nav-item .ft-icon,
-    .ft-nav-item svg,
-    .ft-nav-item i {
-        color: #1877F2;
-        stroke: #1877F2;
-    }
-
-    .ft-nav-item:hover .ft-icon,
-    .ft-nav-item:hover svg,
-    .ft-nav-item:hover i {
-        color: #1D4ED8;
-        stroke: #1D4ED8;
     }
 
     .ft-nav-item.active .ft-icon,
     .ft-nav-item.active svg,
     .ft-nav-item.active span,
-    .ft-nav-item.active i {
-        color: #1877F2 !important;
-        stroke: #1877F2 !important;
-    }
-
-    html.dark .ft-nav-item .ft-icon,
-    html.dark .ft-nav-item svg,
-    html.dark .ft-nav-item i,
+    .ft-nav-item.active i,
     html.dark .ft-nav-item.active .ft-icon,
     html.dark .ft-nav-item.active svg,
     html.dark .ft-nav-item.active span,
     html.dark .ft-nav-item.active i {
-        color: #60A5FA !important;
-        stroke: #60A5FA !important;
+        color: #FFFFFF !important;
+        stroke: #FFFFFF !important;
     }
 
     .ft-sidebar.collapsed .ft-nav-item {
@@ -493,176 +452,83 @@ html.dark {
     }
 
     .ft-sidebar.collapsed .ft-nav-item.active {
-        background: #EFF6FF !important;
-        color: #1877F2 !important;
-        border-color: #3B82F6 !important;
+        background: #1F2937 !important;
+        color: #FFFFFF !important;
     }
 
     html.dark .ft-sidebar.collapsed .ft-nav-item.active {
-        background: rgba(30, 58, 138, 0.35) !important;
-        color: #60A5FA !important;
-        border-color: #3B82F6 !important;
+        background: #4B5563 !important;
+        color: #FFFFFF !important;
     }
 
     .ft-nav-item .ft-icon {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
         flex-shrink: 0;
-        stroke-width: 1.75px;
+        stroke-width: 1.5px;
     }
 
     .ft-nav-label {
         flex: 1;
-        font-size: 14px !important;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         transition: opacity var(--transition-fast);
     }
 
-    /* ── Phase 2: Menu Items inside Module ────────────────────────────────── */
-    .ft-menu-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 36px;
-        padding: 5px 10px;
-        margin: 3px 0;
-        border-radius: var(--radius-btn);
-        cursor: pointer;
-        background: #EFF6FF;
-        color: #1877F2;
-        border: 1px solid #BFDBFE;
-        box-shadow: 0 1px 2px 0 rgba(24, 119, 242, 0.04);
-        font-size: 14px !important;
-        font-weight: 600;
-        white-space: nowrap !important;
-        overflow: hidden;
-        transition: all var(--transition-fast);
-        position: relative;
-    }
-
-    .ft-menu-item:hover {
-        background: #DBEAFE;
-        color: #1D4ED8;
-        border-color: #93C5FD;
-    }
-
-    .ft-menu-item.active {
-        background: #EFF6FF !important;
-        color: #1877F2 !important;
-        border-color: #3B82F6 !important;
-        font-weight: 600;
-        box-shadow: 0 1px 3px 0 rgba(24, 119, 242, 0.12);
-    }
-
-    .ft-menu-item .ft-icon,
-    .ft-menu-item svg,
-    .ft-menu-item i {
-        color: #1877F2;
-        stroke: #1877F2;
-    }
-
-    .ft-menu-item:hover .ft-icon,
-    .ft-menu-item:hover svg,
-    .ft-menu-item:hover i {
-        color: #1D4ED8;
-        stroke: #1D4ED8;
-    }
-
-    html.dark .ft-menu-item {
-        background: rgba(30, 58, 138, 0.2);
-        color: #93C5FD;
-        border-color: rgba(59, 130, 246, 0.3);
-    }
-
-    html.dark .ft-menu-item:hover {
-        background: rgba(30, 58, 138, 0.35);
-        color: #BFDBFE;
-        border-color: rgba(59, 130, 246, 0.5);
-    }
-
-    html.dark .ft-menu-item.active {
-        background: rgba(30, 58, 138, 0.3) !important;
-        color: #60A5FA !important;
-        border-color: #3B82F6 !important;
-    }
-
-    html.dark .ft-menu-item .ft-icon,
-    html.dark .ft-menu-item svg,
-    html.dark .ft-menu-item i {
-        color: #60A5FA;
-        stroke: #60A5FA;
-    }
-
-    /* ── Phase 3: Submenu Nav Items ───────────────────────────────────────── */
+    /* ── Submenu Nav Items ────────────────────────────────────────────────── */
     .ft-submenu-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
         height: 32px;
         margin: 1px 0;
-        padding: 0 6px;
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
-        background: transparent;
-        color: #475569;
-        font-size: 14px !important;
+        color: var(--text-secondary);
+        font-size: 12px;
         font-weight: 400;
         white-space: nowrap !important;
         overflow: hidden;
-        transition: all var(--transition-fast);
+        transition: background var(--transition-fast), color var(--transition-fast);
         position: relative;
     }
 
     .ft-submenu-item:hover {
-        background: rgba(24, 119, 242, 0.05);
-        color: #1877F2;
+        background: var(--hover-overlay);
+        color: var(--text);
     }
 
     .ft-submenu-item.active {
-        background: rgba(24, 119, 242, 0.08) !important;
-        color: #1877F2 !important;
+        background: #1F2937 !important;
+        color: #FFFFFF !important;
         font-weight: 600;
-        border-left: 2px solid #1877F2;
-    }
-
-    html.dark .ft-submenu-item {
-        color: #94A3B8;
-    }
-
-    html.dark .ft-submenu-item:hover {
-        background: rgba(59, 130, 246, 0.12);
-        color: #60A5FA;
     }
 
     html.dark .ft-submenu-item.active {
-        background: rgba(59, 130, 246, 0.18) !important;
-        color: #60A5FA !important;
+        background: #4B5563 !important;
+        color: #FFFFFF !important;
         font-weight: 600;
-        border-left: 2px solid #3B82F6;
     }
 
     .ft-submenu-item.active .ft-icon,
     .ft-submenu-item.active svg,
     .ft-submenu-item.active span,
-    .ft-submenu-item.active i {
-        color: #1877F2 !important;
-        stroke: #1877F2 !important;
-    }
-
+    .ft-submenu-item.active i,
+    .ft-submenu-item.active button,
     html.dark .ft-submenu-item.active .ft-icon,
     html.dark .ft-submenu-item.active svg,
     html.dark .ft-submenu-item.active span,
-    html.dark .ft-submenu-item.active i {
-        color: #60A5FA !important;
-        stroke: #60A5FA !important;
+    html.dark .ft-submenu-item.active i,
+    html.dark .ft-submenu-item.active button {
+        color: #FFFFFF !important;
+        stroke: #FFFFFF !important;
     }
 
     .ft-group-header {
-        padding: var(--space-3) var(--space-3) var(--space-1);
-        font-size: 12px;
+        padding: var(--space-4) var(--space-4) var(--space-2);
+        font-size: var(--text-xs);
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -680,7 +546,7 @@ html.dark {
         padding: 0 var(--space-1);
         background: var(--danger);
         color: #FFFFFF;
-        font-size: 12px;
+        font-size: var(--text-xs);
         font-weight: 700;
         border-radius: var(--radius-avatar);
         display: inline-flex;
