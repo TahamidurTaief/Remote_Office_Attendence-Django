@@ -1,6 +1,6 @@
 <c-vars id="" label="" icon="" is_active="false" badge="" badge_text="" search_keys="" icon_img=""></c-vars>
 
-<div class="ft-dropdown-group"
+<div class="ft-dropdown-group mb-1.5"
      x-show="matchSearch('{{ search_keys|default:label }}')">
   <div class="relative group/dropdown">
     <button type="button"
@@ -13,24 +13,24 @@
             :aria-expanded="isSubmenuOpen('{{ id }}')"
             aria-controls="submenu-{{ id }}"
             :title="collapsed ? '{{ label }}' : ''">
-      <div class="flex items-center gap-2 min-w-0">
+      <div class="flex items-center gap-2.5 min-w-0">
         {% if icon_img %}
           <img src="{{ icon_img }}" alt="{{ label }}" class="w-4 h-4 shrink-0 object-contain rounded-sm" loading="eager">
         {% elif icon %}
           <i data-lucide="{{ icon }}" class="ft-icon"></i>
         {% endif %}
-        <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>{{ label }}</span>
+        <span class="ft-nav-label font-semibold text-[14px]" x-show="!collapsed" x-cloak>{{ label }}</span>
       </div>
-      <div class="flex items-center gap-1" x-show="!collapsed" x-cloak>
+      <div class="flex items-center gap-1.5" x-show="!collapsed" x-cloak>
         {% if badge_text %}
-          <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">{{ badge_text }}</span>
+          <span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">{{ badge_text }}</span>
         {% endif %}
         {% if badge %}
           <span class="ft-badge-pill">{{ badge }}</span>
         {% endif %}
         <i data-lucide="chevron-down"
-           class="w-3.5 h-3.5 transition-transform duration-200"
-           :class="isSubmenuOpen('{{ id }}') ? 'rotate-180' : ''"></i>
+           class="w-4 h-4 transition-transform duration-200 text-slate-400 group-hover/dropdown:text-primary"
+           :class="isSubmenuOpen('{{ id }}') ? 'rotate-180 text-primary' : ''"></i>
       </div>
     </button>
 
@@ -43,11 +43,11 @@
     </div>
   </div>
 
-  {# Submenu Container #}
+  {# Submenu Container (Phase 2 Menus inside Phase 1 Module) #}
   <div id="submenu-{{ id }}"
        x-show="(isSubmenuOpen('{{ id }}') || search) && !collapsed"
        x-collapse.duration.200ms
-       class="pl-4 pr-1 py-0.5 space-y-0.5"
+       class="pl-2 pr-1 py-1 space-y-1 bg-slate-50/50 dark:bg-slate-900/40 rounded-lg my-1 border border-slate-100 dark:border-slate-800/80"
        x-cloak>
     {{ slot }}
   </div>

@@ -1,0 +1,45 @@
+<c-vars id="" label="" icon="" is_active="false" badge="" badge_text="" search_keys=""></c-vars>
+
+<div class="ft-submenu-group"
+     x-show="matchSearch('{{ search_keys|default:label }}')">
+  <div class="relative group/submenu">
+    <button type="button"
+            @click="toggleNestedMenu('{{ id }}')"
+            class="ft-menu-item w-full flex items-center justify-between {% if is_active %}active{% endif %}"
+            :class="{
+              'active': isNestedMenuOpen('{{ id }}') || {% if is_active %}true{% else %}false{% endif %}
+            }"
+            :aria-expanded="isNestedMenuOpen('{{ id }}')"
+            aria-controls="nested-menu-{{ id }}"
+            :title="label">
+      <div class="flex items-center gap-2 min-w-0">
+        {% if icon %}
+          <i data-lucide="{{ icon }}" class="w-4 h-4 shrink-0 text-slate-500 dark:text-slate-400 group-hover/submenu:text-primary transition-colors"></i>
+        {% else %}
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 shrink-0"></span>
+        {% endif %}
+        <span class="truncate text-[14px] font-medium">{{ label }}</span>
+      </div>
+      <div class="flex items-center gap-1">
+        {% if badge_text %}
+          <span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">{{ badge_text }}</span>
+        {% endif %}
+        {% if badge %}
+          <span class="ft-badge-pill">{{ badge }}</span>
+        {% endif %}
+        <i data-lucide="chevron-down"
+           class="w-3.5 h-3.5 transition-transform duration-200 text-slate-400 group-hover/submenu:text-primary"
+           :class="isNestedMenuOpen('{{ id }}') ? 'rotate-180 text-primary' : ''"></i>
+      </div>
+    </button>
+  </div>
+
+  {# Phase 3 Container (Submenu Links) #}
+  <div id="nested-menu-{{ id }}"
+       x-show="(isNestedMenuOpen('{{ id }}') || search) && !collapsed"
+       x-collapse.duration.200ms
+       class="pl-3 pr-1 py-1 space-y-0.5 border-l-2 border-slate-100 dark:border-slate-800 ml-3.5 my-1"
+       x-cloak>
+    {{ slot }}
+  </div>
+</div>

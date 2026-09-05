@@ -393,53 +393,75 @@ html.dark {
         margin-left: var(--sidebar-w-collapsed);
     }
 
-    /* ── Nav Items ───────────────────────────────────────────────────────── */
+    /* ── Nav Items (Phase 1: Module Menu) ────────────────────────────────── */
     .ft-nav-item {
         display: flex;
         align-items: center;
         gap: var(--space-2);
-        height: 33px;
-        padding: 4px 8px;
-        margin: 1px var(--space-1);
+        height: 38px;
+        padding: 6px 10px;
+        margin: 3px var(--space-1);
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
-        color: var(--text-secondary);
-        font-size: 13px !important; /* increased by exactly 1px from 12px */
-        font-weight: 500;
+        background: #FFFFFF;
+        color: #1E293B;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+        font-size: 14px !important;
+        font-weight: 600;
         white-space: nowrap !important;
         overflow: hidden;
-        transition: background var(--transition-fast), color var(--transition-fast);
+        transition: all var(--transition-fast);
         position: relative;
     }
 
     .ft-nav-item:hover {
-        background: var(--hover-overlay);
-        color: var(--text);
+        background: #F8FAFC;
+        color: #1877F2;
+        border-color: #CBD5E1;
     }
 
     .ft-nav-item.active {
-        background: #1F2937 !important;
-        color: #FFFFFF !important;
+        background: #FFFFFF !important;
+        color: #1877F2 !important;
+        border-color: #93C5FD !important;
         font-weight: 600;
+        box-shadow: 0 1px 3px 0 rgba(24, 119, 242, 0.08);
+    }
+
+    html.dark .ft-nav-item {
+        background: #1E293B;
+        color: #F1F5F9;
+        border-color: #334155;
+    }
+
+    html.dark .ft-nav-item:hover {
+        background: #334155;
+        color: #60A5FA;
     }
 
     html.dark .ft-nav-item.active {
-        background: #4B5563 !important;
-        color: #FFFFFF !important;
+        background: #1E293B !important;
+        color: #60A5FA !important;
+        border-color: #3B82F6 !important;
         font-weight: 600;
     }
 
     .ft-nav-item.active .ft-icon,
     .ft-nav-item.active svg,
     .ft-nav-item.active span,
-    .ft-nav-item.active i,
+    .ft-nav-item.active i {
+        color: #1877F2 !important;
+        stroke: #1877F2 !important;
+    }
+
     html.dark .ft-nav-item.active .ft-icon,
     html.dark .ft-nav-item.active svg,
     html.dark .ft-nav-item.active span,
     html.dark .ft-nav-item.active i {
-        color: #FFFFFF !important;
-        stroke: #FFFFFF !important;
+        color: #60A5FA !important;
+        stroke: #60A5FA !important;
     }
 
     .ft-sidebar.collapsed .ft-nav-item {
@@ -452,13 +474,15 @@ html.dark {
     }
 
     .ft-sidebar.collapsed .ft-nav-item.active {
-        background: #1F2937 !important;
-        color: #FFFFFF !important;
+        background: #FFFFFF !important;
+        color: #1877F2 !important;
+        border-color: #1877F2 !important;
     }
 
     html.dark .ft-sidebar.collapsed .ft-nav-item.active {
-        background: #4B5563 !important;
-        color: #FFFFFF !important;
+        background: #1E293B !important;
+        color: #60A5FA !important;
+        border-color: #3B82F6 !important;
     }
 
     .ft-nav-item .ft-icon {
@@ -470,62 +494,127 @@ html.dark {
 
     .ft-nav-label {
         flex: 1;
-        font-size: 13px !important;
+        font-size: 14px !important;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         transition: opacity var(--transition-fast);
     }
 
-    /* ── Submenu Nav Items ────────────────────────────────────────────────── */
+    /* ── Phase 2: Menu Items inside Module ────────────────────────────────── */
+    .ft-menu-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 35px;
+        padding: 5px 8px;
+        margin: 1px 0;
+        border-radius: var(--radius-btn);
+        cursor: pointer;
+        background: #FFFFFF;
+        color: #334155;
+        border: 1px solid #F1F5F9;
+        font-size: 14px !important;
+        font-weight: 500;
+        white-space: nowrap !important;
+        overflow: hidden;
+        transition: all var(--transition-fast);
+        position: relative;
+    }
+
+    .ft-menu-item:hover {
+        background: #F8FAFC;
+        color: #1877F2;
+        border-color: #CBD5E1;
+    }
+
+    .ft-menu-item.active {
+        background: #FFFFFF !important;
+        color: #1877F2 !important;
+        border-color: #93C5FD !important;
+        font-weight: 600;
+    }
+
+    html.dark .ft-menu-item {
+        background: #0F172A;
+        color: #CBD5E1;
+        border-color: #1E293B;
+    }
+
+    html.dark .ft-menu-item:hover {
+        background: #1E293B;
+        color: #60A5FA;
+    }
+
+    html.dark .ft-menu-item.active {
+        background: #0F172A !important;
+        color: #60A5FA !important;
+        border-color: #3B82F6 !important;
+    }
+
+    /* ── Phase 3: Submenu Nav Items ───────────────────────────────────────── */
     .ft-submenu-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
         height: 32px;
         margin: 1px 0;
-        padding: 0 4px;
+        padding: 0 6px;
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
-        color: var(--text-secondary);
-        font-size: 13px !important; /* increased by exactly 1px from 12px */
+        background: transparent;
+        color: #475569;
+        font-size: 14px !important;
         font-weight: 400;
         white-space: nowrap !important;
         overflow: hidden;
-        transition: background var(--transition-fast), color var(--transition-fast);
+        transition: all var(--transition-fast);
         position: relative;
     }
 
     .ft-submenu-item:hover {
-        background: var(--hover-overlay);
-        color: var(--text);
+        background: rgba(24, 119, 242, 0.05);
+        color: #1877F2;
     }
 
     .ft-submenu-item.active {
-        background: #1F2937 !important;
-        color: #FFFFFF !important;
+        background: rgba(24, 119, 242, 0.08) !important;
+        color: #1877F2 !important;
         font-weight: 600;
+        border-left: 2px solid #1877F2;
+    }
+
+    html.dark .ft-submenu-item {
+        color: #94A3B8;
+    }
+
+    html.dark .ft-submenu-item:hover {
+        background: rgba(59, 130, 246, 0.12);
+        color: #60A5FA;
     }
 
     html.dark .ft-submenu-item.active {
-        background: #4B5563 !important;
-        color: #FFFFFF !important;
+        background: rgba(59, 130, 246, 0.18) !important;
+        color: #60A5FA !important;
         font-weight: 600;
+        border-left: 2px solid #3B82F6;
     }
 
     .ft-submenu-item.active .ft-icon,
     .ft-submenu-item.active svg,
     .ft-submenu-item.active span,
-    .ft-submenu-item.active i,
-    .ft-submenu-item.active button,
+    .ft-submenu-item.active i {
+        color: #1877F2 !important;
+        stroke: #1877F2 !important;
+    }
+
     html.dark .ft-submenu-item.active .ft-icon,
     html.dark .ft-submenu-item.active svg,
     html.dark .ft-submenu-item.active span,
-    html.dark .ft-submenu-item.active i,
-    html.dark .ft-submenu-item.active button {
-        color: #FFFFFF !important;
-        stroke: #FFFFFF !important;
+    html.dark .ft-submenu-item.active i {
+        color: #60A5FA !important;
+        stroke: #60A5FA !important;
     }
 
     .ft-group-header {
@@ -813,14 +902,14 @@ html.dark {
     /* Search input — ultra minimal */
     .ft-search-input {
         width: 100%;
-        height: 32px;
-        padding: 5px 10px 5px 32px;
-        border: 1px solid transparent;
+        height: 36px;
+        padding: 6px 12px 6px 34px;
+        border: 1px solid #E2E8F0;
         border-radius: 20px;
         font-family: inherit;
-        font-size: 12px;
+        font-size: 14px;
         color: var(--text);
-        background-color: rgba(24,119,242,0.05);
+        background-color: #FFFFFF;
         outline: none;
         transition: background var(--transition-fast), border-color var(--transition-fast);
     }

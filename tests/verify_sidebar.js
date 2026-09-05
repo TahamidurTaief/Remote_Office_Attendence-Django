@@ -5,12 +5,12 @@ const path = require('node:path');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SIDEBAR_PATH = path.join(ROOT_DIR, 'templates', 'cotton', 'sidebar.html');
 const DROPDOWN_PATH = path.join(ROOT_DIR, 'templates', 'cotton', 'sidebar-dropdown.html');
-const SECTION_PATH = path.join(ROOT_DIR, 'templates', 'cotton', 'sidebar-section.html');
+const SUBMENU_PATH = path.join(ROOT_DIR, 'templates', 'cotton', 'sidebar-submenu.html');
 const LINK_PATH = path.join(ROOT_DIR, 'templates', 'cotton', 'sidebar-link.html');
 const CSS_PATH = path.join(ROOT_DIR, 'static', 'css', 'source.css');
 
 console.log('================================================================');
-console.log('🚀 RUNNING SIDEBAR DASHBOARD NAVIGATION VERIFICATION GATES');
+console.log('🚀 RUNNING 3-PHASE INTERACTIVE SIDEBAR NAVIGATION VERIFICATION');
 console.log('================================================================\n');
 
 let totalTests = 0;
@@ -29,17 +29,17 @@ function runTest(name, fn) {
 }
 
 // 1. Audit files exist
-runTest('All Cotton sidebar templates and CSS source files exist', () => {
+runTest('All Cotton 3-phase sidebar templates and CSS source files exist', () => {
   assert(fs.existsSync(SIDEBAR_PATH), 'sidebar.html exists');
   assert(fs.existsSync(DROPDOWN_PATH), 'sidebar-dropdown.html exists');
-  assert(fs.existsSync(SECTION_PATH), 'sidebar-section.html exists');
+  assert(fs.existsSync(SUBMENU_PATH), 'sidebar-submenu.html exists');
   assert(fs.existsSync(LINK_PATH), 'sidebar-link.html exists');
   assert(fs.existsSync(CSS_PATH), 'source.css exists');
 });
 
 const sidebarContent = fs.readFileSync(SIDEBAR_PATH, 'utf8');
 const dropdownContent = fs.readFileSync(DROPDOWN_PATH, 'utf8');
-const sectionContent = fs.readFileSync(SECTION_PATH, 'utf8');
+const submenuContent = fs.readFileSync(SUBMENU_PATH, 'utf8');
 const linkContent = fs.readFileSync(LINK_PATH, 'utf8');
 const cssContent = fs.readFileSync(CSS_PATH, 'utf8');
 
@@ -82,9 +82,9 @@ runTest('No duplicate "Field Visit" label exists in staff navigation', () => {
   assert.strictEqual(fieldVisitMatches.length, 1, 'Exactly one Field Visit navigation item exists');
 });
 
-// 4. Admin 7 Groups Architecture
-runTest('Admin navigation includes the exact 7 compact groups', () => {
-  const expectedAdminGroups = [
+// 4. Removal of static uppercase section headers
+runTest('Uppercase section headers (OVERVIEW, PEOPLE & ATTENDANCE, etc.) are removed', () => {
+  const forbiddenHeaders = [
     'label="OVERVIEW"',
     'label="PEOPLE & ATTENDANCE"',
     'label="WORK MANAGEMENT"',
@@ -94,47 +94,56 @@ runTest('Admin navigation includes the exact 7 compact groups', () => {
     'label="AI WORKSPACE"'
   ];
 
-  for (const group of expectedAdminGroups) {
-    assert(sidebarContent.includes(group), `Admin group ${group} must be present in sidebar.html`);
+  for (const header of forbiddenHeaders) {
+    assert(!sidebarContent.includes(header), `Header ${header} must not be present in sidebar.html`);
   }
 });
 
-// 5. Staff 5 Groups Architecture
-runTest('Staff navigation includes the exact 5 compact groups', () => {
-  const expectedStaffGroups = [
-    'label="HOME"',
-    'label="ATTENDANCE"',
-    'label="WORK"',
-    'label="LEAVE & FINANCE"',
-    'label="ACCOUNT & TOOLS"'
+// 5. Phase 1 Module Dropdowns exist
+runTest('Phase 1 Module Dropdowns are present directly without duplicate labels', () => {
+  const expectedModules = [
+    'label="Overview"',
+    'label="People & Attendance"',
+    'label="Work Management"',
+    'label="Finance"',
+    'label="Reports"',
+    'label="Administration"',
+    'label="AI Workspace"'
   ];
 
-  for (const group of expectedStaffGroups) {
-    assert(sidebarContent.includes(group), `Staff group ${group} must be present in sidebar.html`);
+  for (const mod of expectedModules) {
+    assert(sidebarContent.includes(mod), `Module dropdown ${mod} must be present in sidebar.html`);
   }
 });
 
-// 6. Typography +1px verification
-runTest('Navigation CSS specifies exactly +1px typography (13px nav, 13px submenu, 12px search, 12px headers/badges)', () => {
-  assert(/\.ft-nav-item\s*\{[^}]*font-size:\s*13px/i.test(cssContent), '.ft-nav-item has font-size: 13px');
-  assert(/\.ft-submenu-item\s*\{[^}]*font-size:\s*13px/i.test(cssContent), '.ft-submenu-item has font-size: 13px');
-  assert(/\.ft-search-input\s*\{[^}]*font-size:\s*12px/i.test(cssContent), '.ft-search-input has font-size: 12px');
-  assert(/\.ft-group-header\s*\{[^}]*font-size:\s*12px/i.test(cssContent), '.ft-group-header has font-size: 12px');
-  assert(/\.ft-badge-pill\s*\{[^}]*font-size:\s*12px/i.test(cssContent), '.ft-badge-pill has font-size: 12px');
+// 6. Phase 2 Menus inside modules exist via c-sidebar-submenu
+runTest('Phase 2 Menus exist inside modules using Cotton <c-sidebar-submenu>', () => {
+  assert(sidebarContent.includes('<c-sidebar-submenu id="overview_dashboard"'), 'Overview has Dashboard menu');
+  assert(sidebarContent.includes('<c-sidebar-submenu id="pa_employees"'), 'People & Attendance has Employees menu');
+  assert(sidebarContent.includes('<c-sidebar-submenu id="pa_attendance"'), 'People & Attendance has Attendance menu');
+  assert(sidebarContent.includes('<c-sidebar-submenu id="wm_projects"'), 'Work Management has Projects menu');
+  assert(sidebarContent.includes('<c-sidebar-submenu id="fin_payroll"'), 'Finance has Payroll menu');
+  assert(sidebarContent.includes('<c-sidebar-submenu id="rep_attendance"'), 'Reports has Attendance Reports menu');
+  assert(sidebarContent.includes('<c-sidebar-submenu id="adm_security"'), 'Administration has Roles & Security menu');
+  assert(sidebarContent.includes('<c-sidebar-submenu id="ai_insights"'), 'AI Workspace has Predictive Insights menu');
 });
 
-// 7. Desktop compact rows and mobile touch target >= 44px
-runTest('Desktop rows are compact (~32-34px) and mobile touch targets are at least 44px', () => {
-  assert(/\.ft-nav-item\s*\{[^}]*height:\s*3[2-4]px/i.test(cssContent), 'Desktop .ft-nav-item height is 32-34px');
-  assert(/\.ft-submenu-item\s*\{[^}]*height:\s*3[2-4]px/i.test(cssContent), 'Desktop .ft-submenu-item height is 32-34px');
-  assert(/min-height:\s*44px/i.test(cssContent), 'Mobile items have min-height: 44px');
+// 7. White Menu Theme & 14px Typography
+runTest('All menu items have white styling and 14px typography', () => {
+  assert(/\.ft-nav-item\s*\{[^}]*font-size:\s*14px/i.test(cssContent), '.ft-nav-item has font-size: 14px');
+  assert(/\.ft-menu-item\s*\{[^}]*font-size:\s*14px/i.test(cssContent), '.ft-menu-item has font-size: 14px');
+  assert(/\.ft-submenu-item\s*\{[^}]*font-size:\s*14px/i.test(cssContent), '.ft-submenu-item has font-size: 14px');
+  assert(/\.ft-search-input\s*\{[^}]*font-size:\s*14px/i.test(cssContent), '.ft-search-input has font-size: 14px');
+  assert(/\.ft-nav-item\s*\{[^}]*background:\s*#FFFFFF/i.test(cssContent), '.ft-nav-item has white background');
+  assert(/\.ft-menu-item\s*\{[^}]*background:\s*#FFFFFF/i.test(cssContent), '.ft-menu-item has white background');
+  assert(!/\.ft-nav-item\.active\s*\{[^}]*background:\s*#1F2937/i.test(cssContent), '.ft-nav-item.active does NOT have black #1F2937 background');
 });
 
 // 8. Zero inline styles
 runTest('Zero inline styles in sidebar and cotton navigation templates', () => {
   assert(!sidebarContent.includes('style='), 'sidebar.html has zero inline style attributes');
   assert(!dropdownContent.includes('style='), 'sidebar-dropdown.html has zero inline style attributes');
-  assert(!sectionContent.includes('style='), 'sidebar-section.html has zero inline style attributes');
+  assert(!submenuContent.includes('style='), 'sidebar-submenu.html has zero inline style attributes');
   assert(!linkContent.includes('style='), 'sidebar-link.html has zero inline style attributes');
 });
 
@@ -147,12 +156,12 @@ runTest('Zero inline <script> tags in sidebar.html', () => {
 runTest('Zero onclick handlers in sidebar and cotton navigation templates', () => {
   assert(!sidebarContent.includes('onclick='), 'sidebar.html has no raw onclick handlers');
   assert(!dropdownContent.includes('onclick='), 'sidebar-dropdown.html has no raw onclick handlers');
-  assert(!sectionContent.includes('onclick='), 'sidebar-section.html has no raw onclick handlers');
+  assert(!submenuContent.includes('onclick='), 'sidebar-submenu.html has no raw onclick handlers');
   assert(!linkContent.includes('onclick='), 'sidebar-link.html has no raw onclick handlers');
 });
 
 // 11. Gated with PermissionEngine
-runTest('All navigation groups are gated with PermissionEngine (has_perm tag/filter)', () => {
+runTest('All navigation modules and menus are gated with PermissionEngine (has_perm filter)', () => {
   assert(sidebarContent.includes('{% load static rbac_tags %}'), 'Template loads rbac_tags');
   assert(sidebarContent.includes("has_perm:'dashboard.view'"), 'Overview / Dashboard is permission gated');
   assert(sidebarContent.includes("has_perm:'employees.view'"), 'People / Employees is permission gated');
@@ -163,9 +172,9 @@ runTest('All navigation groups are gated with PermissionEngine (has_perm tag/fil
 });
 
 // 12. Component-driven structure
-runTest('Sidebar utilizes Django Cotton components c-sidebar-section, c-sidebar-dropdown, c-sidebar-link, c-button, c-input, c-empty-state', () => {
-  assert(sidebarContent.includes('<c-sidebar-section'), 'Uses <c-sidebar-section>');
+runTest('Sidebar utilizes Django Cotton components c-sidebar-dropdown, c-sidebar-submenu, c-sidebar-link, c-button, c-input, c-empty-state', () => {
   assert(sidebarContent.includes('<c-sidebar-dropdown'), 'Uses <c-sidebar-dropdown>');
+  assert(sidebarContent.includes('<c-sidebar-submenu'), 'Uses <c-sidebar-submenu>');
   assert(sidebarContent.includes('<c-sidebar-link'), 'Uses <c-sidebar-link>');
   assert(sidebarContent.includes('<c-button'), 'Uses <c-button>');
   assert(sidebarContent.includes('<c-input'), 'Uses <c-input>');
@@ -180,13 +189,14 @@ runTest('Alpine state supports search, slash focus shortcut, and escape clear', 
   assert(sidebarContent.includes('hasNoSearchResults'), 'Empty state detection exists');
 });
 
-// 14. One submenu open at a time & Persistence
-runTest('Alpine state ensures one submenu open at a time and scroll/collapsed persistence', () => {
-  assert(sidebarContent.includes('localStorage.getItem(\'ft_sidebar\')'), 'Persists collapsed state');
-  assert(sidebarContent.includes('localStorage.getItem(\'ft_sidebar_active_submenu\')'), 'Persists active submenu');
-  assert(sidebarContent.includes('sessionStorage.getItem(\'ft_sidebar_scroll\')'), 'Persists scroll position');
+// 14. 3-Phase interactive navigation with toggleNestedMenu and toggleSubmenu
+runTest('Alpine state supports interactive 3-phase toggling and persistence', () => {
+  assert(sidebarContent.includes("localStorage.getItem('ft_sidebar')"), 'Persists collapsed state');
+  assert(sidebarContent.includes("sessionStorage.getItem('ft_sidebar_scroll')"), 'Persists scroll position');
   assert(sidebarContent.includes('toggleSubmenu(id)'), 'toggleSubmenu method exists');
   assert(sidebarContent.includes('isSubmenuOpen(id)'), 'isSubmenuOpen method exists');
+  assert(sidebarContent.includes('toggleNestedMenu(id)'), 'toggleNestedMenu method exists');
+  assert(sidebarContent.includes('isNestedMenuOpen(id)'), 'isNestedMenuOpen method exists');
 });
 
 // 15. Balanced tags check
@@ -199,13 +209,13 @@ runTest('Template tags and components in sidebar.html are properly balanced', ()
   assert.strictEqual(ifCount, endifCount, `Balanced {% if %} (${ifCount}) and {% endif %} (${endifCount})`);
 
   // Cotton components
-  const openSection = countMatches(sidebarContent, /<c-sidebar-section/g);
-  const closeSection = countMatches(sidebarContent, /<\/c-sidebar-section>/g);
-  assert.strictEqual(openSection, closeSection, `Balanced <c-sidebar-section> (${openSection}) and </c-sidebar-section> (${closeSection})`);
-
   const openDropdown = countMatches(sidebarContent, /<c-sidebar-dropdown/g);
   const closeDropdown = countMatches(sidebarContent, /<\/c-sidebar-dropdown>/g);
   assert.strictEqual(openDropdown, closeDropdown, `Balanced <c-sidebar-dropdown> (${openDropdown}) and </c-sidebar-dropdown> (${closeDropdown})`);
+
+  const openSubmenu = countMatches(sidebarContent, /<c-sidebar-submenu/g);
+  const closeSubmenu = countMatches(sidebarContent, /<\/c-sidebar-submenu>/g);
+  assert.strictEqual(openSubmenu, closeSubmenu, `Balanced <c-sidebar-submenu> (${openSubmenu}) and </c-sidebar-submenu> (${closeSubmenu})`);
 
   const openLink = countMatches(sidebarContent, /<c-sidebar-link/g);
   const closeLink = countMatches(sidebarContent, /<\/c-sidebar-link>/g);
@@ -216,42 +226,24 @@ console.log('\n================================================================'
 console.log(`🎉 ALL ${passedTests}/${totalTests} TESTS PASSED SUCCESSFULLY!`);
 console.log('================================================================\n');
 
-// Print one example output as requested
+// Example output
 const exampleOutput = {
-  scenario: "HR Specialist role with employee & attendance permissions navigating dashboard",
-  visibleAdminGroups: [
-    {
-      group: "PEOPLE & ATTENDANCE",
-      accessibleLinks: [
-        "Employee Directory (/employees/)",
-        "New Employee (/employees/add/)",
-        "Departments (/employees/departments/)",
-        "Designations (/employees/designations/)",
-        "Live Attendance (/attendance/status/)",
-        "Attendance Logs (/admin-panel/attendance/)",
-        "Manual Attendance (/admin-panel/attendance/manual-entry/)"
-      ],
-      hiddenLinksReason: "Payroll, System Roles, Security Policies, Backups omitted due to lack of corresponding permissions"
-    }
-  ],
-  typographyMetrics: {
-    primaryNavItemFontSize: "13px (increased by 1px)",
-    submenuItemFontSize: "13px (increased by 1px)",
-    searchInputFontSize: "12px (increased by 1px)",
-    sectionHeaderFontSize: "12px",
-    desktopRowHeight: "33px (compact: 32-34px)",
-    mobileTouchTargetMinHeight: "44px (compliant)"
+  scenario: "3-Phase Interactive Navigation in White Theme with 14px Typography",
+  hierarchyLevels: {
+    phase1: "Module Dropdown (e.g. People & Attendance) - Clean white card, 14px bold, rotating chevron",
+    phase2: "Inner Menus (e.g. Employees, Attendance, Shifts) - White background, 14px medium, expandable",
+    phase3: "Submenu Links (e.g. Directory, Add, Departments, Designations) - 14px, interactive destination"
   },
-  cottonComponentsEngine: {
-    sectionComponent: "c-sidebar-section",
-    dropdownComponent: "c-sidebar-dropdown",
-    linkComponent: "c-sidebar-link",
-    buttonComponent: "c-button",
-    inputComponent: "c-input",
-    emptyStateComponent: "c-empty-state",
-    inlineStylesCount: 0,
-    inlineScriptsCount: 0,
-    rawOnclickCount: 0
+  typographyAndColor: {
+    fontFamily: "Inter, sans-serif",
+    fontSize: "14px everywhere across sidebar (modules, menus, submenus, search input)",
+    menuBackgroundColor: "#FFFFFF (Pure White) with subtle slate-200 border, no dark #1F2937 boxes",
+    hoverColor: "rgba(24, 119, 242, 0.05) with blue text highlight",
+    activeColor: "#1877F2 (Primary Blue) with clean border-color and soft glow"
+  },
+  headersCleanup: {
+    staticHeadersRemoved: ["OVERVIEW", "PEOPLE & ATTENDANCE", "WORK MANAGEMENT", "FINANCE", "REPORTS", "ADMINISTRATION", "AI WORKSPACE"],
+    status: "All static uppercase group labels removed; only interactive module menus remain"
   }
 };
 

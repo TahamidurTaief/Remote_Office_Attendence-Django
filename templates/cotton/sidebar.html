@@ -1,21 +1,22 @@
 {% load static rbac_tags %}
 <c-vars shell_type="admin" active_href="" pending_leave_count="" unread_notifications="" expired_data_count="" pending_expense_count="" pending_tasks_count=""></c-vars>
-{% comment %} c-sidebar — Reorganized, permission-aware dashboard navigation with Cotton components {% endcomment %}
+{% comment %} c-sidebar — 3-phase interactive permission-aware navigation with white menu styling & 14px typography {% endcomment %}
 
 <div id="ft-sidebar"
      x-data="{
        collapsed: localStorage.getItem('ft_sidebar') === 'collapsed',
        mobileOpen: false,
-       currentOpenSubmenu: localStorage.getItem('ft_sidebar_active_submenu') || null,
+       currentOpenModule: localStorage.getItem('ft_sidebar_active_module') || null,
+       openNestedMenus: {},
        search: '',
        searchableItems: [
          'Overview', 'Dashboard', 'Executive Dashboard', 'Recent Activity',
-         'People & Attendance', 'Employee Directory', 'New Employee', 'Departments', 'Designations', 'Live Attendance', 'Attendance Logs', 'Manual Attendance', 'Shift Schedule', 'Calendar',
-         'Work Management', 'All Projects', 'Active Projects', 'Completed Projects', 'Project Types', 'Team Tasks', 'Task Templates',
-         'Finance', 'Payroll Runs', 'Salary Components', 'Salary Structures', 'Employee Salary Setup', 'Expense Claims',
-         'Reports', 'Reports & Analytics Hub', 'Daily Report', 'Monthly Report', 'Absence Report', 'Payroll Reports',
-         'Administration', 'System Roles & Access', 'Security Settings', 'Security Policies', 'Login Activity', 'Audit Logs', 'Activity Logs', 'Trash', 'User Sessions', 'Backups', 'Branches', 'Holidays', 'Schedule Settings',
-         'AI Workspace', 'AI Assistant', 'Attendance Insights', 'Project Insights', 'HR & Payroll Insights', 'Smart Reports', 'AI Settings',
+         'People & Attendance', 'Employees', 'Employee Directory', 'New Employee', 'Departments', 'Designations', 'Attendance', 'Live Attendance', 'Attendance Logs', 'Manual Attendance', 'Shifts & Schedule', 'Shift Schedule', 'Calendar',
+         'Work Management', 'Projects', 'All Projects', 'Project Types', 'Tasks', 'Global Tasks', 'Task Templates',
+         'Finance', 'Payroll', 'Payroll Runs', 'Salary Components', 'Salary Structures', 'Employee Setup', 'Expenses', 'Expense Claims',
+         'Reports', 'Attendance Reports', 'Daily Report', 'Monthly Report', 'Absence Report', 'Analytics & Hub', 'Reports & Analytics Hub', 'Payroll Reports',
+         'Administration', 'Roles & Security', 'System Roles & Access', 'Security Settings', 'Security Policies', 'Login Activity', 'System Logs', 'Audit Logs', 'Activity Logs', 'User Sessions', 'Recycle Bin', 'Database Backups', 'Organization Settings', 'Branches', 'Holidays', 'Schedule Settings',
+         'AI Workspace', 'AI Assistant', 'Predictive Insights', 'Attendance Insights', 'Project Insights', 'HR & Payroll Insights', 'Smart Tools', 'Smart Reports', 'AI Settings',
          'Home', 'Attendance', 'Check In / Out', 'Attendance History', 'Field Visit',
          'Work', 'My Tasks', 'My Projects',
          'Leave & Finance', 'Apply Leave', 'My Leaves', 'Expenses', 'My Payslips',
@@ -30,7 +31,8 @@
            main.classList.toggle('sidebar-collapsed', this.collapsed);
          }
        },
-       getActiveId() {
+
+       getActiveModule() {
          const p = '{{ active_href|default:request.path }}';
          if ('{{ shell_type }}' === 'staff') {
            if (p === '/staff/home/' || p === '/staff/') return 'staff_home';
@@ -49,22 +51,73 @@
          if (p.includes('/admin-panel/ai/')) return 'ai_workspace';
          return null;
        },
+
+       getActiveId() {
+         return this.getActiveModule();
+       },
+
        toggleSubmenu(id) {
          const isOpen = this.isSubmenuOpen(id);
-         this.currentOpenSubmenu = isOpen ? 'none' : id;
-         localStorage.setItem('ft_sidebar_active_submenu', this.currentOpenSubmenu);
+         this.currentOpenModule = isOpen ? 'none' : id;
+         localStorage.setItem('ft_sidebar_active_module', this.currentOpenModule);
+         localStorage.setItem('ft_sidebar_active_submenu', this.currentOpenModule);
        },
+
        isSubmenuOpen(id) {
          if (this.search && this.search.trim()) return true;
-         if (this.currentOpenSubmenu !== null && this.currentOpenSubmenu !== undefined && this.currentOpenSubmenu !== '') {
-           return this.currentOpenSubmenu === id;
+         if (this.currentOpenModule !== null && this.currentOpenModule !== undefined && this.currentOpenModule !== '') {
+           return this.currentOpenModule === id;
          }
-         return this.getActiveId() === id;
+         return this.getActiveModule() === id;
        },
+
+       toggleNestedMenu(id) {
+         this.openNestedMenus[id] = !this.openNestedMenus[id];
+       },
+
+       isNestedMenuOpen(id) {
+         if (this.search && this.search.trim()) return true;
+         if (this.openNestedMenus[id] !== undefined) {
+           return this.openNestedMenus[id];
+         }
+         return this.isNestedMenuInitiallyActive(id);
+       },
+
+       isNestedMenuInitiallyActive(id) {
+         const p = '{{ active_href|default:request.path }}';
+         if (id === 'overview_dashboard' && p === '/admin-panel/dashboard/') return true;
+         if (id === 'overview_activity' && p.includes('/notifications/')) return true;
+         if (id === 'pa_employees' && p.includes('/employees/')) return true;
+         if (id === 'pa_attendance' && (p.includes('/attendance/') || p.includes('/admin-panel/attendance/'))) return true;
+         if (id === 'pa_shifts' && p.includes('/schedule/')) return true;
+         if (id === 'wm_projects' && p.includes('/projects/') && !p.includes('/tasks') && !p.includes('/templates')) return true;
+         if (id === 'wm_tasks' && (p.includes('/tasks') || p.includes('/templates'))) return true;
+         if (id === 'fin_payroll' && p.includes('/payroll/') && !p.includes('/reports-hub/')) return true;
+         if (id === 'fin_expense' && p.includes('/expense/')) return true;
+         if (id === 'rep_attendance' && (p.includes('/reports/daily') || p.includes('/reports/monthly') || p.includes('/reports/absent'))) return true;
+         if (id === 'rep_analytics' && (p.includes('/reports/') || p.includes('/reports-hub/'))) return true;
+         if (id === 'adm_security' && (p.includes('/admin-panel/roles/') || p.includes('/security/') || p.includes('/account/security/') || p.includes('/login-activity/'))) return true;
+         if (id === 'adm_logs' && (p.includes('/audit-logs/') || p.includes('/audit/') || p.includes('/sessions/') || p.includes('/backups/'))) return true;
+         if (id === 'adm_org' && (p.includes('/branches/') || p.includes('/settings'))) return true;
+         if (id === 'ai_chat' && p === '/admin-panel/ai/assistant/') return true;
+         if (id === 'ai_insights' && (p.includes('/ai/attendance') || p.includes('/ai/project') || p.includes('/ai/payroll'))) return true;
+         if (id === 'ai_tools' && (p.includes('/ai/reports') || p.includes('/ai/settings'))) return true;
+         if (id === 'staff_menu_dashboard' && (p === '/staff/home/' || p === '/staff/')) return true;
+         if (id === 'staff_menu_tracking' && (p.includes('/staff/check-in') || p.includes('/staff/attendance'))) return true;
+         if (id === 'staff_menu_field' && p.includes('/staff/field-visit')) return true;
+         if (id === 'staff_menu_tasks' && p.includes('/staff/my-tasks')) return true;
+         if (id === 'staff_menu_projects' && p.includes('/staff/my-projects')) return true;
+         if (id === 'staff_menu_leave' && p.includes('/leave/')) return true;
+         if (id === 'staff_menu_pay' && (p.includes('/expense/') || p.includes('/payroll/'))) return true;
+         if (id === 'staff_menu_profile' && (p.includes('/profile') || p.includes('/security/'))) return true;
+         return false;
+       },
+
        matchSearch(label) {
          if (!this.search || !this.search.trim()) return true;
          return label.toLowerCase().includes(this.search.toLowerCase().trim());
        },
+
        get hasNoSearchResults() {
          if (!this.search || !this.search.trim()) return false;
          const q = this.search.toLowerCase().trim();
@@ -79,9 +132,9 @@
        const main = document.getElementById('ft-main-content');
        if (main) main.classList.toggle('sidebar-collapsed', collapsed);
        if (window.lucide) window.lucide.createIcons();
-       const active = getActiveId();
-       if (active && (!currentOpenSubmenu || currentOpenSubmenu === 'none')) {
-         currentOpenSubmenu = active;
+       const active = getActiveModule();
+       if (active && (!currentOpenModule || currentOpenModule === 'none')) {
+         currentOpenModule = active;
        }
      ">
 
@@ -99,7 +152,7 @@
 
   {# Sidebar Aside Container #}
   <aside id="ft-sidebar-aside"
-         class="ft-sidebar"
+         class="ft-sidebar bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800"
          :class="{
            'collapsed': collapsed,
            'mobile-open': mobileOpen
@@ -107,9 +160,9 @@
          aria-label="Main Navigation">
 
     {# ── Brand Header ───────────────────────────────────────────────── #}
-    <div class="h-12 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
+    <div class="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
       <div class="flex items-center gap-2.5 min-w-0" :class="collapsed ? 'justify-center w-full' : ''">
-        <div class="w-7 h-7 rounded-btn bg-primary flex items-center justify-center flex-shrink-0 text-white">
+        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 text-white shadow-xs">
           <i data-lucide="zap" class="w-4 h-4"></i>
         </div>
         <div x-show="!collapsed" class="flex items-center gap-1.5 flex-1 min-w-0" x-cloak>
@@ -117,9 +170,9 @@
                alt="FieldTrack"
                class="h-6 w-auto object-contain"
                onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
-          <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 hidden">FieldTrack</span>
+          <span class="text-[14px] font-bold text-slate-800 dark:text-slate-100 hidden">FieldTrack</span>
           {% if shell_type == 'staff' %}
-            <span class="px-1.5 py-0.5 text-[10px] font-bold tracking-wide rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">STAFF</span>
+            <span class="px-1.5 py-0.5 text-[11px] font-bold tracking-wide rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">STAFF</span>
           {% endif %}
         </div>
       </div>
@@ -128,7 +181,7 @@
         <div x-show="!collapsed" class="hidden lg:flex" x-cloak>
           <c-button variant="ghost"
                     size="sm"
-                    extra_class="w-7 h-7 p-0 flex items-center justify-center flex-shrink-0"
+                    extra_class="w-7 h-7 p-0 flex items-center justify-center flex-shrink-0 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                     icon="panel-left-close"
                     @click="toggle()"
                     aria-label="Collapse sidebar">
@@ -150,7 +203,7 @@
     <div x-show="collapsed" class="hidden lg:flex justify-center mt-2 shrink-0" x-cloak>
       <c-button variant="ghost"
                 size="sm"
-                extra_class="w-8 h-8 p-0 flex items-center justify-center"
+                extra_class="w-8 h-8 p-0 flex items-center justify-center text-slate-400 hover:text-primary"
                 icon="panel-left-open"
                 @click="toggle()"
                 aria-label="Expand sidebar">
@@ -158,7 +211,7 @@
     </div>
 
     {# ── Search Input (Expanded mode) ────────────────────────────────── #}
-    <div x-show="!collapsed" class="px-2 py-1.5 shrink-0" x-cloak>
+    <div x-show="!collapsed" class="px-2.5 py-2 shrink-0" x-cloak>
       <div class="relative flex items-center">
         <c-input name="sidebar_search"
                  type="text"
@@ -167,12 +220,12 @@
                  x-ref="sidebarSearchInput"
                  x-model="search"
                  @keydown.escape="search = ''; $el.blur()"
-                 input_class="ft-search-input !h-8 !text-[12px] !border-transparent pr-7"
+                 input_class="ft-search-input !h-9 !text-[14px] pr-7"
                  extra_class="w-full"></c-input>
         <div x-show="search" class="absolute right-2 top-1/2 -translate-y-1/2" x-cloak>
           <c-button variant="ghost"
                     size="sm"
-                    extra_class="w-4 h-4 p-0 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                    extra_class="w-5 h-5 p-0 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white"
                     icon="x"
                     @click="search = ''; $refs.sidebarSearchInput?.focus()"
                     aria-label="Clear search">
@@ -181,9 +234,9 @@
       </div>
     </div>
 
-    {# ── Navigation Body ─────────────────────────────────────────────── #}
+    {# ── Navigation Body (Interactive 3-Phase Hierarchy) ─────────────── #}
     <nav id="ft-sidebar-nav"
-         class="flex-1 py-1 px-1 overflow-y-auto scrollbar-hide"
+         class="flex-1 py-1.5 px-2 overflow-y-auto scrollbar-hide space-y-1"
          aria-label="Sidebar Navigation"
          @scroll.debounce.150ms="sessionStorage.setItem('ft_sidebar_scroll', $el.scrollTop)"
          @htmx:after-swap.window="const s = sessionStorage.getItem('ft_sidebar_scroll'); if (s) $el.scrollTop = parseInt(s, 10);"
@@ -201,140 +254,157 @@
       </div>
 
       {% if shell_type == 'staff' %}
-        {# ════════════════════ STAFF NAVIGATION (5 GROUPS) ════════════════════ #}
+        {# ════════════════════ STAFF NAVIGATION (3 PHASES) ════════════════════ #}
 
-        {# Group 1: Home #}
-        <c-sidebar-section label="HOME" icon="home">
-          <c-sidebar-link href="{% url 'staff:home' %}"
-                          label="Home"
-                          icon="home"
-                          is_primary="true"
-                          is_active="{% if path == '/staff/home/' or path == '/staff/' %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-        </c-sidebar-section>
+        {# Phase 1: Module Home #}
+        <c-sidebar-dropdown id="staff_home" label="Home" icon="home" search_keys="Home Dashboard Staff Home" is_active="{% if path == '/staff/home/' or path == '/staff/' %}true{% else %}false{% endif %}">
+          {# Phase 2: Menu Dashboard #}
+          <c-sidebar-submenu id="staff_menu_dashboard" label="Dashboard" icon="layout-dashboard" is_active="{% if path == '/staff/home/' or path == '/staff/' %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Links #}
+            <c-sidebar-link href="{% url 'staff:home' %}"
+                            label="Staff Home"
+                            icon="home"
+                            is_active="{% if path == '/staff/home/' or path == '/staff/' %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
+        </c-sidebar-dropdown>
 
-        {# Group 2: Attendance #}
-        <c-sidebar-section label="ATTENDANCE" icon="clock">
-          <c-sidebar-link href="{% url 'staff:check_in' %}"
-                          label="Check In / Out"
-                          icon="clock"
-                          is_primary="true"
-                          badge_live="true"
-                          is_active="{% if '/staff/check-in/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-          <c-sidebar-link href="{% url 'staff:attendance' %}"
-                          label="Attendance History"
-                          icon="calendar-check"
-                          is_primary="true"
-                          is_active="{% if '/staff/attendance' in path and '/staff/check-in' not in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-          <c-sidebar-link href="{% url 'staff:field_visit' %}"
-                          label="Field Visit"
-                          icon="map-pin"
-                          is_primary="true"
-                          is_active="{% if '/staff/field-visit/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-        </c-sidebar-section>
+        {# Phase 1: Module Attendance #}
+        <c-sidebar-dropdown id="staff_attendance" label="Attendance" icon="clock" search_keys="Attendance Check In Out History Field Visit" is_active="{% if '/staff/attendance' in path or '/staff/check-in' in path or '/staff/field-visit' in path %}true{% else %}false{% endif %}">
+          {# Phase 2: Menu Daily Attendance #}
+          <c-sidebar-submenu id="staff_menu_tracking" label="Daily Attendance" icon="clock" is_active="{% if '/staff/check-in/' in path or '/staff/attendance' in path %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Links #}
+            <c-sidebar-link href="{% url 'staff:check_in' %}"
+                            label="Check In / Out"
+                            icon="clock"
+                            badge_live="true"
+                            is_active="{% if '/staff/check-in/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+            <c-sidebar-link href="{% url 'staff:attendance' %}"
+                            label="Attendance History"
+                            icon="calendar-check"
+                            is_active="{% if '/staff/attendance' in path and '/staff/check-in' not in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
 
-        {# Group 3: Work #}
-        <c-sidebar-section label="WORK" icon="briefcase">
-          <c-sidebar-link href="{% url 'staff:my_tasks' %}"
-                          label="My Tasks"
-                          icon="check-square"
-                          is_primary="true"
-                          badge="{{ pending_tasks_count }}"
-                          is_active="{% if '/staff/my-tasks/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-          <c-sidebar-link href="{% url 'staff:my_projects' %}"
-                          label="My Projects"
-                          icon="briefcase"
-                          is_primary="true"
-                          is_active="{% if '/staff/projects/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-        </c-sidebar-section>
+          {# Phase 2: Menu Field Tracking #}
+          <c-sidebar-submenu id="staff_menu_field" label="Field Tracking" icon="map-pin" is_active="{% if '/staff/field-visit/' in path %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Link #}
+            <c-sidebar-link href="{% url 'staff:field_visit' %}"
+                            label="Field Visit"
+                            icon="map-pin"
+                            is_active="{% if '/staff/field-visit/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
+        </c-sidebar-dropdown>
 
-        {# Group 4: Leave & Finance #}
-        <c-sidebar-section label="LEAVE & FINANCE" icon="wallet">
-          <c-sidebar-link href="{% url 'leave:staff_request_create' %}"
-                          label="Apply Leave"
-                          icon="calendar-plus"
-                          is_primary="true"
-                          is_active="{% if '/leave/staff/request/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-          <c-sidebar-link href="{% url 'leave:staff_dashboard' %}"
-                          label="My Leaves"
-                          icon="calendar"
-                          is_primary="true"
-                          badge="{{ pending_leave_count }}"
-                          is_active="{% if '/leave/' in path and '/leave/staff/request/' not in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-          <c-sidebar-link href="{% url 'expense:staff_expense_list' %}"
-                          label="Expense Claims"
-                          icon="receipt"
-                          is_primary="true"
-                          badge="{{ pending_expense_count }}"
-                          is_active="{% if '/expense/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-          <c-sidebar-link href="{% url 'payroll:my_payslips' %}"
-                          label="My Payslips"
-                          icon="wallet"
-                          is_primary="true"
-                          is_active="{% if '/payroll/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-        </c-sidebar-section>
+        {# Phase 1: Module Work #}
+        <c-sidebar-dropdown id="staff_work" label="Work" icon="briefcase" search_keys="Work Tasks Projects" is_active="{% if '/staff/my-tasks/' in path or '/staff/projects/' in path %}true{% else %}false{% endif %}">
+          {# Phase 2: Menu Tasks #}
+          <c-sidebar-submenu id="staff_menu_tasks" label="My Tasks" icon="check-square" badge="{{ pending_tasks_count }}" is_active="{% if '/staff/my-tasks/' in path %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Links #}
+            <c-sidebar-link href="{% url 'staff:my_tasks' %}"
+                            label="Task List"
+                            icon="check-square"
+                            badge="{{ pending_tasks_count }}"
+                            is_active="{% if '/staff/my-tasks/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
 
-        {# Group 5: Account & Tools #}
-        <c-sidebar-section label="ACCOUNT & TOOLS" icon="user">
-          <div class="ft-nav-item group/menu-item w-full relative cursor-pointer"
-               :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''"
-               :title="collapsed ? 'AI Assistant' : ''"
-               x-show="matchSearch('AI Assistant AI')"
-               @click="$dispatch('open-ai-chatbot')">
-            <div class="flex items-center gap-2 flex-1 min-w-0 h-full py-1.5"
-                 :class="collapsed ? 'justify-center px-0' : ''">
-              <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 shrink-0 object-contain" loading="eager">
-              <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Assistant</span>
-              <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" x-show="!collapsed" x-cloak>AI</span>
+          {# Phase 2: Menu Projects #}
+          <c-sidebar-submenu id="staff_menu_projects" label="My Projects" icon="folder" is_active="{% if '/staff/projects/' in path %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Links #}
+            <c-sidebar-link href="{% url 'staff:my_projects' %}"
+                            label="Project List"
+                            icon="briefcase"
+                            is_active="{% if '/staff/projects/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
+        </c-sidebar-dropdown>
+
+        {# Phase 1: Module Leave & Finance #}
+        <c-sidebar-dropdown id="staff_finance" label="Leave & Finance" icon="wallet" search_keys="Leave Finance Expenses Payslips" is_active="{% if '/leave/' in path or '/expense/' in path or '/payroll/' in path %}true{% else %}false{% endif %}">
+          {# Phase 2: Menu Leave Management #}
+          <c-sidebar-submenu id="staff_menu_leave" label="Leave Management" icon="calendar" badge="{{ pending_leave_count }}" is_active="{% if '/leave/' in path %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Links #}
+            <c-sidebar-link href="{% url 'leave:staff_request_create' %}"
+                            label="Apply Leave"
+                            icon="calendar-plus"
+                            is_active="{% if '/leave/staff/request/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+            <c-sidebar-link href="{% url 'leave:staff_dashboard' %}"
+                            label="My Leaves"
+                            icon="calendar"
+                            badge="{{ pending_leave_count }}"
+                            is_active="{% if '/leave/' in path and '/leave/staff/request/' not in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
+
+          {# Phase 2: Menu Finance & Payroll #}
+          <c-sidebar-submenu id="staff_menu_pay" label="Finance & Payroll" icon="credit-card" badge="{{ pending_expense_count }}" is_active="{% if '/expense/' in path or '/payroll/' in path %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Links #}
+            <c-sidebar-link href="{% url 'expense:staff_expense_list' %}"
+                            label="Expense Claims"
+                            icon="receipt"
+                            badge="{{ pending_expense_count }}"
+                            is_active="{% if '/expense/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+            <c-sidebar-link href="{% url 'payroll:my_payslips' %}"
+                            label="My Payslips"
+                            icon="wallet"
+                            is_active="{% if '/payroll/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
+        </c-sidebar-dropdown>
+
+        {# Phase 1: Module Account & Tools #}
+        <c-sidebar-dropdown id="staff_account" label="Account & Tools" icon="user" search_keys="Account Tools Profile Security AI Assistant" is_active="{% if '/profile' in path or '/account/security/' in path %}true{% else %}false{% endif %}">
+          {# Phase 2: Menu Profile & Security #}
+          <c-sidebar-submenu id="staff_menu_profile" label="Profile & Security" icon="shield-check" is_active="{% if '/account/security/' in path %}true{% else %}false{% endif %}">
+            {# Phase 3: Submenu Link #}
+            <c-sidebar-link href="{% url 'accounts:security_settings' %}"
+                            label="Security Settings"
+                            icon="shield-check"
+                            is_active="{% if '/account/security/' in path %}true{% else %}false{% endif %}">
+            </c-sidebar-link>
+          </c-sidebar-submenu>
+
+          {# Phase 2: Menu AI Tools #}
+          <c-sidebar-submenu id="staff_menu_ai" label="AI Tools" icon="bot" badge_text="AI">
+            {# Phase 3: Submenu Action Item #}
+            <div class="ft-submenu-item group/menu-item w-full cursor-pointer"
+                 x-show="matchSearch('AI Assistant AI')"
+                 @click="$dispatch('open-ai-chatbot')">
+              <div class="flex items-center gap-2 flex-1 min-w-0 h-full py-1.5 pl-2 text-inherit select-none">
+                <i data-lucide="bot" class="w-3.5 h-3.5 shrink-0 opacity-70"></i>
+                <span class="ft-nav-label text-[14px]">AI Assistant</span>
+                <span class="px-1.5 py-0.5 text-[11px] font-semibold rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">AI</span>
+              </div>
             </div>
-            <div x-show="collapsed" role="tooltip" class="ft-tooltip left-[calc(100%+6px)] top-1/2 -translate-y-1/2 bottom-auto hidden group-hover/menu-item:block" x-cloak>
-              AI Assistant
-            </div>
-          </div>
-
-          <c-sidebar-link href="{% url 'staff:profile' %}"
-                          label="My Profile"
-                          icon="user-circle"
-                          is_primary="true"
-                          is_active="{% if '/staff/profile/' in path or '/account/profile/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-          <c-sidebar-link href="{% url 'accounts:security_settings' %}"
-                          label="Security Settings"
-                          icon="shield-check"
-                          is_primary="true"
-                          is_active="{% if '/account/security/' in path %}true{% else %}false{% endif %}">
-          </c-sidebar-link>
-        </c-sidebar-section>
+          </c-sidebar-submenu>
+        </c-sidebar-dropdown>
 
         {# Optional Switch to Admin Panel for Superusers/Managers #}
         {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' or request.user|has_perm:'admin_panel.view' %}
           <div class="my-2 border-t border-slate-200 dark:border-slate-800"></div>
-          <c-sidebar-section label="ADMIN ACCESS" icon="shield">
-            <c-sidebar-link href="{% url 'admin_panel:dashboard' %}"
-                            label="Admin Panel"
-                            icon="layout-dashboard"
-                            is_primary="true"
-                            badge_text="SWITCH">
-            </c-sidebar-link>
-          </c-sidebar-section>
+          <c-sidebar-dropdown id="admin_switch" label="Admin Panel" icon="shield" search_keys="Admin Panel Switch">
+            <c-sidebar-submenu id="admin_switch_sub" label="Administration" icon="layout-dashboard">
+              <c-sidebar-link href="{% url 'admin_panel:dashboard' %}"
+                              label="Go to Admin Panel"
+                              icon="layout-dashboard"
+                              badge_text="SWITCH">
+              </c-sidebar-link>
+            </c-sidebar-submenu>
+          </c-sidebar-dropdown>
         {% endif %}
 
       {% else %}
-        {# ════════════════════ ADMIN NAVIGATION (7 GROUPS) ════════════════════ #}
+        {# ════════════════════ ADMIN NAVIGATION (3 PHASES) ════════════════════ #}
 
         {# Pinned Section (if pinned items present) #}
         {% if pinned_items %}
-          <c-sidebar-section label="PINNED" icon="pin">
-            <c-sidebar-dropdown id="pinned_submenu" label="Pinned" icon="pin" search_keys="Pinned">
+          <c-sidebar-dropdown id="pinned_submenu" label="Pinned Items" icon="pin" search_keys="Pinned">
+            <c-sidebar-submenu id="pinned_shortcuts" label="Quick Shortcuts" icon="star">
               {% for item in pinned_items %}
                 <c-sidebar-link href="{{ item.url }}"
                                 label="{{ item.label }}"
@@ -344,431 +414,541 @@
                                 is_active="{% if path == item.url %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
               {% endfor %}
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+            </c-sidebar-submenu>
+          </c-sidebar-dropdown>
         {% endif %}
 
-        {# ── Group 1: Overview ── #}
+        {# ── Phase 1: Module Overview ── #}
         {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' or request.user|has_perm:'accounts.view' %}
-          <c-sidebar-section label="OVERVIEW" icon="layout-grid">
-            <c-sidebar-dropdown id="dashboards"
-                                label="Overview"
-                                icon="layout-dashboard"
-                                search_keys="Overview Dashboard Executive Recent Activity"
-                                is_active="{% if path == '/admin-panel/dashboard/' or '/notifications/' in path %}true{% else %}false{% endif %}">
-              {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' %}
+          <c-sidebar-dropdown id="dashboards"
+                              label="Overview"
+                              icon="layout-dashboard"
+                              search_keys="Overview Dashboard Executive Recent Activity"
+                              is_active="{% if path == '/admin-panel/dashboard/' or '/notifications/' in path %}true{% else %}false{% endif %}">
+            {# Phase 2: Menu Dashboard #}
+            {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' %}
+              <c-sidebar-submenu id="overview_dashboard" label="Dashboard" icon="layout-grid" is_active="{% if path == '/admin-panel/dashboard/' %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'admin_panel:dashboard' %}"
                                 label="Executive Dashboard"
+                                icon="layout-dashboard"
                                 key="executive_dashboard"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if path == '/admin-panel/dashboard/' %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' or request.user|has_perm:'accounts.view' %}
+              </c-sidebar-submenu>
+            {% endif %}
+
+            {# Phase 2: Menu Activity #}
+            {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' or request.user|has_perm:'accounts.view' %}
+              <c-sidebar-submenu id="overview_activity" label="Activity" icon="activity" is_active="{% if '/notifications/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'notifications:list' %}"
-                                label="Recent Activity"
+                                label="Notifications & Logs"
+                                icon="bell"
                                 key="recent_activity"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/notifications/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+              </c-sidebar-submenu>
+            {% endif %}
+          </c-sidebar-dropdown>
         {% endif %}
 
-        {# ── Group 2: People & Attendance ── #}
+        {# ── Phase 1: Module People & Attendance ── #}
         {% if request.user.is_superuser or request.user|has_perm:'employees.view' or request.user|has_perm:'attendance.view' or request.user|has_perm:'schedule.view' %}
-          <c-sidebar-section label="PEOPLE & ATTENDANCE" icon="users">
-            <c-sidebar-dropdown id="people_attendance"
-                                label="People & Attendance"
-                                icon="users"
-                                search_keys="People Attendance Employees Directory Departments Designations Live Logs Shift Calendar Schedule"
-                                is_active="{% if '/employees/' in path or '/attendance/' in path or '/schedule/' in path %}true{% else %}false{% endif %}">
-              {% if request.user.is_superuser or request.user|has_perm:'employees.view' %}
-                <c-sidebar-link href="{% url 'employees:employee_list' %}"
-                                label="Employee Directory"
-                                key="employee_directory"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if path == '/employees/' %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'employees.view' or request.user|has_perm:'employees.add' %}
-                <c-sidebar-link href="{% url 'employees:employee_add' %}"
-                                label="New Employee"
-                                key="new_employee"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/employees/add/' in path or '/employees/wizard/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'employees.view' %}
-                <c-sidebar-link href="{% url 'employees:department_list' %}"
-                                label="Departments"
-                                key="departments"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/employees/departments' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'employees:designation_list' %}"
-                                label="Designations"
-                                key="designations"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/employees/designations' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'attendance.view' %}
+          <c-sidebar-dropdown id="people_attendance"
+                              label="People & Attendance"
+                              icon="users"
+                              search_keys="People Attendance Employees Directory Departments Designations Live Logs Shift Calendar Schedule"
+                              is_active="{% if '/employees/' in path or '/attendance/' in path or '/schedule/' in path %}true{% else %}false{% endif %}">
+            {# Phase 2: Menu Employees #}
+            {% if request.user.is_superuser or request.user|has_perm:'employees.view' or request.user|has_perm:'employees.add' %}
+              <c-sidebar-submenu id="pa_employees" label="Employees" icon="user-check" is_active="{% if '/employees/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
+                {% if request.user.is_superuser or request.user|has_perm:'employees.view' %}
+                  <c-sidebar-link href="{% url 'employees:employee_list' %}"
+                                  label="Employee Directory"
+                                  icon="users"
+                                  key="employee_directory"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if path == '/employees/' %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+                {% if request.user.is_superuser or request.user|has_perm:'employees.view' or request.user|has_perm:'employees.add' %}
+                  <c-sidebar-link href="{% url 'employees:employee_add' %}"
+                                  label="New Employee"
+                                  icon="user-plus"
+                                  key="new_employee"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/employees/add/' in path or '/employees/wizard/' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+                {% if request.user.is_superuser or request.user|has_perm:'employees.view' %}
+                  <c-sidebar-link href="{% url 'employees:department_list' %}"
+                                  label="Departments"
+                                  icon="building-2"
+                                  key="departments"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/employees/departments' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                  <c-sidebar-link href="{% url 'employees:designation_list' %}"
+                                  label="Designations"
+                                  icon="award"
+                                  key="designations"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/employees/designations' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+              </c-sidebar-submenu>
+            {% endif %}
+
+            {# Phase 2: Menu Attendance #}
+            {% if request.user.is_superuser or request.user|has_perm:'attendance.view' %}
+              <c-sidebar-submenu id="pa_attendance" label="Attendance" icon="clock" is_active="{% if '/attendance/' in path or '/admin-panel/attendance/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'attendance:status' %}"
                                 label="Live Attendance"
+                                icon="radio"
                                 key="live_attendance"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/attendance/status' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'admin_panel:attendance_list' %}"
                                 label="Attendance Logs"
+                                icon="clipboard-list"
                                 key="attendance_logs"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if path == '/admin-panel/attendance/' or '/admin-panel/attendance/' in path and '/manual' not in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'admin_panel:manual_entry' %}"
-                                label="Manual Attendance"
+                                label="Manual Entry"
+                                icon="edit-3"
                                 key="manual_attendance"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/manual' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'schedule.view' %}
+              </c-sidebar-submenu>
+            {% endif %}
+
+            {# Phase 2: Menu Shifts & Schedule #}
+            {% if request.user.is_superuser or request.user|has_perm:'schedule.view' %}
+              <c-sidebar-submenu id="pa_shifts" label="Shifts & Schedule" icon="calendar" is_active="{% if '/schedule/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'schedule:shift_schedule' %}"
                                 label="Shift Schedule"
+                                icon="calendar-range"
                                 key="shift_schedule"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/schedule/shifts/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'schedule:month_view' %}"
-                                label="Calendar"
+                                label="Monthly Calendar"
+                                icon="calendar"
                                 key="calendar"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if path == '/schedule/' %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+              </c-sidebar-submenu>
+            {% endif %}
+          </c-sidebar-dropdown>
         {% endif %}
 
-        {# ── Group 3: Work Management ── #}
-        {% if request.user.is_superuser or request.user|has_perm:'projects.view' or request.user|has_perm:'tasks.view' %}
-          <c-sidebar-section label="WORK MANAGEMENT" icon="briefcase">
-            <c-sidebar-dropdown id="work_management"
-                                label="Work Management"
-                                icon="briefcase"
-                                search_keys="Work Projects Tasks Templates All Active Completed Types"
-                                is_active="{% if '/projects/' in path or '/tasks/' in path %}true{% else %}false{% endif %}">
-              {% if request.user.is_superuser or request.user|has_perm:'projects.view' %}
-                <c-sidebar-link href="{% url 'projects:project_list' %}"
-                                label="All Projects"
-                                key="all_projects"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if path == '/projects/' and 'status=' not in req_get_urlencode %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'projects:project_list' %}?status=active"
-                                label="Active Projects"
-                                key="active_projects"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if 'status=active' in req_get_urlencode %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'projects:project_list' %}?status=completed"
-                                label="Completed Projects"
-                                key="completed_projects"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if 'status=completed' in req_get_urlencode %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'projects:project_type_list' %}"
-                                label="Project Types"
-                                key="project_types"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/projects/types/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'tasks.view' %}
-                <c-sidebar-link href="{% url 'projects:global_task_list' %}"
-                                label="Team Tasks"
-                                key="team_tasks"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/projects/tasks/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'projects:template_list' %}"
-                                label="Task Templates"
-                                key="task_templates"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/templates/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+        {# ── Phase 1: Module Work Management ── #}
+        {% if request.user.is_superuser or request.user|has_perm:'projects.view' %}
+          <c-sidebar-dropdown id="work_management"
+                              label="Work Management"
+                              icon="briefcase"
+                              search_keys="Work Projects Tasks Templates"
+                              is_active="{% if '/projects/' in path %}true{% else %}false{% endif %}">
+            {# Phase 2: Menu Projects #}
+            <c-sidebar-submenu id="wm_projects" label="Projects" icon="folder-kanban" is_active="{% if '/projects/' in path and '/tasks' not in path and '/templates' not in path %}true{% else %}false{% endif %}">
+              {# Phase 3: Submenu Links #}
+              <c-sidebar-link href="{% url 'projects:project_list' %}"
+                              label="All Projects"
+                              icon="folder"
+                              key="projects_list"
+                              :pinned_keys="pinned_keys"
+                              is_active="{% if path == '/projects/' or '/projects/' in path and '/types' not in path and '/tasks' not in path and '/templates' not in path %}true{% else %}false{% endif %}">
+              </c-sidebar-link>
+              <c-sidebar-link href="{% url 'projects:project_type_list' %}"
+                              label="Project Types"
+                              icon="tag"
+                              key="project_types"
+                              :pinned_keys="pinned_keys"
+                              is_active="{% if '/projects/types' in path %}true{% else %}false{% endif %}">
+              </c-sidebar-link>
+            </c-sidebar-submenu>
+
+            {# Phase 2: Menu Tasks #}
+            <c-sidebar-submenu id="wm_tasks" label="Task Management" icon="check-square" is_active="{% if '/tasks' in path or '/templates' in path %}true{% else %}false{% endif %}">
+              {# Phase 3: Submenu Links #}
+              <c-sidebar-link href="{% url 'projects:global_task_list' %}"
+                              label="Global Tasks"
+                              icon="check-circle-2"
+                              key="global_tasks"
+                              :pinned_keys="pinned_keys"
+                              is_active="{% if '/projects/tasks/' in path %}true{% else %}false{% endif %}">
+              </c-sidebar-link>
+              <c-sidebar-link href="{% url 'projects:template_list' %}"
+                              label="Task Templates"
+                              icon="copy"
+                              key="task_templates"
+                              :pinned_keys="pinned_keys"
+                              is_active="{% if '/projects/templates/' in path %}true{% else %}false{% endif %}">
+              </c-sidebar-link>
+            </c-sidebar-submenu>
+          </c-sidebar-dropdown>
         {% endif %}
 
-        {# ── Group 4: Finance ── #}
+        {# ── Phase 1: Module Finance ── #}
         {% if request.user.is_superuser or request.user|has_perm:'payroll.view' or request.user|has_perm:'expense.view' %}
-          <c-sidebar-section label="FINANCE" icon="wallet">
-            <c-sidebar-dropdown id="finance"
-                                label="Finance"
-                                icon="wallet"
-                                search_keys="Finance Payroll Runs Salary Components Structures Setup Expenses Claims"
-                                is_active="{% if '/payroll/' in path and '/reports-hub/' not in path or '/expense/' in path %}true{% else %}false{% endif %}">
-              {% if request.user.is_superuser or request.user|has_perm:'payroll.view' %}
+          <c-sidebar-dropdown id="finance"
+                              label="Finance"
+                              icon="wallet"
+                              search_keys="Finance Payroll Salary Expenses Claims"
+                              is_active="{% if '/payroll/' in path and '/reports-hub/' not in path or '/expense/' in path %}true{% else %}false{% endif %}">
+            {# Phase 2: Menu Payroll #}
+            {% if request.user.is_superuser or request.user|has_perm:'payroll.view' %}
+              <c-sidebar-submenu id="fin_payroll" label="Payroll" icon="credit-card" is_active="{% if '/payroll/' in path and '/reports-hub/' not in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'payroll:payroll_run_list' %}"
                                 label="Payroll Runs"
+                                icon="play-circle"
                                 key="payroll_runs"
                                 :pinned_keys="pinned_keys"
-                                is_active="{% if '/payroll/' in path and '/components/' not in path and '/structures/' not in path and '/setup/' not in path and '/reports-hub/' not in path and '/my-payslips/' not in path %}true{% else %}false{% endif %}">
+                                is_active="{% if '/payroll/runs/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'payroll:salary_components' %}"
                                 label="Salary Components"
+                                icon="layers"
                                 key="salary_components"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/payroll/components/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'payroll:salary_structures' %}"
                                 label="Salary Structures"
+                                icon="sliders"
                                 key="salary_structures"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/payroll/structures/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'payroll:employee_salary_setup' %}"
                                 label="Employee Salary Setup"
-                                key="employee_salary_setup"
+                                icon="user-cog"
+                                key="salary_setup"
                                 :pinned_keys="pinned_keys"
-                                is_active="{% if '/payroll/setup/' in path %}true{% else %}false{% endif %}">
+                                is_active="{% if '/payroll/employee-setup/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'expense.view' %}
+              </c-sidebar-submenu>
+            {% endif %}
+
+            {# Phase 2: Menu Expenses #}
+            {% if request.user.is_superuser or request.user|has_perm:'expense.view' %}
+              <c-sidebar-submenu id="fin_expense" label="Expenses" icon="receipt" is_active="{% if '/expense/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'expense:admin_expense_list' %}"
                                 label="Expense Claims"
-                                key="expenses"
-                                :pinned_keys="pinned_keys"
+                                icon="receipt"
+                                key="expense_claims"
                                 badge="{{ pending_expense_count }}"
+                                :pinned_keys="pinned_keys"
                                 is_active="{% if '/expense/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+              </c-sidebar-submenu>
+            {% endif %}
+          </c-sidebar-dropdown>
         {% endif %}
 
-        {# ── Group 5: Reports ── #}
-        {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' or request.user|has_perm:'attendance.view' or request.user|has_perm:'payroll.view' %}
-          <c-sidebar-section label="REPORTS" icon="bar-chart-2">
-            <c-sidebar-dropdown id="reports"
-                                label="Reports"
-                                icon="bar-chart-2"
-                                search_keys="Reports Analytics Daily Monthly Absence Payroll"
-                                is_active="{% if '/admin-panel/reports/' in path or '/reports-hub/' in path %}true{% else %}false{% endif %}">
-              {% if request.user.is_superuser or request.user|has_perm:'dashboard.view' or request.user|has_perm:'attendance.view' %}
-                <c-sidebar-link href="{% url 'admin_panel:reports_main' %}"
-                                label="Reports & Analytics Hub"
-                                key="reports_hub"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if path == '/admin-panel/reports/' %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'attendance.view' %}
+        {# ── Phase 1: Module Reports ── #}
+        {% if request.user.is_superuser or request.user|has_perm:'reports.view' or request.user|has_perm:'payroll.view' %}
+          <c-sidebar-dropdown id="reports"
+                              label="Reports"
+                              icon="bar-chart-2"
+                              search_keys="Reports Daily Monthly Absent Analytics Payroll Hub"
+                              is_active="{% if '/admin-panel/reports/' in path or '/reports-hub/' in path %}true{% else %}false{% endif %}">
+            {# Phase 2: Menu Attendance Reports #}
+            {% if request.user.is_superuser or request.user|has_perm:'reports.view' %}
+              <c-sidebar-submenu id="rep_attendance" label="Attendance Reports" icon="file-text" is_active="{% if '/admin-panel/reports/daily' in path or '/admin-panel/reports/monthly' in path or '/admin-panel/reports/absent' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'admin_panel:reports_daily' %}"
                                 label="Daily Report"
+                                icon="calendar"
                                 key="daily_report"
                                 :pinned_keys="pinned_keys"
-                                is_active="{% if '/reports/daily/' in path or '/reports/attendance/' in path %}true{% else %}false{% endif %}">
+                                is_active="{% if '/admin-panel/reports/daily/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'admin_panel:reports_monthly' %}"
                                 label="Monthly Report"
+                                icon="calendar-days"
                                 key="monthly_report"
                                 :pinned_keys="pinned_keys"
-                                is_active="{% if '/reports/monthly/' in path %}true{% else %}false{% endif %}">
+                                is_active="{% if '/admin-panel/reports/monthly/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'admin_panel:reports_absent' %}"
                                 label="Absence Report"
+                                icon="user-x"
                                 key="absence_report"
                                 :pinned_keys="pinned_keys"
-                                is_active="{% if '/reports/absent/' in path %}true{% else %}false{% endif %}">
+                                is_active="{% if '/admin-panel/reports/absent/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'payroll.view' %}
-                <c-sidebar-link href="{% url 'payroll:reports_hub' %}"
-                                label="Payroll Reports"
-                                key="payroll_reports"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/payroll/reports-hub/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+              </c-sidebar-submenu>
+            {% endif %}
+
+            {# Phase 2: Menu Analytics & Hub #}
+            {% if request.user.is_superuser or request.user|has_perm:'reports.view' or request.user|has_perm:'payroll.view' %}
+              <c-sidebar-submenu id="rep_analytics" label="Analytics & Hub" icon="pie-chart" is_active="{% if path == '/admin-panel/reports/' or '/reports-hub/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
+                {% if request.user.is_superuser or request.user|has_perm:'reports.view' %}
+                  <c-sidebar-link href="{% url 'admin_panel:reports_main' %}"
+                                  label="Reports & Analytics Hub"
+                                  icon="pie-chart"
+                                  key="reports_hub"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if path == '/admin-panel/reports/' %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+                {% if request.user.is_superuser or request.user|has_perm:'payroll.view' %}
+                  <c-sidebar-link href="{% url 'payroll:reports_hub' %}"
+                                  label="Payroll Reports"
+                                  icon="bar-chart-3"
+                                  key="payroll_reports"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/reports-hub/' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+              </c-sidebar-submenu>
+            {% endif %}
+          </c-sidebar-dropdown>
         {% endif %}
 
-        {# ── Group 6: Administration ── #}
+        {# ── Phase 1: Module Administration ── #}
         {% if request.user.is_superuser or request.user|has_perm:'accounts.view' or request.user|has_perm:'audit.view' or request.user|has_perm:'branches.view' %}
-          <c-sidebar-section label="ADMINISTRATION" icon="settings">
-            <c-sidebar-dropdown id="administration"
-                                label="Administration"
-                                icon="settings"
-                                search_keys="Administration Roles Access Security Policies Login Activity Audit Logs Trash Sessions Backups Branches Holidays Schedule Settings"
-                                is_active="{% if '/admin-panel/roles/' in path or '/security/' in path or '/login-activity/' in path or '/audit-logs/' in path or '/audit/' in path or '/account/sessions/' in path or '/backups/' in path or '/branches/' in path or '/settings' in path %}true{% else %}false{% endif %}">
-              {% if request.user.is_superuser or request.user|has_perm:'accounts.view' %}
+          <c-sidebar-dropdown id="administration"
+                              label="Administration"
+                              icon="settings"
+                              search_keys="Administration Roles Security Policies Login Audit Logs Activity Sessions Trash Backups Branches Holidays Settings"
+                              is_active="{% if '/admin-panel/roles/' in path or '/security/' in path or '/account/security/' in path or '/account/sessions/' in path or '/login-activity/' in path or '/audit-logs/' in path or '/audit/' in path or '/backups/' in path or '/branches/' in path or '/settings' in path %}true{% else %}false{% endif %}">
+            {# Phase 2: Menu Roles & Security #}
+            {% if request.user.is_superuser or request.user|has_perm:'accounts.view' %}
+              <c-sidebar-submenu id="adm_security" label="Roles & Security" icon="shield" is_active="{% if '/admin-panel/roles/' in path or '/security/' in path or '/account/security/' in path or '/login-activity/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
                 <c-sidebar-link href="{% url 'admin_panel:role_list' %}"
                                 label="System Roles & Access"
-                                key="system_roles"
+                                icon="shield-check"
+                                key="roles_management"
                                 :pinned_keys="pinned_keys"
-                                is_active="{% if '/admin-panel/roles/' in path and not req_get_type %}true{% else %}false{% endif %}">
+                                is_active="{% if '/admin-panel/roles/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'accounts:security_settings' %}"
                                 label="Security Settings"
+                                icon="key-round"
                                 key="security_settings"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/account/security/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'accounts:admin_security_policies' %}"
                                 label="Security Policies"
+                                icon="lock"
                                 key="security_policies"
                                 :pinned_keys="pinned_keys"
-                                is_active="{% if '/security/policies/' in path %}true{% else %}false{% endif %}">
+                                is_active="{% if '/security/policies' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
                 <c-sidebar-link href="{% url 'accounts:admin_login_activity' %}"
                                 label="Login Activity"
+                                icon="history"
                                 key="login_activity"
                                 :pinned_keys="pinned_keys"
                                 is_active="{% if '/login-activity/' in path %}true{% else %}false{% endif %}">
                 </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'accounts.view' or request.user|has_perm:'audit.view' %}
-                <c-sidebar-link href="{% url 'admin_panel:admin_audit_logs' %}"
-                                label="Audit Logs"
-                                key="audit_logs"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/audit-logs/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'audit:activity_list' %}"
-                                label="Activity Logs"
-                                key="activity_logs"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/audit/activity/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'trash.view' or request.user|has_perm:'audit.view' or request.user|has_perm:'accounts.view' %}
-                <c-sidebar-link href="{% url 'audit:trash_list' %}"
-                                label="Trash"
-                                key="trash"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/audit/trash/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'accounts.view' %}
-                <c-sidebar-link href="{% url 'accounts:user_sessions' %}"
-                                label="User Sessions"
-                                key="user_sessions"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/account/sessions/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'backups:backup_list' %}"
-                                label="Backups"
-                                key="backup_list"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/backups/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'branches.view' %}
-                <c-sidebar-link href="{% url 'branches:branch_list' %}"
-                                label="Branches"
-                                key="branch_list"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/branches/' in path and '/holidays/' not in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-                <c-sidebar-link href="{% url 'branches:holiday_list' %}"
-                                label="Holidays"
-                                key="holiday_list"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/branches/holidays/' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-              {% if request.user.is_superuser or request.user|has_perm:'accounts.view' %}
-                <c-sidebar-link href="{% url 'admin_panel:schedule_settings' %}"
-                                label="Schedule Settings"
-                                key="schedule_settings"
-                                :pinned_keys="pinned_keys"
-                                is_active="{% if '/settings' in path %}true{% else %}false{% endif %}">
-                </c-sidebar-link>
-              {% endif %}
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+              </c-sidebar-submenu>
+            {% endif %}
+
+            {# Phase 2: Menu System Logs & Recovery #}
+            {% if request.user.is_superuser or request.user|has_perm:'audit.view' or request.user|has_perm:'accounts.view' %}
+              <c-sidebar-submenu id="adm_logs" label="System Logs & Recovery" icon="database" is_active="{% if '/audit-logs/' in path or '/audit/' in path or '/account/sessions/' in path or '/backups/' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
+                {% if request.user.is_superuser or request.user|has_perm:'audit.view' %}
+                  <c-sidebar-link href="{% url 'admin_panel:admin_audit_logs' %}"
+                                  label="Audit Logs"
+                                  icon="file-text"
+                                  key="admin_audit_logs"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/audit-logs/' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                  <c-sidebar-link href="{% url 'audit:activity_list' %}"
+                                  label="Activity Logs"
+                                  icon="activity"
+                                  key="activity_logs"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if path == '/audit/' or '/audit/activity' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+                {% if request.user.is_superuser or request.user|has_perm:'accounts.view' %}
+                  <c-sidebar-link href="{% url 'accounts:user_sessions' %}"
+                                  label="User Sessions"
+                                  icon="smartphone"
+                                  key="user_sessions"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/account/sessions/' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+                {% if request.user.is_superuser or request.user|has_perm:'audit.view' %}
+                  <c-sidebar-link href="{% url 'audit:trash_list' %}"
+                                  label="Recycle Bin"
+                                  icon="trash-2"
+                                  key="trash_bin"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/audit/trash/' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+                {% if request.user.is_superuser or request.user|has_perm:'accounts.view' %}
+                  <c-sidebar-link href="{% url 'backups:backup_list' %}"
+                                  label="Database Backups"
+                                  icon="hard-drive"
+                                  key="system_backups"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/backups/' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+              </c-sidebar-submenu>
+            {% endif %}
+
+            {# Phase 2: Menu Organization Settings #}
+            {% if request.user.is_superuser or request.user|has_perm:'branches.view' or request.user|has_perm:'schedule.view' %}
+              <c-sidebar-submenu id="adm_org" label="Organization Settings" icon="sliders" is_active="{% if '/branches/' in path or '/admin-panel/schedule/settings' in path %}true{% else %}false{% endif %}">
+                {# Phase 3: Submenu Links #}
+                {% if request.user.is_superuser or request.user|has_perm:'branches.view' %}
+                  <c-sidebar-link href="{% url 'branches:branch_list' %}"
+                                  label="Branch Management"
+                                  icon="git-branch"
+                                  key="branch_management"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if path == '/branches/' or '/branches/' in path and '/holidays' not in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                  <c-sidebar-link href="{% url 'branches:holiday_list' %}"
+                                  label="Holiday Calendar"
+                                  icon="calendar-heart"
+                                  key="holiday_calendar"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/branches/holidays' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+                {% if request.user.is_superuser or request.user|has_perm:'schedule.view' %}
+                  <c-sidebar-link href="{% url 'admin_panel:schedule_settings' %}"
+                                  label="Schedule Settings"
+                                  icon="clock-4"
+                                  key="schedule_settings"
+                                  :pinned_keys="pinned_keys"
+                                  is_active="{% if '/admin-panel/schedule/settings' in path %}true{% else %}false{% endif %}">
+                  </c-sidebar-link>
+                {% endif %}
+              </c-sidebar-submenu>
+            {% endif %}
+          </c-sidebar-dropdown>
         {% endif %}
 
-        {# ── Group 7: AI Workspace ── #}
+        {# ── Phase 1: Module AI Workspace ── #}
         {% if request.user.is_superuser or request.user|has_perm:'ai_workspace.view' %}
-          <c-sidebar-section label="AI WORKSPACE" dot_color="bg-rose-500">
-            <c-sidebar-dropdown id="ai_workspace"
-                                label="AI Workspace"
-                                icon_img="{% static 'icons/ai_icon.png' %}"
-                                badge_text="AI"
-                                search_keys="AI Workspace Intelligence Assistant Insights Smart Reports Settings"
-                                is_active="{% if '/admin-panel/ai/' in path %}true{% else %}false{% endif %}">
+          <c-sidebar-dropdown id="ai_workspace"
+                              label="AI Workspace"
+                              icon="bot"
+                              badge_text="AI"
+                              search_keys="AI Workspace Assistant Attendance Insights Project Payroll Smart Reports Settings"
+                              is_active="{% if '/admin-panel/ai/' in path %}true{% else %}false{% endif %}">
+            {# Phase 2: Menu AI Assistant #}
+            <c-sidebar-submenu id="ai_chat" label="AI Assistant" icon="message-square" is_active="{% if path == '/admin-panel/ai/assistant/' %}true{% else %}false{% endif %}">
+              {# Phase 3: Submenu Links #}
               <c-sidebar-link href="{% url 'admin_panel:ai_assistant' %}"
-                              label="AI Assistant"
+                              label="AI Chat Assistant"
+                              icon="bot"
                               key="ai_assistant"
                               :pinned_keys="pinned_keys"
                               is_active="{% if path == '/admin-panel/ai/assistant/' %}true{% else %}false{% endif %}">
               </c-sidebar-link>
+            </c-sidebar-submenu>
+
+            {# Phase 2: Menu Predictive Insights #}
+            <c-sidebar-submenu id="ai_insights" label="Predictive Insights" icon="sparkles" is_active="{% if '/admin-panel/ai/attendance-insights/' in path or '/admin-panel/ai/project-insights/' in path or '/admin-panel/ai/payroll-insights/' in path %}true{% else %}false{% endif %}">
+              {# Phase 3: Submenu Links #}
               <c-sidebar-link href="{% url 'admin_panel:ai_attendance_insights' %}"
                               label="Attendance Insights"
-                              key="ai_attendance"
+                              icon="sparkles"
+                              key="ai_attendance_insights"
                               :pinned_keys="pinned_keys"
-                              is_active="{% if path == '/admin-panel/ai/attendance-insights/' %}true{% else %}false{% endif %}">
+                              is_active="{% if '/admin-panel/ai/attendance-insights/' in path %}true{% else %}false{% endif %}">
               </c-sidebar-link>
               <c-sidebar-link href="{% url 'admin_panel:ai_project_insights' %}"
                               label="Project Insights"
-                              key="ai_projects"
+                              icon="sparkles"
+                              key="ai_project_insights"
                               :pinned_keys="pinned_keys"
-                              is_active="{% if path == '/admin-panel/ai/project-insights/' %}true{% else %}false{% endif %}">
+                              is_active="{% if '/admin-panel/ai/project-insights/' in path %}true{% else %}false{% endif %}">
               </c-sidebar-link>
               <c-sidebar-link href="{% url 'admin_panel:ai_payroll_insights' %}"
                               label="HR & Payroll Insights"
-                              key="ai_payroll"
+                              icon="sparkles"
+                              key="ai_payroll_insights"
                               :pinned_keys="pinned_keys"
-                              is_active="{% if path == '/admin-panel/ai/payroll-insights/' %}true{% else %}false{% endif %}">
+                              is_active="{% if '/admin-panel/ai/payroll-insights/' in path %}true{% else %}false{% endif %}">
               </c-sidebar-link>
+            </c-sidebar-submenu>
+
+            {# Phase 2: Menu Smart Tools #}
+            <c-sidebar-submenu id="ai_tools" label="Smart Tools" icon="cpu" is_active="{% if '/admin-panel/ai/smart-reports/' in path or '/admin-panel/ai/settings/' in path %}true{% else %}false{% endif %}">
+              {# Phase 3: Submenu Links #}
               <c-sidebar-link href="{% url 'admin_panel:ai_smart_reports' %}"
                               label="Smart Reports"
-                              key="ai_reports"
+                              icon="file-digit"
+                              key="ai_smart_reports"
                               :pinned_keys="pinned_keys"
-                              is_active="{% if path == '/admin-panel/ai/smart-reports/' %}true{% else %}false{% endif %}">
+                              is_active="{% if '/admin-panel/ai/smart-reports/' in path %}true{% else %}false{% endif %}">
               </c-sidebar-link>
               <c-sidebar-link href="{% url 'admin_panel:ai_settings' %}"
                               label="AI Settings"
+                              icon="sliders-horizontal"
                               key="ai_settings"
                               :pinned_keys="pinned_keys"
-                              is_active="{% if path == '/admin-panel/ai/settings/' %}true{% else %}false{% endif %}">
+                              is_active="{% if '/admin-panel/ai/settings/' in path %}true{% else %}false{% endif %}">
               </c-sidebar-link>
-            </c-sidebar-dropdown>
-          </c-sidebar-section>
+            </c-sidebar-submenu>
+          </c-sidebar-dropdown>
         {% endif %}
 
       {% endif %}
 
     </nav>
 
-    {# ── User Footer ─────────────────────────────────────────────────── #}
-    <div class="border-t border-slate-200 dark:border-slate-800 p-2.5 shrink-0 flex items-center gap-2"
-         :class="collapsed ? 'justify-center' : ''">
-      <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-[12px] font-semibold shrink-0">
-        {{ request.user.email|default:"U"|make_list|first|upper }}
-      </div>
-      <div class="flex-1 min-w-0" x-show="!collapsed" x-cloak>
-        <p class="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">
-          {{ request.user.display_first_name|default:request.user.display_name|default:"Employee" }}
-        </p>
-        <p class="text-[12px] text-slate-500 dark:text-slate-400 truncate capitalize">
-          {% if shell_type == 'staff' %}Staff Member{% else %}{{ request.user.role|default:"Admin"|title }}{% endif %}
-        </p>
-      </div>
-      <div x-show="!collapsed" x-cloak>
-        <a href="{% url 'accounts:logout' %}"
-           class="ft-btn ft-btn-ghost ft-btn-sm w-7 h-7 p-0 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
-           title="Logout"
-           aria-label="Logout">
-          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-        </a>
+    {# ── Footer / User Profile & Logout ─────────────────────────────── #}
+    <div class="p-2 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+      <div class="flex items-center justify-between gap-2" :class="collapsed ? 'justify-center' : ''">
+        <div class="flex items-center gap-2 min-w-0" x-show="!collapsed" x-cloak>
+          <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-[14px] shrink-0">
+            {{ request.user.display_first_name|default:"U"|slice:":1"|upper }}
+          </div>
+          <div class="min-w-0">
+            <p class="text-[14px] font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">
+              {{ request.user.display_first_name|default:"User" }}
+            </p>
+            <p class="text-[12px] text-slate-500 dark:text-slate-400 capitalize truncate leading-tight">
+              {{ request.user.role|default:"Staff" }}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1">
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <c-button type="submit"
+                      variant="ghost"
+                      size="sm"
+                      extra_class="w-8 h-8 p-0 flex items-center justify-center text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                      icon="log-out"
+                      title="Sign Out"
+                      aria-label="Sign Out">
+            </c-button>
+          </form>
+        </div>
       </div>
     </div>
 
