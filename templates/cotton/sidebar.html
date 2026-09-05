@@ -160,14 +160,16 @@
          aria-label="Main Navigation">
 
     {# ── Brand Header ───────────────────────────────────────────────── #}
-    <div class="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
+    <div class="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800 shrink-0 overflow-hidden">
       <div class="flex items-center gap-2.5 min-w-0" :class="collapsed ? 'justify-center w-full' : ''">
         <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 text-white shadow-xs">
           <i data-lucide="zap" class="w-4 h-4"></i>
         </div>
-        <div x-show="!collapsed" class="flex items-center gap-1.5 flex-1 min-w-0" x-cloak>
+        <div x-show="!collapsed" class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden" x-cloak>
           <img src="{% static 'main_logo.jpg' %}"
                alt="FieldTrack"
+               height="24"
+               style="height: 24px; max-height: 24px; width: auto; max-width: 140px; object-fit: contain;"
                class="h-6 w-auto object-contain"
                onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
           <span class="text-[14px] font-bold text-slate-800 dark:text-slate-100 hidden">FieldTrack</span>

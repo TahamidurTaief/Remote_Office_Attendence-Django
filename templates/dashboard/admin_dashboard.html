@@ -1,6 +1,7 @@
+{% load static %}
 <c-app-shell page_title="Admin Executive Dashboard | FieldTrack" active_href="{% url 'dashboard' %}">
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{% static 'vendor/chart.min.js' %}"></script>
 
     <div class="p-4 max-w-7xl mx-auto space-y-4">
     <c-page-header title="Executive Control Panel">

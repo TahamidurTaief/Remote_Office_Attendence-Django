@@ -38,12 +38,13 @@
 
   {# ── Styles ────────────────────────────────────────────────────────── #}
   {% tailwind_css %}
+  <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
 
-  {# ── Scripts ───────────────────────────────────────────────────────── #}
-  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  {# ── Scripts (100% Local Vendor Assets - Zero External Network Latency) ── #}
+  <script src="{% static 'vendor/htmx.min.js' %}"></script>
+  <script defer src="{% static 'vendor/alpine-collapse.min.js' %}"></script>
+  <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
+  <script src="{% static 'vendor/lucide.min.js' %}"></script>
   <script src="{% static 'js/offline/db.js' %}"></script>
   <script src="{% static 'js/offline/sync_engine.js' %}"></script>
   <script src="{% static 'js/location_guard.js' %}"></script>

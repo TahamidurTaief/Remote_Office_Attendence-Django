@@ -1,3 +1,4 @@
+{% load static %}
 <c-app-shell page_title="Reports & Analytics Hub | FieldTrack" active_href="{{ request.path }}">
   <div class="p-6 max-w-7xl mx-auto space-y-6" x-data="{ activeTab: 'analytics', searchFilter: '', excelView: false }">
     
@@ -407,7 +408,7 @@
   </div>
 
   <!-- Charts & Clipboard Toast Script -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{% static 'vendor/chart.min.js' %}"></script>
   <script>
     function copyTableTSV() {
       const table = document.getElementById('excelReportTable');

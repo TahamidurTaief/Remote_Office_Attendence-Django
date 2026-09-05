@@ -8,7 +8,7 @@
     
     <!-- Self-hosted font styling -->
     <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="{% static 'vendor/lucide.min.js' %}"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -24,7 +24,7 @@
     <!-- Top Navigation / Logo -->
     <header class="w-full py-4 px-6 flex justify-between items-center z-10 shrink-0 border-b border-slate-100 bg-white">
         <div class="flex items-center">
-            <img src="{% static 'main_logo.jpg' %}" alt="Signtech Track" class="h-6 w-auto max-w-full rounded object-contain bg-white">
+            <img src="{% static 'main_logo.jpg' %}" alt="Signtech Track" height="24" style="height: 24px; max-height: 24px; width: auto; max-width: 140px; object-fit: contain;" class="h-6 w-auto max-w-full rounded object-contain bg-white">
         </div>
         <div class="text-[10px] text-slate-400 font-mono tracking-wider lowercase">
             v1.2.0-stable
