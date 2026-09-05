@@ -192,11 +192,14 @@
                 console.warn('[LocationTracker] Geolocation error:', errMsg);
                 localStorage.setItem('ft_gps_error', errMsg);  // Surface to UI
                 this.isSending = false;
+                if (window.LocationGuard && (error.code === 1 || error.code === 2)) {
+                    window.LocationGuard.showModal(error.code === 1 ? 'denied' : 'unavailable');
+                }
             },
             {
                 enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 60000
+                timeout: 15000,
+                maximumAge: 10000
             }
         );
         },

@@ -357,6 +357,13 @@ class AttendanceTransactionService:
             except (TypeError, ValueError):
                 raise AttendanceTransactionError('Invalid coordinates.', 400)
 
+            from apps.accounts.engine import PermissionEngine
+            is_admin_or_hr = user.is_superuser or PermissionEngine.evaluate(user, 'attendance.override').allowed or PermissionEngine.evaluate(user, 'attendance.edit').allowed
+
+            is_gps_missing = (lat == 0.0 and lng == 0.0)
+            if is_gps_missing and policy.gps_required == 'required' and not is_admin_or_hr:
+                raise AttendanceTransactionError('GPS location is required for check-out.', 400)
+
             if validate_photo and policy.photo_required and not photo:
                 raise AttendanceTransactionError('Photo is required for attendance.', 400)
 

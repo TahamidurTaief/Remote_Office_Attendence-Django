@@ -303,7 +303,13 @@
 
                 function checkoutWithGPS() {
                     if (!navigator.geolocation) {
-                        doCheckout(0, 0, 0, 'GPS not supported');
+                        window.showToast('GPS location is required to check out.', 'error');
+                        if (window.LocationGuard) window.LocationGuard.showModal('unavailable');
+                        const btn = document.getElementById('checkout-btn');
+                        if (btn) {
+                            btn.innerHTML = 'Check Out';
+                            btn.disabled = false;
+                        }
                         return;
                     }
                     navigator.geolocation.getCurrentPosition(
@@ -311,11 +317,21 @@
                             const lat = pos.coords.latitude;
                             const lng = pos.coords.longitude;
                             const acc = pos.coords.accuracy;
+                            if (!lat || !lng || (lat === 0 && lng === 0)) {
+                                window.showToast('Invalid GPS coordinates. Please enable location.', 'error');
+                                if (window.LocationGuard) window.LocationGuard.showModal('unavailable');
+                                const btn = document.getElementById('checkout-btn');
+                                if (btn) {
+                                    btn.innerHTML = 'Check Out';
+                                    btn.disabled = false;
+                                }
+                                return;
+                            }
                             // Try reverse geocode
                             fetch(
                                 'https://nominatim.openstreetmap.org/reverse?lat=' + lat +
                                 '&lon=' + lng + '&format=json',
-                                { headers: { 'Accept-Language': 'en' } }
+                                { headers: { 'Accept-Language': 'en' }, signal: AbortSignal.timeout(4000) }
                             )
                             .then(r => r.json())
                             .then(data => {
@@ -325,11 +341,20 @@
                                 doCheckout(lat, lng, acc, lat + ', ' + lng);
                             });
                         },
-                        function() {
-                            // GPS denied/failed — still allow checkout, just no location
-                            doCheckout(0, 0, 0, 'Location unavailable at checkout');
+                        function(err) {
+                            // Location denied or unavailable — strictly block checkout
+                            window.showToast('GPS location must be enabled to check out.', 'error');
+                            if (window.LocationGuard) {
+                                const reason = err.code === 1 ? 'denied' : (err.code === 3 ? 'timeout' : 'unavailable');
+                                window.LocationGuard.showModal(reason);
+                            }
+                            const btn = document.getElementById('checkout-btn');
+                            if (btn) {
+                                btn.innerHTML = 'Check Out';
+                                btn.disabled = false;
+                            }
                         },
-                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
                     );
                 }
 

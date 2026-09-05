@@ -46,6 +46,8 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="{% static 'js/offline/db.js' %}"></script>
   <script src="{% static 'js/offline/sync_engine.js' %}"></script>
+  <script src="{% static 'js/location_guard.js' %}"></script>
+  <script src="{% static 'js/location_tracker.js' %}"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
@@ -417,6 +419,7 @@
 </head>
 
 <body class="ft-page-bg antialiased"
+      data-shell-type="{{ shell_type|default:'admin' }}"
       x-data="{
         muted: localStorage.getItem('sound_muted') === 'true',
       }"
@@ -606,6 +609,7 @@
   <c-command-palette></c-command-palette>
   <c-ai-chatbot shell_type="{{ shell_type|default:'admin' }}"></c-ai-chatbot>
   <c-context-menu></c-context-menu>
+  <c-location-guard-modal></c-location-guard-modal>
 
   {# ── Global HTMX Loaded Modal Container & Dispatcher ──────────────── #}
   <div id="modal-container"></div>
