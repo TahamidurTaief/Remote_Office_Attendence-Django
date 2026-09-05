@@ -13,7 +13,8 @@ from .services import AuditService, TrashService
 
 
 class TrashListView(LoginRequiredMixin, RoleRequiredMixin, View):
-    allowed_roles = ["admin", "system_owner", "manager", "hr"]
+    required_permission = 'audit.view'
+    action_type = 'view'
 
     template_name = "audit/trash_list.html"
     partial_template_name = "audit/partials/trash_table.html"
@@ -54,7 +55,8 @@ class TrashListView(LoginRequiredMixin, RoleRequiredMixin, View):
 
 
 class TrashRestoreView(LoginRequiredMixin, RoleRequiredMixin, View):
-    allowed_roles = ["admin", "system_owner", "manager", "hr"]
+    required_permission = 'audit.edit'
+    action_type = 'edit'
 
     def post(self, request, pk):
         scoped = TrashService.get_scoped_entries(request.user)
@@ -90,7 +92,8 @@ class TrashPermanentDeleteView(LoginRequiredMixin, View):
 
 
 class TrashBulkActionView(LoginRequiredMixin, RoleRequiredMixin, View):
-    allowed_roles = ["admin", "system_owner", "manager", "hr"]
+    required_permission = 'audit.edit'
+    action_type = 'edit'
 
     def post(self, request):
         ids = [pk for pk in request.POST.getlist("ids") if pk.isdigit()]

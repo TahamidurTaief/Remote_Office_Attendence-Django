@@ -264,8 +264,9 @@ class MediaService:
         if not user or not user.is_authenticated:
             raise PermissionError("Authentication required.")
             
-        user_role = getattr(user, "role", "staff")
-        if asset.module == "employees" and user_role not in ["admin", "system_owner", "hr"]:
+        from apps.accounts.engine import PermissionEngine
+        has_manage = user.is_superuser or PermissionEngine.evaluate(user, f"{asset.module}.view").allowed
+        if asset.module == "employees" and not has_manage:
             # Staff can view their own documents
             if not asset.object_id or asset.object_id != str(getattr(user, "employee_master_id", "")):
                 raise PermissionError("Access denied to private document.")

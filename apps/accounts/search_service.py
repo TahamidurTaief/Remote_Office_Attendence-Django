@@ -83,13 +83,10 @@ class GlobalSearchService:
             return True
 
         user_role_codes = set()
-        if hasattr(user, 'role') and user.role:
-            user_role_codes.add(user.role)
         if hasattr(user, 'role_assignments'):
             user_role_codes.update(
                 user.role_assignments.filter(role__is_active=True).values_list('role__code', flat=True)
             )
-
         return bool(user_role_codes.intersection({'system_owner', 'super_admin', 'admin'}))
 
     @classmethod
@@ -106,13 +103,10 @@ class GlobalSearchService:
             return True
 
         user_role_codes = set()
-        if hasattr(user, 'role') and user.role:
-            user_role_codes.add(user.role)
         if hasattr(user, 'role_assignments'):
             user_role_codes.update(
                 user.role_assignments.filter(role__is_active=True).values_list('role__code', flat=True)
             )
-
         return bool(user_role_codes.intersection({'system_owner', 'super_admin', 'admin'}))
 
     @classmethod
@@ -127,19 +121,6 @@ class GlobalSearchService:
         eval_res = PermissionEngine.evaluate(user=user, codename=f"{module_code}.view", action_type='view')
         if eval_res.allowed:
             return True
-
-        role = getattr(user, 'role', '')
-        if role in ('admin', 'system_owner'):
-            return True
-        if module_code in ('attendance', 'leave', 'expense', 'schedule', 'projects'):
-            return True
-        if module_code == 'employees' and role in ('manager', 'hr'):
-            return True
-        if module_code == 'payroll' and role in ('finance', 'accounts'):
-            return True
-        if module_code in ('branches', 'backups') and role == 'manager':
-            return True
-
         return False
 
     @classmethod
@@ -168,10 +149,9 @@ class GlobalSearchService:
         """
         can_roles = cls.can_view_roles(user)
         can_roles_edit = cls.can_edit_roles(user)
-        role = getattr(user, 'role', '')
-        is_admin_or_mgr = user.is_superuser or role in ('admin', 'system_owner', 'manager', 'hr')
-        is_payroll_auth = user.is_superuser or cls.has_module_view(user, 'payroll') or role in ('admin', 'system_owner', 'finance', 'accounts')
-        is_security_auth = user.is_superuser or cls.has_module_view(user, 'accounts') or role in ('admin', 'system_owner')
+        is_admin_or_mgr = user.is_superuser or cls.has_module_view(user, 'dashboard')
+        is_payroll_auth = user.is_superuser or cls.has_module_view(user, 'payroll')
+        is_security_auth = user.is_superuser or cls.has_module_view(user, 'accounts')
 
         items = []
 
@@ -267,7 +247,7 @@ class GlobalSearchService:
                     'keywords': ['activity logs', 'user activity', 'activity feed', 'submenu'],
                 })
 
-        if user.is_superuser or role in ('admin', 'system_owner', 'manager', 'hr'):
+        if user.is_superuser or cls.has_module_view(user, 'audit'):
             url_trash = cls.safe_reverse('audit:trash_list', fallback='/audit/trash/')
             if url_trash:
                 items.append({
@@ -279,7 +259,7 @@ class GlobalSearchService:
                     'keywords': ['trash', 'recycle bin', 'deleted items', 'restore', 'submenu'],
                 })
 
-        if user.is_superuser or role in ('admin', 'system_owner') or cls.has_module_view(user, 'backups'):
+        if user.is_superuser or cls.has_module_view(user, 'backups'):
             url_backups = cls.safe_reverse('backups:backup_list', fallback='/backups/')
             if url_backups:
                 items.append({
@@ -326,7 +306,7 @@ class GlobalSearchService:
             })
 
         # ── 3. Overview & Dashboards ────────────────────────────────────
-        if is_admin_or_mgr or role in ('finance', 'accounts'):
+        if is_admin_or_mgr or cls.has_module_view(user, 'payroll'):
             url_dash = cls.safe_reverse('admin_panel:admin_dashboard', fallback='/admin-panel/dashboard/')
             if url_dash:
                 items.append({
@@ -361,7 +341,7 @@ class GlobalSearchService:
             })
 
         # ── 4. People & Employees ───────────────────────────────────────
-        if user.is_superuser or cls.has_module_view(user, 'employees') or role in ('admin', 'system_owner', 'hr', 'manager'):
+        if user.is_superuser or cls.has_module_view(user, 'employees'):
             url_emp_dir = cls.safe_reverse('employees:employee_list', fallback='/employees/')
             if url_emp_dir:
                 items.append({
@@ -373,7 +353,7 @@ class GlobalSearchService:
                     'keywords': ['employees', 'employee directory', 'staff directory', 'staff list', 'employee list', 'peoples', 'menu'],
                 })
 
-            if user.is_superuser or role in ('admin', 'system_owner', 'hr'):
+            if user.is_superuser or PermissionEngine.evaluate(user, 'employees.add').allowed:
                 url_add_emp = cls.safe_reverse('employees:employee_wizard_create', fallback='/employees/add/')
                 if url_add_emp:
                     items.append({
@@ -441,7 +421,7 @@ class GlobalSearchService:
                 })
 
         # ── 5. Operations & Scheduling ──────────────────────────────────
-        if user.is_superuser or cls.has_module_view(user, 'attendance') or role in ('admin', 'system_owner', 'hr', 'manager'):
+        if user.is_superuser or cls.has_module_view(user, 'attendance'):
             url_att_admin = cls.safe_reverse('admin_panel:attendance_list', fallback='/admin-panel/attendance/')
             if url_att_admin:
                 items.append({
@@ -464,7 +444,7 @@ class GlobalSearchService:
                     'keywords': ['attendance requests', 'correction requests', 'attendance correction', 'submenu'],
                 })
 
-        if user.is_superuser or cls.has_module_view(user, 'schedule') or role in ('admin', 'system_owner', 'hr', 'manager'):
+        if user.is_superuser or cls.has_module_view(user, 'schedule'):
             url_shifts = cls.safe_reverse('schedule:shift_schedule', fallback='/schedule/shifts/')
             if url_shifts:
                 items.append({
@@ -510,7 +490,7 @@ class GlobalSearchService:
                 'keywords': ['tasks', 'task list', 'global tasks', 'project tasks', 'menu'],
             })
 
-        if user.is_superuser or cls.has_module_view(user, 'projects') or role in ('admin', 'system_owner', 'manager'):
+        if user.is_superuser or cls.has_module_view(user, 'projects'):
             url_proj_types = cls.safe_reverse('projects:project_type_list', fallback='/projects/types/')
             if url_proj_types:
                 items.append({
@@ -649,7 +629,7 @@ class GlobalSearchService:
             })
 
         # ── 9. Branches & Locations ─────────────────────────────────────
-        if user.is_superuser or cls.has_module_view(user, 'branches') or role in ('admin', 'system_owner', 'manager'):
+        if user.is_superuser or cls.has_module_view(user, 'branches'):
             url_branches = cls.safe_reverse('branches:branch_list', fallback='/branches/')
             if url_branches:
                 items.append({
@@ -889,7 +869,6 @@ class GlobalSearchService:
         from apps.expense.models import Expense
 
         results = []
-        role = getattr(user, 'role', '')
         emp = getattr(user, 'employee_master', None)
         user_branch = emp.branch if emp else None
         data_scope = emp.data_scope if emp else 'branch'
@@ -900,7 +879,7 @@ class GlobalSearchService:
             return qs
 
         # 1. Employees / HR (Only admin, system_owner, hr, manager)
-        if role in ('admin', 'system_owner', 'hr', 'manager') or user.is_superuser:
+        if cls.has_module_view(user, 'employees'):
             employees = Employee.objects.select_related('branch', 'department', 'designation')
             employees = filter_branch(employees, 'branch')
             emp_filter = Q()
@@ -952,7 +931,7 @@ class GlobalSearchService:
             })
 
         # 4. Payroll Runs & calculations (Only admin, system_owner, finance, accounts)
-        if role in ('admin', 'system_owner', 'finance', 'accounts') or user.is_superuser:
+        if cls.has_module_view(user, 'payroll'):
             runs = PayrollRun.objects.filter(
                 Q(status__icontains=query) | Q(status__in=tokens)
             ).order_by('-period_start')[:5]
@@ -988,7 +967,8 @@ class GlobalSearchService:
 
         # 5. Leave Requests
         leaves = LeaveRequest.objects.select_related('employee', 'employee__branch', 'leave_type')
-        if role not in ('admin', 'system_owner', 'hr', 'manager') and not user.is_superuser:
+        can_manage_leaves = user.is_superuser or cls.has_module_view(user, 'leave')
+        if not can_manage_leaves:
             leaves = leaves.filter(employee__user=user)
         else:
             leaves = filter_branch(leaves, 'employee__branch')
@@ -999,7 +979,7 @@ class GlobalSearchService:
         for l in leaves:
             results.append({
                 'label': f"Leave: {l.employee.full_name} ({l.leave_type.name} - {l.status})",
-                'href': "/leave/admin/" if (role in ('admin', 'system_owner', 'hr', 'manager') or user.is_superuser) else "/leave/my-leave/",
+                'href': "/leave/admin/" if can_manage_leaves else "/leave/my-leave/",
                 'icon': 'calendar-heart',
                 'group': 'Leave',
                 'description': f"{l.start_date} to {l.end_date} ({l.status.title()})",
@@ -1008,7 +988,8 @@ class GlobalSearchService:
 
         # 6. Expenses
         expenses = Expense.objects.select_related('employee', 'employee__branch')
-        if role not in ('admin', 'system_owner', 'hr', 'manager') and not user.is_superuser:
+        can_manage_expenses = user.is_superuser or cls.has_module_view(user, 'expense')
+        if not can_manage_expenses:
             expenses = expenses.filter(employee__user=user)
         else:
             expenses = filter_branch(expenses, 'employee__branch')
@@ -1019,7 +1000,7 @@ class GlobalSearchService:
         for ex in expenses:
             results.append({
                 'label': f"Expense: {ex.employee.full_name} (${ex.amount} - {ex.status})",
-                'href': "/expense/admin/" if (role in ('admin', 'system_owner', 'hr', 'manager') or user.is_superuser) else "/expense/my-expenses/",
+                'href': "/expense/admin/" if can_manage_expenses else "/expense/my-expenses/",
                 'icon': 'receipt',
                 'group': 'Expense',
                 'description': f"Amount: {ex.amount} ({ex.status.title()})",

@@ -245,8 +245,14 @@ def can_view_menu(user, menu_key):
     cfg = PINNABLE_MENUS[menu_key]
     if cfg.get("is_superuser_only", False):
         return False
-    user_role = getattr(user, "role", "")
-    return user_role in cfg.get("roles", [])
+    url_name = cfg.get("url_name", "")
+    app_label = url_name.split(":")[0] if ":" in url_name else "dashboard"
+    if app_label == "admin_panel":
+        perm = "attendance.view" if "attendance" in url_name else ("reports.view" if "report" in url_name else "dashboard.view")
+    else:
+        perm = f"{app_label}.view"
+    from apps.accounts.engine import PermissionEngine
+    return PermissionEngine.evaluate(user, perm).allowed
 
 def get_menu_url(menu_key):
     cfg = PINNABLE_MENUS.get(menu_key)

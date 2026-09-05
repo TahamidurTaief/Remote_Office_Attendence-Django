@@ -223,7 +223,8 @@ def cancel_workflow(instance, actor, reason=''):
     Cancels a running workflow instance.
     Sets the status to 'cancelled', marks completion time, and logs a cancel action.
     """
-    if actor != instance.initiated_by and not actor.is_superuser and getattr(actor, 'role', '') != 'admin':
+    from apps.accounts.engine import PermissionEngine
+    if actor != instance.initiated_by and not actor.is_superuser and not PermissionEngine.evaluate(actor, 'workflow.edit').allowed:
         from django.core.exceptions import PermissionDenied
         raise PermissionDenied("You do not have permission to cancel this workflow.")
 

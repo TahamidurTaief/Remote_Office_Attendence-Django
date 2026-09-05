@@ -34,6 +34,8 @@ def get_client_ip(request):
     return request.META.get('REMOTE_ADDR') or ''
 
 class EmployeeListView(AdminRequiredMixin, ListView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     model = EmployeeProfile
     template_name = 'employees/employee_list.html'
     context_object_name = 'employees'
@@ -80,6 +82,8 @@ class EmployeeListView(AdminRequiredMixin, ListView):
         return context
 
 class EmployeeCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'employees.add'
+    action_type = 'add'
     model = EmployeeProfile
     form_class = EmployeeCreateForm
     template_name = 'employees/employee_form.html'
@@ -148,6 +152,8 @@ class EmployeeCreateView(AdminRequiredMixin, CreateView):
         return response
 
 class EmployeeEditView(AdminRequiredMixin, UpdateView):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     model = EmployeeProfile
     form_class = EmployeeEditForm
     template_name = 'employees/employee_form.html'
@@ -235,6 +241,8 @@ class EmployeeEditView(AdminRequiredMixin, UpdateView):
 
 
 class ToggleStatusView(AdminRequiredMixin, View):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         employee = get_object_or_404(EmployeeProfile, pk=pk)
         employee.is_active = not employee.is_active
@@ -242,6 +250,8 @@ class ToggleStatusView(AdminRequiredMixin, View):
         return render(request, 'employees/partials/status_badge.html', {'employee': employee})
 
 class EmployeeDocumentCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'employees.add'
+    action_type = 'add'
     model = EmployeeDocument
     form_class = EmployeeDocumentForm
     template_name = 'employees/document_form.html'
@@ -264,6 +274,8 @@ class EmployeeDocumentCreateView(AdminRequiredMixin, CreateView):
         return reverse_lazy('employees:employee_detail', kwargs={'pk': self.employee.pk})
 
 class EmployeeDocumentEditView(AdminRequiredMixin, UpdateView):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     model = EmployeeDocument
     form_class = EmployeeDocumentForm
     template_name = 'employees/document_form.html'
@@ -276,6 +288,8 @@ class EmployeeDocumentEditView(AdminRequiredMixin, UpdateView):
         return reverse_lazy('employees:employee_detail', kwargs={'pk': self.object.employee.pk})
 
 class EmployeeDocumentDeleteView(AdminRequiredMixin, View):
+    required_permission = 'employees.delete'
+    action_type = 'delete'
     def post(self, request, pk):
         doc = get_object_or_404(EmployeeDocument, pk=pk)
         employee_pk = doc.employee.pk
@@ -285,7 +299,8 @@ class EmployeeDocumentDeleteView(AdminRequiredMixin, View):
 
 
 class EmployeeDocumentVerifyView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.approve'
+    action_type = 'approve'
 
     def post(self, request, pk):
         doc = get_object_or_404(EmployeeDocument, pk=pk)
@@ -320,7 +335,8 @@ class EmployeeDocumentVerifyView(RoleRequiredMixin, View):
 
 @method_decorator(require_reauth, name='dispatch')
 class EmployeeDocumentArchiveView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.edit'
+    action_type = 'edit'
 
     def post(self, request, pk):
         doc = get_object_or_404(EmployeeDocument, pk=pk)
@@ -355,6 +371,8 @@ from apps.notifications.models import log_audit
 
 
 class EmployeeMasterListView(AdminRequiredMixin, ListView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     model = Employee
     template_name = 'employees/master_list.html'
     context_object_name = 'employees'
@@ -416,6 +434,8 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
 
 
 class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     model = Employee
     template_name = 'employees/master_detail.html'
     context_object_name = 'employee'
@@ -448,13 +468,15 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
         # Payroll gating check
         from apps.accounts.engine import PermissionEngine
         user = self.request.user
-        can_view_payroll = user.is_superuser or PermissionEngine.evaluate(user, 'employees.view_payroll').allowed or getattr(user, 'role', '') in ('admin', 'hr', 'hr_manager', 'hr_admin')
+        can_view_payroll = user.is_superuser or PermissionEngine.evaluate(user, 'payroll.view').allowed or PermissionEngine.evaluate(user, 'employees.view_payroll').allowed
         context['can_view_payroll'] = can_view_payroll
 
         return context
 
 
 class EmployeeMasterCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'employees.add'
+    action_type = 'add'
     model = Employee
     form_class = EmployeeMasterForm
     template_name = 'employees/master_form_modal.html'
@@ -497,6 +519,8 @@ class EmployeeMasterCreateView(AdminRequiredMixin, CreateView):
 
 
 class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     model = Employee
     form_class = EmployeeMasterForm
     template_name = 'employees/master_edit_page.html'
@@ -600,6 +624,8 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
 
 
 class EmployeeMasterArchiveView(AdminRequiredMixin, View):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
         old_status = employee.status
@@ -627,6 +653,8 @@ class EmployeeMasterArchiveView(AdminRequiredMixin, View):
 
 
 class EmployeeMasterDeleteView(View):
+    required_permission = 'employees.delete'
+    action_type = 'delete'
     """
     Delete an Employee record. Soft-deletes to Trash by default.
     Super-admin can permanently delete if already trashed.
@@ -650,8 +678,6 @@ class EmployeeMasterDeleteView(View):
         from apps.accounts.engine import PermissionEngine
         res = PermissionEngine.evaluate(user, 'employees.delete', action_type='delete')
         if res.allowed:
-            return True
-        if user.has_perm('employees.delete_employee'):
             return True
         return False
 
@@ -799,7 +825,8 @@ from apps.employees.models import Asset, AssetAssignment, DocumentDownloadLog, D
 from apps.employees.forms import EmployeeDocumentForm, AssetForm, AssetAssignmentForm, AssetReturnForm
 
 class EmployeeDocumentUploadView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.add'
+    action_type = 'add'
 
     def get(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
@@ -839,7 +866,8 @@ class EmployeeDocumentUploadView(RoleRequiredMixin, View):
 
 
 class AssetListView(RoleRequiredMixin, ListView):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.view'
+    action_type = 'view'
     model = Asset
     template_name = 'employees/asset_list.html'
     context_object_name = 'assets'
@@ -856,7 +884,8 @@ class AssetListView(RoleRequiredMixin, ListView):
 
 
 class AssetCreateView(RoleRequiredMixin, CreateView):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.add'
+    action_type = 'add'
     model = Asset
     form_class = AssetForm
     template_name = 'employees/partials/asset_form_modal.html'
@@ -876,7 +905,8 @@ class AssetCreateView(RoleRequiredMixin, CreateView):
 
 
 class AssetAssignView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.edit'
+    action_type = 'edit'
 
     def get(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
@@ -910,7 +940,8 @@ class AssetAssignView(RoleRequiredMixin, View):
 
 
 class AssetReturnView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.edit'
+    action_type = 'edit'
 
     def get(self, request, pk):
         assignment = get_object_or_404(AssetAssignment, pk=pk)
@@ -935,7 +966,8 @@ class AssetReturnView(RoleRequiredMixin, View):
 
 
 class AssetReassignView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.edit'
+    action_type = 'edit'
 
     def get(self, request, pk):
         assignment = get_object_or_404(AssetAssignment, pk=pk)
@@ -1149,6 +1181,8 @@ def _apply_transition(employee, req_obj, actor):
 
 
 class LifecycleActionView(AdminRequiredMixin, View):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     """
     POST: Initiate a lifecycle transition from master_detail page.
     LOW_RISK  → apply immediately.
@@ -1251,6 +1285,8 @@ class LifecycleActionView(AdminRequiredMixin, View):
 
 
 class LifecyclePendingListView(AdminRequiredMixin, ListView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     """Admin queue: all lifecycle transition requests (default: pending)."""
     model = LifecycleTransitionRequest
     template_name = 'employees/lifecycle_requests.html'
@@ -1283,6 +1319,8 @@ class LifecyclePendingListView(AdminRequiredMixin, ListView):
 
 @method_decorator(require_reauth, name='dispatch')
 class LifecycleReviewView(AdminRequiredMixin, View):
+    required_permission = 'employees.approve'
+    action_type = 'approve'
     """
     POST: Admin approves or rejects a LifecycleTransitionRequest.
     'action' POST param must be 'approve' or 'reject'.
@@ -1348,6 +1386,8 @@ from apps.employees.forms import (
 from apps.employees.wizard_service import WizardDraftManager
 
 class EmployeeWizardView(AdminRequiredMixin, View):
+    required_permission = 'employees.add'
+    action_type = 'add'
     """
     Multi-Step Wizard for Employee Creation and Edition (Steps 1 to 8).
     Supports progressive saving, direct step counter navigation, HTMX partial swaps,
@@ -1578,6 +1618,8 @@ class EmployeeWizardView(AdminRequiredMixin, View):
 from django.contrib.auth.mixins import LoginRequiredMixin
 
 class EmployeeDocumentDownloadView(LoginRequiredMixin, View):
+    required_permission = 'employees.view'
+    action_type = 'view'
     """
     Unified, PermissionEngine-gated document download view.
     - Sensitive documents: checks ownership first, then falls through PermissionEngine.evaluate().
@@ -1645,6 +1687,8 @@ class EmployeeDocumentDownloadView(LoginRequiredMixin, View):
 
 
 class EmployeeTimelineView(AdminRequiredMixin, DetailView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     """
     Read-only timeline view combining HR history, lifecycle requests, leave requests,
     asset assignments, document uploads, and attendance logs.
@@ -1816,6 +1860,8 @@ class EmployeeTimelineView(AdminRequiredMixin, DetailView):
 
 
 class EmployeeSuspendToggleView(AdminRequiredMixin, View):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
         reason = request.POST.get('reason', '').strip()
@@ -1904,6 +1950,8 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
 
 
 class EmployeeSuspendModalView(AdminRequiredMixin, View):
+    required_permission = 'employees.view'
+    action_type = 'view'
     def get(self, request, pk):
         employee = get_object_or_404(Employee, pk=pk)
         from django.urls import reverse
@@ -1925,6 +1973,8 @@ class EmployeeSuspendModalView(AdminRequiredMixin, View):
 
 
 class EmployeeAuditLogView(AdminRequiredMixin, ListView):
+    required_permission = 'audit.view'
+    action_type = 'view'
     model = EmployeeAuditLog
     template_name = 'employees/partials/audit_log_table.html'
     context_object_name = 'audit_logs'
@@ -1946,6 +1996,8 @@ from apps.employees.hierarchy_services import OrgHierarchyService
 from apps.employees.models import ManagerDelegation
 
 class OrgChartView(AdminRequiredMixin, TemplateView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     template_name = 'employees/org_chart.html'
 
     def get_context_data(self, **kwargs):
@@ -1958,6 +2010,8 @@ class OrgChartView(AdminRequiredMixin, TemplateView):
         return context
 
 class OrgChartNodeView(AdminRequiredMixin, View):
+    required_permission = 'employees.view'
+    action_type = 'view'
     def get(self, request, pk):
         # HTMX lazy load node direct reports
         employee = get_object_or_404(Employee, pk=pk)
@@ -1967,6 +2021,8 @@ class OrgChartNodeView(AdminRequiredMixin, View):
         })
 
 class ManagerDelegationListView(AdminRequiredMixin, ListView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     model = ManagerDelegation
     template_name = 'employees/delegation_list.html'
     context_object_name = 'delegations'
@@ -1975,6 +2031,8 @@ class ManagerDelegationListView(AdminRequiredMixin, ListView):
         return ManagerDelegation.objects.select_related('manager', 'delegate_to', 'created_by').all()
 
 class ManagerDelegationCreateView(AdminRequiredMixin, View):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     def get(self, request):
         active_employees = Employee.objects.exclude(status='archived').order_by('first_name')
         return render(request, 'employees/partials/delegation_create_modal.html', {
@@ -2012,6 +2070,8 @@ class ManagerDelegationCreateView(AdminRequiredMixin, View):
         return redirect('employees:delegation_list')
 
 class ManagerDelegationEndView(AdminRequiredMixin, View):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         delg = get_object_or_404(ManagerDelegation, pk=pk)
         delg.is_active = False
@@ -2029,6 +2089,8 @@ class ManagerDelegationEndView(AdminRequiredMixin, View):
 
 
 class EmployeeReportsView(AdminRequiredMixin, TemplateView):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'employees/reports.html'
 
     def get_context_data(self, **kwargs):
@@ -2070,6 +2132,8 @@ class EmployeeReportsView(AdminRequiredMixin, TemplateView):
 # ==========================================
 
 class DepartmentListView(AdminRequiredMixin, ListView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     model = Department
     template_name = 'employees/department_list.html'
     context_object_name = 'departments'
@@ -2100,6 +2164,8 @@ class DepartmentListView(AdminRequiredMixin, ListView):
 
 
 class DepartmentCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'employees.add'
+    action_type = 'add'
     model = Department
     template_name = 'employees/partials/department_form_modal.html'
 
@@ -2131,6 +2197,8 @@ class DepartmentCreateView(AdminRequiredMixin, CreateView):
 
 
 class DepartmentEditView(AdminRequiredMixin, UpdateView):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     model = Department
     template_name = 'employees/partials/department_form_modal.html'
 
@@ -2162,6 +2230,8 @@ class DepartmentEditView(AdminRequiredMixin, UpdateView):
 
 
 class DepartmentDeleteView(AdminRequiredMixin, View):
+    required_permission = 'employees.delete'
+    action_type = 'delete'
     def post(self, request, pk):
         dept = get_object_or_404(Department, pk=pk)
         name = dept.name
@@ -2181,6 +2251,8 @@ class DepartmentDeleteView(AdminRequiredMixin, View):
 
 
 class DepartmentExportCSVView(AdminRequiredMixin, View):
+    required_permission = 'employees.export'
+    action_type = 'export'
     def get(self, request):
         import csv
         departments = Department.objects.prefetch_related('branches').all().order_by('name')
@@ -2206,6 +2278,8 @@ class DepartmentExportCSVView(AdminRequiredMixin, View):
 
 
 class DepartmentImportCSVView(AdminRequiredMixin, View):
+    required_permission = 'employees.add'
+    action_type = 'add'
     def post(self, request):
         import csv
         import io
@@ -2289,6 +2363,8 @@ class DepartmentImportCSVView(AdminRequiredMixin, View):
 # ==========================================
 
 class DesignationListView(AdminRequiredMixin, ListView):
+    required_permission = 'employees.view'
+    action_type = 'view'
     model = Designation
     template_name = 'employees/designation_list.html'
     context_object_name = 'designations'
@@ -2318,6 +2394,8 @@ class DesignationListView(AdminRequiredMixin, ListView):
 
 
 class DesignationCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'employees.add'
+    action_type = 'add'
     model = Designation
     template_name = 'employees/partials/designation_form_modal.html'
 
@@ -2347,6 +2425,8 @@ class DesignationCreateView(AdminRequiredMixin, CreateView):
 
 
 class DesignationEditView(AdminRequiredMixin, UpdateView):
+    required_permission = 'employees.edit'
+    action_type = 'edit'
     model = Designation
     template_name = 'employees/partials/designation_form_modal.html'
 
@@ -2383,6 +2463,8 @@ import json
 
 
 class DepartmentsForBranchAPIView(AdminRequiredMixin, View):
+    required_permission = 'employees.view'
+    action_type = 'view'
     """JSON endpoint: departments available for a given branch."""
 
     def get(self, request):
@@ -2399,6 +2481,8 @@ class DepartmentsForBranchAPIView(AdminRequiredMixin, View):
 
 
 class DesignationsForDepartmentAPIView(AdminRequiredMixin, View):
+    required_permission = 'employees.view'
+    action_type = 'view'
     """JSON endpoint: designations under a given department."""
 
     def get(self, request):
@@ -2415,6 +2499,8 @@ class DesignationsForDepartmentAPIView(AdminRequiredMixin, View):
 
 
 class DesignationExportCSVView(AdminRequiredMixin, View):
+    required_permission = 'employees.export'
+    action_type = 'export'
     def get(self, request):
         import csv
         designations = Designation.objects.select_related('department').all().order_by('name')
@@ -2436,6 +2522,8 @@ class DesignationExportCSVView(AdminRequiredMixin, View):
 
 
 class DesignationImportCSVView(AdminRequiredMixin, View):
+    required_permission = 'employees.add'
+    action_type = 'add'
     def post(self, request):
         import csv
         import io
@@ -2500,6 +2588,8 @@ class DesignationImportCSVView(AdminRequiredMixin, View):
 
 
 class EmployeeExportCSVView(AdminRequiredMixin, View):
+    required_permission = 'employees.export'
+    action_type = 'export'
     def get(self, request):
         import csv
         employees = Employee.objects.select_related('branch', 'department', 'designation', 'user').all().order_by('first_name', 'last_name')
@@ -2528,6 +2618,8 @@ class EmployeeExportCSVView(AdminRequiredMixin, View):
 
 
 class EmployeeImportCSVView(AdminRequiredMixin, View):
+    required_permission = 'employees.add'
+    action_type = 'add'
     def post(self, request):
         import csv
         import io

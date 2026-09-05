@@ -7,7 +7,7 @@ from apps.employees.models import Employee
 from apps.employees.hierarchy_services import OrgHierarchyService
 
 def check_employee_access(requesting_user, target_employee):
-    if requesting_user.is_superuser or getattr(requesting_user, 'role', '') == 'admin':
+    if requesting_user.is_superuser:
         return True
 
     from apps.accounts.engine import PermissionEngine
@@ -39,7 +39,7 @@ def check_employee_access(requesting_user, target_employee):
     return False
 
 def check_analytics_access(requesting_user):
-    if requesting_user.is_superuser or getattr(requesting_user, 'role', '') == 'admin':
+    if requesting_user.is_superuser:
         return True
 
     from apps.accounts.engine import PermissionEngine

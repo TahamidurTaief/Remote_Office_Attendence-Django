@@ -8,8 +8,8 @@ from apps.accounts.engine import PermissionEngine
 class RBACPermissionRequiredMixin(AccessMixin):
     """
     Evaluates dynamic permissions via PermissionEngine as the single source of truth.
-    Never relies on role name strings.
-    Fails closed with HTTP 403 and reusable Cotton alert partial on HTMX requests.
+    Never relies on role name strings, allowed_roles, or guessed permissions.
+    Fails closed with HTTP 403 when permission is missing or denied.
     Redirects unauthenticated users to login (302).
     """
     required_permission = None
@@ -34,8 +34,12 @@ class RBACPermissionRequiredMixin(AccessMixin):
             from django.http import JsonResponse
             return JsonResponse({'status': 'error', 'message': 'You do not have permission to perform this action.'}, status=403)
 
-        from django.shortcuts import redirect
-        return redirect('/staff/home/')
+        content = render_to_string(
+            'cotton/permission_denied_hx.html',
+            {'message': 'You do not have permission to access this resource.'},
+            request=self.request
+        )
+        return HttpResponseForbidden(content, content_type='text/html')
 
     def get_required_permission(self):
         return self.required_permission
@@ -48,66 +52,46 @@ class RBACPermissionRequiredMixin(AccessMixin):
             return super().dispatch(request, *args, **kwargs)
 
         perm = self.get_required_permission()
-        if perm:
-            eval_res = PermissionEngine.evaluate(
-                user=request.user,
-                codename=perm,
-                required_scope=self.required_scope,
-                action_type=self.action_type
-            )
-            if not eval_res.allowed:
-                return self.handle_no_permission()
-            request.resolved_permission_result = eval_res
+        if not perm:
+            return self.handle_no_permission()
+
+        eval_res = PermissionEngine.evaluate(
+            user=request.user,
+            codename=perm,
+            required_scope=self.required_scope,
+            action_type=self.action_type
+        )
+        if not eval_res.allowed:
+            return self.handle_no_permission()
+        request.resolved_permission_result = eval_res
 
         return super().dispatch(request, *args, **kwargs)
 
 
 class RoleRequiredMixin(RBACPermissionRequiredMixin):
     """
-    Compatibility mixin replacing legacy role name checks with PermissionEngine resolution.
-    Never authorizes users based on CustomUser.role string.
+    Compatibility mixin. Fails closed if required_permission is not explicitly set.
+    Never relies on allowed_roles or guesses permissions.
     """
-    allowed_roles = []
-
-    def get_required_permission(self):
-        if self.required_permission:
-            return self.required_permission
-        if hasattr(self, 'model') and self.model:
-            return f"{self.model._meta.app_label}.view"
-        if any(r in ['admin', 'system_owner', 'super_admin'] for r in self.allowed_roles):
-            return 'dashboard.view'
-        return 'attendance.view'
+    pass
 
 
 class AdminRequiredMixin(RBACPermissionRequiredMixin):
     """
-    Enforces administrative permissions dynamically via PermissionEngine.
-    Never authorizes based on role string.
+    Compatibility mixin for administrative views.
+    Fails closed if required_permission is not explicitly declared.
     """
-    default_permission = 'dashboard.view'
-
-    def get_required_permission(self):
-        if self.required_permission:
-            return self.required_permission
-        if hasattr(self, 'model') and self.model:
-            return f"{self.model._meta.app_label}.view"
-        return self.default_permission
+    pass
 
 
 class StaffRequiredMixin(RBACPermissionRequiredMixin):
     """
-    Enforces staff self-service permissions dynamically via PermissionEngine.
-    Never authorizes based on role string.
+    Compatibility mixin for staff views.
+    Fails closed if required_permission is not explicitly declared.
     """
-    default_permission = 'attendance.view'
-
-    def get_required_permission(self):
-        if self.required_permission:
-            return self.required_permission
-        if hasattr(self, 'model') and self.model:
-            return f"{self.model._meta.app_label}.view"
-        return self.default_permission
+    pass
 
 
 class PermissionRequiredMixin(RBACPermissionRequiredMixin):
     pass
+

@@ -8,7 +8,8 @@ def notifications(request):
         from apps.accounts.permissions import user_can_access_my_projects
         can_access_my_projects = user_can_access_my_projects(request.user)
 
-        if getattr(request.user, 'role', '') == 'admin':
+        from apps.accounts.engine import PermissionEngine
+        if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'dashboard.view').allowed:
             try:
                 from apps.attendance.models import Attendance
                 expired_count = Attendance.objects.filter(is_expired=True).count()

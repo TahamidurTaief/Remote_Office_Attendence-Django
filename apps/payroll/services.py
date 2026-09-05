@@ -545,8 +545,8 @@ class PayrollService:
         Reverses a locked or disbursed payroll run back to Draft, preserving snapshot history.
         Requires authorized admin action.
         """
-        # We check if user is admin (checking is_staff or customized logic, since it's Django, we can check user.is_staff or role=='admin')
-        if not (user.is_staff or getattr(user, 'role', '') == 'admin' or user.is_superuser):
+        from apps.accounts.engine import PermissionEngine
+        if not (user.is_superuser or PermissionEngine.evaluate(user, 'payroll.approve').allowed):
             raise ValidationError("Only authorized administrators can reverse payroll runs.")
 
         old_status = payroll_run.status

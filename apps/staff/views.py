@@ -1013,7 +1013,7 @@ def my_tasks(request):
 
     if employee:
         tasks = ProjectTask.objects.filter(responsible_person=employee).select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
-    elif request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'manager'):
+    elif request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.view').allowed:
         # Admins, superusers, and managers without a profile see all tasks
         tasks = ProjectTask.objects.all().select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
     else:

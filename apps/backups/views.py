@@ -17,7 +17,7 @@ def _admin_required(view_func):
     @login_required
     def _wrapped(request, *args, **kwargs):
         from apps.accounts.engine import PermissionEngine
-        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.edit').allowed or getattr(request.user, 'role', '') == 'admin'):
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.edit').allowed or PermissionEngine.evaluate(request.user, 'settings.edit').allowed):
             from django.http import HttpResponseForbidden
             return HttpResponseForbidden("Admins only.")
         return view_func(request, *args, **kwargs)

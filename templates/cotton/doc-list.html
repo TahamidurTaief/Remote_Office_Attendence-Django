@@ -61,7 +61,7 @@
                 </div>
                 
                 <div class="flex flex-col sm:flex-row items-center gap-1.5 shrink-0">
-                    {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
+                    {% if request.user.is_superuser or 'employees.approve' in request.user.resolved_permissions or 'employees.edit' in request.user.resolved_permissions %}
                     <form action="{% url 'employees:document_verify' doc.pk %}" method="POST" class="inline">
                         {% csrf_token %}
                         <c-button type="submit" size="sm" variant="{% if doc.is_verified %}secondary{% else %}primary{% endif %}" extra_class="!px-2.5 !py-1 text-xs">
@@ -111,7 +111,7 @@
                         {% endif %}
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
-                        {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
+                        {% if request.user.is_superuser or 'employees.approve' in request.user.resolved_permissions or 'employees.edit' in request.user.resolved_permissions %}
                         <form action="{% url 'employees:document_archive' doc.pk %}" method="POST" class="inline">
                             {% csrf_token %}
                             <c-button type="submit" size="sm" variant="secondary" extra_class="!px-2.5 !py-1 text-xs">

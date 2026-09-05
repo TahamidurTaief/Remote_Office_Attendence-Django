@@ -133,7 +133,7 @@ class DynamicRoleListView(RBACRoleAdminMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        can_edit = user.is_superuser or PermissionEngine.evaluate(user, 'accounts.edit').allowed or getattr(user, 'role', '') in ('admin', 'system_owner')
+        can_edit = user.is_superuser or PermissionEngine.evaluate(user, 'accounts.edit').allowed
         context['can_manage_roles'] = can_edit
         context['is_superuser'] = user.is_superuser
         return context

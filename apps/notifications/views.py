@@ -12,7 +12,7 @@ def _admin_required(view_func):
     @login_required
     def _wrapped(request, *args, **kwargs):
         from apps.accounts.engine import PermissionEngine
-        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed or getattr(request.user, 'role', '') == 'admin'):
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed):
             from django.http import HttpResponseForbidden
             return HttpResponseForbidden('Admins only.')
         return view_func(request, *args, **kwargs)
@@ -27,7 +27,7 @@ def notification_list(request):
         recipient=request.user
     ).select_related('employee')
 
-    is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed or getattr(request.user, 'role', '') == 'admin'
+    is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed
     if not is_admin:
         allowed_types = ['task_assigned', 'task_completed', 'task_delayed']
         notifs = notifs.filter(notif_type__in=allowed_types)
@@ -104,7 +104,7 @@ def notification_count(request):
     count_query = Notification.objects.filter(
         recipient=request.user, is_read=False
     )
-    is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed or getattr(request.user, 'role', '') == 'admin'
+    is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed
     if not is_admin:
         count_query = count_query.filter(
             notif_type__in=['task_assigned', 'task_completed', 'task_delayed']

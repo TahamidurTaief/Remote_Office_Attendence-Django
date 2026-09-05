@@ -10,7 +10,7 @@
         <c-page-header title="{{ employee.get_full_name }}">
             <c-slot name="actions">
                 <div class="flex items-center space-x-2">
-                {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
+                {% if request.user.is_superuser or 'employees.edit' in request.user.resolved_permissions %}
                 <c-button hx-get="{% url 'employees:employee_suspend_toggle_modal' employee.pk %}"
                 hx-target="#modal-container"
                 variant="{% if employee.is_suspended %}secondary{% else %}danger{% endif %}"
@@ -86,10 +86,10 @@
                                 <span class="px-1.5 py-0.5 text-[10px] bg-emerald-100 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 rounded-full font-mono font-bold">{{ active_asset_assignments.count }}</span>
                                 {% endif %}
                             </c-tab-button>
-                            {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
+                            {% if request.user.is_superuser or 'employees.edit' in request.user.resolved_permissions %}
                             <c-tab-button @click="tab = 'activity'" active_condition="tab === 'activity'" label="Activity Feed" ></c-tab-button>
                             {% endif %}
-                            {% if request.user.is_superuser or request.user.role == 'admin' %}
+                            {% if request.user.is_superuser or 'audit.view' in request.user.resolved_permissions %}
                             <c-tab-button @click="tab = 'audit'" active_condition="tab === 'audit'" hx-get="{% url 'employees:master_audit' employee.pk %}" hx-target="#audit-tab-content" hx-trigger="click once" label="Audit Log" ></c-tab-button>
                             {% endif %}
                         </nav>
@@ -208,14 +208,14 @@
                     </div>
  
                     <!-- Activity Feed Tab -->
-                    {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'hr_manager' or request.user.role == 'hr' %}
+                    {% if request.user.is_superuser or 'employees.edit' in request.user.resolved_permissions %}
                     <div x-show="tab === 'activity'" x-cloak>
                         <c-activity-feed :logs="employee.activity_logs.all" ></c-activity-feed>
                     </div>
                     {% endif %}
  
                     <!-- Audit Log Tab -->
-                    {% if request.user.is_superuser or request.user.role == 'admin' %}
+                    {% if request.user.is_superuser or 'audit.view' in request.user.resolved_permissions %}
                     <div x-show="tab === 'audit'" x-cloak>
                         <div id="audit-tab-content">
                             <div class="flex justify-center py-8">

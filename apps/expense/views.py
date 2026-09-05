@@ -31,7 +31,8 @@ def _get_profile(user):
     return None
 
 class StaffOrManagerMixin(RoleRequiredMixin):
-    allowed_roles = ['staff', 'manager', 'admin']
+    required_permission = 'expense.view'
+    action_type = 'view'
 
 class StaffExpenseListView(StaffOrManagerMixin, ListView):
     model = Expense
@@ -53,7 +54,7 @@ class ExpenseDetailView(StaffOrManagerMixin, DetailView):
         obj = super().get_object(queryset)
         employee = _get_profile(self.request.user)
         from apps.accounts.engine import PermissionEngine
-        can_manage = self.request.user.is_superuser or PermissionEngine.evaluate(self.request.user, 'expense.approve').allowed or getattr(self.request.user, 'role', '') == 'admin'
+        can_manage = self.request.user.is_superuser or PermissionEngine.evaluate(self.request.user, 'expense.approve').allowed
         if not can_manage and obj.employee != employee:
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to view this expense.")
@@ -192,7 +193,6 @@ def expense_detail_api(request, pk):
     can_manage = (
         request.user.is_superuser
         or PermissionEngine.evaluate(request.user, 'expense.approve').allowed
-        or getattr(request.user, 'role', '') in ('admin', 'manager', 'finance', 'accounts')
     )
     employee = _get_profile(request.user)
     if not can_manage and expense.employee != employee:
@@ -364,21 +364,22 @@ class BaseProcessExpenseView(View):
                 return HttpResponseForbidden("You cannot approve or process your own expense claim.")
             
             # Superuser / Admin bypass
-            if user.is_superuser or getattr(user, 'role', '') == 'admin':
+            from apps.accounts.rbac_models import DataScope
+            if user.is_superuser or (PermissionEngine.evaluate(user, 'expense.approve').allowed and PermissionEngine.get_effective_scope(user, 'expense.approve') == DataScope.GLOBAL):
                 return super().dispatch(request, *args, **kwargs)
                 
             if expense.status == 'pending_manager':
                 # Needs to be reporting manager of the employee or their delegate
                 emp_master = getattr(expense.employee, 'master_employee', None)
                 if not emp_master:
-                    if getattr(user, 'role', '') == 'manager':
+                    if PermissionEngine.evaluate(user, 'expense.approve').allowed:
                         return super().dispatch(request, *args, **kwargs)
                     from django.http import HttpResponseForbidden
                     return HttpResponseForbidden("No manager link or profile found to evaluate.")
                 
                 reporting_manager = emp_master.reporting_manager
                 if not reporting_manager:
-                    if getattr(user, 'role', '') == 'manager':
+                    if PermissionEngine.evaluate(user, 'expense.approve').allowed:
                         return super().dispatch(request, *args, **kwargs)
                     from django.http import HttpResponseForbidden
                     return HttpResponseForbidden("This employee has no reporting manager assigned.")
@@ -419,12 +420,13 @@ class BaseProcessExpenseView(View):
             elif expense.status == 'pending_finance':
                 from apps.accounts.engine import PermissionEngine
                 res = PermissionEngine.evaluate(user, 'expense.approve')
-                if getattr(user, 'role', '') != 'finance' and not res.allowed:
+                if not res.allowed:
                     from django.http import HttpResponseForbidden
                     return HttpResponseForbidden("You do not have Finance permissions to process this expense.")
                     
             elif expense.status == 'pending_accounts':
-                if getattr(user, 'role', '') != 'accounts':
+                res_acc = PermissionEngine.evaluate(user, 'expense.approve')
+                if not res_acc.allowed:
                     from django.http import HttpResponseForbidden
                     return HttpResponseForbidden("You do not have Accounts permissions to process this expense.")
                     

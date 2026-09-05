@@ -216,13 +216,6 @@ class PermissionEngine:
         resolved_map = cls.get_user_resolved_permissions(user)
         perm_entry = resolved_map.get(codename)
 
-        if not perm_entry and '.' in codename:
-            mod_part, act_part = codename.rsplit('.', 1)
-            if act_part == 'create':
-                perm_entry = resolved_map.get(f"{mod_part}.add")
-            elif act_part == 'add':
-                perm_entry = resolved_map.get(f"{mod_part}.create")
-
         if perm_entry is not None and not perm_entry.get('granted'):
             # Explicitly revoked or denied
             return PermissionResolutionResult(allowed=False, reason=f"Permission '{codename}' is explicitly revoked.", read_only=read_only)

@@ -167,12 +167,12 @@ class HierarchicalRoleMatrixTests(TestCase):
         """Unauthorized staff cannot view or modify the permission matrix."""
         self.client.login(email='staff_matrix@example.com', password=self.password)
         resp = self.client.get(reverse('admin_panel:role_matrix', kwargs={'pk': self.custom_role.pk}))
-        self.assertIn(resp.status_code, (403, 302))
+        self.assertEqual(resp.status_code, 403)
 
         # Direct POST attempt rejected
         url = reverse('admin_panel:role_matrix_save', kwargs={'pk': self.custom_role.pk})
         post_resp = self.client.post(url, data=json.dumps({'selections': {}}), content_type='application/json')
-        self.assertIn(post_resp.status_code, (302, 403))
+        self.assertEqual(post_resp.status_code, 403)
 
     def test_system_owner_protected(self):
         """Protected System Owner role cannot be modified."""
@@ -255,6 +255,6 @@ class HierarchicalRoleMatrixTests(TestCase):
         res_after = PermissionEngine.evaluate(self.staff_user, 'employees.add')
         self.assertTrue(res_after.allowed)
 
-        # Compatibility check: employees.create also allowed
+        # Strict canonical check: unaliased employees.create fails closed
         res_create = PermissionEngine.evaluate(self.staff_user, 'employees.create')
-        self.assertTrue(res_create.allowed)
+        self.assertFalse(res_create.allowed)

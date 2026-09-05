@@ -33,9 +33,7 @@ def check_role(user):
     if not user or not user.is_authenticated:
         return False
     from apps.accounts.engine import PermissionEngine
-    if PermissionEngine.evaluate(user, 'attendance.view').allowed and hasattr(user, 'employee_profile'):
-        return True
-    return getattr(user, 'role', '') in ('staff', 'manager', 'admin', 'hr')
+    return PermissionEngine.evaluate(user, 'attendance.view').allowed and hasattr(user, 'employee_profile')
 
 
 def get_attendance_policy(employee):
@@ -328,7 +326,7 @@ def live_locations(request):
     Used by the admin live-map.
     """
     from apps.accounts.engine import PermissionEngine
-    if not (request.user.is_authenticated and (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'attendance.view').allowed or getattr(request.user, 'role', '') == 'admin')):
+    if not (request.user.is_authenticated and (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'attendance.view').allowed)):
         return JsonResponse({'success': False, 'error': 'Unauthorized.'}, status=403)
 
     today = timezone.localdate()
@@ -537,7 +535,7 @@ def check_approval_permissions(user, target_employee):
     is_hr = False
     from apps.accounts.engine import PermissionEngine
     res = PermissionEngine.evaluate(user, 'attendance.approve')
-    if res.allowed or user.is_superuser or getattr(user, 'role', '') == 'admin':
+    if res.allowed or user.is_superuser:
         is_hr = True
         
     is_manager = False
@@ -676,7 +674,8 @@ from django.views.generic import ListView
 from apps.accounts.mixins import RoleRequiredMixin
 
 class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
-    allowed_roles = ['admin', 'manager', 'system_owner', 'hr']
+    required_permission = 'attendance.view'
+    action_type = 'view'
     template_name = 'admin_panel/attendance/requests_list.html'
     context_object_name = 'forgot_checkouts'
     
@@ -799,11 +798,14 @@ def bulk_sync(request):
 
 @login_required
 def employee_timeline(request):
-    is_staff = request.user.role == 'staff'
-    is_manager = request.user.role in ('manager', 'admin') or request.user.is_superuser
-    
-    if not (is_staff or is_manager):
-        return redirect('accounts:login')
+    from apps.accounts.engine import PermissionEngine
+    eval_res = PermissionEngine.evaluate(request.user, 'attendance.view')
+    if not (request.user.is_superuser or eval_res.allowed):
+        from django.http import HttpResponseForbidden
+        from django.template.loader import render_to_string
+        return HttpResponseForbidden(render_to_string('cotton/permission_denied_hx.html', {'message': 'You do not have permission to view the timeline.'}, request=request))
+    is_manager = request.user.is_superuser or eval_res.scope in ('global', 'branch', 'department', 'team')
+    is_staff = True
         
     selected_employee = None
     if is_manager:

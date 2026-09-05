@@ -73,14 +73,12 @@ def resolve_user_role(user) -> str:
     except Exception:
         pass
 
-    # Fallback to direct role attribute
-    role = getattr(user, 'role', None)
-    if role in ('admin', 'system_owner'):
+    # Fallback to PermissionEngine resolved permissions
+    from apps.accounts.engine import PermissionEngine
+    if PermissionEngine.evaluate(user, 'dashboard.view').allowed:
         return 'admin'
-    if role == 'manager':
+    if PermissionEngine.evaluate(user, 'projects.view').allowed or PermissionEngine.evaluate(user, 'attendance.approve').allowed:
         return 'manager'
-    if role in ('staff', 'employee'):
-        return role
 
     # Check if the user is a Project Manager for any projects
     try:

@@ -118,7 +118,8 @@ class AttendanceTransactionService:
             if not is_gps_missing and policy.max_gps_accuracy_meters and acc_val > policy.max_gps_accuracy_meters:
                 is_gps_poor = True
 
-            is_admin_or_hr = user.is_superuser or getattr(user, 'role', '') in ('admin', 'hr')
+            from apps.accounts.engine import PermissionEngine
+            is_admin_or_hr = user.is_superuser or PermissionEngine.evaluate(user, 'attendance.override').allowed or PermissionEngine.evaluate(user, 'attendance.edit').allowed
 
             if is_gps_missing:
                 gps_quality = 'missing'

@@ -1,11 +1,16 @@
-import io
-from django.test import TestCase as DjangoTestCase
-from django.core.management import call_command
+from django.test import TestCase
+from apps.accounts.rbac_models import Role, UserRoleAssignment
+from apps.accounts.rbac_registry import RBACRegistryService
+from apps.accounts.engine import PermissionEngine
 
-class TestCase(DjangoTestCase):
-    def _callSetUp(self):
-        super()._callSetUp()
-        call_command('migrate_legacy_roles', stdout=io.StringIO())
+def assign_role_fixture(user, role_code):
+    role = Role.objects.filter(code=role_code).first()
+    if not role:
+        RBACRegistryService.sync_database()
+        role = Role.objects.filter(code=role_code).first()
+    if role:
+        UserRoleAssignment.objects.get_or_create(user=user, role=role)
+        PermissionEngine.invalidate_user_cache(user)
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -29,12 +34,15 @@ class ProjectTests(TestCase):
             password=self.password,
             role='admin'
         )
+        assign_role_fixture(self.admin_user, 'admin')
+        assign_role_fixture(self.admin_user, 'admin')
         self.staff_user = User.objects.create_user(
             email='staff@example.com',
             phone='+8801700000200',
             password=self.password,
             role='staff'
         )
+        assign_role_fixture(self.staff_user, 'staff')
         self.branch = Branch.objects.create(
             name='Dhanmondi Branch',
             address='Dhanmondi, Dhaka',
@@ -102,14 +110,14 @@ class ProjectTests(TestCase):
         # Should redirect to login page (dispatch handles this)
         self.assertEqual(response.status_code, 302)
         
-        # 2. Staff user access (should redirect to /staff/home/)
+        # 2. Staff user access (authenticated denial must return exact HTTP 403)
         self.client.login(username='+8801700000200', password=self.password)
         response = self.client.get(reverse('projects:project_list'))
-        self.assertRedirects(response, '/staff/home/')
+        self.assertEqual(response.status_code, 403)
         
         # Try to post project add
         response_post = self.client.post(reverse('projects:project_add'), data=self.project_data)
-        self.assertRedirects(response_post, '/staff/home/')
+        self.assertEqual(response_post.status_code, 403)
 
     def test_hvac_template_seeding(self):
         # Verify that the HVAC standard template is seeded
@@ -1151,14 +1159,51 @@ class Phase2And3Tests(TestCase):
     # ------------------------------------------------------------------ #
     # Audit gap #24c — deferred branch-scoping TODO comments present       #
     # ------------------------------------------------------------------ #
-    def test_branch_scoping_todo_comments_present_in_views(self):
-        """Verify TODO: branch-scoping deferred comments exist in views.py."""
-        import os
-        views_path = os.path.join(os.path.dirname(__file__), 'views.py')
-        with open(views_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        self.assertIn('TODO: branch-scoping deferred', content,
-                      "Expected 'TODO: branch-scoping deferred' comment in views.py")
+    def test_branch_scoping_isolation_enforced(self):
+        """Verify cross-branch access to project tasks is denied via scoped 404."""
+        branch_b = Branch.objects.create(
+            name='Branch B',
+            address='Gulshan, Dhaka',
+            latitude=23.7925,
+            longitude=90.4078,
+            radius_meters=100
+        )
+        proj_b = Project.objects.create(
+            name='Branch B Project',
+            project_type=self.project_type,
+            client_name='Branch B Client',
+            location='Gulshan',
+            system_type='VRF',
+            start_date=date.today(),
+            branch=branch_b
+        )
+        task_b = ProjectTask.objects.create(
+            project=proj_b,
+            activity='Task in Branch B',
+            order=1
+        )
+        mgr_user = User.objects.create_user(
+            email='branch_a_mgr@example.com',
+            phone='+8801700000999',
+            password=self.password,
+        )
+        from apps.accounts.rbac_models import Role, RolePermission, UserRoleAssignment, DataScope
+        role_scoped, _ = Role.objects.get_or_create(code='scoped_mgr', defaults={'name': 'Scoped Role', 'is_active': True})
+        perm = RBACRegistryService.ensure_permission('projects.delete')
+        RolePermission.objects.get_or_create(role=role_scoped, permission=perm, defaults={'data_scope': DataScope.BRANCH})
+        from apps.employees.models import EmployeeProfile
+        EmployeeProfile.objects.create(
+            user=mgr_user,
+            full_name='Branch A Manager',
+            branch=self.branch,
+            phone='+8801700000999'
+        )
+        UserRoleAssignment.objects.get_or_create(user=mgr_user, role=role_scoped)
+        PermissionEngine.invalidate_user_cache(mgr_user)
+
+        self.client.login(username='+8801700000999', password=self.password)
+        resp = self.client.post(reverse('projects:task_delete', kwargs={'pk': task_b.pk}))
+        self.assertEqual(resp.status_code, 404)
 
 
 class ProjectCSVExportTests(TestCase):
@@ -1170,12 +1215,15 @@ class ProjectCSVExportTests(TestCase):
             password=self.password,
             role='admin'
         )
+        assign_role_fixture(self.admin_user, 'admin')
+        assign_role_fixture(self.admin_user, 'admin')
         self.staff_user = User.objects.create_user(
             email='staff@example.com',
             phone='+8801700000200',
             password=self.password,
             role='staff'
         )
+        assign_role_fixture(self.staff_user, 'staff')
         self.branch = Branch.objects.create(
             name='Test Branch',
             latitude=23.8103,
@@ -1283,6 +1331,8 @@ class ProjectTaskShiftTests(TestCase):
             password=self.password,
             role='admin'
         )
+        assign_role_fixture(self.admin_user, 'admin')
+        assign_role_fixture(self.admin_user, 'admin')
         self.branch = Branch.objects.create(
             name='Test Branch',
             latitude=23.8103,
@@ -1420,6 +1470,8 @@ class ProjectNotificationEmailTests(TestCase):
             password=self.password,
             role='admin'
         )
+        assign_role_fixture(self.admin_user, 'admin')
+        assign_role_fixture(self.admin_user, 'admin')
         self.branch = Branch.objects.create(
             name='Test Branch',
             latitude=23.8103,
@@ -1556,6 +1608,8 @@ class ProjectTaskNewFeaturesTests(TestCase):
             password=self.password,
             role='admin'
         )
+        assign_role_fixture(self.admin_user, 'admin')
+        assign_role_fixture(self.admin_user, 'admin')
         self.branch = Branch.objects.create(
             name='Test Branch',
             latitude=23.8103,
@@ -1907,6 +1961,7 @@ class StaffTaskCompletePermissionsTests(TestCase):
         
         # PM User
         self.pm_user = User.objects.create_user(email='pm@example.com', phone='+8801700000888', role='manager', password=self.password)
+        assign_role_fixture(self.pm_user, 'manager')
         self.pm_profile = EmployeeProfile.objects.create(
             user=self.pm_user, full_name='Project Manager', branch=self.branch, joined_date=date.today(), phone='+8801700000888', employee_id='EMP901'
         )

@@ -19,7 +19,8 @@ from apps.notifications.models import Notification
 from apps.notifications.dispatch import send_email_notification
 
 class CalendarMonthView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'system_owner', 'manager', 'staff', 'employee']
+    required_permission = 'schedule.view'
+    action_type = 'view'
 
     def get(self, request, *args, **kwargs):
         today = timezone.localdate()
@@ -67,8 +68,9 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         from apps.accounts.engine import PermissionEngine
         res = PermissionEngine.evaluate(request.user, 'schedule.manage')
-        is_admin_or_manager = request.user.is_superuser or res.allowed or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'manager')
-        is_admin = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner')
+        is_admin_or_manager = request.user.is_superuser or res.allowed
+        from apps.accounts.rbac_models import DataScope
+        is_admin = request.user.is_superuser or (PermissionEngine.evaluate(request.user, 'schedule.edit').allowed and PermissionEngine.get_effective_scope(request.user, 'schedule.edit') == DataScope.GLOBAL)
 
         # Role-based scoping:
         # Admin / System Owner: global access across all active branches.
@@ -350,7 +352,8 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
         month_name = pycal.month_name[month]
 
-        is_admin = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner')
+        from apps.accounts.rbac_models import DataScope
+        is_admin = request.user.is_superuser or (PermissionEngine.evaluate(request.user, 'schedule.edit').allowed and PermissionEngine.get_effective_scope(request.user, 'schedule.edit') == DataScope.GLOBAL)
 
         context = {
             'weeks_data': weeks_data,
@@ -378,7 +381,8 @@ class CalendarMonthView(RoleRequiredMixin, View):
 
 
 class ShiftScheduleView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'system_owner', 'manager', 'staff', 'employee']
+    required_permission = 'schedule.view'
+    action_type = 'view'
 
     def get(self, request, *args, **kwargs):
         from apps.branches.models import OfficeSchedule, Branch
@@ -386,9 +390,11 @@ class ShiftScheduleView(RoleRequiredMixin, View):
 
         is_admin_or_manager = (
             request.user.is_superuser or
-            getattr(request.user, 'role', '') in ('admin', 'system_owner', 'manager')
+            PermissionEngine.evaluate(request.user, 'schedule.manage').allowed or
+            PermissionEngine.evaluate(request.user, 'schedule.edit').allowed
         )
-        is_admin = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner')
+        from apps.accounts.rbac_models import DataScope
+        is_admin = request.user.is_superuser or (PermissionEngine.evaluate(request.user, 'schedule.edit').allowed and PermissionEngine.get_effective_scope(request.user, 'schedule.edit') == DataScope.GLOBAL)
 
         user_branch = None
         if request.user.is_authenticated:
@@ -463,7 +469,8 @@ class ShiftScheduleView(RoleRequiredMixin, View):
 
 
 class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'schedule.add'
+    action_type = 'add'
     model = ScheduleEvent
     form_class = ScheduleEventForm
     template_name = 'schedule/event_form.html'
@@ -513,7 +520,8 @@ class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
 
 
 class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'schedule.edit'
+    action_type = 'edit'
     model = ScheduleEvent
     form_class = ScheduleEventForm
     template_name = 'schedule/event_form.html'
@@ -548,7 +556,8 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
 
 
 class ScheduleEventDeleteView(RoleRequiredMixin, DeleteView):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'schedule.delete'
+    action_type = 'delete'
     model = ScheduleEvent
 
     def delete(self, request, *args, **kwargs):

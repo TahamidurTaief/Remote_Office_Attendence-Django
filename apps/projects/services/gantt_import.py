@@ -1295,15 +1295,11 @@ def check_gantt_import_permission(user: Any, project: Project) -> bool:
     if user.is_superuser:
         return True
 
-    # User role check
-    user_role = getattr(user, 'role', '')
-    if user_role in ('admin', 'system_owner'):
-        return True
-
     # Check permission engine
     from apps.accounts.engine import PermissionEngine
-    edit_perm = PermissionEngine.evaluate(user, 'projects.edit').allowed
-    assign_perm = user.has_perm('projects.assign_projecttask') or user.has_perm('projects.add_projecttask')
+    edit_perm = PermissionEngine.evaluate(user, 'projects.edit', branch=project.branch).allowed
+    add_perm = PermissionEngine.evaluate(user, 'projects.add', branch=project.branch).allowed
+    can_modify = edit_perm or add_perm
 
     # Project relationship
     emp = getattr(user, 'employee_profile', None)
@@ -1311,14 +1307,17 @@ def check_gantt_import_permission(user: Any, project: Project) -> bool:
     is_site_eng = emp and project.site_engineers.filter(id=emp.id).exists()
     is_member = emp and project.project_members.filter(id=emp.id).exists()
 
-    # Rule: Project members without assignment permission must receive 403
-    if is_member and not (is_pm or is_site_eng or assign_perm or edit_perm):
+    # Rule: Project members without assignment/edit permission must receive 403
+    if is_member and not (is_pm or is_site_eng or can_modify):
         return False
 
     if is_pm or is_site_eng:
         return True
 
-    if (assign_perm or edit_perm) and (is_member or project.created_by == user):
+    if can_modify and (is_member or project.created_by == user):
+        return True
+
+    if can_modify and PermissionEngine.get_effective_scope(user, 'projects.edit') in ('global', 'branch'):
         return True
 
     return False

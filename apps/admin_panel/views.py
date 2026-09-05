@@ -54,7 +54,8 @@ def admin_required(view_func):
     return _wrapped
 
 class AdminDashboardView(RoleRequiredMixin, TemplateView):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'dashboard.view'
+    action_type = 'view'
     template_name = 'admin_panel/admin_dashboard.html'
 
     def get_context_data(self, **kwargs):
@@ -72,8 +73,9 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
         branch_id = self.request.GET.get('branch')
         employee_id = self.request.GET.get('employee')
 
-        role_name = self.request.user.role.name if hasattr(self.request.user.role, 'name') else self.request.user.role
-        can_view_all = (role_name == 'admin')
+        eval_res = PermissionEngine.evaluate(self.request.user, 'dashboard.view')
+        can_view_all = self.request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        role_name = 'admin' if can_view_all else 'manager'
 
         # Scoping variables
         profile = getattr(self.request.user, 'employee_profile', None)
@@ -173,7 +175,7 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
         pending_approvals = []
         branch_summaries = []
         report_missing_branch = False
-        has_approve_permission = self.request.user.has_perm('leave.change_leaverequest') or self.request.user.has_perm('leave.approve_leaverequest')
+        has_approve_permission = PermissionEngine.evaluate(self.request.user, 'leave.approve').allowed
 
         if not can_view_all and role_name == 'manager':
             from apps.projects.models import Project
@@ -352,6 +354,8 @@ class DashboardPartialView(AdminDashboardView):
     template_name = 'admin_panel/partials/dashboard_live.html'
 
 class AdminAttendanceListView(AdminRequiredMixin, ListView):
+    required_permission = 'attendance.view'
+    action_type = 'view'
     model = Attendance
     template_name = 'admin_panel/admin_attendance.html'
     context_object_name = 'attendances'
@@ -367,8 +371,9 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
 
         # Enforce Manager branch limits
         user = self.request.user
-        role_name = user.role.name if hasattr(user.role, 'name') else str(getattr(user, 'role', ''))
-        can_view_all = (user.is_superuser and role_name != 'manager') or role_name in ('admin', 'system_owner')
+        eval_res = PermissionEngine.evaluate(user, 'attendance.view')
+        can_view_all = user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(user, 'employee_profile', None)
 
         if not can_view_all and role_name == 'manager':
@@ -426,8 +431,9 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
 
         # Enforce Manager branch limits
         user = self.request.user
-        role_name = user.role.name if hasattr(user.role, 'name') else str(getattr(user, 'role', ''))
-        can_view_all = user.is_superuser or role_name in ('admin', 'system_owner')
+        eval_res = PermissionEngine.evaluate(user, 'attendance.view')
+        can_view_all = user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(user, 'employee_profile', None)
 
         if not can_view_all and role_name == 'manager':
@@ -541,6 +547,8 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         return context
 
 class ExportAttendanceCSVView(AdminRequiredMixin, View):
+    required_permission = 'attendance.export'
+    action_type = 'export'
     def get(self, request, *args, **kwargs):
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
@@ -606,6 +614,8 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
         return response
 
 class ManualEntryView(AdminRequiredMixin, FormView):
+    required_permission = 'attendance.add'
+    action_type = 'add'
     template_name = 'admin_panel/manual_entry.html'
     form_class = ManualAttendanceForm
     success_url = '/admin-panel/attendance/'
@@ -626,14 +636,15 @@ class ManualEntryView(AdminRequiredMixin, FormView):
         return super().form_valid(form)
 
 class AttendanceDetailView(RoleRequiredMixin, DetailView):
-    allowed_roles = ['admin', 'system_owner', 'hr', 'manager']
+    required_permission = 'attendance.view'
+    action_type = 'view'
     model = Attendance
     template_name = 'admin_panel/attendance_detail.html'
     context_object_name = 'attendance'
 
     def dispatch(self, request, *args, **kwargs):
         from apps.accounts.engine import PermissionEngine
-        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'attendance.view').allowed or getattr(request.user, 'role', '') in ('admin', 'hr')):
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'attendance.view').allowed):
             from django.http import HttpResponseForbidden
             return HttpResponseForbidden("Unauthorized to view attendance details.")
         return super().dispatch(request, *args, **kwargs)
@@ -683,6 +694,8 @@ class AttendanceDetailView(RoleRequiredMixin, DetailView):
 
 
 class AttendanceLocationsView(AdminRequiredMixin, View):
+    required_permission = 'attendance.view'
+    action_type = 'view'
     def get(self, request, pk):
         attendance = get_object_or_404(Attendance, pk=pk)
         locations = attendance.locations.all().order_by('timestamp')
@@ -1041,8 +1054,9 @@ def _filter_qs_by_request(qs, request):
     branch      = request.GET.get('branch', '')
 
     # Enforce Manager branch limits
-    role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
-    can_view_all = (role_name == 'admin')
+    eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
+    can_view_all = request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
+    role_name = 'admin' if can_view_all else 'manager'
     profile = getattr(request.user, 'employee_profile', None)
 
     if not can_view_all and role_name == 'manager':
@@ -1072,6 +1086,8 @@ def _filter_qs_by_request(qs, request):
 # ─────────────────────────────────────────────────────────────────
 
 class ReportsMainView(AdminRequiredMixin, TemplateView):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'admin_panel/reports/main.html'
 
     def get_context_data(self, **kwargs):
@@ -1224,6 +1240,8 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
 
 class DailyReportView(AdminRequiredMixin, View):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'admin_panel/reports/daily.html'
 
     def get(self, request):
@@ -1314,6 +1332,8 @@ class DailyReportView(AdminRequiredMixin, View):
 
 
 class MonthlyReportView(AdminRequiredMixin, View):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'admin_panel/reports/monthly.html'
 
     def get(self, request):
@@ -1400,6 +1420,8 @@ def format_minutes(total_minutes):
 
 
 class EmployeeReportView(AdminRequiredMixin, View):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'admin_panel/reports/employee_report.html'
 
     def get(self, request, pk, year=None, month=None):
@@ -1621,6 +1643,8 @@ class EmployeeReportView(AdminRequiredMixin, View):
 
 
 class EmployeeDayDetailView(AdminRequiredMixin, View):
+    required_permission = 'reports.view'
+    action_type = 'view'
     def get(self, request, pk, date_str):
         employee = get_object_or_404(EmployeeProfile, pk=pk)
         try:
@@ -1657,6 +1681,8 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
 # ─────────────────────────────────────────────────────────────────
 
 class LeaveMonthlyReportView(AdminRequiredMixin, View):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'admin_panel/reports/leave_monthly.html'
 
     def get(self, request):
@@ -1781,6 +1807,8 @@ class LeaveMonthlyReportView(AdminRequiredMixin, View):
 
 
 class LeaveEmployeeReportView(AdminRequiredMixin, View):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'admin_panel/reports/leave_employee.html'
 
     def get(self, request, pk, year=None, month=None):
@@ -1853,6 +1881,8 @@ class LeaveEmployeeReportView(AdminRequiredMixin, View):
 
 
 class ExportLeaveReportCSVView(AdminRequiredMixin, View):
+    required_permission = 'reports.export'
+    action_type = 'export'
     def get(self, request):
         from apps.leave.models import LeaveRequest
         from datetime import datetime, timedelta
@@ -1958,6 +1988,8 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
 
 
 class ExportLeaveReportPDFView(AdminRequiredMixin, View):
+    required_permission = 'reports.export'
+    action_type = 'export'
     def get(self, request):
         from apps.leave.models import LeaveRequest
         from datetime import datetime, timedelta
@@ -2180,6 +2212,8 @@ def export_leave_monthly_xlsx(request):
 
 
 class ExportReportCSVView(AdminRequiredMixin, View):
+    required_permission = 'reports.export'
+    action_type = 'export'
     def get(self, request):
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
@@ -2189,8 +2223,9 @@ class ExportReportCSVView(AdminRequiredMixin, View):
         status = request.GET.get('status')
 
         # Enforce Manager branch limits
-        role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
-        can_view_all = (role_name == 'admin')
+        eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
+        can_view_all = request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(request.user, 'employee_profile', None)
 
         if not can_view_all and role_name == 'manager':
@@ -2255,6 +2290,8 @@ class ExportReportCSVView(AdminRequiredMixin, View):
 
 
 class ExportReportPDFView(AdminRequiredMixin, View):
+    required_permission = 'reports.export'
+    action_type = 'export'
     def get(self, request):
         # ── Filter (same logic as CSV export) ──────────────────────────
         date_from = request.GET.get('date_from')
@@ -2265,8 +2302,9 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         status = request.GET.get('status')
 
         # Enforce Manager branch limits
-        role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
-        can_view_all = (role_name == 'admin')
+        eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
+        can_view_all = request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(request.user, 'employee_profile', None)
 
         if not can_view_all and role_name == 'manager':
@@ -2389,6 +2427,8 @@ class ExportReportPDFView(AdminRequiredMixin, View):
 # SCHEDULE SETTINGS
 # ─────────────────────────────────────────────────────────────────
 class OfficeScheduleView(AdminRequiredMixin, View):
+    required_permission = 'schedule.view'
+    action_type = 'view'
     template_name = 'admin_panel/settings/schedule.html'
 
     def get(self, request):
@@ -3155,6 +3195,8 @@ from apps.attendance.retention import get_retention_stats
 from apps.attendance.models import AttendanceLocation
 
 class ExpiredDataView(AdminRequiredMixin, ListView):
+    required_permission = 'dashboard.view'
+    action_type = 'view'
     model = Attendance
     template_name = 'admin_panel/expired_data.html'
     context_object_name = 'attendances'
@@ -3236,6 +3278,8 @@ def delete_all_expired(request):
 
 
 class AbsentReportView(AdminRequiredMixin, ListView):
+    required_permission = 'reports.view'
+    action_type = 'view'
     template_name = 'admin_panel/reports/absent_report.html'
     context_object_name = 'absences'
     paginate_by = 25
@@ -3298,6 +3342,8 @@ class AbsentReportView(AdminRequiredMixin, ListView):
 
 
 class ExportAbsentReportExcelView(AdminRequiredMixin, View):
+    required_permission = 'reports.export'
+    action_type = 'export'
     def get(self, request):
         from apps.leave.models import LeaveBalance
         from django.utils import timezone
@@ -3404,6 +3450,8 @@ class ExportAbsentReportExcelView(AdminRequiredMixin, View):
 
 
 class ExportAbsentReportPDFView(AdminRequiredMixin, View):
+    required_permission = 'reports.export'
+    action_type = 'export'
     def get(self, request):
         from reportlab.lib.pagesizes import A4
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -3576,6 +3624,8 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
 
 
 class AdminAddLeaveView(AdminRequiredMixin, CreateView):
+    required_permission = 'leave.add'
+    action_type = 'add'
     template_name = 'admin_panel/reports/add_leave.html'
     success_url = '/admin-panel/reports/absent/'
 
@@ -3605,7 +3655,8 @@ class AdminAddLeaveView(AdminRequiredMixin, CreateView):
 
 
 class EmployeeKPIWidgetView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'employees.view'
+    action_type = 'view'
 
     def get(self, request):
         from apps.employees.models import Employee, Department, EmployeeStatus
@@ -3628,7 +3679,8 @@ class EmployeeKPIWidgetView(RoleRequiredMixin, View):
 
 
 class GlobalSearchView(RoleRequiredMixin, View):
-    allowed_roles = ['admin', 'manager', 'staff']
+    required_permission = 'dashboard.view'
+    action_type = 'view'
 
     def get(self, request):
         from apps.employees.models import Employee, Asset
@@ -3764,6 +3816,8 @@ from apps.admin_panel.dashboard_services import (
 )
 
 class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
+    required_permission = 'dashboard.view'
+    action_type = 'view'
     def get_template_names(self):
         role_override = self.request.GET.get('role_view')
         if role_override and self.request.user.is_superuser:
@@ -3855,8 +3909,11 @@ class AdminCRUDPermissionMixin:
 
 
 class AdminLeaveRequestCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, CreateView):
+    required_permission = 'leave.add'
+    action_type = 'add'
     model = LeaveRequest
-    codename = 'leave.create'
+    required_permission = 'leave.add'
+    action_type = 'add'
     template_name = 'admin_panel/leave/crud/create_modal.html'
 
     def get_form_class(self):
@@ -3881,6 +3938,8 @@ class AdminLeaveRequestCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
 
 
 class AdminLeaveRequestUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, UpdateView):
+    required_permission = 'leave.edit'
+    action_type = 'edit'
     model = LeaveRequest
     codename = 'leave.edit'
     template_name = 'admin_panel/leave/crud/edit_modal.html'
@@ -3907,6 +3966,8 @@ class AdminLeaveRequestUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
 
 
 class AdminLeaveRequestDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, View):
+    required_permission = 'leave.delete'
+    action_type = 'delete'
     codename = 'leave.delete'
 
     def post(self, request, pk):
@@ -3925,6 +3986,8 @@ class AdminLeaveRequestDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
 
 
 class AdminLeaveBalanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, UpdateView):
+    required_permission = 'leave.edit'
+    action_type = 'edit'
     model = LeaveBalance
     codename = 'leave.edit'
     template_name = 'admin_panel/leave/crud/balance_edit_modal.html'
@@ -3947,8 +4010,11 @@ class AdminLeaveBalanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, 
 
 
 class AdminAttendanceCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, CreateView):
+    required_permission = 'attendance.add'
+    action_type = 'add'
     model = Attendance
-    codename = 'attendance.create'
+    required_permission = 'attendance.add'
+    action_type = 'add'
     template_name = 'admin_panel/attendance/crud/create_modal.html'
 
     def get_form_class(self):
@@ -3983,6 +4049,8 @@ class AdminAttendanceCreateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Cr
 
 
 class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, UpdateView):
+    required_permission = 'attendance.edit'
+    action_type = 'edit'
     model = Attendance
     codename = 'attendance.edit'
     template_name = 'admin_panel/attendance/crud/edit_modal.html'
@@ -4017,6 +4085,8 @@ class AdminAttendanceUpdateView(AdminRequiredMixin, AdminCRUDPermissionMixin, Up
 
 
 class AdminAttendanceDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, View):
+    required_permission = 'attendance.delete'
+    action_type = 'delete'
     codename = 'attendance.delete'
 
     def post(self, request, pk):
@@ -4035,11 +4105,12 @@ class AdminAttendanceDeleteView(AdminRequiredMixin, AdminCRUDPermissionMixin, Vi
 
 
 class AIWorkspaceView(RoleRequiredMixin, TemplateView):
+    required_permission = 'dashboard.view'
+    action_type = 'view'
     """
     AI Workspace view for AI submodules.
     Fully responsive Cotton template with zero raw controls and zero inline styles.
     """
-    allowed_roles = ['admin', 'manager']
     template_name = 'admin_panel/ai_workspace.html'
 
     def get_context_data(self, **kwargs):
@@ -4078,11 +4149,12 @@ class AIWorkspaceView(RoleRequiredMixin, TemplateView):
 
 
 class AISettingsSaveView(RoleRequiredMixin, View):
+    required_permission = 'settings.edit'
+    action_type = 'edit'
     """
     Saves AI behavior configuration (system instructions, temperature, tokens, context toggle)
     and primary + multiple fallback API keys.
     """
-    allowed_roles = ['admin', 'system_owner']
 
     def post(self, request, *args, **kwargs):
         import json
@@ -4177,6 +4249,8 @@ class AISettingsSaveView(RoleRequiredMixin, View):
 
 
 class AIChatbotResponseView(RoleRequiredMixin, View):
+    required_permission = 'dashboard.view'
+    action_type = 'view'
     """
     Production-grade AI endpoint for the FieldTrack Assistant.
     - Connects via FieldTrackAIService with automatic multi-provider fallback
@@ -4186,7 +4260,6 @@ class AIChatbotResponseView(RoleRequiredMixin, View):
     - Rate-limited, bounded retries, timeout, truthful errors
     - Renders via safe Cotton partial (cotton/ai-chat-response.html) with CSRF protection
     """
-    allowed_roles = ['admin', 'manager', 'staff', 'employee', 'system_owner']
 
     def post(self, request, *args, **kwargs):
         from .ai_service import FieldTrackAIService

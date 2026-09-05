@@ -27,7 +27,7 @@
   {# Notifications list content #}
   <div class="flex-1 overflow-y-auto divide-y" style="border-color:var(--border-subtle)">
     {% for notif in notifs %}
-      {% if request.user.is_superuser or request.user.role == 'admin' or 'notifications.view' in request.user.resolved_permissions %}
+      {% if request.user.is_superuser or 'notifications.view' in request.user.resolved_permissions %}
         {% if notif.employee %}
           {% url 'employees:employee_detail' notif.employee.pk as item_redirect_url %}
         {% else %}

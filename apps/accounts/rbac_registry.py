@@ -19,20 +19,25 @@ class RBACRegistryService:
     # Canonical Action Definitions
     # -------------------------------------------------------------------------
     ACTIONS = [
+        {'code': 'view', 'name': 'View', 'description': 'View and access list/detail/dashboard records', 'is_destructive': False},
         {'code': 'add', 'name': 'Add', 'description': 'Create new records and initial resources', 'is_destructive': False},
         {'code': 'edit', 'name': 'Edit', 'description': 'Access editing workflows, forms, and modification views', 'is_destructive': False},
-        {'code': 'delete', 'name': 'Delete', 'description': 'Permanently delete or deactivate records', 'is_destructive': True},
         {'code': 'update', 'name': 'Update', 'description': 'Persist and commit changes to existing records', 'is_destructive': False},
+        {'code': 'delete', 'name': 'Delete', 'description': 'Permanently delete or deactivate records', 'is_destructive': True},
+        {'code': 'approve', 'name': 'Approve', 'description': 'Approve workflows, sign-offs, and administrative actions', 'is_destructive': False},
+        {'code': 'export', 'name': 'Export', 'description': 'Export reports and tabular data', 'is_destructive': False},
     ]
 
-    # Legacy action compatibility mapping
+    # Canonical action mapping - actions are independent
     COMPATIBILITY_ACTION_MAP = {
-        'create': 'add',
+        'view': 'view',
         'add': 'add',
+        'create': 'add',
         'edit': 'edit',
         'update': 'update',
         'delete': 'delete',
-        'view': 'edit',  # view capability satisfied if user holds edit or update
+        'approve': 'approve',
+        'export': 'export',
     }
 
     # -------------------------------------------------------------------------
@@ -914,7 +919,7 @@ class RBACRegistryService:
             if created:
                 modules_created += 1
 
-            for act_code in ['add', 'edit', 'delete', 'update', 'view']:
+            for act_code in ['view', 'add', 'edit', 'update', 'delete', 'approve', 'export']:
                 act_obj = actions_map.get(act_code)
                 if not act_obj:
                     continue

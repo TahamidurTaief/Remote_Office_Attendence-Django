@@ -98,7 +98,7 @@
                 </form>
                 {% endif %}
                 <!-- Admin Reversal Button -->
-                {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'system_owner' %}
+                {% if request.user.is_superuser or 'payroll.approve' in request.user.resolved_permissions %}
                 {% if run.status != 'draft' %}
                 <c-button type="button" variant="ghost" size="sm" extra_class="text-rose-600 hover:bg-rose-50" icon="rotate-ccw" label="Admin Reversal" @click="$dispatch('open-modal', {id: 'reverse-modal'})"></c-button>
                 {% endif %}

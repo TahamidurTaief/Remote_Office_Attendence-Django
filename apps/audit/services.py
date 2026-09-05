@@ -34,7 +34,7 @@ def _role_for_user(user):
     roles = list(user.role_assignments.select_related("role").filter(role__is_active=True).values_list("role__code", flat=True))
     if roles:
         return ",".join(sorted(set(roles)))
-    return getattr(user, "role", "") or ""
+    return "unassigned"
 
 
 def _resolve_related(instance):
@@ -193,7 +193,7 @@ class AuditService:
             return qs
 
         role_codes = set(user.role_assignments.select_related("role").filter(role__is_active=True).values_list("role__code", flat=True))
-        role_codes.add(getattr(user, "role", ""))
+        # role fallback removed
         role_codes.discard("")
 
         if "admin" in role_codes or "system_owner" in role_codes:
@@ -253,7 +253,7 @@ class TrashService:
             return qs
 
         role_codes = set(user.role_assignments.select_related("role").filter(role__is_active=True).values_list("role__code", flat=True))
-        role_codes.add(getattr(user, "role", ""))
+        # role fallback removed
         role_codes.discard("")
 
         if "admin" in role_codes or "system_owner" in role_codes:

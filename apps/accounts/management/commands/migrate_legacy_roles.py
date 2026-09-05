@@ -2,7 +2,6 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from apps.accounts.models import Role, UserRoleAssignment
-from apps.accounts.engine import PermissionEngine
 from apps.accounts.services import RoleAssignmentService
 
 User = get_user_model()
@@ -13,82 +12,86 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--dry-run',
+            '--apply',
             action='store_true',
-            help='Simulate migration and output summary without persisting changes.',
+            default=False,
+            help='Persist role migrations to database. Without this flag, command runs in safe dry-run mode.',
         )
 
     def handle(self, *args, **options):
-        dry_run = options.get('dry_run', False)
-        self.stdout.write(self.style.NOTICE(f"Starting legacy role conversion (dry_run={dry_run})..."))
+        apply_changes = options.get('apply', False)
+        dry_run = not apply_changes
+
+        if dry_run:
+            self.stdout.write(self.style.WARNING("Running in DRY-RUN mode. Specify --apply to execute changes."))
+        else:
+            self.stdout.write(self.style.NOTICE("Executing legacy role migration with --apply..."))
 
         ROLE_DISPLAY_MAP = {
             'admin': 'Administrator',
             'manager': 'Branch Manager',
             'staff': 'Staff',
-            'hr': 'HR Manager',
-            'finance': 'Finance Manager',
-            'accounts': 'Accounts Officer',
             'employee': 'Staff',
         }
 
-        users = User.objects.all().select_related()
+        users = User.objects.all().order_by('id')
         total_users = users.count()
         newly_assigned = 0
         already_assigned = 0
         skipped = 0
 
-        if not dry_run:
-            from apps.accounts.rbac_models import Permission
-            if not Permission.objects.exists():
-                from apps.accounts.rbac_registry import RBACRegistryService
-                RBACRegistryService.sync_database()
-
         with transaction.atomic():
             for user in users:
                 role_code = getattr(user, 'role', None)
-                if not role_code:
+                if not role_code or role_code not in ROLE_DISPLAY_MAP:
                     skipped += 1
                     continue
 
                 canonical_code = 'staff' if role_code == 'employee' else role_code
-                role_name = ROLE_DISPLAY_MAP.get(canonical_code, canonical_code.capitalize())
+                role_name = ROLE_DISPLAY_MAP[role_code]
 
-                if not dry_run:
-                    role_obj, _ = Role.objects.get_or_create(
-                        code=canonical_code,
-                        defaults={
-                            'name': role_name,
-                            'description': f"Dynamic role for legacy {role_name} persona.",
-                            'is_active': True,
-                        }
-                    )
-                    # Activate if inactive
-                    if not role_obj.is_active:
-                        role_obj.is_active = True
-                        role_obj.save(update_fields=['is_active'])
+                role_obj = Role.objects.filter(code=canonical_code).first()
+                if not role_obj:
+                    if apply_changes:
+                        role_obj = Role.objects.create(
+                            code=canonical_code,
+                            name=role_name,
+                            description=f"Dynamic role for legacy {role_name} persona.",
+                            is_active=True,
+                        )
+                    else:
+                        newly_assigned += 1
+                        continue
 
-                    assignment, created = UserRoleAssignment.objects.get_or_create(
+                # Never reactivate inactive roles silently
+                if not role_obj.is_active:
+                    self.stdout.write(self.style.WARNING(
+                        f"Skipping assignment for {user.email or user.phone}: role '{role_obj.code}' is inactive."
+                    ))
+                    skipped += 1
+                    continue
+
+                has_assignment = UserRoleAssignment.objects.filter(user=user, role=role_obj).exists()
+                if has_assignment:
+                    already_assigned += 1
+                    continue
+
+                if apply_changes:
+                    # Use approved atomic assignment service which logs audit events and invalidates cache
+                    RoleAssignmentService.sync_user_roles(
                         user=user,
-                        role=role_obj,
+                        target_roles=[role_obj],
+                        actor=None,
+                        trusted_internal=True
                     )
-                    if created:
-                        newly_assigned += 1
-                        PermissionEngine.invalidate_user_cache(user)
-                    else:
-                        already_assigned += 1
+                    newly_assigned += 1
                 else:
-                    # Dry run check
-                    exists = UserRoleAssignment.objects.filter(user=user, role__code=canonical_code).exists()
-                    if not exists:
-                        newly_assigned += 1
-                    else:
-                        already_assigned += 1
+                    newly_assigned += 1
 
             if dry_run:
-                self.stdout.write(self.style.WARNING("DRY RUN: No changes persisted to database."))
+                self.stdout.write(self.style.WARNING("DRY RUN COMPLETE: Zero database modifications performed."))
 
         self.stdout.write(self.style.SUCCESS(
-            f"Legacy role conversion completed: {total_users} total users processed. "
-            f"Newly assigned: {newly_assigned}, Already assigned: {already_assigned}, Skipped: {skipped}."
+            f"Legacy role conversion summary: {total_users} users evaluated. "
+            f"Eligible for assignment: {newly_assigned}, Already assigned: {already_assigned}, Skipped: {skipped}."
         ))

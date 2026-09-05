@@ -40,6 +40,8 @@ from apps.projects.services.gantt_import import (
 
 
 class ProjectListView(AdminRequiredMixin, ListView):
+    required_permission = 'projects.view'
+    action_type = 'view'
     model = Project
     template_name = 'projects/project_list.html'
     context_object_name = 'projects'
@@ -91,6 +93,8 @@ class ProjectListView(AdminRequiredMixin, ListView):
         return context
 
 class ProjectDetailView(AdminRequiredMixin, DetailView):
+    required_permission = 'projects.view'
+    action_type = 'view'
     model = Project
     template_name = 'projects/project_detail.html'
     context_object_name = 'project'
@@ -172,6 +176,8 @@ class ProjectDetailView(AdminRequiredMixin, DetailView):
 
 
 class ProjectCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = Project
     form_class = ProjectForm
     template_name = 'projects/project_form.html'
@@ -214,6 +220,8 @@ class ProjectCreateView(AdminRequiredMixin, CreateView):
         return response
 
 class ProjectUpdateView(AdminRequiredMixin, UpdateView):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = Project
     form_class = ProjectForm
     template_name = 'projects/project_form.html'
@@ -254,6 +262,8 @@ class ProjectUpdateView(AdminRequiredMixin, UpdateView):
 
 
 class ProjectDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
     def post(self, request, pk):
         eval_res = PermissionEngine.evaluate(request.user, 'projects.delete', action_type='delete')
         if not eval_res.allowed:
@@ -272,6 +282,8 @@ class ProjectDeleteView(AdminRequiredMixin, View):
         return redirect('projects:project_list')
 
 class TaskTemplateListView(AdminRequiredMixin, ListView):
+    required_permission = 'projects.view'
+    action_type = 'view'
     model = TaskTemplate
     template_name = 'projects/template_list.html'
     context_object_name = 'templates'
@@ -291,6 +303,8 @@ class TaskTemplateListView(AdminRequiredMixin, ListView):
         return context
 
 class TaskTemplateCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = TaskTemplate
     form_class = TaskTemplateForm
     template_name = 'projects/template_form.html'
@@ -301,6 +315,8 @@ class TaskTemplateCreateView(AdminRequiredMixin, CreateView):
         return super().form_valid(form)
 
 class TaskTemplateUpdateView(AdminRequiredMixin, UpdateView):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = TaskTemplate
     form_class = TaskTemplateForm
     template_name = 'projects/template_form.html'
@@ -317,6 +333,8 @@ class TaskTemplateUpdateView(AdminRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 class TaskTemplateDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
     def post(self, request, pk):
         template = get_object_or_404(TaskTemplate, pk=pk)
         template_name = template.name
@@ -326,6 +344,8 @@ class TaskTemplateDeleteView(AdminRequiredMixin, View):
 
 # Template Item endpoints
 class TemplateAddItemView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, template_pk):
         template = get_object_or_404(TaskTemplate, pk=template_pk)
         form = TaskTemplateItemForm(request.POST)
@@ -339,6 +359,8 @@ class TemplateAddItemView(AdminRequiredMixin, View):
         return redirect('projects:template_edit', pk=template.pk)
 
 class TemplateDeleteItemView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         item = get_object_or_404(TaskTemplateItem, pk=pk)
         template_pk = item.template.pk
@@ -347,6 +369,8 @@ class TemplateDeleteItemView(AdminRequiredMixin, View):
         return redirect('projects:template_edit', pk=template_pk)
 
 class TemplateEditItemView(AdminRequiredMixin, UpdateView):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = TaskTemplateItem
     form_class = TaskTemplateItemForm
     template_name = 'projects/template_form.html'  # default fallback
@@ -366,6 +390,8 @@ class TemplateEditItemView(AdminRequiredMixin, UpdateView):
 
 # ProjectTask CRUD
 class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = ProjectTask
     form_class = ProjectTaskForm
     template_name = 'projects/task_form.html'
@@ -445,11 +471,20 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
         return reverse_lazy('projects:project_detail', kwargs={'pk': self.kwargs['project_id']})
 
 class ProjectTaskUpdateView(RoleRequiredMixin, UpdateView):
-    allowed_roles = ['admin', 'system_owner', 'manager']
-    # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = ProjectTask
     form_class = ProjectTaskForm
     template_name = 'projects/task_form.html'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return PermissionEngine.filter_queryset(
+            user=self.request.user,
+            queryset=qs,
+            codename='projects.edit',
+            branch_field='project__branch'
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -549,9 +584,17 @@ class ProjectTaskUpdateView(RoleRequiredMixin, UpdateView):
         return reverse_lazy('projects:global_task_list')
 
 class ProjectTaskDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
-        # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
-        task = get_object_or_404(ProjectTask, pk=pk)
+        task = PermissionEngine.get_scoped_object_or_404(
+            model_or_qs=ProjectTask,
+            user=request.user,
+            codename='projects.delete',
+            branch_field='project__branch',
+            pk=pk
+        )
         project_pk = task.project.pk if task.project else None
         task_activity = task.activity
         task.delete()
@@ -562,6 +605,8 @@ class ProjectTaskDeleteView(AdminRequiredMixin, View):
 
 
 class ProjectTaskReorderView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     """Move a task up or down by swapping its order value with the adjacent task.
     POST body: direction = 'up' | 'down'
     """
@@ -588,6 +633,8 @@ class ProjectTaskReorderView(AdminRequiredMixin, View):
 
 
 class ProjectTaskBulkStatusView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     """Bulk-update the status of multiple tasks in one POST.
     POST body: task_ids (list of pk strings), new_status / status (string)
     """
@@ -619,6 +666,8 @@ class ProjectTaskBulkStatusView(AdminRequiredMixin, View):
 
 
 class ProjectTaskBulkDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
     """Bulk-delete multiple tasks belonging to a project.
     POST body: task_ids (list of pk strings or task_ids_csv)
     """
@@ -643,6 +692,8 @@ class ProjectTaskBulkDeleteView(AdminRequiredMixin, View):
 
 # Apply Template view
 class ProjectApplyTemplateView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, project_id):
         project = get_object_or_404(Project, pk=project_id)
         template_id = request.POST.get('template_id')
@@ -686,6 +737,8 @@ class ProjectApplyTemplateView(AdminRequiredMixin, View):
 
 # Inline HTMX Task Status Update
 class ProjectTaskUpdateStatusView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         task = get_object_or_404(ProjectTask, pk=pk)
         status = request.POST.get('status')
@@ -696,6 +749,8 @@ class ProjectTaskUpdateStatusView(AdminRequiredMixin, View):
 
 
 class DailyProgressLogCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = DailyProgressLog
     form_class = DailyProgressLogForm
     template_name = 'projects/log_form.html'
@@ -777,10 +832,20 @@ class DailyProgressLogCreateView(AdminRequiredMixin, CreateView):
 
 
 class DailyProgressLogUpdateView(AdminRequiredMixin, UpdateView):
-    # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = DailyProgressLog
     form_class = DailyProgressLogForm
     template_name = 'projects/log_form.html'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return PermissionEngine.filter_queryset(
+            user=self.request.user,
+            queryset=qs,
+            codename='projects.edit',
+            branch_field='project__branch'
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -796,9 +861,17 @@ class DailyProgressLogUpdateView(AdminRequiredMixin, UpdateView):
 
 
 class DailyProgressLogDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
-        # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
-        log = get_object_or_404(DailyProgressLog, pk=pk)
+        log = PermissionEngine.get_scoped_object_or_404(
+            model_or_qs=DailyProgressLog,
+            user=request.user,
+            codename='projects.delete',
+            branch_field='project__branch',
+            pk=pk
+        )
         project_pk = log.project.pk
         log.delete()
         messages.success(request, 'Daily progress log deleted successfully.')
@@ -806,6 +879,8 @@ class DailyProgressLogDeleteView(AdminRequiredMixin, View):
 
 
 class ManpowerDeploymentCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = ManpowerDeployment
     form_class = ManpowerDeploymentForm
     template_name = 'projects/manpower_form.html'
@@ -883,10 +958,20 @@ class ManpowerDeploymentCreateView(AdminRequiredMixin, CreateView):
 
 
 class ManpowerDeploymentUpdateView(AdminRequiredMixin, UpdateView):
-    # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = ManpowerDeployment
     form_class = ManpowerDeploymentForm
     template_name = 'projects/manpower_form.html'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return PermissionEngine.filter_queryset(
+            user=self.request.user,
+            queryset=qs,
+            codename='projects.edit',
+            branch_field='project__branch'
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -902,9 +987,17 @@ class ManpowerDeploymentUpdateView(AdminRequiredMixin, UpdateView):
 
 
 class ManpowerDeploymentDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
-        # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
-        deployment = get_object_or_404(ManpowerDeployment, pk=pk)
+        deployment = PermissionEngine.get_scoped_object_or_404(
+            model_or_qs=ManpowerDeployment,
+            user=request.user,
+            codename='projects.delete',
+            branch_field='project__branch',
+            pk=pk
+        )
         project_pk = deployment.project.pk
         deployment.delete()
         messages.success(request, 'Manpower log deleted successfully.')
@@ -912,6 +1005,8 @@ class ManpowerDeploymentDeleteView(AdminRequiredMixin, View):
 
 
 class ManpowerDeploymentAutoFillView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         from apps.attendance.models import Attendance
         deployment = get_object_or_404(ManpowerDeployment, pk=pk)
@@ -929,6 +1024,8 @@ class ManpowerDeploymentAutoFillView(AdminRequiredMixin, View):
 
 
 class ProjectMaterialCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = ProjectMaterial
     form_class = ProjectMaterialForm
     template_name = 'projects/material_form.html'
@@ -949,10 +1046,20 @@ class ProjectMaterialCreateView(AdminRequiredMixin, CreateView):
 
 
 class ProjectMaterialUpdateView(AdminRequiredMixin, UpdateView):
-    # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = ProjectMaterial
     form_class = ProjectMaterialForm
     template_name = 'projects/material_form.html'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return PermissionEngine.filter_queryset(
+            user=self.request.user,
+            queryset=qs,
+            codename='projects.edit',
+            branch_field='project__branch'
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -968,9 +1075,17 @@ class ProjectMaterialUpdateView(AdminRequiredMixin, UpdateView):
 
 
 class ProjectMaterialDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
-        # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
-        material = get_object_or_404(ProjectMaterial, pk=pk)
+        material = PermissionEngine.get_scoped_object_or_404(
+            model_or_qs=ProjectMaterial,
+            user=request.user,
+            codename='projects.delete',
+            branch_field='project__branch',
+            pk=pk
+        )
         project_pk = material.project.pk
         material.delete()
         messages.success(request, 'Project material deleted successfully.')
@@ -978,6 +1093,8 @@ class ProjectMaterialDeleteView(AdminRequiredMixin, View):
 
 
 class ProjectConfirmSignOffView(AdminRequiredMixin, View):
+    required_permission = 'projects.approve'
+    action_type = 'approve'
     def post(self, request, project_id):
         project = get_object_or_404(Project, pk=project_id)
         sign_off, _ = ProjectSignOff.objects.get_or_create(project=project)
@@ -1013,6 +1130,8 @@ class ProjectConfirmSignOffView(AdminRequiredMixin, View):
 
 
 class ProjectExportPDFView(AdminRequiredMixin, View):
+    required_permission = 'projects.export'
+    action_type = 'export'
     def get(self, request, project_id):
         from django.http import HttpResponse
         from django.utils import timezone
@@ -1314,6 +1433,8 @@ class ProjectExportPDFView(AdminRequiredMixin, View):
 
 
 class ProjectMaterialIncrementView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         material = get_object_or_404(ProjectMaterial, pk=pk)
         increment_qty = request.POST.get('increment_qty')
@@ -1335,6 +1456,8 @@ class ProjectMaterialIncrementView(AdminRequiredMixin, View):
 
 
 class ProjectTypeListView(AdminRequiredMixin, ListView):
+    required_permission = 'projects.view'
+    action_type = 'view'
     model = ProjectType
     template_name = 'projects/project_type_list.html'
     context_object_name = 'project_types'
@@ -1356,6 +1479,8 @@ class ProjectTypeListView(AdminRequiredMixin, ListView):
 
 
 class ProjectTypeCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = ProjectType
     form_class = ProjectTypeForm
     template_name = 'projects/project_type_form.html'
@@ -1376,6 +1501,8 @@ class ProjectTypeCreateView(AdminRequiredMixin, CreateView):
 
 
 class ProjectTypeUpdateView(AdminRequiredMixin, UpdateView):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     model = ProjectType
     form_class = ProjectTypeForm
     template_name = 'projects/project_type_form.html'
@@ -1396,6 +1523,8 @@ class ProjectTypeUpdateView(AdminRequiredMixin, UpdateView):
 
 
 class ProjectTypeDeleteView(AdminRequiredMixin, DeleteView):
+    required_permission = 'projects.delete'
+    action_type = 'delete'
     model = ProjectType
     success_url = reverse_lazy('projects:project_type_list')
 
@@ -1409,6 +1538,8 @@ class ProjectTypeDeleteView(AdminRequiredMixin, DeleteView):
 
 
 class ExportProjectTasksCSVView(AdminRequiredMixin, View):
+    required_permission = 'projects.export'
+    action_type = 'export'
     def get(self, request, pk):
         return self._generate_csv(request, pk)
 
@@ -1461,6 +1592,8 @@ class ExportProjectTasksCSVView(AdminRequiredMixin, View):
         return response
 
 class ExportProjectManpowerCSVView(AdminRequiredMixin, View):
+    required_permission = 'projects.export'
+    action_type = 'export'
     def get(self, request, pk):
         eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
         if not eval_res.allowed:
@@ -1491,6 +1624,8 @@ class ExportProjectManpowerCSVView(AdminRequiredMixin, View):
         return response
 
 class ExportProjectMaterialsCSVView(AdminRequiredMixin, View):
+    required_permission = 'projects.export'
+    action_type = 'export'
     def get(self, request, pk):
         eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
         if not eval_res.allowed:
@@ -1524,6 +1659,8 @@ class ExportProjectMaterialsCSVView(AdminRequiredMixin, View):
 
 
 class ProjectTaskShiftSubsequentView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, pk):
         try:
             task = get_object_or_404(ProjectTask, pk=pk)
@@ -1570,6 +1707,8 @@ class ProjectTaskShiftSubsequentView(AdminRequiredMixin, View):
 
 
 class ProjectRequestSignOffView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     def post(self, request, project_id):
         project = get_object_or_404(Project, pk=project_id)
         role = request.POST.get('role')
@@ -1613,7 +1752,8 @@ class ProjectRequestSignOffView(AdminRequiredMixin, View):
 
 
 class GlobalTaskListView(RoleRequiredMixin, ListView):
-    allowed_roles = ['admin', 'manager', 'system_owner', 'super_admin']
+    required_permission = 'projects.view'
+    action_type = 'view'
     model = ProjectTask
     template_name = 'projects/global_task_list.html'
     context_object_name = 'tasks'
@@ -1697,7 +1837,8 @@ class GlobalTaskListView(RoleRequiredMixin, ListView):
 
 
 class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
-    allowed_roles = ['admin', 'manager']
+    required_permission = 'projects.add'
+    action_type = 'add'
     model = ProjectTask
     form_class = GlobalProjectTaskForm
     template_name = 'projects/global_task_form.html'
@@ -1794,7 +1935,7 @@ def staff_task_complete(request, pk):
     if not task.responsible_person:
         is_authorized = False
         from apps.accounts.engine import PermissionEngine
-        if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed or getattr(request.user, 'role', '') in ('admin', 'manager'):
+        if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed:
             is_authorized = True
         if employee and task.project and task.project.project_managers.filter(id=employee.id).exists():
             is_authorized = True
@@ -1887,7 +2028,7 @@ def staff_task_complete(request, pk):
 
 def check_task_view_permission(user, task):
     from apps.accounts.engine import PermissionEngine
-    if user.is_superuser or PermissionEngine.evaluate(user, 'projects.view').allowed or getattr(user, 'role', '') in ('admin', 'manager'):
+    if user.is_superuser or PermissionEngine.evaluate(user, 'projects.view').allowed:
         return True
     employee = getattr(user, 'employee_profile', None)
     if not employee:
@@ -2045,7 +2186,7 @@ def task_add_reply_api(request, pk):
 @require_POST
 def task_approve_api(request, pk):
     from apps.accounts.engine import PermissionEngine
-    if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed or getattr(request.user, 'role', '') in ('admin', 'manager')):
+    if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed):
         return JsonResponse({'error': 'Permission denied'}, status=403)
         
     task = get_object_or_404(ProjectTask, pk=pk)
@@ -2099,7 +2240,9 @@ def task_approve_api(request, pk):
 # Gantt View (G2)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProjectGanttView(LoginRequiredMixin, View):
+class ProjectGanttView(RoleRequiredMixin, View):
+    required_permission = 'projects.view'
+    action_type = 'view'
     """
     Renders an Alpine.js-driven dynamic Gantt chart for a single project.
     Provides live interactive view switching between:
@@ -2331,7 +2474,9 @@ class ProjectGanttView(LoginRequiredMixin, View):
         return render(request, 'projects/project_gantt.html', context)
 
 
-class ProjectGanttExportView(LoginRequiredMixin, View):
+class ProjectGanttExportView(RoleRequiredMixin, View):
+    required_permission = 'projects.export'
+    action_type = 'export'
     """
     Downloads a professionally formatted multi-sheet Excel workbook (.xlsx)
     for the project's Gantt schedule, matching the exact format of the
@@ -2371,6 +2516,8 @@ class ProjectGanttExportView(LoginRequiredMixin, View):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TaskDependencyCreateView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     """
     HTMX-friendly endpoint: add a predecessor dependency for a given task (successor).
     POST: predecessor, dep_type, lag_days
@@ -2413,6 +2560,8 @@ class TaskDependencyCreateView(AdminRequiredMixin, View):
 
 
 class TaskDependencyDeleteView(AdminRequiredMixin, View):
+    required_permission = 'projects.edit'
+    action_type = 'edit'
     """Remove a single task dependency record."""
 
     def post(self, request, pk):
@@ -2432,7 +2581,9 @@ class TaskDependencyDeleteView(AdminRequiredMixin, View):
 # Gantt Excel Import Workflow
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProjectGanttImportView(View):
+class ProjectGanttImportView(RoleRequiredMixin, View):
+    required_permission = 'projects.add'
+    action_type = 'add'
     """
     Step 1: Upload & Initial Format Detection.
     Accepts .xlsx workbook, enforces code-level safety limits, discovers sheets,
@@ -2544,7 +2695,9 @@ class ProjectGanttImportView(View):
             return render(request, 'projects/gantt_import.html', context, status=400)
 
 
-class ProjectGanttImportPreviewView(View):
+class ProjectGanttImportPreviewView(RoleRequiredMixin, View):
+    required_permission = 'projects.add'
+    action_type = 'add'
     """
     Step 2: Preview, Sheet Switching, In-Place Row Corrections, & Re-Validation.
     Performs zero ProjectTask writes. Authoritative validation executed server-side.
@@ -2671,7 +2824,9 @@ class ProjectGanttImportPreviewView(View):
         return self.get(request, pk, batch_id)
 
 
-class ProjectGanttImportConfirmView(View):
+class ProjectGanttImportConfirmView(RoleRequiredMixin, View):
+    required_permission = 'projects.add'
+    action_type = 'add'
     """
     Step 3: Atomic Confirmation and Idempotent ProjectTask Creation.
     Enforces transaction safety, row revalidation, non-colliding order, and audit tracking.

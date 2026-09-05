@@ -28,8 +28,8 @@ def _get_profile(user):
 
 
 class StaffOrManagerMixin(RoleRequiredMixin):
-    """Allows staff role to access employee-facing views."""
-    allowed_roles = ['staff']
+    required_permission = 'leave.view'
+    action_type = 'view'
 
 # ==============================================================================
 # Admin Views
@@ -71,10 +71,11 @@ class BaseProcessLeaveRequestView(View):
 
         from apps.accounts.engine import PermissionEngine
         res = PermissionEngine.evaluate(request.user, 'leave.approve')
-        if not res.allowed and not request.user.is_superuser and getattr(request.user, 'role', '') not in ('admin', 'manager'):
-            if PermissionEngine.evaluate(request.user, 'accounts.view').allowed or getattr(request.user, 'role', '') == 'admin':
-                return redirect('/admin-panel/dashboard/')
-            return redirect('/staff/home/')
+        if not (res.allowed or request.user.is_superuser):
+            from django.http import HttpResponseForbidden
+            from django.template.loader import render_to_string
+            content = render_to_string('cotton/permission_denied_hx.html', {'message': 'You do not have permission to approve leave requests.'}, request=request)
+            return HttpResponseForbidden(content, content_type='text/html')
 
         # Scoping check for manager/team scope
         if res.allowed and res.data_scope != 'global' and not request.user.is_superuser:
