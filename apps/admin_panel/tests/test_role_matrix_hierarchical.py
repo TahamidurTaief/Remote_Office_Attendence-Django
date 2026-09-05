@@ -32,6 +32,18 @@ class HierarchicalRoleMatrixTests(TestCase):
             password=self.password,
             role='admin'
         )
+        self.role_admin_role = Role.objects.create(
+            code='role_admin_delegated',
+            name='Delegated Role Admin',
+            is_active=True
+        )
+        perm_acc_edit = Permission.objects.get(codename='accounts.edit')
+        RolePermission.objects.create(
+            role=self.role_admin_role,
+            permission=perm_acc_edit,
+            data_scope=DataScope.GLOBAL
+        )
+        UserRoleAssignment.objects.create(user=self.role_admin, role=self.role_admin_role)
 
         # 4. Standard staff user (unauthorized)
         self.staff_user = User.objects.create_user(
@@ -155,7 +167,7 @@ class HierarchicalRoleMatrixTests(TestCase):
         """Unauthorized staff cannot view or modify the permission matrix."""
         self.client.login(email='staff_matrix@example.com', password=self.password)
         resp = self.client.get(reverse('admin_panel:role_matrix', kwargs={'pk': self.custom_role.pk}))
-        self.assertEqual(resp.status_code, 302)  # Redirects to dashboard
+        self.assertIn(resp.status_code, (403, 302))
 
         # Direct POST attempt rejected
         url = reverse('admin_panel:role_matrix_save', kwargs={'pk': self.custom_role.pk})
@@ -176,10 +188,10 @@ class HierarchicalRoleMatrixTests(TestCase):
         """Non-superuser cannot grant permissions they do not possess."""
         self.client.login(email='role_admin@example.com', password=self.password)
 
-        # role_admin has no permissions assigned in RolePermission
+        # role_admin has accounts.edit, but attempts to grant employees permissions
         payload = {
             'selections': {
-                'mod_accounts': {'add': True, 'edit': True, 'delete': True, 'update': True}
+                'mod_employees': {'add': True, 'edit': True, 'delete': True, 'update': True}
             }
         }
         url = reverse('admin_panel:role_matrix_save', kwargs={'pk': self.custom_role.pk})

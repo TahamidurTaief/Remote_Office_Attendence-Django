@@ -32,13 +32,24 @@ def admin_required(view_func):
     from functools import wraps
     from django.http import HttpResponseForbidden
     from django.contrib.auth.decorators import login_required
+    from django.core.exceptions import PermissionDenied
 
     @wraps(view_func)
     @login_required
     def _wrapped(request, *args, **kwargs):
         from apps.accounts.engine import PermissionEngine
-        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.view').allowed or getattr(request.user, 'role', '') == 'admin'):
-            return HttpResponseForbidden('Admins only.')
+        if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'accounts.view').allowed or PermissionEngine.evaluate(request.user, 'dashboard.view').allowed):
+            if request.headers.get('HX-Request'):
+                from django.template.loader import render_to_string
+                content = render_to_string(
+                    'cotton/permission_denied_hx.html',
+                    {'message': 'You do not have permission to access this administrative resource.'},
+                    request=request
+                )
+                resp = HttpResponseForbidden(content, content_type='text/html')
+                resp['HX-Reswap'] = 'none'
+                return resp
+            raise PermissionDenied("Admins only.")
         return view_func(request, *args, **kwargs)
     return _wrapped
 
@@ -2076,7 +2087,9 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
 
 
 def export_leave_monthly_xlsx(request):
-    if not request.user.is_authenticated or request.user.role not in ['admin', 'hr', 'manager']:
+    from apps.accounts.engine import PermissionEngine
+    eval_res = PermissionEngine.evaluate(request.user, 'leave.view', action_type='view')
+    if not eval_res.allowed:
         return HttpResponseForbidden("Access Denied")
 
     import openpyxl
@@ -2098,16 +2111,29 @@ def export_leave_monthly_xlsx(request):
     month_start = dt_mod.date(year, month, 1)
     month_end = dt_mod.date(year, month, last_day)
 
-    employees = EmployeeProfile.objects.filter(is_active=True).select_related('branch').order_by('full_name')
+    base_employees = EmployeeProfile.objects.filter(is_active=True).select_related('branch').order_by('full_name')
+    employees = PermissionEngine.filter_by_data_scope(
+        user=request.user,
+        queryset=base_employees,
+        codename='leave.view',
+        branch_field='branch'
+    )
     if emp_id:
         employees = employees.filter(id=emp_id)
     if branch_id:
         employees = employees.filter(branch_id=branch_id)
 
     leave_types = list(LeaveType.objects.all().order_by('name'))
-    leave_requests = LeaveRequest.objects.filter(
+    base_leave_requests = LeaveRequest.objects.filter(
         start_date__lte=month_end, end_date__gte=month_start
     ).select_related('employee', 'leave_type')
+    leave_requests = PermissionEngine.filter_by_data_scope(
+        user=request.user,
+        queryset=base_leave_requests,
+        codename='leave.view',
+        branch_field='employee__branch',
+        employee_field='employee'
+    )
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -2525,18 +2551,23 @@ def get_monthly_grid_data(request):
     branch_id = request.GET.get('branch') or request.GET.get('branch_id')
     employee_id = request.GET.get('employee')
 
-    # Enforce Manager branch limits
-    role_name = request.user.role.name if hasattr(request.user.role, 'name') else request.user.role
-    can_view_all = (role_name == 'admin')
+    from apps.accounts.engine import PermissionEngine
+    from apps.accounts.models import DataScope
+
+    eval_res = PermissionEngine.evaluate(request.user, 'attendance.view', action_type='view')
+    if not eval_res.allowed:
+        return {'year': year, 'month': month, 'all_days': [], 'employees': [], 'att_lookup': {}, 'employee_stats': {}, 'approved_leaves': []}
+
+    can_view_all = request.user.is_superuser or eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY)
     profile = getattr(request.user, 'employee_profile', None)
 
-    if not can_view_all and role_name == 'manager':
-        if profile and profile.branch:
+    if not can_view_all:
+        if eval_res.data_scope == DataScope.BRANCH and profile and profile.branch:
             branch_id = str(profile.branch.id)
+        elif eval_res.data_scope == DataScope.OWN and profile:
+            employee_id = str(profile.id)
         else:
             branch_id = None
-    elif not can_view_all:
-        branch_id = None
 
     return reporting_service.get_monthly_report_data(
         year=year,

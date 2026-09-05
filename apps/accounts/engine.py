@@ -30,6 +30,22 @@ class PermissionResolutionResult:
         return self.allowed
 
 
+def validate_field_path(model, path):
+    """Validates if a Django field path exists on the given model without raising FieldError."""
+    if not model or not path:
+        return False
+    parts = path.split('__')
+    curr_model = model
+    for part in parts:
+        try:
+            field = curr_model._meta.get_field(part)
+            if hasattr(field, 'related_model') and field.related_model:
+                curr_model = field.related_model
+        except Exception:
+            return False
+    return True
+
+
 class PermissionEngine:
 
     @classmethod
@@ -99,26 +115,10 @@ class PermissionEngine:
                     pass
             return resolved
 
-        # 1. Fetch assigned active roles
+        # 1. Fetch assigned active roles (strictly read-only)
         assigned_role_ids = list(
             UserRoleAssignment.objects.filter(user=user, role__is_active=True).values_list('role_id', flat=True)
         )
-        if not assigned_role_ids and getattr(user, 'role', None):
-            if not Permission.objects.exists():
-                try:
-                    from apps.accounts.rbac_registry import RBACRegistryService
-                    RBACRegistryService.sync_database()
-                except Exception:
-                    pass
-            role_obj = Role.objects.filter(code=user.role, is_active=True).first()
-            if not role_obj:
-                role_obj = Role.objects.create(
-                    code=user.role,
-                    name=getattr(user, 'get_role_display', lambda: user.role.capitalize())(),
-                    is_active=True
-                )
-            UserRoleAssignment.objects.get_or_create(user=user, role=role_obj)
-            assigned_role_ids = [role_obj.id]
 
         # 2. Fetch role permissions
         role_perms = RolePermission.objects.filter(
@@ -215,6 +215,13 @@ class PermissionEngine:
         # -------------------------------------------------------------
         resolved_map = cls.get_user_resolved_permissions(user)
         perm_entry = resolved_map.get(codename)
+
+        if not perm_entry and '.' in codename:
+            mod_part, act_part = codename.rsplit('.', 1)
+            if act_part == 'create':
+                perm_entry = resolved_map.get(f"{mod_part}.add")
+            elif act_part == 'add':
+                perm_entry = resolved_map.get(f"{mod_part}.create")
 
         if perm_entry is not None and not perm_entry.get('granted'):
             # Explicitly revoked or denied
@@ -329,6 +336,9 @@ class PermissionEngine:
             if not user_branch:
                 return False
 
+            if getattr(obj, '__class__', None) and obj.__class__.__name__ == 'Branch':
+                return obj == user_branch
+
             obj_branch = None
             if hasattr(obj, 'branch'):
                 obj_branch = obj.branch
@@ -339,14 +349,14 @@ class PermissionEngine:
             elif hasattr(obj, 'user') and hasattr(obj.user, 'employee_profile') and obj.user.employee_profile:
                 obj_branch = obj.user.employee_profile.branch
 
-            return obj_branch == user_branch
+            return obj_branch is not None and obj_branch == user_branch
 
         if scope == DataScope.DEPARTMENT:
             user_dept = getattr(emp_master, 'department', None)
             if not user_dept:
                 return False
             obj_dept = getattr(obj, 'department', None)
-            return obj_dept == user_dept
+            return obj_dept is not None and obj_dept == user_dept
 
         if scope == DataScope.TEAM:
             if not emp_master:
@@ -358,12 +368,16 @@ class PermissionEngine:
                 return obj.employee.master_employee_id in subordinate_ids
             return False
 
+        if scope in (DataScope.GLOBAL, DataScope.COMPANY):
+            return True
+
         return False
 
     @classmethod
     def filter_by_data_scope(cls, user, queryset, codename, employee_field='employee', branch_field='branch', dept_field='department'):
         """
         Applies automated data scope filtering to QuerySet based on user's resolved scope.
+        Validates field paths and fails closed (none()) rather than leaking or throwing FieldError.
         """
         if not user or not user.is_authenticated:
             return queryset.none()
@@ -385,9 +399,9 @@ class PermissionEngine:
 
         if scope == DataScope.OWN:
             q_filter = Q()
-            if emp_master:
+            if emp_master and validate_field_path(queryset.model, f"{employee_field}__master_employee"):
                 q_filter |= Q(**{f"{employee_field}__master_employee": emp_master})
-            if emp_profile:
+            if emp_profile and validate_field_path(queryset.model, employee_field):
                 q_filter |= Q(**{f"{employee_field}": emp_profile})
 
             # Check if model itself is Employee or has ownership fields
@@ -403,7 +417,12 @@ class PermissionEngine:
             elif 'user' in field_names and not (emp_master or emp_profile):
                 q_filter |= Q(user=user)
 
-            return queryset.filter(q_filter) if q_filter else queryset.none()
+            if not q_filter:
+                return queryset.none()
+            try:
+                return queryset.filter(q_filter)
+            except Exception:
+                return queryset.none()
 
         if scope == DataScope.TEAM:
             q_filter = Q()
@@ -411,8 +430,14 @@ class PermissionEngine:
                 from apps.employees.hierarchy_services import OrgHierarchyService
                 subordinate_ids = list(OrgHierarchyService.get_all_subordinates(emp_master).values_list('id', flat=True))
                 subordinate_ids.append(emp_master.id)
-                q_filter |= Q(**{f"{employee_field}__master_employee_id__in": subordinate_ids})
-            return queryset.filter(q_filter) if q_filter else queryset.none()
+                if validate_field_path(queryset.model, f"{employee_field}__master_employee"):
+                    q_filter |= Q(**{f"{employee_field}__master_employee_id__in": subordinate_ids})
+            if not q_filter:
+                return queryset.none()
+            try:
+                return queryset.filter(q_filter)
+            except Exception:
+                return queryset.none()
 
         if scope == DataScope.BRANCH:
             user_branch = None
@@ -424,7 +449,13 @@ class PermissionEngine:
             if user_branch:
                 if getattr(queryset.model, '__name__', '') == 'Branch':
                     return queryset.filter(pk=user_branch.pk)
-                return queryset.filter(**{f"{branch_field}": user_branch})
+                if not validate_field_path(queryset.model, branch_field):
+                    logger.warning("Configured branch_field '%s' does not exist on model %s. Failing closed.", branch_field, queryset.model)
+                    return queryset.none()
+                try:
+                    return queryset.filter(**{f"{branch_field}": user_branch})
+                except Exception:
+                    return queryset.none()
             return queryset.none()
 
         if scope == DataScope.DEPARTMENT:
@@ -433,10 +464,16 @@ class PermissionEngine:
                 user_dept = emp_master.department
 
             if user_dept:
-                return queryset.filter(**{f"{dept_field}": user_dept})
+                if not validate_field_path(queryset.model, dept_field):
+                    logger.warning("Configured dept_field '%s' does not exist on model %s. Failing closed.", dept_field, queryset.model)
+                    return queryset.none()
+                try:
+                    return queryset.filter(**{f"{dept_field}": user_dept})
+                except Exception:
+                    return queryset.none()
             return queryset.none()
 
-        return queryset
+        return queryset.none()
 
     @classmethod
     def get_scoped_object_or_404(cls, model_or_qs, user, codename, pk, action_type='view', branch_field='branch', employee_field='employee', dept_field='department'):

@@ -99,7 +99,7 @@
          const newVal = !currentVal;
 
          if (action === 'all') {
-           ['add', 'edit', 'delete', 'update'].forEach(act => {
+           ['view', 'add', 'edit', 'update', 'delete'].forEach(act => {
              if (!this.isDisabled(nodeId, act)) {
                if (!this.selections[nodeId]) this.selections[nodeId] = {};
                if (!this.indeterminates[nodeId]) this.indeterminates[nodeId] = {};
@@ -113,7 +113,7 @@
            // Cascade down to all descendants
            const desc = this.descendantsMap[nodeId] || [];
            desc.forEach(cid => {
-             ['add', 'edit', 'delete', 'update'].forEach(act => {
+             ['view', 'add', 'edit', 'update', 'delete'].forEach(act => {
                if (!this.isDisabled(cid, act)) {
                  if (!this.selections[cid]) this.selections[cid] = {};
                  if (!this.indeterminates[cid]) this.indeterminates[cid] = {};
@@ -154,11 +154,11 @@
        updateNodeAllState(nodeId) {
          const sel = this.selections[nodeId] || {};
          const indet = this.indeterminates[nodeId] || {};
-         const acts = ['add', 'edit', 'delete', 'update'];
+         const acts = ['view', 'add', 'edit', 'update', 'delete'];
          const trueCount = acts.filter(a => sel[a]).length;
          const hasIndet = acts.some(a => indet[a]);
 
-         if (trueCount === 4 && !hasIndet) {
+         if (trueCount === 5 && !hasIndet) {
            sel['all'] = true;
            indet['all'] = false;
          } else if (trueCount > 0 || hasIndet) {
@@ -176,7 +176,7 @@
            const children = this.childrenMap[currId] || [];
            if (children.length > 0) {
              if (action === 'all') {
-               ['add', 'edit', 'delete', 'update'].forEach(act => {
+               ['view', 'add', 'edit', 'update', 'delete'].forEach(act => {
                  this.recalculateParentAction(currId, act, children);
                });
              } else {
@@ -453,6 +453,9 @@
                 <i data-lucide="layers" class="w-3.5 h-3.5 text-primary"></i>
                 <span>Module / Submodule / Menu / Submenu</span>
               </div>
+            </th>
+            <th scope="col" class="py-3 px-2 text-center w-20 font-semibold">
+              <span title="View: Access and navigation capability">View</span>
             </th>
             <th scope="col" class="py-3 px-2 text-center w-20 font-semibold">
               <span title="Add: Creation capability">Add</span>

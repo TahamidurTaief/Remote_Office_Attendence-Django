@@ -97,7 +97,24 @@
     </div>
   </td>
 
-  {# ── 2. Add Capability Checkbox ── #}
+  {# ── 2. View Capability Checkbox ── #}
+  <td class="py-2.5 px-2 text-center w-20">
+    <div class="flex items-center justify-center">
+      <c-checkbox
+        id="cb-{{ node.id }}-view"
+        name="cb_{{ node.id }}_view"
+        extra_class="min-h-[44px] min-w-[44px] justify-center"
+        input_class="w-4 h-4 cursor-pointer text-sky-600 focus:ring-sky-500/20"
+        x-bind:checked="isChecked(nid, 'view')"
+        x-bind:indeterminate="isIndeterminate(nid, 'view')"
+        x-bind:disabled="isDisabled(nid, 'view')"
+        @change="toggleAction(nid, 'view')"
+        aria-label="View permission for {{ node.name }}"
+      ></c-checkbox>
+    </div>
+  </td>
+
+  {# ── 3. Add Capability Checkbox ── #}
   <td class="py-2.5 px-2 text-center w-20">
     <div class="flex items-center justify-center">
       <c-checkbox

@@ -9,7 +9,7 @@ import csv
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.contrib import messages
 from apps.attendance.sync_utils import parse_and_validate_client_time
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from datetime import date, timedelta
 from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
@@ -1850,7 +1850,8 @@ def staff_task_complete(request, pk):
             )
 
     is_manager_or_admin = False
-    if request.user.is_superuser or request.user.role in ['admin', 'manager']:
+    from apps.accounts.engine import PermissionEngine
+    if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.update', action_type='update').allowed:
         is_manager_or_admin = True
     elif employee and task.project:
         if task.project.project_managers.filter(id=employee.id).exists():
@@ -2126,7 +2127,7 @@ class ProjectGanttView(LoginRequiredMixin, View):
             pk=pk
         )
 
-        is_admin = getattr(request.user, 'is_superuser', False) or getattr(request.user, 'role', '') in ('admin', 'hr')
+        is_admin = getattr(request.user, 'is_superuser', False) or PermissionEngine.evaluate(request.user, 'projects.view', action_type='view').allowed
         if not is_admin and hasattr(request.user, 'employee_profile'):
             profile = request.user.employee_profile
             is_assigned = (

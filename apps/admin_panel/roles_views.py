@@ -54,6 +54,9 @@ def log_rbac_event(actor, action, target=None, summary="", request=None, before=
     )
 
 
+from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
+
+
 class RBACRoleAdminMixin(AccessMixin):
     """
     Enforces dynamic PermissionEngine decisions for RBAC role administration.
@@ -65,8 +68,16 @@ class RBACRoleAdminMixin(AccessMixin):
     def handle_no_permission(self):
         if not self.request.user.is_authenticated:
             return super().handle_no_permission()
+        if self.request.content_type == 'application/json' or self.request.headers.get('Accept') == 'application/json':
+            return JsonResponse({'status': 'error', 'message': 'Access denied: insufficient RBAC permissions to administer system roles.'}, status=403)
         if self.request.headers.get('HX-Request'):
-            response = HttpResponseForbidden("Permission denied.")
+            from django.template.loader import render_to_string
+            content = render_to_string(
+                'cotton/permission_denied_hx.html',
+                {'message': 'You do not have permission to administer roles.'},
+                request=self.request
+            )
+            response = HttpResponseForbidden(content)
             response['HX-Reswap'] = 'none'
             return response
         raise PermissionDenied("Access denied: insufficient RBAC permissions to administer system roles.")
@@ -348,7 +359,7 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
             disabled_actions[nid] = {}
             scopes[nid] = DataScope.GLOBAL
 
-            for act in ['add', 'edit', 'delete', 'update']:
+            for act in ['view', 'add', 'edit', 'update', 'delete']:
                 code = f"{prefix}.{act}"
                 is_granted = is_sys_owner or (code in assigned_perm_codes)
 
@@ -366,8 +377,8 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
                     disabled_actions[nid][act] = False
 
             # Node-level All state
-            acts_granted = sum(1 for act in ['add', 'edit', 'delete', 'update'] if selections[nid][act])
-            if acts_granted == 4:
+            acts_granted = sum(1 for act in ['view', 'add', 'edit', 'update', 'delete'] if selections[nid][act])
+            if acts_granted == 5:
                 selections[nid]['all'] = True
                 indeterminates[nid]['all'] = False
             elif acts_granted > 0:
@@ -385,7 +396,7 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
                 if not cids:
                     continue
 
-                for act in ['add', 'edit', 'delete', 'update']:
+                for act in ['view', 'add', 'edit', 'update', 'delete']:
                     child_states = [selections[cid][act] for cid in cids if cid in selections]
                     child_indets = [indeterminates[cid][act] for cid in cids if cid in indeterminates]
                     all_true = all(child_states) if child_states else False

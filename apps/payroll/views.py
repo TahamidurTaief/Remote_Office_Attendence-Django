@@ -13,7 +13,7 @@ from django.db.models import Sum, Count, Q
 from django.http import HttpResponse, JsonResponse, HttpResponseBadRequest
 from django.contrib import messages
 
-from apps.accounts.mixins import RoleRequiredMixin, AdminRequiredMixin
+from apps.accounts.mixins import RoleRequiredMixin, AdminRequiredMixin, RBACPermissionRequiredMixin
 from apps.payroll.models import (
     PayrollRun,
     PayrollRunStatus,
@@ -47,19 +47,17 @@ from apps.branches.models import Branch
 PAYROLL_MANAGER_ROLES = ['admin', 'system_owner', 'hr', 'finance', 'accounts']
 
 
-class PayrollManagerMixin(RoleRequiredMixin):
-    allowed_roles = PAYROLL_MANAGER_ROLES
+class PayrollManagerMixin(RBACPermissionRequiredMixin):
+    required_permission = 'payroll.view'
 
 
 def is_payroll_manager(user):
-    if not user.is_authenticated:
+    if not user or not user.is_authenticated:
         return False
     if user.is_superuser:
         return True
-    user_roles = [a.role.code for a in user.role_assignments.select_related('role').filter(role__is_active=True)]
-    if not user_roles and hasattr(user, 'role'):
-        user_roles = [user.role]
-    return any(r in PAYROLL_MANAGER_ROLES for r in user_roles)
+    from apps.accounts.engine import PermissionEngine
+    return PermissionEngine.evaluate(user, 'payroll.view').allowed
 
 
 class PayrollRunListView(PayrollManagerMixin, ListView):

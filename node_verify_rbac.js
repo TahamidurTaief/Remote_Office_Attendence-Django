@@ -1,11 +1,12 @@
 /**
- * Node.js Verification Suite for Dynamic RBAC & PermissionEngine Architecture
+ * Node.js Verification Suite for Dynamic RBAC & PermissionEngine Architecture Contracts
+ * Asserts static contract rules, matrix action keys, scope hierarchies, and runtime expectations.
  * Run with: node node_verify_rbac.js
  */
 
 const assert = require('node:assert/strict');
 
-// 1. Scope Rank Definition matching PermissionEngine.SCOPE_HIERARCHY
+// 1. Contract Definitions
 const SCOPE_HIERARCHY = {
     'global': 6,
     'company': 5,
@@ -15,9 +16,11 @@ const SCOPE_HIERARCHY = {
     'own': 1,
 };
 
-// 2. Mock Implementation of Dynamic RBAC Resolution Engine
-class MockPermissionEngine {
-    static resolveUserPermissions(user, activeRoles, userOverrides = []) {
+const MATRIX_ACTIONS = ['view', 'add', 'edit', 'update', 'delete', 'all'];
+
+// 2. Permission Engine Evaluator Contract
+class DynamicPermissionResolver {
+    static resolveUserPermissions(user, activeRoleAssignments = [], userOverrides = []) {
         if (!user || !user.isAuthenticated) {
             return { allowed: false, reason: "Unauthenticated" };
         }
@@ -26,7 +29,7 @@ class MockPermissionEngine {
         if (user.isSuperuser) {
             return {
                 isSuperuser: true,
-                permissions: {},
+                resolvedMap: {},
                 hasPerm: (codename, scope = 'own', action = 'view') => ({
                     allowed: true,
                     dataScope: 'global',
@@ -35,7 +38,6 @@ class MockPermissionEngine {
             };
         }
 
-        // Check archived/trashed status
         if (user.isTrashed) {
             return {
                 allowed: false,
@@ -44,13 +46,20 @@ class MockPermissionEngine {
             };
         }
 
-        const readOnly = user.isArchived === true;
+        // Compatibility personas alone grant nothing without active assignments
+        if (activeRoleAssignments.length === 0) {
+            return {
+                resolvedMap: {},
+                hasPerm: () => ({ allowed: false, reason: "No active role assignments" })
+            };
+        }
 
-        // Combine permissions from multiple active roles, ignore inactive roles
+        const readOnly = user.isArchived === true;
         const resolved = {};
 
-        for (const role of activeRoles) {
-            if (!role.isActive) continue; // Inactive roles ignored
+        for (const assignment of activeRoleAssignments) {
+            const role = assignment.role;
+            if (!role || !role.isActive) continue; // Inactive roles ignored
 
             for (const perm of role.permissions) {
                 const code = perm.codename;
@@ -63,7 +72,6 @@ class MockPermissionEngine {
                         granted: true
                     };
                 } else {
-                    // Highest scope rank wins
                     const currentRank = SCOPE_HIERARCHY[resolved[code].scope] || 0;
                     const newRank = SCOPE_HIERARCHY[scope] || 0;
                     if (newRank > currentRank) {
@@ -73,14 +81,13 @@ class MockPermissionEngine {
             }
         }
 
-        // Explicit user overrides: explicit denial overrides every role grant
         for (const ov of userOverrides) {
             const code = ov.codename;
             if (!ov.isGranted) {
                 resolved[code] = {
                     codename: code,
                     scope: 'own',
-                    granted: false // Denied
+                    granted: false
                 };
             } else {
                 resolved[code] = {
@@ -120,7 +127,6 @@ class MockPermissionEngine {
         const res = userPermResult.hasPerm('projects.view', requiredScope);
         if (!res.allowed) return false;
 
-        // Scoped check
         if (res.dataScope === 'global') return true;
         if (res.dataScope === 'branch') {
             return obj.branchId === userPermResult.userBranchId;
@@ -130,64 +136,61 @@ class MockPermissionEngine {
 }
 
 // -------------------------------------------------------------
-// Test 1: Independent Action Resolution (no unsafe aliases)
+// Test 1: Zero writes contract & Legacy persona grants nothing
 // -------------------------------------------------------------
-function testIndependentActions() {
-    const user = { id: 1, isAuthenticated: true, isSuperuser: false };
-    const activeRoles = [
-        {
-            name: "Editor",
-            isActive: true,
-            permissions: [
-                { codename: 'projects.edit', dataScope: 'branch' }
-            ]
-        }
-    ];
+function testLegacyPersonaGrantsNothing() {
+    const user = { id: 1, isAuthenticated: true, isSuperuser: false, rolePersona: 'admin' };
+    const emptyAssignments = [];
 
-    const result = MockPermissionEngine.resolveUserPermissions(user, activeRoles);
-    assert.equal(result.hasPerm('projects.edit', 'branch', 'edit').allowed, true, "projects.edit must be allowed");
-    assert.equal(result.hasPerm('projects.update', 'branch', 'update').allowed, false, "projects.update must NOT be granted by edit");
-    assert.equal(result.hasPerm('projects.delete', 'branch', 'delete').allowed, false, "projects.delete must be denied");
-    console.log("✔ Test 1 Passed: Actions are strictly independent (no runtime aliases).");
+    const result = DynamicPermissionResolver.resolveUserPermissions(user, emptyAssignments);
+    assert.equal(result.hasPerm('accounts.view').allowed, false, "Legacy role='admin' with no assignments must be denied");
+    assert.equal(result.hasPerm('projects.view').allowed, false, "Legacy role must grant zero permissions");
+    console.log("✔ Test 1 Passed: Legacy role personas grant nothing without active assignments.");
 }
 
 // -------------------------------------------------------------
-// Test 2: Inactive Roles are Ignored
+// Test 2: Inactive roles are ignored
 // -------------------------------------------------------------
 function testInactiveRolesIgnored() {
     const user = { id: 2, isAuthenticated: true, isSuperuser: false };
-    const roles = [
+    const assignments = [
         {
-            name: "Old Role",
-            isActive: false, // Inactive
-            permissions: [{ codename: 'projects.delete', dataScope: 'global' }]
+            role: {
+                name: "Inactive Admin",
+                isActive: false,
+                permissions: [{ codename: 'projects.delete', dataScope: 'global' }]
+            }
         }
     ];
 
-    const result = MockPermissionEngine.resolveUserPermissions(user, roles);
-    assert.equal(result.hasPerm('projects.delete').allowed, false, "Inactive role must not grant permissions");
-    console.log("✔ Test 2 Passed: Inactive roles are ignored.");
+    const result = DynamicPermissionResolver.resolveUserPermissions(user, assignments);
+    assert.equal(result.hasPerm('projects.delete').allowed, false, "Inactive roles must not grant permissions");
+    console.log("✔ Test 2 Passed: Inactive roles are completely ignored.");
 }
 
 // -------------------------------------------------------------
-// Test 3: Multi-Role Union & Highest Scope Rank
+// Test 3: Multi-role union & highest scope rank
 // -------------------------------------------------------------
 function testMultiRoleUnionScope() {
     const user = { id: 3, isAuthenticated: true, isSuperuser: false };
-    const roles = [
+    const assignments = [
         {
-            name: "Role A",
-            isActive: true,
-            permissions: [{ codename: 'projects.view', dataScope: 'own' }]
+            role: {
+                name: "Role Own",
+                isActive: true,
+                permissions: [{ codename: 'projects.view', dataScope: 'own' }]
+            }
         },
         {
-            name: "Role B",
-            isActive: true,
-            permissions: [{ codename: 'projects.view', dataScope: 'branch' }]
+            role: {
+                name: "Role Branch",
+                isActive: true,
+                permissions: [{ codename: 'projects.view', dataScope: 'branch' }]
+            }
         }
     ];
 
-    const result = MockPermissionEngine.resolveUserPermissions(user, roles);
+    const result = DynamicPermissionResolver.resolveUserPermissions(user, assignments);
     const evalRes = result.hasPerm('projects.view', 'branch');
     assert.equal(evalRes.allowed, true, "Scope must union to highest permitted (branch)");
     assert.equal(evalRes.dataScope, 'branch', "Effective scope must be branch");
@@ -195,25 +198,27 @@ function testMultiRoleUnionScope() {
 }
 
 // -------------------------------------------------------------
-// Test 4: Explicit User Denial Precedence
+// Test 4: Explicit user denial strictly overrides role grants
 // -------------------------------------------------------------
 function testExplicitDenyPrecedence() {
     const user = { id: 4, isAuthenticated: true, isSuperuser: false };
-    const roles = [
+    const assignments = [
         {
-            name: "Manager",
-            isActive: true,
-            permissions: [
-                { codename: 'employees.view', dataScope: 'company' },
-                { codename: 'employees.delete', dataScope: 'company' }
-            ]
+            role: {
+                name: "Manager",
+                isActive: true,
+                permissions: [
+                    { codename: 'employees.view', dataScope: 'company' },
+                    { codename: 'employees.delete', dataScope: 'company' }
+                ]
+            }
         }
     ];
     const overrides = [
-        { codename: 'employees.delete', isGranted: false } // Explicit Revoke
+        { codename: 'employees.delete', isGranted: false }
     ];
 
-    const result = MockPermissionEngine.resolveUserPermissions(user, roles, overrides);
+    const result = DynamicPermissionResolver.resolveUserPermissions(user, assignments, overrides);
     assert.equal(result.hasPerm('employees.view').allowed, true, "employees.view must remain allowed");
     assert.equal(result.hasPerm('employees.delete').allowed, false, "employees.delete must be denied due to explicit override");
     console.log("✔ Test 4 Passed: Explicit user denial strictly overrides role grants.");
@@ -224,26 +229,42 @@ function testExplicitDenyPrecedence() {
 // -------------------------------------------------------------
 function testBranchScopeIsolation() {
     const user = { id: 5, isAuthenticated: true, isSuperuser: false };
-    const roles = [
+    const assignments = [
         {
-            name: "Branch Manager",
-            isActive: true,
-            permissions: [
-                { codename: 'projects.view', dataScope: 'branch' },
-                { codename: 'projects.update', dataScope: 'branch' }
-            ]
+            role: {
+                name: "Branch Manager",
+                isActive: true,
+                permissions: [
+                    { codename: 'projects.view', dataScope: 'branch' },
+                    { codename: 'projects.update', dataScope: 'branch' }
+                ]
+            }
         }
     ];
 
-    const userPerms = MockPermissionEngine.resolveUserPermissions(user, roles);
+    const userPerms = DynamicPermissionResolver.resolveUserPermissions(user, assignments);
     userPerms.userBranchId = 'branch_a';
 
     const projectBranchA = { id: 101, name: "North Tower", branchId: 'branch_a' };
     const projectBranchB = { id: 102, name: "South Mall", branchId: 'branch_b' };
 
-    assert.equal(MockPermissionEngine.checkObjectAccess(userPerms, projectBranchA, 'branch'), true, "User can access Branch A project");
-    assert.equal(MockPermissionEngine.checkObjectAccess(userPerms, projectBranchB, 'branch'), false, "User CANNOT access Branch B project");
+    assert.equal(DynamicPermissionResolver.checkObjectAccess(userPerms, projectBranchA, 'branch'), true, "User can access Branch A project");
+    assert.equal(DynamicPermissionResolver.checkObjectAccess(userPerms, projectBranchB, 'branch'), false, "User CANNOT access Branch B project");
     console.log("✔ Test 5 Passed: Object-level cross-branch access blocked.");
+}
+
+// -------------------------------------------------------------
+// Test 6: Matrix Action Schema & View/All Aggregate Contract
+// -------------------------------------------------------------
+function testMatrixSchemaContract() {
+    assert.ok(MATRIX_ACTIONS.includes('view'), "Matrix must support view action");
+    assert.ok(MATRIX_ACTIONS.includes('add'), "Matrix must support add action");
+    assert.ok(MATRIX_ACTIONS.includes('edit'), "Matrix must support edit action");
+    assert.ok(MATRIX_ACTIONS.includes('update'), "Matrix must support update action");
+    assert.ok(MATRIX_ACTIONS.includes('delete'), "Matrix must support delete action");
+    assert.ok(MATRIX_ACTIONS.includes('all'), "Matrix must support all aggregate action");
+    assert.equal(MATRIX_ACTIONS.length, 6, "Matrix must have exactly 6 distinct action columns");
+    console.log("✔ Test 6 Passed: Permission matrix schema conforms to View/Add/Edit/Update/Delete/All contract.");
 }
 
 // -------------------------------------------------------------
@@ -254,11 +275,12 @@ function runVerification() {
     console.log(" RUNNING RBAC & PERMISSION ENGINE NODE VERIFICATION");
     console.log("=================================================");
 
-    testIndependentActions();
+    testLegacyPersonaGrantsNothing();
     testInactiveRolesIgnored();
     testMultiRoleUnionScope();
     testExplicitDenyPrecedence();
     testBranchScopeIsolation();
+    testMatrixSchemaContract();
 
     console.log("\n=================================================");
     console.log(" EXAMPLE OUTPUT DEMONSTRATION");

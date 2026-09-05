@@ -138,13 +138,7 @@ def run_tailwind_build():
 
 def spot_check_raw_html_content():
     print("\n--- 6. RAW HTML CONTENT-PRESENCE SPOT CHECK WITH REAL DATA ---", flush=True)
-    orig_session_engine = getattr(settings, 'SESSION_ENGINE', None)
-    settings.SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
-    try:
-        return _run_spot_check_raw_html_content()
-    finally:
-        if orig_session_engine is not None:
-            settings.SESSION_ENGINE = orig_session_engine
+    return _run_spot_check_raw_html_content()
 
 def _run_spot_check_raw_html_content():
     from django.test import Client

@@ -13,11 +13,9 @@ from apps.accounts.engine import PermissionEngine
 def check_staff_role(user):
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser:
-        return True
-    if PermissionEngine.evaluate(user, 'attendance.view').allowed or hasattr(user, 'employee_profile'):
-        return True
-    return getattr(user, 'role', '') in ('staff', 'manager', 'admin')
+    if not getattr(user, 'is_active', True):
+        return False
+    return True
 
 
 @login_required

@@ -1,4 +1,12 @@
-from django.test import TestCase
+import io
+from django.test import TestCase as DjangoTestCase
+from django.core.management import call_command
+
+class TestCase(DjangoTestCase):
+    def _callSetUp(self):
+        super()._callSetUp()
+        call_command('migrate_legacy_roles', stdout=io.StringIO())
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from datetime import date, timedelta

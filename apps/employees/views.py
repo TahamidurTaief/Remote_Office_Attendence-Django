@@ -643,12 +643,13 @@ class EmployeeMasterDeleteView(View):
 
     @staticmethod
     def _has_delete_permission(user):
+        if not user or not user.is_authenticated:
+            return False
         if user.is_superuser:
             return True
-        user_role_codes = [assignment.role.code for assignment in user.role_assignments.select_related('role').filter(role__is_active=True)]
-        if not user_role_codes and hasattr(user, 'role'):
-            user_role_codes = [user.role]
-        if any(r in ['admin', 'system_owner'] for r in user_role_codes):
+        from apps.accounts.engine import PermissionEngine
+        res = PermissionEngine.evaluate(user, 'employees.delete', action_type='delete')
+        if res.allowed:
             return True
         if user.has_perm('employees.delete_employee'):
             return True

@@ -685,30 +685,38 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
         from apps.attendance.models import ForgotCheckoutRequest
         qs = ForgotCheckoutRequest.objects.filter(status__in=['pending_manager', 'pending_hr']).select_related('attendance__employee')
         
-        # Scoping check: non-admin managers only see their reporting team
-        user_roles = [a.role.code for a in user.role_assignments.select_related('role').filter(role__is_active=True)] or [str(getattr(user, 'role', ''))]
-        if 'manager' in user_roles and not user.is_superuser and not any(r in ('admin', 'system_owner', 'hr') for r in user_roles):
-            qs = qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
+        from apps.accounts.engine import PermissionEngine
+        eval_res = PermissionEngine.evaluate(user, 'attendance.view', action_type='view')
+        if not user.is_superuser:
+            if eval_res.data_scope in ('own', 'team'):
+                qs = qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
+            elif eval_res.data_scope in ('department', 'branch'):
+                qs = PermissionEngine.filter_by_data_scope(user, qs, employee_field='attendance__employee')
         return qs
         
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         from apps.attendance.models import AttendanceCorrectionRequest, OvertimeRequest
+        from apps.accounts.engine import PermissionEngine
         
-        user_roles = [a.role.code for a in user.role_assignments.select_related('role').filter(role__is_active=True)] or [str(getattr(user, 'role', ''))]
-        is_scoped_manager = 'manager' in user_roles and not user.is_superuser and not any(r in ('admin', 'system_owner', 'hr') for r in user_roles)
+        eval_res = PermissionEngine.evaluate(user, 'attendance.view', action_type='view')
+        is_team_scoped = not user.is_superuser and eval_res.data_scope in ('own', 'team')
 
         # Corrections
         corr_qs = AttendanceCorrectionRequest.objects.filter(status='pending').select_related('attendance__employee')
-        if is_scoped_manager:
+        if is_team_scoped:
             corr_qs = corr_qs.filter(attendance__employee__master_employee__reporting_manager__user=user)
+        elif not user.is_superuser and eval_res.data_scope in ('department', 'branch'):
+            corr_qs = PermissionEngine.filter_by_data_scope(user, corr_qs, employee_field='attendance__employee')
         context['corrections'] = corr_qs
         
         # Overtime Requests (Workflow-backed)
         ot_qs = OvertimeRequest.objects.filter(status__in=['pending', 'manager_approved']).select_related('employee', 'attendance')
-        if is_scoped_manager:
+        if is_team_scoped:
             ot_qs = ot_qs.filter(employee__master_employee__reporting_manager__user=user)
+        elif not user.is_superuser and eval_res.data_scope in ('department', 'branch'):
+            ot_qs = PermissionEngine.filter_by_data_scope(user, ot_qs, employee_field='employee')
         context['overtimes'] = ot_qs
         
         return context

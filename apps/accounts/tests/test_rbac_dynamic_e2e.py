@@ -259,3 +259,96 @@ class DynamicRBACEndToEndTests(TestCase):
         # Cache should be invalidated by signal or service
         eval_after = PermissionEngine.evaluate(self.user_a, 'projects.add')
         self.assertTrue(eval_after.allowed)
+
+    def test_permission_resolution_is_purely_read_only_with_zero_db_writes(self):
+        """Evaluating permissions for a user must NOT write/create any Role or UserRoleAssignment records."""
+        unassigned_user = User.objects.create_user(
+            email="pure_readonly@example.com",
+            password="Password123!",
+            role="admin"  # legacy persona
+        )
+
+        role_count_before = Role.objects.count()
+        assignment_count_before = UserRoleAssignment.objects.count()
+
+        # Call get_user_resolved_permissions directly
+        resolved = PermissionEngine.get_user_resolved_permissions(unassigned_user)
+        self.assertEqual(resolved, {})
+
+        # Call evaluate
+        eval_res = PermissionEngine.evaluate(unassigned_user, 'projects.view')
+        self.assertFalse(eval_res.allowed)
+
+        # Assert ZERO records created
+        self.assertEqual(Role.objects.count(), role_count_before)
+        self.assertEqual(UserRoleAssignment.objects.count(), assignment_count_before)
+        self.assertEqual(UserRoleAssignment.objects.filter(user=unassigned_user).count(), 0)
+
+    def test_legacy_role_persona_grants_zero_access_without_assignment(self):
+        """User with role='admin' but no active UserRoleAssignment gets 403 denied on protected routes."""
+        from django.test import Client
+        legacy_admin = User.objects.create_user(
+            email="legacy_admin@example.com",
+            password="Password123!",
+            role="admin"
+        )
+        client = Client()
+        client.force_login(legacy_admin)
+
+        # Accessing admin panel dashboard or roles must return 403 Forbidden
+        response = client.get('/admin-panel/roles/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_filter_by_data_scope_invalid_field_fails_closed(self):
+        """filter_by_data_scope returns queryset.none() when given invalid/non-existent fields."""
+        role = Role.objects.create(name="Scoped Role", code="scoped_role", is_active=True)
+        RolePermission.objects.create(role=role, permission=self.perm_proj_view, data_scope=DataScope.BRANCH)
+        UserRoleAssignment.objects.create(user=self.user_a, role=role)
+
+        qs = Project.objects.all()
+        # Non-existent field lookup
+        scoped_qs = PermissionEngine.filter_by_data_scope(
+            self.user_a,
+            qs,
+            codename='projects.view',
+            branch_field="non_existent_field__invalid_path"
+        )
+        self.assertEqual(scoped_qs.count(), 0)
+        self.assertEqual(list(scoped_qs), [])
+
+    def test_htmx_permission_denied_returns_cotton_alert(self):
+        """HTMX request to a permission-protected endpoint returns 403 with Cotton alert partial and HX-Reswap none."""
+        from django.test import Client
+        client = Client()
+        client.force_login(self.user_b)  # user_b has no roles
+
+        response = client.get(
+            '/admin-panel/roles/',
+            HTTP_HX_REQUEST='true'
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.headers.get('HX-Reswap'), 'none')
+        content = response.content.decode('utf-8')
+        self.assertIn("Access Denied", content)
+
+    def test_denied_role_mutation_records_audit_event(self):
+        """Unauthorized role mutation rolls back and records a denied audit event."""
+        from apps.audit.models import AuditEvent
+        role_base = Role.objects.create(name="Base Role 2", code="base_role_2", is_active=True)
+        perm_roles_edit = Permission.objects.get(codename='accounts.edit')
+        RolePermission.objects.create(role=role_base, permission=perm_roles_edit, data_scope=DataScope.BRANCH)
+        UserRoleAssignment.objects.create(user=self.user_a, role=role_base)
+
+        target_role = Role.objects.create(name="Custom Target 2", code="custom_target_2", is_active=True)
+
+        audit_count_before = AuditEvent.objects.filter(action="role_permissions_matrix_denied").count()
+
+        with self.assertRaises(PermissionDenied):
+            RolePermissionAssignmentService.sync_role_permissions(
+                role=target_role,
+                selections={'mod_projects': {'delete': True}},
+                actor=self.user_a
+            )
+
+        audit_count_after = AuditEvent.objects.filter(action="role_permissions_matrix_denied").count()
+        self.assertGreater(audit_count_after, audit_count_before)
