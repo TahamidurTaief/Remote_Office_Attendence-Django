@@ -556,6 +556,30 @@ html.dark {
         margin-left: auto;
     }
 
+    /* ── Sidebar Module Filter Transitions ── */
+    .ft-module-enter {
+        transition: opacity 220ms cubic-bezier(0, 0, 0.2, 1), transform 220ms cubic-bezier(0, 0, 0.2, 1);
+    }
+    .ft-module-enter-start {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    .ft-module-enter-end {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .ft-module-leave {
+        transition: opacity 160ms cubic-bezier(0.4, 0, 1, 1), transform 160ms cubic-bezier(0.4, 0, 1, 1);
+    }
+    .ft-module-leave-start {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .ft-module-leave-end {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
     /* ── Topbar ──────────────────────────────────────────────────────────── */
     .ft-topbar {
         position: sticky;

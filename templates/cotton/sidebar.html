@@ -16,6 +16,11 @@
        mobileOpen: false,
        currentOpenSubmenu: localStorage.getItem('ft_sidebar_active_submenu') || null,
        search: '',
+       activeModule: (function() {
+         const val = localStorage.getItem('ft_active_module');
+         const valid = ['all', 'overview', 'people', 'work', 'finance', 'reports', 'administration', 'main', 'account'];
+         return valid.includes(val) ? val : 'all';
+       })(),
 
        toggle() {
          this.collapsed = !this.collapsed;
@@ -63,14 +68,25 @@
        matchSearch(label) {
          if (!this.search) return true;
          return label.toLowerCase().includes(this.search.toLowerCase());
+       },
+       matchModule(mod) {
+         if (this.search) return true;
+         if (!mod || mod === 'ai_workspace') return true;
+         const current = this.activeModule || ($store.moduleFilter ? $store.moduleFilter.active : 'all');
+         if (current === 'all') return true;
+         return current === mod;
        }
      }"
+     @module-filter-changed.window="activeModule = $event.detail.module"
      @toggle-sidebar.window="toggle()"
      @toggle-mobile-sidebar.window="mobileOpen = !mobileOpen"
      @keydown.escape.window="mobileOpen = false"
      x-init="
        const main = document.getElementById('ft-main-content');
        if (main) main.classList.toggle('sidebar-collapsed', collapsed);
+       if ($store.moduleFilter) {
+         $watch('$store.moduleFilter.active', val => { activeModule = val || 'all'; });
+       }
        if (window.lucide) window.lucide.createIcons();
      ">
 
@@ -183,552 +199,156 @@
       {% if shell_type == 'staff' %}
       {# ════════════════════ STAFF APP NAVIGATION ════════════════════ #}
 
-      {# Quick Staff Status Pill #}
-      <div x-show="!collapsed" class="mx-2 mb-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60" x-cloak>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-            <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">Staff Workspace</span>
+      {# ── STAFF MODULE: MAIN ── #}
+      <div data-module="main"
+           x-show="matchModule('main')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# Quick Staff Status Pill #}
+        <div x-show="!collapsed" class="mx-2 mb-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60" x-cloak>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">Staff Workspace</span>
+            </div>
+            <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">PWA</span>
           </div>
-          <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">PWA</span>
         </div>
-      </div>
 
-      {# ── SECTION: MAIN ── #}
-      <div x-show="!collapsed && (matchSearch('Home') || matchSearch('Check In') || matchSearch('Attendance') || matchSearch('Field Visit'))" x-cloak>
-        <div class="ft-group-header"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i><span>MAIN</span></div>
-      </div>
-
-      {# Home / Dashboard #}
-      <a href="{% url 'staff:home' %}"
-         class="ft-nav-item {% if path == '/staff/home/' or path == '/staff/' %}active{% endif %}"
-         x-show="matchSearch('Home') || matchSearch('Dashboard')"
-         :title="collapsed ? 'Home' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="home" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Home</span>
-      </a>
-
-      {# Live Attendance / Check In #}
-      <a href="{% url 'staff:check_in' %}"
-         class="ft-nav-item {% if '/staff/check-in/' in path %}active{% endif %}"
-         x-show="matchSearch('Check In') || matchSearch('Attendance')"
-         :title="collapsed ? 'Check In / Out' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="clock" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Check In / Out</span>
-        <span class="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" x-show="!collapsed" x-cloak>Live</span>
-      </a>
-
-      {# Attendance History #}
-      <a href="{% url 'staff:attendance' %}"
-         class="ft-nav-item {% if '/staff/attendance' in path and '/staff/check-in' not in path %}active{% endif %}"
-         x-show="matchSearch('Attendance History') || matchSearch('My Attendance') || matchSearch('Attendance')"
-         :title="collapsed ? 'Attendance History' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="calendar-check" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Attendance History</span>
-      </a>
-
-      {# Field Visit #}
-      <a href="{% url 'staff:field_visit' %}"
-         class="ft-nav-item {% if '/staff/field-visit/' in path %}active{% endif %}"
-         x-show="matchSearch('Field Visit')"
-         :title="collapsed ? 'Field Visit' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="map-pin" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Field Visit</span>
-      </a>
-
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ── SECTION: WORK ── #}
-      <div x-show="!collapsed && (matchSearch('Tasks') || matchSearch('Projects') || matchSearch('My Tasks'))" x-cloak>
-        <div class="ft-group-header"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i><span>WORK</span></div>
-      </div>
-
-      {# My Tasks #}
-      <a href="{% url 'staff:my_tasks' %}"
-         class="ft-nav-item {% if '/staff/my-tasks/' in path %}active{% endif %}"
-         x-show="matchSearch('My Tasks') || matchSearch('Tasks')"
-         :title="collapsed ? 'My Tasks' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="check-square" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Tasks</span>
-        {% if pending_tasks_count %}
-          <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_tasks_count }}</span>
-        {% endif %}
-      </a>
-
-      {# My Projects #}
-      <a href="{% url 'staff:my_projects' %}"
-         class="ft-nav-item {% if '/staff/projects/' in path %}active{% endif %}"
-         x-show="matchSearch('My Projects') || matchSearch('Projects')"
-         :title="collapsed ? 'My Projects' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="briefcase" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Projects</span>
-      </a>
-
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ── SECTION: LEAVE & FINANCE ── #}
-      <div x-show="!collapsed && (matchSearch('Leave') || matchSearch('Expense') || matchSearch('Payslip') || matchSearch('Salary'))" x-cloak>
-        <div class="ft-group-header"><i data-lucide="wallet" class="w-3.5 h-3.5"></i><span>LEAVE & FINANCE</span></div>
-      </div>
-
-      {# My Leaves #}
-      <a href="{% url 'leave:staff_dashboard' %}"
-         class="ft-nav-item {% if '/leave/' in path and '/leave/request/' not in path %}active{% endif %}"
-         x-show="matchSearch('Leave') || matchSearch('My Leaves')"
-         :title="collapsed ? 'My Leaves' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="calendar" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Leaves</span>
-        {% if pending_leave_count %}
-          <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_leave_count }}</span>
-        {% endif %}
-      </a>
-
-      {# Apply Leave #}
-      <a href="{% url 'leave:staff_request_create' %}"
-         class="ft-nav-item {% if '/leave/request/' in path %}active{% endif %}"
-         x-show="matchSearch('Apply Leave') || matchSearch('Leave')"
-         :title="collapsed ? 'Apply Leave' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="calendar-plus" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Apply Leave</span>
-      </a>
-
-      {# Expense Claims #}
-      <a href="{% url 'expense:staff_expense_list' %}"
-         class="ft-nav-item {% if '/expense/' in path %}active{% endif %}"
-         x-show="matchSearch('Expenses') || matchSearch('Claims')"
-         :title="collapsed ? 'Expenses' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="receipt" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Expenses</span>
-        {% if pending_expense_count %}
-          <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_expense_count }}</span>
-        {% endif %}
-      </a>
-
-      {# My Payslips #}
-      <a href="{% url 'payroll:my_payslips' %}"
-         class="ft-nav-item {% if '/payroll/' in path %}active{% endif %}"
-         x-show="matchSearch('Payslips') || matchSearch('Salary')"
-         :title="collapsed ? 'My Payslips' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="wallet" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Payslips</span>
-      </a>
-
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ── SECTION: TOOLS & ACCOUNT ── #}
-      <div x-show="!collapsed && (matchSearch('AI') || matchSearch('Profile') || matchSearch('Security'))" x-cloak>
-        <div class="ft-group-header"><i data-lucide="user" class="w-3.5 h-3.5"></i><span>ACCOUNT & TOOLS</span></div>
-      </div>
-
-      {# AI Assistant #}
-      <button type="button"
-              @click="$dispatch('open-ai-chatbot')"
-              class="ft-nav-item w-full flex items-center justify-between text-left"
-              x-show="matchSearch('AI') || matchSearch('Assistant')"
-              :title="collapsed ? 'AI Assistant' : ''"
-              :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <div class="flex items-center gap-2 min-w-0">
-          <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 shrink-0 object-contain">
-          <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Assistant</span>
+        {# ── SECTION: MAIN ── #}
+        <div x-show="!collapsed && (matchSearch('Home') || matchSearch('Check In') || matchSearch('Attendance') || matchSearch('Field Visit'))" x-cloak>
+          <div class="ft-group-header"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i><span>MAIN</span></div>
         </div>
-        <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20" x-show="!collapsed" x-cloak>AI</span>
-      </button>
 
-      {# My Profile #}
-      <a href="{% url 'staff:profile' %}"
-         class="ft-nav-item {% if '/staff/profile/' in path or '/account/profile/' in path %}active{% endif %}"
-         x-show="matchSearch('Profile') || matchSearch('Account')"
-         :title="collapsed ? 'My Profile' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="user-circle" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Profile</span>
-      </a>
-
-      {# Security Settings #}
-      <a href="{% url 'accounts:security_settings' %}"
-         class="ft-nav-item {% if '/account/security/' in path %}active{% endif %}"
-         x-show="matchSearch('Security') || matchSearch('Password')"
-         :title="collapsed ? 'Security Settings' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="shield-check" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Security Settings</span>
-      </a>
-
-      {# Optional Switcher for Admins/Managers browsing staff view #}
-      {% if request.user.is_superuser or request.user|has_perm:'admin_panel.view' or request.user|has_perm:'dashboard.view' %}
-      <div class="my-2 border-t" style="border-color:var(--border)"></div>
-      <div x-show="!collapsed && (matchSearch('Admin') || matchSearch('Switch'))" x-cloak>
-        <div class="ft-group-header flex items-center gap-1.5 text-indigo-500">
-          <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-          <span>ADMIN ACCESS</span>
-        </div>
-      </div>
-      <a href="{% url 'admin_panel:dashboard' %}"
-         class="ft-nav-item text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-         x-show="matchSearch('Admin') || matchSearch('Switch')"
-         :title="collapsed ? 'Admin Panel' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="layout-dashboard" class="ft-icon"></i>
-        <span class="ft-nav-label font-semibold" x-show="!collapsed" x-cloak>Admin Panel</span>
-        <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300" x-show="!collapsed" x-cloak>SWITCH</span>
-      </a>
-      {% endif %}
-
-      {% else %}
-      {# ════════════════════ SECTION: DASHBOARD ════════════════════ #}
-      <div x-show="!collapsed && (matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity'))" x-cloak>
-        <div class="ft-group-header"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i><span>DASHBOARD</span></div>
-      </div>
-
-      {# Menu: Dashboard dropdown #}
-      <div x-show="matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity')">
-        <button type="button"
-                @click="toggleSubmenu('dashboards')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Dashboard' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="layout-dashboard" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Dashboard</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('dashboards') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-
-        {# Submenu #}
-        <div x-show="(isSubmenuOpen('dashboards') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <a href="{% url 'admin_panel:dashboard' %}"
-             class="ft-nav-item {% if path == '/admin-panel/dashboard/' %}active{% endif %}"
-             x-show="matchSearch('Executive Dashboard')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Executive Dashboard</span>
-          </a>
-          <c-sidebar-link href="{% url 'admin_panel:reports_main' %}" label="Analytics" key="reports_hub" :pinned_keys="pinned_keys" is_active="{% if '/admin-panel/reports/' in path and '/absent/' not in path %}true{% endif %}"></c-sidebar-link>
-          <a href="{% url 'notifications:list' %}"
-             class="ft-nav-item {% if '/notifications/' in path %}active{% endif %}"
-             x-show="matchSearch('Recent Activity')">
-            <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
-            <span class="ft-nav-label">Recent Activity</span>
-          </a>
-        </div>
-      </div>
-
-
-
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-       {# ════════════════════ SECTION: PINNED ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="pin" class="w-3.5 h-3.5"></i><span>PINNED</span></div>
-      </div>
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('pinned_submenu')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Pinned' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="pin" class="ft-icon text-indigo-500"></i>
-            <span class="ft-nav-label font-bold" x-show="!collapsed" x-cloak>Pinned</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('pinned_submenu') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('pinned_submenu') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          {% for item in pinned_items %}
-          <div class="ft-submenu-item group/pinned-item w-full flex items-center justify-between {% if path == item.url %}active{% endif %}"
-               onclick="if (!event.target.closest('button')) { const a = this.querySelector('a'); if (a) a.click(); }">
-            <a href="{{ item.url }}" class="flex items-center gap-2 flex-1 min-w-0 h-full py-1.5 pl-2 text-inherit no-underline select-none">
-              <i data-lucide="{{ item.icon }}" class="w-3.5 h-3.5 shrink-0 opacity-60"></i>
-              <span class="ft-nav-label" x-show="!collapsed" x-cloak>{{ item.label }}</span>
-            </a>
-            <!-- Unpin Button -->
-            <button type="button"
-                    hx-post="{% url 'audit:unpin_menu' %}"
-                    hx-vals='{"menu_key": "{{ item.key }}"}'
-                    hx-target="#ft-sidebar"
-                    hx-swap="outerHTML"
-                    class="p-1 mr-1 rounded transition-all {% if path == item.url %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %}"
-                    title="Unpin {{ item.label }}"
-                    aria-label="Unpin {{ item.label }}"
-                    onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin {{ item.label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ item.key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
-              <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
-            </button>
-          </div>
-          {% empty %}
-          <div class="px-3 py-2 text-xs text-slate-400 dark:text-slate-500 italic">No pinned items</div>
-          {% endfor %}
-        </div>
-      </div>
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ════════════════════ SECTION: PEOPLE ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="users" class="w-3.5 h-3.5"></i><span>PEOPLE</span></div>
-      </div>
-
-      {# Menu: Employees #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('employees')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Employees' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="users" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Employees</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('employees') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('employees') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'employees:employee_list' %}" label="Employee Directory" key="employee_directory" :pinned_keys="pinned_keys" is_active="{% if path == '/employees/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'employees:employee_add' %}" label="New Employee" key="new_employee" :pinned_keys="pinned_keys" is_active="{% if '/employees/add/' in path or '/employees/wizard/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'employees:department_list' %}" label="Departments" key="departments" :pinned_keys="pinned_keys" is_active="{% if '/employees/departments' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'employees:designation_list' %}" label="Designations" key="designations" :pinned_keys="pinned_keys" is_active="{% if '/employees/designations' in path %}true{% endif %}"></c-sidebar-link>
-        </div>
-      </div>
-
-      {# Menu: Attendance #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('attendance')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Attendance' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="clock" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Attendance</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('attendance') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('attendance') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'attendance:status' %}" label="Live Attendance" key="live_attendance" :pinned_keys="pinned_keys" is_active="{% if '/attendance/status' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:attendance_list' %}" label="Attendance Logs" key="attendance_logs" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/attendance/' or '/admin-panel/attendance/' in path and '/manual' not in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:manual_entry' %}" label="Manual Attendance" key="manual_attendance" :pinned_keys="pinned_keys" is_active="{% if '/manual' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:reports_main' %}" label="Reports & Analytics Hub" key="reports_hub" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/reports/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:reports_daily' %}" label="Daily Report" key="daily_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/daily' in path or '/reports/attendance' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:reports_monthly' %}" label="Monthly Report" key="monthly_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/monthly' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:reports_main' %}#employee-profile" label="Employee Report" key="employee_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/employee' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:reports_absent' %}" label="Absence Report" key="absence_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/absent' in path %}true{% endif %}"></c-sidebar-link>
-        </div>
-      </div>
-
-      {# Menu: Leave Management #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('leave')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Leave Management' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="clipboard-check" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Leave Management</span>
-          </div>
-          <div class="flex items-center gap-1">
-            {% if pending_leave_count %}
-              <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_leave_count }}</span>
-            {% endif %}
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('leave') ? 'rotate-180' : ''"
-               x-cloak></i>
-          </div>
-        </button>
-        <div x-show="(isSubmenuOpen('leave') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'leave:admin_dashboard' %}" label="Leave Requests" key="leave_requests" :pinned_keys="pinned_keys" is_active="{% if '/leave/admin/' in path and '/types/' not in path and '/balances/' not in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'leave:admin_leave_types' %}" label="Leave Types" key="leave_types" :pinned_keys="pinned_keys" is_active="{% if '/leave/admin/types/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'leave:admin_balances' %}" label="Leave Balance" key="leave_balance" :pinned_keys="pinned_keys" is_active="{% if '/leave/admin/balances/' in path %}true{% endif %}"></c-sidebar-link>
-        </div>
-      </div>
-
-      {# Menu: Schedule #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('schedule')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Schedule' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="calendar" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Schedule</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('schedule') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('schedule') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'schedule:month_view' %}" label="Calendar" key="calendar" :pinned_keys="pinned_keys" is_active="{% if request.path == '/schedule/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'schedule:shift_schedule' %}" label="Shift Schedule" key="shift_schedule" :pinned_keys="pinned_keys" is_active="{% if '/schedule/shifts/' in request.path %}true{% endif %}"></c-sidebar-link>
-        </div>
-      </div>
-
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ════════════════════ SECTION: WORK ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i><span>WORK</span></div>
-      </div>
-
-      {# Menu: Projects #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('projects')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Projects' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="briefcase" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Projects</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('projects') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('projects') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'projects:project_list' %}" label="All Projects" key="all_projects" :pinned_keys="pinned_keys" is_active="{% if path == '/projects/' and 'status=' not in req_get_urlencode %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'projects:project_list' %}?status=active" label="Active Projects" key="active_projects" :pinned_keys="pinned_keys" is_active="{% if 'status=active' in req_get_urlencode %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'projects:project_list' %}?status=completed" label="Completed Projects" key="completed_projects" :pinned_keys="pinned_keys" is_active="{% if 'status=completed' in req_get_urlencode %}true{% endif %}"></c-sidebar-link>
-        </div>
-      </div>
-
-      {# Menu: Tasks #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('tasks')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Tasks' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="check-square" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Tasks</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('tasks') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('tasks') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'staff:my_tasks' %}" label="My Tasks" key="my_tasks" :pinned_keys="pinned_keys" is_active="{% if '/staff/my-tasks/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'projects:global_task_list' %}" label="Team Tasks" key="team_tasks" :pinned_keys="pinned_keys" is_active="{% if '/projects/tasks/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'projects:template_list' %}" label="Task Templates" key="task_templates" :pinned_keys="pinned_keys" is_active="{% if '/templates/' in path %}true{% endif %}"></c-sidebar-link>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between group/menu-item w-full pr-1.5 {% if '/projects/types/' in path %}rounded-btn bg-[#1F2937] dark:bg-[#4B5563]{% endif %}" x-show="matchSearch('Project Types')">
-        <a href="{% url 'projects:project_type_list' %}"
-           class="ft-nav-item flex-1 {% if '/projects/types/' in path %}active{% endif %}"
-           :title="collapsed ? 'Project Types' : ''"
+        {# Home / Dashboard #}
+        <a href="{% url 'staff:home' %}"
+           class="ft-nav-item {% if path == '/staff/home/' or path == '/staff/' %}active{% endif %}"
+           x-show="matchSearch('Home') || matchSearch('Dashboard')"
+           :title="collapsed ? 'Home' : ''"
            :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <i data-lucide="tag" class="ft-icon"></i>
-          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Project Types</span>
+          <i data-lucide="home" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Home</span>
         </a>
-        {% if request.user.is_authenticated %}
-          {% if 'project_types' in pinned_keys %}
-            <button type="button" class="p-1 {% if '/projects/types/' in path %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %} rounded transition-opacity" title="Unpin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Project Types? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
-          {% else %}
-            <button type="button" class="p-1 {% if '/projects/types/' in path %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %} rounded transition-opacity" title="Pin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Project Types? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
-          {% endif %}
-        {% endif %}
+
+        {# Live Attendance / Check In #}
+        <a href="{% url 'staff:check_in' %}"
+           class="ft-nav-item {% if '/staff/check-in/' in path %}active{% endif %}"
+           x-show="matchSearch('Check In') || matchSearch('Attendance')"
+           :title="collapsed ? 'Check In / Out' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="clock" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Check In / Out</span>
+          <span class="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" x-show="!collapsed" x-cloak>Live</span>
+        </a>
+
+        {# Attendance History #}
+        <a href="{% url 'staff:attendance' %}"
+           class="ft-nav-item {% if '/staff/attendance' in path and '/staff/check-in' not in path %}active{% endif %}"
+           x-show="matchSearch('Attendance History') || matchSearch('My Attendance') || matchSearch('Attendance')"
+           :title="collapsed ? 'Attendance History' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="calendar-check" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Attendance History</span>
+        </a>
+
+        {# Field Visit #}
+        <a href="{% url 'staff:field_visit' %}"
+           class="ft-nav-item {% if '/staff/field-visit/' in path %}active{% endif %}"
+           x-show="matchSearch('Field Visit')"
+           :title="collapsed ? 'Field Visit' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="map-pin" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Field Visit</span>
+        </a>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
       </div>
 
-
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ════════════════════ SECTION: FINANCE ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="wallet" class="w-3.5 h-3.5"></i><span>FINANCE</span></div>
-      </div>
-
-      {# Menu: Payroll #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('payroll')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'Payroll' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="calculator" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Payroll</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('payroll') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('payroll') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'payroll:payroll_run_list' %}" label="Payroll Runs" key="payroll_runs" :pinned_keys="pinned_keys" is_active="{% if '/payroll/' in path and '/my-payslips/' not in path and '/components/' not in path and '/structures/' not in path and '/setup/' not in path and '/reports-hub/' not in path %}true{% endif %}"></c-sidebar-link>
-          {% if request.user.is_superuser or request.user|has_perm:'payroll.manage' or request.user|has_perm:'payroll.view' %}
-          <c-sidebar-link href="{% url 'payroll:salary_components' %}" label="Salary Components" key="salary_components" :pinned_keys="pinned_keys" is_active="{% if '/payroll/components/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'payroll:salary_structures' %}" label="Salary Structures" key="salary_structures" :pinned_keys="pinned_keys" is_active="{% if '/payroll/structures/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'payroll:employee_salary_setup' %}" label="Employee Salary Setup" key="employee_salary_setup" :pinned_keys="pinned_keys" is_active="{% if '/payroll/setup/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'payroll:reports_hub' %}" label="Payroll Reports" key="payroll_reports" :pinned_keys="pinned_keys" is_active="{% if '/payroll/reports-hub/' in path %}true{% endif %}"></c-sidebar-link>
-          {% endif %}
-          <c-sidebar-link href="{% url 'payroll:my_payslips' %}" label="My Payslips" key="my_payslips" :pinned_keys="pinned_keys" is_active="{% if '/payroll/my-payslips/' in path %}true{% endif %}"></c-sidebar-link>
+      {# ── STAFF MODULE: WORK ── #}
+      <div data-module="work"
+           x-show="matchModule('work')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# ── SECTION: WORK ── #}
+        <div x-show="!collapsed && (matchSearch('Tasks') || matchSearch('Projects') || matchSearch('My Tasks'))" x-cloak>
+          <div class="ft-group-header"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i><span>WORK</span></div>
         </div>
+
+        {# My Tasks #}
+        <a href="{% url 'staff:my_tasks' %}"
+           class="ft-nav-item {% if '/staff/my-tasks/' in path %}active{% endif %}"
+           x-show="matchSearch('My Tasks') || matchSearch('Tasks')"
+           :title="collapsed ? 'My Tasks' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="check-square" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Tasks</span>
+          {% if pending_tasks_count %}
+            <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_tasks_count }}</span>
+          {% endif %}
+        </a>
+
+        {# My Projects #}
+        <a href="{% url 'staff:my_projects' %}"
+           class="ft-nav-item {% if '/staff/projects/' in path %}active{% endif %}"
+           x-show="matchSearch('My Projects') || matchSearch('Projects')"
+           :title="collapsed ? 'My Projects' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="briefcase" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Projects</span>
+        </a>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
       </div>
 
-      {# Menu direct link: Expenses #}
-      <div class="flex items-center justify-between group/menu-item w-full pr-1.5 {% if '/expense/' in path %}rounded-btn bg-[#1F2937] dark:bg-[#4B5563]{% endif %}" x-show="matchSearch('Expenses')">
-        <a href="{% url 'expense:admin_expense_list' %}"
-           class="ft-nav-item flex-1 {% if '/expense/' in path %}active{% endif %}"
+      {# ── STAFF MODULE: LEAVE & FINANCE ── #}
+      <div data-module="finance"
+           x-show="matchModule('finance')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# ── SECTION: LEAVE & FINANCE ── #}
+        <div x-show="!collapsed && (matchSearch('Leave') || matchSearch('Expense') || matchSearch('Payslip') || matchSearch('Salary'))" x-cloak>
+          <div class="ft-group-header"><i data-lucide="wallet" class="w-3.5 h-3.5"></i><span>LEAVE & FINANCE</span></div>
+        </div>
+
+        {# My Leaves #}
+        <a href="{% url 'leave:staff_dashboard' %}"
+           class="ft-nav-item {% if '/leave/' in path and '/leave/request/' not in path %}active{% endif %}"
+           x-show="matchSearch('Leave') || matchSearch('My Leaves')"
+           :title="collapsed ? 'My Leaves' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="calendar" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Leaves</span>
+          {% if pending_leave_count %}
+            <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_leave_count }}</span>
+          {% endif %}
+        </a>
+
+        {# Apply Leave #}
+        <a href="{% url 'leave:staff_request_create' %}"
+           class="ft-nav-item {% if '/leave/request/' in path %}active{% endif %}"
+           x-show="matchSearch('Apply Leave') || matchSearch('Leave')"
+           :title="collapsed ? 'Apply Leave' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="calendar-plus" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Apply Leave</span>
+        </a>
+
+        {# Expense Claims #}
+        <a href="{% url 'expense:staff_expense_list' %}"
+           class="ft-nav-item {% if '/expense/' in path %}active{% endif %}"
+           x-show="matchSearch('Expenses') || matchSearch('Claims')"
            :title="collapsed ? 'Expenses' : ''"
            :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
           <i data-lucide="receipt" class="ft-icon"></i>
@@ -737,134 +357,686 @@
             <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_expense_count }}</span>
           {% endif %}
         </a>
-        {% if request.user.is_authenticated %}
-          {% if 'expenses' in pinned_keys %}
-            <button type="button" class="p-1 {% if '/expense/' in path %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %} rounded transition-opacity" title="Unpin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Expenses? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
-          {% else %}
-            <button type="button" class="p-1 {% if '/expense/' in path %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %} rounded transition-opacity" title="Pin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Expenses? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
-          {% endif %}
+
+        {# My Payslips #}
+        <a href="{% url 'payroll:my_payslips' %}"
+           class="ft-nav-item {% if '/payroll/' in path %}active{% endif %}"
+           x-show="matchSearch('Payslips') || matchSearch('Salary')"
+           :title="collapsed ? 'My Payslips' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="wallet" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Payslips</span>
+        </a>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      </div>
+
+      {# ── STAFF MODULE: TOOLS & ACCOUNT ── #}
+      <div data-module="account"
+           x-show="matchModule('account')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# ── SECTION: TOOLS & ACCOUNT ── #}
+        <div x-show="!collapsed && (matchSearch('AI') || matchSearch('Profile') || matchSearch('Security'))" x-cloak>
+          <div class="ft-group-header"><i data-lucide="user" class="w-3.5 h-3.5"></i><span>ACCOUNT & TOOLS</span></div>
+        </div>
+
+        {# AI Assistant #}
+        <button type="button"
+                @click="$dispatch('open-ai-chatbot')"
+                class="ft-nav-item w-full flex items-center justify-between text-left"
+                x-show="matchSearch('AI') || matchSearch('Assistant')"
+                :title="collapsed ? 'AI Assistant' : ''"
+                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <div class="flex items-center gap-2 min-w-0">
+            <img src="{% static 'icons/ai_icon.png' %}" alt="AI" class="w-4 h-4 shrink-0 object-contain">
+            <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Assistant</span>
+          </div>
+          <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20" x-show="!collapsed" x-cloak>AI</span>
+        </button>
+
+        {# My Profile #}
+        <a href="{% url 'staff:profile' %}"
+           class="ft-nav-item {% if '/staff/profile/' in path or '/account/profile/' in path %}active{% endif %}"
+           x-show="matchSearch('Profile') || matchSearch('Account')"
+           :title="collapsed ? 'My Profile' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="user-circle" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>My Profile</span>
+        </a>
+
+        {# Security Settings #}
+        <a href="{% url 'accounts:security_settings' %}"
+           class="ft-nav-item {% if '/account/security/' in path %}active{% endif %}"
+           x-show="matchSearch('Security') || matchSearch('Password')"
+           :title="collapsed ? 'Security Settings' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="shield-check" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Security Settings</span>
+        </a>
+
+        {# Optional Switcher for Admins/Managers browsing staff view #}
+        {% if request.user.is_superuser or request.user|has_perm:'admin_panel.view' or request.user|has_perm:'dashboard.view' %}
+        <div class="my-2 border-t" style="border-color:var(--border)"></div>
+        <div x-show="!collapsed && (matchSearch('Admin') || matchSearch('Switch'))" x-cloak>
+          <div class="ft-group-header flex items-center gap-1.5 text-indigo-500">
+            <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+            <span>ADMIN ACCESS</span>
+          </div>
+        </div>
+        <a href="{% url 'admin_panel:dashboard' %}"
+           class="ft-nav-item text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+           x-show="matchSearch('Admin') || matchSearch('Switch')"
+           :title="collapsed ? 'Admin Panel' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="layout-dashboard" class="ft-icon"></i>
+          <span class="ft-nav-label font-semibold" x-show="!collapsed" x-cloak>Admin Panel</span>
+          <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300" x-show="!collapsed" x-cloak>SWITCH</span>
+        </a>
         {% endif %}
       </div>
 
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      {% else %}
+      {# ════════════════════ ADMIN APP NAVIGATION ════════════════════ #}
 
-      {# ════════════════════ SECTION: ORGANIZATION ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="building" class="w-3.5 h-3.5"></i><span>ORGANIZATION</span></div>
-      </div>
-
-      <a href="{% url 'branches:branch_list' %}"
-         class="ft-nav-item {% if '/branches/' in path and '/holidays/' not in path and not req_get_type %}active{% endif %}"
-         x-show="matchSearch('Branches')"
-         :title="collapsed ? 'Branches' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="building-2" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Branches</span>
-      </a>
-
-      <a href="{% url 'branches:holiday_list' %}"
-         class="ft-nav-item {% if '/branches/holidays/' in path %}active{% endif %}"
-         x-show="matchSearch('Holidays')"
-         :title="collapsed ? 'Holidays' : ''"
-         :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-        <i data-lucide="sun" class="ft-icon"></i>
-        <span class="ft-nav-label" x-show="!collapsed" x-cloak>Holidays</span>
-      </a>
-
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ════════════════════ SECTION: ADMINISTRATION ════════════════════ #}
-      <div x-show="!collapsed" x-cloak>
-        <div class="ft-group-header"><i data-lucide="sliders" class="w-3.5 h-3.5"></i><span>ADMINISTRATION</span></div>
-      </div>
-
-      {# Menu: System #}
-      <div>
-        <button type="button"
-                @click="toggleSubmenu('system')"
-                class="ft-nav-item w-full flex items-center justify-between"
-                :title="collapsed ? 'System Settings' : ''"
-                :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
-          <div class="flex items-center gap-2 min-w-0">
-            <i data-lucide="settings" class="ft-icon"></i>
-            <span class="ft-nav-label" x-show="!collapsed" x-cloak>System Settings</span>
-          </div>
-          <i data-lucide="chevron-down"
-             x-show="!collapsed"
-             class="w-3.5 h-3.5 transition-transform duration-200"
-             :class="isSubmenuOpen('system') ? 'rotate-180' : ''"
-             x-cloak></i>
-        </button>
-        <div x-show="(isSubmenuOpen('system') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'admin_panel:schedule_settings' %}" label="Settings" key="settings" :pinned_keys="pinned_keys" is_active="{% if '/settings' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:role_list' %}" label="System Roles & Access" key="system_roles" :pinned_keys="pinned_keys" is_active="{% if '/admin-panel/roles/' in path and not req_get_type %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'accounts:security_settings' %}" label="Security Settings" key="security_settings" :pinned_keys="pinned_keys" is_active="{% if '/account/security/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'accounts:admin_security_policies' %}" label="Security Policies" key="security_policies" :pinned_keys="pinned_keys" is_active="{% if '/security/policies/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'accounts:admin_login_activity' %}" label="Login Activity" key="login_activity" :pinned_keys="pinned_keys" is_active="{% if '/login-activity/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:admin_audit_logs' %}" label="Audit Logs" key="audit_logs" :pinned_keys="pinned_keys" is_active="{% if '/audit-logs/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'audit:activity_list' %}" label="Activity Logs" key="activity_logs" :pinned_keys="pinned_keys" is_active="{% if '/audit/activity/' in path %}true{% endif %}"></c-sidebar-link>
-          {% if request.user.is_superuser or request.user|has_perm:'trash.view' or request.user|has_perm:'audit.view' %}
-          <c-sidebar-link href="{% url 'audit:trash_list' %}" label="Trash" key="trash" :pinned_keys="pinned_keys" is_active="{% if '/audit/trash/' in path %}true{% endif %}"></c-sidebar-link>
-          {% endif %}
-          <c-sidebar-link href="{% url 'accounts:user_sessions' %}" label="User Sessions" key="user_sessions" :pinned_keys="pinned_keys" is_active="{% if '/account/sessions/' in path %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'backups:backup_list' %}" label="Backups" key="backup_list" :pinned_keys="pinned_keys" is_active="{% if '/backups/' in path %}true{% endif %}"></c-sidebar-link>
+      {# ── ADMIN MODULE: OVERVIEW ── #}
+      <div data-module="overview"
+           x-show="matchModule('overview')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# SECTION: DASHBOARD #}
+        <div x-show="!collapsed && (matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity'))" x-cloak>
+          <div class="ft-group-header"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i><span>DASHBOARD</span></div>
         </div>
-      </div>
 
-      <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
-
-      {# ════════════════════ SECTION: AI WORKSPACE ════════════════════ #}
-      <div x-show="!collapsed && (matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings'))" x-cloak>
-        <div class="ft-group-header flex items-center gap-1.5">
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
-          <span class="text-[#F97316] font-semibold tracking-wider">AI INTELLIGENCE</span>
-        </div>
-      </div>
-
-      {# Menu: AI Workspace dropdown #}
-      <div x-show="matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings')">
-        <button type="button"
-                @click="toggleSubmenu('ai_workspace')"
-                class="ft-nav-item w-full flex items-center justify-between group/ai transition-colors"
-                :title="collapsed ? 'AI Workspace' : ''"
-                :class="{
-                  'justify-center px-0 mx-auto w-9': collapsed,
-                  'bg-orange-500/10 text-[#F97316] dark:bg-orange-950/30': isSubmenuOpen('ai_workspace')
-                }">
-          <div class="flex items-center gap-2 min-w-0">
-            <img src="{% static 'icons/ai_icon.png' %}"
-                 alt="AI Assistant"
-                 width="16"
-                 height="16"
-                 loading="eager"
-                 class="w-4 h-4 shrink-0 object-contain rounded-sm">
-            <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Workspace</span>
-          </div>
-          <div class="flex items-center gap-1" x-show="!collapsed" x-cloak>
-            <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI</span>
+        {# Menu: Dashboard dropdown #}
+        <div x-show="matchSearch('Dashboard') || matchSearch('Executive Dashboard') || matchSearch('Analytics') || matchSearch('Recent Activity')">
+          <button type="button"
+                  @click="toggleSubmenu('dashboards')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Dashboard' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="layout-dashboard" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Dashboard</span>
+            </div>
             <i data-lucide="chevron-down"
+               x-show="!collapsed"
                class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('ai_workspace') ? 'rotate-180' : ''"></i>
-          </div>
-        </button>
+               :class="isSubmenuOpen('dashboards') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
 
-        {# Submenu #}
-        <div x-show="(isSubmenuOpen('ai_workspace') || search) && !collapsed"
-             x-collapse.duration.200ms
-             class="pl-4 pr-1 py-0.5 space-y-0.5"
-             x-cloak>
-          <c-sidebar-link href="{% url 'admin_panel:ai_assistant' %}" label="AI Assistant" key="ai_assistant" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/assistant/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_attendance_insights' %}" label="Attendance Insights" key="ai_attendance" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/attendance-insights/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_project_insights' %}" label="Project Insights" key="ai_projects" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/project-insights/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_payroll_insights' %}" label="HR & Payroll Insights" key="ai_payroll" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/payroll-insights/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_smart_reports' %}" label="Smart Reports" key="ai_reports" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/smart-reports/' %}true{% endif %}"></c-sidebar-link>
-          <c-sidebar-link href="{% url 'admin_panel:ai_settings' %}" label="AI Settings" key="ai_settings" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/settings/' %}true{% endif %}"></c-sidebar-link>
+          {# Submenu #}
+          <div x-show="(isSubmenuOpen('dashboards') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <a href="{% url 'admin_panel:dashboard' %}"
+               class="ft-nav-item {% if path == '/admin-panel/dashboard/' %}active{% endif %}"
+               x-show="matchSearch('Executive Dashboard')">
+              <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+              <span class="ft-nav-label">Executive Dashboard</span>
+            </a>
+            <c-sidebar-link href="{% url 'admin_panel:reports_main' %}" label="Analytics" key="reports_hub" :pinned_keys="pinned_keys" is_active="{% if '/admin-panel/reports/' in path and '/absent/' not in path %}true{% endif %}"></c-sidebar-link>
+            <a href="{% url 'notifications:list' %}"
+               class="ft-nav-item {% if '/notifications/' in path %}active{% endif %}"
+               x-show="matchSearch('Recent Activity')">
+              <i data-lucide="circle" class="w-1.5 h-1.5 shrink-0 opacity-60"></i>
+              <span class="ft-nav-label">Recent Activity</span>
+            </a>
+          </div>
         </div>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
       </div>
 
+      {# ── SECTION: PINNED ── #}
+      <div data-module="pinned"
+           x-show="matchModule('overview')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        <div x-show="!collapsed" x-cloak>
+          <div class="ft-group-header"><i data-lucide="pin" class="w-3.5 h-3.5"></i><span>PINNED</span></div>
+        </div>
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('pinned_submenu')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Pinned' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="pin" class="ft-icon text-indigo-500"></i>
+              <span class="ft-nav-label font-bold" x-show="!collapsed" x-cloak>Pinned</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('pinned_submenu') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('pinned_submenu') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            {% for item in pinned_items %}
+            <div class="ft-submenu-item group/pinned-item w-full flex items-center justify-between {% if path == item.url %}active{% endif %}"
+                 onclick="if (!event.target.closest('button')) { const a = this.querySelector('a'); if (a) a.click(); }">
+              <a href="{{ item.url }}" class="flex items-center gap-2 flex-1 min-w-0 h-full py-1.5 pl-2 text-inherit no-underline select-none">
+                <i data-lucide="{{ item.icon }}" class="w-3.5 h-3.5 shrink-0 opacity-60"></i>
+                <span class="ft-nav-label" x-show="!collapsed" x-cloak>{{ item.label }}</span>
+              </a>
+              <!-- Unpin Button -->
+              <button type="button"
+                      hx-post="{% url 'audit:unpin_menu' %}"
+                      hx-vals='{"menu_key": "{{ item.key }}"}'
+                      hx-target="#ft-sidebar"
+                      hx-swap="outerHTML"
+                      class="p-1 mr-1 rounded transition-all {% if path == item.url %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %}"
+                      title="Unpin {{ item.label }}"
+                      aria-label="Unpin {{ item.label }}"
+                      onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin {{ item.label }}? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: '{{ item.key }}'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })">
+                <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            {% empty %}
+            <div class="px-3 py-2 text-xs text-slate-400 dark:text-slate-500 italic">No pinned items</div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      </div>
+
+      {# ── ADMIN MODULE: PEOPLE & ATTENDANCE ── #}
+      <div data-module="people"
+           x-show="matchModule('people')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# SECTION: PEOPLE #}
+        <div x-show="!collapsed" x-cloak>
+          <div class="ft-group-header"><i data-lucide="users" class="w-3.5 h-3.5"></i><span>PEOPLE & ATTENDANCE</span></div>
+        </div>
+
+        {# Menu: Employees #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('employees')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Employees' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="users" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Employees</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('employees') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('employees') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'employees:employee_list' %}" label="Employee Directory" key="employee_directory" :pinned_keys="pinned_keys" is_active="{% if path == '/employees/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'employees:employee_add' %}" label="New Employee" key="new_employee" :pinned_keys="pinned_keys" is_active="{% if '/employees/add/' in path or '/employees/wizard/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'employees:department_list' %}" label="Departments" key="departments" :pinned_keys="pinned_keys" is_active="{% if '/employees/departments' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'employees:designation_list' %}" label="Designations" key="designations" :pinned_keys="pinned_keys" is_active="{% if '/employees/designations' in path %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        {# Menu: Attendance #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('attendance')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Attendance' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="clock" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Attendance</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('attendance') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('attendance') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'attendance:status' %}" label="Live Attendance" key="live_attendance" :pinned_keys="pinned_keys" is_active="{% if '/attendance/status' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:attendance_list' %}" label="Attendance Logs" key="attendance_logs" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/attendance/' or '/admin-panel/attendance/' in path and '/manual' not in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:manual_entry' %}" label="Manual Attendance" key="manual_attendance" :pinned_keys="pinned_keys" is_active="{% if '/manual' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_main' %}" label="Reports & Analytics Hub" key="reports_hub" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/reports/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_daily' %}" label="Daily Report" key="daily_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/daily' in path or '/reports/attendance' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_monthly' %}" label="Monthly Report" key="monthly_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/monthly' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_main' %}#employee-profile" label="Employee Report" key="employee_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/employee' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_absent' %}" label="Absence Report" key="absence_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/absent' in path %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        {# Menu: Leave Management #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('leave')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Leave Management' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="clipboard-check" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Leave Management</span>
+            </div>
+            <div class="flex items-center gap-1">
+              {% if pending_leave_count %}
+                <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_leave_count }}</span>
+              {% endif %}
+              <i data-lucide="chevron-down"
+                 x-show="!collapsed"
+                 class="w-3.5 h-3.5 transition-transform duration-200"
+                 :class="isSubmenuOpen('leave') ? 'rotate-180' : ''"
+                 x-cloak></i>
+            </div>
+          </button>
+          <div x-show="(isSubmenuOpen('leave') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'leave:admin_dashboard' %}" label="Leave Requests" key="leave_requests" :pinned_keys="pinned_keys" is_active="{% if '/leave/admin/' in path and '/types/' not in path and '/balances/' not in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'leave:admin_leave_types' %}" label="Leave Types" key="leave_types" :pinned_keys="pinned_keys" is_active="{% if '/leave/admin/types/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'leave:admin_balances' %}" label="Leave Balance" key="leave_balance" :pinned_keys="pinned_keys" is_active="{% if '/leave/admin/balances/' in path %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        {# Menu: Schedule #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('schedule')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Schedule' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="calendar" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Schedule</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('schedule') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('schedule') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'schedule:month_view' %}" label="Calendar" key="calendar" :pinned_keys="pinned_keys" is_active="{% if request.path == '/schedule/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'schedule:shift_schedule' %}" label="Shift Schedule" key="shift_schedule" :pinned_keys="pinned_keys" is_active="{% if '/schedule/shifts/' in request.path %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      </div>
+
+      {# ── ADMIN MODULE: WORK MANAGEMENT ── #}
+      <div data-module="work"
+           x-show="matchModule('work')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# SECTION: WORK #}
+        <div x-show="!collapsed" x-cloak>
+          <div class="ft-group-header"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i><span>WORK</span></div>
+        </div>
+
+        {# Menu: Projects #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('projects')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Projects' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="briefcase" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Projects</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('projects') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('projects') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'projects:project_list' %}" label="All Projects" key="all_projects" :pinned_keys="pinned_keys" is_active="{% if path == '/projects/' and 'status=' not in req_get_urlencode %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'projects:project_list' %}?status=active" label="Active Projects" key="active_projects" :pinned_keys="pinned_keys" is_active="{% if 'status=active' in req_get_urlencode %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'projects:project_list' %}?status=completed" label="Completed Projects" key="completed_projects" :pinned_keys="pinned_keys" is_active="{% if 'status=completed' in req_get_urlencode %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        {# Menu: Tasks #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('tasks')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Tasks' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="check-square" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Tasks</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('tasks') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('tasks') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'staff:my_tasks' %}" label="My Tasks" key="my_tasks" :pinned_keys="pinned_keys" is_active="{% if '/staff/my-tasks/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'projects:global_task_list' %}" label="Team Tasks" key="team_tasks" :pinned_keys="pinned_keys" is_active="{% if '/projects/tasks/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'projects:template_list' %}" label="Task Templates" key="task_templates" :pinned_keys="pinned_keys" is_active="{% if '/templates/' in path %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        {# Project Types #}
+        <div class="flex items-center justify-between group/menu-item w-full pr-1.5 {% if '/projects/types/' in path %}rounded-btn bg-[#1F2937] dark:bg-[#4B5563]{% endif %}" x-show="matchSearch('Project Types')">
+          <a href="{% url 'projects:project_type_list' %}"
+             class="ft-nav-item flex-1 {% if '/projects/types/' in path %}active{% endif %}"
+             :title="collapsed ? 'Project Types' : ''"
+             :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <i data-lucide="tag" class="ft-icon"></i>
+            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Project Types</span>
+          </a>
+          {% if request.user.is_authenticated %}
+            {% if 'project_types' in pinned_keys %}
+              <button type="button" class="p-1 {% if '/projects/types/' in path %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %} rounded transition-opacity" title="Unpin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Project Types? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
+            {% else %}
+              <button type="button" class="p-1 {% if '/projects/types/' in path %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %} rounded transition-opacity" title="Pin Project Types" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Project Types? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'project_types'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      </div>
+
+      {# ── ADMIN MODULE: FINANCE ── #}
+      <div data-module="finance"
+           x-show="matchModule('finance')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# SECTION: FINANCE #}
+        <div x-show="!collapsed" x-cloak>
+          <div class="ft-group-header"><i data-lucide="wallet" class="w-3.5 h-3.5"></i><span>FINANCE</span></div>
+        </div>
+
+        {# Menu: Payroll #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('payroll')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Payroll' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="calculator" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>Payroll</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('payroll') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('payroll') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'payroll:payroll_run_list' %}" label="Payroll Runs" key="payroll_runs" :pinned_keys="pinned_keys" is_active="{% if '/payroll/' in path and '/my-payslips/' not in path and '/components/' not in path and '/structures/' not in path and '/setup/' not in path and '/reports-hub/' not in path %}true{% endif %}"></c-sidebar-link>
+            {% if request.user.is_superuser or request.user|has_perm:'payroll.manage' or request.user|has_perm:'payroll.view' %}
+            <c-sidebar-link href="{% url 'payroll:salary_components' %}" label="Salary Components" key="salary_components" :pinned_keys="pinned_keys" is_active="{% if '/payroll/components/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'payroll:salary_structures' %}" label="Salary Structures" key="salary_structures" :pinned_keys="pinned_keys" is_active="{% if '/payroll/structures/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'payroll:employee_salary_setup' %}" label="Employee Salary Setup" key="employee_salary_setup" :pinned_keys="pinned_keys" is_active="{% if '/payroll/setup/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'payroll:reports_hub' %}" label="Payroll Reports" key="payroll_reports" :pinned_keys="pinned_keys" is_active="{% if '/payroll/reports-hub/' in path %}true{% endif %}"></c-sidebar-link>
+            {% endif %}
+            <c-sidebar-link href="{% url 'payroll:my_payslips' %}" label="My Payslips" key="my_payslips" :pinned_keys="pinned_keys" is_active="{% if '/payroll/my-payslips/' in path %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        {# Menu direct link: Expenses #}
+        <div class="flex items-center justify-between group/menu-item w-full pr-1.5 {% if '/expense/' in path %}rounded-btn bg-[#1F2937] dark:bg-[#4B5563]{% endif %}" x-show="matchSearch('Expenses')">
+          <a href="{% url 'expense:admin_expense_list' %}"
+             class="ft-nav-item flex-1 {% if '/expense/' in path %}active{% endif %}"
+             :title="collapsed ? 'Expenses' : ''"
+             :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <i data-lucide="receipt" class="ft-icon"></i>
+            <span class="ft-nav-label" x-show="!collapsed" x-cloak>Expenses</span>
+            {% if pending_expense_count %}
+              <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_expense_count }}</span>
+            {% endif %}
+          </a>
+          {% if request.user.is_authenticated %}
+            {% if 'expenses' in pinned_keys %}
+              <button type="button" class="p-1 {% if '/expense/' in path %}text-white hover:text-red-300 hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-indigo-500 dark:text-indigo-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100{% endif %} rounded transition-opacity" title="Unpin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Unpin Expenses? It will be removed from Pinned.', () => { htmx.ajax('POST', '{% url 'audit:unpin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin-off" class="w-3.5 h-3.5"></i></button>
+            {% else %}
+              <button type="button" class="p-1 {% if '/expense/' in path %}text-white hover:bg-white/10 opacity-90 hover:opacity-100{% else %}text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-40 hover:opacity-100{% endif %} rounded transition-opacity" title="Pin Expenses" onclick="event.preventDefault(); event.stopPropagation(); window.confirmAction('Pin Expenses? It will be added to Pinned.', () => { htmx.ajax('POST', '{% url 'audit:pin_menu' %}', {values: {menu_key: 'expenses'}, target: '#ft-sidebar', swap: 'outerHTML', headers: {'X-CSRFToken': '{{ csrf_token }}'}}) })"><i data-lucide="pin" class="w-3.5 h-3.5"></i></button>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      </div>
+
+      {# ── ADMIN MODULE: REPORTS ── #}
+      <div data-module="reports"
+           x-show="matchModule('reports')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# SECTION: REPORTS #}
+        <div x-show="!collapsed && (matchSearch('Reports') || matchSearch('Analytics') || matchSearch('Daily') || matchSearch('Monthly') || matchSearch('Absence'))" x-cloak>
+          <div class="ft-group-header"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i><span>REPORTS</span></div>
+        </div>
+
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('reports')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'Reports' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="bar-chart-2" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>System Reports</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('reports') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('reports') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'admin_panel:reports_main' %}" label="Reports & Analytics Hub" key="reports_hub" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/reports/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_daily' %}" label="Daily Report" key="daily_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/daily' in path or '/reports/attendance' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_monthly' %}" label="Monthly Report" key="monthly_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/monthly' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_main' %}#employee-profile" label="Employee Report" key="employee_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/employee' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:reports_absent' %}" label="Absence Report" key="absence_report" :pinned_keys="pinned_keys" is_active="{% if '/reports/absent' in path %}true{% endif %}"></c-sidebar-link>
+            {% if request.user.is_superuser or request.user|has_perm:'payroll.manage' or request.user|has_perm:'payroll.view' %}
+            <c-sidebar-link href="{% url 'payroll:reports_hub' %}" label="Payroll Reports" key="payroll_reports" :pinned_keys="pinned_keys" is_active="{% if '/payroll/reports-hub/' in path %}true{% endif %}"></c-sidebar-link>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      </div>
+
+      {# ── ADMIN MODULE: ADMINISTRATION ── #}
+      <div data-module="administration"
+           x-show="matchModule('administration')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# SECTION: ORGANIZATION #}
+        <div x-show="!collapsed" x-cloak>
+          <div class="ft-group-header"><i data-lucide="building" class="w-3.5 h-3.5"></i><span>ORGANIZATION</span></div>
+        </div>
+
+        <a href="{% url 'branches:branch_list' %}"
+           class="ft-nav-item {% if '/branches/' in path and '/holidays/' not in path and not req_get_type %}active{% endif %}"
+           x-show="matchSearch('Branches')"
+           :title="collapsed ? 'Branches' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="building-2" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Branches</span>
+        </a>
+
+        <a href="{% url 'branches:holiday_list' %}"
+           class="ft-nav-item {% if '/branches/holidays/' in path %}active{% endif %}"
+           x-show="matchSearch('Holidays')"
+           :title="collapsed ? 'Holidays' : ''"
+           :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+          <i data-lucide="sun" class="ft-icon"></i>
+          <span class="ft-nav-label" x-show="!collapsed" x-cloak>Holidays</span>
+        </a>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+
+        {# SECTION: ADMINISTRATION #}
+        <div x-show="!collapsed" x-cloak>
+          <div class="ft-group-header"><i data-lucide="sliders" class="w-3.5 h-3.5"></i><span>ADMINISTRATION</span></div>
+        </div>
+
+        {# Menu: System #}
+        <div>
+          <button type="button"
+                  @click="toggleSubmenu('system')"
+                  class="ft-nav-item w-full flex items-center justify-between"
+                  :title="collapsed ? 'System Settings' : ''"
+                  :class="collapsed ? 'justify-center px-0 mx-auto w-9' : ''">
+            <div class="flex items-center gap-2 min-w-0">
+              <i data-lucide="settings" class="ft-icon"></i>
+              <span class="ft-nav-label" x-show="!collapsed" x-cloak>System Settings</span>
+            </div>
+            <i data-lucide="chevron-down"
+               x-show="!collapsed"
+               class="w-3.5 h-3.5 transition-transform duration-200"
+               :class="isSubmenuOpen('system') ? 'rotate-180' : ''"
+               x-cloak></i>
+          </button>
+          <div x-show="(isSubmenuOpen('system') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'admin_panel:schedule_settings' %}" label="Settings" key="settings" :pinned_keys="pinned_keys" is_active="{% if '/settings' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:role_list' %}" label="System Roles & Access" key="system_roles" :pinned_keys="pinned_keys" is_active="{% if '/admin-panel/roles/' in path and not req_get_type %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'accounts:security_settings' %}" label="Security Settings" key="security_settings" :pinned_keys="pinned_keys" is_active="{% if '/account/security/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'accounts:admin_security_policies' %}" label="Security Policies" key="security_policies" :pinned_keys="pinned_keys" is_active="{% if '/security/policies/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'accounts:admin_login_activity' %}" label="Login Activity" key="login_activity" :pinned_keys="pinned_keys" is_active="{% if '/login-activity/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:admin_audit_logs' %}" label="Audit Logs" key="audit_logs" :pinned_keys="pinned_keys" is_active="{% if '/audit-logs/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'audit:activity_list' %}" label="Activity Logs" key="activity_logs" :pinned_keys="pinned_keys" is_active="{% if '/audit/activity/' in path %}true{% endif %}"></c-sidebar-link>
+            {% if request.user.is_superuser or request.user|has_perm:'trash.view' or request.user|has_perm:'audit.view' %}
+            <c-sidebar-link href="{% url 'audit:trash_list' %}" label="Trash" key="trash" :pinned_keys="pinned_keys" is_active="{% if '/audit/trash/' in path %}true{% endif %}"></c-sidebar-link>
+            {% endif %}
+            <c-sidebar-link href="{% url 'accounts:user_sessions' %}" label="User Sessions" key="user_sessions" :pinned_keys="pinned_keys" is_active="{% if '/account/sessions/' in path %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'backups:backup_list' %}" label="Backups" key="backup_list" :pinned_keys="pinned_keys" is_active="{% if '/backups/' in path %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+
+        <div class="my-1.5 border-t" style="border-color:var(--border)"></div>
+      </div>
+
+      {# ── ADMIN MODULE: AI WORKSPACE (PERSISTENT & ALWAYS VISIBLE) ── #}
+      <div data-module="ai_workspace"
+           x-show="matchModule('ai_workspace')"
+           x-transition:enter="ft-module-enter"
+           x-transition:enter-start="ft-module-enter-start"
+           x-transition:enter-end="ft-module-enter-end"
+           x-transition:leave="ft-module-leave"
+           x-transition:leave-start="ft-module-leave-start"
+           x-transition:leave-end="ft-module-leave-end">
+        {# SECTION: AI WORKSPACE #}
+        <div x-show="!collapsed && (matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings'))" x-cloak>
+          <div class="ft-group-header flex items-center gap-1.5">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444]"></span>
+            <span class="text-[#F97316] font-semibold tracking-wider">AI INTELLIGENCE</span>
+          </div>
+        </div>
+
+        {# Menu: AI Workspace dropdown #}
+        <div x-show="matchSearch('AI') || matchSearch('Intelligence') || matchSearch('Assistant') || matchSearch('Insights') || matchSearch('Smart Reports') || matchSearch('AI Settings')">
+          <button type="button"
+                  @click="toggleSubmenu('ai_workspace')"
+                  class="ft-nav-item w-full flex items-center justify-between group/ai transition-colors"
+                  :title="collapsed ? 'AI Workspace' : ''"
+                  :class="{
+                    'justify-center px-0 mx-auto w-9': collapsed,
+                    'bg-orange-500/10 text-[#F97316] dark:bg-orange-950/30': isSubmenuOpen('ai_workspace')
+                  }">
+            <div class="flex items-center gap-2 min-w-0">
+              <img src="{% static 'icons/ai_icon.png' %}"
+                   alt="AI Assistant"
+                   width="16"
+                   height="16"
+                   loading="eager"
+                   class="w-4 h-4 shrink-0 object-contain rounded-sm">
+              <span class="ft-nav-label font-medium" x-show="!collapsed" x-cloak>AI Workspace</span>
+            </div>
+            <div class="flex items-center gap-1" x-show="!collapsed" x-cloak>
+              <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI</span>
+              <i data-lucide="chevron-down"
+                 class="w-3.5 h-3.5 transition-transform duration-200"
+                 :class="isSubmenuOpen('ai_workspace') ? 'rotate-180' : ''"></i>
+            </div>
+          </button>
+
+          {# Submenu #}
+          <div x-show="(isSubmenuOpen('ai_workspace') || search) && !collapsed"
+               x-collapse.duration.200ms
+               class="pl-4 pr-1 py-0.5 space-y-0.5"
+               x-cloak>
+            <c-sidebar-link href="{% url 'admin_panel:ai_assistant' %}" label="AI Assistant" key="ai_assistant" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/assistant/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:ai_attendance_insights' %}" label="Attendance Insights" key="ai_attendance" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/attendance-insights/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:ai_project_insights' %}" label="Project Insights" key="ai_projects" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/project-insights/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:ai_payroll_insights' %}" label="HR & Payroll Insights" key="ai_payroll" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/payroll-insights/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:ai_smart_reports' %}" label="Smart Reports" key="ai_reports" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/smart-reports/' %}true{% endif %}"></c-sidebar-link>
+            <c-sidebar-link href="{% url 'admin_panel:ai_settings' %}" label="AI Settings" key="ai_settings" :pinned_keys="pinned_keys" is_active="{% if path == '/admin-panel/ai/settings/' %}true{% endif %}"></c-sidebar-link>
+          </div>
+        </div>
+      </div>
       {% endif %}
 
     </nav>
