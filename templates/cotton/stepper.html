@@ -59,7 +59,7 @@
         {% elif step1_status == 'error' or step1_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step1_status == 'complete' or cur > 1 %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -79,7 +79,7 @@
         {% elif step1_status == 'error' or step1_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step1_status == 'complete' or cur > 1 %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
@@ -90,7 +90,7 @@
     {# Connector 1-2 #}
     {% if cnt >= 2 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step1_status == 'complete' or cur > 1 %} bg-emerald-500 {% elif step1_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if step1_status == 'complete' or cur > 1 %} bg-[#1877F2] {% elif step1_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 2 ── #}
     {% if is_click == "true" %}
@@ -118,7 +118,7 @@
         {% elif step2_status == 'error' or step2_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step2_status == 'complete' or cur > 2 %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -138,7 +138,7 @@
         {% elif step2_status == 'error' or step2_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step2_status == 'complete' or cur > 2 %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
@@ -150,7 +150,7 @@
     {# Connector 2-3 #}
     {% if cnt >= 3 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step2_status == 'complete' or cur > 2 %} bg-emerald-500 {% elif step2_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if step2_status == 'complete' or cur > 2 %} bg-[#1877F2] {% elif step2_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 3 ── #}
     {% if is_click == "true" %}
@@ -178,7 +178,7 @@
         {% elif step3_status == 'error' or step3_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step3_status == 'complete' or cur > 3 %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -198,7 +198,7 @@
         {% elif step3_status == 'error' or step3_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step3_status == 'complete' or cur > 3 %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
@@ -210,7 +210,7 @@
     {# Connector 3-4 #}
     {% if cnt >= 4 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step3_status == 'complete' or cur > 3 %} bg-emerald-500 {% elif step3_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if step3_status == 'complete' or cur > 3 %} bg-[#1877F2] {% elif step3_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 4 ── #}
     {% if is_click == "true" %}
@@ -238,7 +238,7 @@
         {% elif step4_status == 'error' or step4_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step4_status == 'complete' or cur > 4 %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -258,7 +258,7 @@
         {% elif step4_status == 'error' or step4_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step4_status == 'complete' or cur > 4 %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
@@ -270,7 +270,7 @@
     {# Connector 4-5 #}
     {% if cnt >= 5 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step4_status == 'complete' or cur > 4 %} bg-emerald-500 {% elif step4_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if step4_status == 'complete' or cur > 4 %} bg-[#1877F2] {% elif step4_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 5 ── #}
     {% if is_click == "true" %}
@@ -298,7 +298,7 @@
         {% elif step5_status == 'error' or step5_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step5_status == 'complete' or cur > 5 %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -318,7 +318,7 @@
         {% elif step5_status == 'error' or step5_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step5_status == 'complete' or cur > 5 %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
@@ -330,7 +330,7 @@
     {# Connector 5-6 #}
     {% if cnt >= 6 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step5_status == 'complete' or cur > 5 %} bg-emerald-500 {% elif step5_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if step5_status == 'complete' or cur > 5 %} bg-[#1877F2] {% elif step5_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 6 ── #}
     {% if is_click == "true" %}
@@ -358,7 +358,7 @@
         {% elif step6_status == 'error' or step6_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step6_status == 'complete' or cur > 6 %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -378,7 +378,7 @@
         {% elif step6_status == 'error' or step6_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step6_status == 'complete' or cur > 6 %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
@@ -390,7 +390,7 @@
     {# Connector 6-7 #}
     {% if cnt >= 7 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step6_status == 'complete' or cur > 6 %} bg-emerald-500 {% elif step6_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if step6_status == 'complete' or cur > 6 %} bg-[#1877F2] {% elif step6_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 7 ── #}
     {% if is_click == "true" %}
@@ -418,7 +418,7 @@
         {% elif step7_status == 'error' or step7_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step7_status == 'complete' or cur > 7 %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -438,7 +438,7 @@
         {% elif step7_status == 'error' or step7_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step7_status == 'complete' or cur > 7 %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">
@@ -450,7 +450,7 @@
     {# Connector 7-8 #}
     {% if cnt >= 8 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step7_status == 'complete' or cur > 7 %} bg-emerald-500 {% elif step7_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if step7_status == 'complete' or cur > 7 %} bg-[#1877F2] {% elif step7_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 8 ── #}
     {% if is_click == "true" %}
@@ -478,7 +478,7 @@
         {% elif step8_status == 'error' or step8_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step8_status == 'complete' %}
-          bg-emerald-600 text-white shadow-emerald-500/20 ring-2 ring-emerald-600/30
+          bg-[#1877F2] text-white shadow-blue-500/20 ring-2 ring-[#1877F2]/30
         {% else %}
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
@@ -498,7 +498,7 @@
         {% elif step8_status == 'error' or step8_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step8_status == 'complete' %}
-          text-emerald-700 dark:text-emerald-400
+          text-slate-700 dark:text-slate-300 font-semibold
         {% else %}
           text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200
         {% endif %}">

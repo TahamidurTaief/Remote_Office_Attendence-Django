@@ -14,7 +14,7 @@ Slots:
 {% with pad_map="sm:p-3 md:p-4 lg:p-6 none:p-0" %}
 {% with pad_class=padding|default:"md" %}
 
-<div class="ft-card flex flex-col {{ extra_class }}" style="--card-bg: var(--surface);">
+<div class="ft-card flex flex-col {{ extra_class }}" style="--card-bg: var(--surface);" {{ attrs }}>
 
   {# Header row #}
   {% if title or header or actions %}

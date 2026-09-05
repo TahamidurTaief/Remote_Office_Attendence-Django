@@ -253,3 +253,48 @@ COTTON_SNAKE_CASED_NAMES = False
 TENANCY_ENABLED = True
 TENANT_UI_ENABLED = False
 DEFAULT_TENANT_SLUG = 'signtech'
+
+
+# ── DJANGO DEBUG TOOLBAR CONFIGURATION ───────────────────────────────────────
+
+import sys
+_is_running_tests = 'test' in sys.argv or 'pytest' in sys.modules
+
+ENABLE_DEBUG_TOOLBAR = (
+    os.getenv('ENABLE_DEBUG_TOOLBAR', 'True').lower() in ('true', '1', 'yes')
+    and not _is_running_tests
+)
+
+if DEBUG and ENABLE_DEBUG_TOOLBAR:
+    INSTALLED_APPS.append('debug_toolbar')
+    
+    # DebugToolbarMiddleware immediately following SecurityMiddleware
+    sec_idx = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
+    MIDDLEWARE.insert(sec_idx + 1, 'debug_toolbar.middleware.DebugToolbarMiddleware')
+    
+    INTERNAL_IPS = ['127.0.0.1', 'localhost', '::1']
+    
+    # Docker gateway resolution
+    container_ips = os.getenv('CONTAINER_IPS', '')
+    if container_ips:
+        for ip in container_ips.split(','):
+            parts = ip.strip().split('.')
+            if len(parts) == 4:
+                parts[3] = '1'
+                INTERNAL_IPS.append('.'.join(parts))
+
+    DEBUG_TOOLBAR_CONFIG = {
+        'ROOT_TAG_EXTRA_ATTRS': 'hx-preserve',
+        'SHOW_COLLAPSED': True,
+        'INTERCEPT_REDIRECTS': False,
+        'SHOW_TOOLBAR_CALLBACK': lambda request: (
+            DEBUG and ENABLE_DEBUG_TOOLBAR
+            and not request.headers.get('HX-Request')
+            and not request.headers.get('X-Requested-With')
+            and (
+                request.META.get('REMOTE_ADDR') in INTERNAL_IPS or
+                request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() in INTERNAL_IPS
+            )
+        ),
+    }
+

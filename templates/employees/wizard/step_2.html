@@ -1,9 +1,11 @@
 <form 
   id="wizard-step-form"
+  method="POST"
+  action="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=2 %}{% else %}{% url 'employees:employee_wizard_create_step' step=2 %}{% endif %}"
   hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=2 %}{% else %}{% url 'employees:employee_wizard_create_step' step=2 %}{% endif %}"
   hx-target="#wizard-root"
   hx-swap="outerHTML"
-  hx-indicator="#wizard-global-loader"
+  hx-indicator="#ft-global-loader"
   hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
   class="space-y-6"
 >
@@ -93,7 +95,7 @@
       hx-target="#wizard-root" 
       hx-swap="outerHTML" 
       {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=1 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard' %}"{% endif %}
-      hx-indicator="#wizard-global-loader"
+      hx-indicator="#ft-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       label="Back to Step 1"
     ></c-button>

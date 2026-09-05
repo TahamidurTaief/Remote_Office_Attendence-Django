@@ -138,14 +138,17 @@
   <!-- Approval Action Form Footer -->
   <form 
     id="wizard-step-form"
+    method="POST"
     {% if employee %}
+      action="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=8 %}"
       hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=8 %}"
     {% else %}
+      action="{% url 'employees:employee_wizard_create_step' step=8 %}"
       hx-post="{% url 'employees:employee_wizard_create_step' step=8 %}"
     {% endif %}
     hx-target="#wizard-root"
     hx-swap="outerHTML"
-    hx-indicator="#wizard-global-loader"
+    hx-indicator="#ft-global-loader"
     hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
     class="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-800"
   >
@@ -157,7 +160,7 @@
       hx-target="#wizard-root" 
       hx-swap="outerHTML" 
       {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=7 %}"{% endif %}
-      hx-indicator="#wizard-global-loader"
+      hx-indicator="#ft-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       label="Back to Step 7"
     ></c-button>

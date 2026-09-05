@@ -1,9 +1,11 @@
 <form
   id="wizard-step-form"
+  method="POST"
+  action="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
   hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
   hx-target="#wizard-root"
   hx-swap="outerHTML"
-  hx-indicator="#wizard-global-loader"
+  hx-indicator="#ft-global-loader"
   hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
   class="space-y-6"
   x-data="{
@@ -52,9 +54,7 @@
 
     <!-- DYNAMIC ROLE ASSIGNMENT SECTION -->
     <div class="md:col-span-2">
-      <c-card padding="md" extra_class="!bg-slate-50/60 dark:!bg-slate-900/40 !border-slate-200 dark:!border-slate-800">
-        <c-employee-roles-picker :field="form.roles" required="true" help_text="Select one or more active RBAC system roles to grant system permissions."></c-employee-roles-picker>
-      </c-card>
+      <c-employee-roles-picker :field="form.roles" required="true" help_text="Select one or more active RBAC system roles to grant system permissions."></c-employee-roles-picker>
     </div>
 
     <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -70,6 +70,14 @@
         <c-checkbox name="mfa_required" id="id_mfa_required" label="Require Multi-Factor Authentication (MFA)" checked="{% if form.mfa_required.value %}true{% endif %}"></c-checkbox>
       </div>
     </div>
+
+    <!-- DIRECT CUSTOM PERMISSIONS (OVERRIDES) SECTION -->
+    <div class="md:col-span-2">
+      <c-employee-custom-permissions
+        :available_permissions="form.roles.field.available_permissions"
+        initial_overrides="{{ form.custom_permissions.value|default:'' }}"
+      ></c-employee-custom-permissions>
+    </div>
   </div>
 
   <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -82,7 +90,7 @@
       hx-target="#wizard-root" 
       hx-swap="outerHTML" 
       {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=3 %}"{% endif %}
-      hx-indicator="#wizard-global-loader"
+      hx-indicator="#ft-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       label="Back to Step 3"
     ></c-button>

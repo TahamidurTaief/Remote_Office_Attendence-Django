@@ -252,7 +252,7 @@ html.dark {
     }
 
     h1, h2, h3, h4, h5, h6 {
-        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-family: "Segoe UI Historic", "Segoe UI", system-ui, sans-serif;
         font-weight: 700;
         color: var(--text);
     }

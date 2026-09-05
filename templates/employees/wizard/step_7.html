@@ -33,10 +33,12 @@
     <c-card padding="lg">
       <form 
         id="wizard-step-form"
+        method="POST"
+        action="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}"
         hx-post="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}"
         hx-target="#wizard-root"
         hx-swap="outerHTML"
-        hx-indicator="#wizard-global-loader"
+        hx-indicator="#ft-global-loader"
         hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
         class="space-y-4"
       >
@@ -139,7 +141,7 @@
       hx-target="#wizard-root" 
       hx-swap="outerHTML" 
       {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=6 %}"{% endif %}
-      hx-indicator="#wizard-global-loader"
+      hx-indicator="#ft-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       label="Back to Step 6"
     ></c-button>
@@ -151,7 +153,7 @@
       hx-target="#wizard-root" 
       hx-swap="outerHTML" 
       {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=8 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=8 %}"{% endif %}
-      hx-indicator="#wizard-global-loader"
+      hx-indicator="#ft-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       icon_right="arrow-right" 
       label="Proceed to Step 8 (Review)"
