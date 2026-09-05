@@ -397,18 +397,20 @@ html.dark {
     .ft-nav-item {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: var(--space-2);
         height: 38px;
-        padding: 6px 10px;
-        margin: 2px var(--space-1);
+        padding: 6px 12px;
+        margin: 4px var(--space-1);
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
-        background: transparent;
-        color: #334155;
-        border: 1px solid transparent;
+        background: #EFF6FF;
+        color: #1877F2;
+        border: 1px solid #BFDBFE;
+        box-shadow: 0 1px 2px 0 rgba(24, 119, 242, 0.04);
         font-size: 14px !important;
-        font-weight: 500;
+        font-weight: 600;
         white-space: nowrap !important;
         overflow: hidden;
         transition: all var(--transition-fast);
@@ -416,33 +418,50 @@ html.dark {
     }
 
     .ft-nav-item:hover {
-        background: #F1F5F9;
-        color: #1877F2;
+        background: #DBEAFE;
+        color: #1D4ED8;
+        border-color: #93C5FD;
     }
 
     .ft-nav-item.active {
         background: #EFF6FF !important;
         color: #1877F2 !important;
-        border-color: #DBEAFE !important;
+        border-color: #3B82F6 !important;
         font-weight: 600;
+        box-shadow: 0 1px 3px 0 rgba(24, 119, 242, 0.12);
     }
 
     html.dark .ft-nav-item {
-        background: transparent;
-        color: #94A3B8;
-        border-color: transparent;
+        background: rgba(30, 58, 138, 0.25);
+        color: #93C5FD;
+        border-color: rgba(59, 130, 246, 0.35);
     }
 
     html.dark .ft-nav-item:hover {
-        background: #1E293B;
-        color: #60A5FA;
+        background: rgba(30, 58, 138, 0.4);
+        color: #BFDBFE;
+        border-color: rgba(59, 130, 246, 0.55);
     }
 
     html.dark .ft-nav-item.active {
-        background: rgba(59, 130, 246, 0.15) !important;
+        background: rgba(30, 58, 138, 0.35) !important;
         color: #60A5FA !important;
-        border-color: rgba(59, 130, 246, 0.3) !important;
+        border-color: #3B82F6 !important;
         font-weight: 600;
+    }
+
+    .ft-nav-item .ft-icon,
+    .ft-nav-item svg,
+    .ft-nav-item i {
+        color: #1877F2;
+        stroke: #1877F2;
+    }
+
+    .ft-nav-item:hover .ft-icon,
+    .ft-nav-item:hover svg,
+    .ft-nav-item:hover i {
+        color: #1D4ED8;
+        stroke: #1D4ED8;
     }
 
     .ft-nav-item.active .ft-icon,
@@ -453,6 +472,9 @@ html.dark {
         stroke: #1877F2 !important;
     }
 
+    html.dark .ft-nav-item .ft-icon,
+    html.dark .ft-nav-item svg,
+    html.dark .ft-nav-item i,
     html.dark .ft-nav-item.active .ft-icon,
     html.dark .ft-nav-item.active svg,
     html.dark .ft-nav-item.active span,
@@ -473,13 +495,13 @@ html.dark {
     .ft-sidebar.collapsed .ft-nav-item.active {
         background: #EFF6FF !important;
         color: #1877F2 !important;
-        border-color: #DBEAFE !important;
+        border-color: #3B82F6 !important;
     }
 
     html.dark .ft-sidebar.collapsed .ft-nav-item.active {
-        background: rgba(59, 130, 246, 0.2) !important;
+        background: rgba(30, 58, 138, 0.35) !important;
         color: #60A5FA !important;
-        border-color: rgba(59, 130, 246, 0.35) !important;
+        border-color: #3B82F6 !important;
     }
 
     .ft-nav-item .ft-icon {
@@ -503,16 +525,17 @@ html.dark {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        height: 34px;
-        padding: 4px 8px;
-        margin: 1px 0;
+        height: 36px;
+        padding: 5px 10px;
+        margin: 3px 0;
         border-radius: var(--radius-btn);
         cursor: pointer;
-        background: transparent;
-        color: #475569;
-        border: 1px solid transparent;
-        font-size: 13.5px !important;
-        font-weight: 500;
+        background: #EFF6FF;
+        color: #1877F2;
+        border: 1px solid #BFDBFE;
+        box-shadow: 0 1px 2px 0 rgba(24, 119, 242, 0.04);
+        font-size: 14px !important;
+        font-weight: 600;
         white-space: nowrap !important;
         overflow: hidden;
         transition: all var(--transition-fast);
@@ -520,32 +543,56 @@ html.dark {
     }
 
     .ft-menu-item:hover {
-        background: #F8FAFC;
-        color: #1877F2;
+        background: #DBEAFE;
+        color: #1D4ED8;
+        border-color: #93C5FD;
     }
 
     .ft-menu-item.active {
         background: #EFF6FF !important;
         color: #1877F2 !important;
-        border-color: #DBEAFE !important;
+        border-color: #3B82F6 !important;
         font-weight: 600;
+        box-shadow: 0 1px 3px 0 rgba(24, 119, 242, 0.12);
+    }
+
+    .ft-menu-item .ft-icon,
+    .ft-menu-item svg,
+    .ft-menu-item i {
+        color: #1877F2;
+        stroke: #1877F2;
+    }
+
+    .ft-menu-item:hover .ft-icon,
+    .ft-menu-item:hover svg,
+    .ft-menu-item:hover i {
+        color: #1D4ED8;
+        stroke: #1D4ED8;
     }
 
     html.dark .ft-menu-item {
-        background: transparent;
-        color: #94A3B8;
-        border-color: transparent;
+        background: rgba(30, 58, 138, 0.2);
+        color: #93C5FD;
+        border-color: rgba(59, 130, 246, 0.3);
     }
 
     html.dark .ft-menu-item:hover {
-        background: #1E293B;
-        color: #60A5FA;
+        background: rgba(30, 58, 138, 0.35);
+        color: #BFDBFE;
+        border-color: rgba(59, 130, 246, 0.5);
     }
 
     html.dark .ft-menu-item.active {
-        background: rgba(59, 130, 246, 0.15) !important;
+        background: rgba(30, 58, 138, 0.3) !important;
         color: #60A5FA !important;
-        border-color: rgba(59, 130, 246, 0.3) !important;
+        border-color: #3B82F6 !important;
+    }
+
+    html.dark .ft-menu-item .ft-icon,
+    html.dark .ft-menu-item svg,
+    html.dark .ft-menu-item i {
+        color: #60A5FA;
+        stroke: #60A5FA;
     }
 
     /* ── Phase 3: Submenu Nav Items ───────────────────────────────────────── */

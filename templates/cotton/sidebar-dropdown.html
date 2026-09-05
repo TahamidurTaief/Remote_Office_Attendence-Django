@@ -29,8 +29,8 @@
           <span class="ft-badge-pill">{{ badge }}</span>
         {% endif %}
         <i data-lucide="chevron-down"
-           class="w-4 h-4 transition-transform duration-200 text-slate-400 group-hover/dropdown:text-primary"
-           :class="isSubmenuOpen('{{ id }}') ? 'rotate-180 text-primary' : ''"></i>
+           class="w-4 h-4 transition-transform duration-200 text-[#1877F2] dark:text-[#60A5FA]"
+           :class="isSubmenuOpen('{{ id }}') ? 'rotate-180' : ''"></i>
       </div>
     </button>
 
@@ -47,7 +47,7 @@
   <div id="submenu-{{ id }}"
        x-show="(isSubmenuOpen('{{ id }}') || search) && !collapsed"
        x-collapse.duration.200ms
-       class="pl-2 pr-1 py-1 space-y-1 bg-slate-50/50 dark:bg-slate-900/40 rounded-lg my-1 border border-slate-100 dark:border-slate-800/80"
+       class="pl-2 pr-1 py-1 space-y-1 bg-transparent rounded-lg my-1 border-0"
        x-cloak>
     {{ slot }}
   </div>
