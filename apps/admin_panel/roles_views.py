@@ -57,11 +57,19 @@ def log_rbac_event(actor, action, target=None, summary="", request=None, before=
 class RBACRoleAdminMixin(AccessMixin):
     """
     Enforces dynamic PermissionEngine decisions for RBAC role administration.
-    - Superusers and System Owner allowed full access.
-    - Super Admin allowed access for managing regular roles.
+    - Superusers allowed full access.
     - Users with accounts.view (for read) or accounts.edit (for write) allowed if granted by PermissionEngine.
     """
     required_action = 'view'
+
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            return super().handle_no_permission()
+        if self.request.headers.get('HX-Request'):
+            response = HttpResponseForbidden("Permission denied.")
+            response['HX-Reswap'] = 'none'
+            return response
+        raise PermissionDenied("Access denied: insufficient RBAC permissions to administer system roles.")
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -77,23 +85,22 @@ class RBACRoleAdminMixin(AccessMixin):
             action_type=self.required_action
         )
 
-        user_role_codes = list(
-            request.user.role_assignments.filter(role__is_active=True).values_list('role__code', flat=True)
-        )
-        if hasattr(request.user, 'role') and request.user.role:
-            user_role_codes.append(request.user.role)
-
-        is_privileged_role = any(r in ['system_owner', 'super_admin', 'admin'] for r in user_role_codes)
-
-        if not (eval_res.allowed or is_privileged_role):
-            messages.error(request, "Access denied: insufficient RBAC permissions to administer system roles.")
-            log_rbac_event(
-                request.user,
-                'unauthorized_rbac_admin_access_attempt',
-                summary=f"Unauthorized access attempt to {request.path}",
-                request=request
+        if not eval_res.allowed:
+            alt_codename = 'roles.edit' if self.required_action == 'edit' else 'roles.view'
+            eval_alt = PermissionEngine.evaluate(
+                user=request.user,
+                codename=alt_codename,
+                action_type=self.required_action
             )
-            return redirect('/admin-panel/dashboard/')
+            if not eval_alt.allowed:
+                log_rbac_event(
+                    request.user,
+                    'unauthorized_rbac_admin_access_attempt',
+                    summary=f"Unauthorized access attempt to {request.path}",
+                    request=request
+                )
+                return self.handle_no_permission()
+            eval_res = eval_alt
 
         request.rbac_eval = eval_res
         return super().dispatch(request, *args, **kwargs)
@@ -304,6 +311,10 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
         role = self.object
         user = self.request.user
 
+        # Ensure permissions are synchronized idempotently
+        if not Permission.objects.filter(module__is_active=True).exists():
+            RBACRegistryService.sync_database()
+
         # Fetch canonical hierarchy and lookup maps
         hierarchy_tree = RBACRegistryService.get_canonical_hierarchy()
         flat_nodes = RBACRegistryService.get_all_nodes_flat()
@@ -320,7 +331,7 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
         can_edit = (
             actor_is_super or
             PermissionEngine.evaluate(user, 'accounts.edit').allowed or
-            getattr(user, 'role', '') in ('admin', 'system_owner')
+            PermissionEngine.evaluate(user, 'roles.edit').allowed
         ) and not is_sys_owner
 
         # Build initial selections, indeterminates, scopes, and disabled actions
@@ -340,11 +351,6 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
             for act in ['add', 'edit', 'delete', 'update']:
                 code = f"{prefix}.{act}"
                 is_granted = is_sys_owner or (code in assigned_perm_codes)
-                if not is_granted:
-                    if act == 'add' and f"{prefix}.create" in assigned_perm_codes:
-                        is_granted = True
-                    elif act == 'update' and f"{prefix}.edit" in assigned_perm_codes:
-                        is_granted = True
 
                 selections[nid][act] = is_granted
                 indeterminates[nid][act] = False
@@ -355,11 +361,6 @@ class DynamicRoleMatrixView(RBACRoleAdminMixin, DetailView):
                 # Actor ceiling
                 if not actor_is_super:
                     actor_p = actor_resolved.get(code)
-                    if not actor_p or not actor_p.get('granted'):
-                        if act == 'add':
-                            actor_p = actor_resolved.get(f"{prefix}.create")
-                        elif act == 'update':
-                            actor_p = actor_resolved.get(f"{prefix}.edit")
                     disabled_actions[nid][act] = not (actor_p and actor_p.get('granted'))
                 else:
                     disabled_actions[nid][act] = False
@@ -772,6 +773,7 @@ class UserPermissionOverrideSaveView(RBACRoleAdminMixin, View):
         override.is_granted = is_granted
         override.data_scope = data_scope
         override.save()
+        PermissionEngine.invalidate_user_cache(target)
 
         log_rbac_event(request.user, 'user_permission_overridden', target=target, summary=f"Set permission override '{perm.codename}' (granted={is_granted}, scope={data_scope}) for '{target.email}'", request=request)
         messages.success(request, f"Permission override for '{perm.codename}' saved.")

@@ -1,4 +1,4 @@
-{% load static %}
+{% load static rbac_tags %}
 <c-vars shell_type="admin" active_href="" pending_leave_count="" unread_notifications="" expired_data_count="" pending_expense_count="" pending_tasks_count=""></c-vars>
 {% comment %} c-sidebar — Full hierarchical navigation sidebar
    Props:
@@ -365,7 +365,7 @@
       </a>
 
       {# Optional Switcher for Admins/Managers browsing staff view #}
-      {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'manager' or request.user.role == 'hr' or request.user.role == 'system_owner' %}
+      {% if request.user.is_superuser or request.user|has_perm:'admin_panel.view' or request.user|has_perm:'dashboard.view' %}
       <div class="my-2 border-t" style="border-color:var(--border)"></div>
       <div x-show="!collapsed && (matchSearch('Admin') || matchSearch('Switch'))" x-cloak>
         <div class="ft-group-header flex items-center gap-1.5 text-indigo-500">
@@ -715,7 +715,7 @@
              class="pl-4 pr-1 py-0.5 space-y-0.5"
              x-cloak>
           <c-sidebar-link href="{% url 'payroll:payroll_run_list' %}" label="Payroll Runs" key="payroll_runs" :pinned_keys="pinned_keys" is_active="{% if '/payroll/' in path and '/my-payslips/' not in path and '/components/' not in path and '/structures/' not in path and '/setup/' not in path and '/reports-hub/' not in path %}true{% endif %}"></c-sidebar-link>
-          {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'system_owner' or request.user.role == 'hr' or request.user.role == 'finance' or request.user.role == 'accounts' %}
+          {% if request.user.is_superuser or request.user|has_perm:'payroll.manage' or request.user|has_perm:'payroll.view' %}
           <c-sidebar-link href="{% url 'payroll:salary_components' %}" label="Salary Components" key="salary_components" :pinned_keys="pinned_keys" is_active="{% if '/payroll/components/' in path %}true{% endif %}"></c-sidebar-link>
           <c-sidebar-link href="{% url 'payroll:salary_structures' %}" label="Salary Structures" key="salary_structures" :pinned_keys="pinned_keys" is_active="{% if '/payroll/structures/' in path %}true{% endif %}"></c-sidebar-link>
           <c-sidebar-link href="{% url 'payroll:employee_salary_setup' %}" label="Employee Salary Setup" key="employee_salary_setup" :pinned_keys="pinned_keys" is_active="{% if '/payroll/setup/' in path %}true{% endif %}"></c-sidebar-link>
@@ -806,7 +806,7 @@
           <c-sidebar-link href="{% url 'accounts:admin_login_activity' %}" label="Login Activity" key="login_activity" :pinned_keys="pinned_keys" is_active="{% if '/login-activity/' in path %}true{% endif %}"></c-sidebar-link>
           <c-sidebar-link href="{% url 'admin_panel:admin_audit_logs' %}" label="Audit Logs" key="audit_logs" :pinned_keys="pinned_keys" is_active="{% if '/audit-logs/' in path %}true{% endif %}"></c-sidebar-link>
           <c-sidebar-link href="{% url 'audit:activity_list' %}" label="Activity Logs" key="activity_logs" :pinned_keys="pinned_keys" is_active="{% if '/audit/activity/' in path %}true{% endif %}"></c-sidebar-link>
-          {% if request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'system_owner' or request.user.role == 'manager' or request.user.role == 'hr' %}
+          {% if request.user.is_superuser or request.user|has_perm:'trash.view' or request.user|has_perm:'audit.view' %}
           <c-sidebar-link href="{% url 'audit:trash_list' %}" label="Trash" key="trash" :pinned_keys="pinned_keys" is_active="{% if '/audit/trash/' in path %}true{% endif %}"></c-sidebar-link>
           {% endif %}
           <c-sidebar-link href="{% url 'accounts:user_sessions' %}" label="User Sessions" key="user_sessions" :pinned_keys="pinned_keys" is_active="{% if '/account/sessions/' in path %}true{% endif %}"></c-sidebar-link>

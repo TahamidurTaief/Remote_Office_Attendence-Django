@@ -13,6 +13,7 @@ from django.db.models import Q
 from datetime import date, timedelta
 from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
+from apps.accounts.engine import PermissionEngine
 from apps.branches.models import Branch
 from apps.employees.models import EmployeeProfile
 from apps.notifications.models import Notification
@@ -45,8 +46,13 @@ class ProjectListView(AdminRequiredMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
-        queryset = super().get_queryset().select_related(
+        scoped_qs = PermissionEngine.filter_by_data_scope(
+            user=self.request.user,
+            queryset=super().get_queryset(),
+            codename='projects.view',
+            branch_field='branch'
+        )
+        queryset = scoped_qs.select_related(
             'branch', 'project_type'
         ).prefetch_related(
             'project_managers', 'site_engineers', 'project_members'
@@ -75,7 +81,12 @@ class ProjectListView(AdminRequiredMixin, ListView):
         context['search'] = self.request.GET.get('search', '')
         context['status_val'] = self.request.GET.get('status', '')
         context['branch_id'] = self.request.GET.get('branch', '')
-        context['branches'] = Branch.objects.all()
+        context['branches'] = PermissionEngine.filter_by_data_scope(
+            user=self.request.user,
+            queryset=Branch.objects.all(),
+            codename='branches.view',
+            branch_field='id'
+        ) if not self.request.user.is_superuser else Branch.objects.all()
         context['status_choices'] = Project.STATUS_CHOICES
         return context
 
@@ -85,9 +96,13 @@ class ProjectDetailView(AdminRequiredMixin, DetailView):
     context_object_name = 'project'
 
     def get_queryset(self):
-        # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
-        # #16 — add project_type to select_related to avoid N+1 on template rendering
-        return super().get_queryset().select_related(
+        scoped_qs = PermissionEngine.filter_by_data_scope(
+            user=self.request.user,
+            queryset=super().get_queryset(),
+            codename='projects.view',
+            branch_field='branch'
+        )
+        return scoped_qs.select_related(
             'branch', 'sign_off', 'project_type'
         ).prefetch_related(
             'project_managers', 'site_engineers', 'project_members'
@@ -162,6 +177,14 @@ class ProjectCreateView(AdminRequiredMixin, CreateView):
     template_name = 'projects/project_form.html'
     success_url = reverse_lazy('projects:project_list')
 
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.add', action_type='add')
+        if not eval_res.allowed:
+            return self.handle_no_permission()
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
         form.instance.created_by = self.request.user
         response = super().form_valid(form)
@@ -196,6 +219,22 @@ class ProjectUpdateView(AdminRequiredMixin, UpdateView):
     template_name = 'projects/project_form.html'
     success_url = reverse_lazy('projects:project_list')
 
+    def get_queryset(self):
+        return PermissionEngine.filter_by_data_scope(
+            user=self.request.user,
+            queryset=super().get_queryset(),
+            codename='projects.update',
+            branch_field='branch'
+        )
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.update', action_type='update')
+        if not eval_res.allowed:
+            return self.handle_no_permission()
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from apps.employees.models import EmployeeProfile
@@ -216,8 +255,17 @@ class ProjectUpdateView(AdminRequiredMixin, UpdateView):
 
 class ProjectDeleteView(AdminRequiredMixin, View):
     def post(self, request, pk):
-        # TODO: branch-scoping deferred — depends on Role/Permission system (see separate RBAC work)
-        project = get_object_or_404(Project, pk=pk)
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.delete', action_type='delete')
+        if not eval_res.allowed:
+            raise PermissionDenied("You do not have permission to delete projects.")
+        project = PermissionEngine.get_scoped_object_or_404(
+            Project,
+            user=request.user,
+            codename='projects.delete',
+            pk=pk,
+            action_type='delete',
+            branch_field='branch'
+        )
         project_name = project.name
         project.delete()
         messages.success(request, f'Project "{project_name}" was successfully deleted.')
@@ -973,10 +1021,11 @@ class ProjectExportPDFView(AdminRequiredMixin, View):
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         
-        from django.db.models import Prefetch
-        
-        project = get_object_or_404(
-            # #16 — also prefetch project_type for PDF to avoid extra query
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+        if not eval_res.allowed:
+            raise PermissionDenied("You do not have permission to view or export projects.")
+
+        project = PermissionEngine.get_scoped_object_or_404(
             Project.objects.select_related('branch', 'sign_off', 'project_type')
             .prefetch_related(
                 # #14 — tasks pre-fetched here; iterate project.tasks.all() below to use this cache
@@ -985,7 +1034,10 @@ class ProjectExportPDFView(AdminRequiredMixin, View):
                 Prefetch('manpower_logs', queryset=ManpowerDeployment.objects.order_by('-date', 'trade')),
                 Prefetch('materials', queryset=ProjectMaterial.objects.order_by('material_name'))
             ),
-            pk=project_id
+            user=request.user,
+            codename='projects.view',
+            pk=project_id,
+            branch_field='branch'
         )
         
         try:
@@ -1364,7 +1416,16 @@ class ExportProjectTasksCSVView(AdminRequiredMixin, View):
         return self._generate_csv(request, pk)
 
     def _generate_csv(self, request, pk):
-        project = get_object_or_404(Project, pk=pk)
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+        if not eval_res.allowed:
+            raise PermissionDenied("You do not have permission to export project tasks.")
+        project = PermissionEngine.get_scoped_object_or_404(
+            Project,
+            user=request.user,
+            codename='projects.view',
+            pk=pk,
+            branch_field='branch'
+        )
         tasks = project.tasks.select_related('responsible_person').all().order_by('order')
 
         # Support selective export via task_ids
@@ -1401,7 +1462,16 @@ class ExportProjectTasksCSVView(AdminRequiredMixin, View):
 
 class ExportProjectManpowerCSVView(AdminRequiredMixin, View):
     def get(self, request, pk):
-        project = get_object_or_404(Project, pk=pk)
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+        if not eval_res.allowed:
+            raise PermissionDenied("You do not have permission to export project manpower.")
+        project = PermissionEngine.get_scoped_object_or_404(
+            Project,
+            user=request.user,
+            codename='projects.view',
+            pk=pk,
+            branch_field='branch'
+        )
         logs = project.manpower_logs.all().order_by('-date', 'trade')
         
         response = HttpResponse(content_type='text/csv')
@@ -1422,7 +1492,16 @@ class ExportProjectManpowerCSVView(AdminRequiredMixin, View):
 
 class ExportProjectMaterialsCSVView(AdminRequiredMixin, View):
     def get(self, request, pk):
-        project = get_object_or_404(Project, pk=pk)
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+        if not eval_res.allowed:
+            raise PermissionDenied("You do not have permission to export project materials.")
+        project = PermissionEngine.get_scoped_object_or_404(
+            Project,
+            user=request.user,
+            codename='projects.view',
+            pk=pk,
+            branch_field='branch'
+        )
         materials = project.materials.all().order_by('material_name')
         
         response = HttpResponse(content_type='text/csv')
@@ -1534,14 +1613,20 @@ class ProjectRequestSignOffView(AdminRequiredMixin, View):
 
 
 class GlobalTaskListView(RoleRequiredMixin, ListView):
-    allowed_roles = ['admin', 'manager']
+    allowed_roles = ['admin', 'manager', 'system_owner', 'super_admin']
     model = ProjectTask
     template_name = 'projects/global_task_list.html'
     context_object_name = 'tasks'
     
     def get_queryset(self):
-        # Optimized from the start using select_related
-        qs = ProjectTask.objects.select_related('project', 'responsible_person').all().order_by('project__name', 'order')
+        base_qs = ProjectTask.objects.select_related('project', 'responsible_person').all().order_by('project__name', 'order')
+        qs = PermissionEngine.filter_by_data_scope(
+            user=self.request.user,
+            queryset=base_qs,
+            codename='projects.view',
+            branch_field='project__branch',
+            employee_field='responsible_person'
+        )
         
         # Apply filters
         employee_id = self.request.GET.get('employee')
@@ -2256,23 +2341,17 @@ class ProjectGanttExportView(LoginRequiredMixin, View):
         from apps.projects.services.gantt_export import GanttExcelExportService
         from django.utils.text import slugify
 
-        project = get_object_or_404(
-            Project.objects.prefetch_related('tasks__responsible_person'),
-            pk=pk
-        )
+        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+        if not eval_res.allowed:
+            raise PermissionDenied("You do not have permission to export project schedules.")
 
-        is_admin = getattr(request.user, 'is_superuser', False) or getattr(request.user, 'role', '') in ('admin', 'hr')
-        if not is_admin and hasattr(request.user, 'employee_profile'):
-            profile = request.user.employee_profile
-            is_assigned = (
-                project.project_managers.filter(pk=profile.pk).exists() or
-                project.site_engineers.filter(pk=profile.pk).exists() or
-                project.project_members.filter(pk=profile.pk).exists()
-            )
-            if not is_assigned:
-                return redirect('/staff/home/')
-        elif not is_admin:
-            return redirect('/staff/home/')
+        project = PermissionEngine.get_scoped_object_or_404(
+            Project.objects.prefetch_related('tasks__responsible_person'),
+            user=request.user,
+            codename='projects.view',
+            pk=pk,
+            branch_field='branch'
+        )
 
         xlsx_bytes = GanttExcelExportService.export_project_workbook(project)
         slug = slugify(project.name) or f"project_{project.pk}"

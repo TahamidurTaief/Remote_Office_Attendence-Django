@@ -186,16 +186,8 @@ class RoleAssignmentService:
         """
         Invalidates cached permissions on the user instance and related objects.
         """
-        if not user:
-            return
-        if hasattr(user, '_resolved_permissions_cache'):
-            delattr(user, '_resolved_permissions_cache')
-        try:
-            from django.core.cache import cache
-            cache.delete(f"user_permissions_{user.pk}")
-            cache.delete(f"rbac_user_perms_{user.pk}")
-        except Exception:
-            pass
+        from apps.accounts.engine import PermissionEngine
+        PermissionEngine.invalidate_user_cache(user)
 
     @classmethod
     @transaction.atomic
@@ -380,15 +372,6 @@ class RolePermissionAssignmentService:
         actor_perms = PermissionEngine.get_user_resolved_permissions(actor)
         actor_p = actor_perms.get(perm_codename)
 
-        # Check compatibility aliases if exact perm not in actor_p
-        if not actor_p or not actor_p.get('granted'):
-            if perm_codename.endswith('.add'):
-                alt = perm_codename[:-4] + '.create'
-                actor_p = actor_perms.get(alt)
-            elif perm_codename.endswith('.update'):
-                alt = perm_codename[:-7] + '.edit'
-                actor_p = actor_perms.get(alt)
-
         if not actor_p or not actor_p.get('granted'):
             raise PermissionDenied(
                 f"Privilege escalation: You cannot grant permission '{perm_codename}' because you do not hold this permission."
@@ -429,12 +412,12 @@ class RolePermissionAssignmentService:
         if role.code == 'super_admin' and not (getattr(actor, 'is_superuser', False) or trusted_internal):
             raise PermissionDenied("Only a System Owner (superuser) can configure Super Admin permissions.")
 
-        # 3. Check general actor permission to edit roles
+        # 3. Check general actor permission to edit roles via dynamic PermissionEngine
         if not (
             getattr(actor, 'is_superuser', False)
             or trusted_internal
-            or getattr(actor, 'role', '') in ('admin', 'system_owner')
             or PermissionEngine.evaluate(actor, 'accounts.edit').allowed
+            or PermissionEngine.evaluate(actor, 'roles.edit').allowed
         ):
             raise PermissionDenied("Insufficient RBAC permissions to administer system role permissions.")
 

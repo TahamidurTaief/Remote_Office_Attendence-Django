@@ -914,7 +914,7 @@ class RBACRegistryService:
             if created:
                 modules_created += 1
 
-            for act_code in ['add', 'edit', 'delete', 'update']:
+            for act_code in ['add', 'edit', 'delete', 'update', 'view']:
                 act_obj = actions_map.get(act_code)
                 if not act_obj:
                     continue
@@ -935,26 +935,32 @@ class RBACRegistryService:
                     perms_created += 1
                 all_perms_to_grant.append(perm)
 
-        # 4. Ensure System Owner Protected Role exists with GLOBAL permissions
-        sys_owner, _ = Role.objects.get_or_create(
-            code='system_owner',
-            defaults={
-                'name': 'System Owner',
-                'description': 'Protected recovery role with full system privileges across all modules.',
-                'is_system_protected': True,
-                'is_active': True
-            }
-        )
-        if not sys_owner.is_system_protected:
-            sys_owner.is_system_protected = True
-            sys_owner.save(update_fields=['is_system_protected'])
-
-        for p in all_perms_to_grant:
-            RolePermission.objects.get_or_create(
-                role=sys_owner,
-                permission=p,
-                defaults={'data_scope': DataScope.GLOBAL}
+        # 4. Ensure System Owner, Super Admin, and Admin Roles exist with appropriate permissions
+        roles_config = [
+            ('system_owner', 'System Owner', 'Protected recovery role with full system privileges across all modules.', True),
+            ('super_admin', 'Super Admin', 'Super administrative role with global access.', False),
+            ('admin', 'Administrator', 'Standard administrator role with comprehensive operational access.', False),
+        ]
+        for r_code, r_name, r_desc, is_prot in roles_config:
+            r_obj, _ = Role.objects.get_or_create(
+                code=r_code,
+                defaults={
+                    'name': r_name,
+                    'description': r_desc,
+                    'is_system_protected': is_prot,
+                    'is_active': True
+                }
             )
+            if is_prot and not r_obj.is_system_protected:
+                r_obj.is_system_protected = True
+                r_obj.save(update_fields=['is_system_protected'])
+
+            for p in all_perms_to_grant:
+                RolePermission.objects.get_or_create(
+                    role=r_obj,
+                    permission=p,
+                    defaults={'data_scope': DataScope.GLOBAL}
+                )
 
         return {
             'modules': modules_created,

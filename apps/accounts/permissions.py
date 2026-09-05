@@ -26,14 +26,9 @@ def get_effective_permissions(user) -> set[str]:
 
 def clear_user_perm_cache(user):
     """
-    Clears request-scoped permission cache on user object.
+    Clears request-scoped and distributed permission cache on user object.
     """
-    if hasattr(user, '_effective_perms'):
-        delattr(user, '_effective_perms')
-    if hasattr(user, '_has_perm_cache'):
-        delattr(user, '_has_perm_cache')
-    if hasattr(user, '_resolved_permissions_cache'):
-        delattr(user, '_resolved_permissions_cache')
+    PermissionEngine.invalidate_user_cache(user)
 
 
 def has_perm_cached(user, perm_codename: str) -> bool:
@@ -52,11 +47,9 @@ def user_can_access_my_projects(user) -> bool:
         return True
     if PermissionEngine.evaluate(user, 'projects.view').allowed:
         return True
-    if getattr(user, 'role', '') in ('manager', 'admin'):
-        return True
-    
+
     employee_profile = getattr(user, 'employee_profile', None)
     if employee_profile and employee_profile.is_active and employee_profile.is_project_manager:
         return True
-            
+
     return False
