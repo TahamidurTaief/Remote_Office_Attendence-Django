@@ -308,6 +308,9 @@ class PayrollRunTransitionView(PayrollManagerMixin, View):
 
 
 class PayrollRunReverseView(AdminRequiredMixin, View):
+    required_permission = 'payroll.edit'
+    action_type = 'edit'
+
     def post(self, request, pk):
         run = get_object_or_404(PayrollRun, pk=pk)
         note = request.POST.get('note', '').strip()

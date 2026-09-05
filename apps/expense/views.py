@@ -152,6 +152,8 @@ class StaffExpenseCreateView(StaffOrManagerMixin, CreateView):
         return response
 
 class AdminExpenseListView(AdminRequiredMixin, ListView):
+    required_permission = 'expense.view'
+    action_type = 'view'
     model = Expense
     template_name = 'admin_panel/expense/list.html'
     context_object_name = 'expenses'
@@ -276,6 +278,9 @@ def expense_detail_api(request, pk):
 
 
 class AdminExpenseUpdateView(AdminRequiredMixin, View):
+    required_permission = 'expense.edit'
+    action_type = 'edit'
+
     def post(self, request, pk):
         from django.db import transaction
         from .models import ExpenseHistory, ExpenseCategory

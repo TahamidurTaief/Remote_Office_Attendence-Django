@@ -1038,7 +1038,7 @@ class RBACRegistryService:
         for node in flat_nodes:
             mod_code = node['perm_prefix']
             mod_name = node['name']
-            for act in ['add', 'edit', 'delete', 'update']:
+            for act in ['view', 'add', 'edit', 'update', 'delete', 'approve', 'export']:
                 codename = f"{mod_code}.{act}"
                 if codename not in seen:
                     seen.add(codename)

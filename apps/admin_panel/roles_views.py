@@ -798,6 +798,9 @@ from apps.notifications.models import AuditLog
 
 
 class AdminAuditLogView(AdminRequiredMixin, View):
+    required_permission = 'audit.view'
+    action_type = 'view'
+
     def get(self, request):
         action_filter = request.GET.get('action', '').strip()
         module_filter = request.GET.get('module', '').strip()
@@ -849,6 +852,9 @@ from apps.accounts.models import UserSession, UserLoginActivity, LoginProtection
 
 
 class AdminSecurityDashboardView(AdminRequiredMixin, View):
+    required_permission = 'accounts.view'
+    action_type = 'view'
+
     def get(self, request):
         now = timezone.now()
         since_24h = now - timedelta(hours=24)

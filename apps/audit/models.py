@@ -56,6 +56,18 @@ class AuditEvent(models.Model):
     content_object = GenericForeignKey("content_type", "content_object_id")
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
 
+    @property
+    def ip(self):
+        return self.ip_address
+
+    @property
+    def timestamp(self):
+        return self.created_at
+
+    @property
+    def summary(self):
+        return self.object_label or self.reason_note or ""
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [

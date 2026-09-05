@@ -36,6 +36,8 @@ class StaffOrManagerMixin(RoleRequiredMixin):
 # ==============================================================================
 
 class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
+    required_permission = 'leave.view'
+    action_type = 'view'
     model = LeaveRequest
     template_name = 'admin_panel/leave/request_list.html'
     context_object_name = 'requests'
@@ -168,6 +170,8 @@ class ReturnLeaveRequestView(BaseProcessLeaveRequestView):
         return redirect('leave:admin_dashboard')
 
 class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):
+    required_permission = 'leave.view'
+    action_type = 'view'
     model = EmployeeProfile
     template_name = 'admin_panel/leave/employee_balances.html'
     context_object_name = 'employees'
@@ -218,6 +222,8 @@ class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):
         return context
 
 class AdminEmployeeBalanceDetailView(AdminRequiredMixin, DetailView):
+    required_permission = 'leave.view'
+    action_type = 'view'
     model = EmployeeProfile
     template_name = 'admin_panel/leave/employee_balance_detail.html'
     context_object_name = 'employee'
@@ -261,6 +267,8 @@ class AdminEmployeeBalanceDetailView(AdminRequiredMixin, DetailView):
         return context
 
 class AdminLeaveTypesView(AdminRequiredMixin, ListView):
+    required_permission = 'leave.view'
+    action_type = 'view'
     model = LeaveType
     template_name = 'admin_panel/leave/leave_types.html'
     context_object_name = 'leave_types'
@@ -271,6 +279,8 @@ class AdminLeaveTypesView(AdminRequiredMixin, ListView):
         return context
 
 class AdminLeaveTypeCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'leave.add'
+    action_type = 'add'
     model = LeaveType
     form_class = LeaveTypeForm
     template_name = 'admin_panel/leave/leave_type_form.html'
@@ -288,6 +298,8 @@ class AdminLeaveTypeCreateView(AdminRequiredMixin, CreateView):
 
 
 class AdminLeaveTypeUpdateView(AdminRequiredMixin, UpdateView):
+    required_permission = 'leave.edit'
+    action_type = 'edit'
     model = LeaveType
     form_class = LeaveTypeForm
     template_name = 'admin_panel/leave/leave_type_form.html'
@@ -313,6 +325,9 @@ class AdminLeaveTypeUpdateView(AdminRequiredMixin, UpdateView):
 
 
 class AdminLeaveTypeDeleteView(AdminRequiredMixin, View):
+    required_permission = 'leave.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
         leave_type = get_object_or_404(LeaveType, pk=pk)
         name = leave_type.name
@@ -464,6 +479,8 @@ class StaffLeaveRequestCreateView(StaffOrManagerMixin, CreateView):
 
 
 class RescheduleLeaveRequestView(AdminRequiredMixin, UpdateView):
+    required_permission = 'leave.edit'
+    action_type = 'edit'
     model = LeaveRequest
     form_class = AdminLeaveRequestRescheduleForm
     template_name = 'admin_panel/leave/reschedule_form.html'

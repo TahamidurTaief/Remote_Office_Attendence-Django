@@ -72,3 +72,6 @@ backups/*.dump
 
 .zip
 *.zip
+
+# User scratch/issues documentation
+issues.md

@@ -94,4 +94,3 @@ class StaffRequiredMixin(RBACPermissionRequiredMixin):
 
 class PermissionRequiredMixin(RBACPermissionRequiredMixin):
     pass
-

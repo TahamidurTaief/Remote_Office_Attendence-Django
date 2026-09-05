@@ -7,6 +7,8 @@ from .models import Branch, Holiday
 from .forms import BranchForm, HolidayForm
 
 class BranchListView(AdminRequiredMixin, ListView):
+    required_permission = 'branches.view'
+    action_type = 'view'
     model = Branch
     template_name = 'branches/branch_list.html'
     context_object_name = 'branches'
@@ -33,6 +35,8 @@ class BranchListView(AdminRequiredMixin, ListView):
         return context
 
 class BranchCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'branches.add'
+    action_type = 'add'
     model = Branch
     form_class = BranchForm
     template_name = 'branches/branch_form.html'
@@ -43,6 +47,8 @@ class BranchCreateView(AdminRequiredMixin, CreateView):
         return super().form_valid(form)
 
 class BranchEditView(AdminRequiredMixin, UpdateView):
+    required_permission = 'branches.edit'
+    action_type = 'edit'
     model = Branch
     form_class = BranchForm
     template_name = 'branches/branch_form.html'
@@ -53,6 +59,9 @@ class BranchEditView(AdminRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 class BranchDeleteView(AdminRequiredMixin, View):
+    required_permission = 'branches.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
         branch = get_object_or_404(Branch, pk=pk)
         branch.is_active = False
@@ -61,6 +70,8 @@ class BranchDeleteView(AdminRequiredMixin, View):
         return redirect('branches:branch_list')
 
 class HolidayListView(AdminRequiredMixin, ListView):
+    required_permission = 'branches.view'
+    action_type = 'view'
     model = Holiday
     template_name = 'branches/holiday_list.html'
     context_object_name = 'holidays'
@@ -89,6 +100,8 @@ class HolidayListView(AdminRequiredMixin, ListView):
         return context
 
 class HolidayCreateView(AdminRequiredMixin, CreateView):
+    required_permission = 'branches.add'
+    action_type = 'add'
     model = Holiday
     form_class = HolidayForm
     template_name = 'branches/holiday_form.html'
@@ -99,6 +112,8 @@ class HolidayCreateView(AdminRequiredMixin, CreateView):
         return super().form_valid(form)
 
 class HolidayEditView(AdminRequiredMixin, UpdateView):
+    required_permission = 'branches.edit'
+    action_type = 'edit'
     model = Holiday
     form_class = HolidayForm
     template_name = 'branches/holiday_form.html'
@@ -109,6 +124,9 @@ class HolidayEditView(AdminRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 class HolidayDeleteView(AdminRequiredMixin, View):
+    required_permission = 'branches.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
         holiday = get_object_or_404(Holiday, pk=pk)
         name = holiday.name
