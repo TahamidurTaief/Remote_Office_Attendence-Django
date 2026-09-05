@@ -122,10 +122,24 @@
          if (!this.search || !this.search.trim()) return false;
          const q = this.search.toLowerCase().trim();
          return !this.searchableItems.some(item => item.toLowerCase().includes(q));
+       },
+
+       activeModule: (function() {
+         const val = localStorage.getItem('ft_active_module');
+         const valid = ['all', 'overview', 'people', 'work', 'finance', 'reports', 'administration', 'main', 'account'];
+         return valid.includes(val) ? val : 'all';
+       })(),
+
+       isModuleVisible(modKey) {
+         if (modKey === 'ai_workspace') return true;
+         const current = (window.Alpine && Alpine.store('moduleFilter')) ? Alpine.store('moduleFilter').active : this.activeModule;
+         if (!current || current === 'all') return true;
+         return current === modKey;
        }
      }"
      @toggle-sidebar.window="toggle()"
      @toggle-mobile-sidebar.window="mobileOpen = !mobileOpen"
+     @module-filter-changed.window="activeModule = $event.detail.module"
      @keydown.escape.window="if (search) { search = ''; } else { mobileOpen = false; }"
      @keydown.window.prevent.slash="if (!['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { $refs.sidebarSearchInput?.focus(); }"
      x-init="
@@ -259,7 +273,7 @@
         {# ════════════════════ STAFF NAVIGATION (3 PHASES) ════════════════════ #}
 
         {# Phase 1: Module Home #}
-        <c-sidebar-dropdown id="staff_home" label="Home" icon="home" search_keys="Home Dashboard Staff Home" is_active="{% if path == '/staff/home/' or path == '/staff/' %}true{% else %}false{% endif %}">
+        <c-sidebar-dropdown id="staff_home" label="Home" icon="home" module="main" search_keys="Home Dashboard Staff Home" is_active="{% if path == '/staff/home/' or path == '/staff/' %}true{% else %}false{% endif %}">
           {# Phase 2: Menu Dashboard #}
           <c-sidebar-submenu id="staff_menu_dashboard" label="Dashboard" icon="layout-dashboard" is_active="{% if path == '/staff/home/' or path == '/staff/' %}true{% else %}false{% endif %}">
             {# Phase 3: Submenu Links #}
@@ -272,7 +286,7 @@
         </c-sidebar-dropdown>
 
         {# Phase 1: Module Attendance #}
-        <c-sidebar-dropdown id="staff_attendance" label="Attendance" icon="clock" search_keys="Attendance Check In Out History Field Visit" is_active="{% if '/staff/attendance' in path or '/staff/check-in' in path or '/staff/field-visit' in path %}true{% else %}false{% endif %}">
+        <c-sidebar-dropdown id="staff_attendance" label="Attendance" icon="clock" module="main" search_keys="Attendance Check In Out History Field Visit" is_active="{% if '/staff/attendance' in path or '/staff/check-in' in path or '/staff/field-visit' in path %}true{% else %}false{% endif %}">
           {# Phase 2: Menu Daily Attendance #}
           <c-sidebar-submenu id="staff_menu_tracking" label="Daily Attendance" icon="clock" is_active="{% if '/staff/check-in/' in path or '/staff/attendance' in path %}true{% else %}false{% endif %}">
             {# Phase 3: Submenu Links #}
@@ -301,7 +315,7 @@
         </c-sidebar-dropdown>
 
         {# Phase 1: Module Work #}
-        <c-sidebar-dropdown id="staff_work" label="Work" icon="briefcase" search_keys="Work Tasks Projects" is_active="{% if '/staff/my-tasks/' in path or '/staff/projects/' in path %}true{% else %}false{% endif %}">
+        <c-sidebar-dropdown id="staff_work" label="Work" icon="briefcase" module="work" search_keys="Work Tasks Projects" is_active="{% if '/staff/my-tasks/' in path or '/staff/projects/' in path %}true{% else %}false{% endif %}">
           {# Phase 2: Menu Tasks #}
           <c-sidebar-submenu id="staff_menu_tasks" label="My Tasks" icon="check-square" badge="{{ pending_tasks_count }}" is_active="{% if '/staff/my-tasks/' in path %}true{% else %}false{% endif %}">
             {# Phase 3: Submenu Links #}
@@ -325,7 +339,7 @@
         </c-sidebar-dropdown>
 
         {# Phase 1: Module Leave & Finance #}
-        <c-sidebar-dropdown id="staff_finance" label="Leave & Finance" icon="wallet" search_keys="Leave Finance Expenses Payslips" is_active="{% if '/leave/' in path or '/expense/' in path or '/payroll/' in path %}true{% else %}false{% endif %}">
+        <c-sidebar-dropdown id="staff_finance" label="Leave & Finance" icon="wallet" module="finance" search_keys="Leave Finance Expenses Payslips" is_active="{% if '/leave/' in path or '/expense/' in path or '/payroll/' in path %}true{% else %}false{% endif %}">
           {# Phase 2: Menu Leave Management #}
           <c-sidebar-submenu id="staff_menu_leave" label="Leave Management" icon="calendar" badge="{{ pending_leave_count }}" is_active="{% if '/leave/' in path %}true{% else %}false{% endif %}">
             {# Phase 3: Submenu Links #}
@@ -360,7 +374,7 @@
         </c-sidebar-dropdown>
 
         {# Phase 1: Module Account & Tools #}
-        <c-sidebar-dropdown id="staff_account" label="Account & Tools" icon="user" search_keys="Account Tools Profile Security AI Assistant" is_active="{% if '/profile' in path or '/account/security/' in path %}true{% else %}false{% endif %}">
+        <c-sidebar-dropdown id="staff_account" label="Account & Tools" icon="user" module="account" search_keys="Account Tools Profile Security AI Assistant" is_active="{% if '/profile' in path or '/account/security/' in path %}true{% else %}false{% endif %}">
           {# Phase 2: Menu Profile & Security #}
           <c-sidebar-submenu id="staff_menu_profile" label="Profile & Security" icon="shield-check" is_active="{% if '/account/security/' in path %}true{% else %}false{% endif %}">
             {# Phase 3: Submenu Link #}
@@ -425,6 +439,7 @@
           <c-sidebar-dropdown id="dashboards"
                               label="Overview"
                               icon="layout-dashboard"
+                              module="overview"
                               search_keys="Overview Dashboard Executive Recent Activity"
                               is_active="{% if path == '/admin-panel/dashboard/' or '/notifications/' in path %}true{% else %}false{% endif %}">
             {# Phase 2: Menu Dashboard #}
@@ -462,6 +477,7 @@
           <c-sidebar-dropdown id="people_attendance"
                               label="People & Attendance"
                               icon="users"
+                              module="people"
                               search_keys="People Attendance Employees Directory Departments Designations Live Logs Shift Calendar Schedule"
                               is_active="{% if '/employees/' in path or '/attendance/' in path or '/schedule/' in path %}true{% else %}false{% endif %}">
             {# Phase 2: Menu Employees #}
@@ -561,6 +577,7 @@
           <c-sidebar-dropdown id="work_management"
                               label="Work Management"
                               icon="briefcase"
+                              module="work"
                               search_keys="Work Projects Tasks Templates"
                               is_active="{% if '/projects/' in path %}true{% else %}false{% endif %}">
             {# Phase 2: Menu Projects #}
@@ -608,6 +625,7 @@
           <c-sidebar-dropdown id="finance"
                               label="Finance"
                               icon="wallet"
+                              module="finance"
                               search_keys="Finance Payroll Salary Expenses Claims"
                               is_active="{% if '/payroll/' in path and '/reports-hub/' not in path or '/expense/' in path %}true{% else %}false{% endif %}">
             {# Phase 2: Menu Payroll #}
@@ -667,6 +685,7 @@
           <c-sidebar-dropdown id="reports"
                               label="Reports"
                               icon="bar-chart-2"
+                              module="reports"
                               search_keys="Reports Daily Monthly Absent Analytics Payroll Hub"
                               is_active="{% if '/admin-panel/reports/' in path or '/reports-hub/' in path %}true{% else %}false{% endif %}">
             {# Phase 2: Menu Attendance Reports #}
@@ -729,6 +748,7 @@
           <c-sidebar-dropdown id="administration"
                               label="Administration"
                               icon="settings"
+                              module="administration"
                               search_keys="Administration Roles Security Policies Login Audit Logs Activity Sessions Trash Backups Branches Holidays Settings"
                               is_active="{% if '/admin-panel/roles/' in path or '/security/' in path or '/account/security/' in path or '/account/sessions/' in path or '/login-activity/' in path or '/audit-logs/' in path or '/audit/' in path or '/backups/' in path or '/branches/' in path or '/settings' in path %}true{% else %}false{% endif %}">
             {# Phase 2: Menu Roles & Security #}
@@ -856,6 +876,7 @@
                               label="AI Workspace"
                               icon="bot"
                               badge_text="AI"
+                              module="ai_workspace"
                               search_keys="AI Workspace Assistant Attendance Insights Project Payroll Smart Reports Settings"
                               is_active="{% if '/admin-panel/ai/' in path %}true{% else %}false{% endif %}">
             {# Phase 2: Menu AI Assistant #}

@@ -1,6 +1,7 @@
-<c-vars label="" icon="" dot_color="" extra_class=""></c-vars>
+<c-vars label="" icon="" dot_color="" extra_class="" module=""></c-vars>
 
-<div class="ft-sidebar-section mb-1.5 {{ extra_class }}">
+<div class="ft-sidebar-section mb-1.5 {{ extra_class }}"
+     {% if module %}x-show="isModuleVisible('{{ module }}')"{% endif %}>
   <div class="ft-group-header" x-show="!collapsed" x-cloak>
     {% if dot_color %}
       <span class="inline-block w-1.5 h-1.5 rounded-full {{ dot_color }}"></span>

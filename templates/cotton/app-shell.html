@@ -185,6 +185,25 @@
     window.SoundFX = SoundFX;
 
     document.addEventListener('alpine:init', () => {
+      Alpine.store('moduleFilter', {
+        active: (function() {
+          const val = localStorage.getItem('ft_active_module');
+          const valid = ['all', 'overview', 'people', 'work', 'finance', 'reports', 'administration', 'main', 'account'];
+          return valid.includes(val) ? val : 'all';
+        })(),
+        set(moduleKey) {
+          const valid = ['all', 'overview', 'people', 'work', 'finance', 'reports', 'administration', 'main', 'account'];
+          this.active = valid.includes(moduleKey) ? moduleKey : 'all';
+          localStorage.setItem('ft_active_module', this.active);
+          window.dispatchEvent(new CustomEvent('module-filter-changed', { detail: { module: this.active } }));
+        },
+        isMatch(moduleKey) {
+          if (!this.active || this.active === 'all') return true;
+          if (moduleKey === 'ai_workspace') return true;
+          return this.active === moduleKey;
+        }
+      });
+
       Alpine.store('sound', {
         muted: localStorage.getItem('sound_muted') === 'true',
         toggle() {

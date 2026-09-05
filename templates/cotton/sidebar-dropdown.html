@@ -1,7 +1,7 @@
-<c-vars id="" label="" icon="" is_active="false" badge="" badge_text="" search_keys="" icon_img=""></c-vars>
+<c-vars id="" label="" icon="" is_active="false" badge="" badge_text="" search_keys="" icon_img="" module=""></c-vars>
 
 <div class="ft-dropdown-group mb-1.5"
-     x-show="matchSearch('{{ search_keys|default:label }}')">
+     {% if module %}x-show="isModuleVisible('{{ module }}') && matchSearch('{{ search_keys|default:label }}')"{% else %}x-show="matchSearch('{{ search_keys|default:label }}')"{% endif %}>
   <div class="relative group/dropdown">
     <button type="button"
             @click="toggleSubmenu('{{ id }}')"
