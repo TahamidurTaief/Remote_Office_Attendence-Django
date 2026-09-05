@@ -27,32 +27,36 @@
                    extra_class="w-full max-w-md" ></c-input>
         </div>
 
-        <div class="flex items-center gap-2 flex-wrap">
-          <select name="module"
-                  hx-get="{% url 'admin_panel:admin_audit_logs' %}"
-                  hx-include="#audit-filter-bar"
-                  hx-target="#audit-log-table-container"
-                  hx-swap="outerHTML"
-                  hx-trigger="change"
-                  class="ft-input text-xs py-1.5 px-3 rounded-lg border">
-            <option value="">All Modules</option>
-            {% for mod in modules %}
-              <option value="{{ mod }}" {% if module_filter == mod %}selected{% endif %}>{{ mod|upper }}</option>
-            {% endfor %}
-          </select>
+        <div class="flex items-center gap-2 flex-wrap min-w-[360px]">
+          <div class="w-44">
+            <c-select name="module"
+                      value="{{ module_filter }}"
+                      hx-get="{% url 'admin_panel:admin_audit_logs' %}"
+                      hx-include="#audit-filter-bar"
+                      hx-target="#audit-log-table-container"
+                      hx-swap="outerHTML"
+                      hx-trigger="change">
+              <option value="">All Modules</option>
+              {% for mod in modules %}
+                <option value="{{ mod }}" {% if module_filter == mod %}selected{% endif %}>{{ mod|upper }}</option>
+              {% endfor %}
+            </c-select>
+          </div>
 
-          <select name="action"
-                  hx-get="{% url 'admin_panel:admin_audit_logs' %}"
-                  hx-include="#audit-filter-bar"
-                  hx-target="#audit-log-table-container"
-                  hx-swap="outerHTML"
-                  hx-trigger="change"
-                  class="ft-input text-xs py-1.5 px-3 rounded-lg border">
-            <option value="">All Action Types</option>
-            {% for act in action_types %}
-              <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act|upper }}</option>
-            {% endfor %}
-          </select>
+          <div class="w-48">
+            <c-select name="action"
+                      value="{{ action_filter }}"
+                      hx-get="{% url 'admin_panel:admin_audit_logs' %}"
+                      hx-include="#audit-filter-bar"
+                      hx-target="#audit-log-table-container"
+                      hx-swap="outerHTML"
+                      hx-trigger="change">
+              <option value="">All Action Types</option>
+              {% for act in action_types %}
+                <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act|upper }}</option>
+              {% endfor %}
+            </c-select>
+          </div>
         </div>
       </div>
 

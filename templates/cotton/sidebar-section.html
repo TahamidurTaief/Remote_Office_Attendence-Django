@@ -1,0 +1,15 @@
+<c-vars label="" icon="" dot_color="" extra_class=""></c-vars>
+
+<div class="ft-sidebar-section mb-1.5 {{ extra_class }}">
+  <div class="ft-group-header" x-show="!collapsed" x-cloak>
+    {% if dot_color %}
+      <span class="inline-block w-1.5 h-1.5 rounded-full {{ dot_color }}"></span>
+    {% elif icon %}
+      <i data-lucide="{{ icon }}" class="w-3.5 h-3.5 shrink-0"></i>
+    {% endif %}
+    <span>{{ label }}</span>
+  </div>
+  <div class="space-y-0.5">
+    {{ slot }}
+  </div>
+</div>

@@ -18,7 +18,7 @@ class CustomUserManager(BaseUserManager):
                 email = None
         else:
             email = None
-            
+
         if phone:
             phone = phone.strip()
             if not phone:
@@ -48,7 +48,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         ('finance', 'Finance'),
         ('accounts', 'Accounts'),
     )
-    
+
     email = models.EmailField(unique=True, null=True, blank=True)
     phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='staff')
@@ -92,18 +92,44 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             full_name = f"{emp.first_name} {emp.last_name}".strip()
             if full_name:
                 return full_name
+        profile = getattr(self, 'employee_profile', None)
+        if profile and profile.full_name:
+            return profile.full_name.strip()
         first_name = getattr(self, 'first_name', '')
         last_name = getattr(self, 'last_name', '')
         full_name = f"{first_name} {last_name}".strip()
         if full_name:
             return full_name
-        return self.phone or self.email or "User"
+        if self.email:
+            return self.email
+        return self.phone or "User"
+
+    @property
+    def display_first_name(self):
+        emp = getattr(self, 'employee_master', None)
+        if emp and emp.first_name:
+            return emp.first_name.strip()
+        profile = getattr(self, 'employee_profile', None)
+        if profile and profile.full_name:
+            parts = profile.full_name.strip().split()
+            if parts:
+                return parts[0]
+        first_name = getattr(self, 'first_name', '')
+        if first_name:
+            return first_name.strip()
+        if self.email:
+            prefix = self.email.split('@')[0]
+            clean_first = ''.join([c if c.isalpha() else ' ' for c in prefix]).strip().split()
+            if clean_first:
+                return clean_first[0].title()
+            return prefix
+        return self.display_name.split()[0] if self.display_name else "User"
 
     def get_full_name(self):
         return self.display_name
 
     def get_short_name(self):
-        return self.display_name
+        return self.display_first_name
 
 
 

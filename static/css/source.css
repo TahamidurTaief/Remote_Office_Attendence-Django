@@ -127,14 +127,14 @@ html:not(.dark) {
     --space-7: 32px;
     --space-8: 40px;
 
-    /* Font size scale — reduced by 2px app-wide */
-    --text-xs: 10px;
-    --text-sm: 11px;
-    --text-md: 12px;
+    /* Font size scale — min 12px, body/standard max 14px */
+    --text-xs: 12px;
+    --text-sm: 12px;
+    --text-md: 13px;
     --text-lg: 14px;
-    --text-xl: 16px;
-    --text-2xl: 18px;
-    --text-3xl: 22px;
+    --text-xl: 14px;
+    --text-2xl: 14px;
+    --text-3xl: 18px;
 
     /* Z-index scale */
     --z-sidebar: 40;
@@ -243,7 +243,7 @@ html.dark {
         background: var(--bg-gradient);
         background-attachment: fixed;
         color: var(--text);
-        font-family: "Inter", "Noto Sans Bengali", system-ui, -apple-system, sans-serif;
+        font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Noto Sans Bengali", system-ui, sans-serif;
         font-size: var(--text-md);
         line-height: 1.5;
         font-weight: 400;
@@ -252,7 +252,7 @@ html.dark {
     }
 
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'Inter', sans-serif;
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
         font-weight: 700;
         color: var(--text);
     }
@@ -398,15 +398,15 @@ html.dark {
         display: flex;
         align-items: center;
         gap: var(--space-2);
-        height: 32px;
+        height: 33px;
         padding: 4px 8px;
         margin: 1px var(--space-1);
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
         color: var(--text-secondary);
-        font-size: 12px; /* 12px per spec */
-        font-weight: 400;
+        font-size: 13px !important; /* increased by exactly 1px from 12px */
+        font-weight: 500;
         white-space: nowrap !important;
         overflow: hidden;
         transition: background var(--transition-fast), color var(--transition-fast);
@@ -462,14 +462,15 @@ html.dark {
     }
 
     .ft-nav-item .ft-icon {
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
         flex-shrink: 0;
-        stroke-width: 1.5px;
+        stroke-width: 1.75px;
     }
 
     .ft-nav-label {
         flex: 1;
+        font-size: 13px !important;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -483,11 +484,12 @@ html.dark {
         justify-content: space-between;
         height: 32px;
         margin: 1px 0;
+        padding: 0 4px;
         border-radius: var(--radius-btn);
         cursor: pointer;
         text-decoration: none;
         color: var(--text-secondary);
-        font-size: 12px;
+        font-size: 13px !important; /* increased by exactly 1px from 12px */
         font-weight: 400;
         white-space: nowrap !important;
         overflow: hidden;
@@ -527,8 +529,8 @@ html.dark {
     }
 
     .ft-group-header {
-        padding: var(--space-4) var(--space-4) var(--space-2);
-        font-size: var(--text-xs);
+        padding: var(--space-3) var(--space-3) var(--space-1);
+        font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -546,7 +548,7 @@ html.dark {
         padding: 0 var(--space-1);
         background: var(--danger);
         color: #FFFFFF;
-        font-size: var(--text-xs);
+        font-size: 12px;
         font-weight: 700;
         border-radius: var(--radius-avatar);
         display: inline-flex;
@@ -869,7 +871,7 @@ html.dark {
     .ft-table th {
         padding: 10px 12px;
         text-align: left;
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -886,6 +888,7 @@ html.dark {
         padding: 12px 12px;
         border-bottom: 1px solid var(--border);
         color: var(--text-secondary);
+        font-size: 13px;
         vertical-align: middle;
     }
 
@@ -900,7 +903,7 @@ html.dark {
         gap: var(--space-1);
         padding: 2px var(--space-2);
         border-radius: var(--radius-chip);
-        font-size: var(--text-sm);
+        font-size: 12px;
         font-weight: 500;
         white-space: nowrap;
     }
@@ -916,7 +919,7 @@ html.dark {
         height: 40px;
         padding: 0 var(--space-4);
         text-align: left;
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -1533,6 +1536,12 @@ html.dark {
             transform: translateX(0);
         }
 
+        .ft-sidebar .ft-nav-item,
+        .ft-sidebar .ft-submenu-item {
+            min-height: 44px;
+            height: 44px;
+        }
+
         .ft-main {
             margin-left: 0 !important;
         }
@@ -1549,5 +1558,33 @@ html.dark {
     }
     .ft-ambient-purple {
         background: radial-gradient(circle, rgba(233,213,255,0.65) 0%, rgba(168,85,247,0) 70%);
+    }
+
+    /* ── Universal Font Size Constraints: Min 12px, Standard Max 14px ── */
+    .text-\[9px\],
+    .text-\[10px\],
+    .text-\[11px\],
+    .text-xs {
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Table text styling */
+    .ft-table td,
+    .ft-table th {
+        font-size: 12px !important;
+    }
+
+    .ft-table code,
+    .ft-table span.font-mono {
+        font-size: 12px !important;
+    }
+
+    .bg-primary {
+        background-color: var(--primary, #1877F2);
+    }
+
+    .text-accent-600 {
+        color: #2B8E42;
     }
 }

@@ -139,11 +139,11 @@
               @click="open = !open"
               class="flex items-center gap-1.5 px-2 py-1 rounded-btn hover:bg-opacity-10 transition-colors"
               style="background:transparent">
-        <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-[11px] font-semibold">
-          {{ request.user.display_name|default:"User"|make_list|first|upper }}
+        <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-semibold">
+          {{ request.user.display_first_name|default:"User"|make_list|first|upper }}
         </div>
-        <span class="hidden md:block text-[12px] font-medium max-w-[120px] truncate" style="color:var(--text-secondary)">
-          {{ request.user.display_name|default:"User" }}
+        <span class="hidden md:block text-xs font-semibold max-w-[120px] truncate" style="color:var(--text-secondary)">
+          {{ request.user.display_first_name|default:"User" }}
         </span>
         <i data-lucide="chevron-down" class="w-3.5 h-3.5" style="color:var(--text-muted)"></i>
       </button>
@@ -160,10 +160,10 @@
            style="background:var(--surface); border-color:var(--border); box-shadow:var(--shadow-dropdown)"
            x-cloak>
         <div class="px-3 py-1.5 border-b mb-1" style="border-color:var(--border)">
-          <p class="text-[12px] font-semibold truncate" style="color:var(--text)">
+          <p class="text-xs font-semibold truncate" style="color:var(--text)">
             {{ request.user.display_name|default:"User" }}
           </p>
-          <p class="text-[10px]" style="color:var(--text-muted)">{{ request.user.role|title }}</p>
+          <p class="text-xs" style="color:var(--text-muted)">{{ request.user.role|title }}</p>
         </div>
         {# Mobile nav history/zoom items inside the user dropdown #}
         <div class="block lg:hidden border-b pb-1.5 mb-1.5 px-3 space-y-1.5" style="border-color:var(--border)">

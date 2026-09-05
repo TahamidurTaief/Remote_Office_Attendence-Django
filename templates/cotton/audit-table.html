@@ -26,9 +26,8 @@
             <th class="py-3 px-4 font-semibold">Actor / User</th>
             <th class="py-3 px-3 font-semibold">Action</th>
             <th class="py-3 px-3 font-semibold">Target &amp; Module</th>
-            <th class="py-3 px-4 font-semibold">Changed Data / Summary</th>
             <th class="py-3 px-3 font-semibold">IP Address</th>
-            <th class="py-3 px-3 font-semibold">Timestamp</th>
+            <th class="py-3 px-3 font-semibold text-right">Timestamp</th>
         {% endif %}
     </c-slot>
 
@@ -58,14 +57,14 @@
                 <td class="text-xs text-slate-400 max-w-[200px] truncate" title="{{ log.user_agent }}">
                     {% if forloop.first %}
                     <span class="font-mono">{{ log.ip_address|default:"—" }}</span>
-                    <span class="block text-[10px] text-slate-350 truncate">{{ log.user_agent }}</span>
+                    <span class="block text-xs text-slate-400 truncate">{{ log.user_agent }}</span>
                     {% endif %}
                 </td>
             </tr>
             {% endfor %}
         {% empty %}
         <tr>
-            <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
+            <td colspan="6" class="py-12 text-center text-slate-400 text-xs">
                 <c-empty-state icon="database" title="No Audit Records" description="No technical audits logged for this employee profile yet." ></c-empty-state>
             </td>
         </tr>
@@ -73,45 +72,45 @@
     {% elif type == 'login' %}
         {% for act in logs %}
           <tr class="hover:bg-slate-500/5">
-            <td class="py-3 px-3 font-medium" style="color:var(--text)">
+            <td class="py-3 px-3 font-medium text-xs" style="color:var(--text)">
               {% if act.user %}
                 {{ act.user.email|default:act.user.phone }}
-                <span class="block text-[10px] text-slate-400 font-mono">Role: {{ act.user.role|default:"User" }}</span>
+                <span class="block text-xs text-slate-400 font-mono">Role: {{ act.user.role|default:"User" }}</span>
               {% else %}
                 {{ act.identifier_entered|default:"Unknown User" }}
-                <span class="block text-[10px] text-slate-400 font-mono">Unauthenticated</span>
+                <span class="block text-xs text-slate-400 font-mono">Unauthenticated</span>
               {% endif %}
             </td>
             <td class="py-3 px-3 whitespace-nowrap">
               {% if act.status == 'success' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
                   Success
                 </span>
               {% elif act.status == 'failed' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
                   Failed
                 </span>
               {% elif act.status == 'locked' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
+                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
                   Account Locked
                 </span>
               {% elif act.status == 'captcha_failed' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/25">
+                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/25">
                   Captcha Failed
                 </span>
               {% else %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/25">
+                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/25">
                   {{ act.status|default:"Unknown"|title }}
                 </span>
               {% endif %}
             </td>
-            <td class="py-3 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
+            <td class="py-3 px-3 font-mono text-xs" style="color:var(--text-muted)">
               {{ act.ip_address|default:"-" }}
             </td>
-            <td class="py-3 px-3 text-[11px] max-w-xs truncate" style="color:var(--text-muted)" title="{{ act.user_agent }}">
+            <td class="py-3 px-3 text-xs max-w-xs truncate" style="color:var(--text-muted)" title="{{ act.user_agent }}">
               {{ act.user_agent|default:"-" }}
             </td>
-            <td class="py-3 px-3 text-[11px] whitespace-nowrap" style="color:var(--text-muted)">
+            <td class="py-3 px-3 text-xs whitespace-nowrap" style="color:var(--text-muted)">
               {{ act.timestamp|date:"d/m/Y g:i:s A" }}
             </td>
             <td class="py-3 px-3 text-right space-x-1 whitespace-nowrap">
@@ -121,7 +120,7 @@
                           hx-post="{% url 'accounts:admin_force_logout' pk=act.user.id %}"
                           hx-target="#action-zone-{{ act.user.id }}"
                           hx-swap="innerHTML"
-                          class="ft-btn ft-btn-secondary ft-btn-sm text-[10px] py-1 px-2">
+                          class="ft-btn ft-btn-secondary ft-btn-sm text-xs py-1 px-2">
                     Force Logout
                   </button>
                   {% if act.user.locked_until %}
@@ -129,7 +128,7 @@
                             hx-post="{% url 'accounts:admin_unlock_user' pk=act.user.id %}"
                             hx-target="#action-zone-{{ act.user.id }}"
                             hx-swap="innerHTML"
-                            class="ft-btn ft-btn-accent ft-btn-sm text-[10px] py-1 px-2">
+                            class="ft-btn ft-btn-accent ft-btn-sm text-xs py-1 px-2">
                       Unlock
                     </button>
                   {% endif %}
@@ -146,93 +145,137 @@
         {% endfor %}
     {% elif type == 'sensitive' %}
         {% for log in logs %}
-          <tr class="hover:bg-slate-500/5">
-            <td class="py-3 px-4 font-medium" style="color:var(--text)">
-              {% if log.actor_user %}
-                {{ log.actor_user.email|default:log.actor_user.phone }}
-                <span class="block text-[10px] text-slate-400 font-mono">{{ log.actor_role|default:"User" }}</span>
-              {% elif log.actor %}
-                {{ log.actor.email|default:log.actor.phone }}
-                <span class="block text-[10px] text-slate-400 font-mono">ID: #{{ log.actor.id }}</span>
-              {% elif log.actor_role %}
-                <span class="font-medium" style="color:var(--text)">{{ log.actor_role|title }}</span>
-                <span class="block text-[10px] text-slate-400 font-mono">System Actor</span>
-              {% else %}
-                <span class="text-slate-400">System / Automated</span>
-              {% endif %}
-            </td>
-
-            <td class="py-3 px-3 whitespace-nowrap">
-              {% if log.action == 'created' or log.action == 'role_created' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
-                  {{ log.action|upper }}
-                </span>
-              {% elif log.action == 'updated' or log.action == 'role_updated' or log.action == 'security_policy_changed' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/25">
-                  {{ log.action|upper }}
-                </span>
-              {% elif log.action == 'deleted' or log.action == 'trashed' or log.action == 'role_deleted' or log.action == 'bulk_audit_log_delete' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
-                  {{ log.action|upper }}
-                </span>
-              {% elif log.action == 'restored' %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/25">
-                  {{ log.action|upper }}
-                </span>
-              {% else %}
-                <span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary border border-primary/20">
-                  {{ log.action|upper }}
-                </span>
-              {% endif %}
-            </td>
-
-            <td class="py-3 px-3 text-[11px]" style="color:var(--text-muted)">
-              {% if log.module %}
-                <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20 mb-1">
-                  {{ log.module }}
-                </span>
-              {% endif %}
-              <div>
-                {% if log.object_type %}
-                  <span class="font-mono text-[10px]">{{ log.object_type }}{% if log.object_id %} #{{ log.object_id }}{% endif %}</span>
-                {% elif log.target_type %}
-                  <span class="font-mono text-[10px]">{{ log.target_type }}{% if log.target_id %} #{{ log.target_id }}{% endif %}</span>
-                {% else %}
-                  <span class="text-slate-400">—</span>
-                {% endif %}
+          {# ── Row 1: Primary Event Metadata ── #}
+          <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+            {# 1. Actor / User #}
+            <td class="pt-3 pb-1 px-4 text-xs">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs font-medium shrink-0">
+                  {% if log.actor_user %}
+                    {{ log.actor_user.display_name|default:log.actor_user.email|make_list|first|upper }}
+                  {% elif log.actor %}
+                    {{ log.actor.display_name|default:log.actor.email|make_list|first|upper }}
+                  {% else %}
+                    S
+                  {% endif %}
+                </div>
+                <div class="min-w-0">
+                  {% if log.actor_user %}
+                    <span class="text-xs font-medium text-slate-900 dark:text-slate-100 block truncate">
+                      {{ log.actor_user.display_name }}
+                    </span>
+                    <span class="text-xs text-slate-400 block font-normal">
+                      {{ log.actor_role|default:log.actor_user.role|default:"User"|title }}
+                    </span>
+                  {% elif log.actor %}
+                    <span class="text-xs font-medium text-slate-900 dark:text-slate-100 block truncate">
+                      {{ log.actor.display_name }}
+                    </span>
+                    <span class="text-xs text-slate-400 block font-normal">
+                      ID: #{{ log.actor.id }}
+                    </span>
+                  {% elif log.actor_role %}
+                    <span class="text-xs font-medium text-slate-900 dark:text-slate-100 block truncate">
+                      {{ log.actor_role|title }}
+                    </span>
+                    <span class="text-xs text-slate-400 block font-normal">System Actor</span>
+                  {% else %}
+                    <span class="text-xs font-normal text-slate-500 block">System / Automated</span>
+                  {% endif %}
+                </div>
               </div>
             </td>
 
-            <td class="py-3 px-4 text-xs">
-              {% if log.changed_fields %}
-                <div class="flex flex-wrap gap-1.5 max-w-md">
-                  {% for field, change in log.changed_fields.items %}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20" title="{{ field }}">
-                      <strong class="font-semibold">{{ field }}:</strong>
-                      <span class="line-through opacity-70 text-rose-600 dark:text-rose-400">{{ change.before|default:"(empty)" }}</span>
-                      <span class="text-slate-400">&rarr;</span>
-                      <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ change.after|default:"(empty)" }}</span>
-                    </span>
-                  {% endfor %}
-                </div>
+            {# 2. Action (Pure text with clean color, no box) #}
+            <td class="pt-3 pb-1 px-3 whitespace-nowrap text-xs">
+              {% if log.action == 'created' or log.action == 'role_created' %}
+                <span class="text-emerald-600 dark:text-emerald-400 font-medium">
+                  {{ log.action|upper }}
+                </span>
+              {% elif log.action == 'updated' or log.action == 'role_updated' or log.action == 'security_policy_changed' %}
+                <span class="text-sky-600 dark:text-sky-400 font-medium">
+                  {{ log.action|upper }}
+                </span>
+              {% elif log.action == 'deleted' or log.action == 'trashed' or log.action == 'role_deleted' or log.action == 'bulk_audit_log_delete' %}
+                <span class="text-rose-600 dark:text-rose-400 font-medium">
+                  {{ log.action|upper }}
+                </span>
+              {% elif log.action == 'restored' %}
+                <span class="text-purple-600 dark:text-purple-400 font-medium">
+                  {{ log.action|upper }}
+                </span>
               {% else %}
-                <div class="text-xs truncate max-w-sm" style="color:var(--text)">
-                  {{ log.object_label|default:log.summary|default:log.reason_note|default:"—" }}
-                </div>
+                <span class="text-primary font-medium">
+                  {{ log.action|upper }}
+                </span>
               {% endif %}
             </td>
 
-            <td class="py-3 px-3 font-mono text-[11px]" style="color:var(--text-muted)">
+            {# 3. Target & Module (Pure text, no badge box) #}
+            <td class="pt-3 pb-1 px-3 text-xs">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                {% if log.module %}
+                  <span class="font-medium text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                    {{ log.module }}
+                  </span>
+                  <span class="text-slate-300 dark:text-slate-600">&bull;</span>
+                {% endif %}
+                <span class="text-slate-700 dark:text-slate-300 font-normal">
+                  {% if log.object_type %}
+                    {{ log.object_type }}{% if log.object_id %} #{{ log.object_id }}{% endif %}
+                  {% elif log.target_type %}
+                    {{ log.target_type }}{% if log.target_id %} #{{ log.target_id }}{% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </span>
+              </div>
+            </td>
+
+            {# 4. IP Address #}
+            <td class="pt-3 pb-1 px-3 text-xs text-slate-500 dark:text-slate-400 font-normal font-mono">
               {{ log.ip_address|default:log.ip|default:"—" }}
             </td>
 
-            <td class="py-3 px-3 text-[11px] whitespace-nowrap" style="color:var(--text-muted)">
+            {# 5. Timestamp #}
+            <td class="pt-3 pb-1 px-3 text-xs whitespace-nowrap text-right text-slate-500 dark:text-slate-400 font-normal">
               {{ log.created_at|default:log.timestamp|date:"d/m/Y g:i:s A" }}
+            </td>
+          </tr>
+
+          {# ── Row 2: Clean, borderless Changed Data / Summary ── #}
+          <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+            <td colspan="5" class="pt-0.5 pb-3 px-4 pl-12 text-xs">
+              <div class="flex items-baseline gap-2 flex-wrap text-xs">
+                {% if log.object_label %}
+                  <span class="text-slate-500 dark:text-slate-400 font-normal">
+                    {{ log.object_label }}
+                  </span>
+                  {% if log.changed_fields %}<span class="text-slate-300 dark:text-slate-600">—</span>{% endif %}
+                {% endif %}
+
+                {% if log.changed_fields %}
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {% for field, change in log.changed_fields.items %}
+                      <span class="inline-flex items-center gap-1 font-normal text-slate-700 dark:text-slate-300" title="{{ field }}">
+                        <span class="text-slate-500 dark:text-slate-400 font-medium">{{ field }}:</span>
+                        <span class="line-through text-rose-500 dark:text-rose-400 opacity-70">{{ change.before|default:"(empty)" }}</span>
+                        <span class="text-slate-400">&rarr;</span>
+                        <span class="text-emerald-600 dark:text-emerald-400 font-medium">{{ change.after|default:"(empty)" }}</span>
+                      </span>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <span class="text-slate-600 dark:text-slate-300 font-normal">
+                    {{ log.summary|default:log.reason_note|default:"No diff details recorded." }}
+                  </span>
+                {% endif %}
+              </div>
             </td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="6" class="py-8 text-center text-xs" style="color:var(--text-muted)">
+            <td colspan="5" class="py-10 text-center text-xs" style="color:var(--text-muted)">
               No sensitive action audit logs found matching criteria.
             </td>
           </tr>

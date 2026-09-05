@@ -120,6 +120,10 @@ module.exports = {
             },
         },
     },
+    safelist: [
+        'bg-primary',
+        'text-accent-600',
+    ],
     plugins: [
         require('@tailwindcss/forms'),
         require('@tailwindcss/typography'),
