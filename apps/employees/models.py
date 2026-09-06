@@ -538,7 +538,32 @@ class Employee(models.Model):
     def primary_bank_account(self):
         return self.bank_accounts.filter(is_active=True, is_primary=True).select_related('bank', 'branch').first()
 
+    def _check_has_active_docs(self) -> bool:
+        if hasattr(self, '_has_docs_annotated'):
+            return bool(self._has_docs_annotated)
+        if hasattr(self, '_prefetched_objects_cache') and 'documents' in self._prefetched_objects_cache:
+            today = timezone.localdate()
+            return any(
+                doc.is_active and not doc.is_archived and (doc.expiry_date is None or doc.expiry_date >= today)
+                for doc in self.documents.all()
+            )
+        return self.documents.filter(
+            is_active=True,
+            is_archived=False
+        ).filter(
+            models.Q(expiry_date__isnull=True) | models.Q(expiry_date__gte=timezone.localdate())
+        ).exists()
+
+    def _check_has_active_assets(self) -> bool:
+        if hasattr(self, '_has_assets_annotated'):
+            return bool(self._has_assets_annotated)
+        if hasattr(self, '_prefetched_objects_cache') and 'asset_assignments' in self._prefetched_objects_cache:
+            return any(a.returned_date is None for a in self.asset_assignments.all())
+        return self.asset_assignments.filter(returned_date__isnull=True).exists()
+
     def get_completion_percentage(self) -> int:
+        if hasattr(self, '_completion_percentage_cache'):
+            return self._completion_percentage_cache
         score = 0
         # Step 1: Basic info
         if self.employee_number and self.first_name and self.last_name:
@@ -553,39 +578,34 @@ class Employee(models.Model):
         if self.user_id:
             score += 20
         # Step 5-7: Documents/Emergency/Assets
-        has_docs = self.documents.filter(
-            is_active=True,
-            is_archived=False
-        ).filter(
-            models.Q(expiry_date__isnull=True) | models.Q(expiry_date__gte=timezone.localdate())
-        ).exists()
+        has_docs = self._check_has_active_docs()
         has_emergency = bool(self.emergency_contact_name and self.emergency_contact_phone)
-        has_assets = self.asset_assignments.filter(returned_date__isnull=True).exists()
+        has_assets = self._check_has_active_assets()
         if has_docs or has_emergency or has_assets:
             score += 20
+        self._completion_percentage_cache = score
         return score
 
     def get_next_wizard_step(self) -> int:
+        if hasattr(self, '_next_wizard_step_cache'):
+            return self._next_wizard_step_cache
+        step = 8
         if not (self.employee_number and self.first_name and self.last_name):
-            return 1
-        if not (self.department_id and self.designation_id and self.joined_date):
-            return 2
-        if self.basic_salary is None:
-            return 3
-        if not self.user_id:
-            return 4
-        if not self.documents.filter(
-            is_active=True,
-            is_archived=False
-        ).filter(
-            models.Q(expiry_date__isnull=True) | models.Q(expiry_date__gte=timezone.localdate())
-        ).exists():
-            return 5
-        if not (self.emergency_contact_name and self.emergency_contact_phone):
-            return 6
-        if not self.asset_assignments.filter(returned_date__isnull=True).exists():
-            return 7
-        return 8
+            step = 1
+        elif not (self.department_id and self.designation_id and self.joined_date):
+            step = 2
+        elif self.basic_salary is None:
+            step = 3
+        elif not self.user_id:
+            step = 4
+        elif not self._check_has_active_docs():
+            step = 5
+        elif not (self.emergency_contact_name and self.emergency_contact_phone):
+            step = 6
+        elif not self._check_has_active_assets():
+            step = 7
+        self._next_wizard_step_cache = step
+        return step
 
     class Meta:
         ordering = ['employee_number']
@@ -641,6 +661,15 @@ class Employee(models.Model):
 
     @property
     def business_status(self) -> str:
+        cache_key = (self.status, self.is_suspended, self.is_trashed)
+        if getattr(self, '_business_status_key', None) == cache_key and hasattr(self, '_business_status_cache'):
+            return self._business_status_cache
+        res = self._compute_business_status()
+        self._business_status_key = cache_key
+        self._business_status_cache = res
+        return res
+
+    def _compute_business_status(self) -> str:
         if self.is_trashed:
             return 'archived'
         if self.status == EmployeeStatus.ARCHIVED:
@@ -654,10 +683,19 @@ class Employee(models.Model):
         if self.status == EmployeeStatus.PROBATION:
             return 'on_probation'
         
-        today = timezone.localdate()
         profile = getattr(self, 'legacy_profile', None)
-        if profile and profile.leave_requests.filter(status='approved', start_date__lte=today, end_date__gte=today).exists():
-            return 'on_leave'
+        if profile:
+            if hasattr(profile, 'active_leaves'):
+                if profile.active_leaves:
+                    return 'on_leave'
+            elif hasattr(profile, '_prefetched_objects_cache') and 'leave_requests' in profile._prefetched_objects_cache:
+                today = timezone.localdate()
+                if any(lr.status == 'approved' and lr.start_date <= today <= lr.end_date for lr in profile.leave_requests.all()):
+                    return 'on_leave'
+            else:
+                today = timezone.localdate()
+                if profile.leave_requests.filter(status='approved', start_date__lte=today, end_date__gte=today).exists():
+                    return 'on_leave'
             
         if self.status in (EmployeeStatus.DRAFT, EmployeeStatus.PENDING_APPROVAL):
             return 'inactive'

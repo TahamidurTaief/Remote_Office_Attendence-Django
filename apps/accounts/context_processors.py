@@ -11,22 +11,34 @@ def notifications(request):
         from apps.accounts.engine import PermissionEngine
         if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'dashboard.view').allowed:
             try:
-                from apps.attendance.models import Attendance
-                expired_count = Attendance.objects.filter(is_expired=True).count()
+                if hasattr(request, '_expired_data_count'):
+                    expired_count = request._expired_data_count
+                else:
+                    from apps.attendance.models import Attendance
+                    expired_count = Attendance.objects.filter(is_expired=True).count()
+                    request._expired_data_count = expired_count
             except Exception:
                 expired_count = 0
 
             try:
-                from apps.notifications.models import Notification
-                unread_count = Notification.objects.filter(
-                    recipient=request.user, is_read=False
-                ).count()
+                if hasattr(request, '_unread_notification_count'):
+                    unread_count = request._unread_notification_count
+                else:
+                    from apps.notifications.models import Notification
+                    unread_count = Notification.objects.filter(
+                        recipient=request.user, is_read=False
+                    ).count()
+                    request._unread_notification_count = unread_count
             except Exception:
                 unread_count = 0
 
             try:
-                from apps.leave.models import LeaveRequest
-                pending_leave_count = LeaveRequest.objects.filter(status='pending').count()
+                if hasattr(request, '_pending_leave_count'):
+                    pending_leave_count = request._pending_leave_count
+                else:
+                    from apps.leave.models import LeaveRequest
+                    pending_leave_count = LeaveRequest.objects.filter(status='pending').count()
+                    request._pending_leave_count = pending_leave_count
             except Exception:
                 pending_leave_count = 0
 
