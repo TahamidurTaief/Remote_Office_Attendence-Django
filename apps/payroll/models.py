@@ -1,7 +1,10 @@
 import uuid
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.employees.models import Employee
+from apps.tenants.models import TenantBaseModel
 from decimal import Decimal
 
 class SalaryComponentType(models.TextChoices):
@@ -85,6 +88,19 @@ class PayrollRun(models.Model):
     period_start = models.DateField(db_index=True)
     period_end = models.DateField(db_index=True)
     status = models.CharField(max_length=20, choices=PayrollRunStatus.choices, default=PayrollRunStatus.DRAFT)
+    configuration = models.ForeignKey(
+        'payroll.PayrollConfiguration',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='payroll_runs',
+        help_text="Configuration version snapshot used for this payroll run"
+    )
+    configuration_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Immutable snapshot of the configuration at the time of calculation/finalization"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -199,4 +215,186 @@ class PayrollPolicy(models.Model):
     def __str__(self):
         branch_name = self.branch.name if self.branch else "Company-wide Default"
         return f"Payroll Policy ({branch_name}): {self.get_absence_divisor_mode_display()}, OT: {self.default_ot_multiplier}x"
+
+
+class PayrollPeriodType(models.TextChoices):
+    CALENDAR_MONTH = 'calendar_month', 'Calendar Month'
+    CUSTOM_CYCLE = 'custom_cycle', 'Custom Cutoff Cycle'
+
+
+class PayFrequency(models.TextChoices):
+    MONTHLY = 'monthly', 'Monthly'
+    BIWEEKLY = 'biweekly', 'Bi-Weekly'
+    WEEKLY = 'weekly', 'Weekly'
+
+
+class ProrationMethod(models.TextChoices):
+    CALENDAR_DAYS = 'calendar_days', 'Calendar Days Basis'
+    WORKING_DAYS = 'working_days', 'Working Days Basis'
+    NONE = 'none', 'No Proration'
+
+
+class RoundingRule(models.TextChoices):
+    NEAREST_INTEGER = 'nearest_integer', 'Round to Nearest Integer (Half Up)'
+    ROUND_UP = 'round_up', 'Round Up (Ceiling)'
+    ROUND_DOWN = 'round_down', 'Round Down (Floor)'
+    TWO_DECIMAL = 'two_decimal', 'Preserve Two Decimals'
+
+
+class NegativeNetPayPolicy(models.TextChoices):
+    ZERO_OUT = 'zero_out', 'Zero Out and Carry Forward'
+    PREVENT_FINALIZE = 'prevent_finalize', 'Prevent Finalization if Negative'
+    ALLOW_NEGATIVE = 'allow_negative', 'Allow Negative Net Pay'
+
+
+class PayrollConfiguration(TenantBaseModel):
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True, db_index=True)
+    is_archived = models.BooleanField(default=False, db_index=True)
+
+    currency = models.CharField(max_length=10, default='BDT')
+    pay_frequency = models.CharField(
+        max_length=20,
+        choices=PayFrequency.choices,
+        default=PayFrequency.MONTHLY
+    )
+    payroll_period_type = models.CharField(
+        max_length=30,
+        choices=PayrollPeriodType.choices,
+        default=PayrollPeriodType.CALENDAR_MONTH
+    )
+    cutoff_day = models.PositiveIntegerField(
+        default=25,
+        validators=[MinValueValidator(1), MaxValueValidator(31)],
+        help_text="Day of the month for attendance cutoff (1-31)"
+    )
+    payment_day = models.PositiveIntegerField(
+        default=30,
+        validators=[MinValueValidator(1), MaxValueValidator(31)],
+        help_text="Day of the month for salary disbursement (1-31)"
+    )
+    working_day_basis = models.CharField(
+        max_length=20,
+        choices=AbsenceDivisorMode.choices,
+        default=AbsenceDivisorMode.FIXED_30,
+        help_text="Divisor basis for salary absence and proration calculations"
+    )
+    attendance_source = models.CharField(
+        max_length=100,
+        default='attendance.AttendanceRecord',
+        help_text="Data source identifier for employee attendance logs"
+    )
+    leave_source = models.CharField(
+        max_length=100,
+        default='leave.LeaveRequest',
+        help_text="Data source identifier for approved employee leaves"
+    )
+    overtime_source = models.CharField(
+        max_length=100,
+        default='attendance.AttendanceRecord',
+        help_text="Data source identifier for approved employee overtime"
+    )
+    overtime_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.50')
+    )
+    proration_method = models.CharField(
+        max_length=30,
+        choices=ProrationMethod.choices,
+        default=ProrationMethod.CALENDAR_DAYS
+    )
+    rounding_rule = models.CharField(
+        max_length=30,
+        choices=RoundingRule.choices,
+        default=RoundingRule.NEAREST_INTEGER
+    )
+    negative_net_pay_policy = models.CharField(
+        max_length=30,
+        choices=NegativeNetPayPolicy.choices,
+        default=NegativeNetPayPolicy.ZERO_OUT
+    )
+    approval_workflow_steps = models.PositiveIntegerField(
+        default=2,
+        choices=[(1, 'Single-Step (Direct Approve)'), (2, 'Two-Step (Review then Approve)')],
+        help_text="Number of workflow approval steps required"
+    )
+    payslip_prefix = models.CharField(
+        max_length=20,
+        default='PSL-',
+        help_text="Prefix used in generated payslip numbers"
+    )
+    supported_payment_methods = models.JSONField(
+        default=list,
+        help_text="Supported payment methods, e.g. ['bank', 'cash', 'split']"
+    )
+    effective_from = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payroll_configs_created'
+    )
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payroll_configs_archived'
+    )
+
+    class Meta:
+        ordering = ['-version']
+        unique_together = ('tenant', 'version')
+        indexes = [
+            models.Index(fields=['tenant', 'is_active']),
+            models.Index(fields=['tenant', 'version']),
+        ]
+
+    def __str__(self):
+        status = 'Active' if self.is_active else ('Archived' if self.is_archived else 'Inactive')
+        tenant_name = self.tenant.name if getattr(self, 'tenant_id', None) else 'No Tenant'
+        return f"Payroll Config v{self.version} ({tenant_name}) - {status}"
+
+    def clean(self):
+        if not self.supported_payment_methods:
+            self.supported_payment_methods = ['bank', 'cash', 'split']
+
+    def delete(self, *args, **kwargs):
+        if self.payroll_runs.exists():
+            raise ValidationError("Cannot hard-delete a payroll configuration referenced by payroll runs. Archive it instead.")
+        super().delete(*args, **kwargs)
+
+    def to_snapshot(self) -> dict:
+        return {
+            'id': self.id,
+            'tenant_id': self.tenant_id,
+            'tenant_name': self.tenant.name if self.tenant_id else '',
+            'version': self.version,
+            'is_active': self.is_active,
+            'is_archived': self.is_archived,
+            'currency': self.currency,
+            'pay_frequency': self.pay_frequency,
+            'payroll_period_type': self.payroll_period_type,
+            'cutoff_day': self.cutoff_day,
+            'payment_day': self.payment_day,
+            'working_day_basis': self.working_day_basis,
+            'attendance_source': self.attendance_source,
+            'leave_source': self.leave_source,
+            'overtime_source': self.overtime_source,
+            'overtime_multiplier': str(self.overtime_multiplier),
+            'proration_method': self.proration_method,
+            'rounding_rule': self.rounding_rule,
+            'negative_net_pay_policy': self.negative_net_pay_policy,
+            'approval_workflow_steps': self.approval_workflow_steps,
+            'payslip_prefix': self.payslip_prefix,
+            'supported_payment_methods': list(self.supported_payment_methods or ['bank', 'cash', 'split']),
+            'effective_from': str(self.effective_from) if self.effective_from else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
 

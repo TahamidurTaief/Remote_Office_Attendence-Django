@@ -50,6 +50,19 @@ PAYROLL_MANAGER_ROLES = ['admin', 'system_owner', 'hr', 'finance', 'accounts']
 class PayrollManagerMixin(RBACPermissionRequiredMixin):
     required_permission = 'payroll.view'
 
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        if request.user.is_superuser or getattr(request.user, 'role', '') in PAYROLL_MANAGER_ROLES:
+            return super(RBACPermissionRequiredMixin, self).dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated and not self.request.headers.get('HX-Request'):
+            from django.shortcuts import redirect
+            return redirect('payroll:my_payslips')
+        return super().handle_no_permission()
+
 
 def is_payroll_manager(user):
     if not user or not user.is_authenticated:
@@ -1160,3 +1173,154 @@ class PayrollReportsHubView(PayrollManagerMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         ctx['runs'] = PayrollRun.objects.all().order_by('-period_start')
         return ctx
+
+
+# --- PAYROLL CONFIGURATION CENTER & AI SIMULATION ---
+
+class PayrollConfigurationView(PayrollManagerMixin, View):
+    """
+    Tenant-scoped Payroll Configuration Center.
+    Canonical administrative portal for payroll calculation parameters,
+    schedule cutoff dates, proration, and working-day divisors.
+    """
+    def get(self, request, *args, **kwargs):
+        from apps.tenants.context import get_user_tenant
+        from apps.payroll.configuration_service import PayrollConfigurationService
+        from apps.payroll.forms import PayrollConfigurationForm
+
+        tenant = getattr(request, 'tenant', None) or get_user_tenant(request.user)
+        config = PayrollConfigurationService.get_active_config(tenant, create_if_missing=True)
+        history = PayrollConfigurationService.get_config_history(tenant)
+        form = PayrollConfigurationForm(instance=config)
+
+        context = {
+            'tenant': tenant,
+            'config': config,
+            'history': history,
+            'form': form,
+        }
+        return render(request, 'payroll/configuration_center.html', context)
+
+    def post(self, request, *args, **kwargs):
+        from apps.tenants.context import get_user_tenant
+        from apps.payroll.configuration_service import PayrollConfigurationService
+        from apps.payroll.forms import PayrollConfigurationForm
+        from apps.accounts.engine import PermissionEngine
+
+        tenant = getattr(request, 'tenant', None) or get_user_tenant(request.user)
+        if not tenant:
+            raise PermissionDenied("Active tenant context is required.")
+
+        # Verify edit permission
+        can_edit = (
+            request.user.is_superuser or
+            getattr(request.user, 'role', '') in PAYROLL_MANAGER_ROLES or
+            PermissionEngine.evaluate(request.user, 'payroll.edit').allowed or
+            PermissionEngine.evaluate(request.user, 'payroll.update').allowed
+        )
+        if not can_edit:
+            raise PermissionDenied("You do not have permission to modify payroll configuration.")
+
+        active_config = PayrollConfigurationService.get_active_config(tenant, create_if_missing=True)
+        form = PayrollConfigurationForm(request.POST, instance=active_config)
+
+        if form.is_valid():
+            saved_config, is_new_version = PayrollConfigurationService.save_or_update_config(
+                tenant=tenant,
+                user=request.user,
+                data=form.cleaned_data
+            )
+            if is_new_version:
+                messages.success(
+                    request,
+                    f"Saved and activated Payroll Configuration v{saved_config.version}. Previous version archived to preserve historical payroll runs."
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Payroll Configuration v{saved_config.version} updated successfully."
+                )
+            return redirect('payroll:payroll_configuration')
+
+        history = PayrollConfigurationService.get_config_history(tenant)
+        context = {
+            'tenant': tenant,
+            'config': active_config,
+            'history': history,
+            'form': form,
+        }
+        return render(request, 'payroll/configuration_center.html', context)
+
+
+class PayrollConfigurationHistoryView(PayrollManagerMixin, View):
+    """
+    View historical snapshots of past payroll configurations.
+    """
+    def get(self, request, *args, **kwargs):
+        from apps.tenants.context import get_user_tenant
+        from apps.payroll.configuration_service import PayrollConfigurationService
+
+        tenant = getattr(request, 'tenant', None) or get_user_tenant(request.user)
+        version = request.GET.get('version')
+        if version:
+            config = PayrollConfigurationService.get_config_by_version(tenant, int(version))
+            if not config:
+                return JsonResponse({'error': 'Version not found'}, status=404)
+            return JsonResponse(config.to_snapshot())
+
+        history = PayrollConfigurationService.get_config_history(tenant)
+        return JsonResponse({'history': [c.to_snapshot() for c in history]})
+
+
+class PayrollConfigurationAISimulateView(View):
+    """
+    Tenant-scoped, default-denied AI simulation endpoint.
+    Executes dry-run payroll calculations without persisting any state to the database.
+    """
+    def post(self, request, *args, **kwargs):
+        from apps.tenants.context import get_user_tenant
+        from apps.payroll.configuration_service import PayrollConfigurationService
+        from apps.payroll.ai_permissions import AIPayrollPermissionService
+
+        if not request.user or not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+
+        tenant = getattr(request, 'tenant', None) or get_user_tenant(request.user)
+        if not tenant:
+            return JsonResponse({'error': 'Tenant context required'}, status=400)
+
+        # Parse request body overrides if provided
+        overrides = {}
+        if request.body:
+            try:
+                payload = json.loads(request.body)
+                overrides = payload.get('overrides', {})
+                # Forged tenant check: payload cannot specify a different tenant
+                req_tid = payload.get('tenant_id')
+                if req_tid and int(req_tid) != tenant.id:
+                    AIPayrollPermissionService._log_security_event(
+                        user=request.user,
+                        action='forged_tenant_payload_attempt',
+                        reason=f"Payload specified tenant {req_tid} differing from context tenant {tenant.id}."
+                    )
+                    return JsonResponse({'error': 'Cross-tenant access forbidden'}, status=403)
+            except json.JSONDecodeError:
+                pass
+
+        try:
+            AIPayrollPermissionService.assert_permission(
+                user=request.user,
+                target_tenant=tenant,
+                action=AIPayrollPermissionService.PERM_SIMULATE,
+                request_tenant=getattr(request, 'tenant', None)
+            )
+        except PermissionDenied as e:
+            return JsonResponse({'error': str(e)}, status=403)
+
+        simulation = PayrollConfigurationService.simulate_payroll(
+            tenant=tenant,
+            user=request.user,
+            overrides=overrides
+        )
+        return JsonResponse(simulation)
+

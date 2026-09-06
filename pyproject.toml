@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "django>=5.0,<6.0",
-    "django-browser-reload>=1.21.0",
-    "django-cotton>=2.7.2",
+    "django-browser-reload==1.21.0",
+    "django-cotton==2.7.2",
     "django-environ>=0.11.2",
     "django-imagekit>=5.0.0",
     "django-tailwind-cli==2.21.1",
@@ -17,10 +17,11 @@ dependencies = [
     "openpyxl>=3.1.2",
     "pillow>=10.2.0",
     "psycopg2-binary>=2.9.9",
-    "pyotp>=2.10.0",
+    "pyotp==2.10.0",
     "python-dateutil>=2.9.0",
-    "qrcode>=8.2",
+    "qrcode==8.2.0",
     "reportlab>=4.0.4",
     "imagekitio>=5.8.0",
     "google-genai>=1.0.0",
+    "django-debug-toolbar>=8.0.0",
 ]

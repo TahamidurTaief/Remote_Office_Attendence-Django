@@ -3,6 +3,7 @@ import re
 from typing import Dict, List, Optional, Set, Tuple
 from django.urls import reverse, NoReverseMatch
 from django.db.models import Q
+from apps.accounts.engine import PermissionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,17 @@ class GlobalSearchService:
         eval_res = PermissionEngine.evaluate(user=user, codename=f"{module_code}.view", action_type='view')
         if eval_res.allowed:
             return True
+
+        role = getattr(user, 'role', '')
+        if role in ['admin', 'system_owner']:
+            return True
+        if role in ['finance', 'accounts'] and module_code in ['payroll', 'expense']:
+            return True
+        if role == 'hr' and module_code in ['employees', 'attendance', 'leave', 'payroll']:
+            return True
+        if role == 'manager' and module_code in ['dashboard', 'employees', 'attendance', 'leave', 'projects', 'tasks']:
+            return True
+
         return False
 
     @classmethod
@@ -615,6 +627,17 @@ class GlobalSearchService:
                     'group': 'Payroll',
                     'description': 'Cash payment disbursements and employee signoff sheets',
                     'keywords': ['cash report', 'salary cash payments', 'submenu'],
+                })
+
+            url_payroll_cfg = cls.safe_reverse('payroll:payroll_configuration', fallback='/payroll/configuration/')
+            if url_payroll_cfg:
+                items.append({
+                    'label': 'Payroll Configuration Center',
+                    'href': url_payroll_cfg,
+                    'icon': 'sliders',
+                    'group': 'Payroll',
+                    'description': 'Tenant payroll currency, frequency, cutoff dates, proration, and working-day basis',
+                    'keywords': ['payroll configuration', 'payroll config', 'payroll settings', 'cutoff date', 'salary rules', 'currency', 'menu'],
                 })
 
         url_my_slips = cls.safe_reverse('payroll:my_payslips', fallback='/payroll/my-payslips/')

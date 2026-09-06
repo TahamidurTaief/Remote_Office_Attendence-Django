@@ -1,0 +1,295 @@
+<c-app-shell page_title="Payroll Configuration Center | FieldTrack" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4" x-data="{
+        activeTab: 'config',
+        simulationOpen: false,
+        simulating: false,
+        simResult: null,
+        runSimulation() {
+            this.simulating = true;
+            fetch('{% url 'payroll:payroll_configuration_simulate' %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({})
+            })
+            .then(res => res.json())
+            .then(data => {
+                this.simulating = false;
+                this.simResult = data;
+                $dispatch('open-modal', {id: 'ai-simulation-modal'});
+            })
+            .catch(err => {
+                this.simulating = false;
+                alert('Simulation request failed.');
+            });
+        }
+    }">
+        <!-- Page Header -->
+        <c-page-header title="Payroll Configuration Center">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2">
+                    <c-button variant="secondary" icon="sparkles" label="AI Simulate" @click="runSimulation()"></c-button>
+                    <c-button type="submit" form="payroll-config-form" variant="primary" icon="save" label="Save Configuration"></c-button>
+                </div>
+            </c-slot>
+        </c-page-header>
+
+        <!-- Status & Tenant Context Banner -->
+        <c-card padding="sm">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Tenant: {{ tenant.name }}</h3>
+                            <c-badge variant="success" label="Active v{{ config.version }}"></c-badge>
+                            {% if config.payroll_runs.exists %}
+                            <c-badge variant="warning" label="Locked to {{ config.payroll_runs.count }} Run(s)"></c-badge>
+                            {% else %}
+                            <c-badge variant="neutral" label="Draft Editable"></c-badge>
+                            {% endif %}
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Canonical source of truth for all compensation calculations, period cutoffs, and AI actions.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <c-button variant="secondary" size="sm" icon="sliders" label="Active Config" @click="activeTab = 'config'"></c-button>
+                    <c-button variant="secondary" size="sm" icon="history" label="Version History ({{ history|length }})" @click="activeTab = 'history'"></c-button>
+                </div>
+            </div>
+        </c-card>
+
+        {% if messages %}
+            {% for message in messages %}
+                <c-alert variant="{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}" title="{{ message }}"></c-alert>
+            {% endfor %}
+        {% endif %}
+
+        {% if config.payroll_runs.exists %}
+        <c-alert variant="info" title="Version Integrity Safeguard Active">
+            Saving modifications will automatically preserve historical payroll by creating version {{ config.version|add:1 }}. All finalized payroll runs retain their original immutable configuration snapshot.
+        </c-alert>
+        {% endif %}
+
+        <!-- Tab 1: Configuration Form -->
+        <div x-show="activeTab === 'config'" class="space-y-4">
+            <c-form-error-summary :errors="form.errors"></c-form-error-summary>
+
+            <form id="payroll-config-form" method="post" action="{% url 'payroll:payroll_configuration' %}" class="space-y-4">
+                {% csrf_token %}
+
+                <!-- Section 1: Payroll Schedule & Periods -->
+                <c-card padding="md">
+                    <c-form-section title="Pay Schedule & Frequency" subtitle="Define the accounting currency, disbursement cycle, and cutoff rules." columns="3">
+                        <c-input name="currency" label="Currency" value="{{ form.currency.value|default:'BDT' }}" required="true" help="Primary operational currency code"></c-input>
+
+                        <c-select name="pay_frequency" label="Pay Frequency" value="{{ form.pay_frequency.value }}">
+                            {% for val, label in form.fields.pay_frequency.choices %}
+                            <option value="{{ val }}" {% if form.pay_frequency.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </c-select>
+
+                        <c-select name="payroll_period_type" label="Period Cycle" value="{{ form.payroll_period_type.value }}">
+                            {% for val, label in form.fields.payroll_period_type.choices %}
+                            <option value="{{ val }}" {% if form.payroll_period_type.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </c-select>
+
+                        <c-input name="cutoff_day" type="number" label="Monthly Cutoff Day" value="{{ form.cutoff_day.value|default:25 }}" required="true" help="Attendance & leave cutoff day (1-31)"></c-input>
+
+                        <c-input name="payment_day" type="number" label="Disbursement Day" value="{{ form.payment_day.value|default:30 }}" required="true" help="Scheduled salary disbursement day (1-31)"></c-input>
+
+                        <c-input name="payslip_prefix" label="Payslip Number Prefix" value="{{ form.payslip_prefix.value|default:'PSL-' }}" help="E.g. PSL-2026-XXXX"></c-input>
+                    </c-form-section>
+                </c-card>
+
+                <!-- Section 2: Calculation Engine & Working Basis -->
+                <c-card padding="md">
+                    <c-form-section title="Calculation Rules & Basis" subtitle="Configure divisors for absence, overtime multiplier, and rounding policies." columns="3">
+                        <c-select name="working_day_basis" label="Absence Divisor Basis" value="{{ form.working_day_basis.value }}" help="Working-day divisor for absence deduction">
+                            {% for val, label in form.fields.working_day_basis.choices %}
+                            <option value="{{ val }}" {% if form.working_day_basis.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </c-select>
+
+                        <c-input name="overtime_multiplier" label="Overtime Hourly Multiplier" value="{{ form.overtime_multiplier.value|default:'1.50' }}" help="Standard multiplier for approved overtime hours (e.g. 1.50x)"></c-input>
+
+                        <c-select name="proration_method" label="Proration Method" value="{{ form.proration_method.value }}">
+                            {% for val, label in form.fields.proration_method.choices %}
+                            <option value="{{ val }}" {% if form.proration_method.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </c-select>
+
+                        <c-select name="rounding_rule" label="Net Pay Rounding" value="{{ form.rounding_rule.value }}">
+                            {% for val, label in form.fields.rounding_rule.choices %}
+                            <option value="{{ val }}" {% if form.rounding_rule.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </c-select>
+
+                        <c-select name="negative_net_pay_policy" label="Negative Net Pay Policy" value="{{ form.negative_net_pay_policy.value }}">
+                            {% for val, label in form.fields.negative_net_pay_policy.choices %}
+                            <option value="{{ val }}" {% if form.negative_net_pay_policy.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </c-select>
+
+                        <c-select name="approval_workflow_steps" label="Approval Workflow" value="{{ form.approval_workflow_steps.value }}">
+                            <option value="1" {% if form.approval_workflow_steps.value == 1 %}selected{% endif %}>1-Step (Direct Approve)</option>
+                            <option value="2" {% if form.approval_workflow_steps.value == 2 or not form.approval_workflow_steps.value %}selected{% endif %}>2-Step (Review then Approve)</option>
+                        </c-select>
+                    </c-form-section>
+                </c-card>
+
+                <!-- Section 3: Data Sources & Integration -->
+                <c-card padding="md">
+                    <c-form-section title="Integration Sources & Governance" subtitle="Data connectors for attendance, leaves, overtime, and audit notes." columns="3">
+                        <c-input name="attendance_source" label="Attendance Source" value="{{ form.attendance_source.value|default:'attendance.AttendanceRecord' }}" help="Target model for biometric / mobile attendance"></c-input>
+
+                        <c-input name="leave_source" label="Leave Source" value="{{ form.leave_source.value|default:'leave.LeaveRequest' }}" help="Target model for approved leave records"></c-input>
+
+                        <c-input name="overtime_source" label="Overtime Source" value="{{ form.overtime_source.value|default:'attendance.AttendanceRecord' }}" help="Target model for approved overtime hours"></c-input>
+                    </c-form-section>
+
+                    <div class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-800">
+                        <c-input name="notes" label="Configuration Notes" value="{{ form.notes.value|default:'' }}" placeholder="Document reason for update or regulatory policy changes..."></c-input>
+                    </div>
+                </c-card>
+
+                <!-- Form Actions Footer -->
+                <c-card padding="sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-500">Last updated: {{ config.updated_at|date:"d M Y, H:i" }}</span>
+                        <div class="flex items-center gap-2">
+                            <c-button type="submit" variant="primary" icon="check" label="Save & Apply Configuration"></c-button>
+                        </div>
+                    </div>
+                </c-card>
+            </form>
+        </div>
+
+        <!-- Tab 2: Version History -->
+        <div x-show="activeTab === 'history'" class="space-y-4" style="display: none;">
+            <c-card padding="none">
+                <c-table>
+                    <c-slot name="header">
+                        <th>Version</th>
+                        <th>Status</th>
+                        <th>Currency / Frequency</th>
+                        <th>Cutoff / Disbursement</th>
+                        <th>Working Basis</th>
+                        <th>OT Multiplier</th>
+                        <th>Associated Runs</th>
+                        <th>Created By / Date</th>
+                    </c-slot>
+                    <c-slot name="body">
+                        {% for v in history %}
+                        <tr>
+                            <td>
+                                <span class="font-mono font-bold text-gray-900 dark:text-white">v{{ v.version }}</span>
+                            </td>
+                            <td>
+                                {% if v.is_active %}
+                                <c-badge variant="success" label="Active"></c-badge>
+                                {% elif v.is_archived %}
+                                <c-badge variant="neutral" label="Archived"></c-badge>
+                                {% else %}
+                                <c-badge variant="warning" label="Inactive"></c-badge>
+                                {% endif %}
+                            </td>
+                            <td>{{ v.currency }} / {{ v.get_pay_frequency_display }}</td>
+                            <td>Day {{ v.cutoff_day }} / Day {{ v.payment_day }}</td>
+                            <td>{{ v.get_working_day_basis_display }}</td>
+                            <td>{{ v.overtime_multiplier }}x</td>
+                            <td>
+                                <span class="font-mono">{{ v.payroll_runs.count }}</span> run(s)
+                            </td>
+                            <td>
+                                <div class="text-xs text-gray-900 dark:text-white">{{ v.created_by.email|default:"System" }}</div>
+                                <div class="text-[11px] text-gray-500">{{ v.created_at|date:"d M Y, H:i" }}</div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-6 text-gray-500">No configuration history found.</td>
+                        </tr>
+                        {% endfor %}
+                    </c-slot>
+                </c-table>
+            </c-card>
+        </div>
+
+        <!-- AI Simulation Result Modal -->
+        <c-modal id="ai-simulation-modal" title="AI Payroll Simulation Results" max_width="2xl">
+            <div class="space-y-4">
+                <c-alert variant="info" title="Non-Persistent Simulation Complete">
+                    Calculations were executed purely in-memory. Zero database records were modified or created.
+                </c-alert>
+
+                <template x-if="simResult">
+                    <div class="space-y-3">
+                        <c-card padding="sm">
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                                <div>
+                                    <div class="text-[11px] text-gray-500 uppercase">Sample Count</div>
+                                    <div class="text-base font-bold text-gray-900 dark:text-white" x-text="simResult.summary.employee_count"></div>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-gray-500 uppercase">Gross Sum</div>
+                                    <div class="text-base font-bold text-gray-900 dark:text-white" x-text="simResult.summary.total_gross + ' ' + simResult.currency"></div>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-gray-500 uppercase">Total Net</div>
+                                    <div class="text-base font-bold text-green-600 dark:text-green-400" x-text="simResult.summary.total_net + ' ' + simResult.currency"></div>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-gray-500 uppercase">Deductions</div>
+                                    <div class="text-base font-bold text-red-600 dark:text-red-400" x-text="simResult.summary.total_deductions + ' ' + simResult.currency"></div>
+                                </div>
+                            </div>
+                        </c-card>
+
+                        <c-card padding="none">
+                            <c-table>
+                                <c-slot name="header">
+                                    <th>Employee</th>
+                                    <th>Gross</th>
+                                    <th>Absence Deduct</th>
+                                    <th>OT Amount</th>
+                                    <th>Net Payable</th>
+                                </c-slot>
+                                <c-slot name="body">
+                                    <template x-for="emp in simResult.sample_breakdowns" :key="emp.employee_id">
+                                        <tr>
+                                            <td>
+                                                <div class="font-semibold text-xs text-gray-900 dark:text-white" x-text="emp.name"></div>
+                                                <div class="text-[11px] text-gray-500 font-mono" x-text="emp.employee_number"></div>
+                                            </td>
+                                            <td class="font-mono text-xs" x-text="emp.gross_salary"></td>
+                                            <td class="font-mono text-xs text-red-600" x-text="emp.absence_deduction"></td>
+                                            <td class="font-mono text-xs text-green-600" x-text="emp.ot_amount"></td>
+                                            <td class="font-mono text-xs font-bold text-gray-900 dark:text-white" x-text="emp.net_payable"></td>
+                                        </tr>
+                                    </template>
+                                </c-slot>
+                            </c-table>
+                        </c-card>
+                    </div>
+                </template>
+            </div>
+
+            <c-slot name="footer">
+                <div class="flex justify-end gap-2">
+                    <c-button variant="secondary" label="Close" @click="$dispatch('close-modal', {id: 'ai-simulation-modal'})"></c-button>
+                </div>
+            </c-slot>
+        </c-modal>
+    </div>
+</c-app-shell>

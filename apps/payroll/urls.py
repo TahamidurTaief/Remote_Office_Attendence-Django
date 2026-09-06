@@ -45,4 +45,9 @@ urlpatterns = [
     path('runs/<int:pk>/bank-report/export/<str:format>/', views.BankReportExportView.as_view(), name='bank_report_export'),
     path('runs/<int:pk>/cash-report/', views.CashReportView.as_view(), name='cash_report'),
     path('runs/<int:pk>/cash-report/export/<str:format>/', views.CashReportExportView.as_view(), name='cash_report_export'),
+
+    # Payroll Configuration Center & AI
+    path('configuration/', views.PayrollConfigurationView.as_view(), name='payroll_configuration'),
+    path('configuration/history/', views.PayrollConfigurationHistoryView.as_view(), name='payroll_configuration_history'),
+    path('configuration/simulate/', views.PayrollConfigurationAISimulateView.as_view(), name='payroll_configuration_simulate'),
 ]

@@ -807,7 +807,7 @@ class PayrollPresentationLayerTests(TestCase):
 
         # Test partial grid for HTMX live search and check queries
         grid_url = reverse('payroll:payroll_run_grid_partial', kwargs={'pk': self.payroll_run.pk})
-        with self.assertNumQueries(13):  # session, user, security policies, count, pinned menu, and 1 select_related query for calculations
+        with self.assertNumQueries(16):  # session, user, tenant, security policies, notification counts, pinned menu, and calculations
             response = self.client.get(grid_url)
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, "+8801711111111")
@@ -1549,3 +1549,282 @@ class PayrollUITests(TestCase):
         )
         self.assertEqual(result["total_deductions"], Decimal("4000.0000"))
         self.assertEqual(result["net_payable"], Decimal("56000.0000"))
+
+
+class PayrollConfigurationCenterTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        from django.contrib.auth import get_user_model
+        from apps.tenants.models import Tenant, TenantMembership
+
+        cache.clear()
+        User = get_user_model()
+
+        # Setup two distinct tenants
+        self.tenant_a = Tenant.objects.create(name="Tenant Alpha", slug="tenant-alpha")
+        self.tenant_b = Tenant.objects.create(name="Tenant Beta", slug="tenant-beta")
+
+        # Setup users
+        self.admin_user_a = User.objects.create_user(
+            email="admin.alpha@example.com",
+            password="password123",
+            role="admin"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_a, user=self.admin_user_a, is_active=True)
+
+        self.staff_user_a = User.objects.create_user(
+            email="staff.alpha@example.com",
+            password="password123",
+            role="staff"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_a, user=self.staff_user_a, is_active=True)
+
+        self.user_b = User.objects.create_user(
+            email="user.beta@example.com",
+            password="password123",
+            role="admin"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_b, user=self.user_b, is_active=True)
+
+        self.superuser = User.objects.create_superuser(
+            email="superadmin@example.com",
+            password="password123"
+        )
+
+    def test_default_configuration_initialization_and_isolation(self):
+        """Verify default v1 configuration is initialized per-tenant and isolated."""
+        from apps.payroll.configuration_service import PayrollConfigurationService
+        from apps.payroll.models import AbsenceDivisorMode
+
+        config_a = PayrollConfigurationService.get_active_config(self.tenant_a)
+        self.assertIsNotNone(config_a)
+        self.assertEqual(config_a.tenant, self.tenant_a)
+        self.assertEqual(config_a.version, 1)
+        self.assertTrue(config_a.is_active)
+        self.assertFalse(config_a.is_archived)
+        self.assertEqual(config_a.currency, "BDT")
+        self.assertEqual(config_a.cutoff_day, 25)
+        self.assertEqual(config_a.payment_day, 30)
+        self.assertEqual(config_a.working_day_basis, AbsenceDivisorMode.FIXED_30)
+
+        # Tenant B configuration is separate
+        config_b = PayrollConfigurationService.get_active_config(self.tenant_b)
+        self.assertIsNotNone(config_b)
+        self.assertEqual(config_b.tenant, self.tenant_b)
+        self.assertNotEqual(config_a.id, config_b.id)
+
+    def test_inplace_update_when_no_payroll_runs_exist(self):
+        """When not referenced by any payroll run, changes update the active config in-place."""
+        from apps.payroll.configuration_service import PayrollConfigurationService
+        from apps.payroll.models import AbsenceDivisorMode
+
+        config_a = PayrollConfigurationService.get_active_config(self.tenant_a)
+        initial_id = config_a.id
+
+        updated_config, is_new = PayrollConfigurationService.save_or_update_config(
+            tenant=self.tenant_a,
+            user=self.admin_user_a,
+            data={
+                'currency': 'USD',
+                'cutoff_day': 20,
+                'working_day_basis': AbsenceDivisorMode.CALENDAR_DAYS,
+            }
+        )
+
+        self.assertFalse(is_new)
+        self.assertEqual(updated_config.id, initial_id)
+        self.assertEqual(updated_config.version, 1)
+        self.assertEqual(updated_config.currency, 'USD')
+        self.assertEqual(updated_config.cutoff_day, 20)
+        self.assertEqual(updated_config.working_day_basis, AbsenceDivisorMode.CALENDAR_DAYS)
+
+        # Check cached lookup returns updated values
+        active = PayrollConfigurationService.get_active_config(self.tenant_a)
+        self.assertEqual(active.currency, 'USD')
+
+    def test_auto_versioning_safeguard_when_referenced_by_payroll_run(self):
+        """
+        When active configuration is referenced by a payroll run, modifications
+        must spawn a new incremented version (v2), archiving v1 without touching the run.
+        """
+        from apps.payroll.configuration_service import PayrollConfigurationService
+        from apps.payroll.models import AbsenceDivisorMode
+
+        config_v1 = PayrollConfigurationService.get_active_config(self.tenant_a)
+        
+        # Attach to a payroll run
+        run = PayrollRun.objects.create(
+            name="August 2026",
+            period_start=datetime.date(2026, 8, 1),
+            period_end=datetime.date(2026, 8, 31),
+            status=PayrollRunStatus.APPROVED_LOCKED
+        )
+        PayrollConfigurationService.attach_to_payroll_run(run, config=config_v1)
+
+        self.assertEqual(run.configuration_id, config_v1.id)
+        self.assertEqual(run.configuration_snapshot['version'], 1)
+        self.assertEqual(run.configuration_snapshot['cutoff_day'], 25)
+
+        # Now update configuration as admin
+        config_v2, is_new = PayrollConfigurationService.save_or_update_config(
+            tenant=self.tenant_a,
+            user=self.admin_user_a,
+            data={
+                'currency': 'BDT',
+                'cutoff_day': 22,
+                'overtime_multiplier': Decimal('2.00'),
+                'working_day_basis': AbsenceDivisorMode.WORKING_DAYS
+            }
+        )
+
+        self.assertTrue(is_new)
+        self.assertEqual(config_v2.version, 2)
+        self.assertTrue(config_v2.is_active)
+        self.assertFalse(config_v2.is_archived)
+        self.assertEqual(config_v2.cutoff_day, 22)
+        self.assertEqual(config_v2.overtime_multiplier, Decimal('2.00'))
+
+        # Verify previous version is archived
+        config_v1.refresh_from_db()
+        self.assertFalse(config_v1.is_active)
+        self.assertTrue(config_v1.is_archived)
+        self.assertIsNotNone(config_v1.archived_at)
+        self.assertEqual(config_v1.archived_by, self.admin_user_a)
+
+        # Verify historical payroll run retains immutable snapshot of v1
+        run.refresh_from_db()
+        self.assertEqual(run.configuration_id, config_v1.id)
+        self.assertEqual(run.configuration_snapshot['version'], 1)
+        self.assertEqual(run.configuration_snapshot['cutoff_day'], 25)
+
+    def test_hard_delete_protection(self):
+        """Configuration referenced by a payroll run cannot be hard-deleted."""
+        from apps.payroll.configuration_service import PayrollConfigurationService
+
+        config = PayrollConfigurationService.get_active_config(self.tenant_a)
+        run = PayrollRun.objects.create(
+            name="September 2026",
+            period_start=datetime.date(2026, 9, 1),
+            period_end=datetime.date(2026, 9, 30),
+        )
+        PayrollConfigurationService.attach_to_payroll_run(run, config=config)
+
+        with self.assertRaises(ValidationError):
+            config.delete()
+
+    def test_ai_permission_separation_and_default_denied(self):
+        """
+        Verify AI capabilities are separated (read, simulate, propose, approve, execute)
+        and default-denied. Autonomous distribution is always blocked.
+        """
+        from apps.payroll.ai_permissions import AIPayrollPermissionService
+
+        # Staff user lacks configuration permissions by default
+        self.assertFalse(
+            AIPayrollPermissionService.check_permission(
+                self.staff_user_a,
+                self.tenant_a,
+                AIPayrollPermissionService.PERM_READ
+            )
+        )
+        self.assertFalse(
+            AIPayrollPermissionService.check_permission(
+                self.staff_user_a,
+                self.tenant_a,
+                AIPayrollPermissionService.PERM_SIMULATE
+            )
+        )
+
+        # Admin user possesses read, simulate, and propose
+        self.assertTrue(
+            AIPayrollPermissionService.check_permission(
+                self.admin_user_a,
+                self.tenant_a,
+                AIPayrollPermissionService.PERM_READ
+            )
+        )
+        self.assertTrue(
+            AIPayrollPermissionService.check_permission(
+                self.admin_user_a,
+                self.tenant_a,
+                AIPayrollPermissionService.PERM_SIMULATE
+            )
+        )
+
+        # Autonomous distribution is strictly blocked even for superusers
+        self.assertFalse(
+            AIPayrollPermissionService.check_permission(
+                self.superuser,
+                self.tenant_a,
+                'payroll.distribute_salary'
+            )
+        )
+
+    def test_forged_tenant_access_rejection_and_security_audit(self):
+        """Attempting cross-tenant access triggers permission denial and security audit log."""
+        from apps.payroll.ai_permissions import AIPayrollPermissionService
+        from apps.audit.models import AuditEvent
+        from django.core.exceptions import PermissionDenied
+
+        initial_audit_count = AuditEvent.objects.filter(action='forged_tenant_access_attempt').count()
+
+        # User A tries to simulate on Tenant B
+        with self.assertRaises(PermissionDenied):
+            AIPayrollPermissionService.assert_permission(
+                user=self.admin_user_a,
+                target_tenant=self.tenant_b,
+                action=AIPayrollPermissionService.PERM_SIMULATE,
+                request_tenant=self.tenant_a  # Forged/mismatched context
+            )
+
+        new_audit_count = AuditEvent.objects.filter(action='forged_tenant_access_attempt').count()
+        self.assertGreater(new_audit_count, initial_audit_count)
+
+    def test_payroll_configuration_view_authorization_and_render(self):
+        """Test GET /payroll/configuration/ renders Cotton UI for authorized user."""
+        from django.urls import reverse
+
+        self.client.force_login(self.admin_user_a)
+        url = reverse('payroll:payroll_configuration')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Payroll Configuration Center")
+        self.assertContains(response, "Tenant Alpha")
+        self.assertContains(response, "v1")
+
+    def test_ai_simulation_endpoint_zero_side_effects(self):
+        """POST /payroll/configuration/simulate/ executes calculation without database changes."""
+        from django.urls import reverse
+        from apps.payroll.models import PayrollConfiguration
+
+        self.client.force_login(self.admin_user_a)
+        url = reverse('payroll:payroll_configuration_simulate')
+
+        initial_config_count = PayrollConfiguration.objects.count()
+        initial_run_count = PayrollRun.objects.count()
+
+        response = self.client.post(url, data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('summary', data)
+        self.assertIn('total_gross', data['summary'])
+        self.assertTrue(data.get('is_simulation'))
+
+        # DB must have zero new payroll runs or configs
+        self.assertEqual(PayrollConfiguration.objects.count(), initial_config_count)
+        self.assertEqual(PayrollRun.objects.count(), initial_run_count)
+
+    def test_global_search_registration_and_filtering(self):
+        """Verify Payroll Configuration Center appears in Global Search for authorized users."""
+        from apps.accounts.search_service import GlobalSearchService
+
+        items_admin = GlobalSearchService.get_navigation_catalog(self.admin_user_a)
+        payroll_config_items = [i for i in items_admin if i['label'] == 'Payroll Configuration Center']
+        self.assertEqual(len(payroll_config_items), 1)
+        self.assertEqual(payroll_config_items[0]['href'], '/payroll/configuration/')
+
+        # Staff user should not see Payroll Configuration Center
+        items_staff = GlobalSearchService.get_navigation_catalog(self.staff_user_a)
+        staff_config_items = [i for i in items_staff if i['label'] == 'Payroll Configuration Center']
+        self.assertEqual(len(staff_config_items), 0)
+

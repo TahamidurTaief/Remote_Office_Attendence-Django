@@ -26,11 +26,15 @@ class RBACRegistryService:
         {'code': 'delete', 'name': 'Delete', 'description': 'Permanently delete or deactivate records', 'is_destructive': True},
         {'code': 'approve', 'name': 'Approve', 'description': 'Approve workflows, sign-offs, and administrative actions', 'is_destructive': False},
         {'code': 'export', 'name': 'Export', 'description': 'Export reports and tabular data', 'is_destructive': False},
+        {'code': 'simulate', 'name': 'Simulate', 'description': 'Execute non-persistent dry-run calculations and simulations', 'is_destructive': False},
+        {'code': 'propose', 'name': 'Propose', 'description': 'Draft proposed changes for human review and sign-off', 'is_destructive': False},
+        {'code': 'execute', 'name': 'Execute', 'description': 'Execute configuration changes and administrative workflows', 'is_destructive': False},
     ]
 
     # Canonical action mapping - actions are independent
     COMPATIBILITY_ACTION_MAP = {
         'view': 'view',
+        'read': 'view',
         'add': 'add',
         'create': 'add',
         'edit': 'edit',
@@ -38,6 +42,9 @@ class RBACRegistryService:
         'delete': 'delete',
         'approve': 'approve',
         'export': 'export',
+        'simulate': 'simulate',
+        'propose': 'propose',
+        'execute': 'execute',
     }
 
     # -------------------------------------------------------------------------
@@ -468,6 +475,14 @@ class RBACRegistryService:
                             'description': 'Individual employee base pay, bank accounts, and benefits',
                             'submenus': []
                         },
+                        {
+                            'code': 'payroll_configuration',
+                            'name': 'Payroll Configuration Center',
+                            'route': 'payroll:payroll_configuration',
+                            'fallback_url': '/payroll/configuration/',
+                            'description': 'Tenant-scoped payroll policies, cutoff dates, overtime, and calculation rules',
+                            'submenus': []
+                        },
                     ]
                 }
             ]
@@ -693,6 +708,14 @@ class RBACRegistryService:
                             'route': 'admin_panel:ai_settings',
                             'fallback_url': '/admin-panel/ai/settings/',
                             'description': 'Configure Gemini API keys, prompt context, and AI features',
+                            'submenus': []
+                        },
+                        {
+                            'code': 'ai_payroll_config',
+                            'name': 'AI Payroll Configuration Assistant',
+                            'route': 'payroll:payroll_configuration',
+                            'fallback_url': '/payroll/configuration/',
+                            'description': 'AI simulation and proposed rules for tenant payroll configuration',
                             'submenus': []
                         },
                     ]
