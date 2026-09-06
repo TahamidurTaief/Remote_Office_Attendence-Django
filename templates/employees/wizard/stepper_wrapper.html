@@ -6,7 +6,7 @@
     hx_post_base="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=step %}{% else %}{% url 'employees:employee_wizard_create_step' step=step %}{% endif %}"
     hx_include="#wizard-step-form"
     hx_target="#wizard-root"
-    hx_swap="outerHTML"
+    hx_swap="outerHTML transition:true"
     step1="Basic Info" 
     step2="Organization" 
     step3="Payroll" 

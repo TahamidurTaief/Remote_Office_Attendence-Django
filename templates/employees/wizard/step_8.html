@@ -147,8 +147,8 @@
       hx-post="{% url 'employees:employee_wizard_create_step' step=8 %}"
     {% endif %}
     hx-target="#wizard-root"
-    hx-swap="outerHTML"
-    hx-indicator="#ft-global-loader"
+    hx-swap="outerHTML transition:true"
+    hx-indicator="#wizard-global-loader"
     hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
     class="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-800"
   >
@@ -158,9 +158,9 @@
       variant="secondary" 
       hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}{% else %}{% url 'employees:employee_wizard_create_step' step=7 %}{% endif %}" 
       hx-target="#wizard-root" 
-      hx-swap="outerHTML" 
-      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=7 %}"{% endif %}
-      hx-indicator="#ft-global-loader"
+      hx-swap="outerHTML transition:true" 
+      hx-push-url="true"
+      hx-indicator="#wizard-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       label="Back to Step 7"
     ></c-button>

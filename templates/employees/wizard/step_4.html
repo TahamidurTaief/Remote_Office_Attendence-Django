@@ -4,23 +4,23 @@
   action="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
   hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
   hx-target="#wizard-root"
-  hx-swap="outerHTML"
-  hx-indicator="#ft-global-loader"
+  hx-swap="outerHTML transition:true"
+  hx-indicator="#wizard-global-loader"
   hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
   class="space-y-6"
   x-data="{
-    genPassword() {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-      let pass = '';
-      for (let i = 0; i < 12; i++) {
-        pass += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      this.$refs.pass1.value = pass;
-      this.$refs.pass2.value = pass;
-      this.$refs.pass1.type = 'text';
-      this.$refs.pass2.type = 'text';
+    pass1: '{{ form.password1.value|default:''|escapejs }}',
+    pass2: '{{ form.password2.value|default:''|escapejs }}',
+    handleGenerated(pass) {
+      this.pass1 = pass;
+      this.pass2 = pass;
+      const el1 = document.getElementById('id_password1');
+      const el2 = document.getElementById('id_password2');
+      if (el1) { el1.value = pass; el1.type = 'text'; el1.dispatchEvent(new Event('input', { bubbles: true })); }
+      if (el2) { el2.value = pass; el2.type = 'text'; el2.dispatchEvent(new Event('input', { bubbles: true })); }
     }
   }"
+  @password-generated.window="handleGenerated($event.detail)"
 >
   {% csrf_token %}
   <input type="hidden" name="next_step" value="5">
@@ -35,25 +35,52 @@
 
   <c-form-error-summary :form="form" :errors="step_errors"></c-form-error-summary>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
     <div class="md:col-span-2">
       <c-input type="email" name="login_email" id="id_login_email" label="Login Email" required="true" value="{{ form.login_email.value|default:'' }}" error="{{ form.login_email.errors.0 }}" placeholder="user@company.com"></c-input>
     </div>
 
+    <!-- Password Column -->
     <div>
-      <div class="flex items-center justify-between mb-1">
-        <label class="ft-label">Password</label>
-        <c-button type="button" variant="ghost" size="sm" label="Generate Strong Password" attrs="@click='genPassword()'"></c-button>
+      <c-password-input
+        name="password1"
+        id="id_password1"
+        label="Password"
+        required="true"
+        placeholder="Set password (min. 6 characters)"
+        error="{{ form.password1.errors.0 }}"
+        generator_below="true"
+        model="pass1"
+        value="{{ form.password1.value|default:'' }}"
+      ></c-password-input>
+    </div>
+
+    <!-- Confirm Password Column -->
+    <div>
+      <c-password-input
+        name="password2"
+        id="id_password2"
+        label="Confirm Password"
+        required="true"
+        placeholder="Repeat password"
+        error="{{ form.password2.errors.0 }}"
+        model="pass2"
+        value="{{ form.password2.value|default:'' }}"
+      ></c-password-input>
+      <div class="mt-1 min-h-[22px] flex items-center">
+        <span x-show="pass1 && pass2 && pass1 === pass2" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 inline text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Passwords match
+        </span>
+        <span x-show="pass1 && pass2 && pass1 !== pass2" class="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 inline text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          Passwords do not match
+        </span>
       </div>
-      <c-input type="password" name="password1" id="id_password1" placeholder="Set password" error="{{ form.password1.errors.0 }}" attrs="x-ref='pass1'"></c-input>
     </div>
 
-    <div>
-      <c-input type="password" name="password2" id="id_password2" label="Confirm Password" placeholder="Repeat password" error="{{ form.password2.errors.0 }}" attrs="x-ref='pass2'"></c-input>
-    </div>
-
-    <!-- DYNAMIC ROLE ASSIGNMENT SECTION -->
-    <div class="md:col-span-2">
+    <!-- DYNAMIC ROLE ASSIGNMENT SECTION (Clean, direct container layout) -->
+    <div class="md:col-span-2 pt-2">
       <c-employee-roles-picker :field="form.roles" required="true" help_text="Select one or more active RBAC system roles to grant system permissions."></c-employee-roles-picker>
     </div>
 
@@ -71,7 +98,7 @@
       </div>
     </div>
 
-    <!-- DIRECT CUSTOM PERMISSIONS (OVERRIDES) SECTION -->
+    <!-- DIRECT CUSTOM PERMISSIONS SECTION (Clean, direct container layout) -->
     <div class="md:col-span-2">
       <c-employee-custom-permissions
         :available_permissions="form.roles.field.available_permissions"
@@ -84,13 +111,11 @@
     <c-button 
       type="button" 
       variant="secondary" 
-      hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
-      hx-vals='{"target_step": "3"}'
-      hx-include="#wizard-step-form"
+      hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}{% else %}{% url 'employees:employee_wizard_create_step' step=3 %}{% endif %}"
       hx-target="#wizard-root" 
-      hx-swap="outerHTML" 
-      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=3 %}"{% endif %}
-      hx-indicator="#ft-global-loader"
+      hx-swap="outerHTML transition:true" 
+      hx-push-url="true"
+      hx-indicator="#wizard-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       label="Back to Step 3"
     ></c-button>

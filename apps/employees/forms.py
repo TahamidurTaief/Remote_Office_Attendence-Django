@@ -191,13 +191,8 @@ class EmployeeCreateForm(forms.ModelForm):
         if password1 or password2:
             if password1 != password2:
                 self.add_error('password2', "Passwords do not match")
-            else:
-                from django.contrib.auth.password_validation import validate_password
-                from django.core.exceptions import ValidationError as DjangoValidationError
-                try:
-                    validate_password(password1)
-                except DjangoValidationError as e:
-                    self.add_error('password1', e.messages)
+            elif len(password1) < 6:
+                self.add_error('password1', "Password must be at least 6 characters long.")
         return cleaned_data
 
     @transaction.atomic
@@ -1003,6 +998,14 @@ class WizardStep2Form(forms.ModelForm):
         return cleaned_data
 
 
+WIZARD_PAYMENT_METHOD_CHOICES = [
+    ('bank', 'Bank Transfer'),
+    ('mfs', 'Mobile Financial Service'),
+    ('cash', 'Cash'),
+    ('split', 'Multiple Methods (Bank & MFS)'),
+]
+
+
 class WizardStep3Form(forms.ModelForm):
     bank = forms.ModelChoiceField(
         queryset=Bank.objects.filter(is_active=True),
@@ -1012,6 +1015,7 @@ class WizardStep3Form(forms.ModelForm):
     )
     bank_name = forms.CharField(
         required=False,
+        label="Bank Name",
         widget=forms.Select(choices=BANGLADESH_BANK_CHOICES, attrs={'class': SELECT_INPUT})
     )
     branch = forms.ModelChoiceField(
@@ -1023,22 +1027,36 @@ class WizardStep3Form(forms.ModelForm):
     account_holder_name = forms.CharField(
         max_length=255,
         required=False,
+        label="AC Name",
         widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Account Holder Name as in Bank Record'})
     )
     routing_number = forms.CharField(
         max_length=9,
         required=False,
+        label="Routing Number",
         widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'readonly': 'readonly', 'placeholder': '9-digit routing number'})
     )
     mfs_provider = forms.ChoiceField(
-        choices=[('', '-- Choose Provider --'), ('bkash', 'bKash'), ('nagad', 'Nagad'), ('rocket', 'Rocket')],
+        choices=[('', '-- Choose Banking Method --'), ('bkash', 'bKash'), ('nagad', 'Nagad'), ('rocket', 'Rocket')],
         required=False,
+        label="Banking Method",
         widget=forms.Select(attrs={'class': SELECT_INPUT})
     )
     wallet_number = forms.CharField(
         max_length=20,
         required=False,
+        label="Transaction Number",
         widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. 017XXXXXXXX'})
+    )
+    transaction_id = forms.CharField(
+        max_length=100,
+        required=False,
+        label="Transaction ID",
+        widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. TXN987654321 / Ref ID'})
+    )
+    has_secondary = forms.BooleanField(
+        required=False,
+        widget=forms.HiddenInput()
     )
 
     @property
@@ -1055,7 +1073,7 @@ class WizardStep3Form(forms.ModelForm):
             'basic_salary': forms.NumberInput(attrs={'class': TEXT_INPUT, 'step': '0.01', 'placeholder': '0.00'}),
             'salary_structure': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. Executive Grade B'}),
             'bank_name': forms.Select(choices=BANGLADESH_BANK_CHOICES, attrs={'class': SELECT_INPUT}),
-            'bank_account': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'Account Number'}),
+            'bank_account': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'AC Number'}),
             'payment_method': forms.Select(attrs={'class': SELECT_INPUT}),
             'tax_profile': forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'TIN / Tax Region'}),
             'pf_enabled': forms.CheckboxInput(attrs={'class': CHECKBOX_INPUT}),
@@ -1064,13 +1082,20 @@ class WizardStep3Form(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['payment_method'].choices = WIZARD_PAYMENT_METHOD_CHOICES
+        self.fields['bank_account'].label = 'AC Number'
         if self.instance and self.instance.pk:
-            dest = getattr(self.instance, 'payment_destination', None)
+            dest = None
+            try:
+                dest = getattr(self.instance, 'payment_destination', None)
+            except Exception as e:
+                logger.warning("Could not load payment destination for employee %s: %s", self.instance.pk, e)
             if dest:
                 if dest.payment_type == 'mfs':
                     self.fields['payment_method'].initial = 'mfs'
                     self.fields['mfs_provider'].initial = dest.mfs_provider
                     self.fields['wallet_number'].initial = dest.get_wallet_number()
+                    self.fields['transaction_id'].initial = dest.notes
                     self.fields['bank_account'].initial = dest.get_wallet_number()
                 elif dest.payment_type == 'cash':
                     self.fields['payment_method'].initial = 'cash'
@@ -1089,6 +1114,25 @@ class WizardStep3Form(forms.ModelForm):
                     raw_acc = dest.get_account_number()
                     if raw_acc and not self.initial.get('bank_account'):
                         self.fields['bank_account'].initial = raw_acc
+                elif dest.payment_type == 'split':
+                    self.fields['payment_method'].initial = 'split'
+                    self.fields['has_secondary'].initial = True
+                    if dest.bank_id:
+                        self.fields['bank'].initial = dest.bank_id
+                    if dest.branch_id:
+                        self.fields['branch'].initial = dest.branch_id
+                    if dest.account_holder_name:
+                        self.fields['account_holder_name'].initial = dest.account_holder_name
+                    if dest.routing_number:
+                        self.fields['routing_number'].initial = dest.routing_number
+                    if dest.bank_name and not self.initial.get('bank_name'):
+                        self.fields['bank_name'].initial = dest.bank_name
+                    raw_acc = dest.get_account_number()
+                    if raw_acc and not self.initial.get('bank_account'):
+                        self.fields['bank_account'].initial = raw_acc
+                    self.fields['mfs_provider'].initial = dest.mfs_provider
+                    self.fields['wallet_number'].initial = dest.get_wallet_number()
+                    self.fields['transaction_id'].initial = dest.notes
 
             primary_acc = getattr(self.instance, 'primary_bank_account', None)
             if primary_acc and not self.fields['bank'].initial:
@@ -1117,6 +1161,10 @@ class WizardStep3Form(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         payment_method = cleaned_data.get('payment_method') or 'bank'
+        raw_has_sec = self.data.get('has_secondary')
+        has_secondary = bool(raw_has_sec in ('true', 'True', True, '1', 1) or cleaned_data.get('has_secondary'))
+        cleaned_data['has_secondary'] = has_secondary
+
         bank = cleaned_data.get('bank')
         branch = cleaned_data.get('branch')
         raw_bank_name = cleaned_data.get('bank_name') or ''
@@ -1127,44 +1175,13 @@ class WizardStep3Form(forms.ModelForm):
         holder_name = cleaned_data.get('account_holder_name') or ''
         mfs_provider = cleaned_data.get('mfs_provider') or ''
         wallet_number = cleaned_data.get('wallet_number') or ''
+        transaction_id = cleaned_data.get('transaction_id') or ''
 
-        # Handle MFS / Mobile Financial Service
-        if payment_method in ('mfs', 'mobile'):
-            cleaned_data['payment_method'] = 'mfs'
-            if not mfs_provider:
-                self.add_error('mfs_provider', 'MFS Provider (bKash, Nagad, or Rocket) is required.')
-            elif mfs_provider not in ['bkash', 'nagad', 'rocket']:
-                self.add_error('mfs_provider', 'Choose a valid MFS provider: bKash, Nagad, or Rocket.')
+        is_multi_method = (payment_method == 'split' or has_secondary)
 
-            target_wallet = wallet_number or bank_account
-            if not target_wallet:
-                self.add_error('wallet_number', 'Wallet number is required for Mobile Financial Service.')
-            else:
-                cleaned_wallet = target_wallet.strip().replace(" ", "").replace("-", "")
-                if not re.match(r"^01[3-9]\d{8,9}$", cleaned_wallet):
-                    self.add_error('wallet_number', 'Invalid Bangladeshi wallet number. Must start with 01 and contain 11 digits (or 12 for Rocket).')
-                cleaned_data['wallet_number'] = cleaned_wallet
-                cleaned_data['bank_account'] = cleaned_wallet
-
-            # Clear obsolete bank fields
-            cleaned_data['bank'] = None
-            cleaned_data['bank_name'] = ''
-            cleaned_data['branch'] = None
-            cleaned_data['routing_number'] = ''
-
-        # Handle Cash
-        elif payment_method == 'cash':
-            # Clear obsolete bank and MFS fields
-            cleaned_data['bank'] = None
-            cleaned_data['bank_name'] = ''
-            cleaned_data['branch'] = None
-            cleaned_data['routing_number'] = ''
-            cleaned_data['bank_account'] = ''
-            cleaned_data['mfs_provider'] = ''
-            cleaned_data['wallet_number'] = ''
-
-        # Handle Bank
-        elif payment_method in ('bank', 'split'):
+        # 1. Evaluate Bank requirements
+        need_bank_validation = (payment_method in ('bank', 'split')) or (is_multi_method and (bank or bank_name or bank_account))
+        if need_bank_validation:
             # Auto-match legacy bank_name if bank not explicitly selected
             if not bank and bank_name:
                 matched_bank = Bank.objects.filter(
@@ -1186,37 +1203,71 @@ class WizardStep3Form(forms.ModelForm):
 
             # Enforce server-side validation for bank transfers
             if not bank and not bank_name:
-                self.add_error('bank', 'Bank selection is required for bank transfer disbursements.')
                 self.add_error('bank_name', 'Bank selection is required for bank transfer disbursements.')
-            if bank and not branch:
-                branch = bank.branches.filter(is_active=True).first()
-                if branch:
-                    cleaned_data['branch'] = branch
-                else:
-                    self.add_error('branch', 'Branch selection is required for bank transfer disbursements.')
             if not bank_account:
-                self.add_error('bank_account', 'Account number is required for bank transfer disbursements.')
+                self.add_error('bank_account', 'AC Number is required for bank transfer disbursements.')
+            else:
+                cleaned_acc = normalize_account_number(bank_account)
+                if len(cleaned_acc) < 6 or len(cleaned_acc) > 30:
+                    self.add_error('bank_account', 'Bank AC number must be between 6 and 30 characters.')
+                elif not re.match(r"^[A-Za-z0-9]+$", cleaned_acc):
+                    self.add_error('bank_account', 'Bank AC number must contain only alphanumeric characters.')
+                cleaned_data['bank_account'] = cleaned_acc
 
             if bank and branch:
-                # Server-side security check: branch must belong to submitted bank
                 if branch.bank_id != bank.id:
                     self.add_error('branch', 'Selected branch does not belong to the submitted bank.')
-                # Canonical derivation of routing number from database record
                 cleaned_data['routing_number'] = branch.routing_number
                 if not cleaned_data.get('bank_name'):
                     cleaned_data['bank_name'] = bank.name
 
-            if bank_account:
-                cleaned_acc = normalize_account_number(bank_account)
-                if len(cleaned_acc) < 6 or len(cleaned_acc) > 30:
-                    self.add_error('bank_account', 'Bank account number must be between 6 and 30 characters.')
-                if not re.match(r"^[A-Za-z0-9]+$", cleaned_acc):
-                    self.add_error('bank_account', 'Bank account number must contain only alphanumeric characters.')
-                cleaned_data['bank_account'] = cleaned_acc
+        # 2. Evaluate MFS requirements
+        need_mfs_validation = (payment_method in ('mfs', 'mobile', 'split')) or (is_multi_method and (mfs_provider or wallet_number))
+        if need_mfs_validation:
+            if not mfs_provider:
+                self.add_error('mfs_provider', 'Banking Method (bKash, Nagad, or Rocket) is required.')
+            elif mfs_provider not in ['bkash', 'nagad', 'rocket']:
+                self.add_error('mfs_provider', 'Choose a valid Banking Method: bKash, Nagad, or Rocket.')
 
-            # Clear obsolete MFS fields
-            cleaned_data['mfs_provider'] = ''
-            cleaned_data['wallet_number'] = ''
+            target_wallet = wallet_number or (bank_account if payment_method in ('mfs', 'mobile') else '')
+            if not target_wallet:
+                self.add_error('wallet_number', 'Transaction Number (mobile wallet number) is required.')
+            else:
+                cleaned_wallet = target_wallet.strip().replace(" ", "").replace("-", "")
+                if not re.match(r"^01[3-9]\d{8,9}$", cleaned_wallet):
+                    self.add_error('wallet_number', 'Invalid Bangladeshi wallet number. Must start with 01 and contain 11 digits (or 12 for Rocket).')
+                cleaned_data['wallet_number'] = cleaned_wallet
+                if payment_method in ('mfs', 'mobile'):
+                    cleaned_data['bank_account'] = cleaned_wallet
+
+            cleaned_data['transaction_id'] = transaction_id.strip()
+
+        # 3. Single vs Multi Method Routing
+        if not is_multi_method:
+            if payment_method in ('mfs', 'mobile'):
+                cleaned_data['payment_method'] = 'mfs'
+                cleaned_data['bank'] = None
+                cleaned_data['bank_name'] = ''
+                cleaned_data['branch'] = None
+                cleaned_data['routing_number'] = ''
+            elif payment_method == 'bank':
+                cleaned_data['payment_method'] = 'bank'
+                cleaned_data['mfs_provider'] = ''
+                cleaned_data['wallet_number'] = ''
+                cleaned_data['transaction_id'] = ''
+            elif payment_method == 'cash':
+                cleaned_data['payment_method'] = 'cash'
+                cleaned_data['bank'] = None
+                cleaned_data['bank_name'] = ''
+                cleaned_data['branch'] = None
+                cleaned_data['routing_number'] = ''
+                cleaned_data['bank_account'] = ''
+                cleaned_data['account_holder_name'] = ''
+                cleaned_data['mfs_provider'] = ''
+                cleaned_data['wallet_number'] = ''
+                cleaned_data['transaction_id'] = ''
+        else:
+            cleaned_data['payment_method'] = 'split'
 
         return cleaned_data
 
@@ -1234,6 +1285,8 @@ class WizardStep3Form(forms.ModelForm):
                 'routing_number': self.cleaned_data.get('routing_number'),
                 'mfs_provider': self.cleaned_data.get('mfs_provider'),
                 'wallet_number': self.cleaned_data.get('wallet_number') or self.cleaned_data.get('bank_account'),
+                'transaction_id': self.cleaned_data.get('transaction_id') or '',
+                'notes': self.cleaned_data.get('transaction_id') or '',
             }
             try:
                 PayrollPaymentDestinationService.save_destination(
@@ -1364,14 +1417,8 @@ class WizardStep4Form(forms.Form):
         if p1 or p2:
             if p1 != p2:
                 self.add_error('password2', "Passwords do not match.")
-            else:
-                from django.contrib.auth.password_validation import validate_password
-                from django.core.exceptions import ValidationError as DjangoValidationError
-                user_instance = self.employee.user if (self.employee and self.employee.user) else None
-                try:
-                    validate_password(p1, user=user_instance)
-                except DjangoValidationError as e:
-                    self.add_error('password1', e.messages)
+            elif len(p1) < 6:
+                self.add_error('password1', "Password must be at least 6 characters long.")
         return cleaned_data
 
     @transaction.atomic

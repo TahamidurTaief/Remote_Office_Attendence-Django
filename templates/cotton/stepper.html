@@ -1,26 +1,24 @@
+{% load static %}
 {% comment %} c-stepper component
-   Multi-step progress indicator pipeline.
-   Supports both static display and interactive, directly clickable HTMX navigation.
+   Multi-step progress indicator pipeline with SPA instant navigation and smooth transitions.
    Props:
    - current: current active step index (1-based)
    - step_count: total step count (default 8)
    - step1 to step8: labels for each step
    - step1_status to step8_status: 'complete' | 'incomplete' | 'error' | 'pending'
-   - step1_url to step8_url: target URLs for browser history / direct access
-   - clickable: 'true' | 'false' (default 'false')
-   - hx_post_base: URL to submit current form to before switching steps
-   - hx_include: form selector to include (default '#wizard-step-form')
+   - step1_url to step8_url: target URLs for direct access
+   - clickable: 'true' | 'false' (default 'true')
    - hx_target: target container (default '#wizard-root')
-   - hx_swap: swap strategy (default 'outerHTML')
+   - hx_swap: swap strategy (default 'outerHTML transition:true')
 {% endcomment %}
 <c-vars 
   current="1" 
   step_count="8" 
-  clickable="false" 
+  clickable="true" 
   hx_post_base="" 
   hx_include="#wizard-step-form" 
   hx_target="#wizard-root" 
-  hx_swap="outerHTML"
+  hx_swap="outerHTML transition:true"
   step1="Basic Info" step2="Organization" step3="Payroll" step4="Security"
   step5="Documents" step6="Emergency" step7="Assets" step8="Review"
   step1_status="" step2_status="" step3_status="" step4_status=""
@@ -29,33 +27,32 @@
   step5_url="" step6_url="" step7_url="" step8_url=""
 ></c-vars>
 
-{% with cur=current|add:"0" cnt=step_count|default:8|add:"0" is_click=clickable %}
+{% with cur=current|add:"0" cnt=step_count|default:8|add:"0" is_click=clickable|default:"true" %}
 <div class="w-full py-2 overflow-x-auto scrollbar-hide">
   <div class="flex items-center justify-between min-w-[680px] w-full px-2">
     
     {# ── Step 1 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 1: {{ step1 }} (Status: {{ step1_status|default:'pending' }})"
       {% if cur == 1 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "1"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step1_url %}hx-push-url="{{ step1_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step1_url %}
+        hx-get="{{ step1_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 1 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step1_status == 'error' or step1_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step1_status == 'complete' or cur > 1 %}
@@ -64,7 +61,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 1 %}
-          1
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step1_status == 'error' or step1_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step1_status == 'complete' or cur > 1 %}
@@ -75,7 +72,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 1 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step1_status == 'error' or step1_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step1_status == 'complete' or cur > 1 %}
@@ -85,36 +82,35 @@
         {% endif %}">
         {{ step1|default:"Basic Info" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
 
     {# Connector 1-2 #}
     {% if cnt >= 2 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step1_status == 'complete' or cur > 1 %} bg-[#1877F2] {% elif step1_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if cur > 1 %} bg-[#1877F2] {% elif cur == 1 %} bg-orange-300 dark:bg-orange-800 {% elif step1_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 2 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 2: {{ step2 }} (Status: {{ step2_status|default:'pending' }})"
       {% if cur == 2 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "2"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step2_url %}hx-push-url="{{ step2_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step2_url %}
+        hx-get="{{ step2_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 2 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step2_status == 'error' or step2_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step2_status == 'complete' or cur > 2 %}
@@ -123,7 +119,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 2 %}
-          2
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step2_status == 'error' or step2_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step2_status == 'complete' or cur > 2 %}
@@ -134,7 +130,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 2 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step2_status == 'error' or step2_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step2_status == 'complete' or cur > 2 %}
@@ -144,37 +140,36 @@
         {% endif %}">
         {{ step2|default:"Organization" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 2-3 #}
     {% if cnt >= 3 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step2_status == 'complete' or cur > 2 %} bg-[#1877F2] {% elif step2_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if cur > 2 %} bg-[#1877F2] {% elif cur == 2 %} bg-orange-300 dark:bg-orange-800 {% elif step2_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 3 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 3: {{ step3 }} (Status: {{ step3_status|default:'pending' }})"
       {% if cur == 3 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "3"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step3_url %}hx-push-url="{{ step3_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step3_url %}
+        hx-get="{{ step3_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 3 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step3_status == 'error' or step3_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step3_status == 'complete' or cur > 3 %}
@@ -183,7 +178,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 3 %}
-          3
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step3_status == 'error' or step3_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step3_status == 'complete' or cur > 3 %}
@@ -194,7 +189,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 3 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step3_status == 'error' or step3_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step3_status == 'complete' or cur > 3 %}
@@ -204,37 +199,36 @@
         {% endif %}">
         {{ step3|default:"Payroll" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 3-4 #}
     {% if cnt >= 4 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step3_status == 'complete' or cur > 3 %} bg-[#1877F2] {% elif step3_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if cur > 3 %} bg-[#1877F2] {% elif cur == 3 %} bg-orange-300 dark:bg-orange-800 {% elif step3_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 4 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 4: {{ step4 }} (Status: {{ step4_status|default:'pending' }})"
       {% if cur == 4 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "4"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step4_url %}hx-push-url="{{ step4_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step4_url %}
+        hx-get="{{ step4_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 4 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step4_status == 'error' or step4_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step4_status == 'complete' or cur > 4 %}
@@ -243,7 +237,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 4 %}
-          4
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step4_status == 'error' or step4_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step4_status == 'complete' or cur > 4 %}
@@ -254,7 +248,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 4 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step4_status == 'error' or step4_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step4_status == 'complete' or cur > 4 %}
@@ -264,37 +258,36 @@
         {% endif %}">
         {{ step4|default:"Security" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 4-5 #}
     {% if cnt >= 5 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step4_status == 'complete' or cur > 4 %} bg-[#1877F2] {% elif step4_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if cur > 4 %} bg-[#1877F2] {% elif cur == 4 %} bg-orange-300 dark:bg-orange-800 {% elif step4_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 5 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 5: {{ step5 }} (Status: {{ step5_status|default:'pending' }})"
       {% if cur == 5 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "5"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step5_url %}hx-push-url="{{ step5_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step5_url %}
+        hx-get="{{ step5_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 5 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step5_status == 'error' or step5_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step5_status == 'complete' or cur > 5 %}
@@ -303,7 +296,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 5 %}
-          5
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step5_status == 'error' or step5_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step5_status == 'complete' or cur > 5 %}
@@ -314,7 +307,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 5 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step5_status == 'error' or step5_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step5_status == 'complete' or cur > 5 %}
@@ -324,37 +317,36 @@
         {% endif %}">
         {{ step5|default:"Documents" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 5-6 #}
     {% if cnt >= 6 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step5_status == 'complete' or cur > 5 %} bg-[#1877F2] {% elif step5_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if cur > 5 %} bg-[#1877F2] {% elif cur == 5 %} bg-orange-300 dark:bg-orange-800 {% elif step5_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 6 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 6: {{ step6 }} (Status: {{ step6_status|default:'pending' }})"
       {% if cur == 6 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "6"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step6_url %}hx-push-url="{{ step6_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step6_url %}
+        hx-get="{{ step6_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 6 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step6_status == 'error' or step6_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step6_status == 'complete' or cur > 6 %}
@@ -363,7 +355,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 6 %}
-          6
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step6_status == 'error' or step6_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step6_status == 'complete' or cur > 6 %}
@@ -374,7 +366,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 6 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step6_status == 'error' or step6_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step6_status == 'complete' or cur > 6 %}
@@ -384,37 +376,36 @@
         {% endif %}">
         {{ step6|default:"Emergency" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 6-7 #}
     {% if cnt >= 7 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step6_status == 'complete' or cur > 6 %} bg-[#1877F2] {% elif step6_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if cur > 6 %} bg-[#1877F2] {% elif cur == 6 %} bg-orange-300 dark:bg-orange-800 {% elif step6_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 7 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 7: {{ step7 }} (Status: {{ step7_status|default:'pending' }})"
       {% if cur == 7 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "7"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step7_url %}hx-push-url="{{ step7_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step7_url %}
+        hx-get="{{ step7_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 7 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step7_status == 'error' or step7_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step7_status == 'complete' or cur > 7 %}
@@ -423,7 +414,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 7 %}
-          7
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step7_status == 'error' or step7_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step7_status == 'complete' or cur > 7 %}
@@ -434,7 +425,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 7 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step7_status == 'error' or step7_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step7_status == 'complete' or cur > 7 %}
@@ -444,37 +435,36 @@
         {% endif %}">
         {{ step7|default:"Assets" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
     {# Connector 7-8 #}
     {% if cnt >= 8 %}
     <div class="flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300
-      {% if step7_status == 'complete' or cur > 7 %} bg-[#1877F2] {% elif step7_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
+      {% if cur > 7 %} bg-[#1877F2] {% elif cur == 7 %} bg-orange-300 dark:bg-orange-800 {% elif step7_status == 'error' %} bg-rose-300 dark:bg-rose-900 {% else %} bg-gray-200 dark:bg-gray-800 {% endif %}"></div>
 
     {# ── Step 8 ── #}
-    {% if is_click == "true" %}
+    {% if is_click == "true" or is_click == True %}
     <button 
       type="button"
       tabindex="0"
       aria-label="Step 8: {{ step8 }} (Status: {{ step8_status|default:'pending' }})"
       {% if cur == 8 %}aria-current="step"{% endif %}
-      hx-post="{{ hx_post_base }}"
-      hx-vals='{"target_step": "8"}'
-      hx-include="{{ hx_include }}"
-      hx-target="{{ hx_target }}"
-      hx-swap="{{ hx_swap }}"
-      {% if step8_url %}hx-push-url="{{ step8_url }}"{% endif %}
-      hx-indicator="#wizard-global-loader"
-      hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-transform active:scale-95"
+      {% if step8_url %}
+        hx-get="{{ step8_url }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-push-url="true"
+        hx-indicator="#wizard-global-loader"
+      {% endif %}
+      class="flex flex-col items-center relative z-10 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 rounded-xl p-1 min-w-[44px] min-h-[44px] transition-all active:scale-95"
     >
     {% else %}
     <div class="flex flex-col items-center relative z-10 group">
     {% endif %}
-      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 shadow-sm
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
         {% if cur == 8 %}
-          bg-[#1877F2] text-white ring-4 ring-[#1877F2]/25 scale-110 shadow-blue-500/30
+          bg-orange-500 text-white ring-4 ring-orange-500/25 scale-110 shadow-lg shadow-orange-500/30
         {% elif step8_status == 'error' or step8_status == 'incomplete' %}
           bg-rose-600 text-white ring-2 ring-rose-600/30 shadow-rose-500/20
         {% elif step8_status == 'complete' %}
@@ -483,7 +473,7 @@
           bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600
         {% endif %}">
         {% if cur == 8 %}
-          8
+          <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-5 h-5 rounded-full object-contain">
         {% elif step8_status == 'error' or step8_status == 'incomplete' %}
           <i data-lucide="alert-circle" class="w-4 h-4 stroke-[3]"></i>
         {% elif step8_status == 'complete' %}
@@ -494,7 +484,7 @@
       </div>
       <span class="mt-2 text-[11px] font-semibold tracking-tight transition-colors duration-200 text-center
         {% if cur == 8 %}
-          text-[#1877F2] dark:text-blue-400 font-bold
+          text-orange-600 dark:text-orange-400 font-bold
         {% elif step8_status == 'error' or step8_status == 'incomplete' %}
           text-rose-600 dark:text-rose-400 font-semibold
         {% elif step8_status == 'complete' %}
@@ -504,7 +494,7 @@
         {% endif %}">
         {{ step8|default:"Review" }}
       </span>
-    {% if is_click == "true" %}</button>{% else %}</div>{% endif %}
+    {% if is_click == "true" or is_click == True %}</button>{% else %}</div>{% endif %}
     {% endif %}
 
   </div>

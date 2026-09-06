@@ -404,6 +404,7 @@ class PaymentType(models.TextChoices):
     BANK = 'bank', 'Bank Transfer'
     CASH = 'cash', 'Cash'
     MFS = 'mfs', 'Mobile Financial Service'
+    SPLIT = 'split', 'Multiple Methods (Bank & MFS)'
 
 
 class MFSProvider(models.TextChoices):
@@ -520,6 +521,13 @@ class PayrollPaymentDestination(TenantBaseModel):
             return f"••••{self.account_number_last4}"
         elif self.payment_type == PaymentType.MFS and self.wallet_number_last4:
             return f"••••{self.wallet_number_last4}"
+        elif self.payment_type == PaymentType.SPLIT:
+            parts = []
+            if self.account_number_last4:
+                parts.append(f"Bank: ••••{self.account_number_last4}")
+            if self.wallet_number_last4:
+                parts.append(f"MFS: ••••{self.wallet_number_last4}")
+            return " | ".join(parts) or "Multiple"
         return ""
 
     @property
@@ -560,6 +568,19 @@ class PayrollPaymentDestination(TenantBaseModel):
             data.update({
                 'mfs_provider': self.mfs_provider,
                 'mfs_provider_display': self.get_mfs_provider_display(),
+                'wallet_number_masked': self.masked_wallet_number,
+                'wallet_number_last4': self.wallet_number_last4,
+            })
+        elif self.payment_type == PaymentType.SPLIT:
+            data.update({
+                'bank_name': self.bank_name or (self.bank.name if self.bank else ''),
+                'branch_name': self.branch_name or (self.branch.name if self.branch else ''),
+                'account_holder_name': self.account_holder_name,
+                'account_number_masked': self.masked_account_number,
+                'account_number_last4': self.account_number_last4,
+                'routing_number': self.routing_number,
+                'mfs_provider': self.mfs_provider,
+                'mfs_provider_display': self.get_mfs_provider_display() if self.mfs_provider else '',
                 'wallet_number_masked': self.masked_wallet_number,
                 'wallet_number_last4': self.wallet_number_last4,
             })
@@ -623,6 +644,18 @@ class PayrollPaymentDestination(TenantBaseModel):
                 raise ValidationError({"mfs_provider": f"Invalid MFS provider. Choose from: {', '.join(MFSProvider.labels)}."})
             if not self.wallet_number_encrypted:
                 raise ValidationError({"wallet_number": "Valid wallet number is required for Mobile Financial Service."})
+
+        elif self.payment_type == PaymentType.SPLIT:
+            # Multi-method / Split payment retains both Bank and MFS data
+            if self.branch and self.bank:
+                if self.branch.bank_id != self.bank_id:
+                    raise ValidationError({"branch": "Selected branch does not belong to the selected bank."})
+                if not self.routing_number:
+                    self.routing_number = self.branch.routing_number
+                if not self.bank_name:
+                    self.bank_name = self.bank.name
+                if not self.branch_name:
+                    self.branch_name = self.branch.name
 
         elif self.payment_type == PaymentType.CASH:
             # Clear both Bank and MFS data atomically

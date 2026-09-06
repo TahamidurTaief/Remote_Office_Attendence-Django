@@ -4,19 +4,23 @@
   action="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}{% else %}{% url 'employees:employee_wizard_create_step' step=3 %}{% endif %}"
   hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}{% else %}{% url 'employees:employee_wizard_create_step' step=3 %}{% endif %}"
   hx-target="#wizard-root"
-  hx-swap="outerHTML"
-  hx-indicator="#ft-global-loader"
+  hx-swap="outerHTML transition:true"
+  hx-indicator="#wizard-global-loader"
   hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
-  x-data="{ paymentType: '{{ form.payment_method.value|default:'bank' }}' }"
+  x-data="{ 
+    paymentType: '{{ form.payment_method.value|default:'bank' }}',
+    hasSecondary: {% if form.has_secondary.value or form.payment_method.value == 'split' %}true{% else %}false{% endif %}
+  }"
   class="space-y-6"
 >
   {% csrf_token %}
   <input type="hidden" name="next_step" value="4">
+  <input type="hidden" name="has_secondary" :value="hasSecondary ? 'true' : ''">
 
   <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
     <div>
       <h2 class="text-lg font-bold text-slate-900 dark:text-white">Step 3: Payroll Information</h2>
-      <p class="text-xs text-slate-500 dark:text-slate-400">Salary details, bank accounts, tax profile, and PF policy.</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Salary details, disbursement accounts, tax profile, and PF policy.</p>
     </div>
     <c-badge variant="info" label="Operational Setup Tier"></c-badge>
   </div>
@@ -36,59 +40,136 @@
       </c-select>
     </div>
 
-    <div>
-      <c-select name="payment_method" id="id_payment_method" label="Payment Method" value="{{ form.payment_method.value|default:'' }}" error="{{ form.payment_method.errors.0 }}" @change="paymentType = $event.target.value">
+    <div class="md:col-span-2">
+      <c-select name="payment_method" id="id_payment_method" label="Payment Method" value="{{ form.payment_method.value|default:'bank' }}" error="{{ form.payment_method.errors.0 }}" @change="paymentType = $event.target.value; if (paymentType === 'split') { hasSecondary = true; }">
         {% for val, label in form.payment_method.field.choices %}
-          <option value="{{ val }}" {% if form.payment_method.value == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </c-select>
-    </div>
-
-    <!-- Bank Destination Fields -->
-    <div x-show="paymentType === 'bank' || paymentType === 'split'">
-      <c-select name="bank_name" id="id_bank_name" label="Bank Name" value="{{ form.bank_name.value|default:'' }}" error="{{ form.bank_name.errors.0 }}">
-        <option value="">-- Choose Bank --</option>
-        {% for group_name, bank_list in form.bank_groups %}
-          <optgroup label="{{ group_name }}">
-            {% for bank_val, bank_label in bank_list %}
-              <option value="{{ bank_val }}" {% if form.bank_name.value == bank_val %}selected{% endif %}>{{ bank_label }}</option>
-            {% endfor %}
-          </optgroup>
-        {% endfor %}
-      </c-select>
-    </div>
-
-    <div x-show="paymentType === 'bank' || paymentType === 'split'">
-      <c-input type="text" name="bank_account" id="id_bank_account" label="Bank Account Number" placeholder="Account Number" value="{{ form.bank_account.value|default:'' }}" error="{{ form.bank_account.errors.0 }}"></c-input>
-    </div>
-
-    <div x-show="paymentType === 'bank' || paymentType === 'split'">
-      <c-input type="text" name="account_holder_name" id="id_account_holder_name" label="Account Holder Name" placeholder="e.g. As registered with bank" value="{{ form.account_holder_name.value|default:'' }}" error="{{ form.account_holder_name.errors.0 }}"></c-input>
-    </div>
-
-    <div x-show="paymentType === 'bank' || paymentType === 'split'">
-      <c-input type="text" name="routing_number" id="id_routing_number" label="Routing Number (Optional)" placeholder="9-digit routing number" value="{{ form.routing_number.value|default:'' }}" error="{{ form.routing_number.errors.0 }}"></c-input>
-    </div>
-
-    <!-- Mobile Financial Service (MFS) Fields -->
-    <div x-show="paymentType === 'mfs' || paymentType === 'mobile'">
-      <c-select name="mfs_provider" id="id_mfs_provider" label="MFS Provider" value="{{ form.mfs_provider.value|default:'' }}" error="{{ form.mfs_provider.errors.0 }}">
-        <option value="">-- Choose Provider --</option>
-        {% for val, label in form.mfs_provider.field.choices %}
-          {% if val %}
-          <option value="{{ val }}" {% if form.mfs_provider.value == val %}selected{% endif %}>{{ label }}</option>
+          {% if val != 'mobile' %}
+            <option value="{{ val }}" {% if form.payment_method.value == val or form.payment_method.value == 'mobile' and val == 'mfs' %}selected{% endif %}>{{ label }}</option>
           {% endif %}
         {% endfor %}
       </c-select>
     </div>
 
-    <div x-show="paymentType === 'mfs' || paymentType === 'mobile'">
-      <c-input type="text" name="wallet_number" id="id_wallet_number" label="Mobile Wallet Number" placeholder="e.g. 017XXXXXXXX" value="{{ form.wallet_number.value|default:'' }}" error="{{ form.wallet_number.errors.0 }}"></c-input>
+    <!-- Bank Transfer Fields -->
+    <div 
+      x-show="paymentType === 'bank' || paymentType === 'split' || (hasSecondary && paymentType !== 'bank')" 
+      x-transition:enter="transition ease-out duration-200"
+      x-transition:enter-start="opacity-0 -translate-y-1"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      class="md:col-span-2 space-y-4 pt-1"
+    >
+      <div class="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800/80">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+            <span x-show="paymentType === 'split' || hasSecondary">Method 1: </span>Bank Transfer Details
+          </h3>
+        </div>
+        <c-badge variant="neutral" label="Direct Bank Settlement"></c-badge>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <c-select name="bank_name" id="id_bank_name" label="Bank Name" value="{{ form.bank_name.value|default:'' }}" error="{{ form.bank_name.errors.0 }}">
+            <option value="">-- Choose Bank --</option>
+            {% for group_name, bank_list in form.bank_groups %}
+              <optgroup label="{{ group_name }}">
+                {% for bank_val, bank_label in bank_list %}
+                  <option value="{{ bank_val }}" {% if form.bank_name.value == bank_val %}selected{% endif %}>{{ bank_label }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </c-select>
+        </div>
+
+        <div>
+          <c-input type="text" name="bank_account" id="id_bank_account" label="AC Number" placeholder="Account Number" value="{{ form.bank_account.value|default:'' }}" error="{{ form.bank_account.errors.0 }}"></c-input>
+        </div>
+
+        <div>
+          <c-input type="text" name="account_holder_name" id="id_account_holder_name" label="AC Name" placeholder="e.g. As registered in bank" value="{{ form.account_holder_name.value|default:'' }}" error="{{ form.account_holder_name.errors.0 }}"></c-input>
+        </div>
+
+        <div>
+          <c-input type="text" name="routing_number" id="id_routing_number" label="Routing Number (Optional)" placeholder="9-digit routing number" value="{{ form.routing_number.value|default:'' }}" error="{{ form.routing_number.errors.0 }}"></c-input>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Financial Service (MFS) Fields -->
+    <div 
+      x-show="paymentType === 'mfs' || paymentType === 'split' || (hasSecondary && paymentType !== 'mfs')" 
+      x-transition:enter="transition ease-out duration-200"
+      x-transition:enter-start="opacity-0 -translate-y-1"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      class="md:col-span-2 space-y-4 pt-1"
+    >
+      <div class="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800/80">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+            <span x-show="paymentType === 'split' || hasSecondary">Method 2: </span>Mobile Financial Service (MFS) Details
+          </h3>
+        </div>
+        <c-badge variant="neutral" label="Instant MFS Wallet Settlement"></c-badge>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <c-select name="mfs_provider" id="id_mfs_provider" label="Banking Method" value="{{ form.mfs_provider.value|default:'' }}" error="{{ form.mfs_provider.errors.0 }}">
+            <option value="">-- Choose Banking Method --</option>
+            {% for val, label in form.mfs_provider.field.choices %}
+              {% if val %}
+              <option value="{{ val }}" {% if form.mfs_provider.value == val %}selected{% endif %}>{{ label }}</option>
+              {% endif %}
+            {% endfor %}
+          </c-select>
+        </div>
+
+        <div>
+          <c-input type="text" name="wallet_number" id="id_wallet_number" label="Transaction Number" placeholder="e.g. 017XXXXXXXX" value="{{ form.wallet_number.value|default:'' }}" error="{{ form.wallet_number.errors.0 }}"></c-input>
+        </div>
+
+        <div>
+          <c-input type="text" name="transaction_id" id="id_transaction_id" label="Transaction ID" placeholder="e.g. TXN987654321 / Ref ID" value="{{ form.transaction_id.value|default:'' }}" error="{{ form.transaction_id.errors.0 }}"></c-input>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toggle for Adding/Removing 2nd Method -->
+    <div x-show="paymentType !== 'split' && paymentType !== 'cash'" class="md:col-span-2 pt-1 pb-1">
+      <button 
+        type="button" 
+        @click="hasSecondary = !hasSecondary" 
+        class="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all duration-150"
+        :class="hasSecondary ? 'border-amber-300 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100' : 'border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm'"
+      >
+        <template x-if="!hasSecondary">
+          <span class="flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>+ Add 2nd Payment Method (Add multiple methods at a time)</span>
+          </span>
+        </template>
+        <template x-if="hasSecondary">
+          <span class="flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            <span>Remove 2nd Payment Method</span>
+          </span>
+        </template>
+      </button>
     </div>
 
     <!-- Cash Disbursement Info -->
-    <div x-show="paymentType === 'cash'" class="md:col-span-2">
-      <c-badge variant="neutral" label="Physical Cash Disbursement — No bank account or wallet details required."></c-badge>
+    <div x-show="paymentType === 'cash' && !hasSecondary" class="md:col-span-2 py-2">
+      <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/40 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Physical Cash Disbursement</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">Employee will be paid via physical cash receipt voucher. No bank account, AC, or mobile transaction details required.</p>
+        </div>
+      </div>
     </div>
 
     <div>
@@ -112,13 +193,11 @@
     <c-button 
       type="button" 
       variant="secondary" 
-      hx-post="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}{% else %}{% url 'employees:employee_wizard_create_step' step=3 %}{% endif %}"
-      hx-vals='{"target_step": "2"}'
-      hx-include="#wizard-step-form"
+      hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=2 %}{% else %}{% url 'employees:employee_wizard_create_step' step=2 %}{% endif %}"
       hx-target="#wizard-root" 
-      hx-swap="outerHTML" 
-      {% if employee %}hx-push-url="{% url 'employees:employee_wizard_step' uuid=employee.uuid step=2 %}"{% else %}hx-push-url="{% url 'employees:employee_wizard_create_step' step=2 %}"{% endif %}
-      hx-indicator="#ft-global-loader"
+      hx-swap="outerHTML transition:true" 
+      hx-push-url="true"
+      hx-indicator="#wizard-global-loader"
       hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
       label="Back to Step 2"
     ></c-button>

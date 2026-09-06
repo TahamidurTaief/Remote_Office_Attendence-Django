@@ -1,66 +1,84 @@
 {% comment %}
 c-location-guard-modal component
-Mandatory full-screen blocking overlay when GPS/location is disabled or permission denied.
+Mandatory modal when GPS/location is disabled or permission needed.
+100% English, simple, modern, built with Cotton components.
 {% endcomment %}
 <div id="location-guard-modal"
-     class="hidden fixed inset-0 z-[99999] items-center justify-center p-4 bg-slate-900/85 backdrop-blur-md transition-opacity">
-  <div class="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+     class="hidden fixed inset-0 z-[99999] items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm transition-opacity">
+  <div class="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
     
     {# Top Icon & Status Badge #}
     <div class="flex items-center justify-between mb-4">
-      <div class="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-950/40 text-red-600 flex items-center justify-center border border-red-200 dark:border-red-900/60 shadow-xs">
-        <i data-lucide="map-pin-off" class="w-6 h-6 stroke-[2.2] animate-bounce"></i>
+      <div class="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center border border-orange-200/50 dark:border-orange-900/50">
+        <i data-lucide="map-pin" class="w-5 h-5 stroke-[2]"></i>
       </div>
-      <span id="loc-modal-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800">
-        <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-        <span>GPS Required</span>
-      </span>
+      <c-badge variant="primary" size="sm" dot="true" id="loc-modal-badge" label="GPS Verification"></c-badge>
     </div>
 
     {# Heading & Explanation #}
     <div class="space-y-1.5 mb-4">
-      <h2 id="loc-modal-title" class="text-lg font-black text-slate-900 dark:text-white leading-tight">
-        Device GPS / Location Required
+      <h2 id="loc-modal-title" class="text-base font-bold text-slate-900 dark:text-white leading-snug">
+        Location Access Required
       </h2>
-      <p id="loc-modal-desc" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-        FieldTrack requires active GPS location to verify attendance. You cannot check in, check out, or use the staff system until location is enabled.
-      </p>
-      <p class="text-[11px] text-amber-700 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/30 p-2 rounded-xl border border-amber-200 dark:border-amber-900/50">
-        সিস্টেম ব্যবহার এবং হাজিরা দেওয়ার জন্য ফোনের লোকেশন (GPS) চালু করুন এবং ব্রাউজার পারমিশন দিন।
+      <p id="loc-modal-desc" class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+        FieldTrack requires device location to verify attendance and duty presence. Please ensure location is enabled on your device and allowed in your browser.
       </p>
     </div>
 
-    {# Step-by-Step Instructions Card #}
-    <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-3.5 mb-5">
-      <p class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-        How to enable / যেভাবে চালু করবেন:
+    {# Insecure Origin Notice (Shown automatically if accessed via HTTP LAN IP) #}
+    <div id="loc-insecure-warning" class="hidden mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+      <div class="flex items-center gap-1.5 font-bold">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600 shrink-0"></i>
+        <span>Local Wi-Fi Network Note</span>
+      </div>
+      <p class="text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+        Mobile browsers restrict high-precision GPS over unencrypted HTTP (192.168.x.x). You can tap "Continue to Dashboard" to proceed with network verification.
       </p>
-      <ul id="loc-modal-steps" class="text-xs text-slate-600 dark:text-slate-400 space-y-2">
-        <li class="flex items-start gap-2">
-          <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
-          <span>Open your device quick settings / drop-down menu and turn <strong>ON Location / GPS</strong>.</span>
+    </div>
+
+    {# Quick Step Guide #}
+    <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3.5 mb-5">
+      <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+        Quick Steps:
+      </p>
+      <ul id="loc-modal-steps" class="text-xs text-slate-600 dark:text-slate-300 space-y-2">
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+          <span>Ensure <strong>Location / GPS</strong> is turned ON in your device quick settings.</span>
         </li>
-        <li class="flex items-start gap-2">
-          <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
-          <span>In your browser address bar, tap the lock/settings icon and set <strong>Location to Allow</strong>.</span>
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+          <span>Tap the lock / settings icon in your browser address bar and set <strong>Location to Allow</strong>.</span>
         </li>
-        <li class="flex items-start gap-2">
-          <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
-          <span>Click the blue button below to detect and verify your location.</span>
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+          <span>Tap <strong>Verify Location</strong> below.</span>
         </li>
       </ul>
     </div>
 
-    {# Action CTA Button #}
-    <div>
-      <button type="button"
-              id="loc-modal-retry-btn"
-              onclick="if(window.LocationGuard) window.LocationGuard.requestLocation(true);"
-              class="w-full py-3.5 px-4 rounded-xl font-bold text-white text-sm bg-[#1877F2] hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer">
-        <i id="loc-modal-spinner" data-lucide="loader" class="w-5 h-5 animate-spin hidden"></i>
-        <i data-lucide="map-pin" class="w-5 h-5"></i>
-        <span id="loc-modal-btn-text">Turn On Location & Verify</span>
-      </button>
+    {# Actions #}
+    <div class="space-y-2">
+      <c-button
+        type="button"
+        variant="primary"
+        size="lg"
+        id="loc-modal-retry-btn"
+        icon="map-pin"
+        label="Verify Location"
+        extra_class="w-full justify-center !py-2.5 font-semibold shadow-xs"
+        attrs="onclick='if(window.LocationGuard) window.LocationGuard.requestLocation(true);'"
+      ></c-button>
+
+      <div class="flex items-center justify-center pt-1">
+        <button
+          type="button"
+          onclick="if(window.LocationGuard) window.LocationGuard.bypassOrDismiss();"
+          class="text-xs text-slate-500 hover:text-primary dark:text-slate-400 dark:hover:text-primary hover:underline cursor-pointer focus:outline-none font-medium py-1"
+        >
+          Continue to Dashboard &rarr;
+        </button>
+      </div>
     </div>
   </div>
 </div>
