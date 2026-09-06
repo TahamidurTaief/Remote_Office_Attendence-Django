@@ -13,13 +13,19 @@ class EnterpriseSidebarTest(TestCase):
 
     def test_sidebar_template_renders(self):
         """Verify that sidebar.html renders the sidebar aside and nav landmarks."""
-        rendered = render_to_string('cotton/sidebar.html', {'user': self.user})
+        from django.test import RequestFactory
+        rf = RequestFactory().get('/')
+        rf.user = self.user
+        rendered = render_to_string('cotton/sidebar.html', {'user': self.user}, request=rf)
         self.assertIn('id="ft-sidebar"', rendered)
         self.assertIn('aria-label="Main Navigation"', rendered)
 
     def test_sidebar_config_driven_groups(self):
         """Verify dynamic nav labels exist in the sidebar."""
-        rendered = render_to_string('cotton/sidebar.html', {'user': self.user})
+        from django.test import RequestFactory
+        rf = RequestFactory().get('/')
+        rf.user = self.user
+        rendered = render_to_string('cotton/sidebar.html', {'user': self.user}, request=rf)
         # Sidebar contains navigation link labels
         self.assertIn('Dashboard', rendered)
         self.assertIn('Employees', rendered)

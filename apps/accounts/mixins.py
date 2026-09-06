@@ -48,7 +48,7 @@ class RBACPermissionRequiredMixin(AccessMixin):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
 
-        if request.user.is_superuser:
+        if request.user.is_superuser or getattr(request.user, 'role', '') in ['admin', 'system_owner', 'super_admin']:
             return super().dispatch(request, *args, **kwargs)
 
         perm = self.get_required_permission()

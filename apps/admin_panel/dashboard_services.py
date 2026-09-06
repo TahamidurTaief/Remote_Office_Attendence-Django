@@ -31,15 +31,15 @@ def determine_user_role_variant(user):
 
     from apps.accounts.rbac_models import DataScope
     # Admin check (superuser or accounts.view/edit permission or global dashboard scope)
-    if user.is_superuser or PermissionEngine.evaluate(user, 'accounts.view').allowed or (PermissionEngine.evaluate(user, 'dashboard.view').allowed and PermissionEngine.get_effective_scope(user, 'dashboard.view') == DataScope.GLOBAL):
+    if (user.is_superuser and getattr(user, 'role', '') != 'manager') or getattr(user, 'role', '') in ['admin', 'system_owner', 'super_admin'] or PermissionEngine.evaluate(user, 'accounts.view').allowed or (PermissionEngine.evaluate(user, 'dashboard.view').allowed and PermissionEngine.get_effective_scope(user, 'dashboard.view') == DataScope.GLOBAL):
         return 'admin'
 
     # HR check (employees.view and leave.approve permission)
-    if PermissionEngine.evaluate(user, 'employees.view').allowed and PermissionEngine.evaluate(user, 'leave.approve').allowed:
+    if getattr(user, 'role', '') == 'hr' or (PermissionEngine.evaluate(user, 'employees.view').allowed and PermissionEngine.evaluate(user, 'leave.approve').allowed):
         return 'hr'
 
     # Manager check (projects/leave approve permission or user has direct reports)
-    is_manager_role = PermissionEngine.evaluate(user, 'leave.approve').allowed or PermissionEngine.evaluate(user, 'projects.approve').allowed
+    is_manager_role = getattr(user, 'role', '') == 'manager' or PermissionEngine.evaluate(user, 'leave.approve').allowed or PermissionEngine.evaluate(user, 'projects.approve').allowed
     emp_master = getattr(user, 'employee_master', None)
     has_direct_reports = False
     if emp_master:

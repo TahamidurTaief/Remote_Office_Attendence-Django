@@ -358,6 +358,7 @@ class BaseProcessExpenseView(View):
         
         from django.db import transaction
         from apps.expense.models import Expense
+        from apps.accounts.engine import PermissionEngine
         
         with transaction.atomic():
             expense = get_object_or_404(Expense.objects.select_for_update(), pk=kwargs.get('pk'))

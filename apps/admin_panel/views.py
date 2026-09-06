@@ -16,6 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
+from apps.accounts.rbac_models import DataScope
 from django.views.generic import TemplateView, ListView, View, FormView, DetailView, CreateView
 from apps.attendance.models import Attendance
 from apps.attendance.schedule_utils import (
@@ -372,7 +373,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         # Enforce Manager branch limits
         user = self.request.user
         eval_res = PermissionEngine.evaluate(user, 'attendance.view')
-        can_view_all = user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        can_view_all = getattr(user, 'role', '') != 'manager' and (user.is_superuser or eval_res.scope == DataScope.GLOBAL)
         role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(user, 'employee_profile', None)
 
@@ -1055,7 +1056,7 @@ def _filter_qs_by_request(qs, request):
 
     # Enforce Manager branch limits
     eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
-    can_view_all = request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
+    can_view_all = getattr(request.user, 'role', '') != 'manager' and (request.user.is_superuser or eval_res.scope == DataScope.GLOBAL)
     role_name = 'admin' if can_view_all else 'manager'
     profile = getattr(request.user, 'employee_profile', None)
 
@@ -2224,7 +2225,7 @@ class ExportReportCSVView(AdminRequiredMixin, View):
 
         # Enforce Manager branch limits
         eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
-        can_view_all = request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        can_view_all = getattr(request.user, 'role', '') != 'manager' and (request.user.is_superuser or eval_res.scope == DataScope.GLOBAL)
         role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(request.user, 'employee_profile', None)
 

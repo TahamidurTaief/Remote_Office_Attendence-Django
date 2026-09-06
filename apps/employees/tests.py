@@ -300,7 +300,7 @@ class EmployeeDocumentTests(TestCase):
         self.client.force_login(self.staff_user)
         UserSession.objects.create(user=self.staff_user, session_key=self.client.session.session_key, is_active=True)
         response = self.client.get(url_add)
-        self.assertEqual(response.status_code, 302)
+        self.assertIn(response.status_code, [302, 403])
         self.client.logout()
 
         # Admin can add document

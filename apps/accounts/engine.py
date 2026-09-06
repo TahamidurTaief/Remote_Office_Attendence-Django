@@ -29,6 +29,10 @@ class PermissionResolutionResult:
     def __bool__(self):
         return self.allowed
 
+    @property
+    def scope(self):
+        return self.data_scope
+
 
 def validate_field_path(model, path):
     """Validates if a Django field path exists on the given model without raising FieldError."""
@@ -69,6 +73,11 @@ class PermissionEngine:
                 cache.delete(f"rbac_user_perms_{user_id}")
             except Exception:
                 pass
+
+    @classmethod
+    def get_effective_scope(cls, user, codename):
+        """Returns the effective DataScope for a user and permission codename."""
+        return cls.evaluate(user, codename).data_scope
 
     @classmethod
     def get_user_resolved_permissions(cls, user):
@@ -119,6 +128,10 @@ class PermissionEngine:
         assigned_role_ids = list(
             UserRoleAssignment.objects.filter(user=user, role__is_active=True).values_list('role_id', flat=True)
         )
+        if not assigned_role_ids and hasattr(user, 'role') and user.role:
+            role_obj = Role.objects.filter(code=user.role, is_active=True).first()
+            if role_obj:
+                assigned_role_ids = [role_obj.id]
 
         # 2. Fetch role permissions
         role_perms = RolePermission.objects.filter(
