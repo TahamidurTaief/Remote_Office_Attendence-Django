@@ -3,6 +3,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 from apps.employees.models import EmployeeProfile, EmployeeDocument, Bank, BankBranch, EmployeeBankAccount, Employee
 from apps.employees.bank_crypto import normalize_account_number
 from apps.employees.bank_registry import (
@@ -637,8 +640,8 @@ class EmployeeMasterForm(forms.ModelForm):
                     payment_type=pm,
                     data=dest_data
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Could not sync payment destination during EmployeeMasterForm save: %s", e)
         return instance
 
 
@@ -1238,8 +1241,8 @@ class WizardStep3Form(forms.ModelForm):
                     payment_type=pm,
                     data=dest_data
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Could not sync payment destination during WizardStep3Form save: %s", e)
         return employee
 
 

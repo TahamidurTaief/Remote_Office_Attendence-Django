@@ -144,6 +144,10 @@ class PayrollPaymentDestinationService:
                 branch = bank.branches.filter(is_active=True).first()
                 if branch and not branch_name:
                     branch_name = branch.name
+                elif not branch_name:
+                    branch_name = 'Main Branch'
+            elif not branch and not branch_name and (bank or bank_name):
+                branch_name = 'Main Branch'
 
             # Security check: cross-bank branch forging
             if bank and branch and branch.bank_id != bank.id:
