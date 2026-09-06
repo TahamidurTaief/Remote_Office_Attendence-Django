@@ -7,6 +7,7 @@
   hx-swap="outerHTML"
   hx-indicator="#ft-global-loader"
   hx-disabled-elt="#wizard-stepper-banner button, #wizard-step-container button"
+  x-data="{ paymentType: '{{ form.payment_method.value|default:'bank' }}' }"
   class="space-y-6"
 >
   {% csrf_token %}
@@ -36,14 +37,15 @@
     </div>
 
     <div>
-      <c-select name="payment_method" id="id_payment_method" label="Payment Method" value="{{ form.payment_method.value|default:'' }}" error="{{ form.payment_method.errors.0 }}">
+      <c-select name="payment_method" id="id_payment_method" label="Payment Method" value="{{ form.payment_method.value|default:'' }}" error="{{ form.payment_method.errors.0 }}" @change="paymentType = $event.target.value">
         {% for val, label in form.payment_method.field.choices %}
           <option value="{{ val }}" {% if form.payment_method.value == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </c-select>
     </div>
 
-    <div>
+    <!-- Bank Destination Fields -->
+    <div x-show="paymentType === 'bank' || paymentType === 'split'">
       <c-select name="bank_name" id="id_bank_name" label="Bank Name" value="{{ form.bank_name.value|default:'' }}" error="{{ form.bank_name.errors.0 }}">
         <option value="">-- Choose Bank --</option>
         {% for group_name, bank_list in form.bank_groups %}
@@ -56,12 +58,37 @@
       </c-select>
     </div>
 
-    <div>
+    <div x-show="paymentType === 'bank' || paymentType === 'split'">
       <c-input type="text" name="bank_account" id="id_bank_account" label="Bank Account Number" placeholder="Account Number" value="{{ form.bank_account.value|default:'' }}" error="{{ form.bank_account.errors.0 }}"></c-input>
     </div>
 
-    <div>
+    <div x-show="paymentType === 'bank' || paymentType === 'split'">
       <c-input type="text" name="account_holder_name" id="id_account_holder_name" label="Account Holder Name" placeholder="e.g. As registered with bank" value="{{ form.account_holder_name.value|default:'' }}" error="{{ form.account_holder_name.errors.0 }}"></c-input>
+    </div>
+
+    <div x-show="paymentType === 'bank' || paymentType === 'split'">
+      <c-input type="text" name="routing_number" id="id_routing_number" label="Routing Number (Optional)" placeholder="9-digit routing number" value="{{ form.routing_number.value|default:'' }}" error="{{ form.routing_number.errors.0 }}"></c-input>
+    </div>
+
+    <!-- Mobile Financial Service (MFS) Fields -->
+    <div x-show="paymentType === 'mfs' || paymentType === 'mobile'">
+      <c-select name="mfs_provider" id="id_mfs_provider" label="MFS Provider" value="{{ form.mfs_provider.value|default:'' }}" error="{{ form.mfs_provider.errors.0 }}">
+        <option value="">-- Choose Provider --</option>
+        {% for val, label in form.mfs_provider.field.choices %}
+          {% if val %}
+          <option value="{{ val }}" {% if form.mfs_provider.value == val %}selected{% endif %}>{{ label }}</option>
+          {% endif %}
+        {% endfor %}
+      </c-select>
+    </div>
+
+    <div x-show="paymentType === 'mfs' || paymentType === 'mobile'">
+      <c-input type="text" name="wallet_number" id="id_wallet_number" label="Mobile Wallet Number" placeholder="e.g. 017XXXXXXXX" value="{{ form.wallet_number.value|default:'' }}" error="{{ form.wallet_number.errors.0 }}"></c-input>
+    </div>
+
+    <!-- Cash Disbursement Info -->
+    <div x-show="paymentType === 'cash'" class="md:col-span-2">
+      <c-badge variant="neutral" label="Physical Cash Disbursement — No bank account or wallet details required."></c-badge>
     </div>
 
     <div>

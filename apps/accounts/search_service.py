@@ -640,6 +640,17 @@ class GlobalSearchService:
                     'keywords': ['payroll configuration', 'payroll config', 'payroll settings', 'cutoff date', 'salary rules', 'currency', 'menu'],
                 })
 
+            url_payment_dest = cls.safe_reverse('payroll:payment_destinations', fallback='/payroll/destinations/')
+            if url_payment_dest:
+                items.append({
+                    'label': 'Payroll Payment Destinations',
+                    'href': url_payment_dest,
+                    'icon': 'credit-card',
+                    'group': 'Payroll',
+                    'description': 'Configure Bank, Cash, and Mobile Financial Service (MFS) payout destinations',
+                    'keywords': ['payment destinations', 'payroll destinations', 'bank account', 'bkash', 'nagad', 'rocket', 'mfs', 'cash disbursement', 'menu', 'submenu'],
+                })
+
         url_my_slips = cls.safe_reverse('payroll:my_payslips', fallback='/payroll/my-payslips/')
         if url_my_slips:
             items.append({
@@ -1090,6 +1101,12 @@ class GlobalSearchService:
         """
         clean_query, tokens = cls.normalize_query(query)
         if not user or not user.is_authenticated:
+            return []
+
+        # Security protection: Raw account number / card / wallet numeric queries are rejected
+        clean_digits = re.sub(r'\D', '', clean_query)
+        if len(clean_digits) >= 8 and (len(clean_query.replace('-', '').replace(' ', '')) == len(clean_digits)):
+            # Pure account number or card probe - reject to avoid sensitive audit or data leakage
             return []
 
         # When query is empty, return default high-priority routes based on user's access

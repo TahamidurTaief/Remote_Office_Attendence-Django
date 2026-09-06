@@ -1324,3 +1324,85 @@ class PayrollConfigurationAISimulateView(View):
         )
         return JsonResponse(simulation)
 
+
+# --- PAYROLL PAYMENT DESTINATIONS ---
+
+class PayrollPaymentDestinationListView(PayrollManagerMixin, View):
+    """
+    Tenant-scoped overview of employee payroll payment destinations (Bank, Cash, MFS).
+    Masks sensitive account numbers and wallet numbers.
+    """
+    def get(self, request, *args, **kwargs):
+        from apps.employees.models import Employee
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+
+        employees = Employee.objects.select_related('branch', 'department', 'designation', 'payment_destination').filter(
+            status='active'
+        ).order_by('employee_number')
+
+        query = request.GET.get('q', '').strip()
+        if query:
+            import re
+            clean_digits = re.sub(r'\D', '', query)
+            if len(clean_digits) >= 8 and len(query.replace('-', '').replace(' ', '')) == len(clean_digits):
+                employees = employees.none()
+            else:
+                employees = employees.filter(
+                    models.Q(first_name__icontains=query) |
+                    models.Q(last_name__icontains=query) |
+                    models.Q(employee_number__icontains=query)
+                )
+
+        destinations_data = []
+        for emp in employees:
+            dest_info = PayrollPaymentDestinationService.get_masked_destination(emp)
+            destinations_data.append({
+                'employee': emp,
+                'destination': dest_info,
+            })
+
+        return render(request, 'payroll/payment_destinations.html', {
+            'destinations_data': destinations_data,
+            'query': query,
+        })
+
+
+class PayrollPaymentDestinationUpdateView(PayrollManagerMixin, View):
+    """
+    Update employee payroll payment destination with conditional Bank, Cash, or MFS validation.
+    """
+    def get(self, request, employee_id, *args, **kwargs):
+        from apps.employees.models import Employee
+        from apps.payroll.forms import PayrollPaymentDestinationForm
+
+        employee = get_object_or_404(Employee, pk=employee_id)
+        form = PayrollPaymentDestinationForm(employee=employee)
+        return render(request, 'payroll/payment_destination_edit.html', {
+            'employee': employee,
+            'form': form,
+        })
+
+    def post(self, request, employee_id, *args, **kwargs):
+        from apps.employees.models import Employee
+        from apps.payroll.forms import PayrollPaymentDestinationForm
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+
+        employee = get_object_or_404(Employee, pk=employee_id)
+        form = PayrollPaymentDestinationForm(request.POST, employee=employee)
+
+        if form.is_valid():
+            payment_type = form.cleaned_data['payment_type']
+            PayrollPaymentDestinationService.save_destination(
+                employee=employee,
+                payment_type=payment_type,
+                data=form.cleaned_data,
+                actor=request.user
+            )
+            messages.success(request, f"Payment destination updated for {employee.get_full_name()} ({employee.employee_number}).")
+            return redirect('payroll:payment_destinations')
+
+        return render(request, 'payroll/payment_destination_edit.html', {
+            'employee': employee,
+            'form': form,
+        })
+

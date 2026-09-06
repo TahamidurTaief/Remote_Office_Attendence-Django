@@ -1,0 +1,102 @@
+<c-app-shell page_title="Edit Payment Destination | FieldTrack" active_href="{% url 'payroll:payment_destinations' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payment_destinations' %}"></c-sidebar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-4xl mx-auto space-y-4">
+        <c-page-header title="Configure Payment Destination: {{ employee.get_full_name }}">
+            <c-slot name="actions">
+                <c-button href="{% url 'payroll:payment_destinations' %}" variant="secondary" icon="arrow-left" label="Back to Destinations"></c-button>
+            </c-slot>
+        </c-page-header>
+
+        {% if form.non_field_errors %}
+        <div class="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+            {% for err in form.non_field_errors %}{{ err }} {% endfor %}
+        </div>
+        {% endif %}
+
+        <c-card>
+            <form method="post" action="{% url 'payroll:payment_destination_edit' employee.id %}" x-data="{ paymentType: '{{ form.payment_type.value|default:'bank' }}' }" class="space-y-6">
+                {% csrf_token %}
+
+                <div class="pb-4 border-b border-gray-100 dark:border-gray-800">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Payment Method & Destination Details</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Select Bank Transfer, Cash, or Mobile Financial Service (bKash, Nagad, Rocket).</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <c-select name="payment_type" id="id_payment_type" label="Payment Method" value="{{ form.payment_type.value|default:'' }}" error="{{ form.payment_type.errors.0 }}" @change="paymentType = $event.target.value">
+                            {% for val, label in form.payment_type.field.choices %}
+                                <option value="{{ val }}" {% if form.payment_type.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </c-select>
+                    </div>
+
+                    <!-- Bank Transfer Section -->
+                    <div x-show="paymentType === 'bank'" class="contents">
+                        <div>
+                            <c-select name="bank_name" id="id_bank_name" label="Bank Name *" value="{{ form.bank_name.value|default:'' }}" error="{{ form.bank_name.errors.0 }}">
+                                {% for val, label in form.bank_name.field.choices %}
+                                    {% if val %}
+                                    <option value="{{ val }}" {% if form.bank_name.value == val %}selected{% endif %}>{{ label }}</option>
+                                    {% else %}
+                                    <option value="">{{ label }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </c-select>
+                        </div>
+
+                        <div>
+                            <c-input type="text" name="branch_name" id="id_branch_name" label="Branch Name *" placeholder="e.g. Gulshan Branch" value="{{ form.branch_name.value|default:'' }}" error="{{ form.branch_name.errors.0 }}"></c-input>
+                        </div>
+
+                        <div>
+                            <c-input type="text" name="account_holder_name" id="id_account_holder_name" label="Account Holder Name *" placeholder="As registered with the bank" value="{{ form.account_holder_name.value|default:'' }}" error="{{ form.account_holder_name.errors.0 }}"></c-input>
+                        </div>
+
+                        <div>
+                            <c-input type="text" name="account_number" id="id_account_number" label="Account Number *" placeholder="Bank Account Number" value="{{ form.account_number.value|default:'' }}" error="{{ form.account_number.errors.0 }}"></c-input>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <c-input type="text" name="routing_number" id="id_routing_number" label="Routing Number (Optional)" placeholder="9-digit Bangladesh Bank routing number" value="{{ form.routing_number.value|default:'' }}" error="{{ form.routing_number.errors.0 }}"></c-input>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Financial Service (MFS) Section -->
+                    <div x-show="paymentType === 'mfs'" class="contents">
+                        <div>
+                            <c-select name="mfs_provider" id="id_mfs_provider" label="MFS Provider *" value="{{ form.mfs_provider.value|default:'' }}" error="{{ form.mfs_provider.errors.0 }}">
+                                {% for val, label in form.mfs_provider.field.choices %}
+                                    <option value="{{ val }}" {% if form.mfs_provider.value == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </c-select>
+                        </div>
+
+                        <div>
+                            <c-input type="text" name="wallet_number" id="id_wallet_number" label="Mobile Wallet Number *" placeholder="e.g. 017XXXXXXXX" value="{{ form.wallet_number.value|default:'' }}" error="{{ form.wallet_number.errors.0 }}"></c-input>
+                        </div>
+                    </div>
+
+                    <!-- Cash Section -->
+                    <div x-show="paymentType === 'cash'" class="md:col-span-2">
+                        <c-badge variant="neutral" label="Physical Cash Disbursement — Physical pay voucher signoff. No bank or wallet details required."></c-badge>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <c-input type="text" name="notes" id="id_notes" label="Notes / Comments (Optional)" placeholder="Optional internal notes on payment destination..." value="{{ form.notes.value|default:'' }}" error="{{ form.notes.errors.0 }}"></c-input>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+                    <c-button href="{% url 'payroll:payment_destinations' %}" variant="secondary" label="Cancel"></c-button>
+                    <c-button type="submit" variant="primary" icon="check" label="Save Payment Destination"></c-button>
+                </div>
+            </form>
+        </c-card>
+    </div>
+</c-app-shell>

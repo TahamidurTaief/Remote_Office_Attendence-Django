@@ -483,6 +483,14 @@ class RBACRegistryService:
                             'description': 'Tenant-scoped payroll policies, cutoff dates, overtime, and calculation rules',
                             'submenus': []
                         },
+                        {
+                            'code': 'payment_destinations',
+                            'name': 'Payroll Payment Destinations',
+                            'route': 'payroll:payment_destinations',
+                            'fallback_url': '/payroll/destinations/',
+                            'description': 'Configure Bank, Cash, and Mobile Financial Service (MFS) payout destinations',
+                            'submenus': []
+                        },
                     ]
                 }
             ]

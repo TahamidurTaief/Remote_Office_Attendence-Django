@@ -50,4 +50,8 @@ urlpatterns = [
     path('configuration/', views.PayrollConfigurationView.as_view(), name='payroll_configuration'),
     path('configuration/history/', views.PayrollConfigurationHistoryView.as_view(), name='payroll_configuration_history'),
     path('configuration/simulate/', views.PayrollConfigurationAISimulateView.as_view(), name='payroll_configuration_simulate'),
+
+    # Payroll Payment Destinations
+    path('destinations/', views.PayrollPaymentDestinationListView.as_view(), name='payment_destinations'),
+    path('destinations/<int:employee_id>/edit/', views.PayrollPaymentDestinationUpdateView.as_view(), name='payment_destination_edit'),
 ]

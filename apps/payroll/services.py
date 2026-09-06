@@ -309,6 +309,10 @@ class PayrollService:
 
         serialized_snapshot = serialize_decimals(calc_result)
 
+        # Snapshot employee payment destination
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        dest_snapshot = PayrollPaymentDestinationService.snapshot_destination_for_calculation(employee)
+
         # Save / Update calculation record
         calculation, created = EmployeePayrollCalculation.objects.update_or_create(
             payroll_run=payroll_run,
@@ -328,6 +332,7 @@ class PayrollService:
                 'bank_payable': calc_result['bank_payable'],
                 'cash_payable': calc_result['cash_payable'],
                 'structure_snapshot': serialized_snapshot,
+                'payment_snapshot': dest_snapshot,
                 'synced_at': synced_at,
                 'source_total_present_days': source_total_present_days,
                 'source_total_approved_leave_days': source_total_approved_leave_days,

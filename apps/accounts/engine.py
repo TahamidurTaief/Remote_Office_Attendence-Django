@@ -128,10 +128,6 @@ class PermissionEngine:
         assigned_role_ids = list(
             UserRoleAssignment.objects.filter(user=user, role__is_active=True).values_list('role_id', flat=True)
         )
-        if not assigned_role_ids and hasattr(user, 'role') and user.role:
-            role_obj = Role.objects.filter(code=user.role, is_active=True).first()
-            if role_obj:
-                assigned_role_ids = [role_obj.id]
 
         # 2. Fetch role permissions
         role_perms = RolePermission.objects.filter(

@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 from apps.employees.models import Employee
 from apps.tenants.models import TenantBaseModel
 from decimal import Decimal
@@ -141,6 +142,7 @@ class EmployeePayrollCalculation(models.Model):
     
     # Structural Breakdown Snapshot
     structure_snapshot = models.JSONField(help_text="Detailed JSON snapshot of salary components configuration and calculation results")
+    payment_snapshot = models.JSONField(default=dict, blank=True, help_text="Immutable snapshot of employee payment destination at calculation time")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -392,9 +394,248 @@ class PayrollConfiguration(TenantBaseModel):
             'negative_net_pay_policy': self.negative_net_pay_policy,
             'approval_workflow_steps': self.approval_workflow_steps,
             'payslip_prefix': self.payslip_prefix,
-            'supported_payment_methods': list(self.supported_payment_methods or ['bank', 'cash', 'split']),
+            'supported_payment_methods': list(self.supported_payment_methods or ['bank', 'cash', 'split', 'mfs']),
             'effective_from': str(self.effective_from) if self.effective_from else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class PaymentType(models.TextChoices):
+    BANK = 'bank', 'Bank Transfer'
+    CASH = 'cash', 'Cash'
+    MFS = 'mfs', 'Mobile Financial Service'
+
+
+class MFSProvider(models.TextChoices):
+    BKASH = 'bkash', 'bKash'
+    NAGAD = 'nagad', 'Nagad'
+    ROCKET = 'rocket', 'Rocket'
+
+
+class PayrollPaymentDestination(TenantBaseModel):
+    employee = models.OneToOneField(
+        'employees.Employee',
+        on_delete=models.CASCADE,
+        related_name='payment_destination',
+        db_index=True
+    )
+    payment_type = models.CharField(
+        max_length=20,
+        choices=PaymentType.choices,
+        default=PaymentType.BANK,
+        db_index=True
+    )
+
+    # Bank Transfer fields
+    bank = models.ForeignKey(
+        'employees.Bank',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payroll_destinations'
+    )
+    bank_name = models.CharField(max_length=150, blank=True)
+    branch = models.ForeignKey(
+        'employees.BankBranch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payroll_destinations'
+    )
+    branch_name = models.CharField(max_length=150, blank=True)
+    account_holder_name = models.CharField(max_length=255, blank=True)
+    account_number_encrypted = models.TextField(blank=True, help_text="Encrypted bank account number")
+    account_number_last4 = models.CharField(max_length=4, blank=True, db_index=True)
+    routing_number = models.CharField(max_length=9, blank=True, db_index=True)
+
+    # Mobile Financial Service (MFS) fields
+    mfs_provider = models.CharField(
+        max_length=20,
+        choices=MFSProvider.choices,
+        blank=True,
+        db_index=True
+    )
+    wallet_number_encrypted = models.TextField(blank=True, help_text="Encrypted mobile wallet number")
+    wallet_number_last4 = models.CharField(max_length=4, blank=True, db_index=True)
+
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = 'Payroll Payment Destination'
+        verbose_name_plural = 'Payroll Payment Destinations'
+        indexes = [
+            models.Index(fields=['tenant', 'payment_type']),
+            models.Index(fields=['tenant', 'is_active']),
+        ]
+
+    def __str__(self):
+        emp_num = self.employee.employee_number if self.employee else 'Unknown'
+        return f"{emp_num} - {self.get_payment_type_display()}"
+
+    def set_account_number(self, raw_number: str):
+        from apps.employees.bank_crypto import encrypt_account_number, normalize_account_number
+        cleaned = normalize_account_number(raw_number)
+        if not cleaned:
+            self.account_number_encrypted = ''
+            self.account_number_last4 = ''
+            return
+        self.account_number_encrypted = encrypt_account_number(cleaned)
+        self.account_number_last4 = cleaned[-4:] if len(cleaned) >= 4 else cleaned
+
+    def get_account_number(self) -> str:
+        from apps.employees.bank_crypto import decrypt_account_number
+        if not self.account_number_encrypted:
+            return ''
+        return decrypt_account_number(self.account_number_encrypted)
+
+    @property
+    def masked_account_number(self) -> str:
+        if self.account_number_last4:
+            return f"**********{self.account_number_last4}"
+        return ""
+
+    def set_wallet_number(self, raw_wallet: str):
+        import re
+        from apps.employees.bank_crypto import encrypt_account_number, normalize_account_number
+        cleaned = normalize_account_number(raw_wallet)
+        if not cleaned:
+            self.wallet_number_encrypted = ''
+            self.wallet_number_last4 = ''
+            return
+        if not re.match(r"^01[3-9]\d{8,9}$", cleaned):
+            raise ValidationError({"wallet_number": "Invalid Bangladeshi wallet number. Must start with 01 and have 11 digits (or 12 for Rocket)."})
+        self.wallet_number_encrypted = encrypt_account_number(cleaned)
+        self.wallet_number_last4 = cleaned[-4:] if len(cleaned) >= 4 else cleaned
+
+    def get_wallet_number(self) -> str:
+        from apps.employees.bank_crypto import decrypt_account_number
+        if not self.wallet_number_encrypted:
+            return ''
+        return decrypt_account_number(self.wallet_number_encrypted)
+
+    @property
+    def masked_account(self) -> str:
+        if self.payment_type == PaymentType.BANK and self.account_number_last4:
+            return f"••••{self.account_number_last4}"
+        elif self.payment_type == PaymentType.MFS and self.wallet_number_last4:
+            return f"••••{self.wallet_number_last4}"
+        return ""
+
+    @property
+    def masked_wallet_number(self) -> str:
+        if self.wallet_number_last4:
+            return f"*******{self.wallet_number_last4}"
+        return ""
+
+    @property
+    def account_number(self) -> str:
+        return self.get_account_number()
+
+    @property
+    def account_holder(self) -> str:
+        return self.account_holder_name
+
+    @property
+    def mfs_wallet_number(self) -> str:
+        return self.get_wallet_number()
+
+    def get_masked_destination(self) -> dict:
+        data = {
+            'payment_type': self.payment_type,
+            'payment_type_display': self.get_payment_type_display(),
+            'is_active': self.is_active,
+            'masked_account': self.masked_account,
+        }
+        if self.payment_type == PaymentType.BANK:
+            data.update({
+                'bank_name': self.bank_name or (self.bank.name if self.bank else ''),
+                'branch_name': self.branch_name or (self.branch.name if self.branch else ''),
+                'account_holder_name': self.account_holder_name,
+                'account_number_masked': self.masked_account_number,
+                'account_number_last4': self.account_number_last4,
+                'routing_number': self.routing_number,
+            })
+        elif self.payment_type == PaymentType.MFS:
+            data.update({
+                'mfs_provider': self.mfs_provider,
+                'mfs_provider_display': self.get_mfs_provider_display(),
+                'wallet_number_masked': self.masked_wallet_number,
+                'wallet_number_last4': self.wallet_number_last4,
+            })
+        elif self.payment_type == PaymentType.CASH:
+            data.update({
+                'disbursement': 'Cash / Physical voucher',
+            })
+        return data
+
+    def to_snapshot(self) -> dict:
+        snapshot = self.get_masked_destination()
+        snapshot['snapshotted_at'] = timezone.now().isoformat()
+        return snapshot
+
+    def clean(self):
+        super().clean()
+        if self.payment_type == 'mobile':
+            self.payment_type = PaymentType.MFS
+
+        if self.payment_type == PaymentType.BANK:
+            # Clear obsolete MFS data atomically
+            self.mfs_provider = ''
+            self.wallet_number_encrypted = ''
+            self.wallet_number_last4 = ''
+
+            # Validate Bank fields
+            if not self.bank and not self.bank_name:
+                raise ValidationError({"bank": "Bank is required for bank transfer destinations."})
+            if not self.account_holder_name:
+                raise ValidationError({"account_holder_name": "Account holder name is required for bank transfer destinations."})
+            if not self.account_number_encrypted:
+                raise ValidationError({"account_number": "Account number is required for bank transfer destinations."})
+            if not self.branch and not self.branch_name:
+                raise ValidationError({"branch": "Branch is required for bank transfer destinations."})
+
+            if self.branch and self.bank:
+                if self.branch.bank_id != self.bank_id:
+                    raise ValidationError({"branch": "Selected branch does not belong to the selected bank."})
+                if not self.routing_number:
+                    self.routing_number = self.branch.routing_number
+                if not self.bank_name:
+                    self.bank_name = self.bank.name
+                if not self.branch_name:
+                    self.branch_name = self.branch.name
+
+        elif self.payment_type == PaymentType.MFS:
+            # Clear obsolete Bank data atomically
+            self.bank = None
+            self.bank_name = ''
+            self.branch = None
+            self.branch_name = ''
+            self.account_holder_name = ''
+            self.account_number_encrypted = ''
+            self.account_number_last4 = ''
+            self.routing_number = ''
+
+            # Validate MFS fields
+            if not self.mfs_provider:
+                raise ValidationError({"mfs_provider": "MFS provider (bKash, Nagad, or Rocket) is required."})
+            if self.mfs_provider not in MFSProvider.values:
+                raise ValidationError({"mfs_provider": f"Invalid MFS provider. Choose from: {', '.join(MFSProvider.labels)}."})
+            if not self.wallet_number_encrypted:
+                raise ValidationError({"wallet_number": "Valid wallet number is required for Mobile Financial Service."})
+
+        elif self.payment_type == PaymentType.CASH:
+            # Clear both Bank and MFS data atomically
+            self.bank = None
+            self.bank_name = ''
+            self.branch = None
+            self.branch_name = ''
+            self.account_holder_name = ''
+            self.account_number_encrypted = ''
+            self.account_number_last4 = ''
+            self.routing_number = ''
+            self.mfs_provider = ''
+            self.wallet_number_encrypted = ''
+            self.wallet_number_last4 = ''
 
 

@@ -458,6 +458,7 @@ class Employee(models.Model):
     PAYMENT_METHOD_CHOICES = (
         ('bank', 'Bank Transfer'),
         ('cash', 'Cash'),
+        ('mfs', 'Mobile Financial Service'),
         ('mobile', 'Mobile Banking'),
     )
 

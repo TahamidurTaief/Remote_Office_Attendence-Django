@@ -1828,3 +1828,464 @@ class PayrollConfigurationCenterTests(TestCase):
         staff_config_items = [i for i in items_staff if i['label'] == 'Payroll Configuration Center']
         self.assertEqual(len(staff_config_items), 0)
 
+
+class PayrollPaymentDestinationTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from apps.tenants.models import Tenant, TenantMembership
+        from apps.branches.models import Branch
+        from apps.employees.models import Employee, EmployeeStatus
+        from apps.payroll.models import (
+            SalaryComponent, SalaryComponentType, SalaryComponentValueType,
+            SalaryStructure, SalaryStructureComponent, EmployeeSalaryAssignment
+        )
+
+        User = get_user_model()
+        self.tenant_a = Tenant.objects.create(name="Destination Corp A", slug="dest-corp-a")
+        self.tenant_b = Tenant.objects.create(name="Destination Corp B", slug="dest-corp-b")
+
+        self.admin_user_a = User.objects.create_user(
+            email="dest.admin.a@example.com",
+            password="password123",
+            role="admin"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_a, user=self.admin_user_a, is_active=True)
+
+        self.staff_user_a = User.objects.create_user(
+            email="dest.staff.a@example.com",
+            password="password123",
+            role="staff"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_a, user=self.staff_user_a, is_active=True)
+
+        self.admin_user_b = User.objects.create_user(
+            email="dest.admin.b@example.com",
+            password="password123",
+            role="admin"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_b, user=self.admin_user_b, is_active=True)
+
+        self.branch_a = Branch.objects.create(
+            name="Branch A",
+            address="Gulshan, Dhaka",
+            latitude=Decimal('23.8103'),
+            longitude=Decimal('90.4125')
+        )
+        self.branch_b = Branch.objects.create(
+            name="Branch B",
+            address="Agrabad, Chittagong",
+            latitude=Decimal('22.3569'),
+            longitude=Decimal('91.7832')
+        )
+
+        self.emp_user_a = User.objects.create_user(
+            email="dest.emp.a@example.com",
+            password="password123",
+            role="staff"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_a, user=self.emp_user_a, is_active=True)
+
+        self.emp_user_b = User.objects.create_user(
+            email="dest.emp.b@example.com",
+            password="password123",
+            role="staff"
+        )
+        TenantMembership.objects.create(tenant=self.tenant_b, user=self.emp_user_b, is_active=True)
+
+        self.employee_a = Employee.objects.create(
+            employee_number="EMP-DEST-A1",
+            first_name="Rahim",
+            last_name="Uddin",
+            joined_date=datetime.date(2026, 1, 1),
+            status=EmployeeStatus.ACTIVE,
+            branch=self.branch_a,
+            user=self.emp_user_a
+        )
+        self.employee_b = Employee.objects.create(
+            employee_number="EMP-DEST-B1",
+            first_name="Karim",
+            last_name="Chowdhury",
+            joined_date=datetime.date(2026, 1, 1),
+            status=EmployeeStatus.ACTIVE,
+            branch=self.branch_b,
+            user=self.emp_user_b
+        )
+
+        # Setup basic structure for payroll run
+        basic = SalaryComponent.objects.create(
+            name="Basic Pay",
+            code="BASIC_D",
+            type=SalaryComponentType.EARNING,
+            value_type=SalaryComponentValueType.PERCENTAGE,
+            value=Decimal('100.00')
+        )
+        structure = SalaryStructure.objects.create(name="Dest Test Structure")
+        SalaryStructureComponent.objects.create(salary_structure=structure, salary_component=basic, value=Decimal('100.00'), value_type=SalaryComponentValueType.PERCENTAGE)
+        EmployeeSalaryAssignment.objects.create(
+            employee=self.employee_a,
+            salary_structure=structure,
+            gross_salary=Decimal('50000.00'),
+            effective_from=datetime.date(2026, 1, 1)
+        )
+
+    def test_bank_destination_creation_and_masking(self):
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        from apps.payroll.models import PaymentType, PayrollPaymentDestination
+
+        dest = PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.BANK,
+            user=self.admin_user_a,
+            bank_name="BRAC Bank PLC",
+            account_holder="Rahim Uddin",
+            account_number="1501203456789001",
+            branch_name="Gulshan Branch",
+            routing_number="060261358"
+        )
+        self.assertEqual(dest.payment_type, PaymentType.BANK)
+        self.assertEqual(dest.bank_name, "BRAC Bank PLC")
+        self.assertEqual(dest.account_number, "1501203456789001")
+        self.assertEqual(dest.masked_account, "••••9001")
+
+        # Check masked dictionary
+        masked = PayrollPaymentDestinationService.get_masked_destination(self.employee_a)
+        self.assertEqual(masked['payment_type'], PaymentType.BANK)
+        self.assertEqual(masked['masked_account'], "••••9001")
+        self.assertNotIn("1501203456789001", str(masked.values()))
+
+    def test_mfs_destination_validation_and_creation(self):
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        from apps.payroll.models import PaymentType, MFSProvider
+
+        # Invalid wallet number should raise ValidationError
+        with self.assertRaises(ValidationError):
+            PayrollPaymentDestinationService.save_destination(
+                tenant=self.tenant_a,
+                employee=self.employee_a,
+                payment_type=PaymentType.MFS,
+                user=self.admin_user_a,
+                mfs_provider=MFSProvider.BKASH,
+                mfs_wallet_number="12345"  # invalid
+            )
+
+        with self.assertRaises(ValidationError):
+            PayrollPaymentDestinationService.save_destination(
+                tenant=self.tenant_a,
+                employee=self.employee_a,
+                payment_type=PaymentType.MFS,
+                user=self.admin_user_a,
+                mfs_provider=MFSProvider.BKASH,
+                mfs_wallet_number="01212345678"  # 012 is invalid in BD
+            )
+
+        # Valid wallet number succeeds
+        dest = PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.MFS,
+            user=self.admin_user_a,
+            mfs_provider=MFSProvider.BKASH,
+            mfs_wallet_number="01712345678"
+        )
+        self.assertEqual(dest.payment_type, PaymentType.MFS)
+        self.assertEqual(dest.mfs_provider, MFSProvider.BKASH)
+        self.assertEqual(dest.mfs_wallet_number, "01712345678")
+        self.assertEqual(dest.masked_account, "••••5678")
+
+    def test_atomic_clearing_of_obsolete_fields_on_type_switch(self):
+        """Switching from Bank to Cash or MFS must atomically clear obsolete destination data."""
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        from apps.payroll.models import PaymentType, MFSProvider
+
+        # 1. Setup Bank
+        dest = PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.BANK,
+            user=self.admin_user_a,
+            bank_name="Dutch-Bangla Bank",
+            account_holder="Rahim Uddin",
+            account_number="1234567890123",
+            branch_name="Motijheel",
+            routing_number="090261111"
+        )
+        self.assertEqual(dest.payment_type, PaymentType.BANK)
+        self.assertEqual(dest.account_number, "1234567890123")
+
+        # 2. Switch to Cash -> bank fields MUST be completely cleared
+        cash_dest = PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.CASH,
+            user=self.admin_user_a
+        )
+        self.assertEqual(cash_dest.payment_type, PaymentType.CASH)
+        self.assertEqual(cash_dest.bank_name, "")
+        self.assertEqual(cash_dest.account_holder, "")
+        self.assertEqual(cash_dest.account_number, "")
+        self.assertEqual(cash_dest.branch_name, "")
+        self.assertEqual(cash_dest.routing_number, "")
+        self.assertEqual(cash_dest.mfs_provider, "")
+        self.assertEqual(cash_dest.mfs_wallet_number, "")
+        self.assertEqual(cash_dest.masked_account, "")
+
+        # 3. Switch to MFS -> wallet set, bank empty
+        mfs_dest = PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.MFS,
+            user=self.admin_user_a,
+            mfs_provider=MFSProvider.NAGAD,
+            mfs_wallet_number="01812345678"
+        )
+        self.assertEqual(mfs_dest.payment_type, PaymentType.MFS)
+        self.assertEqual(mfs_dest.mfs_provider, MFSProvider.NAGAD)
+        self.assertEqual(mfs_dest.mfs_wallet_number, "01812345678")
+        self.assertEqual(mfs_dest.bank_name, "")
+        self.assertEqual(mfs_dest.account_number, "")
+
+        # 4. Switch back to Bank -> MFS fields cleared
+        bank_dest2 = PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.BANK,
+            user=self.admin_user_a,
+            bank_name="City Bank",
+            account_holder="Rahim Uddin",
+            account_number="987654321000",
+            branch_name="Dhanmondi"
+        )
+        self.assertEqual(bank_dest2.payment_type, PaymentType.BANK)
+        self.assertEqual(bank_dest2.mfs_provider, "")
+        self.assertEqual(bank_dest2.mfs_wallet_number, "")
+        self.assertEqual(bank_dest2.account_number, "987654321000")
+
+    def test_tenant_boundary_isolation_rejection(self):
+        """Cross-tenant assignment or access must be strictly rejected."""
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        from apps.payroll.models import PaymentType
+
+        # Attempt to save destination for employee_b (tenant B) under tenant A context
+        with self.assertRaises(ValidationError):
+            PayrollPaymentDestinationService.save_destination(
+                tenant=self.tenant_a,
+                employee=self.employee_b,  # Belongs to tenant B!
+                payment_type=PaymentType.CASH,
+                user=self.admin_user_a
+            )
+
+    def test_historical_calculation_immutability_snapshot(self):
+        """Payroll calculation saves immutable snapshot; later employee edits don't change past snapshot."""
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        from apps.payroll.models import PaymentType, PayrollRun, PayrollRunStatus, EmployeePayrollCalculation
+        from apps.payroll.services import PayrollService
+
+        # 1. Set initial destination as Bank
+        PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.BANK,
+            user=self.admin_user_a,
+            bank_name="Eastern Bank PLC",
+            account_holder="Rahim Uddin",
+            account_number="100200300400",
+            branch_name="Principal Branch"
+        )
+
+        # 2. Run payroll for this employee
+        payroll_run = PayrollRun.objects.create(
+            name="January 2026 Payroll",
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 1, 31),
+            status=PayrollRunStatus.DRAFT
+        )
+        calc = PayrollService.run_payroll_for_employee(
+            payroll_run=payroll_run,
+            employee=self.employee_a
+        )
+
+        # Verify snapshot captured bank
+        self.assertIsNotNone(calc.payment_snapshot)
+        self.assertEqual(calc.payment_snapshot.get('payment_type'), PaymentType.BANK)
+        self.assertEqual(calc.payment_snapshot.get('bank_name'), "Eastern Bank PLC")
+        self.assertEqual(calc.payment_snapshot.get('masked_account'), "••••0400")
+
+        # 3. Employee changes destination to Cash afterwards
+        PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.CASH,
+            user=self.admin_user_a
+        )
+
+        # 4. Reload historical calculation: snapshot MUST remain unchanged!
+        calc.refresh_from_db()
+        self.assertEqual(calc.payment_snapshot.get('payment_type'), PaymentType.BANK)
+        self.assertEqual(calc.payment_snapshot.get('bank_name'), "Eastern Bank PLC")
+        self.assertEqual(calc.payment_snapshot.get('masked_account'), "••••0400")
+
+    def test_ai_permission_boundaries_and_masking(self):
+        """AI may read only masked destinations and cannot execute autonomous disbursements."""
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        from apps.payroll.models import PaymentType
+        from apps.payroll.ai_permissions import (
+            get_masked_destination_for_ai,
+            prepare_payment_action,
+            AIPermissionRegistry,
+            PERM_DESTINATION_READ,
+            PERM_DESTINATION_PREPARE
+        )
+
+        PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.BANK,
+            user=self.admin_user_a,
+            bank_name="Trust Bank Ltd",
+            account_holder="Rahim Uddin",
+            account_number="888877776666",
+            branch_name="Gulshan"
+        )
+
+        # 1. Staff user without AI read perm is denied
+        denied_read = get_masked_destination_for_ai(self.staff_user_a, self.employee_a)
+        self.assertFalse(denied_read['allowed'])
+
+        # 2. Admin user with AI read perm receives masked destination only
+        allowed_read = get_masked_destination_for_ai(self.admin_user_a, self.employee_a)
+        self.assertTrue(allowed_read['allowed'])
+        dest_data = allowed_read['destination']
+        self.assertEqual(dest_data['masked_account'], "••••6666")
+        self.assertNotIn("888877776666", str(dest_data.values()))
+
+        # 3. AI prepare payment action creates draft and explicitly prohibits autonomous disbursement
+        action_res = prepare_payment_action(
+            user=self.admin_user_a,
+            employee=self.employee_a,
+            amount=Decimal('50000.00'),
+            notes="January Salary Prep"
+        )
+        self.assertTrue(action_res['prepared'])
+        self.assertEqual(action_res['action_type'], 'payroll_disbursement_draft')
+        self.assertFalse(action_res['can_disburse_autonomously'])
+        self.assertTrue(action_res['requires_human_approval'])
+
+    def test_global_search_raw_account_probe_protection(self):
+        """Raw account number probe queries in Global Search must be rejected."""
+        from apps.accounts.search_service import GlobalSearchService
+
+        # Search with normal query
+        normal_res = GlobalSearchService.search(self.admin_user_a, "Payment")
+        self.assertTrue(any("Payment" in item.get('label', '') for item in normal_res))
+
+        # Search with raw account number (8+ digits probe)
+        probe_res = GlobalSearchService.search(self.admin_user_a, "1501203456789001")
+        self.assertEqual(probe_res, [])
+
+    def test_audit_event_redaction(self):
+        """Audit events must not record raw account or wallet numbers."""
+        from apps.notifications.models import AuditLog
+        from apps.audit.models import AuditEvent
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        from apps.payroll.models import PaymentType
+
+        raw_acc = "9999888877771234"
+        PayrollPaymentDestinationService.save_destination(
+            tenant=self.tenant_a,
+            employee=self.employee_a,
+            payment_type=PaymentType.BANK,
+            user=self.admin_user_a,
+            bank_name="Audit Test Bank",
+            account_holder="Rahim Uddin",
+            account_number=raw_acc,
+            branch_name="Main"
+        )
+
+        recent_audits = AuditLog.objects.filter(
+            action="payroll_payment_destination_updated"
+        ).order_by('-timestamp')[:5]
+        self.assertTrue(recent_audits.exists())
+        for audit in recent_audits:
+            audit_str = f"{audit.summary} {audit.metadata}"
+            self.assertNotIn(raw_acc, audit_str)
+            self.assertIn("••••1234", audit_str)
+
+        recent_platform = AuditEvent.objects.filter(
+            action="payroll_payment_destination_updated"
+        ).order_by('-created_at')[:5]
+        self.assertTrue(recent_platform.exists())
+        for ev in recent_platform:
+            ev_str = f"{ev.reason_note} {ev.after_data}"
+            self.assertNotIn(raw_acc, ev_str)
+            self.assertIn("••••1234", ev_str)
+
+    def test_payment_destinations_views(self):
+        """Verify list view and update view authorization, Cotton rendering, and POST submission."""
+        from django.urls import reverse
+        from apps.payroll.models import PaymentType, MFSProvider
+
+        self.client.force_login(self.admin_user_a)
+
+        # 1. List view
+        list_url = reverse('payroll:payment_destinations')
+        res_list = self.client.get(list_url)
+        self.assertEqual(res_list.status_code, 200)
+        self.assertContains(res_list, "Payroll Payment Destinations")
+        self.assertContains(res_list, self.employee_a.first_name)
+
+        # 2. Edit view GET
+        edit_url = reverse('payroll:payment_destination_edit', args=[self.employee_a.id])
+        res_edit = self.client.get(edit_url)
+        self.assertEqual(res_edit.status_code, 200)
+        self.assertContains(res_edit, "Payment Destination")
+        self.assertContains(res_edit, self.employee_a.get_full_name())
+
+        # 3. Edit view POST: change to MFS
+        post_data = {
+            'payment_type': 'mfs',
+            'mfs_provider': 'bkash',
+            'wallet_number': '01912345678',
+        }
+        res_post = self.client.post(edit_url, post_data)
+        self.assertEqual(res_post.status_code, 302)
+
+        # Check DB destination updated
+        dest = self.employee_a.payment_destination
+        self.assertEqual(dest.payment_type, PaymentType.MFS)
+        self.assertEqual(dest.mfs_provider, MFSProvider.BKASH)
+        self.assertEqual(dest.get_wallet_number(), '01912345678')
+
+    def test_form_validation(self):
+        """Form enforces conditional validation rules across Bank, Cash, and MFS."""
+        from apps.payroll.forms import PayrollPaymentDestinationForm
+
+        # Bank without account number is invalid
+        form_bank_invalid = PayrollPaymentDestinationForm(data={
+            'payment_type': 'bank',
+            'bank_name': 'Test Bank',
+            'branch_name': 'Test Branch',
+            'account_holder_name': 'Rahim Uddin',
+            'account_number': '',
+        })
+        self.assertFalse(form_bank_invalid.is_valid())
+        self.assertIn('account_number', form_bank_invalid.errors)
+
+        # MFS with invalid wallet number is invalid
+        form_mfs_invalid = PayrollPaymentDestinationForm(data={
+            'payment_type': 'mfs',
+            'mfs_provider': 'bkash',
+            'wallet_number': '999999',
+        })
+        self.assertFalse(form_mfs_invalid.is_valid())
+        self.assertIn('wallet_number', form_mfs_invalid.errors)
+
+        # Cash is valid with zero extra fields
+        form_cash = PayrollPaymentDestinationForm(data={
+            'payment_type': 'cash',
+        })
+        self.assertTrue(form_cash.is_valid())
+
+
+
+

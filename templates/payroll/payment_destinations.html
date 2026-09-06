@@ -1,0 +1,102 @@
+<c-app-shell page_title="Payroll Payment Destinations | FieldTrack" active_href="{% url 'payroll:payment_destinations' %}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{% url 'payroll:payment_destinations' %}"></c-sidebar>
+    </c-slot>
+
+    <c-command-palette></c-command-palette>
+
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
+        <c-page-header title="Payroll Payment Destinations">
+            <c-slot name="actions">
+                <div class="flex items-center gap-2">
+                    <c-button href="{% url 'payroll:payroll_configuration' %}" variant="secondary" icon="settings" label="Payroll Rules"></c-button>
+                    <c-button href="{% url 'payroll:payroll_run_list' %}" variant="primary" icon="database" label="Payroll Batches"></c-button>
+                </div>
+            </c-slot>
+        </c-page-header>
+
+        {% if messages %}
+        <div class="space-y-2">
+            {% for message in messages %}
+            <div class="p-3 rounded-xl text-xs font-medium {% if message.tags == 'error' %}bg-rose-50 text-rose-700 border border-rose-200{% else %}bg-emerald-50 text-emerald-700 border border-emerald-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <c-card>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Active Employee Payment Profiles</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Configure Bank Transfer, Cash, and Mobile Financial Service (bKash, Nagad, Rocket) destinations.</p>
+                </div>
+                <form method="get" class="flex items-center gap-2">
+                    <c-input type="text" name="q" placeholder="Search employee..." value="{{ query|default:'' }}"></c-input>
+                    <c-button type="submit" variant="secondary" size="sm" label="Filter"></c-button>
+                    {% if query %}
+                    <c-button href="{% url 'payroll:payment_destinations' %}" variant="secondary" size="sm" label="Clear"></c-button>
+                    {% endif %}
+                </form>
+            </div>
+
+            <div class="overflow-x-auto mt-4">
+                <table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">
+                    <thead class="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                        <tr>
+                            <th class="px-4 py-3">Employee</th>
+                            <th class="px-4 py-3">Department & Branch</th>
+                            <th class="px-4 py-3">Payment Method</th>
+                            <th class="px-4 py-3">Destination Details (Masked)</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                        {% for row in destinations_data %}
+                        <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
+                            <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">
+                                <div class="font-semibold">{{ row.employee.get_full_name }}</div>
+                                <div class="text-[11px] text-gray-500 font-mono">{{ row.employee.employee_number }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div>{{ row.employee.department.name|default:'—' }}</div>
+                                <div class="text-[11px] text-gray-400">{{ row.employee.branch.name|default:'All Branches' }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                {% if row.destination.payment_type == 'bank' %}
+                                    <c-badge variant="info" label="Bank Transfer"></c-badge>
+                                {% elif row.destination.payment_type == 'mfs' %}
+                                    <c-badge variant="warning" label="{{ row.destination.mfs_provider_display|default:'Mobile Financial Service' }}"></c-badge>
+                                {% else %}
+                                    <c-badge variant="neutral" label="Cash"></c-badge>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 font-mono">
+                                {% if row.destination.payment_type == 'bank' %}
+                                    <div class="text-xs font-sans text-gray-900 dark:text-white font-medium">{{ row.destination.bank_name|default:'Bank not specified' }}</div>
+                                    <div class="text-[11px] text-gray-500">{{ row.destination.branch_name|default:'' }}</div>
+                                    <div class="text-[11px] text-gray-600 dark:text-gray-300">{{ row.destination.account_number_masked|default:'•••• ••••' }}</div>
+                                {% elif row.destination.payment_type == 'mfs' %}
+                                    <div class="text-xs font-sans text-gray-900 dark:text-white font-medium">{{ row.destination.mfs_provider_display }}</div>
+                                    <div class="text-[11px] text-gray-600 dark:text-gray-300">{{ row.destination.wallet_number_masked }}</div>
+                                {% else %}
+                                    <span class="text-gray-400 italic">Physical Cash Disbursement</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <c-button href="{% url 'payroll:payment_destination_edit' row.employee.id %}" size="sm" variant="secondary" label="Configure"></c-button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+                                No active employees found matching the search criteria.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </c-card>
+    </div>
+</c-app-shell>

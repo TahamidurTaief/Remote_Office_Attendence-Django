@@ -623,6 +623,22 @@ class EmployeeMasterForm(forms.ModelForm):
                     joined_date=instance.joined_date or timezone.localdate(),
                     branch=instance.branch
                 )
+        if commit and instance.pk:
+            from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+            pm = self.cleaned_data.get('payment_method') or 'bank'
+            dest_data = {
+                'bank_name': self.cleaned_data.get('bank_name'),
+                'account_number': self.cleaned_data.get('bank_account'),
+                'account_holder_name': instance.get_full_name(),
+            }
+            try:
+                PayrollPaymentDestinationService.save_destination(
+                    employee=instance,
+                    payment_type=pm,
+                    data=dest_data
+                )
+            except Exception:
+                pass
         return instance
 
 
@@ -1011,6 +1027,16 @@ class WizardStep3Form(forms.ModelForm):
         required=False,
         widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'readonly': 'readonly', 'placeholder': '9-digit routing number'})
     )
+    mfs_provider = forms.ChoiceField(
+        choices=[('', '-- Choose Provider --'), ('bkash', 'bKash'), ('nagad', 'Nagad'), ('rocket', 'Rocket')],
+        required=False,
+        widget=forms.Select(attrs={'class': SELECT_INPUT})
+    )
+    wallet_number = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': 'e.g. 017XXXXXXXX'})
+    )
 
     @property
     def bank_groups(self):
@@ -1036,8 +1062,33 @@ class WizardStep3Form(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
+            dest = getattr(self.instance, 'payment_destination', None)
+            if dest:
+                if dest.payment_type == 'mfs':
+                    self.fields['payment_method'].initial = 'mfs'
+                    self.fields['mfs_provider'].initial = dest.mfs_provider
+                    self.fields['wallet_number'].initial = dest.get_wallet_number()
+                    self.fields['bank_account'].initial = dest.get_wallet_number()
+                elif dest.payment_type == 'cash':
+                    self.fields['payment_method'].initial = 'cash'
+                elif dest.payment_type == 'bank':
+                    self.fields['payment_method'].initial = 'bank'
+                    if dest.bank_id:
+                        self.fields['bank'].initial = dest.bank_id
+                    if dest.branch_id:
+                        self.fields['branch'].initial = dest.branch_id
+                    if dest.account_holder_name:
+                        self.fields['account_holder_name'].initial = dest.account_holder_name
+                    if dest.routing_number:
+                        self.fields['routing_number'].initial = dest.routing_number
+                    if dest.bank_name and not self.initial.get('bank_name'):
+                        self.fields['bank_name'].initial = dest.bank_name
+                    raw_acc = dest.get_account_number()
+                    if raw_acc and not self.initial.get('bank_account'):
+                        self.fields['bank_account'].initial = raw_acc
+
             primary_acc = getattr(self.instance, 'primary_bank_account', None)
-            if primary_acc:
+            if primary_acc and not self.fields['bank'].initial:
                 self.fields['bank'].initial = primary_acc.bank_id
                 self.fields['branch'].initial = primary_acc.branch_id
                 self.fields['account_holder_name'].initial = primary_acc.account_holder_name
@@ -1046,7 +1097,7 @@ class WizardStep3Form(forms.ModelForm):
                     self.fields['bank_name'].initial = resolve_canonical_bank_name(primary_acc.bank.name)
                 if not self.initial.get('bank_account'):
                     self.fields['bank_account'].initial = primary_acc.get_account_number()
-            elif self.instance.bank_name:
+            elif self.instance.bank_name and not self.fields['bank_name'].initial:
                 canonical = resolve_canonical_bank_name(self.instance.bank_name)
                 self.fields['bank_name'].initial = canonical
                 matched_bank = Bank.objects.filter(
@@ -1071,28 +1122,66 @@ class WizardStep3Form(forms.ModelForm):
             cleaned_data['bank_name'] = bank_name
         bank_account = cleaned_data.get('bank_account') or ''
         holder_name = cleaned_data.get('account_holder_name') or ''
+        mfs_provider = cleaned_data.get('mfs_provider') or ''
+        wallet_number = cleaned_data.get('wallet_number') or ''
 
-        # Auto-match legacy bank_name if bank not explicitly selected
-        if not bank and bank_name:
-            matched_bank = Bank.objects.filter(
-                Q(name__iexact=bank_name) |
-                Q(short_name__iexact=bank_name) |
-                Q(code__iexact=bank_name),
-                is_active=True
-            ).first()
-            if not matched_bank:
-                tokens = bank_name.lower().replace("ltd", "").replace("limited", "").replace("plc", "").replace("bank", "").strip()
-                if tokens:
-                    matched_bank = Bank.objects.filter(name__icontains=tokens, is_active=True).first()
-            if matched_bank:
-                bank = matched_bank
-                cleaned_data['bank'] = bank
-                if not branch:
-                    branch = bank.branches.filter(is_active=True).first()
-                    cleaned_data['branch'] = branch
+        # Handle MFS / Mobile Financial Service
+        if payment_method in ('mfs', 'mobile'):
+            cleaned_data['payment_method'] = 'mfs'
+            if not mfs_provider:
+                self.add_error('mfs_provider', 'MFS Provider (bKash, Nagad, or Rocket) is required.')
+            elif mfs_provider not in ['bkash', 'nagad', 'rocket']:
+                self.add_error('mfs_provider', 'Choose a valid MFS provider: bKash, Nagad, or Rocket.')
 
-        # Enforce server-side validation for bank transfers
-        if payment_method in ('bank', 'split'):
+            target_wallet = wallet_number or bank_account
+            if not target_wallet:
+                self.add_error('wallet_number', 'Wallet number is required for Mobile Financial Service.')
+            else:
+                cleaned_wallet = target_wallet.strip().replace(" ", "").replace("-", "")
+                if not re.match(r"^01[3-9]\d{8,9}$", cleaned_wallet):
+                    self.add_error('wallet_number', 'Invalid Bangladeshi wallet number. Must start with 01 and contain 11 digits (or 12 for Rocket).')
+                cleaned_data['wallet_number'] = cleaned_wallet
+                cleaned_data['bank_account'] = cleaned_wallet
+
+            # Clear obsolete bank fields
+            cleaned_data['bank'] = None
+            cleaned_data['bank_name'] = ''
+            cleaned_data['branch'] = None
+            cleaned_data['routing_number'] = ''
+
+        # Handle Cash
+        elif payment_method == 'cash':
+            # Clear obsolete bank and MFS fields
+            cleaned_data['bank'] = None
+            cleaned_data['bank_name'] = ''
+            cleaned_data['branch'] = None
+            cleaned_data['routing_number'] = ''
+            cleaned_data['bank_account'] = ''
+            cleaned_data['mfs_provider'] = ''
+            cleaned_data['wallet_number'] = ''
+
+        # Handle Bank
+        elif payment_method in ('bank', 'split'):
+            # Auto-match legacy bank_name if bank not explicitly selected
+            if not bank and bank_name:
+                matched_bank = Bank.objects.filter(
+                    Q(name__iexact=bank_name) |
+                    Q(short_name__iexact=bank_name) |
+                    Q(code__iexact=bank_name),
+                    is_active=True
+                ).first()
+                if not matched_bank:
+                    tokens = bank_name.lower().replace("ltd", "").replace("limited", "").replace("plc", "").replace("bank", "").strip()
+                    if tokens:
+                        matched_bank = Bank.objects.filter(name__icontains=tokens, is_active=True).first()
+                if matched_bank:
+                    bank = matched_bank
+                    cleaned_data['bank'] = bank
+                    if not branch:
+                        branch = bank.branches.filter(is_active=True).first()
+                        cleaned_data['branch'] = branch
+
+            # Enforce server-side validation for bank transfers
             if not bank and not bank_name:
                 self.add_error('bank', 'Bank selection is required for bank transfer disbursements.')
                 self.add_error('bank_name', 'Bank selection is required for bank transfer disbursements.')
@@ -1105,43 +1194,52 @@ class WizardStep3Form(forms.ModelForm):
             if not bank_account:
                 self.add_error('bank_account', 'Account number is required for bank transfer disbursements.')
 
-        if bank and branch:
-            # Server-side security check: branch must belong to submitted bank
-            if branch.bank_id != bank.id:
-                self.add_error('branch', 'Selected branch does not belong to the submitted bank.')
-            # Canonical derivation of routing number from database record
-            cleaned_data['routing_number'] = branch.routing_number
-            if not cleaned_data.get('bank_name'):
-                cleaned_data['bank_name'] = bank.name
+            if bank and branch:
+                # Server-side security check: branch must belong to submitted bank
+                if branch.bank_id != bank.id:
+                    self.add_error('branch', 'Selected branch does not belong to the submitted bank.')
+                # Canonical derivation of routing number from database record
+                cleaned_data['routing_number'] = branch.routing_number
+                if not cleaned_data.get('bank_name'):
+                    cleaned_data['bank_name'] = bank.name
 
-        if bank_account:
-            cleaned_acc = normalize_account_number(bank_account)
-            if payment_method in ('bank', 'split'):
+            if bank_account:
+                cleaned_acc = normalize_account_number(bank_account)
                 if len(cleaned_acc) < 6 or len(cleaned_acc) > 30:
                     self.add_error('bank_account', 'Bank account number must be between 6 and 30 characters.')
                 if not re.match(r"^[A-Za-z0-9]+$", cleaned_acc):
                     self.add_error('bank_account', 'Bank account number must contain only alphanumeric characters.')
-            cleaned_data['bank_account'] = cleaned_acc
+                cleaned_data['bank_account'] = cleaned_acc
+
+            # Clear obsolete MFS fields
+            cleaned_data['mfs_provider'] = ''
+            cleaned_data['wallet_number'] = ''
 
         return cleaned_data
 
     def save(self, commit=True):
         employee = super().save(commit=commit)
-        bank = self.cleaned_data.get('bank')
-        branch = self.cleaned_data.get('branch')
-        account_number = self.cleaned_data.get('bank_account')
-        holder_name = (self.cleaned_data.get('account_holder_name') or employee.get_full_name()).strip()
-
-        if commit and employee.pk and bank and branch and account_number:
-            from apps.employees.bank_service import BankService
-            BankService.save_employee_bank_account(
-                employee=employee,
-                bank=bank,
-                branch=branch,
-                account_holder_name=holder_name,
-                account_number=account_number,
-                is_primary=True,
-            )
+        if commit and employee.pk:
+            from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+            pm = self.cleaned_data.get('payment_method') or 'bank'
+            dest_data = {
+                'bank': self.cleaned_data.get('bank'),
+                'bank_name': self.cleaned_data.get('bank_name'),
+                'branch': self.cleaned_data.get('branch'),
+                'account_holder_name': (self.cleaned_data.get('account_holder_name') or employee.get_full_name()).strip(),
+                'account_number': self.cleaned_data.get('bank_account'),
+                'routing_number': self.cleaned_data.get('routing_number'),
+                'mfs_provider': self.cleaned_data.get('mfs_provider'),
+                'wallet_number': self.cleaned_data.get('wallet_number') or self.cleaned_data.get('bank_account'),
+            }
+            try:
+                PayrollPaymentDestinationService.save_destination(
+                    employee=employee,
+                    payment_type=pm,
+                    data=dest_data
+                )
+            except Exception:
+                pass
         return employee
 
 

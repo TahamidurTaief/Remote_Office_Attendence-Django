@@ -23,6 +23,8 @@ class AIPayrollPermissionService:
     PERM_PROPOSE = 'payroll.configuration.propose'
     PERM_APPROVE = 'payroll.configuration.approve'
     PERM_EXECUTE = 'payroll.configuration.execute'
+    PERM_DESTINATION_READ = 'payroll.destination.read'
+    PERM_DESTINATION_PREPARE = 'payroll.destination.prepare'
 
     ALL_PERMISSIONS = {
         PERM_READ,
@@ -30,6 +32,8 @@ class AIPayrollPermissionService:
         PERM_PROPOSE,
         PERM_APPROVE,
         PERM_EXECUTE,
+        PERM_DESTINATION_READ,
+        PERM_DESTINATION_PREPARE,
     }
 
     # Autonomous execution of financial disbursements is strictly blocked
@@ -37,6 +41,7 @@ class AIPayrollPermissionService:
         'payroll.distribute_salary',
         'payroll.execute_disbursement',
         'payroll.autonomous_distribution',
+        'payroll.destination.autonomous_payout',
     }
 
     @classmethod
@@ -187,12 +192,85 @@ class AIPayrollPermissionService:
             perms.add(cls.PERM_READ)
             perms.add(cls.PERM_SIMULATE)
             perms.add(cls.PERM_PROPOSE)
+            perms.add(cls.PERM_DESTINATION_READ)
+            perms.add(cls.PERM_DESTINATION_PREPARE)
             if role in ['admin', 'finance']:
                 perms.add(cls.PERM_APPROVE)
                 # Note: PERM_EXECUTE for configuration editing, NOT autonomous distribution
                 perms.add(cls.PERM_EXECUTE)
 
         return perms
+
+    @classmethod
+    def get_masked_destination_for_ai(
+        cls,
+        user,
+        employee,
+        target_tenant: Optional[Tenant] = None,
+        request_tenant: Optional[Tenant] = None
+    ) -> dict:
+        """
+        Allows AI to inspect masked destination details.
+        Strictly requires PERM_DESTINATION_READ or PERM_READ and enforces tenant boundaries.
+        Raw account numbers or private keys are never returned.
+        """
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        resolved_tenant = PayrollPaymentDestinationService.resolve_tenant_for_employee(employee, target_tenant=target_tenant)
+        cls.validate_tenant_boundary(user=user, target_tenant=resolved_tenant, request_tenant=request_tenant)
+
+        can_read = (
+            cls.check_permission(user, resolved_tenant, cls.PERM_DESTINATION_READ, request_tenant) or
+            cls.check_permission(user, resolved_tenant, cls.PERM_READ, request_tenant)
+        )
+        if not can_read:
+            raise PermissionDenied("AI actor lacks permission to read payment destinations.")
+
+        return PayrollPaymentDestinationService.get_masked_destination(employee)
+
+    @classmethod
+    def prepare_payment_action_for_ai(
+        cls,
+        user,
+        employee,
+        payment_type: str,
+        destination_data: dict,
+        target_tenant: Optional[Tenant] = None,
+        request_tenant: Optional[Tenant] = None
+    ) -> dict:
+        """
+        Prepares a proposed payment action or destination update for human review.
+        Guards against autonomous direct disbursements.
+        """
+        from django.utils import timezone
+        from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
+        resolved_tenant = PayrollPaymentDestinationService.resolve_tenant_for_employee(employee, target_tenant=target_tenant)
+        cls.validate_tenant_boundary(user=user, target_tenant=resolved_tenant, request_tenant=request_tenant)
+
+        # Prohibit direct autonomous distribution
+        for blocked_action in cls.BLOCKED_AUTONOMOUS_ACTIONS:
+            if blocked_action in destination_data.get('action', ''):
+                cls._log_security_event(
+                    user=user,
+                    action='blocked_autonomous_payroll_action',
+                    reason=f"Blocked autonomous execution attempt of {blocked_action}"
+                )
+                raise PermissionDenied(f"Autonomous execution of {blocked_action} is strictly prohibited.")
+
+        can_prepare = (
+            cls.check_permission(user, resolved_tenant, cls.PERM_DESTINATION_PREPARE, request_tenant) or
+            cls.check_permission(user, resolved_tenant, cls.PERM_PROPOSE, request_tenant)
+        )
+        if not can_prepare:
+            raise PermissionDenied("AI actor lacks permission to prepare payment destination actions.")
+
+        return {
+            'status': 'proposed_for_human_approval',
+            'employee_id': employee.id,
+            'employee_number': employee.employee_number,
+            'proposed_payment_type': payment_type,
+            'proposed_data_summary': {k: '***' if 'account' in k or 'wallet' in k else v for k, v in destination_data.items()},
+            'prepared_at': timezone.now().isoformat(),
+        }
 
     @classmethod
     def _log_security_event(cls, user, action: str, reason: str):
@@ -210,3 +288,48 @@ class AIPayrollPermissionService:
             )
         except Exception as e:
             logger.warning("Failed to record security audit log: %s", e)
+
+
+PERM_DESTINATION_READ = AIPayrollPermissionService.PERM_DESTINATION_READ
+PERM_DESTINATION_PREPARE = AIPayrollPermissionService.PERM_DESTINATION_PREPARE
+AIPermissionRegistry = AIPayrollPermissionService
+
+
+def get_masked_destination_for_ai(user, employee, target_tenant=None, request_tenant=None):
+    try:
+        data = AIPayrollPermissionService.get_masked_destination_for_ai(
+            user=user,
+            employee=employee,
+            target_tenant=target_tenant,
+            request_tenant=request_tenant
+        )
+        return {'allowed': True, 'destination': data}
+    except Exception as e:
+        return {'allowed': False, 'error': str(e)}
+
+
+def prepare_payment_action(user, employee, amount=None, notes='', payment_type=None, destination_data=None, target_tenant=None, request_tenant=None):
+    try:
+        payload = dict(destination_data or {})
+        if amount is not None:
+            payload['amount'] = str(amount)
+        if notes:
+            payload['notes'] = notes
+        prep = AIPayrollPermissionService.prepare_payment_action_for_ai(
+            user=user,
+            employee=employee,
+            payment_type=payment_type or 'bank',
+            destination_data=payload,
+            target_tenant=target_tenant,
+            request_tenant=request_tenant
+        )
+        return {
+            'prepared': True,
+            'action_type': 'payroll_disbursement_draft',
+            'can_disburse_autonomously': False,
+            'requires_human_approval': True,
+            'draft': prep
+        }
+    except Exception as e:
+        return {'prepared': False, 'error': str(e)}
+
