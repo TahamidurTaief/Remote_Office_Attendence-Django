@@ -32,6 +32,8 @@ def get_employee(user):
 def check_role(user):
     if not user or not user.is_authenticated:
         return False
+    if getattr(user, 'role', '') in ('staff', 'manager', 'admin', 'hr') or user.is_superuser or getattr(user, 'is_staff', False):
+        return True
     from apps.accounts.engine import PermissionEngine
     return PermissionEngine.evaluate(user, 'attendance.view').allowed and hasattr(user, 'employee_profile')
 
@@ -111,9 +113,6 @@ def check_out(request):
 @login_required
 @require_GET
 def attendance_status(request):
-    if not check_role(request.user):
-        return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
-
     accept_header = request.headers.get('accept', '')
     is_html_request = ('text/html' in accept_header or 'application/xhtml+xml' in accept_header) and not request.headers.get('x-requested-with') == 'XMLHttpRequest' and request.GET.get('format') != 'json'
 
@@ -148,6 +147,9 @@ def attendance_status(request):
                     'total_hours_today': 0,
                 }, status=403)
             return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
+
+        if not check_role(request.user):
+            return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
 
         today = timezone.localdate()
 
@@ -535,7 +537,7 @@ def check_approval_permissions(user, target_employee):
     is_hr = False
     from apps.accounts.engine import PermissionEngine
     res = PermissionEngine.evaluate(user, 'attendance.approve')
-    if res.allowed or user.is_superuser:
+    if res.allowed or user.is_superuser or getattr(user, 'role', '') in ('admin', 'hr', 'system_owner', 'super_admin'):
         is_hr = True
         
     is_manager = False
@@ -800,7 +802,7 @@ def bulk_sync(request):
 def employee_timeline(request):
     from apps.accounts.engine import PermissionEngine
     eval_res = PermissionEngine.evaluate(request.user, 'attendance.view')
-    if not (request.user.is_superuser or eval_res.allowed):
+    if not (request.user.is_superuser or eval_res.allowed or check_role(request.user)):
         from django.http import HttpResponseForbidden
         from django.template.loader import render_to_string
         return HttpResponseForbidden(render_to_string('cotton/permission_denied_hx.html', {'message': 'You do not have permission to view the timeline.'}, request=request))

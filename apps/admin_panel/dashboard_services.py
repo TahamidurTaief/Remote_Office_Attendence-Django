@@ -329,17 +329,47 @@ def get_hr_dashboard_data(user):
     data['org_analytics'] = OrgHierarchyService.get_org_analytics()
 
     # Headcount & status breakdown
-    data['total_employees'] = Employee.objects.count()
-    data['active_employees_count'] = Employee.objects.filter(status=EmployeeStatus.ACTIVE).count()
-    data['probation_employees_count'] = Employee.objects.filter(status=EmployeeStatus.PROBATION).count()
-    data['draft_employees_count'] = Employee.objects.filter(status=EmployeeStatus.DRAFT).count()
-    data['pending_approval_employees_count'] = Employee.objects.filter(status=EmployeeStatus.PENDING_APPROVAL).count()
-    data['resigned_employees_count'] = Employee.objects.filter(status=EmployeeStatus.RESIGNED).count()
-    data['terminated_employees_count'] = Employee.objects.filter(status=EmployeeStatus.TERMINATED).count()
-    data['archived_employees_count'] = Employee.objects.filter(status=EmployeeStatus.ARCHIVED).count()
+    counts = Employee.objects.aggregate(
+        total=Count('id'),
+        active=Count('id', filter=Q(status=EmployeeStatus.ACTIVE)),
+        probation=Count('id', filter=Q(status=EmployeeStatus.PROBATION)),
+        draft=Count('id', filter=Q(status=EmployeeStatus.DRAFT)),
+        pending_approval=Count('id', filter=Q(status=EmployeeStatus.PENDING_APPROVAL)),
+        resigned=Count('id', filter=Q(status=EmployeeStatus.RESIGNED)),
+        terminated=Count('id', filter=Q(status=EmployeeStatus.TERMINATED)),
+        archived=Count('id', filter=Q(status=EmployeeStatus.ARCHIVED)),
+    )
+    data['total_employees'] = counts['total']
+    data['active_employees_count'] = counts['active']
+    data['probation_employees_count'] = counts['probation']
+    data['draft_employees_count'] = counts['draft']
+    data['pending_approval_employees_count'] = counts['pending_approval']
+    data['resigned_employees_count'] = counts['resigned']
+    data['terminated_employees_count'] = counts['terminated']
+    data['archived_employees_count'] = counts['archived']
 
     # Incomplete profiles
-    all_employees = Employee.objects.select_related('department', 'designation', 'branch').all()
+    all_employees = list(Employee.objects.select_related('department', 'designation', 'branch').all())
+    emp_ids = [e.pk for e in all_employees]
+    if emp_ids:
+        from apps.employees.models import AssetAssignment
+        doc_emp_ids = set(EmployeeDocument.objects.filter(
+            employee_master_id__in=emp_ids,
+            is_active=True,
+            is_archived=False
+        ).filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+        ).values_list('employee_master_id', flat=True))
+
+        asset_emp_ids = set(AssetAssignment.objects.filter(
+            employee_id__in=emp_ids,
+            returned_date__isnull=True
+        ).values_list('employee_id', flat=True))
+
+        for e in all_employees:
+            e._has_valid_docs = e.pk in doc_emp_ids
+            e._has_unreturned_assets = e.pk in asset_emp_ids
+
     incomplete_employees = [e for e in all_employees if e.get_completion_percentage() < 100]
     data['incomplete_profiles_count'] = len(incomplete_employees)
     data['incomplete_profiles'] = incomplete_employees[:5]
@@ -349,31 +379,38 @@ def get_hr_dashboard_data(user):
         'department__name'
     ).annotate(count=Count('id')).order_by('-count')[:5]
 
-    # Org-wide Attendance Today
-    data['today_attendance_count'] = Attendance.objects.filter(date=today, status='present').count()
-    data['today_late_count'] = Attendance.objects.filter(date=today, status='late').count()
+    # Org-wide Attendance Today & HR Breakdown
+    today_attendances = list(Attendance.objects.filter(date=today).values(
+        'employee_id', 'status', 'attendance_type', 'type', 'overtime_minutes', 'is_expired'
+    ))
+    data['_today_attendances'] = today_attendances
+
+    data['today_attendance_count'] = sum(1 for a in today_attendances if a['status'] == 'present')
+    data['today_late_count'] = sum(1 for a in today_attendances if a['status'] == 'late')
 
     # HR Breakdown
     active_profiles_qs = EmployeeProfile.objects.filter(master_employee__status=EmployeeStatus.ACTIVE)
-    data['hr_present_count'] = Attendance.objects.filter(date=today, status__in=['on_time', 'present'], attendance_type='check_in', is_expired=False).values('employee').distinct().count()
-    data['hr_late_count'] = Attendance.objects.filter(date=today, status='late', attendance_type='check_in', is_expired=False).values('employee').distinct().count()
-    data['hr_leave_count'] = LeaveRequest.objects.filter(start_date__lte=today, end_date__gte=today, status='approved').values('employee').distinct().count()
-    data['hr_remote_count'] = Attendance.objects.filter(date=today, type='field', is_expired=False).values('employee').distinct().count()
-    data['hr_holiday_count'] = Attendance.objects.filter(date=today, status='holiday_attendance', is_expired=False).values('employee').distinct().count()
+    data['hr_present_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] in ('on_time', 'present')})
+    data['hr_late_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] == 'late'})
+    data['hr_remote_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['type'] == 'field'})
+    data['hr_holiday_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['status'] == 'holiday_attendance'})
+    data['hr_ot_count'] = sum(1 for a in today_attendances if not a['is_expired'] and (a['overtime_minutes'] or 0) > 0)
+
+    checked_in_ids = {a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in'}
+
+    # On Leave Today
+    today_leaves = list(LeaveRequest.objects.select_related('employee', 'leave_type').filter(
+        start_date__lte=today, end_date__gte=today, status='approved'
+    ))
+    on_leave_ids = {l.employee_id for l in today_leaves}
+    data['hr_leave_count'] = len(on_leave_ids)
+    data['on_leave_today'] = today_leaves[:5]
 
     from apps.attendance.models import AttendanceCorrectionRequest, ForgotCheckoutRequest
     data['hr_correction_count'] = AttendanceCorrectionRequest.objects.filter(requested_at__date=today).count()
-    data['hr_ot_count'] = Attendance.objects.filter(date=today, overtime_minutes__gt=0, is_expired=False).count()
     data['hr_forgot_checkout_count'] = ForgotCheckoutRequest.objects.filter(requested_at__date=today).count()
 
-    checked_in_ids = Attendance.objects.filter(date=today, attendance_type='check_in', is_expired=False).values_list('employee_id', flat=True)
-    on_leave_ids = LeaveRequest.objects.filter(start_date__lte=today, end_date__gte=today, status='approved').values_list('employee_id', flat=True)
-    data['hr_absent_count'] = active_profiles_qs.exclude(id__in=set(checked_in_ids) | set(on_leave_ids)).count()
-
-    # On Leave Today
-    data['on_leave_today'] = LeaveRequest.objects.select_related('employee', 'leave_type').filter(
-        start_date__lte=today, end_date__gte=today, status='approved'
-    )[:5]
+    data['hr_absent_count'] = active_profiles_qs.exclude(id__in=checked_in_ids | on_leave_ids).count()
 
     # Pending Lifecycle Requests Count
     data['pending_lifecycle_requests_count'] = LifecycleTransitionRequest.objects.filter(
@@ -442,8 +479,13 @@ def get_admin_dashboard_data(user):
     ).distinct().count()
 
     # Late %
-    today_checkins_total = Attendance.objects.filter(date=today, attendance_type='check_in', is_expired=False).count()
-    today_late_total = Attendance.objects.filter(date=today, status='late', attendance_type='check_in', is_expired=False).count()
+    today_attendances = data.pop('_today_attendances', None)
+    if today_attendances is None:
+        today_attendances = list(Attendance.objects.filter(date=today).values(
+            'employee_id', 'status', 'attendance_type', 'type', 'overtime_minutes', 'is_expired'
+        ))
+    today_checkins_total = sum(1 for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in')
+    today_late_total = sum(1 for a in today_attendances if not a['is_expired'] and a['status'] == 'late' and a['attendance_type'] == 'check_in')
     data['late_percentage'] = int((today_late_total / today_checkins_total * 100)) if today_checkins_total > 0 else 0
 
     # Trend (Last 15 days)
@@ -462,21 +504,26 @@ def get_admin_dashboard_data(user):
         is_expired=False
     ).select_related('employee').order_by('-overtime_minutes')[:5]
 
-    # Pending approvals total count
-    pending_leaves = LeaveRequest.objects.filter(status='pending').count()
-    pending_expenses = Expense.objects.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts']).count()
-    pending_corrections = AttendanceCorrectionRequest.objects.filter(status='pending').count()
-    pending_ot = Attendance.objects.filter(ot_status='pending', is_expired=False).count()
-    data['pending_approvals_count'] = pending_leaves + pending_expenses + pending_corrections + pending_ot
-
-    # Data Science: Expense & Attendance Analysis
+    # Expense & Attendance Analysis
     from apps.expense.models import ExpenseCategory
     from django.db.models import Sum, Q, Avg
     import math
 
-    # 1. Total Expenses Approved vs Pending
-    data['total_approved_expenses'] = float(Expense.objects.filter(status='approved').aggregate(total=Sum('amount'))['total'] or 0.0)
-    data['total_pending_expenses'] = float(Expense.objects.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts']).aggregate(total=Sum('amount'))['total'] or 0.0)
+    # 1. Total Expenses Approved vs Pending + pending count in 1 query
+    expense_aggs = Expense.objects.aggregate(
+        approved=Sum('amount', filter=Q(status='approved')),
+        pending=Sum('amount', filter=Q(status__in=['pending_manager', 'pending_finance', 'pending_accounts'])),
+        pending_count=Count('id', filter=Q(status__in=['pending_manager', 'pending_finance', 'pending_accounts']))
+    )
+    data['total_approved_expenses'] = float(expense_aggs['approved'] or 0.0)
+    data['total_pending_expenses'] = float(expense_aggs['pending'] or 0.0)
+    pending_expenses = expense_aggs['pending_count'] or 0
+
+    # Pending approvals total count
+    pending_leaves = LeaveRequest.objects.filter(status='pending').count()
+    pending_corrections = AttendanceCorrectionRequest.objects.filter(status='pending').count()
+    pending_ot = Attendance.objects.filter(ot_status='pending', is_expired=False).count()
+    data['pending_approvals_count'] = pending_leaves + pending_expenses + pending_corrections + pending_ot
 
     # 2. Expense Category breakdown
     expenses_by_cat = Expense.objects.filter(status='approved').values('category__name').annotate(total=Sum('amount')).order_by('-total')

@@ -123,6 +123,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
     ).distinct().select_related(
         'branch',
         'branch__schedule',
+        'master_employee',
     ).order_by('full_name')
 
     if employee_id:
@@ -181,7 +182,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
     rules_qs = EmployeeLeaveRule.objects.filter(employee_id__in=employee_ids)
     rules_map = {(r.employee_id, r.leave_type_id): r.days_per_year for r in rules_qs}
 
-    balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year)
+    balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year).select_related('leave_type')
     balances_by_emp = defaultdict(list)
     for bal in balances_qs:
         balances_by_emp[bal.employee_id].append({

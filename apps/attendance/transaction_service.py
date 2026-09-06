@@ -19,6 +19,12 @@ class AttendanceTransactionService:
     def check_in(user, data, photo=None, validate_photo=True):
         from apps.attendance.views import check_role, get_employee, get_attendance_policy
 
+        employee = get_employee(user)
+        if not employee:
+            raise AttendanceTransactionError('Employee profile not found.', 403)
+        if not employee.is_active:
+            raise AttendanceTransactionError('Employee profile is inactive.', 403)
+
         if not check_role(user):
             raise AttendanceTransactionError('Unauthorized role.', 403)
 
@@ -27,10 +33,6 @@ class AttendanceTransactionService:
             master = user.employee_profile.master_employee
         if master and (master.is_suspended or master.business_status == 'suspended'):
             raise AttendanceTransactionError('Account is suspended.', 403)
-
-        employee = get_employee(user)
-        if not employee:
-            raise AttendanceTransactionError('Employee profile not found.', 403)
 
         sync_uuid = data.get('sync_uuid')
 
@@ -119,7 +121,7 @@ class AttendanceTransactionService:
                 is_gps_poor = True
 
             from apps.accounts.engine import PermissionEngine
-            is_admin_or_hr = user.is_superuser or PermissionEngine.evaluate(user, 'attendance.override').allowed or PermissionEngine.evaluate(user, 'attendance.edit').allowed
+            is_admin_or_hr = user.is_superuser or PermissionEngine.evaluate(user, 'attendance.override').allowed or PermissionEngine.evaluate(user, 'attendance.edit').allowed or getattr(user, 'role', '') in ('admin', 'hr', 'system_owner', 'super_admin')
 
             if is_gps_missing:
                 gps_quality = 'missing'
@@ -276,6 +278,12 @@ class AttendanceTransactionService:
     def check_out(user, data, photo=None, validate_photo=True):
         from apps.attendance.views import check_role, get_employee, get_attendance_policy
 
+        employee = get_employee(user)
+        if not employee:
+            raise AttendanceTransactionError('Employee profile not found.', 403)
+        if not employee.is_active:
+            raise AttendanceTransactionError('Employee profile is inactive.', 403)
+
         if not check_role(user):
             raise AttendanceTransactionError('Unauthorized role.', 403)
 
@@ -284,10 +292,6 @@ class AttendanceTransactionService:
             master = user.employee_profile.master_employee
         if master and (master.is_suspended or master.business_status == 'suspended'):
             raise AttendanceTransactionError('Account is suspended.', 403)
-
-        employee = get_employee(user)
-        if not employee:
-            raise AttendanceTransactionError('Employee profile not found.', 403)
 
         sync_uuid = data.get('sync_uuid')
 
@@ -428,6 +432,12 @@ class AttendanceTransactionService:
     def field_visit(user, data, photo=None, validate_photo=True):
         from apps.attendance.views import check_role, get_employee, get_attendance_policy
 
+        employee = get_employee(user)
+        if not employee:
+            raise AttendanceTransactionError('Employee profile not found.', 403)
+        if not employee.is_active:
+            raise AttendanceTransactionError('Employee profile is inactive.', 403)
+
         if not check_role(user):
             raise AttendanceTransactionError('Unauthorized role.', 403)
 
@@ -436,10 +446,6 @@ class AttendanceTransactionService:
             master = user.employee_profile.master_employee
         if master and (master.is_suspended or master.business_status == 'suspended'):
             raise AttendanceTransactionError('Account is suspended.', 403)
-
-        employee = get_employee(user)
-        if not employee:
-            raise AttendanceTransactionError('Employee profile not found.', 403)
 
         sync_uuid = data.get('sync_uuid')
 

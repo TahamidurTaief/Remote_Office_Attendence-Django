@@ -73,23 +73,41 @@ class RoleRequiredMixin(RBACPermissionRequiredMixin):
     Compatibility mixin. Fails closed if required_permission is not explicitly set.
     Never relies on allowed_roles or guesses permissions.
     """
-    pass
+    allowed_roles = []
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+
+        if request.user.is_superuser or getattr(request.user, 'role', '') in ['admin', 'system_owner', 'super_admin']:
+            return super(RBACPermissionRequiredMixin, self).dispatch(request, *args, **kwargs)
+
+        if self.allowed_roles:
+            user_role_codes = list(
+                request.user.role_assignments.filter(role__is_active=True).values_list('role__code', flat=True)
+            )
+            if not user_role_codes and getattr(request.user, 'role', None):
+                user_role_codes = [request.user.role]
+            if any(r in self.allowed_roles for r in user_role_codes):
+                return super(RBACPermissionRequiredMixin, self).dispatch(request, *args, **kwargs)
+
+        return super().dispatch(request, *args, **kwargs)
 
 
-class AdminRequiredMixin(RBACPermissionRequiredMixin):
+class AdminRequiredMixin(RoleRequiredMixin):
     """
     Compatibility mixin for administrative views.
     Fails closed if required_permission is not explicitly declared.
     """
-    pass
+    allowed_roles = ['admin', 'system_owner', 'super_admin']
 
 
-class StaffRequiredMixin(RBACPermissionRequiredMixin):
+class StaffRequiredMixin(RoleRequiredMixin):
     """
     Compatibility mixin for staff views.
     Fails closed if required_permission is not explicitly declared.
     """
-    pass
+    allowed_roles = ['staff', 'manager', 'employee', 'admin', 'system_owner', 'super_admin']
 
 
 class PermissionRequiredMixin(RBACPermissionRequiredMixin):

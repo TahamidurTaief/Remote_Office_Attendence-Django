@@ -12,7 +12,22 @@ from apps.attendance.sync_utils import parse_and_validate_client_time
 from django.db.models import Q, Prefetch
 from datetime import date, timedelta
 from django.contrib.auth.mixins import LoginRequiredMixin
-from apps.accounts.mixins import AdminRequiredMixin, RoleRequiredMixin
+from apps.accounts.mixins import AdminRequiredMixin as BaseAdminRequiredMixin, RoleRequiredMixin as BaseRoleRequiredMixin
+
+
+class AdminRequiredMixin(BaseAdminRequiredMixin):
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            return super().handle_no_permission()
+        return redirect('/staff/home/')
+
+
+class RoleRequiredMixin(BaseRoleRequiredMixin):
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            return super().handle_no_permission()
+        return redirect('/staff/home/')
+
 from apps.accounts.engine import PermissionEngine
 from apps.branches.models import Branch
 from apps.employees.models import EmployeeProfile
@@ -46,6 +61,12 @@ class ProjectListView(AdminRequiredMixin, ListView):
     template_name = 'projects/project_list.html'
     context_object_name = 'projects'
     paginate_by = 10
+
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            return super().handle_no_permission()
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Access denied.")
 
     def get_queryset(self):
         scoped_qs = PermissionEngine.filter_by_data_scope(
@@ -183,12 +204,19 @@ class ProjectCreateView(AdminRequiredMixin, CreateView):
     template_name = 'projects/project_form.html'
     success_url = reverse_lazy('projects:project_list')
 
+    def handle_no_permission(self):
+        if not self.request.user.is_authenticated:
+            return super().handle_no_permission()
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Access denied.")
+
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.add', action_type='add')
-        if not eval_res.allowed:
-            return self.handle_no_permission()
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.add', action_type='add')
+            if not eval_res.allowed:
+                return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
@@ -238,9 +266,10 @@ class ProjectUpdateView(AdminRequiredMixin, UpdateView):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.update', action_type='update')
-        if not eval_res.allowed:
-            return self.handle_no_permission()
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.update', action_type='update')
+            if not eval_res.allowed:
+                return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -265,9 +294,10 @@ class ProjectDeleteView(AdminRequiredMixin, View):
     required_permission = 'projects.delete'
     action_type = 'delete'
     def post(self, request, pk):
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.delete', action_type='delete')
-        if not eval_res.allowed:
-            raise PermissionDenied("You do not have permission to delete projects.")
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.delete', action_type='delete')
+            if not eval_res.allowed:
+                raise PermissionDenied("You do not have permission to delete projects.")
         project = PermissionEngine.get_scoped_object_or_404(
             Project,
             user=request.user,
@@ -1140,9 +1170,10 @@ class ProjectExportPDFView(AdminRequiredMixin, View):
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
-        if not eval_res.allowed:
-            raise PermissionDenied("You do not have permission to view or export projects.")
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+            if not eval_res.allowed:
+                raise PermissionDenied("You do not have permission to view or export projects.")
 
         project = PermissionEngine.get_scoped_object_or_404(
             Project.objects.select_related('branch', 'sign_off', 'project_type')
@@ -1547,9 +1578,10 @@ class ExportProjectTasksCSVView(AdminRequiredMixin, View):
         return self._generate_csv(request, pk)
 
     def _generate_csv(self, request, pk):
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
-        if not eval_res.allowed:
-            raise PermissionDenied("You do not have permission to export project tasks.")
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+            if not eval_res.allowed:
+                raise PermissionDenied("You do not have permission to export project tasks.")
         project = PermissionEngine.get_scoped_object_or_404(
             Project,
             user=request.user,
@@ -1595,9 +1627,10 @@ class ExportProjectManpowerCSVView(AdminRequiredMixin, View):
     required_permission = 'projects.export'
     action_type = 'export'
     def get(self, request, pk):
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
-        if not eval_res.allowed:
-            raise PermissionDenied("You do not have permission to export project manpower.")
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+            if not eval_res.allowed:
+                raise PermissionDenied("You do not have permission to export project manpower.")
         project = PermissionEngine.get_scoped_object_or_404(
             Project,
             user=request.user,
@@ -1627,9 +1660,10 @@ class ExportProjectMaterialsCSVView(AdminRequiredMixin, View):
     required_permission = 'projects.export'
     action_type = 'export'
     def get(self, request, pk):
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
-        if not eval_res.allowed:
-            raise PermissionDenied("You do not have permission to export project materials.")
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+            if not eval_res.allowed:
+                raise PermissionDenied("You do not have permission to export project materials.")
         project = PermissionEngine.get_scoped_object_or_404(
             Project,
             user=request.user,
@@ -1935,7 +1969,7 @@ def staff_task_complete(request, pk):
     if not task.responsible_person:
         is_authorized = False
         from apps.accounts.engine import PermissionEngine
-        if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed:
+        if request.user.is_superuser or getattr(request.user, 'role', '') in ['admin', 'manager'] or PermissionEngine.evaluate(request.user, 'projects.edit').allowed:
             is_authorized = True
         if employee and task.project and task.project.project_managers.filter(id=employee.id).exists():
             is_authorized = True
@@ -1992,7 +2026,7 @@ def staff_task_complete(request, pk):
 
     is_manager_or_admin = False
     from apps.accounts.engine import PermissionEngine
-    if request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.update', action_type='update').allowed:
+    if request.user.is_superuser or getattr(request.user, 'role', '') in ['admin', 'manager'] or PermissionEngine.evaluate(request.user, 'projects.update', action_type='update').allowed:
         is_manager_or_admin = True
     elif employee and task.project:
         if task.project.project_managers.filter(id=employee.id).exists():
@@ -2251,6 +2285,11 @@ class ProjectGanttView(RoleRequiredMixin, View):
     3. Multi-Zone / Activity Schedule Matrix View
     """
 
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            return redirect('/staff/home/')
+        return super().handle_no_permission()
+
     def get(self, request, pk):
         from django.db.models import Prefetch
         import json
@@ -2270,7 +2309,7 @@ class ProjectGanttView(RoleRequiredMixin, View):
             pk=pk
         )
 
-        is_admin = getattr(request.user, 'is_superuser', False) or PermissionEngine.evaluate(request.user, 'projects.view', action_type='view').allowed
+        is_admin = getattr(request.user, 'is_superuser', False) or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin') or PermissionEngine.evaluate(request.user, 'projects.view', action_type='view').allowed
         if not is_admin and hasattr(request.user, 'employee_profile'):
             profile = request.user.employee_profile
             is_assigned = (
@@ -2487,9 +2526,10 @@ class ProjectGanttExportView(RoleRequiredMixin, View):
         from apps.projects.services.gantt_export import GanttExcelExportService
         from django.utils.text import slugify
 
-        eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
-        if not eval_res.allowed:
-            raise PermissionDenied("You do not have permission to export project schedules.")
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = PermissionEngine.evaluate(request.user, 'projects.view', action_type='view')
+            if not eval_res.allowed:
+                raise PermissionDenied("You do not have permission to export project schedules.")
 
         project = PermissionEngine.get_scoped_object_or_404(
             Project.objects.prefetch_related('tasks__responsible_person'),

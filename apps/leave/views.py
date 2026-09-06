@@ -28,6 +28,7 @@ def _get_profile(user):
 
 
 class StaffOrManagerMixin(RoleRequiredMixin):
+    allowed_roles = ['staff', 'manager', 'employee']
     required_permission = 'leave.view'
     action_type = 'view'
 

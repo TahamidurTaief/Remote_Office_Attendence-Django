@@ -381,7 +381,7 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
     def get_queryset(self):
         queryset = Employee.objects.filter(is_trashed=False).select_related(
             'branch', 'department', 'designation', 'reporting_manager', 'user', 'legacy_profile'
-        ).prefetch_related('direct_reports', 'employment_history')
+        ).prefetch_related('direct_reports', 'employment_history', 'suspensions')
 
         search = self.request.GET.get('search', '').strip()
         status_filter = self.request.GET.get('status', '').strip()
@@ -425,6 +425,49 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
         from apps.branches.utils import get_cached_branches
         context['branches'] = get_cached_branches()
         context['statuses'] = EmployeeStatus.choices
+
+        # Batch-resolve completion and status indicators to eliminate per-row N+1 queries
+        employees = list(context.get('employees', []))
+        emp_ids = [e.pk for e in employees]
+        if emp_ids:
+            from apps.employees.models import EmployeeDocument, AssetAssignment
+            from apps.leave.models import LeaveRequest
+            today = timezone.localdate()
+
+            doc_emp_ids = set(EmployeeDocument.objects.filter(
+                employee_master_id__in=emp_ids,
+                is_active=True,
+                is_archived=False
+            ).filter(
+                Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+            ).values_list('employee_master_id', flat=True))
+
+            asset_emp_ids = set(AssetAssignment.objects.filter(
+                employee_id__in=emp_ids,
+                returned_date__isnull=True
+            ).values_list('employee_id', flat=True))
+
+            legacy_profile_map = {}
+            for e in employees:
+                prof = getattr(e, 'legacy_profile', None)
+                if prof:
+                    legacy_profile_map[e.pk] = prof.id
+
+            leave_profile_ids = set()
+            if legacy_profile_map:
+                leave_profile_ids = set(LeaveRequest.objects.filter(
+                    employee_id__in=legacy_profile_map.values(),
+                    status='approved',
+                    start_date__lte=today,
+                    end_date__gte=today
+                ).values_list('employee_id', flat=True))
+
+            for emp in employees:
+                emp._has_valid_docs = emp.pk in doc_emp_ids
+                emp._has_unreturned_assets = emp.pk in asset_emp_ids
+                prof_id = legacy_profile_map.get(emp.pk)
+                emp._has_active_leave = (prof_id in leave_profile_ids) if prof_id else False
+
         return context
 
     def render_to_response(self, context, **response_kwargs):

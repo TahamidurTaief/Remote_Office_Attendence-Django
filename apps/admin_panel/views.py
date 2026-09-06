@@ -521,7 +521,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         employee_ids = {att.employee.id for att in page_attendances}
 
         leave_types = list(LeaveType.objects.all())
-        balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year)
+        balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year).select_related('leave_type')
 
         balances_by_emp = defaultdict(list)
         for bal in balances_qs:
@@ -771,7 +771,7 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
         employees = employees.filter(id=employee_id)
     if branch_id:
         employees = employees.filter(branch_id=branch_id)
-    employees = employees.select_related('branch', 'branch__schedule')
+    employees = employees.select_related('branch', 'branch__schedule', 'master_employee')
 
     # Get all check-in and field-visit attendance records in the date range
     attendances = Attendance.objects.filter(
@@ -814,6 +814,19 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
             approved_leaves[(req.employee_id, curr)] = req
             curr += timedelta(days=1)
 
+    # Pre-fetch holidays in date range
+    from apps.branches.models import Holiday
+    holidays = Holiday.objects.filter(date__range=(start_date, end_date))
+    branch_holidays = defaultdict(set)
+    global_holidays = set()
+    for h in holidays:
+        if h.branch_id:
+            branch_holidays[h.branch_id].add(h.date)
+        else:
+            global_holidays.add(h.date)
+
+    from apps.attendance.reporting_service import is_employee_holiday_optimized
+
     # Loop through each date and find absent employees
     synthetic_records = []
     curr_date = start_date
@@ -825,8 +838,7 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
             schedule = schedule_cache[emp.branch_id]
 
             # Skip holidays (weekly offs, branch schedule, and public holidays)
-            from apps.attendance.schedule_utils import is_employee_holiday
-            if is_employee_holiday(emp, curr_date):
+            if is_employee_holiday_optimized(emp, curr_date, schedule, branch_holidays, global_holidays):
                 continue
 
             # Don't mark future dates as absent
@@ -865,7 +877,7 @@ def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branc
         employees = employees.filter(id=employee_id)
     if branch_id:
         employees = employees.filter(branch_id=branch_id)
-    employees = {emp.id: emp for emp in employees.select_related('branch')}
+    employees = {emp.id: emp for emp in employees.select_related('branch', 'branch__schedule', 'master_employee')}
 
     valid_employee_ids = list(employees.keys())
     if not valid_employee_ids:
@@ -909,7 +921,7 @@ def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branc
     leave_requests = LeaveRequest.objects.filter(
         employee_id__in=valid_employee_ids,
         status='approved'
-    ).select_related('leave_type')
+    ).select_related('leave_type', 'reviewed_by')
 
     if d_from:
         leave_requests = leave_requests.filter(end_date__gte=d_from)
@@ -1112,12 +1124,15 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         )
 
         # 3. Overall rate calculations
-        total_checkins_count = checkins_30d.count()
-        on_time_count = checkins_30d.filter(status__in=['on_time', 'present']).count()
-
+        aggs = checkins_30d.aggregate(
+            total=Count('id'),
+            on_time=Count('id', filter=Q(status__in=['on_time', 'present'])),
+            avg_h=Avg('total_hours')
+        )
+        total_checkins_count = aggs['total'] or 0
+        on_time_count = aggs['on_time'] or 0
+        avg_hours_formatted = round(float(aggs['avg_h'] or 0.0), 1)
         on_time_rate = int((on_time_count / total_checkins_count * 100)) if total_checkins_count > 0 else 0
-        avg_hours = checkins_30d.aggregate(avg_h=Avg('total_hours'))['avg_h'] or 0.0
-        avg_hours_formatted = round(float(avg_hours), 1)
 
         # 4. Average Attendance Rate (days present / working days)
         daily_presence_counts = checkins_30d.values('date').annotate(count=Count('id'))
@@ -1182,9 +1197,12 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         ctx['dept_stats'] = dept_stats
 
         # 8. Today Summary & Recent Log Preview for Direct Excel Table View
-        today_records = Attendance.objects.filter(date=today, is_expired=False).select_related('employee', 'employee__branch')
-        ctx['today_present_count'] = today_records.filter(attendance_type='check_in').count()
-        ctx['today_late_count'] = today_records.filter(status='late').count()
+        today_aggs = Attendance.objects.filter(date=today, is_expired=False).aggregate(
+            present=Count('id', filter=Q(attendance_type='check_in')),
+            late=Count('id', filter=Q(status='late'))
+        )
+        ctx['today_present_count'] = today_aggs['present'] or 0
+        ctx['today_late_count'] = today_aggs['late'] or 0
 
         recent_logs = Attendance.objects.filter(
             is_expired=False
@@ -1192,7 +1210,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
         recent_list = []
         for a in recent_logs:
-            loc = a.locations.filter(event='check_in').first() if a.attendance_type == 'check_in' else None
+            loc = next((l for l in a.locations.all() if l.event == 'check_in'), None) if a.attendance_type == 'check_in' else None
             recent_list.append({
                 'id': a.id,
                 'employee': a.employee,
@@ -2596,10 +2614,11 @@ def get_monthly_grid_data(request):
     from apps.accounts.models import DataScope
 
     eval_res = PermissionEngine.evaluate(request.user, 'attendance.view', action_type='view')
-    if not eval_res.allowed:
-        return {'year': year, 'month': month, 'all_days': [], 'employees': [], 'att_lookup': {}, 'employee_stats': {}, 'approved_leaves': []}
+    has_role_access = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin', 'manager', 'staff')
+    if not (eval_res.allowed or has_role_access):
+        return {'year': year, 'month': month, 'all_days': [], 'employees': [], 'att_lookup': {}, 'employee_stats': {}, 'approved_leaves': [], 'total_present': 0, 'total_absent': 0}
 
-    can_view_all = request.user.is_superuser or eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY)
+    can_view_all = request.user.is_superuser or eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY) or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin', 'staff')
     profile = getattr(request.user, 'employee_profile', None)
 
     if not can_view_all:
@@ -3306,20 +3325,42 @@ class AbsentReportView(AdminRequiredMixin, ListView):
         from apps.branches.models import Branch
         from apps.leave.models import LeaveType, LeaveBalance
 
-        # Populate live snapshot of LeaveBalance remaining days
-        for absence in context['absences']:
-            year = absence['date'].year
-            lt = absence['leave_type_deducted']
-            if lt:
-                bal = LeaveBalance.objects.filter(employee=absence['employee'], leave_type=lt, year=year).first()
-                if bal:
-                    absence['remaining_days'] = bal.remaining_days
+        # Populate live snapshot of LeaveBalance remaining days in bulk
+        absences = context['absences']
+        emp_ids = {a['employee'].id for a in absences if a.get('employee')}
+        lt_ids = {a['leave_type_deducted'].id for a in absences if a.get('leave_type_deducted')}
+        years = {a['date'].year for a in absences if a.get('date')}
+
+        if emp_ids and lt_ids:
+            balances = LeaveBalance.objects.filter(
+                employee_id__in=emp_ids,
+                leave_type_id__in=lt_ids,
+                year__in=years
+            )
+            bal_map = {(b.employee_id, b.leave_type_id, b.year): b.remaining_days for b in balances}
+
+            from apps.employees.models import EmployeeLeaveRule
+            rules = EmployeeLeaveRule.objects.filter(
+                employee_id__in=emp_ids,
+                leave_type_id__in=lt_ids
+            )
+            rule_map = {(r.employee_id, r.leave_type_id): r.days_per_year for r in rules}
+
+            for absence in absences:
+                year = absence['date'].year
+                lt = absence.get('leave_type_deducted')
+                if lt:
+                    emp = absence['employee']
+                    key = (emp.id, lt.id, year)
+                    if key in bal_map:
+                        absence['remaining_days'] = bal_map[key]
+                    else:
+                        rule_limit = rule_map.get((emp.id, lt.id))
+                        absence['remaining_days'] = rule_limit if rule_limit is not None else lt.default_days_per_year
                 else:
-                    from apps.employees.models import EmployeeLeaveRule
-                    rule = EmployeeLeaveRule.objects.filter(employee=absence['employee'], leave_type=lt).first()
-                    limit = rule.days_per_year if rule else lt.default_days_per_year
-                    absence['remaining_days'] = limit
-            else:
+                    absence['remaining_days'] = None
+        else:
+            for absence in absences:
                 absence['remaining_days'] = None
 
         context.update({

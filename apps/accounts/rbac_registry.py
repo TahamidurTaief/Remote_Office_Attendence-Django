@@ -998,6 +998,41 @@ class RBACRegistryService:
                     defaults={'data_scope': DataScope.GLOBAL}
                 )
 
+        standard_roles = [
+            ('manager', 'Branch Manager', 'Branch and department supervisory access over team activities and approvals.', False),
+            ('staff', 'Staff', 'Standard employee access for self-service attendance, leave, tasks, and profile.', False),
+        ]
+        for r_code, r_name, r_desc, is_prot in standard_roles:
+            r_obj, _ = Role.objects.get_or_create(
+                code=r_code,
+                defaults={
+                    'name': r_name,
+                    'description': r_desc,
+                    'is_system_protected': is_prot,
+                    'is_active': True
+                }
+            )
+            if r_code == 'manager':
+                for p in all_perms_to_grant:
+                    mod_code = p.module.code
+                    if any(mod_code.startswith(m) for m in ['attendance', 'leave', 'schedule', 'projects', 'tasks', 'employees', 'branches']):
+                        RolePermission.objects.get_or_create(
+                            role=r_obj,
+                            permission=p,
+                            defaults={'data_scope': DataScope.BRANCH}
+                        )
+            elif r_code == 'staff':
+                for p in all_perms_to_grant:
+                    mod_code = p.module.code
+                    act_code = p.action.code
+                    if mod_code.startswith('attendance') or mod_code.startswith('leave'):
+                        if act_code in ['add', 'edit', 'update', 'view']:
+                            RolePermission.objects.get_or_create(
+                                role=r_obj,
+                                permission=p,
+                                defaults={'data_scope': DataScope.OWN}
+                            )
+
         return {
             'modules': modules_created,
             'actions': actions_created,
