@@ -16,16 +16,28 @@ def _parse_comma_separated(value, default=None):
 
 # ── ENVIRONMENT & RUNTIME FLAGS ──────────────────────────────────────────────
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-SECRET_KEY = 'django-insecure-development-only-key-fieldtrack-attendance-2026'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-development-only-key-fieldtrack-attendance-2026')
 
 # Hosts Configuration
-_dev_allowed_hosts = ['localhost', '127.0.0.1', 'testserver', '[::1]', '*']
-ALLOWED_HOSTS = ['*']
+_env_allowed = _parse_comma_separated(os.getenv('ALLOWED_HOSTS'))
+ALLOWED_HOSTS = _env_allowed if _env_allowed else ['*']
 
 # CSRF Trusted Origins
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000', 'http://127.0.0.1', 'http://localhost']
+_default_csrf_origins = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://127.0.0.1',
+    'http://localhost',
+    'https://erp-signtech.taieflab.com',
+    'http://erp-signtech.taieflab.com',
+]
+_env_csrf_origins = _parse_comma_separated(os.getenv('CSRF_TRUSTED_ORIGINS'))
+CSRF_TRUSTED_ORIGINS = _env_csrf_origins if _env_csrf_origins else _default_csrf_origins
+
+# Reverse Proxy SSL Header (For Traefik / Coolify / Nginx)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # ── SECURITY HARDENING & HEADERS ─────────────────────────────────────────────
@@ -38,10 +50,10 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'same-origin'
 
-SECURE_SSL_REDIRECT = False
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
-SECURE_HSTS_SECONDS = 0
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1', 'yes')
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1', 'yes')
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False').lower() in ('true', '1', 'yes')
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 
@@ -83,6 +95,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -190,7 +203,7 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
 
