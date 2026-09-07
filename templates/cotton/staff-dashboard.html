@@ -173,13 +173,13 @@ Props:
         <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-tight">Claim Expense</span>
       </a>
 
-      {# Action 4: My Payslips #}
-      <a href="{% url 'expense:staff_expense_list' %}"
-         class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl py-3 px-1.5 flex flex-col items-center justify-center text-center shadow-xs hover:border-purple-300 transition-all active:scale-95">
-        <div class="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-[#9333EA] flex items-center justify-center mb-1.5">
-          <i data-lucide="file-text" class="w-5 h-5"></i>
+      {# Action 4: Excel Report #}
+      <a href="/admin-panel/attendance/export/?format=excel"
+         class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl py-3 px-1.5 flex flex-col items-center justify-center text-center shadow-xs hover:border-emerald-500 transition-all active:scale-95">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center mb-1.5">
+          <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
         </div>
-        <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-tight">My Payslips</span>
+        <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-tight">Excel Report</span>
       </a>
     </div>
   </div>

@@ -141,7 +141,7 @@ class AttendanceTransactionService:
                     is_exception = True
                     note = f"{note} [POLICY EXCEPTION: Poor GPS accuracy {int(acc_val)}m]".strip()
 
-            if validate_photo and policy.photo_required and not photo:
+            if validate_photo and policy.photo_required and not photo and not is_admin_or_hr:
                 raise AttendanceTransactionError('Photo is required for attendance.', 400)
 
             if photo:
@@ -366,9 +366,9 @@ class AttendanceTransactionService:
 
             is_gps_missing = (lat == 0.0 and lng == 0.0)
             if is_gps_missing and policy.gps_required == 'required' and not is_admin_or_hr:
-                raise AttendanceTransactionError('GPS location is required for check-out.', 400)
+                address = address or 'GPS unavailable at check-out'
 
-            if validate_photo and policy.photo_required and not photo:
+            if validate_photo and policy.photo_required and not photo and not is_admin_or_hr:
                 raise AttendanceTransactionError('Photo is required for attendance.', 400)
 
             if photo:

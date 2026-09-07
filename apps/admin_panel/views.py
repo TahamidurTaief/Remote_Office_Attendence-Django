@@ -631,6 +631,112 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
 
             records = queryset.order_by('-date', '-check_in_time')
 
+        export_format = request.GET.get('format', 'excel')
+
+        if export_format in ('excel', 'xlsx'):
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Attendance Report"
+            ws.views.sheetView[0].showGridLines = True
+
+            # Styling definitions
+            header_fill = PatternFill(start_color="1877F2", end_color="1877F2", fill_type="solid")
+            header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            title_font = Font(name="Calibri", size=16, bold=True, color="1E293B")
+            subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+            regular_font = Font(name="Calibri", size=10, color="0F172A")
+            bold_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
+            center_align = Alignment(horizontal="center", vertical="center")
+            left_align = Alignment(horizontal="left", vertical="center")
+            right_align = Alignment(horizontal="right", vertical="center")
+            thin_border = Border(
+                left=Side(style='thin', color='E2E8F0'),
+                right=Side(style='thin', color='E2E8F0'),
+                top=Side(style='thin', color='E2E8F0'),
+                bottom=Side(style='thin', color='E2E8F0')
+            )
+
+            # Title block
+            ws.merge_cells('A1:K1')
+            ws['A1'] = "FieldTrack — Comprehensive Attendance Report"
+            ws['A1'].font = title_font
+            ws['A1'].alignment = left_align
+
+            ws.merge_cells('A2:K2')
+            ws['A2'] = f"Generated on: {timezone.localtime().strftime('%d %B %Y, %I:%M %p')} | Filter: {date_from or 'All Start'} to {date_to or 'All End'}"
+            ws['A2'].font = subtitle_font
+            ws['A2'].alignment = left_align
+
+            # Headers
+            headers = ['SN', 'Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours Worked', 'Type', 'Status', 'Notes / Location']
+            ws.row_dimensions[4].height = 26
+            for col_num, header_title in enumerate(headers, 1):
+                cell = ws.cell(row=4, column=col_num, value=header_title)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = center_align
+                cell.border = thin_border
+
+            # Data rows
+            row_idx = 5
+            for idx, att in enumerate(records, 1):
+                check_in = timezone.localtime(att.check_in_time).strftime('%I:%M:%S %p') if getattr(att, 'check_in_time', None) else '—'
+                check_out = timezone.localtime(att.check_out_time).strftime('%I:%M:%S %p') if getattr(att, 'check_out_time', None) else '—'
+                branch_name = att.employee.branch.name if (hasattr(att, 'employee') and att.employee and att.employee.branch) else 'Unassigned'
+                emp_id = getattr(att.employee, 'employee_id', '') if hasattr(att, 'employee') else ''
+                emp_name = getattr(att.employee, 'full_name', '') if hasattr(att, 'employee') else ''
+                hours_val = float(att.total_hours) if getattr(att, 'total_hours', None) else 0.0
+                type_display = att.get_type_display() if hasattr(att, 'get_type_display') else 'Office'
+                status_display = att.get_status_display() if hasattr(att, 'get_status_display') else 'Absent'
+                note_str = str(getattr(att, 'note', '')) or ''
+
+                ws.row_dimensions[row_idx].height = 20
+                row_data = [
+                    (idx, center_align),
+                    (str(att.date), center_align),
+                    (emp_id, center_align),
+                    (emp_name, left_align),
+                    (branch_name, left_align),
+                    (check_in, center_align),
+                    (check_out, center_align),
+                    (hours_val, right_align),
+                    (type_display, center_align),
+                    (status_display, center_align),
+                    (note_str, left_align),
+                ]
+
+                for col_idx, (val, align) in enumerate(row_data, 1):
+                    c = ws.cell(row=row_idx, column=col_idx, value=val)
+                    c.font = regular_font
+                    c.alignment = align
+                    c.border = thin_border
+
+                row_idx += 1
+
+            # Auto-fit column widths
+            for col in ws.columns:
+                max_len = 0
+                col_letter = get_column_letter(col[0].column)
+                for cell in col:
+                    if cell.row < 4:
+                        continue
+                    val_str = str(cell.value or '')
+                    if len(val_str) > max_len:
+                        max_len = len(val_str)
+                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+            response = HttpResponse(
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="attendance_report_{timezone.localdate()}.xlsx"'
+            wb.save(response)
+            return response
+
+        # Fallback to CSV format
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="attendance_export_{timezone.localdate()}.csv"'
 
@@ -638,21 +744,21 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
         writer.writerow(['SN', 'Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours', 'Type', 'Status', 'Note'])
 
         for idx, att in enumerate(records, 1):
-            check_in = timezone.localtime(att.check_in_time).strftime('%H:%M:%S') if att.check_in_time else ''
-            check_out = timezone.localtime(att.check_out_time).strftime('%H:%M:%S') if att.check_out_time else ''
-            branch_name = att.employee.branch.name if att.employee.branch else 'Unassigned'
+            check_in = timezone.localtime(att.check_in_time).strftime('%H:%M:%S') if getattr(att, 'check_in_time', None) else ''
+            check_out = timezone.localtime(att.check_out_time).strftime('%H:%M:%S') if getattr(att, 'check_out_time', None) else ''
+            branch_name = att.employee.branch.name if (hasattr(att, 'employee') and att.employee and att.employee.branch) else 'Unassigned'
             writer.writerow([
                 idx,
                 att.date,
-                att.employee.employee_id,
-                att.employee.full_name,
+                getattr(att.employee, 'employee_id', ''),
+                getattr(att.employee, 'full_name', ''),
                 branch_name,
                 check_in,
                 check_out,
-                att.total_hours or '',
-                att.get_type_display(),
-                att.get_status_display(),
-                att.note
+                getattr(att, 'total_hours', '') or '',
+                att.get_type_display() if hasattr(att, 'get_type_display') else '',
+                att.get_status_display() if hasattr(att, 'get_status_display') else '',
+                getattr(att, 'note', '')
             ])
 
         return response

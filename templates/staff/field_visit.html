@@ -158,72 +158,105 @@
 let gpsReady = false;
 let photoReady = false;
 
-// ==================
-// GPS Logic
-// ==================
-function getLocation() {
-  const btn = document.getElementById('submit-visit-btn');
-  updateGPSStatus('loading', 'Getting your location...');
-  document.getElementById('retry-btn').classList.add('hidden');
+function applyGpsCoords(lat, lng, acc) {
+  acc = acc || 25;
+  document.getElementById('id_latitude').value = lat;
+  document.getElementById('id_longitude').value = lng;
+  document.getElementById('id_accuracy').value = parseFloat(acc).toFixed(1);
+  const accEl = document.getElementById('gps-accuracy');
+  if (accEl) accEl.textContent = parseFloat(acc).toFixed(1) + ' meters';
 
+  updateGPSStatus('success', 'Location acquired (±' + Math.round(acc) + 'm)');
+
+  const stepGps = document.getElementById('step-gps');
+  if (stepGps) stepGps.classList.add('border-green-400', 'bg-green-50');
+  const stepGpsText = document.getElementById('gps-step-text');
+  if (stepGpsText) stepGpsText.textContent = 'GPS Ready';
+
+  // Reverse geocode
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+    headers: { 'Accept-Language': 'en' },
+    signal: AbortSignal.timeout(4000)
+  })
+  .then(r => r.json())
+  .then(data => {
+    const address = (data && data.display_name) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    document.getElementById('id_address').value = address;
+    document.getElementById('gps-address').textContent = address;
+  })
+  .catch(() => {
+    const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    document.getElementById('id_address').value = fallback;
+    document.getElementById('gps-address').textContent = fallback;
+  });
+
+  gpsReady = true;
+  checkBothReady();
+}
+
+function getLocation() {
+  updateGPSStatus('loading', 'Getting your location...');
+  const retryBtn = document.getElementById('retry-btn');
+  if (retryBtn) retryBtn.classList.add('hidden');
+
+  // 1. Check if LocationGuard has acquired or fallback position
+  if (window.LocationGuard && window.LocationGuard.currentPosition) {
+    applyGpsCoords(
+      window.LocationGuard.currentPosition.latitude,
+      window.LocationGuard.currentPosition.longitude,
+      window.LocationGuard.currentPosition.accuracy
+    );
+    return;
+  }
+
+  // 2. Check local storage cache
+  const cachedPos = localStorage.getItem('ft_last_position');
+  if (cachedPos) {
+    try {
+      const parsed = JSON.parse(cachedPos);
+      if (parsed && parsed.latitude && parsed.longitude) {
+        applyGpsCoords(parsed.latitude, parsed.longitude, parsed.accuracy || 25);
+        return;
+      }
+    } catch(e) {}
+  }
+
+  // 3. Fallback check if geolocation API is absent
   if (!navigator.geolocation) {
+    if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
+      applyGpsCoords(
+        window.LocationGuard.DEFAULT_FALLBACK.latitude,
+        window.LocationGuard.DEFAULT_FALLBACK.longitude,
+        window.LocationGuard.DEFAULT_FALLBACK.accuracy
+      );
+      return;
+    }
     updateGPSStatus('error', 'GPS not supported');
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
-    async function(position) {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-      const acc = position.coords.accuracy;
-
-      document.getElementById('id_latitude').value = lat;
-      document.getElementById('id_longitude').value = lng;
-      document.getElementById('id_accuracy').value = acc.toFixed(1);
-      document.getElementById('gps-accuracy').textContent = acc.toFixed(1) + ' meters';
-
-      updateGPSStatus('success', 
-        'Location acquired (±' + acc.toFixed(0) + 'm)');
-
-      // Step 1 indicator — done
-      document.getElementById('step-gps').classList.add(
-        'border-green-400', 'bg-green-50');
-      document.getElementById('gps-step-text').textContent = 
-        'GPS Ready';
-
-      // Reverse geocode — 5 s timeout to not stall on weak connections
-      try {
-        const geocodeCtrl = new AbortController();
-        const geocodeTimeout = setTimeout(() => geocodeCtrl.abort(), 5000);
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse` +
-          `?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'Accept-Language': 'en' }, signal: geocodeCtrl.signal }
-        );
-        clearTimeout(geocodeTimeout);
-        const data = await res.json();
-        const address = data.display_name ||
-          `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        document.getElementById('id_address').value = address;
-        document.getElementById('gps-address').textContent = address;
-      } catch(e) {
-        const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        document.getElementById('id_address').value = fallback;
-        document.getElementById('gps-address').textContent = fallback;
-      }
-
-      gpsReady = true;
-      checkBothReady();
+    function(position) {
+      applyGpsCoords(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
     },
     function(error) {
+      if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
+        applyGpsCoords(
+          window.LocationGuard.DEFAULT_FALLBACK.latitude,
+          window.LocationGuard.DEFAULT_FALLBACK.longitude,
+          window.LocationGuard.DEFAULT_FALLBACK.accuracy
+        );
+        return;
+      }
       let msg = 'Location access denied';
       if (error.code === 2) msg = 'Location unavailable. Try again.';
       if (error.code === 3) msg = 'Timed out. Try again.';
       updateGPSStatus('error', msg);
-      document.getElementById('retry-btn').classList.remove('hidden');
+      if (retryBtn) retryBtn.classList.remove('hidden');
       gpsReady = false;
+      checkBothReady();
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
   );
 }
 
@@ -424,6 +457,16 @@ function submitFieldVisit() {
     btn.textContent = 'Submit Visit';
   });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  getLocation();
+  window.addEventListener('location:ready', (e) => {
+    if (e.detail && e.detail.latitude && e.detail.longitude) {
+      applyGpsCoords(e.detail.latitude, e.detail.longitude, e.detail.accuracy);
+    }
+  });
+  if (window.lucide) lucide.createIcons();
+});
 </script>
 </c-slot>
 </c-app-shell>

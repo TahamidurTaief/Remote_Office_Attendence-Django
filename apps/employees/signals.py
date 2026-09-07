@@ -32,5 +32,5 @@ def sync_employee_master_to_legacy_profile(sender, instance, **kwargs):
             profile.is_active = is_active_allowed
             update_fields.append('is_active')
 
-        if update_fields:
+        if update_fields and profile.pk:
             profile.save(update_fields=update_fields)
