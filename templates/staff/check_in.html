@@ -468,6 +468,21 @@
     }
     if (loadingSubtitle) loadingSubtitle.textContent = 'Connecting to high-accuracy sensors...';
 
+    // Fast-path: Check if LocationGuard already has cached/verified coordinates
+    if (window.LocationGuard && window.LocationGuard.currentPosition) {
+      handleLocationSuccess({ coords: window.LocationGuard.currentPosition });
+      return;
+    }
+    const cachedPos = localStorage.getItem('ft_last_position');
+    if (cachedPos) {
+      try {
+        const parsed = JSON.parse(cachedPos);
+        if (parsed && parsed.latitude && parsed.longitude) {
+          handleLocationSuccess({ coords: parsed });
+        }
+      } catch(e) {}
+    }
+
     if (!navigator.geolocation) {
       if (loadingTitle) {
         loadingTitle.textContent = 'GPS not supported';
@@ -478,11 +493,11 @@
     }
 
     try {
-      // Step 1: Try high accuracy GPS (satellite / hardware) with 15s timeout
+      // Step 1: Try high accuracy GPS (satellite / hardware) with 5s timeout
       const pos = await requestPosition({
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
+        timeout: 5000,
+        maximumAge: 5000
       });
       handleLocationSuccess(pos);
     } catch (errHigh) {
@@ -491,12 +506,17 @@
         // Step 2: Fallback to standard network geolocation with cached positions allowed
         const pos = await requestPosition({
           enableHighAccuracy: false,
-          timeout: 10000,
-          maximumAge: 15000
+          timeout: 5000,
+          maximumAge: 60000
         });
         handleLocationSuccess(pos);
       } catch (errLow) {
-        handleLocationError(errLow);
+        // Step 3: Check LocationGuard fallback if available
+        if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
+          handleLocationSuccess({ coords: window.LocationGuard.DEFAULT_FALLBACK });
+        } else {
+          handleLocationError(errLow);
+        }
       }
     }
 

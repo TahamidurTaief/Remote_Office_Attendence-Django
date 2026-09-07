@@ -99,15 +99,11 @@ class OrgHierarchyService:
             headcount=Count('master_employees')
         ).values('name', 'headcount'))
         
-        # Span of control: reports per manager
-        # Find all employees who are reporting managers (count > 0 direct reports)
-        managers = Employee.objects.filter(direct_reports__isnull=False).distinct()
-        total_managers = managers.count()
-        total_reports = Employee.objects.filter(reporting_manager__isnull=False).count()
+        # Maximum org depth & span calculated in-memory
+        all_emps_data = dict(Employee.objects.exclude(status='archived').filter(is_trashed=False).values_list('id', 'reporting_manager_id'))
+        total_reports = sum(1 for pid in all_emps_data.values() if pid is not None)
+        total_managers = len({pid for pid in all_emps_data.values() if pid is not None})
         avg_span = round(total_reports / total_managers, 2) if total_managers > 0 else 0.0
-        
-        # Maximum org depth calculated in-memory (0 extra queries)
-        all_emps_data = dict(Employee.objects.values_list('id', 'reporting_manager_id'))
         depths = {}
         def compute_depth(emp_id, path=None):
             if path is None:
@@ -136,5 +132,5 @@ class OrgHierarchyService:
             'branch_headcounts': branch_counts,
             'avg_span_of_control': avg_span,
             'max_depth': max_depth,
-            'total_headcount': Employee.objects.exclude(status='archived').filter(is_trashed=False).count()
+            'total_headcount': len(all_emps_data)
         }

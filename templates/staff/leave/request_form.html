@@ -1,5 +1,128 @@
 <c-app-shell page_title="Request Leave | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
-<div class="max-w-2xl mx-auto space-y-6">
+
+{# ── MOBILE VIEW (< md) Matching Reference Screenshot 2 Exactly ── #}
+<div class="md:hidden max-w-md mx-auto pt-2 pb-24 px-4 select-none">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-xs">
+        <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">
+            Request Leave
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-5">
+            Submit a new request for leave approval.
+        </p>
+
+        <form action="" method="POST" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+
+            {% if form.errors or form.non_field_errors %}
+            <div class="rounded-xl bg-red-50 dark:bg-red-950/40 p-3 border border-red-200 dark:border-red-900/60 mb-2">
+                <div class="flex items-center gap-2 text-xs font-bold text-red-700 dark:text-red-400 mb-1">
+                    <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                    <span>Please correct the errors:</span>
+                </div>
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <p class="text-[11px] text-red-600 dark:text-red-400">• {{ field.label }}: {{ error }}</p>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {# Leave Type Select #}
+            <div>
+                <label for="id_leave_type_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                    Leave Type
+                </label>
+                <div class="relative">
+                    <select id="id_leave_type_mobile"
+                            name="leave_type"
+                            required
+                            class="w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 px-3.5 text-xs text-slate-700 dark:text-slate-200 shadow-2xs appearance-none focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none transition-all">
+                        <option value="" disabled {% if not form.leave_type.value %}selected{% endif %}>---------</option>
+                        {% for lt in form.fields.leave_type.queryset %}
+                            <option value="{{ lt.id }}" {% if form.leave_type.value|stringformat:"s" == lt.id|stringformat:"s" %}selected{% endif %}>
+                                {{ lt.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                        <i data-lucide="chevron-down" class="w-4 h-4 stroke-[2]"></i>
+                    </div>
+                </div>
+            </div>
+
+            {# Dates Grid #}
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label for="id_start_date_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                        Start Date
+                    </label>
+                    <div class="relative">
+                        <input type="date"
+                               id="id_start_date_mobile"
+                               name="start_date"
+                               required
+                               value="{{ form.start_date.value|date:'Y-m-d'|default:form.start_date.value|default:'' }}"
+                               placeholder="Select date"
+                               class="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-200 shadow-2xs focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none transition-all">
+                        <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="calendar" class="w-4 h-4 stroke-[1.8]"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="id_end_date_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                        End Date
+                    </label>
+                    <div class="relative">
+                        <input type="date"
+                               id="id_end_date_mobile"
+                               name="end_date"
+                               required
+                               value="{{ form.end_date.value|date:'Y-m-d'|default:form.end_date.value|default:'' }}"
+                               placeholder="Select date"
+                               class="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-200 shadow-2xs focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none transition-all">
+                        <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="calendar" class="w-4 h-4 stroke-[1.8]"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Reason #}
+            <div>
+                <label for="id_reason_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                    Reason
+                </label>
+                <textarea id="id_reason_mobile"
+                          name="reason"
+                          rows="4"
+                          required
+                          placeholder="Reason for leave request..."
+                          class="w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-xs text-slate-700 dark:text-slate-200 shadow-2xs placeholder-slate-400 focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none resize-none transition-all">{{ form.reason.value|default:'' }}</textarea>
+            </div>
+
+            {# Action Buttons: Cancel & Submit side-by-side #}
+            <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+                <a href="{% url 'leave:staff_dashboard' %}"
+                   class="px-6 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 transition-colors shadow-2xs">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="px-6 py-2.5 bg-[#1877F2] hover:bg-blue-600 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm transition-all">
+                    Submit Request
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {# Bottom Navigation #}
+    <c-bottom-nav active_tab="leave"></c-bottom-nav>
+</div>
+
+{# ── DESKTOP & TABLET VIEW (hidden md:block) with Full Cotton Components Untouched ── #}
+<div class="hidden md:block max-w-2xl mx-auto space-y-6 p-4">
     <!-- Header -->
     <div class="flex items-center justify-between gap-4">
         <div>
@@ -32,16 +155,6 @@
                         {% endfor %}
                     </div>
                 </div>
-            </div>
-            {% endif %}
-
-            {% if form.projected_remaining is not None %}
-            <div class="p-4 rounded-xl border flex items-center justify-between gap-3 shadow-inner {% if form.projected_remaining < 0 %}bg-red-50 border-red-200 text-red-700{% else %}bg-green-50 border-green-200 text-green-700{% endif %}">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="info" class="w-5 h-5 {% if form.projected_remaining < 0 %}text-red-650{% else %}text-green-600{% endif %} flex-shrink-0"></i>
-                    <span class="text-sm font-semibold">After this request:</span>
-                </div>
-                <span class="text-sm font-bold">{{ form.projected_remaining }} day{% if form.projected_remaining != 1 and form.projected_remaining != -1 %}s{% endif %} remaining</span>
             </div>
             {% endif %}
 
@@ -82,4 +195,3 @@
     </c-card>
 </div>
 </c-app-shell>
-

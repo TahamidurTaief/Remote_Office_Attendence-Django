@@ -379,9 +379,22 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
+        from django.db.models import Prefetch
+        from apps.employees.models import EmployeeSuspension, EmployeeDocument, AssetAssignment
+
+        from apps.leave.models import LeaveRequest
+        today = timezone.localdate()
+
         queryset = Employee.objects.filter(is_trashed=False).select_related(
             'branch', 'department', 'designation', 'reporting_manager', 'user', 'legacy_profile'
-        ).prefetch_related('direct_reports', 'employment_history', 'suspensions')
+        ).prefetch_related(
+            'direct_reports',
+            'employment_history',
+            Prefetch('suspensions', queryset=EmployeeSuspension.objects.order_by('-changed_at')),
+            Prefetch('documents', queryset=EmployeeDocument.objects.filter(is_active=True, is_archived=False)),
+            Prefetch('asset_assignments', queryset=AssetAssignment.objects.filter(returned_date__isnull=True)),
+            Prefetch('legacy_profile__leave_requests', queryset=LeaveRequest.objects.filter(status='approved', start_date__lte=today, end_date__gte=today), to_attr='active_leaves'),
+        )
 
         search = self.request.GET.get('search', '').strip()
         status_filter = self.request.GET.get('status', '').strip()
@@ -420,8 +433,8 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
         context['branch_filter'] = self.request.GET.get('branch', '')
         context['desig_filter'] = self.request.GET.get('designation', '')
 
-        context['departments'] = Department.objects.filter(is_active=True)
-        context['designations'] = Designation.objects.filter(is_active=True)
+        context['departments'] = Department.objects.filter(is_active=True).only('id', 'name')
+        context['designations'] = Designation.objects.filter(is_active=True).only('id', 'name')
         from apps.branches.utils import get_cached_branches
         context['branches'] = get_cached_branches()
         context['statuses'] = EmployeeStatus.choices

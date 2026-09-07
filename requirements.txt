@@ -17,3 +17,5 @@ qrcode==8.2.0
 imagekitio>=5.8.0
 google-genai>=1.0.0
 django-debug-toolbar>=8.0.0
+gunicorn>=22.0.0
+whitenoise>=6.6.0

@@ -214,6 +214,29 @@ class EmployeeCreateForm(forms.ModelForm):
         user = User.objects.create_user(email=email, phone=phone, password=password, role=compat_role)
         profile.user = user
 
+        # Ensure Employee Master SSOT record exists and is linked
+        from django.utils import timezone
+        name_parts = (profile.full_name or 'Employee').strip().split(' ', 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        emp_master, _ = Employee.objects.get_or_create(
+            employee_number=profile.employee_id,
+            defaults={
+                'user': user,
+                'first_name': first_name,
+                'last_name': last_name,
+                'phone': phone or '',
+                'personal_email': email or '',
+                'branch': profile.branch,
+                'joined_date': profile.joined_date or timezone.localdate(),
+                'status': 'active' if profile.is_active else 'inactive'
+            }
+        )
+        if emp_master.user != user:
+            emp_master.user = user
+            emp_master.save(update_fields=['user'])
+        profile.master_employee = emp_master
+
         if commit:
             profile.save()
 
@@ -1203,6 +1226,7 @@ class WizardStep3Form(forms.ModelForm):
 
             # Enforce server-side validation for bank transfers
             if not bank and not bank_name:
+                self.add_error('bank', 'Bank selection is required for bank transfer disbursements.')
                 self.add_error('bank_name', 'Bank selection is required for bank transfer disbursements.')
             if not bank_account:
                 self.add_error('bank_account', 'AC Number is required for bank transfer disbursements.')

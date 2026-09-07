@@ -6,6 +6,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.db import models
+from django.db.models import Count, Q, Prefetch
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -203,23 +204,44 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
                 branches_to_summarize = get_cached_branches()
                 report_missing_branch = True
 
-            for b in branches_to_summarize:
-                b_employees = EmployeeProfile.objects.filter(branch=b, is_active=True)
-                b_emp_count = b_employees.count()
-                b_atts = Attendance.objects.filter(date=today, employee__branch=b, is_expired=False)
-                b_present = b_atts.filter(attendance_type='check_in').values('employee_id').distinct().count()
-                b_late = b_atts.filter(attendance_type='check_in', status='late').values('employee_id').distinct().count()
-                b_absent_recs = get_absent_records(date_from=today, date_to=today, branch_id=b.id)
-                b_absent = sum(1 for r in b_absent_recs if r.status == 'absent')
-                b_on_leave = sum(1 for r in b_absent_recs if r.status == 'on_leave')
+            branch_ids = [b.id for b in branches_to_summarize]
+            emp_counts = dict(
+                EmployeeProfile.objects.filter(branch_id__in=branch_ids, is_active=True)
+                .values('branch_id')
+                .annotate(c=Count('id'))
+                .values_list('branch_id', 'c')
+            )
+            today_atts_qs = Attendance.objects.filter(
+                date=today, employee__branch_id__in=branch_ids, is_expired=False
+            ).values('employee__branch_id', 'employee_id', 'attendance_type', 'status')
 
+            branch_presents = defaultdict(set)
+            branch_lates = defaultdict(set)
+            for a in today_atts_qs:
+                if a['attendance_type'] == 'check_in':
+                    b_id = a['employee__branch_id']
+                    branch_presents[b_id].add(a['employee_id'])
+                    if a['status'] == 'late':
+                        branch_lates[b_id].add(a['employee_id'])
+
+            all_absent_recs = get_absent_records(date_from=today, date_to=today)
+            absent_by_branch = defaultdict(lambda: {'absent': 0, 'on_leave': 0})
+            for r in all_absent_recs:
+                b_id = getattr(r.employee, 'branch_id', None)
+                if b_id:
+                    if r.status == 'absent':
+                        absent_by_branch[b_id]['absent'] += 1
+                    elif r.status == 'on_leave':
+                        absent_by_branch[b_id]['on_leave'] += 1
+
+            for b in branches_to_summarize:
                 branch_summaries.append({
                     'branch': b,
-                    'total_employees': b_emp_count,
-                    'present': b_present,
-                    'late': b_late,
-                    'absent': b_absent,
-                    'on_leave': b_on_leave,
+                    'total_employees': emp_counts.get(b.id, 0),
+                    'present': len(branch_presents.get(b.id, set())),
+                    'late': len(branch_lates.get(b.id, set())),
+                    'absent': absent_by_branch[b.id]['absent'],
+                    'on_leave': absent_by_branch[b.id]['on_leave'],
                 })
 
         from apps.branches.utils import get_cached_branches
@@ -234,10 +256,16 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
         from apps.employees.models import Employee, Department, EmployeeStatus
         from django.db.models import Count
 
-        total_master_emp = Employee.objects.count()
-        active_master_emp = Employee.objects.filter(status=EmployeeStatus.ACTIVE).count()
-        probation_master_emp = Employee.objects.filter(status=EmployeeStatus.PROBATION).count()
-        notice_master_emp = Employee.objects.filter(status=EmployeeStatus.NOTICE_PERIOD).count()
+        master_aggs = Employee.objects.aggregate(
+            total=Count('id'),
+            active=Count('id', filter=Q(status=EmployeeStatus.ACTIVE)),
+            probation=Count('id', filter=Q(status=EmployeeStatus.PROBATION)),
+            notice=Count('id', filter=Q(status=EmployeeStatus.NOTICE_PERIOD)),
+        )
+        total_master_emp = master_aggs['total']
+        active_master_emp = master_aggs['active']
+        probation_master_emp = master_aggs['probation']
+        notice_master_emp = master_aggs['notice']
 
         dept_summary = Department.objects.annotate(emp_count=Count('employees')).filter(is_active=True)
         recent_master_joiners = Employee.objects.select_related('department', 'branch', 'designation').order_by('-created_at')[:5]
@@ -400,7 +428,14 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                 branch_id=branch_id
             ) if r.status == 'on_leave']
 
-        queryset = super().get_queryset().filter(is_expired=False).select_related('employee', 'employee__branch')
+        queryset = super().get_queryset().filter(is_expired=False).select_related(
+            'employee',
+            'employee__branch',
+            'employee__user',
+            'employee__master_employee',
+            'employee__master_employee__department',
+            'employee__master_employee__designation',
+        )
 
         if date_from:
             queryset = queryset.filter(date__gte=date_from)
@@ -458,18 +493,22 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         if att_type:
             base_qs = base_qs.filter(type=att_type)
 
-        # Count Present (distinct employees checked in today)
+        # Count Field and base count
+        base_aggs = base_qs.aggregate(
+            total_field=Count('id', filter=Q(type='field')),
+            total_count=Count('id'),
+            present_count=Count('id', filter=Q(attendance_type='check_in')),
+            late_count=Count('id', filter=Q(attendance_type='check_in', status='late')),
+        )
         total_present = base_qs.filter(
             attendance_type='check_in'
         ).values('employee_id', 'date').distinct().count()
 
-        # Count Late (distinct employees late checked in today)
         total_late = base_qs.filter(
             attendance_type='check_in', status='late'
         ).values('employee_id', 'date').distinct().count()
 
-        # Count Field (total field visits and check_ins of type field)
-        total_field = base_qs.filter(type='field').count()
+        total_field = base_aggs['total_field']
 
         # Count Absent / On Leave (using the helper)
         absent_records = get_absent_records(
@@ -487,11 +526,11 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         elif status == 'on_leave':
             total_records = total_on_leave
         elif status == 'present':
-            total_records = base_qs.filter(attendance_type='check_in').count()
+            total_records = base_aggs['present_count']
         elif status == 'late':
-            total_records = base_qs.filter(attendance_type='check_in', status='late').count()
+            total_records = base_aggs['late_count']
         else:
-            total_records = base_qs.count()
+            total_records = base_aggs['total_count']
 
         context['total_records'] = total_records
         context['total_present'] = total_present
@@ -500,7 +539,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         context['total_late'] = total_late
         context['total_field'] = total_field
 
-        context['employees'] = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        context['employees'] = EmployeeProfile.objects.filter(is_active=True).only('id', 'full_name').order_by('full_name')
         from apps.branches.utils import get_cached_branches
         context['branches'] = get_cached_branches()
 
@@ -518,7 +557,11 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                 pass
 
         page_attendances = context['attendances']
-        employee_ids = {att.employee.id for att in page_attendances}
+        employee_ids = {
+            getattr(att, 'employee_id', getattr(getattr(att, 'employee', None), 'id', None))
+            for att in page_attendances
+        }
+        employee_ids.discard(None)
 
         leave_types = list(LeaveType.objects.all())
         balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year).select_related('leave_type')
@@ -588,6 +631,112 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
 
             records = queryset.order_by('-date', '-check_in_time')
 
+        export_format = request.GET.get('format', 'excel')
+
+        if export_format in ('excel', 'xlsx'):
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Attendance Report"
+            ws.views.sheetView[0].showGridLines = True
+
+            # Styling definitions
+            header_fill = PatternFill(start_color="1877F2", end_color="1877F2", fill_type="solid")
+            header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            title_font = Font(name="Calibri", size=16, bold=True, color="1E293B")
+            subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+            regular_font = Font(name="Calibri", size=10, color="0F172A")
+            bold_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
+            center_align = Alignment(horizontal="center", vertical="center")
+            left_align = Alignment(horizontal="left", vertical="center")
+            right_align = Alignment(horizontal="right", vertical="center")
+            thin_border = Border(
+                left=Side(style='thin', color='E2E8F0'),
+                right=Side(style='thin', color='E2E8F0'),
+                top=Side(style='thin', color='E2E8F0'),
+                bottom=Side(style='thin', color='E2E8F0')
+            )
+
+            # Title block
+            ws.merge_cells('A1:K1')
+            ws['A1'] = "FieldTrack — Comprehensive Attendance Report"
+            ws['A1'].font = title_font
+            ws['A1'].alignment = left_align
+
+            ws.merge_cells('A2:K2')
+            ws['A2'] = f"Generated on: {timezone.localtime().strftime('%d %B %Y, %I:%M %p')} | Filter: {date_from or 'All Start'} to {date_to or 'All End'}"
+            ws['A2'].font = subtitle_font
+            ws['A2'].alignment = left_align
+
+            # Headers
+            headers = ['SN', 'Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours Worked', 'Type', 'Status', 'Notes / Location']
+            ws.row_dimensions[4].height = 26
+            for col_num, header_title in enumerate(headers, 1):
+                cell = ws.cell(row=4, column=col_num, value=header_title)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = center_align
+                cell.border = thin_border
+
+            # Data rows
+            row_idx = 5
+            for idx, att in enumerate(records, 1):
+                check_in = timezone.localtime(att.check_in_time).strftime('%I:%M:%S %p') if getattr(att, 'check_in_time', None) else '—'
+                check_out = timezone.localtime(att.check_out_time).strftime('%I:%M:%S %p') if getattr(att, 'check_out_time', None) else '—'
+                branch_name = att.employee.branch.name if (hasattr(att, 'employee') and att.employee and att.employee.branch) else 'Unassigned'
+                emp_id = getattr(att.employee, 'employee_id', '') if hasattr(att, 'employee') else ''
+                emp_name = getattr(att.employee, 'full_name', '') if hasattr(att, 'employee') else ''
+                hours_val = float(att.total_hours) if getattr(att, 'total_hours', None) else 0.0
+                type_display = att.get_type_display() if hasattr(att, 'get_type_display') else 'Office'
+                status_display = att.get_status_display() if hasattr(att, 'get_status_display') else 'Absent'
+                note_str = str(getattr(att, 'note', '')) or ''
+
+                ws.row_dimensions[row_idx].height = 20
+                row_data = [
+                    (idx, center_align),
+                    (str(att.date), center_align),
+                    (emp_id, center_align),
+                    (emp_name, left_align),
+                    (branch_name, left_align),
+                    (check_in, center_align),
+                    (check_out, center_align),
+                    (hours_val, right_align),
+                    (type_display, center_align),
+                    (status_display, center_align),
+                    (note_str, left_align),
+                ]
+
+                for col_idx, (val, align) in enumerate(row_data, 1):
+                    c = ws.cell(row=row_idx, column=col_idx, value=val)
+                    c.font = regular_font
+                    c.alignment = align
+                    c.border = thin_border
+
+                row_idx += 1
+
+            # Auto-fit column widths
+            for col in ws.columns:
+                max_len = 0
+                col_letter = get_column_letter(col[0].column)
+                for cell in col:
+                    if cell.row < 4:
+                        continue
+                    val_str = str(cell.value or '')
+                    if len(val_str) > max_len:
+                        max_len = len(val_str)
+                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+            response = HttpResponse(
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="attendance_report_{timezone.localdate()}.xlsx"'
+            wb.save(response)
+            return response
+
+        # Fallback to CSV format
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="attendance_export_{timezone.localdate()}.csv"'
 
@@ -595,21 +744,21 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
         writer.writerow(['SN', 'Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours', 'Type', 'Status', 'Note'])
 
         for idx, att in enumerate(records, 1):
-            check_in = timezone.localtime(att.check_in_time).strftime('%H:%M:%S') if att.check_in_time else ''
-            check_out = timezone.localtime(att.check_out_time).strftime('%H:%M:%S') if att.check_out_time else ''
-            branch_name = att.employee.branch.name if att.employee.branch else 'Unassigned'
+            check_in = timezone.localtime(att.check_in_time).strftime('%H:%M:%S') if getattr(att, 'check_in_time', None) else ''
+            check_out = timezone.localtime(att.check_out_time).strftime('%H:%M:%S') if getattr(att, 'check_out_time', None) else ''
+            branch_name = att.employee.branch.name if (hasattr(att, 'employee') and att.employee and att.employee.branch) else 'Unassigned'
             writer.writerow([
                 idx,
                 att.date,
-                att.employee.employee_id,
-                att.employee.full_name,
+                getattr(att.employee, 'employee_id', ''),
+                getattr(att.employee, 'full_name', ''),
                 branch_name,
                 check_in,
                 check_out,
-                att.total_hours or '',
-                att.get_type_display(),
-                att.get_status_display(),
-                att.note
+                getattr(att, 'total_hours', '') or '',
+                att.get_type_display() if hasattr(att, 'get_type_display') else '',
+                att.get_status_display() if hasattr(att, 'get_status_display') else '',
+                getattr(att, 'note', '')
             ])
 
         return response
@@ -814,9 +963,16 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
             approved_leaves[(req.employee_id, curr)] = req
             curr += timedelta(days=1)
 
-    # Pre-fetch holidays in date range
+    # Fetch policies and holidays in bulk
+    from apps.attendance.reporting_service import OptimizedSchedule, is_employee_holiday_optimized
+    from apps.attendance.models import AttendancePolicy
     from apps.branches.models import Holiday
-    holidays = Holiday.objects.filter(date__range=(start_date, end_date))
+
+    policies = list(AttendancePolicy.objects.all())
+    policies_by_branch = {p.branch_id: p for p in policies if p.branch_id is not None}
+    global_policy = next((p for p in policies if p.branch_id is None), None)
+
+    holidays = list(Holiday.objects.filter(date__gte=start_date, date__lte=end_date))
     branch_holidays = defaultdict(set)
     global_holidays = set()
     for h in holidays:
@@ -824,18 +980,16 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
             branch_holidays[h.branch_id].add(h.date)
         else:
             global_holidays.add(h.date)
-
-    from apps.attendance.reporting_service import is_employee_holiday_optimized
-
     # Loop through each date and find absent employees
     synthetic_records = []
     curr_date = start_date
     schedule_cache = {}
+    for emp in employees:
+        schedule_cache[emp.id] = OptimizedSchedule(emp, policies_by_branch, global_policy)
+
     while curr_date <= end_date:
         for emp in employees:
-            if emp.branch_id not in schedule_cache:
-                schedule_cache[emp.branch_id] = _get_employee_schedule(emp)
-            schedule = schedule_cache[emp.branch_id]
+            schedule = schedule_cache[emp.id]
 
             # Skip holidays (weekly offs, branch schedule, and public holidays)
             if is_employee_holiday_optimized(emp, curr_date, schedule, branch_holidays, global_holidays):
@@ -877,7 +1031,7 @@ def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branc
         employees = employees.filter(id=employee_id)
     if branch_id:
         employees = employees.filter(branch_id=branch_id)
-    employees = {emp.id: emp for emp in employees.select_related('branch', 'branch__schedule', 'master_employee')}
+    employees = {emp.id: emp for emp in employees.select_related('branch', 'branch__schedule', 'master_employee', 'user')}
 
     valid_employee_ids = list(employees.keys())
     if not valid_employee_ids:
@@ -1112,7 +1266,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         thirty_days_ago = today - timedelta(days=30)
 
         # 1. Total headcount
-        employees = EmployeeProfile.objects.filter(is_active=True).order_by('full_name')
+        employees = EmployeeProfile.objects.filter(is_active=True).only('id', 'full_name', 'employee_id').order_by('full_name')
         ctx['employees'] = employees
         total_employees = employees.count() or 1
 
@@ -1206,7 +1360,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
         recent_logs = Attendance.objects.filter(
             is_expired=False
-        ).select_related('employee', 'employee__branch').prefetch_related('locations').order_by('-date', '-check_in_time')[:20]
+        ).select_related('employee', 'employee__branch', 'employee__user', 'employee__master_employee').prefetch_related('locations').order_by('-date', '-check_in_time')[:20]
 
         recent_list = []
         for a in recent_logs:
@@ -1400,8 +1554,8 @@ class MonthlyReportView(AdminRequiredMixin, View):
             'total_late':        data['total_late'],
             'total_field':       data['total_field'],
             'avg_att_pct':       data['avg_att_pct'],
-            'employees':         EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
-            'branches':          Branch.objects.all(),
+            'employees':         EmployeeProfile.objects.filter(is_active=True).only('id', 'full_name').order_by('full_name'),
+            'branches':          Branch.objects.only('id', 'name'),
             'selected_employee': emp_id,
             'selected_branch':   branch_id,
             'prev_m': prev_m, 'prev_y': prev_y,
@@ -3364,9 +3518,9 @@ class AbsentReportView(AdminRequiredMixin, ListView):
                 absence['remaining_days'] = None
 
         context.update({
-            'employees': EmployeeProfile.objects.all().order_by('full_name'),
-            'branches': Branch.objects.all().order_by('name'),
-            'leave_types': LeaveType.objects.all().order_by('name'),
+            'employees': EmployeeProfile.objects.all().only('id', 'full_name').order_by('full_name'),
+            'branches': Branch.objects.all().only('id', 'name').order_by('name'),
+            'leave_types': LeaveType.objects.all().only('id', 'name', 'default_days_per_year').order_by('name'),
             'selected_employee': self.request.GET.get('employee', ''),
             'selected_branch': self.request.GET.get('branch', ''),
             'selected_leave_type': self.request.GET.get('leave_type', ''),
@@ -3913,7 +4067,7 @@ class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
         context['user_employee'] = getattr(self.request.user, 'employee_master', None)
 
         if variant == 'admin':
-            context.update(get_admin_dashboard_data(self.request.user))
+            context.update(get_admin_dashboard_data(self.request.user, request=self.request))
         elif variant == 'hr':
             context.update(get_hr_dashboard_data(self.request.user))
         elif variant == 'manager':

@@ -1,13 +1,124 @@
 {% load leave_extras %}
 <c-app-shell page_title="My Leaves | FieldTrack" active_href="{{ request.path }}" shell_type="staff">
 
-
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 max-w-7xl mx-auto space-y-4">
+    {# ── MOBILE VIEW (< md) Matching Reference Screenshot 1 Exactly ── #}
+    <div class="md:hidden max-w-md mx-auto pt-1 pb-24 px-4 select-none">
+        {# Heading #}
+        <h1 class="text-xl font-bold text-slate-900 dark:text-white mb-3 tracking-tight">
+            My Leave Balances
+        </h1>
+
+        {# Request Leave Green Pill Button #}
+        <a href="{% url 'leave:staff_request_create' %}"
+           class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#16A34A] hover:bg-green-700 active:scale-95 text-white text-xs font-bold shadow-xs transition-all mb-3.5">
+            <i data-lucide="plus-circle" class="w-4 h-4 stroke-[2.2]"></i>
+            <span>Request Leave</span>
+        </a>
+
+        {# Total Leave Left Card #}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs mb-3 flex items-center justify-between">
+            <div>
+                <p class="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    TOTAL LEAVE LEFT ({{ year }})
+                </p>
+                <p class="text-xs text-slate-400 mt-0.5 font-medium">
+                    Combined balance across active categories
+                </p>
+            </div>
+            <div>
+                <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-[#DCFCE7] text-[#16A34A] dark:bg-emerald-950/40 dark:text-emerald-400 border border-[#86EFAC]/40">
+                    {{ total_leave_left }} day{% if total_leave_left != 1 %}s{% endif %}
+                </span>
+            </div>
+        </div>
+
+        {# Balance Category Cards #}
+        <div class="space-y-3 mb-4">
+            {% for balance in balances %}
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        {# Circle Icon #}
+                        <div class="w-10 h-10 rounded-full {% cycle 'bg-blue-50 text-[#1877F2] dark:bg-blue-950/40' 'bg-emerald-50 text-[#16A34A] dark:bg-emerald-950/40' %} flex items-center justify-center shrink-0">
+                            <i data-lucide="calendar" class="w-5 h-5 stroke-[2]"></i>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                {% if balance.leave_type %}{{ balance.leave_type.name }}{% else %}{{ balance.name }}{% endif %}
+                            </p>
+                            <p class="text-2xl font-black text-slate-900 dark:text-white leading-tight mt-0.5">
+                                {% if balance.remaining_days is not None %}{{ balance.remaining_days }}{% else %}{{ balance.remaining }}{% endif %}
+                            </p>
+                            <p class="text-xs text-slate-400 font-medium">Days Remaining</p>
+                        </div>
+                    </div>
+
+                    {# Total & Used #}
+                    <div class="text-right pl-4 border-l border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+                        <p>Total: {% if balance.total_days is not None %}{{ balance.total_days }}{% else %}{{ balance.total }}{% endif %}d</p>
+                        <p class="mt-0.5">Used: {% if balance.used_days is not None %}{{ balance.used_days }}{% else %}{{ balance.used }}{% endif %}d</p>
+                    </div>
+                </div>
+
+                {# Color Bar #}
+                <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div class="{% cycle 'bg-[#1877F2]' 'bg-[#16A34A]' %} h-full rounded-full"
+                         style="width: {% widthratio balance.used_days|default:balance.used balance.total_days|default:balance.total 100 %}%"></div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 text-center border border-slate-200/90 shadow-xs">
+                <p class="text-xs text-slate-500">No leave configurations configured.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Request History Section #}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-3">Request History</h3>
+            <div class="space-y-2">
+                {% for req in history %}
+                <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold text-slate-900 dark:text-white truncate">{{ req.leave_type.name }}</span>
+                            <span class="text-[10px] font-semibold text-slate-400">({{ req.total_days }}d)</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}</p>
+                    </div>
+                    <div>
+                        {% if req.status == 'APPROVED' or req.status == 'approved' %}
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#DCFCE7] text-[#166534]">Approved</span>
+                        {% elif req.status == 'REJECTED' or req.status == 'rejected' %}
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEE2E2] text-[#991B1B]">Rejected</span>
+                        {% else %}
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEF3C7] text-[#92400E]">Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="py-8 text-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-2">
+                        <i data-lucide="clock" class="w-6 h-6 stroke-[1.8]"></i>
+                    </div>
+                    <p class="text-sm font-bold text-slate-900 dark:text-white">No Requests Yet</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Your submitted leave requests will appear here.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Native Bottom Navigation #}
+        <c-bottom-nav active_tab="leave"></c-bottom-nav>
+    </div>
+
+    {# ── DESKTOP & TABLET VIEW (hidden md:block) with Full Cotton Components Untouched ── #}
+    <div class="hidden md:block p-4 max-w-7xl mx-auto space-y-4">
         <c-page-header title="My Leave Balances">
             <c-slot name="actions">
-                <c-button href="{% url 'leave:staff_request_create' %}" variant="accent" icon="plus-circle" label="Request Leave" ></c-button>
+                <c-button href="{% url 'leave:staff_request_create' %}" variant="accent" icon="plus-circle" label="Request Leave"></c-button>
             </c-slot>
         </c-page-header>
         {% if employee %}
@@ -19,7 +130,7 @@
                     <p class="text-xs mt-0.5" style="color:var(--text-muted)">Combined balance across active categories</p>
                 </div>
                 <div>
-                    <c-badge variant="{% if total_left < 0 %}danger{% else %}success{% endif %}" size="md" label="{{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}" ></c-badge>
+                    <c-badge variant="{% if total_left < 0 %}danger{% else %}success{% endif %}" size="md" label="{{ total_left }} day{% if total_left != 1 and total_left != -1 %}s{% endif %}"></c-badge>
                 </div>
             </div>
         </c-card>
@@ -59,7 +170,7 @@
             {% empty %}
             <div class="col-span-full">
                 <c-card>
-                    <c-empty-state icon="calendar" title="No Leave Configurations" description="No leave balances configured for this year." ></c-empty-state>
+                    <c-empty-state icon="calendar" title="No Leave Configurations" description="No leave balances configured for this year."></c-empty-state>
                 </c-card>
             </div>
             {% endfor %}
@@ -74,7 +185,7 @@
                         <div>
                             <div class="flex items-center gap-2">
                                 <span class="font-semibold text-xs" style="color:var(--text)">{{ req.leave_type.name }}</span>
-                                <c-badge variant="neutral" label="{{ req.total_days }} day{% if req.total_days != 1 %}s{% endif %}" ></c-badge>
+                                <c-badge variant="neutral" label="{{ req.total_days }} day{% if req.total_days != 1 %}s{% endif %}"></c-badge>
                             </div>
                             <p class="text-xs mt-0.5" style="color:var(--text-muted)">
                                 {{ req.start_date|date:"d/m/Y" }} - {{ req.end_date|date:"d/m/Y" }}
@@ -85,15 +196,15 @@
                         </div>
                         <div class="flex items-center gap-2">
                             {% if req.status == 'APPROVED' or req.status == 'approved' %}
-                                <c-status-pill status="approved" ></c-status-pill>
+                                <c-status-pill status="approved"></c-status-pill>
                             {% elif req.status == 'REJECTED' or req.status == 'rejected' %}
-                                <c-status-pill status="rejected" ></c-status-pill>
+                                <c-status-pill status="rejected"></c-status-pill>
                             {% elif req.status == 'returned' %}
-                                <c-status-pill status="returned" ></c-status-pill>
+                                <c-status-pill status="returned"></c-status-pill>
                             {% elif req.status == 'cancelled' %}
-                                <c-status-pill status="cancelled" ></c-status-pill>
+                                <c-status-pill status="cancelled"></c-status-pill>
                             {% else %}
-                                <c-status-pill status="pending" ></c-status-pill>
+                                <c-status-pill status="pending"></c-status-pill>
                             {% endif %}
                             <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''"></i>
                         </div>
@@ -113,11 +224,10 @@
                 </div>
                 {% empty %}
                 <div class="p-8">
-                    <c-empty-state icon="clock" title="No Requests Yet" description="Your submitted leave requests will appear here." ></c-empty-state>
+                    <c-empty-state icon="clock" title="No Requests Yet" description="Your submitted leave requests will appear here."></c-empty-state>
                 </div>
                 {% endfor %}
             </div>
         </c-card>
-
     </div>
 </c-app-shell>

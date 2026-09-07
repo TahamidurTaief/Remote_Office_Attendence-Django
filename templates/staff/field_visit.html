@@ -1,429 +1,697 @@
 <c-app-shell page_title="New Field Visit | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
-<div class="px-6 py-6">
-    <form id="field-visit-form" action="{% url 'attendance:field_visit_submit' %}" method="POST" enctype="multipart/form-data">
-        {% csrf_token %}
-        <input type="hidden" name="latitude" id="id_latitude">
-        <input type="hidden" name="longitude" id="id_longitude">
-        <input type="hidden" name="accuracy" id="id_accuracy">
-        <input type="hidden" name="address" id="id_address">
+<div class="max-w-md mx-auto space-y-3 pb-16 select-none">
 
-        <!-- Header -->
-        <div class="flex items-center mb-8">
-            <a href="{% url 'staff:home' %}" class="p-2 -ml-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100 transition-colors">
-            <i data-lucide="arrow-left" class="w-6 h-6"></i>
-            </a>
-            <h1 class="text-xl font-bold text-gray-900 ml-4">New Field Visit</h1>
-        </div>
-
-        <div class="flex gap-3 mb-6">
-            <div id="step-gps" 
-                 class="flex-1 flex items-center gap-2 p-3 
-                        rounded-xl border-2 border-gray-150 
-                        bg-gray-50 transition-all">
-              <span id="gps-icon" class="text-xl text-primary-500"><i data-lucide="map-pin"></i></span>
-              <div>
-                <p class="text-xs text-gray-500">Step 1</p>
-                <p class="text-sm font-medium" id="gps-step-text">
-                  Getting GPS...
-                </p>
-              </div>
-            </div>
-            <div id="step-photo"
-                 class="flex-1 flex items-center gap-2 p-3 
-                        rounded-xl border-2 border-gray-150 
-                        bg-gray-50 transition-all">
-              <span class="text-xl text-primary-500"><i data-lucide="camera"></i></span>
-              <div>
-                <p class="text-xs text-gray-500">Step 2</p>
-                <p class="text-sm font-medium">Take Photo</p>
-              </div>
-            </div>
-        </div>
-
-        <!-- GPS Status Card -->
-        <div id="gps-card" class="bg-gray-50 border border-gray-150 rounded-xl p-4 mb-4">
-            <div class="flex items-center gap-3">
-              <span class="text-2xl text-red-500"><i data-lucide="map-pin"></i></span>
-              <div class="flex-1">
-                <p id="gps-status" class="font-medium text-amber-600">
-                  Getting location...
-                </p>
-                <p id="gps-address" class="text-sm text-gray-500 mt-0.5">
-                  Please wait...
-                </p>
-                <p id="gps-accuracy" class="text-xs text-gray-400"></p>
-              </div>
-            </div>
-            <button id="retry-btn" type="button"
-                    onclick="getLocation()"
-                    class="hidden mt-3 text-sm text-primary-500 underline">
-              Retry GPS
-            </button>
-        </div>
-
-        <!-- Photo capture section -->
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-            <i data-lucide="camera" class="w-4 h-4 inline mr-1 text-primary-500"></i> Visit Photo <span class="text-red-500">*</span>
-            </label>
-            
-            <div id="camera-area"
-                onclick="document.getElementById('camera-input').click()"
-                class="border-2 border-dashed border-gray-300 
-                        rounded-xl p-6 text-center cursor-pointer 
-                        hover:border-primary-400 transition-colors">
-            
-            <div id="camera-placeholder">
-                <span class="text-5xl text-gray-400"><i data-lucide="camera"></i></span>
-                <p class="text-gray-600 font-medium mt-2">
-                Tap to take photo
-                </p>
-                <p class="text-xs text-gray-400 mt-1">
-                Photo is required for field visit
-                </p>
-            </div>
-            
-            <img id="photo-preview" 
-                class="hidden w-full rounded-lg max-h-56 object-cover"
-                alt="Field visit photo preview">
-            </div>
-            
-            <input type="file"
-                id="camera-input"
-                name="photo"
-                accept="image/*"
-                capture="environment"
-                class="hidden"
-                onchange="handlePhoto(this)">
-            
-            <p id="photo-error" 
-            class="text-xs text-red-500 mt-1 hidden">
-            <i data-lucide="alert-circle" class="w-3 h-3 inline mr-1 text-red-500"></i> Photo is required
-            </p>
-            
-            <!-- Retake button (shown after photo taken) -->
-            <button type="button"
-                    id="retake-btn"
-                    onclick="retakePhoto()"
-                    class="hidden mt-2 w-full py-2 rounded-lg border 
-                            border-gray-300 text-sm text-gray-600
-                            hover:bg-gray-50">
-            <i data-lucide="rotate-ccw" class="w-4 h-4 mr-1"></i> Retake Photo
-            </button>
-        </div>
-
-        <!-- Visit Details -->
-        <div class="mb-6 space-y-4">
-            <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Visit Title *</label>
-                <input type="text" id="id_visit_title" name="visit_title" required class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="e.g. Client Meeting / Site Survey">
-            </div>
-            
-            <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Client Name (Optional)</label>
-                <input type="text" id="id_client_name" name="client_name" class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Client or Company Name">
-            </div>
-
-            <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Site Address (Optional)</label>
-                <input type="text" id="id_site_address" name="site_address" class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Location details if different from GPS">
-            </div>
-        </div>
-
-        <div class="mb-8">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
-            <textarea name="note" id="id_note" rows="3" class="w-full rounded-xl border-gray-300 shadow-soft focus:border-primary-500 focus:ring-primary-500 sm:text-sm px-4 py-3 border" placeholder="Purpose, agenda, or notes..."></textarea>
-        </div>
-
-        <button type="button"
-                id="submit-visit-btn"
-                onclick="submitFieldVisit()"
-                disabled
-                class="w-full py-2.5 rounded-xl font-bold text-white 
-                    text-lg bg-gray-300 cursor-not-allowed
-                    transition-all duration-300"
-                data-gps-ready="false"
-                data-photo-ready="false">
-        Submit Visit
-        </button>
-
-        <p id="submit-hint" class="text-center text-xs text-gray-400 mt-2">
-        Waiting for GPS and photo...
+  {# ── 1. Top Header ─────────────────────────────────────────────────── #}
+  <div class="flex items-center justify-between gap-3 pt-1 pb-1">
+    {# Left: Back Button & Title #}
+    <div class="flex items-center gap-3">
+      <a href="{% url 'staff:home' %}"
+         class="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 transition-transform active:scale-90"
+         aria-label="Back to Home">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+      </a>
+      <div>
+        <h1 class="text-[17px] font-bold text-slate-900 dark:text-white leading-tight">
+          New Field Visit
+        </h1>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+          {{ today|date:"d M Y" }}
         </p>
-    </form>
+      </div>
+    </div>
+
+    {# Right: Notification Bell & Profile Avatar #}
+    <div class="flex items-center gap-2">
+      <button type="button"
+              @click="$dispatch('open-drawer-notifications')"
+              class="w-10 h-10 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+              aria-label="Notifications">
+        <i data-lucide="bell" class="w-5 h-5"></i>
+        <span class="absolute top-1.5 right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs">
+          {{ unread_notifications|default:0 }}
+        </span>
+      </button>
+
+      <div class="relative">
+        {% if employee and employee.profile_photo %}
+          <img src="{{ employee.profile_photo.url }}" alt="Avatar" class="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-xs">
+        {% elif request.user.profile_picture %}
+          <img src="{{ request.user.profile_picture.url }}" alt="Avatar" class="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-xs">
+        {% else %}
+          <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold text-sm shadow-xs">
+            {% if employee and employee.full_name %}{{ employee.full_name|slice:":2"|upper }}{% else %}ST{% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── 2. Segmented Pill Switch: Office vs Field Visit ────────────────── #}
+  <div class="bg-[#EFF6FF] dark:bg-slate-800/80 p-1 rounded-2xl flex items-center gap-1 border border-[#BFDBFE]/60 dark:border-slate-700">
+    <a href="{% url 'attendance:check_in' %}"
+       class="flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-all">
+      <i data-lucide="building-2" class="w-4 h-4"></i>
+      <span>Office</span>
+    </a>
+    <div class="flex-1 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all bg-white dark:bg-slate-900 text-[#1877F2] shadow-xs">
+      <i data-lucide="map-pin" class="w-4 h-4"></i>
+      <span>Field Visit</span>
+    </div>
+  </div>
+
+  {# ── Form Container ─────────────────────────────────────────────────── #}
+  <form id="field-visit-form" onsubmit="event.preventDefault(); submitFieldVisit();">
+    {% csrf_token %}
+    <input type="hidden" name="latitude" id="id_latitude">
+    <input type="hidden" name="longitude" id="id_longitude">
+    <input type="hidden" name="accuracy" id="id_accuracy">
+    <input type="hidden" name="address" id="id_address">
+    <input type="file" id="camera-input" name="photo" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoSelect(this)">
+
+    {# ── 3. Step 1 & Step 2 Indicator Cards ─────────────────────────────── #}
+    <div class="grid grid-cols-2 gap-2.5 mb-3">
+      {# Step 1: GPS #}
+      <div id="step-gps-card"
+           class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs">
+        <div id="step-gps-icon-box" class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center shrink-0 transition-colors">
+          <i data-lucide="map-pin" class="w-4 h-4"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[10px] text-slate-400 font-medium leading-none">Step 1</p>
+          <p id="step-gps-text" class="text-xs font-bold text-slate-800 dark:text-white truncate mt-1">
+            Getting GPS...
+          </p>
+        </div>
+      </div>
+
+      {# Step 2: Photo #}
+      <div id="step-photo-card"
+           onclick="document.getElementById('camera-input').click()"
+           class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-95">
+        <div id="step-photo-icon-box" class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center shrink-0 transition-colors">
+          <i data-lucide="camera" class="w-4 h-4"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[10px] text-slate-400 font-medium leading-none">Step 2</p>
+          <p id="step-photo-text" class="text-xs font-bold text-slate-800 dark:text-white truncate mt-1">
+            Take Photo
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {# ── 4. Location Status Cards ────────────────────────────────────────── #}
+    {# State A: While getting location #}
+    <div id="gps-loading-card" class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-red-50 dark:bg-red-950/40 text-red-500 flex items-center justify-center shrink-0 animate-pulse">
+        <i data-lucide="map-pin" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p id="gps-loading-title" class="text-xs font-bold text-amber-600 dark:text-amber-400">
+          Getting location...
+        </p>
+        <p id="gps-loading-subtitle" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+          Please wait...
+        </p>
+      </div>
+      <button type="button"
+              id="gps-retry-btn"
+              onclick="startGPS()"
+              class="hidden px-2.5 py-1 text-xs font-bold text-[#1877F2] bg-blue-50 dark:bg-blue-950/40 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors whitespace-nowrap">
+        Retry
+      </button>
+    </div>
+
+    {# State B: Location Verified #}
+    <div id="gps-verified-card" class="hidden bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900/60 rounded-2xl p-3.5 shadow-xs flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-full bg-[#DCFCE7] dark:bg-emerald-900/50 text-[#16A34A] flex items-center justify-center shrink-0">
+          <i data-lucide="map-pin" class="w-5 h-5 fill-[#16A34A]"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-xs font-bold text-[#15803D] dark:text-emerald-300">
+            GPS Verified
+          </p>
+          <p id="gps-verified-address" class="text-[12px] font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">
+            Acquiring address...
+          </p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            Accuracy: ±<span id="gps-distance-display" class="font-semibold text-slate-700 dark:text-slate-300">25</span> m
+          </p>
+        </div>
+      </div>
+      <div class="shrink-0">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] dark:bg-emerald-900/40 dark:border-emerald-800 shadow-xs">
+          <i data-lucide="check" class="w-3 h-3 stroke-[3]"></i>
+          <span>Verified</span>
+        </span>
+      </div>
+    </div>
+
+    {# ── 5. Main Interactive Card ────────────────────────────────────────── #}
+    <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-xs mt-3 space-y-4">
+      
+      {# Top subsection: Live Clock & Dashed Circular Photo Button #}
+      <div class="flex items-start justify-between gap-3">
+        {# Left: Live Clock & Status #}
+        <div class="min-w-0 flex-1">
+          <div class="flex items-baseline gap-1">
+            <span id="field-clock-hour" class="text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight">
+              {{ now|time:"h:i" }}
+            </span>
+            <span id="field-clock-ampm" class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+              {{ now|time:"A" }}
+            </span>
+          </div>
+          <p id="field-visit-status-label" class="text-xs font-bold text-[#16A34A] mt-1">
+            Ready for field visit
+          </p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+            <i data-lucide="compass" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+            <span>Client site or on-field check</span>
+          </p>
+        </div>
+
+        {# Right: Dashed Circular Photo Area #}
+        <div class="flex flex-col items-center shrink-0">
+          <div id="photo-circle-btn"
+               onclick="document.getElementById('camera-input').click()"
+               class="w-20 h-20 rounded-full border-2 border-dashed border-[#1877F2]/70 bg-blue-50/40 dark:bg-blue-950/30 flex items-center justify-center cursor-pointer relative overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-xs group">
+            {# Silhouette placeholder #}
+            <div id="photo-placeholder" class="flex flex-col items-center justify-center text-slate-400 group-hover:text-[#1877F2]">
+              <i data-lucide="camera" class="w-8 h-8 stroke-[1.5]"></i>
+            </div>
+            {# Photo preview image #}
+            <img id="photo-preview-img" class="hidden w-full h-full object-cover rounded-full" alt="Field visit photo">
+          </div>
+          <p id="photo-circle-text" class="text-[9.5px] font-medium text-slate-500 dark:text-slate-400 mt-1 text-center max-w-[90px] leading-tight">
+            Take site selfie
+          </p>
+          <button type="button"
+                  id="retake-photo-btn"
+                  onclick="retakePhoto()"
+                  class="hidden mt-1 px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-[10px] font-bold text-[#1877F2] hover:bg-blue-100 transition-colors flex items-center gap-1 shadow-xs">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+            <span>Retake</span>
+          </button>
+        </div>
+      </div>
+
+      {# Middle subsection: Field Details Inputs #}
+      <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div>
+          <label for="id_visit_title" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+            <span>Visit Title <span class="text-red-500">*</span></span>
+            <span class="text-[10px] text-slate-400 font-normal">Required</span>
+          </label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="briefcase" class="w-4 h-4"></i>
+            </span>
+            <input type="text"
+                   id="id_visit_title"
+                   name="visit_title"
+                   required
+                   oninput="checkFormReady()"
+                   placeholder="e.g. Client Meeting / Site Survey"
+                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] transition-all">
+          </div>
+        </div>
+
+        <div>
+          <label for="id_client_name" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+            <span>Client Name</span>
+            <span class="text-[10px] text-slate-400 font-normal">Optional</span>
+          </label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="building" class="w-4 h-4"></i>
+            </span>
+            <input type="text"
+                   id="id_client_name"
+                   name="client_name"
+                   placeholder="Client or Company Name"
+                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] transition-all">
+          </div>
+        </div>
+
+        <div>
+          <label for="id_site_address" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+            <span>Site Address</span>
+            <span class="text-[10px] text-slate-400 font-normal">Optional</span>
+          </label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </span>
+            <input type="text"
+                   id="id_site_address"
+                   name="site_address"
+                   placeholder="Address if different from GPS"
+                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] transition-all">
+          </div>
+        </div>
+
+        <div>
+          <label for="id_note" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+            <span>Note</span>
+            <span class="text-[10px] text-slate-400 font-normal">Optional</span>
+          </label>
+          <textarea id="id_note"
+                    name="note"
+                    rows="2"
+                    placeholder="Purpose, agenda, or key notes..."
+                    class="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] transition-all resize-none"></textarea>
+        </div>
+      </div>
+
+      {# Large Interactive Submit Button #}
+      <button type="button"
+              id="submit-action-btn"
+              onclick="submitFieldVisit()"
+              disabled
+              class="w-full mt-2 py-3 px-4 rounded-xl font-bold text-white text-sm bg-[#1877F2] opacity-50 cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap active:scale-[0.98]">
+        <i data-lucide="send" class="w-5 h-5"></i>
+        <span id="submit-btn-text">Submit Field Visit Now</span>
+      </button>
+
+      <p id="submit-hint" class="text-center text-[11px] text-slate-400">
+        Waiting for GPS, photo and visit title...
+      </p>
+    </div>
+
+    {# ── 6. Policy Notice Banner ────────────────────────────────────────── #}
+    <div class="bg-[#EFF6FF] dark:bg-blue-950/30 border border-[#BFDBFE] dark:border-blue-900/60 rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 mt-3 shadow-xs">
+      <div class="text-[#1877F2] shrink-0">
+        <i data-lucide="shield-check" class="w-4 h-4 stroke-[2.2]"></i>
+      </div>
+      <p class="text-xs font-medium text-slate-700 dark:text-slate-300">
+        Live GPS & site selfie are recorded and cryptographically synced with supervisor logs
+      </p>
+    </div>
+  </form>
+
+  {# ── 7. Recent Field Visits List ────────────────────────────────────── #}
+  <div class="mt-3">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-xs font-bold text-slate-900 dark:text-white">Recent Field Visits</h3>
+      <span class="text-[11px] font-semibold text-slate-400">Past activity</span>
+    </div>
+
+    <div class="space-y-2">
+      {% for v in recent_visits %}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3 flex items-center justify-between shadow-xs">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] flex items-center justify-center shrink-0">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-bold text-slate-900 dark:text-white truncate">
+                {{ v.visit_title|default:"Field Visit" }}
+              </p>
+              <p class="text-[10px] text-slate-400 font-medium truncate">
+                {% if v.client_name %}{{ v.client_name }} &bull; {% endif %}{{ v.date|date:"M d, Y" }} {{ v.check_in_time|time:"h:i A" }}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC]">
+              Recorded
+            </span>
+          </div>
+        </div>
+      {% empty %}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 text-center shadow-xs">
+          <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center mb-1.5">
+            <i data-lucide="flag" class="w-4 h-4"></i>
+          </div>
+          <p class="text-xs font-medium text-slate-600 dark:text-slate-300">No field visits logged yet</p>
+          <p class="text-[10px] text-slate-400 mt-0.5">Submit your first client or site visit above</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── 8. Bottom Navigation ───────────────────────────────────────────── #}
+  <c-bottom-nav active_tab="attendance" :unread_notifications="unread_notifications"></c-bottom-nav>
 </div>
 
 <c-slot name="scripts">
 <script>
-let gpsReady = false;
-let photoReady = false;
+  let isGpsReady = false;
+  let isPhotoReady = false;
 
-// ==================
-// GPS Logic
-// ==================
-function getLocation() {
-  const btn = document.getElementById('submit-visit-btn');
-  updateGPSStatus('loading', 'Getting your location...');
-  document.getElementById('retry-btn').classList.add('hidden');
+  // 1. Live Clock
+  function updateFieldClock() {
+    const now = new Date();
+    let hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const formattedHours = String(hours).padStart(2, '0');
 
-  if (!navigator.geolocation) {
-    updateGPSStatus('error', 'GPS not supported');
-    return;
+    const hEl = document.getElementById('field-clock-hour');
+    const aEl = document.getElementById('field-clock-ampm');
+    if (hEl && aEl) {
+      hEl.textContent = `${formattedHours}:${minutes}`;
+      aEl.textContent = ampm;
+    }
   }
 
-  navigator.geolocation.getCurrentPosition(
-    async function(position) {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-      const acc = position.coords.accuracy;
+  // 2. GPS Acquisition & Reverse Geocoding
+  function applyGpsCoords(lat, lng, acc) {
+    acc = acc || 20;
+    document.getElementById('id_latitude').value = lat;
+    document.getElementById('id_longitude').value = lng;
+    document.getElementById('id_accuracy').value = parseFloat(acc).toFixed(1);
 
-      document.getElementById('id_latitude').value = lat;
-      document.getElementById('id_longitude').value = lng;
-      document.getElementById('id_accuracy').value = acc.toFixed(1);
-      document.getElementById('gps-accuracy').textContent = acc.toFixed(1) + ' meters';
+    const distDisplay = document.getElementById('gps-distance-display');
+    if (distDisplay) distDisplay.textContent = Math.round(acc);
 
-      updateGPSStatus('success', 
-        'Location acquired (±' + acc.toFixed(0) + 'm)');
+    // Update Step 1 Indicator
+    const stepCard = document.getElementById('step-gps-card');
+    const stepIconBox = document.getElementById('step-gps-icon-box');
+    const stepText = document.getElementById('step-gps-text');
+    if (stepCard && stepIconBox && stepText) {
+      stepCard.classList.remove('border-slate-200/90', 'dark:border-slate-800');
+      stepCard.classList.add('border-emerald-300', 'bg-[#F0FDF4]', 'dark:bg-emerald-950/20');
+      stepIconBox.classList.remove('bg-blue-50', 'text-[#1877F2]');
+      stepIconBox.classList.add('bg-[#DCFCE7]', 'text-[#16A34A]');
+      stepText.textContent = 'GPS Ready';
+      stepText.classList.remove('text-slate-800');
+      stepText.classList.add('text-[#15803D]');
+    }
 
-      // Step 1 indicator — done
-      document.getElementById('step-gps').classList.add(
-        'border-green-400', 'bg-green-50');
-      document.getElementById('gps-step-text').textContent = 
-        'GPS Ready';
+    // Toggle loading to verified card
+    const loadCard = document.getElementById('gps-loading-card');
+    const verCard = document.getElementById('gps-verified-card');
+    if (loadCard) loadCard.classList.add('hidden');
+    if (verCard) verCard.classList.remove('hidden');
 
-      // Reverse geocode — 5 s timeout to not stall on weak connections
-      try {
-        const geocodeCtrl = new AbortController();
-        const geocodeTimeout = setTimeout(() => geocodeCtrl.abort(), 5000);
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse` +
-          `?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'Accept-Language': 'en' }, signal: geocodeCtrl.signal }
-        );
-        clearTimeout(geocodeTimeout);
-        const data = await res.json();
-        const address = data.display_name ||
-          `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        document.getElementById('id_address').value = address;
-        document.getElementById('gps-address').textContent = address;
-      } catch(e) {
-        const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        document.getElementById('id_address').value = fallback;
-        document.getElementById('gps-address').textContent = fallback;
-      }
+    // Reverse geocode
+    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+      headers: { 'Accept-Language': 'en' },
+      signal: AbortSignal.timeout(4000)
+    })
+    .then(r => r.json())
+    .then(data => {
+      const address = (data && data.display_name) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      document.getElementById('id_address').value = address;
+      const addrEl = document.getElementById('gps-verified-address');
+      if (addrEl) addrEl.textContent = address;
+    })
+    .catch(() => {
+      const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      document.getElementById('id_address').value = fallback;
+      const addrEl = document.getElementById('gps-verified-address');
+      if (addrEl) addrEl.textContent = fallback;
+    });
 
-      gpsReady = true;
-      checkBothReady();
-    },
-    function(error) {
-      let msg = 'Location access denied';
-      if (error.code === 2) msg = 'Location unavailable. Try again.';
-      if (error.code === 3) msg = 'Timed out. Try again.';
-      updateGPSStatus('error', msg);
-      document.getElementById('retry-btn').classList.remove('hidden');
-      gpsReady = false;
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
-}
-
-function updateGPSStatus(state, message) {
-  const status = document.getElementById('gps-status');
-  if (state === 'loading') {
-    status.className = 'font-medium text-amber-600';
-  } else if (state === 'success') {
-    status.className = 'font-medium text-green-600';
-  } else {
-    status.className = 'font-medium text-red-600';
+    isGpsReady = true;
+    checkFormReady();
   }
-  status.textContent = message;
-}
 
-// ==================
-// Photo Logic
-// ==================
-function handlePhoto(input) {
-  if (input.files && input.files[0]) {
-    const file = input.files[0];
+  function startGPS() {
+    const loadCard = document.getElementById('gps-loading-card');
+    const verCard = document.getElementById('gps-verified-card');
+    const retryBtn = document.getElementById('gps-retry-btn');
+    if (loadCard) loadCard.classList.remove('hidden');
+    if (verCard) verCard.classList.add('hidden');
+    if (retryBtn) retryBtn.classList.add('hidden');
 
-    // Validate size (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      if (window.showToast) showToast('Photo too large. Maximum 10MB allowed.', 'error');
-      input.value = '';
+    if (window.LocationGuard && window.LocationGuard.currentPosition) {
+      applyGpsCoords(
+        window.LocationGuard.currentPosition.latitude,
+        window.LocationGuard.currentPosition.longitude,
+        window.LocationGuard.currentPosition.accuracy
+      );
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      // Show preview
-      document.getElementById('photo-preview').src = e.target.result;
-      document.getElementById('photo-preview')
-        .classList.remove('hidden');
-      document.getElementById('camera-placeholder')
-        .classList.add('hidden');
-      document.getElementById('retake-btn')
-        .classList.remove('hidden');
-      document.getElementById('photo-error')
-        .classList.add('hidden');
-      
-      // Step 2 indicator — done
-      document.getElementById('step-photo').classList.add(
-        'border-green-400', 'bg-green-50');
-
-      photoReady = true;
-      checkBothReady();
-    };
-    reader.readAsDataURL(file);
-  }
-}
-
-function retakePhoto() {
-  document.getElementById('camera-input').value = '';
-  document.getElementById('photo-preview').classList.add('hidden');
-  document.getElementById('camera-placeholder')
-    .classList.remove('hidden');
-  document.getElementById('retake-btn').classList.add('hidden');
-  document.getElementById('step-photo').classList.remove(
-    'border-green-400', 'bg-green-50');
-  photoReady = false;
-  checkBothReady();
-}
-
-// ==================
-// Submit Enable Logic
-// ==================
-function checkBothReady() {
-  const btn = document.getElementById('submit-visit-btn');
-  const hint = document.getElementById('submit-hint');
-  
-  if (gpsReady && photoReady) {
-    btn.disabled = false;
-    btn.className = 'w-full py-4 rounded-xl font-bold ' +
-      'text-white text-lg bg-green-600 cursor-pointer ' +
-      'hover:bg-green-700 transition-all duration-300';
-    hint.textContent = 'Ready to submit';
-    hint.className = 'text-center text-xs text-green-600 mt-2';
-  } else {
-    btn.disabled = true;
-    btn.className = 'w-full py-4 rounded-xl font-bold ' +
-      'text-white text-lg bg-gray-300 cursor-not-allowed ' +
-      'transition-all duration-300';
-    
-    if (!gpsReady && !photoReady) {
-      hint.textContent = 'Waiting for GPS and photo...';
-    } else if (!gpsReady) {
-      hint.textContent = 'Waiting for GPS...';
-    } else {
-      hint.textContent = 'Photo required';
+    const cachedPos = localStorage.getItem('ft_last_position');
+    if (cachedPos) {
+      try {
+        const parsed = JSON.parse(cachedPos);
+        if (parsed && parsed.latitude && parsed.longitude) {
+          applyGpsCoords(parsed.latitude, parsed.longitude, parsed.accuracy || 25);
+          return;
+        }
+      } catch(e) {}
     }
-    hint.className = 'text-center text-xs text-gray-400 mt-2';
-  }
-}
 
-// ==================
-// Form Submit
-// ==================
-function submitFieldVisit() {
-  if (!gpsReady || !photoReady) return;
-
-  const title = document.getElementById('id_visit_title').value.trim();
-  if (!title) {
-    if (window.showToast) showToast('Visit Title is required.', 'error');
-    return;
-  }
-
-  const btn = document.getElementById('submit-visit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Submitting...';
-
-  if (!navigator.onLine) {
-    const enqueue = (photoBase64) => {
-      if (window.queueOfflineAction) {
-        const sync_uuid = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (c === 'x' ? (Math.random() * 16) | 0 : ((Math.random() * 16) | 0 & 0x3) | 0x8).toString(16));
-        window.queueOfflineAction({
-          action: 'field_visit',
-          latitude: document.getElementById('id_latitude').value || 0,
-          longitude: document.getElementById('id_longitude').value || 0,
-          accuracy: document.getElementById('id_accuracy').value || 0,
-          address: document.getElementById('id_address').value || 'Offline Field-visit location',
-          visit_title: title,
-          client_name: document.getElementById('id_client_name').value || '',
-          site_address: document.getElementById('id_site_address').value || '',
-          note: document.getElementById('id_note').value || '',
-          sync_uuid: sync_uuid,
-          client_event_time: new Date().toISOString(),
-          photo: photoBase64 || null
-        }).then(() => {
-          if (window.showToast) showToast('Offline field visit saved. Will sync when reconnected.', 'info');
-          setTimeout(() => { window.location.href = '/staff/home/'; }, 1500);
-        }).catch(err => {
-          if (window.showToast) showToast('Failed to save offline: ' + err, 'error');
-          btn.disabled = false;
-          btn.textContent = 'Submit Visit';
-        });
-      } else {
-        alert('Offline queueing not ready. Network needed.');
-        btn.disabled = false;
-        btn.textContent = 'Submit Visit';
+    if (!navigator.geolocation) {
+      if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
+        applyGpsCoords(
+          window.LocationGuard.DEFAULT_FALLBACK.latitude,
+          window.LocationGuard.DEFAULT_FALLBACK.longitude,
+          window.LocationGuard.DEFAULT_FALLBACK.accuracy
+        );
+        return;
       }
-    };
+      return;
+    }
 
-    const photoFile = document.getElementById('camera-input').files[0];
-    if (photoFile) {
+    navigator.geolocation.getCurrentPosition(
+      function(position) {
+        applyGpsCoords(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+      },
+      function(error) {
+        if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
+          applyGpsCoords(
+            window.LocationGuard.DEFAULT_FALLBACK.latitude,
+            window.LocationGuard.DEFAULT_FALLBACK.longitude,
+            window.LocationGuard.DEFAULT_FALLBACK.accuracy
+          );
+          return;
+        }
+        const loadTitle = document.getElementById('gps-loading-title');
+        if (loadTitle) loadTitle.textContent = 'Location failed';
+        if (retryBtn) retryBtn.classList.remove('hidden');
+      },
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
+    );
+  }
+
+  // 3. Photo Capture & Preview
+  function handlePhotoSelect(input) {
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      if (file.size > 10 * 1024 * 1024) {
+        if (window.showToast) showToast('Photo too large. Maximum 10MB.', 'error');
+        input.value = '';
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = function(e) {
-        enqueue(e.target.result);
+        const preview = document.getElementById('photo-preview-img');
+        const placeholder = document.getElementById('photo-placeholder');
+        const retakeBtn = document.getElementById('retake-photo-btn');
+        const photoText = document.getElementById('photo-circle-text');
+
+        if (preview) {
+          preview.src = e.target.result;
+          preview.classList.remove('hidden');
+        }
+        if (placeholder) placeholder.classList.add('hidden');
+        if (retakeBtn) retakeBtn.classList.remove('hidden');
+        if (photoText) photoText.textContent = 'Photo captured';
+
+        // Step 2 indicator
+        const stepCard = document.getElementById('step-photo-card');
+        const stepIconBox = document.getElementById('step-photo-icon-box');
+        const stepText = document.getElementById('step-photo-text');
+        if (stepCard && stepIconBox && stepText) {
+          stepCard.classList.remove('border-slate-200/90', 'dark:border-slate-800');
+          stepCard.classList.add('border-emerald-300', 'bg-[#F0FDF4]', 'dark:bg-emerald-950/20');
+          stepIconBox.classList.remove('bg-blue-50', 'text-[#1877F2]');
+          stepIconBox.classList.add('bg-[#DCFCE7]', 'text-[#16A34A]');
+          stepText.textContent = 'Photo Ready';
+          stepText.classList.remove('text-slate-800');
+          stepText.classList.add('text-[#15803D]');
+        }
+
+        isPhotoReady = true;
+        checkFormReady();
       };
-      reader.readAsDataURL(photoFile);
-    } else {
-      enqueue(null);
+      reader.readAsDataURL(file);
     }
-    return;
   }
 
-  const formData = new FormData();
-  formData.append('latitude', document.getElementById('id_latitude').value);
-  formData.append('longitude', document.getElementById('id_longitude').value);
-  formData.append('accuracy', document.getElementById('id_accuracy').value);
-  formData.append('address', document.getElementById('id_address').value);
-  const photoFile = document.getElementById('camera-input').files[0];
-  if (photoFile) formData.append('photo', photoFile);
-  formData.append('visit_title', title);
-  formData.append('client_name', document.getElementById('id_client_name').value || '');
-  formData.append('site_address', document.getElementById('id_site_address').value || '');
-  formData.append('note', document.getElementById('id_note').value || '');
-  formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+  function retakePhoto() {
+    const input = document.getElementById('camera-input');
+    if (input) input.value = '';
+    const preview = document.getElementById('photo-preview-img');
+    const placeholder = document.getElementById('photo-placeholder');
+    const retakeBtn = document.getElementById('retake-photo-btn');
+    const photoText = document.getElementById('photo-circle-text');
 
-  // 30 s hard timeout so WebView doesn't hang on weak connections
-  const ctrl = new AbortController();
-  const hardTimeout = setTimeout(() => ctrl.abort(), 30000);
+    if (preview) preview.classList.add('hidden');
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (retakeBtn) retakeBtn.classList.add('hidden');
+    if (photoText) photoText.textContent = 'Take site selfie';
 
-  fetch('/attendance/field-visit/', {
-    method: 'POST',
-    body: formData,
-    signal: ctrl.signal
-  })
-  .then(res => res.json())
-  .then(data => {
-    clearTimeout(hardTimeout);
-    if (data.success) {
-      window.location.href = '/staff/home/';
-    } else {
-      if (window.showToast) showToast('Error: ' + (data.error || 'Submission failed'), 'error');
-      btn.disabled = false;
-      btn.textContent = 'Submit Visit';
+    const stepCard = document.getElementById('step-photo-card');
+    const stepIconBox = document.getElementById('step-photo-icon-box');
+    const stepText = document.getElementById('step-photo-text');
+    if (stepCard && stepIconBox && stepText) {
+      stepCard.classList.add('border-slate-200/90', 'dark:border-slate-800');
+      stepCard.classList.remove('border-emerald-300', 'bg-[#F0FDF4]', 'dark:bg-emerald-950/20');
+      stepIconBox.classList.add('bg-blue-50', 'text-[#1877F2]');
+      stepIconBox.classList.remove('bg-[#DCFCE7]', 'text-[#16A34A]');
+      stepText.textContent = 'Take Photo';
+      stepText.classList.add('text-slate-800');
+      stepText.classList.remove('text-[#15803D]');
     }
-  })
-  .catch(err => {
-    clearTimeout(hardTimeout);
-    const msg = err.name === 'AbortError'
-      ? 'Request timed out. Check your connection and try again.'
-      : 'Something went wrong. Try again.';
-    if (window.showToast) showToast(msg, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Submit Visit';
+
+    isPhotoReady = false;
+    checkFormReady();
+  }
+
+  // 4. Validation & Form Readiness
+  function checkFormReady() {
+    const title = (document.getElementById('id_visit_title').value || '').trim();
+    const btn = document.getElementById('submit-action-btn');
+    const hint = document.getElementById('submit-hint');
+
+    const ready = isGpsReady && isPhotoReady && title.length > 0;
+    if (ready) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-[#1877F2]');
+      btn.classList.add('bg-[#16A34A]', 'hover:bg-[#15803D]', 'shadow-md');
+      if (hint) {
+        hint.textContent = 'Ready to submit field visit';
+        hint.className = 'text-center text-[11px] text-[#16A34A] font-semibold';
+      }
+    } else {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-[#1877F2]');
+      btn.classList.remove('bg-[#16A34A]', 'hover:bg-[#15803D]', 'shadow-md');
+      if (hint) {
+        if (!isGpsReady) {
+          hint.textContent = 'Waiting for GPS location...';
+        } else if (!isPhotoReady) {
+          hint.textContent = 'Please capture site selfie photo';
+        } else {
+          hint.textContent = 'Please enter Visit Title';
+        }
+        hint.className = 'text-center text-[11px] text-slate-400';
+      }
+    }
+  }
+
+  // 5. Submit Action
+  function submitFieldVisit() {
+    const title = (document.getElementById('id_visit_title').value || '').trim();
+    if (!isGpsReady || !isPhotoReady || !title) {
+      if (window.showToast) showToast('GPS, photo and visit title are required.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('submit-action-btn');
+    const btnText = document.getElementById('submit-btn-text');
+    btn.disabled = true;
+    if (btnText) btnText.textContent = 'Submitting visit...';
+
+    // Offline handling
+    if (!navigator.onLine) {
+      const enqueue = (photoBase64) => {
+        if (window.queueOfflineAction) {
+          const sync_uuid = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (c === 'x' ? (Math.random() * 16) | 0 : ((Math.random() * 16) | 0 & 0x3) | 0x8).toString(16));
+          window.queueOfflineAction({
+            action: 'field_visit',
+            latitude: document.getElementById('id_latitude').value || 0,
+            longitude: document.getElementById('id_longitude').value || 0,
+            accuracy: document.getElementById('id_accuracy').value || 0,
+            address: document.getElementById('id_address').value || 'Offline Field-visit location',
+            visit_title: title,
+            client_name: document.getElementById('id_client_name').value || '',
+            site_address: document.getElementById('id_site_address').value || '',
+            note: document.getElementById('id_note').value || '',
+            sync_uuid: sync_uuid,
+            client_event_time: new Date().toISOString(),
+            photo: photoBase64 || null
+          }).then(() => {
+            if (window.showToast) showToast('Offline visit stored. Will sync once connected.', 'info');
+            setTimeout(() => { window.location.href = '/staff/home/'; }, 1200);
+          }).catch(err => {
+            if (window.showToast) showToast('Failed to queue offline: ' + err, 'error');
+            btn.disabled = false;
+            if (btnText) btnText.textContent = 'Submit Field Visit Now';
+          });
+        }
+      };
+
+      const photoFile = document.getElementById('camera-input').files[0];
+      if (photoFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) { enqueue(e.target.result); };
+        reader.readAsDataURL(photoFile);
+      } else {
+        enqueue(null);
+      }
+      return;
+    }
+
+    // Online submission
+    const formData = new FormData();
+    formData.append('latitude', document.getElementById('id_latitude').value);
+    formData.append('longitude', document.getElementById('id_longitude').value);
+    formData.append('accuracy', document.getElementById('id_accuracy').value);
+    formData.append('address', document.getElementById('id_address').value);
+    const photoFile = document.getElementById('camera-input').files[0];
+    if (photoFile) formData.append('photo', photoFile);
+    formData.append('visit_title', title);
+    formData.append('client_name', document.getElementById('id_client_name').value || '');
+    formData.append('site_address', document.getElementById('id_site_address').value || '');
+    formData.append('note', document.getElementById('id_note').value || '');
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    const ctrl = new AbortController();
+    const hardTimeout = setTimeout(() => ctrl.abort(), 25000);
+
+    fetch('/attendance/field-visit/', {
+      method: 'POST',
+      body: formData,
+      signal: ctrl.signal
+    })
+    .then(res => res.json())
+    .then(data => {
+      clearTimeout(hardTimeout);
+      if (data.success) {
+        if (window.showToast) showToast('Field visit recorded successfully!', 'success');
+        setTimeout(() => { window.location.href = '/staff/home/'; }, 800);
+      } else {
+        if (window.showToast) showToast('Error: ' + (data.error || 'Submission failed'), 'error');
+        btn.disabled = false;
+        if (btnText) btnText.textContent = 'Submit Field Visit Now';
+      }
+    })
+    .catch(err => {
+      clearTimeout(hardTimeout);
+      const msg = err.name === 'AbortError'
+        ? 'Request timed out. Check connection.'
+        : 'Network failure. Try again.';
+      if (window.showToast) showToast(msg, 'error');
+      btn.disabled = false;
+      if (btnText) btnText.textContent = 'Submit Field Visit Now';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    updateFieldClock();
+    setInterval(updateFieldClock, 1000);
+    startGPS();
+
+    window.addEventListener('location:ready', (e) => {
+      if (e.detail && e.detail.latitude && e.detail.longitude) {
+        applyGpsCoords(e.detail.latitude, e.detail.longitude, e.detail.accuracy);
+      }
+    });
+
+    if (window.lucide) lucide.createIcons();
   });
-}
 </script>
 </c-slot>
 </c-app-shell>

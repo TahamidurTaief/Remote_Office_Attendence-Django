@@ -352,7 +352,7 @@ def get_hr_dashboard_data(user):
     all_employees = list(Employee.objects.select_related('department', 'designation', 'branch').all())
     emp_ids = [e.pk for e in all_employees]
     if emp_ids:
-        from apps.employees.models import AssetAssignment
+        from apps.employees.models import AssetAssignment, EmployeeDocument
         doc_emp_ids = set(EmployeeDocument.objects.filter(
             employee_master_id__in=emp_ids,
             is_active=True,
@@ -369,7 +369,6 @@ def get_hr_dashboard_data(user):
         for e in all_employees:
             e._has_valid_docs = e.pk in doc_emp_ids
             e._has_unreturned_assets = e.pk in asset_emp_ids
-
     incomplete_employees = [e for e in all_employees if e.get_completion_percentage() < 100]
     data['incomplete_profiles_count'] = len(incomplete_employees)
     data['incomplete_profiles'] = incomplete_employees[:5]
@@ -385,8 +384,8 @@ def get_hr_dashboard_data(user):
     ))
     data['_today_attendances'] = today_attendances
 
-    data['today_attendance_count'] = sum(1 for a in today_attendances if a['status'] == 'present')
-    data['today_late_count'] = sum(1 for a in today_attendances if a['status'] == 'late')
+    data['today_attendance_count'] = sum(1 for a in today_attendances if not a['is_expired'] and a['status'] == 'present')
+    data['today_late_count'] = sum(1 for a in today_attendances if not a['is_expired'] and a['status'] == 'late')
 
     # HR Breakdown
     active_profiles_qs = EmployeeProfile.objects.filter(master_employee__status=EmployeeStatus.ACTIVE)
@@ -451,7 +450,7 @@ def get_hr_dashboard_data(user):
     return data
 
 
-def get_admin_dashboard_data(user):
+def get_admin_dashboard_data(user, request=None):
     """
     Admin dashboard: HR org-wide metrics + System security & session stats.
     """
@@ -469,7 +468,13 @@ def get_admin_dashboard_data(user):
     from apps.attendance.models import SyncLog, AttendanceLocation, AttendanceCorrectionRequest
     from django.db.models import Sum, Q
     data['sync_failed_count'] = SyncLog.objects.aggregate(total_failed=Sum('records_failed'))['total_failed'] or 0
-    data['offline_queue_size'] = Attendance.objects.filter(synced_at__isnull=True).count()
+    # Attendance offline queue & pending OT
+    att_aggs = Attendance.objects.aggregate(
+        offline_queue=Count('id', filter=Q(synced_at__isnull=True)),
+        pending_ot=Count('id', filter=Q(ot_status='pending', is_expired=False))
+    )
+    data['offline_queue_size'] = att_aggs['offline_queue']
+    pending_ot = att_aggs['pending_ot']
     data['gps_issues_count'] = Attendance.objects.filter(
         Q(gps_quality__in=['poor', 'missing']) |
         Q(note__icontains='GEOFENCE WARNING') |
@@ -502,7 +507,7 @@ def get_admin_dashboard_data(user):
         date=today,
         overtime_minutes__gt=0,
         is_expired=False
-    ).select_related('employee').order_by('-overtime_minutes')[:5]
+    ).select_related('employee', 'employee__user', 'employee__master_employee').order_by('-overtime_minutes')[:5]
 
     # Expense & Attendance Analysis
     from apps.expense.models import ExpenseCategory
@@ -520,9 +525,13 @@ def get_admin_dashboard_data(user):
     pending_expenses = expense_aggs['pending_count'] or 0
 
     # Pending approvals total count
-    pending_leaves = LeaveRequest.objects.filter(status='pending').count()
+    if request and hasattr(request, '_pending_leave_count'):
+        pending_leaves = request._pending_leave_count
+    else:
+        pending_leaves = LeaveRequest.objects.filter(status='pending').count()
+        if request:
+            request._pending_leave_count = pending_leaves
     pending_corrections = AttendanceCorrectionRequest.objects.filter(status='pending').count()
-    pending_ot = Attendance.objects.filter(ot_status='pending', is_expired=False).count()
     data['pending_approvals_count'] = pending_leaves + pending_expenses + pending_corrections + pending_ot
 
     # 2. Expense Category breakdown
@@ -537,11 +546,7 @@ def get_admin_dashboard_data(user):
 
     # 3. Predict/Forecast Tomorrow's Attendance
     seven_days_ago = today - timedelta(days=7)
-    past_7_days_atts = Attendance.objects.filter(
-        date__range=(seven_days_ago, today),
-        attendance_type='check_in',
-        is_expired=False
-    ).values('date').annotate(count=Count('id')).order_by('date')
+    past_7_days_atts = [item for item in data.get('attendance_trend', []) if item['date'] >= seven_days_ago]
     
     n = len(past_7_days_atts)
     if n >= 3:
@@ -560,14 +565,11 @@ def get_admin_dashboard_data(user):
         else:
             forecasted_count = sum_y / n
     else:
-        avg_checkins = Attendance.objects.filter(
-            date__range=(today - timedelta(days=5), today),
-            attendance_type='check_in',
-            is_expired=False
-        ).values('date').annotate(count=Count('id')).aggregate(avg=Avg('count'))['avg'] or 0
-        forecasted_count = avg_checkins
+        five_days_ago = today - timedelta(days=5)
+        recent_counts = [item['count'] for item in data.get('attendance_trend', []) if item['date'] >= five_days_ago]
+        forecasted_count = (sum(recent_counts) / len(recent_counts)) if recent_counts else 0
 
-    total_emp_count = Employee.objects.count() or 1
+    total_emp_count = data.get('total_employees') or 1
     data['forecasted_attendance_count'] = round(forecasted_count)
     data['forecasted_attendance_rate'] = min(100.0, round((float(forecasted_count) / total_emp_count) * 100, 1))
 
@@ -579,12 +581,7 @@ def get_admin_dashboard_data(user):
     ).values('requested_at__date').annotate(total_amount=Sum('amount'))
     expense_map = {item['requested_at__date']: float(item['total_amount']) for item in daily_expenses_qs}
 
-    daily_checkins_qs = Attendance.objects.filter(
-        date__range=(ten_days_ago, today),
-        attendance_type='check_in',
-        is_expired=False
-    ).values('date').annotate(count=Count('id'))
-    checkin_map = {item['date']: item['count'] for item in daily_checkins_qs}
+    checkin_map = {item['date']: item['count'] for item in data.get('attendance_trend', []) if item['date'] >= ten_days_ago}
 
     x_vals = []
     y_vals = []

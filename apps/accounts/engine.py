@@ -128,7 +128,6 @@ class PermissionEngine:
         assigned_role_ids = list(
             UserRoleAssignment.objects.filter(user=user, role__is_active=True).values_list('role_id', flat=True)
         )
-
         # 2. Fetch role permissions
         role_perms = RolePermission.objects.filter(
             role_id__in=assigned_role_ids,
