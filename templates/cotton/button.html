@@ -17,7 +17,7 @@
 <a href="{{ href }}"
    class="ft-btn ft-btn-{{ variant|default:'primary' }} ft-btn-{{ size|default:'md' }} {{ extra_class }}"
    {% if disabled %}aria-disabled="true" tabindex="-1"{% endif %}
-   {{ attrs }}>
+   {{ attrs|safe }}>
   {% if icon %}<i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>{% endif %}
   {% if label %}{{ label }}{% endif %}
   {{ slot }}
@@ -28,7 +28,7 @@
         class="ft-btn ft-btn-{{ variant|default:'primary' }} ft-btn-{{ size|default:'md' }} {{ extra_class }}"
         {% if disabled %}disabled{% endif %}
         {% if loading %}disabled aria-busy="true"{% endif %}
-        {{ attrs }}>
+        {{ attrs|safe }}>
   {% if loading %}
     <svg class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

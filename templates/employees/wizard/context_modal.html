@@ -1,0 +1,332 @@
+{% load static %}
+{% comment %}
+   Wizard Right-Click Context Modal & Quick Actions Hub
+   Opened via mouse right-click or keyboard shortcut.
+{% endcomment %}
+
+<c-modal id="wizard-shortcuts-modal" title="Wizard Quick Actions & Shortcuts" size="lg">
+  <div class="space-y-4">
+    {# ── Banner with TaiefLab branding ── #}
+    <div class="flex items-center justify-between p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
+      <div class="flex items-center gap-3">
+        <img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-8 h-8 rounded-full object-contain shadow-xs">
+        <div>
+          <h4 class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            FieldTrack Wizard Quick Actions
+            <c-badge variant="primary" size="sm">
+              Step {{ step }} of 8
+            </c-badge>
+          </h4>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            Right-click context hub • 1-click step jumping, form shortcuts, and quick tools.
+          </p>
+        </div>
+      </div>
+      <c-badge variant="neutral" size="sm">
+        <i data-lucide="mouse-pointer-click" class="w-3 h-3 mr-1 inline"></i> Right Click
+      </c-badge>
+    </div>
+
+    {# ── Section 1: 1-Click Direct Step Jumper ── #}
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Jump Directly to Step</span>
+        <span class="text-[10px] text-slate-400">Instant SPA navigation without page reload</span>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {# Step 1 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=1 %}{% else %}{% url 'employees:employee_wizard' %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 1 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 1 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 1 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}1{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">1. Basic Info</span>
+            <span class="text-[9px] opacity-80 block">Profile & Contact</span>
+          </div>
+        </button>
+
+        {# Step 2 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=2 %}{% else %}{% url 'employees:employee_wizard_create_step' step=2 %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 2 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 2 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 2 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}2{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">2. Organization</span>
+            <span class="text-[9px] opacity-80 block">Branch & Dept</span>
+          </div>
+        </button>
+
+        {# Step 3 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=3 %}{% else %}{% url 'employees:employee_wizard_create_step' step=3 %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 3 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 3 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 3 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}3{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">3. Payroll</span>
+            <span class="text-[9px] opacity-80 block">Salary & Bank</span>
+          </div>
+        </button>
+
+        {# Step 4 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=4 %}{% else %}{% url 'employees:employee_wizard_create_step' step=4 %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 4 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 4 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 4 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}4{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">4. Security</span>
+            <span class="text-[9px] opacity-80 block">Roles & Account</span>
+          </div>
+        </button>
+
+        {# Step 5 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=5 %}{% else %}{% url 'employees:employee_wizard_create_step' step=5 %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 5 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 5 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 5 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}5{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">5. Documents</span>
+            <span class="text-[9px] opacity-80 block">NID & Files</span>
+          </div>
+        </button>
+
+        {# Step 6 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=6 %}{% else %}{% url 'employees:employee_wizard_create_step' step=6 %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 6 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 6 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 6 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}6{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">6. Emergency</span>
+            <span class="text-[9px] opacity-80 block">Next of Kin</span>
+          </div>
+        </button>
+
+        {# Step 7 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=7 %}{% else %}{% url 'employees:employee_wizard_create_step' step=7 %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 7 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 7 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 7 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}7{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">7. Assets</span>
+            <span class="text-[9px] opacity-80 block">Equipment</span>
+          </div>
+        </button>
+
+        {# Step 8 #}
+        <button
+          type="button"
+          hx-get="{% if employee %}{% url 'employees:employee_wizard_step' uuid=employee.uuid step=8 %}{% else %}{% url 'employees:employee_wizard_create_step' step=8 %}{% endif %}"
+          hx-target="#wizard-root"
+          hx-swap="outerHTML transition:true"
+          hx-push-url="true"
+          hx-indicator="#wizard-global-loader"
+          @click="$dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer select-none {% if step == 8 %}bg-orange-500 text-white border-orange-500 shadow-md ring-2 ring-orange-500/30{% else %}bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-500/50 hover:bg-orange-50/40 dark:hover:bg-slate-800{% endif %}"
+        >
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold {% if step == 8 %}bg-white text-orange-600{% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+            {% if step == 8 %}<img src="{% static 'icons/icon.png' %}" alt="TaiefLab" class="w-4 h-4 rounded-full object-contain">{% else %}8{% endif %}
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold block truncate">8. Review</span>
+            <span class="text-[9px] opacity-80 block">Approval</span>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    {# ── Section 2: Fast Action Buttons ── #}
+    <div>
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">Fast Actions</span>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button
+          type="button"
+          @click="document.querySelector('#wizard-step-form button[type=submit]')?.click(); $dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2.5 p-2.5 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary transition-all text-left font-medium text-xs cursor-pointer"
+        >
+          <i data-lucide="check" class="w-4 h-4 shrink-0"></i>
+          <div>
+            <span class="font-bold block">Save & Continue Step</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">Submits current step form (Ctrl + S)</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          @click="document.querySelector('#wizard-step-form button[label*=\'Back\'], #wizard-step-container button[label*=\'Back\'], #wizard-step-container button[hx-get*=\'step\']')?.click(); $dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all text-left font-medium text-xs cursor-pointer"
+        >
+          <i data-lucide="arrow-left" class="w-4 h-4 shrink-0"></i>
+          <div>
+            <span class="font-bold block">Previous Step</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">Navigate backward (Alt + Left)</span>
+          </div>
+        </button>
+
+        {% if step == 4 %}
+        <button
+          type="button"
+          @click="(() => {
+            const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+            const lowers = 'abcdefghijkmnopqrstuvwxyz';
+            const nums = '23456789';
+            const specs = '!@#$%^&*';
+            const all = uppers + lowers + nums + specs;
+            let pass = uppers[Math.floor(Math.random()*uppers.length)] + lowers[Math.floor(Math.random()*lowers.length)] + nums[Math.floor(Math.random()*nums.length)] + specs[Math.floor(Math.random()*specs.length)];
+            for (let i=pass.length; i<12; i++) pass += all[Math.floor(Math.random()*all.length)];
+            pass = pass.split('').sort(() => 0.5 - Math.random()).join('');
+            window.dispatchEvent(new CustomEvent('password-generated', { detail: pass }));
+            $dispatch('close-modal', { id: 'wizard-shortcuts-modal' });
+          })()"
+          class="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 transition-all text-left font-medium text-xs cursor-pointer"
+        >
+          <i data-lucide="key-round" class="w-4 h-4 shrink-0 text-amber-500"></i>
+          <div>
+            <span class="font-bold block">Generate Strong Password</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">Generates 12-char secure password</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          @click="(() => {
+            const inputs = document.querySelectorAll('#wizard-step-container input[type=password], #wizard-step-container input[name^=password]');
+            inputs.forEach(i => i.type = (i.type === 'password' ? 'text' : 'password'));
+            $dispatch('close-modal', { id: 'wizard-shortcuts-modal' });
+          })()"
+          class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all text-left font-medium text-xs cursor-pointer"
+        >
+          <i data-lucide="eye" class="w-4 h-4 shrink-0 text-slate-500"></i>
+          <div>
+            <span class="font-bold block">Toggle Password Visibility</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">Show or hide masked passwords</span>
+          </div>
+        </button>
+        {% endif %}
+
+        <button
+          type="button"
+          @click="const f = document.getElementById('wizard-step-form'); if(f) f.reportValidity(); $dispatch('close-modal', { id: 'wizard-shortcuts-modal' })"
+          class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all text-left font-medium text-xs cursor-pointer"
+        >
+          <i data-lucide="check-circle" class="w-4 h-4 shrink-0 text-emerald-500"></i>
+          <div>
+            <span class="font-bold block">Validate Required Fields</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">Highlights any missing inputs</span>
+          </div>
+        </button>
+
+        <a
+          href="{% url 'employees:employee_list' %}"
+          class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all text-left font-medium text-xs"
+        >
+          <i data-lucide="users" class="w-4 h-4 shrink-0 text-indigo-500"></i>
+          <div>
+            <span class="font-bold block">Employee Directory</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">View all existing employees</span>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    {# ── Section 3: Keyboard Shortcuts Guide ── #}
+    <div class="p-3 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">Keyboard Shortcuts</span>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div class="flex items-center gap-1.5">
+          <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono text-[10px] shadow-2xs">Ctrl</kbd>
+          <span>+</span>
+          <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono text-[10px] shadow-2xs">S</kbd>
+          <span class="text-[10px] text-slate-500 dark:text-slate-400 ml-1">Save Step</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono text-[10px] shadow-2xs">Alt</kbd>
+          <span>+</span>
+          <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono text-[10px] shadow-2xs">→</kbd>
+          <span class="text-[10px] text-slate-500 dark:text-slate-400 ml-1">Next Step</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono text-[10px] shadow-2xs">Alt</kbd>
+          <span>+</span>
+          <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono text-[10px] shadow-2xs">←</kbd>
+          <span class="text-[10px] text-slate-500 dark:text-slate-400 ml-1">Prev Step</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <kbd class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono text-[10px] shadow-2xs">Esc</kbd>
+          <span class="text-[10px] text-slate-500 dark:text-slate-400 ml-1">Close Modal</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <c-slot name="footer">
+    <c-button
+      type="button"
+      variant="secondary"
+      size="sm"
+      label="Close"
+      attrs="@click='$dispatch(\'close-modal\', { id: \'wizard-shortcuts-modal\' })'"
+    ></c-button>
+  </c-slot>
+</c-modal>

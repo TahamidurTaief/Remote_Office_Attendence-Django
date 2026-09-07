@@ -37,6 +37,14 @@
         </div>
       {% endif %}
 
+      {% if messages %}
+        <div class="mb-4 space-y-2">
+          {% for message in messages %}
+            <c-alert variant="{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% elif message.tags == 'success' %}success{% else %}info{% endif %}" message="{{ message }}"></c-alert>
+          {% endfor %}
+        </div>
+      {% endif %}
+
       <div id="login-form-container">
         {% if show_mfa_step %}
           {% include "accounts/partials/login_mfa_step.html" %}

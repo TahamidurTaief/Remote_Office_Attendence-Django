@@ -1291,8 +1291,8 @@ def check_gantt_import_permission(user: Any, project: Project) -> bool:
     if not user or not user.is_authenticated:
         return False
 
-    # Superuser has global access
-    if user.is_superuser:
+    # Superuser and admin has global access
+    if user.is_superuser or getattr(user, 'role', '') in ['admin', 'system_owner', 'super_admin']:
         return True
 
     # Check permission engine

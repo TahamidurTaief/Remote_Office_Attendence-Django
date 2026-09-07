@@ -1196,7 +1196,8 @@ class Phase2And3Tests(TestCase):
             user=mgr_user,
             full_name='Branch A Manager',
             branch=self.branch,
-            phone='+8801700000999'
+            phone='+8801700000999',
+            joined_date=date.today()
         )
         UserRoleAssignment.objects.get_or_create(user=mgr_user, role=role_scoped)
         PermissionEngine.invalidate_user_cache(mgr_user)

@@ -543,3 +543,138 @@ class EmployeeWizardFullTestSuite(TestCase):
         self.assertIn('Direct Custom Permissions (Overrides)', content)
         self.assertIn('custom_permissions', content)
 
+    def test_wizard_step_3_bank_method(self):
+        """Step 3 correctly configures bank payment with Bank name, AC Number, and AC Name."""
+        emp = Employee.objects.create(
+            employee_number='EMP-PAY-001',
+            first_name='Bank',
+            last_name='User',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s3 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 3})
+        res = self.client.post(url_s3, {
+            'basic_salary': '60000.00',
+            'payment_method': 'bank',
+            'bank_name': 'City Bank Ltd',
+            'bank_account': '98765432101',
+            'account_holder_name': 'Bank User Official',
+            'target_step': '4'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.payment_method, 'bank')
+        self.assertEqual(emp.bank_name, 'The City Bank Limited')
+        self.assertEqual(emp.bank_account, '98765432101')
+        self.assertTrue(hasattr(emp, 'payment_destination'))
+        dest = emp.payment_destination
+        self.assertEqual(dest.payment_type, 'bank')
+        self.assertEqual(dest.account_holder_name, 'Bank User Official')
+
+    def test_wizard_step_3_mfs_method(self):
+        """Step 3 correctly configures MFS with Banking Method, Transaction Number, and Transaction ID."""
+        emp = Employee.objects.create(
+            employee_number='EMP-PAY-002',
+            first_name='MFS',
+            last_name='User',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s3 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 3})
+        res = self.client.post(url_s3, {
+            'basic_salary': '45000.00',
+            'payment_method': 'mfs',
+            'mfs_provider': 'bkash',
+            'wallet_number': '01711223344',
+            'transaction_id': 'TXN-BKASH-7890',
+            'target_step': '4'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.payment_method, 'mfs')
+        self.assertEqual(emp.bank_account, '01711223344')
+        dest = emp.payment_destination
+        self.assertEqual(dest.payment_type, 'mfs')
+        self.assertEqual(dest.mfs_provider, 'bkash')
+        self.assertEqual(dest.get_wallet_number(), '01711223344')
+        self.assertEqual(dest.notes, 'TXN-BKASH-7890')
+
+    def test_wizard_step_3_cash_method(self):
+        """Step 3 allows cash payment without extra bank or wallet fields."""
+        emp = Employee.objects.create(
+            employee_number='EMP-PAY-003',
+            first_name='Cash',
+            last_name='User',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s3 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 3})
+        res = self.client.post(url_s3, {
+            'basic_salary': '30000.00',
+            'payment_method': 'cash',
+            'target_step': '4'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.payment_method, 'cash')
+        dest = emp.payment_destination
+        self.assertEqual(dest.payment_type, 'cash')
+        self.assertEqual(dest.bank_name, '')
+        self.assertEqual(dest.mfs_provider, '')
+
+    def test_wizard_step_3_multi_method(self):
+        """Step 3 allows adding multiple payment methods at a time (e.g. Bank and MFS together)."""
+        emp = Employee.objects.create(
+            employee_number='EMP-PAY-004',
+            first_name='Multi',
+            last_name='User',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s3 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 3})
+        res = self.client.post(url_s3, {
+            'basic_salary': '75000.00',
+            'payment_method': 'split',
+            'has_secondary': 'true',
+            'bank_name': 'Dutch-Bangla Bank Ltd',
+            'bank_account': '123456789012',
+            'account_holder_name': 'Multi User',
+            'mfs_provider': 'nagad',
+            'wallet_number': '01811223344',
+            'transaction_id': 'TXN-NAGAD-999',
+            'target_step': '4'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.payment_method, 'split')
+        dest = emp.payment_destination
+        self.assertEqual(dest.payment_type, 'split')
+        self.assertEqual(dest.bank_name, 'Dutch-Bangla Bank Limited')
+        self.assertEqual(dest.account_holder_name, 'Multi User')
+        self.assertEqual(dest.get_account_number(), '123456789012')
+        self.assertEqual(dest.mfs_provider, 'nagad')
+        self.assertEqual(dest.get_wallet_number(), '01811223344')
+        self.assertEqual(dest.notes, 'TXN-NAGAD-999')
+
+    def test_wizard_step_3_ui_choices(self):
+        """Step 3 UI renders Mobile Financial Service and no Mobile Banking."""
+        emp = Employee.objects.create(
+            employee_number='EMP-PAY-005',
+            first_name='UI',
+            last_name='Test',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s3 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 3})
+        res = self.client.get(url_s3, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+        content = res.content.decode('utf-8')
+
+        self.assertIn('Mobile Financial Service', content)
+        self.assertNotIn('Mobile Banking', content)
+        self.assertIn('AC Number', content)
+        self.assertIn('AC Name', content)
+        self.assertIn('Banking Method', content)
+        self.assertIn('Transaction Number', content)
+        self.assertIn('Transaction ID', content)
+
+

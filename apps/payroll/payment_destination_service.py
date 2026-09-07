@@ -206,6 +206,56 @@ class PayrollPaymentDestinationService:
             destination.wallet_number_encrypted = ''
             destination.wallet_number_last4 = ''
 
+        # Handle SPLIT / Multiple Methods
+        elif payment_type_clean in (PaymentType.SPLIT, 'split'):
+            bank = payload.get('bank')
+            bank_name = (payload.get('bank_name') or '').strip()
+            branch = payload.get('branch')
+            branch_name = (payload.get('branch_name') or '').strip()
+            account_holder = (payload.get('account_holder_name') or payload.get('account_holder') or employee.get_full_name()).strip()
+            raw_acc_num = (payload.get('account_number') or payload.get('bank_account') or '').strip()
+            routing_number = (payload.get('routing_number') or '').strip()
+
+            if not bank and bank_name:
+                bank = Bank.objects.filter(name__iexact=bank_name, is_active=True).first()
+
+            if bank and not branch:
+                branch = bank.branches.filter(is_active=True).first()
+                if branch and not branch_name:
+                    branch_name = branch.name
+                elif not branch_name:
+                    branch_name = 'Main Branch'
+            elif not branch and not branch_name and (bank or bank_name):
+                branch_name = 'Main Branch'
+
+            if bank and branch and branch.bank_id != bank.id:
+                raise ValidationError({"branch": "Selected branch does not belong to the submitted bank."})
+
+            if branch and not routing_number:
+                routing_number = branch.routing_number
+
+            destination.bank = bank
+            destination.bank_name = bank_name or (bank.name if bank else '')
+            destination.branch = branch
+            destination.branch_name = branch_name or (branch.name if branch else '')
+            destination.account_holder_name = account_holder
+            destination.routing_number = routing_number
+            if raw_acc_num:
+                destination.set_account_number(raw_acc_num)
+
+            mfs_prov = (payload.get('mfs_provider') or '').lower().strip()
+            if mfs_prov in MFSProvider.values:
+                destination.mfs_provider = mfs_prov
+                raw_wallet = payload.get('wallet_number') or payload.get('mfs_wallet_number') or ''
+                if raw_wallet:
+                    cleaned_wallet = cls.validate_wallet_number(raw_wallet)
+                    destination.set_wallet_number(cleaned_wallet)
+
+        # Store optional transaction ID or reference in notes
+        txn_id = (payload.get('transaction_id') or payload.get('notes') or '').strip()
+        if txn_id:
+            destination.notes = txn_id
+
         # Validate conditional rules
         destination.clean()
         destination.save()
@@ -245,12 +295,32 @@ class PayrollPaymentDestinationService:
                     account.set_account_number(raw_acc)
                     account.save()
         elif destination.payment_type == PaymentType.MFS:
-            employee.payment_method = 'mobile'
+            employee.payment_method = 'mfs'
             employee.bank_name = f"MFS - {destination.get_mfs_provider_display()}"
             employee.bank_account = destination.get_wallet_number()
             emp_updated = True
             # Deactivate bank accounts to avoid stale active bank records
             EmployeeBankAccount.objects.filter(employee=employee).update(is_active=False, is_primary=False)
+        elif destination.payment_type == PaymentType.SPLIT:
+            employee.payment_method = 'split'
+            if destination.bank_name:
+                employee.bank_name = destination.bank_name
+            elif destination.mfs_provider:
+                employee.bank_name = f"MFS - {destination.get_mfs_provider_display()}"
+            raw_acc = destination.get_account_number()
+            raw_wallet = destination.get_wallet_number()
+            employee.bank_account = raw_acc or raw_wallet or ''
+            emp_updated = True
+            if destination.bank and destination.branch and raw_acc:
+                account = EmployeeBankAccount.objects.filter(employee=employee, is_primary=True).first()
+                if not account:
+                    account = EmployeeBankAccount(employee=employee, is_primary=True)
+                account.bank = destination.bank
+                account.branch = destination.branch
+                account.account_holder_name = destination.account_holder_name or employee.get_full_name()
+                account.routing_number = destination.routing_number
+                account.set_account_number(raw_acc)
+                account.save()
         elif destination.payment_type == PaymentType.CASH:
             employee.payment_method = 'cash'
             employee.bank_name = ''

@@ -1,9 +1,15 @@
-<div id="wizard-root" class="max-w-6xl mx-auto px-4 py-6 space-y-6" x-data="{ hxError: false }">
+<div 
+  id="wizard-root" 
+  class="max-w-6xl mx-auto px-4 py-6 space-y-6" 
+  x-data="{ hxError: false }"
+  @contextmenu.prevent="$dispatch('open-modal', { id: 'wizard-shortcuts-modal' })"
+  @keydown.window.ctrl.s.prevent="document.querySelector('#wizard-step-form button[type=submit]')?.click()"
+  @keydown.window.alt.right.prevent="document.querySelector('#wizard-step-form button[type=submit]')?.click()"
+  @keydown.window.alt.left.prevent="document.querySelector('#wizard-step-form button[label*=\'Back\'], #wizard-step-container button[label*=\'Back\'], #wizard-step-container button[hx-get*=\'step\']')?.click()"
+>
 
   {# Non-intrusive HTMX Activity Indicator satisfying test contract without UI flicker #}
   <div id="wizard-global-loader" class="htmx-indicator hidden" aria-hidden="true"></div>
-
-
 
   {# Recoverable HTMX Error State #}
   <div x-show="hxError" x-cloak class="transition-all duration-300">
@@ -24,11 +30,43 @@
   {# Stepper Header Component #}
   {% include "employees/wizard/stepper_wrapper.html" %}
 
-  {# Step Content Container #}
+  {# Step Content Container with smooth transition #}
   <c-card padding="lg">
-    <div id="wizard-step-container">
+    <div id="wizard-step-container" class="wizard-step-animate">
       {% include step_template %}
     </div>
   </c-card>
+
+  {# Right-Click Context Modal & Quick Actions Hub #}
+  {% include "employees/wizard/context_modal.html" %}
+
+  <style>
+    #wizard-root {
+      transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .htmx-swapping #wizard-root,
+    .htmx-swapping #wizard-step-container {
+      opacity: 0.2;
+      transform: translateY(3px) scale(0.998);
+    }
+    .htmx-settling #wizard-root,
+    .htmx-settling #wizard-step-container {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .wizard-step-animate {
+      animation: wizardStepFadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes wizardStepFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
 
 </div>

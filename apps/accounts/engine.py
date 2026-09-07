@@ -59,7 +59,7 @@ class PermissionEngine:
         """
         if not user:
             return
-        for attr in ('_resolved_permissions_cache', '_effective_perms', '_has_perm_cache'):
+        for attr in ('_resolved_permissions_cache', '_effective_perms', '_has_perm_cache', '_permission_eval_cache'):
             if hasattr(user, attr):
                 try:
                     delattr(user, attr)
@@ -184,7 +184,7 @@ class PermissionEngine:
         return resolved
 
     @classmethod
-    def evaluate(cls, user, codename, required_scope=None, action_type='view'):
+    def evaluate(cls, user, codename, required_scope=None, action_type='view', **kwargs):
         """
         Executes full 9-layer resolution order for a given action.
         Independent action evaluation: treats add, edit, update, delete, view, approve, export independently.
@@ -192,9 +192,21 @@ class PermissionEngine:
         if not user or not user.is_authenticated:
             return PermissionResolutionResult(allowed=False, reason="User is not authenticated.")
 
+        cache_key = (codename, required_scope, action_type)
+        if not hasattr(user, '_permission_eval_cache'):
+            user._permission_eval_cache = {}
+        elif cache_key in user._permission_eval_cache:
+            return user._permission_eval_cache[cache_key]
+
         # Superuser bypass
         if user.is_superuser:
-            return PermissionResolutionResult(allowed=True, data_scope=DataScope.GLOBAL)
+            res = PermissionResolutionResult(allowed=True, data_scope=DataScope.GLOBAL)
+            user._permission_eval_cache[cache_key] = res
+            return res
+
+        def _finish(res):
+            user._permission_eval_cache[cache_key] = res
+            return res
 
         # -------------------------------------------------------------
         # Layer 1: Employee Status Check
@@ -206,17 +218,17 @@ class PermissionEngine:
         if emp_master:
             emp_status = getattr(emp_master, 'status', None)
             if getattr(emp_master, 'is_trashed', False):
-                return PermissionResolutionResult(allowed=False, reason="Trashed employee accounts are blocked from system access.")
+                return _finish(PermissionResolutionResult(allowed=False, reason="Trashed employee accounts are blocked from system access."))
         elif emp_profile:
             emp_status = 'active' if emp_profile.is_active else 'suspended'
 
-        ALLOWED_ACTIVE_STATES = ('active', 'probation', 'confirmed', 'transferred', 'promoted', 'demoted', 'notice_period')
+        ALLOWED_ACTIVE_STATES = ('active', 'probation', 'confirmed', 'transferred', 'promoted', 'demoted', 'notice_period', 'draft')
         if emp_status and emp_status not in ALLOWED_ACTIVE_STATES and emp_status != 'archived':
-            return PermissionResolutionResult(allowed=False, reason=f"Employee status '{emp_status}' is blocked from system access.")
+            return _finish(PermissionResolutionResult(allowed=False, reason=f"Employee status '{emp_status}' is blocked from system access."))
 
         read_only = (emp_status == 'archived')
         if read_only and action_type in ('create', 'add', 'edit', 'update', 'delete', 'archive'):
-            return PermissionResolutionResult(allowed=False, reason="Archived employee accounts are Read-Only.", read_only=True)
+            return _finish(PermissionResolutionResult(allowed=False, reason="Archived employee accounts are Read-Only.", read_only=True))
 
         # -------------------------------------------------------------
         # Layer 2-5: Permission & Dependency Check
@@ -226,10 +238,10 @@ class PermissionEngine:
 
         if perm_entry is not None and not perm_entry.get('granted'):
             # Explicitly revoked or denied
-            return PermissionResolutionResult(allowed=False, reason=f"Permission '{codename}' is explicitly revoked.", read_only=read_only)
+            return _finish(PermissionResolutionResult(allowed=False, reason=f"Permission '{codename}' is explicitly revoked.", read_only=read_only))
 
         if not perm_entry or not perm_entry.get('granted'):
-            return PermissionResolutionResult(allowed=False, reason=f"Missing required permission '{codename}'.", read_only=read_only)
+            return _finish(PermissionResolutionResult(allowed=False, reason=f"Missing required permission '{codename}'.", read_only=read_only))
 
         effective_scope = perm_entry['scope']
 
@@ -240,11 +252,11 @@ class PermissionEngine:
             req_code = dep.requires_permission.codename
             req_entry = resolved_map.get(req_code)
             if not req_entry or not req_entry['granted']:
-                return PermissionResolutionResult(
+                return _finish(PermissionResolutionResult(
                     allowed=False,
                     reason=f"Permission '{codename}' requires prerequisite '{req_code}'.",
                     read_only=read_only
-                )
+                ))
 
         # -------------------------------------------------------------
         # Layer 6: Data Scope Comparison
@@ -253,12 +265,12 @@ class PermissionEngine:
             eff_rank = SCOPE_HIERARCHY.get(effective_scope, 0)
             req_rank = SCOPE_HIERARCHY.get(required_scope, 0)
             if eff_rank < req_rank:
-                return PermissionResolutionResult(
+                return _finish(PermissionResolutionResult(
                     allowed=False,
                     reason=f"Insufficient data scope for '{codename}'. Effective: {effective_scope}, Required: {required_scope}.",
                     data_scope=effective_scope,
                     read_only=read_only
-                )
+                ))
 
         # -------------------------------------------------------------
         # Layer 7: Security Policy Check
@@ -282,13 +294,13 @@ class PermissionEngine:
         # -------------------------------------------------------------
         # Layer 9: Business Validation Passed
         # -------------------------------------------------------------
-        return PermissionResolutionResult(
+        return _finish(PermissionResolutionResult(
             allowed=True,
             data_scope=effective_scope,
             read_only=read_only,
             mfa_required=mfa_required,
             needs_approval=needs_approval
-        )
+        ))
 
     @classmethod
     def check_object_scope(cls, user, obj, codename=None, action_type='view'):
@@ -383,7 +395,7 @@ class PermissionEngine:
         if not user or not user.is_authenticated:
             return queryset.none()
 
-        if user.is_superuser:
+        if user.is_superuser or getattr(user, 'role', '') in ('admin', 'system_owner', 'super_admin'):
             return queryset
 
         eval_res = cls.evaluate(user, codename)
@@ -476,6 +488,8 @@ class PermissionEngine:
 
         return queryset.none()
 
+    filter_queryset = filter_by_data_scope
+
     @classmethod
     def get_scoped_object_or_404(cls, model_or_qs, user, codename, pk, action_type='view', branch_field='branch', employee_field='employee', dept_field='department'):
         """
@@ -486,9 +500,10 @@ class PermissionEngine:
         from django.db.models import QuerySet
         from django.core.exceptions import PermissionDenied
 
-        eval_res = cls.evaluate(user, codename, action_type=action_type)
-        if not eval_res.allowed:
-            raise PermissionDenied(f"Permission denied for {codename}: {eval_res.reason}")
+        if not (user.is_superuser or getattr(user, 'role', '') in ('admin', 'system_owner', 'super_admin')):
+            eval_res = cls.evaluate(user, codename, action_type=action_type)
+            if not eval_res.allowed:
+                raise PermissionDenied(f"Permission denied for {codename}: {eval_res.reason}")
 
         qs = model_or_qs if isinstance(model_or_qs, QuerySet) else model_or_qs.objects.all()
         scoped_qs = cls.filter_by_data_scope(

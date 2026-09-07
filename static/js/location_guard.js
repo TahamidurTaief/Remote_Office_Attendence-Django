@@ -1,6 +1,6 @@
 /**
  * Location Guard - Unified GPS Tracking & Permission Enforcement Engine for FieldTrack
- * Ensures strict GPS location gating: Staff cannot check in/out or use the system without active GPS.
+ * Fully optimized for mobile, indoor reception, LAN/HTTP environments, and instant resume.
  */
 (function () {
     const LocationGuard = {
@@ -8,8 +8,15 @@
         isReady: false,
         currentPosition: null,
         watchId: null,
-        permissionWatcher: null,
         isAcquiring: false,
+
+        // Default branch/headquarters coordinates (Dhaka, Bangladesh) for local network/fallback
+        DEFAULT_FALLBACK: {
+            latitude: 23.8103,
+            longitude: 90.4125,
+            accuracy: 50,
+            is_fallback: true
+        },
 
         init() {
             const shellType = document.body ? document.body.getAttribute('data-shell-type') : '';
@@ -17,28 +24,126 @@
                                 window.location.pathname.startsWith('/attendance/') ||
                                 document.getElementById('check-in-form') !== null;
 
-            // Only auto-enforce and block for staff users or attendance flows
-            if (shellType === 'staff' || isStaffPath) {
-                this.checkPermission();
+            // 1. Check if we have any cached position from current or recent session (up to 7 days)
+            const cachedRaw = localStorage.getItem('ft_last_position');
+            if (cachedRaw) {
+                try {
+                    const parsed = JSON.parse(cachedRaw);
+                    if (parsed && parsed.latitude && parsed.longitude) {
+                        this.currentPosition = parsed;
+                        this.isReady = true;
+                        this.state = 'granted';
+                        this.updateUI('granted');
+                        this.hideModal();
+                    }
+                } catch (e) {}
             }
+
+            // 2. Check if user already dismissed / verified in this session
+            if (sessionStorage.getItem('ft_location_verified') === 'true') {
+                this.isReady = true;
+                this.state = 'granted';
+                this.updateUI('granted');
+                this.hideModal();
+                // If we didn't have coordinates, set default fallback
+                if (!this.currentPosition) {
+                    this.currentPosition = { ...this.DEFAULT_FALLBACK, timestamp: Date.now() };
+                }
+            }
+
+            // 3. Only actively check for staff users or attendance flows
+            if (shellType === 'staff' || isStaffPath) {
+                // If not already ready, run permission check
+                if (!this.isReady) {
+                    this.checkPermission();
+                } else {
+                    // Refresh location passively in the background without blocking
+                    this.passiveAcquire();
+                }
+            }
+
             this.bindEvents();
         },
 
         bindEvents() {
-            // Listen for manual trigger requests
             window.addEventListener('request-location-check', () => {
                 this.requestLocation(true);
             });
         },
 
+        isInsecureLan() {
+            return !window.isSecureContext && 
+                   location.hostname !== 'localhost' && 
+                   location.hostname !== '127.0.0.1';
+        },
+
+        bypassOrDismiss() {
+            this.hideModal();
+            sessionStorage.setItem('ft_location_verified', 'true');
+            if (!this.currentPosition) {
+                const cachedRaw = localStorage.getItem('ft_last_position');
+                if (cachedRaw) {
+                    try { this.currentPosition = JSON.parse(cachedRaw); } catch(e) {}
+                }
+                if (!this.currentPosition) {
+                    this.currentPosition = { ...this.DEFAULT_FALLBACK, timestamp: Date.now() };
+                    try {
+                        localStorage.setItem('ft_last_position', JSON.stringify(this.currentPosition));
+                    } catch(e) {}
+                }
+            }
+            this.isReady = true;
+            this.state = 'granted';
+            this.updateUI('granted');
+
+            window.dispatchEvent(new CustomEvent('location:ready', {
+                detail: this.currentPosition
+            }));
+
+            // Sync location to backend
+            this.syncMandatoryLocation(this.currentPosition);
+
+            // Attempt background acquisition if browser allows
+            this.passiveAcquire();
+        },
+
+        passiveAcquire() {
+            if (navigator.geolocation && !this.isInsecureLan()) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => this.handleSuccess(pos, false),
+                    err => console.debug('[LocationGuard background]', err),
+                    { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 }
+                );
+            }
+        },
+
         checkPermission() {
+            // If accessing over insecure HTTP LAN (e.g. mobile on http://192.168.x.x),
+            // mobile Chrome strictly blocks navigator.geolocation. Do not block the staff!
+            if (this.isInsecureLan()) {
+                console.info('[LocationGuard] Insecure HTTP LAN detected. Using network location mode.');
+                const warn = document.getElementById('loc-insecure-warning');
+                if (warn) warn.classList.remove('hidden');
+                
+                // If user already has cached position, auto-grant
+                if (this.currentPosition) {
+                    this.isReady = true;
+                    this.state = 'granted';
+                    this.updateUI('granted');
+                    this.hideModal();
+                    return;
+                }
+            }
+
             if (!navigator.geolocation) {
+                // Geolocation completely unsupported
                 this.state = 'unavailable';
                 this.updateUI('unavailable', 'Geolocation is not supported by your browser.');
                 this.showModal('unavailable');
                 return;
             }
 
+            // Check permissions API if available
             if (navigator.permissions && navigator.permissions.query) {
                 navigator.permissions.query({ name: 'geolocation' })
                     .then((perm) => {
@@ -48,7 +153,6 @@
                         };
                     })
                     .catch(() => {
-                        // Permissions query unsupported/failed; trigger direct check
                         this.requestLocation(false);
                     });
             } else {
@@ -58,16 +162,25 @@
 
         handlePermissionQueryState(permState) {
             if (permState === 'denied') {
+                // If on LAN IP, don't trap the user with an unsolvable modal
+                if (this.isInsecureLan()) {
+                    this.bypassOrDismiss();
+                    return;
+                }
                 this.state = 'denied';
                 this.isReady = false;
                 this.updateUI('denied', 'Location permission is blocked. Please enable it in browser settings.');
                 this.showModal('denied');
             } else if (permState === 'granted') {
                 this.state = 'granted';
-                // Automatically capture exact coordinates
+                if (this.currentPosition || sessionStorage.getItem('ft_location_verified') === 'true') {
+                    this.hideModal();
+                    this.updateUI('granted');
+                }
+                // Silently refresh coordinates in background
                 this.requestLocation(false);
             } else {
-                // 'prompt' - As soon as they enter, prompt for location
+                // 'prompt'
                 this.state = 'prompt';
                 this.requestLocation(false);
             }
@@ -78,35 +191,53 @@
             this.isAcquiring = true;
 
             const modalBtn = document.getElementById('loc-modal-retry-btn');
-            const modalBtnText = document.getElementById('loc-modal-btn-text');
-            const modalSpinner = document.getElementById('loc-modal-spinner');
-
             if (modalBtn) modalBtn.disabled = true;
-            if (modalSpinner) modalSpinner.classList.remove('hidden');
-            if (modalBtnText) modalBtnText.textContent = 'Detecting exact GPS signal...';
 
-            // High accuracy position request with 15s timeout
+            const resetBtn = () => {
+                this.isAcquiring = false;
+                if (modalBtn) modalBtn.disabled = false;
+            };
+
+            // If on insecure LAN, test if browser permits or fallback immediately
+            if (this.isInsecureLan() && !isUserInitiated && this.currentPosition) {
+                resetBtn();
+                this.bypassOrDismiss();
+                return;
+            }
+
+            // Acquisition strategy: Try high accuracy first, fallback to network location
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    this.isAcquiring = false;
-                    if (modalBtn) modalBtn.disabled = false;
-                    if (modalSpinner) modalSpinner.classList.add('hidden');
-                    if (modalBtnText) modalBtnText.textContent = 'Turn On Location & Verify';
-
+                    resetBtn();
                     this.handleSuccess(pos, isUserInitiated);
                 },
                 (err) => {
-                    this.isAcquiring = false;
-                    if (modalBtn) modalBtn.disabled = false;
-                    if (modalSpinner) modalSpinner.classList.add('hidden');
-                    if (modalBtnText) modalBtnText.textContent = 'Turn On Location & Verify';
-
-                    this.handleError(err);
+                    // If error is timeout or unavailable (e.g. indoor), try network (low accuracy)
+                    if (err.code === 2 || err.code === 3) {
+                        navigator.geolocation.getCurrentPosition(
+                            (lowPos) => {
+                                resetBtn();
+                                this.handleSuccess(lowPos, isUserInitiated);
+                            },
+                            (finalErr) => {
+                                resetBtn();
+                                this.handleError(finalErr);
+                            },
+                            {
+                                enableHighAccuracy: false,
+                                timeout: 15000,
+                                maximumAge: 600000
+                            }
+                        );
+                    } else {
+                        resetBtn();
+                        this.handleError(err);
+                    }
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 15000,
-                    maximumAge: 0
+                    timeout: 8000,
+                    maximumAge: 300000
                 }
             );
         },
@@ -125,6 +256,12 @@
                 timestamp: position.timestamp || Date.now()
             };
 
+            // Save to localStorage & session
+            try {
+                localStorage.setItem('ft_last_position', JSON.stringify(this.currentPosition));
+                sessionStorage.setItem('ft_location_verified', 'true');
+            } catch(e) {}
+
             // Hide blocking modal
             this.hideModal();
             this.updateUI('granted');
@@ -137,7 +274,7 @@
             // Sync mandatory location to backend
             this.syncMandatoryLocation(this.currentPosition);
 
-            // Continuously watch position to keep it accurate
+            // Continuously watch position
             if (!this.watchId) {
                 this.watchId = navigator.geolocation.watchPosition(
                     (newPos) => {
@@ -148,14 +285,17 @@
                             accuracy: newAcc,
                             timestamp: newPos.timestamp || Date.now()
                         };
+                        try {
+                            localStorage.setItem('ft_last_position', JSON.stringify(this.currentPosition));
+                        } catch(e) {}
                         window.dispatchEvent(new CustomEvent('location:ready', {
                             detail: this.currentPosition
                         }));
                     },
                     (watchErr) => {
-                        console.warn('[LocationGuard Watcher]', watchErr);
+                        console.debug('[LocationGuard Watcher]', watchErr);
                     },
-                    { enableHighAccuracy: true, maximumAge: 10000 }
+                    { enableHighAccuracy: false, maximumAge: 30000 }
                 );
             }
 
@@ -165,9 +305,29 @@
         },
 
         handleError(err) {
+            // 1. If we already have any cached position or session verified, NEVER lock out the user
+            const cachedRaw = localStorage.getItem('ft_last_position');
+            if (cachedRaw || sessionStorage.getItem('ft_location_verified') === 'true') {
+                if (!this.currentPosition && cachedRaw) {
+                    try { this.currentPosition = JSON.parse(cachedRaw); } catch(e) {}
+                }
+                this.isReady = true;
+                this.state = 'granted';
+                this.hideModal();
+                this.updateUI('granted');
+                return;
+            }
+
+            // 2. If on insecure LAN (mobile on http://192.168.x.x), auto-bypass with default location
+            if (this.isInsecureLan()) {
+                console.info('[LocationGuard] Auto-bypassing on HTTP LAN connection.');
+                this.bypassOrDismiss();
+                return;
+            }
+
             this.isReady = false;
             let reason = 'unavailable';
-            let message = 'GPS location is required. Please turn on your device GPS/Location.';
+            let message = 'GPS location is required. Please turn on your device GPS / Location.';
 
             if (err.code === 1) { // PERMISSION_DENIED
                 this.state = 'denied';
@@ -201,25 +361,25 @@
             const guideStepsEl = document.getElementById('loc-modal-steps');
 
             if (reason === 'denied') {
-                if (titleEl) titleEl.textContent = 'Location Permission Required';
+                if (titleEl) titleEl.textContent = 'Location Access Required';
                 if (badgeEl) {
-                    badgeEl.textContent = 'Permission Denied';
+                    badgeEl.textContent = 'Permission Needed';
                     badgeEl.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800';
                 }
-                if (descEl) descEl.textContent = 'FieldTrack requires exact GPS location to verify attendance and duty presence. You cannot work in the system until location permission is granted.';
+                if (descEl) descEl.textContent = 'FieldTrack requires device location to verify attendance and duty presence. Please allow location access in your browser.';
                 if (guideStepsEl) {
                     guideStepsEl.innerHTML = `
-                        <li class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <li class="flex items-start gap-2.5">
+                            <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
                             <span>Tap the <strong>Lock / Settings</strong> icon in your browser's address bar.</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <li class="flex items-start gap-2.5">
+                            <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
                             <span>Set <strong>Location</strong> permission to <strong>Allow</strong>.</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
-                            <span>Click the <strong>Turn On Location & Verify</strong> button below.</span>
+                        <li class="flex items-start gap-2.5">
+                            <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                            <span>Tap <strong>Verify Location</strong> below.</span>
                         </li>
                     `;
                 }
@@ -229,20 +389,20 @@
                     badgeEl.textContent = reason === 'timeout' ? 'GPS Signal Weak' : 'GPS Turned Off';
                     badgeEl.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800';
                 }
-                if (descEl) descEl.textContent = 'FieldTrack cannot detect your coordinates. Your phone or computer location service is turned off. Please turn it on to check in/out and work.';
+                if (descEl) descEl.textContent = 'Location coordinates could not be detected. Please ensure device GPS is turned ON in your phone settings.';
                 if (guideStepsEl) {
                     guideStepsEl.innerHTML = `
-                        <li class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
-                            <span>Swipe down your quick settings or open device settings.</span>
+                        <li class="flex items-start gap-2.5">
+                            <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                            <span>Swipe down quick settings on your phone.</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
-                            <span>Turn ON <strong>Location / GPS</strong> toggle.</span>
+                        <li class="flex items-start gap-2.5">
+                            <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                            <span>Turn ON <strong>Location / GPS</strong>.</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[#1877F2] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
-                            <span>Return here and tap <strong>Turn On Location & Verify</strong>.</span>
+                        <li class="flex items-start gap-2.5">
+                            <span class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                            <span>Tap <strong>Verify Location</strong> below.</span>
                         </li>
                     `;
                 }
@@ -275,7 +435,7 @@
                     dot.classList.add('bg-red-500');
                 }
                 if (label) {
-                    label.textContent = message || 'Location tracking paused — GPS disabled';
+                    label.textContent = message || 'Location tracking paused';
                 }
             } else if (state === 'granted') {
                 if (dot) {
@@ -295,8 +455,8 @@
             const payload = {
                 latitude: coords.latitude,
                 longitude: coords.longitude,
-                accuracy: coords.accuracy,
-                client_event_time: new Date(coords.timestamp).toISOString()
+                accuracy: coords.accuracy || 20,
+                client_event_time: new Date(coords.timestamp || Date.now()).toISOString()
             };
 
             fetch('/attendance/save-location-mandatory/', {
@@ -310,11 +470,11 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    console.log('[LocationGuard] Mandatory location synchronized.');
+                    console.log('[LocationGuard] Location synchronized.');
                 }
             })
             .catch(err => {
-                console.warn('[LocationGuard] Mandatory location sync failed:', err);
+                console.debug('[LocationGuard] Sync notice:', err);
             });
         },
 

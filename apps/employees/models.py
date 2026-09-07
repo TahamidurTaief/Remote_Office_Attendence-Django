@@ -457,9 +457,10 @@ class Employee(models.Model):
 
     PAYMENT_METHOD_CHOICES = (
         ('bank', 'Bank Transfer'),
-        ('cash', 'Cash'),
         ('mfs', 'Mobile Financial Service'),
-        ('mobile', 'Mobile Banking'),
+        ('cash', 'Cash'),
+        ('split', 'Multiple Methods (Bank & MFS)'),
+        ('mobile', 'Mobile Financial Service'),
     )
 
     DATA_SCOPE_CHOICES = (
@@ -564,6 +565,8 @@ class Employee(models.Model):
     def get_completion_percentage(self) -> int:
         if hasattr(self, '_completion_percentage_cache'):
             return self._completion_percentage_cache
+        if hasattr(self, '_cached_completion_pct'):
+            return self._cached_completion_pct
         score = 0
         # Step 1: Basic info
         if self.employee_number and self.first_name and self.last_name:
@@ -589,6 +592,8 @@ class Employee(models.Model):
     def get_next_wizard_step(self) -> int:
         if hasattr(self, '_next_wizard_step_cache'):
             return self._next_wizard_step_cache
+        if hasattr(self, '_cached_next_wizard_step'):
+            return self._cached_next_wizard_step
         step = 8
         if not (self.employee_number and self.first_name and self.last_name):
             step = 1
@@ -659,14 +664,25 @@ class Employee(models.Model):
     def canonical_is_active(self):
         return self.status == 'active' and not self.is_suspended and not self.is_trashed
 
+    def refresh_from_db(self, using=None, fields=None):
+        super().refresh_from_db(using=using, fields=fields)
+        self.__dict__.pop('_cached_business_status', None)
+        self.__dict__.pop('_cached_business_status_key', None)
+        self.__dict__.pop('_cached_next_wizard_step', None)
+        self.__dict__.pop('_cached_completion_pct', None)
+
     @property
     def business_status(self) -> str:
-        cache_key = (self.status, self.is_suspended, self.is_trashed)
-        if getattr(self, '_business_status_key', None) == cache_key and hasattr(self, '_business_status_cache'):
+        key = (self.status, self.is_trashed, getattr(self, 'is_suspended', False))
+        if hasattr(self, '_cached_business_status') and getattr(self, '_cached_business_status_key', None) == key:
+            return self._cached_business_status
+        if getattr(self, '_business_status_key', None) == key and hasattr(self, '_business_status_cache'):
             return self._business_status_cache
         res = self._compute_business_status()
-        self._business_status_key = cache_key
+        self._cached_business_status = res
+        self._cached_business_status_key = key
         self._business_status_cache = res
+        self._business_status_key = key
         return res
 
     def _compute_business_status(self) -> str:
@@ -683,19 +699,24 @@ class Employee(models.Model):
         if self.status == EmployeeStatus.PROBATION:
             return 'on_probation'
         
-        profile = getattr(self, 'legacy_profile', None)
-        if profile:
-            if hasattr(profile, 'active_leaves'):
-                if profile.active_leaves:
-                    return 'on_leave'
-            elif hasattr(profile, '_prefetched_objects_cache') and 'leave_requests' in profile._prefetched_objects_cache:
-                today = timezone.localdate()
-                if any(lr.status == 'approved' and lr.start_date <= today <= lr.end_date for lr in profile.leave_requests.all()):
-                    return 'on_leave'
+        if hasattr(self, '_has_active_leave'):
+            on_leave = self._has_active_leave
+        else:
+            profile = getattr(self, 'legacy_profile', None)
+            if profile:
+                if hasattr(profile, 'active_leaves'):
+                    on_leave = bool(profile.active_leaves)
+                elif hasattr(profile, '_prefetched_objects_cache') and 'leave_requests' in profile._prefetched_objects_cache:
+                    today = timezone.localdate()
+                    on_leave = any(lr.status == 'approved' and lr.start_date <= today <= lr.end_date for lr in profile.leave_requests.all())
+                else:
+                    today = timezone.localdate()
+                    on_leave = profile.leave_requests.filter(status='approved', start_date__lte=today, end_date__gte=today).exists()
             else:
-                today = timezone.localdate()
-                if profile.leave_requests.filter(status='approved', start_date__lte=today, end_date__gte=today).exists():
-                    return 'on_leave'
+                on_leave = False
+
+        if on_leave:
+            return 'on_leave'
             
         if self.status in (EmployeeStatus.DRAFT, EmployeeStatus.PENDING_APPROVAL):
             return 'inactive'
