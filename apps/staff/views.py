@@ -455,7 +455,26 @@ def field_visit_page(request):
         return redirect('accounts:login')
 
     employee = getattr(request.user, 'employee_profile', None)
-    return render(request, 'staff/field_visit.html', {'employee': employee})
+    today = timezone.localdate()
+    now = timezone.localtime(timezone.now())
+    branch = getattr(employee, 'branch', None) if employee else None
+
+    recent_visits = []
+    if employee:
+        from apps.attendance.models import Attendance
+        recent_visits = Attendance.objects.filter(
+            employee=employee,
+            attendance_type='field_visit'
+        ).order_by('-date', '-check_in_time')[:5]
+
+    return render(request, 'staff/field_visit.html', {
+        'employee': employee,
+        'branch': branch,
+        'today': today,
+        'now': now,
+        'recent_visits': recent_visits,
+        'unread_notifications': 0,
+    })
 
 
 @login_required

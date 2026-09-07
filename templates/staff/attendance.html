@@ -8,21 +8,38 @@
     <button onclick="syncOfflineQueue()" class="px-3 py-1.5 bg-white text-amber-700 rounded-xl hover:bg-amber-50 transition-colors text-xs font-bold">Sync Now</button>
 </div>
 
-<div class="bg-primary text-white px-6 pt-8 pb-16 rounded-card mb-6">
-    <h1 class="text-2xl font-bold mb-6">Attendance History</h1>
-    
-    <div class="flex justify-between items-center mb-2" id="month-selector">
-        <button id="prev-month-btn" class="p-2 text-primary-100 hover:text-white transition-colors" 
-                hx-get="{% url 'staff:attendance' %}?month={{ prev_month_val }}" 
-                hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true">
-            <i data-lucide="chevron-left" class="w-6 h-6"></i>
-        </button>
-        <h2 class="text-lg font-bold" id="current-month-display">{{ current_month }}</h2>
-        <button id="next-month-btn" class="p-2 text-primary-100 hover:text-white transition-colors"
-                hx-get="{% url 'staff:attendance' %}?month={{ next_month_val }}" 
-                hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true">
-            <i data-lucide="chevron-right" class="w-6 h-6"></i>
-        </button>
+<div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-xs mb-4 select-none">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <a href="{% url 'staff:home' %}"
+               class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-200 transition-transform active:scale-90"
+               aria-label="Back to Home">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </a>
+            <div>
+                <h1 class="text-base font-bold text-slate-900 dark:text-white leading-tight">Attendance History</h1>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Monthly logs & punch records</p>
+            </div>
+        </div>
+
+        {# Month Switcher Controls with soft pill styling #}
+        <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700" id="month-selector">
+            <button id="prev-month-btn"
+                    class="w-7 h-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-[#1877F2] shadow-2xs transition-colors"
+                    hx-get="{% url 'staff:attendance' %}?month={{ prev_month_val }}" 
+                    hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true"
+                    title="Previous Month">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <span class="text-xs font-bold text-slate-800 dark:text-white px-2 min-w-[90px] text-center" id="current-month-display">{{ current_month }}</span>
+            <button id="next-month-btn"
+                    class="w-7 h-7 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:text-[#1877F2] shadow-2xs transition-colors"
+                    hx-get="{% url 'staff:attendance' %}?month={{ next_month_val }}" 
+                    hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true"
+                    title="Next Month">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+        </div>
     </div>
 </div>
 

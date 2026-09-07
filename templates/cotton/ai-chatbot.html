@@ -20,6 +20,16 @@
        hovering: false,
        message: '',
        loading: false,
+       selectedLang: localStorage.getItem('ft_ai_voice_lang') || 'bn-BD',
+       isRecording: false,
+       volumeLevel: 0,
+       interimText: '',
+       recognition: null,
+       audioContext: null,
+       analyser: null,
+       mediaStream: null,
+       animFrameId: null,
+       waveBars: [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
        activeSessionId: 'session-1',
        sessions: [
          { id: 'session-1', title: 'Workforce Overview', icon: 'users', color: 'text-orange-500', badge: 'Active' },
@@ -220,6 +230,162 @@
          if (window.lucide) {
            this.$nextTick(() => { lucide.createIcons(); });
          }
+       },
+       setLanguage(lang) {
+         this.selectedLang = lang;
+         try { localStorage.setItem('ft_ai_voice_lang', lang); } catch(e) {}
+         if (this.isRecording) {
+           this.stopVoice();
+           setTimeout(() => this.startVoice(), 250);
+         }
+       },
+       toggleVoice() {
+         if (this.isRecording) {
+           this.stopVoice();
+         } else {
+           this.startVoice();
+         }
+       },
+       async startVoice() {
+         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+         if (!SpeechRec) {
+           alert('Speech recognition is not supported in this browser. Please use Chrome, Edge, or a modern mobile browser.');
+           return;
+         }
+
+         try {
+           this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+         } catch(err) {
+           console.warn('Mic access error:', err);
+           alert('Microphone permission is required for voice input.');
+           return;
+         }
+
+         try {
+           const AudioCtx = window.AudioContext || window.webkitAudioContext;
+           this.audioContext = new AudioCtx();
+           if (this.audioContext.state === 'suspended') {
+             await this.audioContext.resume();
+           }
+           const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+           this.analyser = this.audioContext.createAnalyser();
+           this.analyser.fftSize = 64;
+           source.connect(this.analyser);
+
+           const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+           const updateWave = () => {
+             if (!this.isRecording) return;
+             this.analyser.getByteFrequencyData(dataArray);
+             let sum = 0;
+             for (let i = 0; i < dataArray.length; i++) {
+               sum += dataArray[i];
+             }
+             const avg = sum / dataArray.length;
+             this.volumeLevel = Math.min(100, Math.round((avg / 128) * 100));
+
+             if (this.volumeLevel < 6) {
+               this.waveBars = [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+             } else {
+               const mult = this.volumeLevel / 100;
+               this.waveBars = [
+                 Math.round(6 + (dataArray[0] || 20) * mult * 0.12),
+                 Math.round(8 + (dataArray[2] || 35) * mult * 0.15),
+                 Math.round(12 + (dataArray[4] || 60) * mult * 0.18),
+                 Math.round(18 + (dataArray[6] || 90) * mult * 0.22),
+                 Math.round(24 + (dataArray[8] || 110) * mult * 0.25),
+                 Math.round(20 + (dataArray[10] || 95) * mult * 0.22),
+                 Math.round(26 + (dataArray[12] || 120) * mult * 0.28),
+                 Math.round(22 + (dataArray[14] || 100) * mult * 0.24),
+                 Math.round(16 + (dataArray[16] || 80) * mult * 0.20),
+                 Math.round(20 + (dataArray[18] || 90) * mult * 0.22),
+                 Math.round(14 + (dataArray[20] || 60) * mult * 0.18),
+                 Math.round(10 + (dataArray[22] || 40) * mult * 0.15),
+                 Math.round(6 + (dataArray[24] || 25) * mult * 0.12),
+                 Math.round(4 + (dataArray[26] || 15) * mult * 0.10)
+               ].map(h => Math.max(4, Math.min(32, h)));
+             }
+             this.animFrameId = requestAnimationFrame(updateWave);
+           };
+           this.animFrameId = requestAnimationFrame(updateWave);
+         } catch(e) {
+           console.warn('AudioContext visualizer error:', e);
+         }
+
+         try {
+           this.recognition = new SpeechRec();
+           this.recognition.lang = this.selectedLang;
+           this.recognition.continuous = true;
+           this.recognition.interimResults = true;
+           this.interimText = '';
+
+           this.recognition.onresult = (event) => {
+             let interim = '';
+             let finalTrans = '';
+             for (let i = event.resultIndex; i < event.results.length; ++i) {
+               if (event.results[i].isFinal) {
+                 finalTrans += event.results[i][0].transcript;
+               } else {
+                 interim += event.results[i][0].transcript;
+               }
+             }
+             if (finalTrans) {
+               this.message = (this.message ? (this.message.trim() + ' ') : '') + finalTrans.trim();
+               this.interimText = '';
+             } else {
+               this.interimText = interim;
+             }
+           };
+
+           this.recognition.onerror = (event) => {
+             console.warn('Speech recognition error:', event.error);
+             if (event.error !== 'no-speech') {
+               this.stopVoice();
+             }
+           };
+
+           this.recognition.onend = () => {
+             if (this.isRecording) {
+               try { this.recognition.start(); } catch(e) {}
+             }
+           };
+
+           this.recognition.start();
+           this.isRecording = true;
+         } catch(err) {
+           console.error('Speech recognition failed to start:', err);
+           this.stopVoice();
+         }
+       },
+       stopVoice() {
+         this.isRecording = false;
+         if (this.animFrameId) {
+           cancelAnimationFrame(this.animFrameId);
+           this.animFrameId = null;
+         }
+         if (this.recognition) {
+           try { this.recognition.stop(); } catch(e) {}
+           this.recognition = null;
+         }
+         if (this.mediaStream) {
+           try {
+             this.mediaStream.getTracks().forEach(t => t.stop());
+           } catch(e) {}
+           this.mediaStream = null;
+         }
+         if (this.audioContext) {
+           try { this.audioContext.close(); } catch(e) {}
+           this.audioContext = null;
+         }
+         if (this.interimText) {
+           this.message = (this.message ? (this.message.trim() + ' ') : '') + this.interimText.trim();
+           this.interimText = '';
+         }
+         this.waveBars = [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+         this.volumeLevel = 0;
+         this.$nextTick(() => {
+           const inp = document.getElementById('ai-chat-input');
+           if (inp) inp.focus();
+         });
        }
      }"
      @keydown.escape.window="if (open) { open = false; minimized = false; }"
@@ -470,8 +636,48 @@
 
     </div>
 
-    {# Chat Input Form (HTMX powered) #}
+    {# Chat Input Form (HTMX powered with Multilingual Voice Recognition & Waveform) #}
     <div class="p-2.5 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shrink-0">
+      
+      {# Language Switcher Pill (Bangla, English, Hindi) #}
+      <div class="flex items-center justify-between px-0.5 pb-2">
+        <div class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700/60 p-0.5 rounded-lg text-[10px]">
+          <button type="button"
+                  @click="setLanguage('bn-BD')"
+                  :class="selectedLang === 'bn-BD' ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                  class="px-2 py-0.5 rounded-md transition-all">
+            বাংলা
+          </button>
+          <button type="button"
+                  @click="setLanguage('en-US')"
+                  :class="selectedLang === 'en-US' ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                  class="px-2 py-0.5 rounded-md transition-all">
+            English
+          </button>
+          <button type="button"
+                  @click="setLanguage('hi-IN')"
+                  :class="selectedLang === 'hi-IN' ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 font-bold shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                  class="px-2 py-0.5 rounded-md transition-all">
+            हिन्दी
+          </button>
+        </div>
+        
+        <div class="text-[10px] font-medium flex items-center gap-1.5">
+          <template x-if="isRecording">
+            <span class="flex items-center gap-1.5 text-red-500 font-semibold animate-pulse">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+              <span>Listening (<span x-text="selectedLang === 'bn-BD' ? 'বাংলা' : (selectedLang === 'hi-IN' ? 'हिन्दी' : 'EN')"></span>)...</span>
+            </span>
+          </template>
+          <template x-if="!isRecording">
+            <span class="text-slate-400 flex items-center gap-1">
+              <i data-lucide="mic" class="w-3 h-3 text-orange-500"></i>
+              <span>Voice / Text</span>
+            </span>
+          </template>
+        </div>
+      </div>
+
       <form hx-post="{% url 'admin_panel:ai_chatbot_response' %}"
             hx-target="#ai-chat-messages"
             hx-swap="beforeend"
@@ -481,19 +687,80 @@
             class="space-y-1.5">
         {% csrf_token %}
         <div class="flex items-center gap-1.5">
-          <div class="flex-1">
-            <input id="ai-chat-input"
-                   name="message"
-                   type="text"
-                   placeholder="Type your workforce question..."
-                   required
-                   x-model="message"
-                   autocomplete="off"
-                   class="ft-input w-full">
+          
+          {# Input Field OR Live Voice Wave Visualizer #}
+          <div class="flex-1 relative">
+            {# Normal Text Input (when not recording) #}
+            <div x-show="!isRecording">
+              <input id="ai-chat-input"
+                     name="message"
+                     type="text"
+                     placeholder="Type or use voice to ask question..."
+                     required
+                     x-model="message"
+                     autocomplete="off"
+                     class="ft-input w-full">
+            </div>
+
+            {# Sound Wave & Voice Visualizer (when recording) #}
+            <div x-show="isRecording"
+                 class="w-full flex items-center justify-between px-3 py-1.5 bg-orange-50/80 dark:bg-slate-900/90 border-2 border-orange-400 rounded-lg min-h-[40px] overflow-hidden"
+                 x-cloak>
+              
+              {# Left: Resting dots or Active Wave Bars synced to sound volume #}
+              <div class="flex items-center gap-1 h-6 shrink-0">
+                <template x-if="volumeLevel < 6">
+                  <div class="flex items-center gap-1 text-orange-500 text-xs font-bold tracking-widest animate-pulse">
+                    <span>&bull;</span><span>&bull;</span><span>&bull;</span><span>&bull;</span>
+                  </div>
+                </template>
+                <template x-if="volumeLevel >= 6">
+                  <div class="flex items-center gap-0.5 h-6">
+                    <template x-for="(barH, idx) in waveBars" :key="idx">
+                      <div class="w-1 rounded-full bg-gradient-to-t from-orange-500 via-red-500 to-amber-400 transition-all duration-75"
+                           :style="`height: ${barH}px;`"></div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+
+              {# Center/Right: Live Transcribed Text #}
+              <div class="flex-1 min-w-0 px-2 text-right">
+                <span class="text-[11px] font-medium text-slate-700 dark:text-slate-200 truncate block"
+                      x-text="interimText || message || (volumeLevel < 6 ? 'Listening... speak now' : 'Detecting voice...')">
+                </span>
+              </div>
+            </div>
           </div>
+
+          {# Mic / Stop Voice Button with Radiating Wave Effect #}
+          <div class="relative shrink-0 flex items-center justify-center">
+            {# Resting Mic Button #}
+            <button x-show="!isRecording"
+                    type="button"
+                    @click="startVoice()"
+                    class="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 hover:bg-orange-50 hover:border-orange-400 dark:bg-slate-800 text-slate-600 hover:text-orange-600 dark:text-slate-300 flex items-center justify-center transition-all shadow-xs"
+                    title="Start Voice Input (বাংলা, English, हिन्दी)">
+              <i data-lucide="mic" class="w-4 h-4"></i>
+            </button>
+
+            {# Active Recording Stop Button with Radiating Wave Waves Expanding #}
+            <div x-show="isRecording" class="relative flex items-center justify-center" x-cloak>
+              <span class="absolute inline-flex h-12 w-12 rounded-full bg-red-500/30 animate-ping pointer-events-none" style="animation-duration: 1.4s;"></span>
+              <span class="absolute inline-flex h-10 w-10 rounded-full bg-orange-500/40 animate-ping pointer-events-none" style="animation-duration: 0.9s;"></span>
+              <button type="button"
+                      @click="stopVoice()"
+                      class="relative z-10 w-9 h-9 rounded-lg bg-red-500 hover:bg-red-600 text-white shadow-lg flex items-center justify-center transition-all transform active:scale-95 ring-2 ring-red-400/50"
+                      title="Stop Voice & Convert to Text">
+                <i data-lucide="square" class="w-3.5 h-3.5 fill-white"></i>
+              </button>
+            </div>
+          </div>
+
+          {# Send Button #}
           <button type="submit"
                   class="ft-btn ft-btn-primary ft-btn-sm shrink-0 bg-[#F97316] hover:bg-[#EA580C] border-[#F97316] text-white"
-                  :disabled="loading">
+                  :disabled="loading || isRecording">
             <i data-lucide="send" class="w-3.5 h-3.5"></i>
           </button>
         </div>
