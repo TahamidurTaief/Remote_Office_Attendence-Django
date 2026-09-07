@@ -1,5 +1,5 @@
 <c-app-shell page_title="Attendance History | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
-<div class="max-w-md mx-auto pt-2 pb-24 px-4 select-none">
+<div class="max-w-md mx-auto pt-1 pb-24 px-4 select-none">
 
     {# Offline Sync Status Banner #}
     <div id="sync-banner" style="display:none" class="mb-3 p-3 bg-amber-500 text-white rounded-2xl flex items-center justify-between text-xs font-semibold shadow-sm animate-pulse">
@@ -10,22 +10,27 @@
         <button onclick="syncOfflineQueue()" class="px-2.5 py-1 bg-white text-amber-700 rounded-lg text-[10px] font-bold">Sync</button>
     </div>
 
-    {# ── Month Selector (Centered Pill matching Image 3) ── #}
-    <div class="flex items-center justify-between bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl px-2 py-1 max-w-[210px] mx-auto mb-3 shadow-2xs">
+    {# ── Subtitle (Matching Reference Screenshot) ── #}
+    <p class="text-center text-xs text-slate-500 dark:text-slate-400 font-medium mb-2.5">
+        Monthly logs & punch records
+    </p>
+
+    {# ── Month Selector (Centered Pill matching Reference Screenshot) ── #}
+    <div class="flex items-center justify-between bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl px-3 py-1.5 max-w-[220px] mx-auto mb-3.5 shadow-2xs">
         <button id="prev-month-btn"
-                class="p-1 text-slate-600 hover:text-slate-900 transition-colors" 
+                class="p-1 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors" 
                 hx-get="{% url 'staff:attendance' %}?month={{ prev_month_val }}" 
                 hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true"
                 title="Previous Month">
-            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            <i data-lucide="chevron-left" class="w-4 h-4 stroke-[2.2]"></i>
         </button>
-        <span class="text-xs font-bold text-slate-900 dark:text-white px-2" id="current-month-display">{{ current_month }}</span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white px-2" id="current-month-display">{{ current_month }}</span>
         <button id="next-month-btn"
-                class="p-1 text-slate-600 hover:text-slate-900 transition-colors"
+                class="p-1 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
                 hx-get="{% url 'staff:attendance' %}?month={{ next_month_val }}" 
                 hx-target="#attendance-list-container" hx-swap="outerHTML" hx-push-url="true"
                 title="Next Month">
-            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            <i data-lucide="chevron-right" class="w-4 h-4 stroke-[2.2]"></i>
         </button>
     </div>
 
@@ -38,7 +43,7 @@
     <c-bottom-nav active_tab="attendance"></c-bottom-nav>
 </div>
 
-{# ── Bottom Sheet Modal: Forgot Check-out Request (Matching Image 3) ── #}
+{# ── Bottom Sheet Modal: Forgot Check-out Request ── #}
 <div x-data="{ open: false }"
      @open-forgot-modal.window="open = true"
      @keydown.escape.window="open = false"
