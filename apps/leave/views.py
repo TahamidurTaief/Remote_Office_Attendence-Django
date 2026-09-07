@@ -374,11 +374,13 @@ class StaffLeaveDashboardView(StaffOrManagerMixin, TemplateView):
             balances = []
             history = []
 
+        total_leave_left = sum(getattr(b, 'remaining_days', 0) for b in balances)
         context.update({
             'employee': employee,
             'balances': balances,
             'history': history,
-            'year': year
+            'year': year,
+            'total_leave_left': total_leave_left,
         })
         return context
 

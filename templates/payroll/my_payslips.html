@@ -1,9 +1,77 @@
 <c-app-shell page_title="My Payslips | FieldTrack" shell_type="{% if request.user.role == 'admin' or request.user.role == 'system_owner' %}admin{% else %}staff{% endif %}" active_href="{{ request.path }}">
 
-
     <c-command-palette></c-command-palette>
 
-    <div class="p-4 max-w-5xl mx-auto space-y-4">
+    {# ── MOBILE VIEW (< md) Matching Reference Screenshot 3 Exactly ── #}
+    <div class="md:hidden max-w-md mx-auto pt-1 pb-24 px-4 select-none">
+        <h1 class="text-xl font-bold text-slate-900 dark:text-white mb-4 tracking-tight">
+            My Payslips
+        </h1>
+
+        <div class="space-y-3">
+            {% for p in payslips %}
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                    <div>
+                        <p class="text-xs font-bold text-slate-900 dark:text-white">{{ p.payroll_run.period_start|date:"F Y" }}</p>
+                        <p class="text-[10px] text-slate-400 font-mono mt-0.5">{{ p.payroll_run.period_start|date:"d M Y" }} - {{ p.payroll_run.period_end|date:"d M Y" }}</p>
+                    </div>
+                    <div>
+                        {% if p.payroll_run.status == 'disbursed' %}
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#166534]">Disbursed</span>
+                        {% elif p.payroll_run.status == 'approved_locked' %}
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700">Approved</span>
+                        {% else %}
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Processing</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center text-xs">
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">Gross Salary</p>
+                        <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5">BDT {{ p.gross_salary|floatformat:2 }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">Net Payable</p>
+                        <p class="font-black text-emerald-600 dark:text-emerald-400 mt-0.5">BDT {{ p.net_payable|floatformat:2 }}</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-50 dark:border-slate-800">
+                    <a href="{% url 'payroll:payslip_detail' p.pk %}"
+                       class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-2xs">
+                        View
+                    </a>
+                    <a href="{% url 'payroll:payslip_pdf' p.pk %}"
+                       target="_blank"
+                       class="px-4 py-1.5 rounded-xl bg-[#1877F2] text-xs font-bold text-white shadow-sm hover:bg-blue-600 transition-colors">
+                        PDF
+                    </a>
+                </div>
+            </div>
+            {% empty %}
+            {# Empty State Matching Screenshot 3 #}
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200/90 dark:border-slate-800 text-center shadow-xs mt-2">
+                <div class="text-slate-400 mb-3 flex items-center justify-center">
+                    <i data-lucide="file-text" class="w-16 h-16 stroke-[1.3]"></i>
+                </div>
+                <h2 class="text-base font-bold text-slate-900 dark:text-white mb-1.5">
+                    No Payslips Available
+                </h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                    Payslips will appear here once payroll for the period is calculated, approved, and locked by the Finance department.
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Native Bottom Navigation #}
+        <c-bottom-nav active_tab="profile"></c-bottom-nav>
+    </div>
+
+    {# ── DESKTOP & TABLET VIEW (hidden md:block) with Full Cotton Components Untouched ── #}
+    <div class="hidden md:block p-4 max-w-5xl mx-auto space-y-4">
         <c-page-header title="My Payslips"></c-page-header>
         <c-card padding="none">
             <c-table id="my-payslips-table">

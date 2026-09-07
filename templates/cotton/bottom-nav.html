@@ -35,7 +35,16 @@ Props:
       {% endif %}
     </a>
 
-    {# Tab 3: Tasks #}
+    {# Tab 3: Tasks or Leave (Dynamic to match Screenshots 1 & 2) #}
+    {% if active_tab == 'leave' %}
+    <a href="{% url 'leave:staff_dashboard' %}"
+       class="flex flex-col items-center justify-center min-h-[48px] py-0.5 rounded-xl transition-all relative text-[#1877F2]"
+       aria-label="Leave">
+      <i data-lucide="file-text" class="w-6 h-6 stroke-[2.2] text-[#1877F2]"></i>
+      <span class="text-[11px] leading-tight mt-1 font-bold text-[#1877F2]">Leave</span>
+      <span class="w-14 h-[2.5px] bg-[#1877F2] rounded-full mt-1"></span>
+    </a>
+    {% else %}
     <a href="{% url 'staff:my_tasks' %}"
        class="flex flex-col items-center justify-center min-h-[48px] py-0.5 rounded-xl transition-all relative {% if active_tab == 'tasks' %}text-[#1877F2]{% else %}text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200{% endif %}"
        aria-label="Tasks">
@@ -45,6 +54,7 @@ Props:
         <span class="w-12 h-[2.5px] bg-[#1877F2] rounded-full mt-1"></span>
       {% endif %}
     </a>
+    {% endif %}
 
     {# Tab 4: Profile #}
     <a href="{% url 'staff:profile' %}"

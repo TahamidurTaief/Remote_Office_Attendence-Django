@@ -1,111 +1,130 @@
 <c-app-shell page_title="Expense Claims | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
-<div class="px-4 md:px-6 py-6 md:py-8 space-y-6">
-    <!-- Header -->
-    <div class="flex items-start justify-between gap-4">
+{# ── MOBILE VIEW (< md): Native Android Style ── #}
+<div class="md:hidden max-w-md mx-auto pt-1 pb-24 px-4 select-none">
+    <div class="flex items-center justify-between gap-3 mb-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Expense Claims</h1>
-            <p class="text-sm text-gray-500">Track and submit your business expense claims</p>
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+                Expense Claims
+            </h1>
+            <p class="text-xs text-slate-400">Track and submit business expense claims</p>
         </div>
-        <a href="{% url 'expense:staff_expense_create' %}" class="flex items-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+        <a href="{% url 'expense:staff_expense_create' %}"
+           class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#1877F2] text-white text-xs font-bold shadow-xs active:scale-95 transition-all">
             <i data-lucide="plus-circle" class="w-4 h-4"></i>
-            Claim Expense
+            <span>Claim</span>
         </a>
     </div>
 
-    <!-- Requests History list -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-            <h2 class="text-lg font-bold text-gray-900">Claim History</h2>
-            <p class="text-xs text-gray-500 mt-0.5">Track status of your submitted expense claims.</p>
-        </div>
+    <div class="space-y-3">
+        {% for exp in expenses %}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-[#1877F2] uppercase">
+                        {{ exp.category }}
+                    </span>
+                    {% if exp.project %}
+                    <span class="text-[11px] text-slate-400 font-medium truncate max-w-[140px]">
+                        {{ exp.project.name }}
+                    </span>
+                    {% endif %}
+                </div>
+                <div>
+                    {% if exp.status == 'approved' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#166534]">Approved</span>
+                    {% elif exp.status == 'pending_manager' or exp.status == 'pending_finance' or exp.status == 'pending_accounts' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF3C7] text-[#92400E]">Pending</span>
+                    {% elif exp.status == 'returned' or exp.status == 'returned_by_manager' or exp.status == 'returned_by_finance' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700">Returned</span>
+                    {% else %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Rejected</span>
+                    {% endif %}
+                </div>
+            </div>
 
-        <div class="divide-y divide-gray-100">
+            <div>
+                <p class="text-xl font-black text-slate-900 dark:text-white">
+                    BDT {{ exp.amount }}
+                </p>
+                <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2">
+                    {{ exp.description }}
+                </p>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
+                <span>{{ exp.requested_at|date:"d M Y" }}</span>
+                <div class="flex items-center gap-2">
+                    {% if exp.attachment %}
+                    <a href="{{ exp.attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[#1877F2] font-semibold">
+                        <i data-lucide="paperclip" class="w-3 h-3"></i> Receipt
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'expense:expense_detail' exp.pk %}" class="font-bold text-slate-700 dark:text-slate-200">
+                        Details →
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200/90 text-center shadow-xs">
+            <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                <i data-lucide="receipt" class="w-6 h-6 stroke-[1.8]"></i>
+            </div>
+            <p class="text-sm font-bold text-slate-900">No Expense Claims Yet</p>
+            <p class="text-xs text-slate-400 mt-0.5">Submit your first claim using the Claim button above.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <c-bottom-nav active_tab="profile"></c-bottom-nav>
+</div>
+
+{# ── DESKTOP VIEW (hidden md:block): Cotton Components ── #}
+<div class="hidden md:block max-w-6xl mx-auto p-4 space-y-6">
+    <c-page-header title="Expense Claims" subtitle="Track and submit your business expense claims">
+        <c-slot name="actions">
+            <c-button href="{% url 'expense:staff_expense_create' %}" variant="primary" icon="plus-circle" label="Claim Expense"></c-button>
+        </c-slot>
+    </c-page-header>
+
+    <c-card title="Claim History" padding="none">
+        <div class="divide-y divide-gray-100 dark:divide-slate-800">
             {% for exp in expenses %}
-            <div class="p-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:bg-gray-50/50 transition-colors">
+            <div class="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-slate-800/50 transition-colors">
                 <div class="space-y-1">
-                    <div class="flex items-center gap-2 flex-wrap">
+                    <div class="flex items-center gap-2">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-600 uppercase">
                             {{ exp.category }}
                         </span>
-                        <span class="text-sm font-black text-gray-900">
+                        <span class="text-sm font-black text-gray-900 dark:text-white">
                             BDT {{ exp.amount }}
                         </span>
                     </div>
                     {% if exp.project %}
-                    <p class="text-xs text-gray-500">
-                        Project: <span class="font-semibold text-gray-700">{{ exp.project.name }}</span>
-                    </p>
+                    <p class="text-xs text-gray-500">Project: <span class="font-semibold">{{ exp.project.name }}</span></p>
                     {% endif %}
-                    <p class="text-sm text-gray-800 font-medium">
-                        {{ exp.description|truncatechars:100 }}
-                    </p>
-                    {% if exp.rejection_reason and exp.status == 'rejected' %}
-                    <div class="mt-2 text-xs text-red-650 bg-red-50/50 border border-red-100 rounded-lg p-2 max-w-lg">
-                        <span class="font-bold">Rejection Reason:</span> "{{ exp.rejection_reason }}"
-                    </div>
-                    {% endif %}
+                    <p class="text-xs text-gray-600 dark:text-slate-300">{{ exp.description|truncatechars:100 }}</p>
                 </div>
-                
-                <div class="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-                    <div class="text-right">
-                        <span class="text-[11px] text-gray-400 block">
-                            Submitted: {{ exp.requested_at|date:"d/m/Y" }}
-                        </span>
-                        {% if exp.attachment %}
-                        <a href="{{ exp.attachment.url }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-primary-600 font-semibold hover:underline mt-1">
-                            <i data-lucide="paperclip" class="w-3 h-3"></i>
-                            View Receipt
-                        </a>
-                        {% endif %}
-                    </div>
-                    
-                    <div>
-                        {% if exp.status == 'pending_manager' or exp.status == 'pending_finance' or exp.status == 'pending_accounts' %}
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                            Pending Review
-                        </span>
-                        {% elif exp.status == 'approved' %}
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-800 border border-green-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-green-600"></span>
-                            Approved
-                        </span>
-                        {% elif exp.status == 'returned_by_manager' or exp.status == 'returned_by_finance' or exp.status == 'returned' %}
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                            Returned
-                        </span>
-                        {% elif exp.status == 'draft' %}
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-50 text-gray-800 border border-gray-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                            Draft
-                        </span>
-                        {% else %}
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-800 border border-red-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-                            Rejected
-                        </span>
-                        {% endif %}
-                    </div>
-
-                    {% if exp.status == 'draft' or exp.status == 'returned' or exp.status == 'returned_by_manager' or exp.status == 'returned_by_finance' %}
-                    <a href="{% url 'expense:staff_expense_edit' exp.pk %}" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition-colors border border-indigo-200">
-                        Edit
-                    </a>
+                <div class="flex items-center gap-4">
+                    <span class="text-xs text-gray-400">{{ exp.requested_at|date:"d/m/Y" }}</span>
+                    {% if exp.status == 'approved' %}
+                        <c-badge variant="success" label="Approved"></c-badge>
+                    {% elif exp.status == 'rejected' %}
+                        <c-badge variant="danger" label="Rejected"></c-badge>
+                    {% else %}
+                        <c-badge variant="warning" label="Pending Review"></c-badge>
                     {% endif %}
-                    
-                    <a href="{% url 'expense:expense_detail' exp.pk %}" class="p-1 text-gray-300 hover:text-primary-600 transition-colors">
+                    <a href="{% url 'expense:expense_detail' exp.pk %}" class="text-gray-400 hover:text-primary-600">
                         <i data-lucide="chevron-right" class="w-5 h-5"></i>
                     </a>
                 </div>
             </div>
             {% empty %}
-            <div class="p-8 text-center text-gray-500">
-                <i data-lucide="receipt" class="w-10 h-10 text-gray-300 mx-auto mb-2"></i>
-                <p class="text-sm font-semibold text-gray-650">No expense claims yet</p>
-                <p class="text-xs text-gray-400 mt-1">Submit your first claim using the button above.</p>
+            <div class="p-8 text-center">
+                <c-empty-state icon="receipt" title="No Expense Claims Yet" description="Submit your first claim using the Claim Expense button."></c-empty-state>
             </div>
             {% endfor %}
         </div>
-    </div>
+    </c-card>
+</div>
 </c-app-shell>

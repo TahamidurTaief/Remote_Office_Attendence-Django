@@ -1,19 +1,159 @@
 <c-app-shell page_title="Claim Expense | FieldTrack" shell_type="staff" active_href="{{ request.path }}">
-<div class="px-4 md:px-6 py-6 md:py-8 max-w-2xl mx-auto">
+
+{# ── MOBILE VIEW (< md) Matching Reference Screenshot 4 Exactly ── #}
+<div class="md:hidden max-w-md mx-auto pt-2 pb-24 px-4 select-none">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-xs">
+        <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">
+            Claim Expense
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-5">
+            Submit a new business expense claim for reimbursement.
+        </p>
+
+        <form method="POST" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+
+            {% if form.errors or form.non_field_errors %}
+            <div class="rounded-xl bg-red-50 dark:bg-red-950/40 p-3 border border-red-200 dark:border-red-900/60 mb-2">
+                <div class="flex items-center gap-2 text-xs font-bold text-red-700 dark:text-red-400 mb-1">
+                    <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                    <span>Please correct the following:</span>
+                </div>
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <p class="text-[11px] text-red-600 dark:text-red-400">• {{ field.label }}: {{ error }}</p>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {# Project (Optional) #}
+            <div>
+                <label for="id_project_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                    Project (Optional)
+                </label>
+                <div class="relative">
+                    <select id="id_project_mobile"
+                            name="project"
+                            class="w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 px-3.5 text-xs text-slate-700 dark:text-slate-200 shadow-2xs appearance-none focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none transition-all">
+                        <option value="">-------</option>
+                        {% for choice in form.fields.project.queryset %}
+                            <option value="{{ choice.id }}" {% if form.project.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>
+                                {{ choice }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                        <i data-lucide="chevron-down" class="w-4 h-4 stroke-[2]"></i>
+                    </div>
+                </div>
+            </div>
+
+            {# Amount (BDT) #}
+            <div>
+                <label for="id_amount_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                    Amount (BDT)
+                </label>
+                <input type="number"
+                       step="0.01"
+                       id="id_amount_mobile"
+                       name="amount"
+                       required
+                       value="{{ form.amount.value|default:'' }}"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-100 shadow-2xs focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none transition-all">
+            </div>
+
+            {# Category #}
+            <div>
+                <label for="id_category_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                    Category
+                </label>
+                <div class="relative">
+                    <select id="id_category_mobile"
+                            name="category"
+                            required
+                            class="w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 px-3.5 text-xs text-slate-700 dark:text-slate-200 shadow-2xs appearance-none focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none transition-all">
+                        <option value="">-------</option>
+                        {% for cat_val, cat_label in form.fields.category.choices %}
+                            {% if cat_val %}
+                            <option value="{{ cat_val }}" {% if form.category.value|stringformat:"s" == cat_val|stringformat:"s" %}selected{% endif %}>
+                                {{ cat_label }}
+                            </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                        <i data-lucide="chevron-down" class="w-4 h-4 stroke-[2]"></i>
+                    </div>
+                </div>
+            </div>
+
+            {# Description #}
+            <div>
+                <label for="id_description_mobile" class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                    Description
+                </label>
+                <textarea id="id_description_mobile"
+                          name="description"
+                          rows="4"
+                          required
+                          class="w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-xs text-slate-700 dark:text-slate-200 shadow-2xs placeholder-slate-400 focus:border-[#1877F2] focus:ring-1 focus:ring-[#1877F2] outline-none resize-none transition-all">{{ form.description.value|default:'' }}</textarea>
+            </div>
+
+            {# Receipt Attachment (Optional) #}
+            <div>
+                <label class="block text-xs font-bold text-slate-900 dark:text-white mb-1.5">
+                    Receipt Attachment (Optional)
+                </label>
+                <label class="flex items-center gap-3 w-full rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs text-slate-500 dark:text-slate-400 cursor-pointer shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <i data-lucide="paperclip" class="w-4 h-4 text-slate-400 shrink-0"></i>
+                    <span class="px-3 py-1 rounded-lg border border-[#1877F2] text-[#1877F2] font-semibold text-xs bg-blue-50/40 dark:bg-blue-950/40">
+                        Choose file
+                    </span>
+                    <span id="expense-file-chosen-text" class="truncate text-slate-400">No file chosen</span>
+                    <input type="file"
+                           id="id_attachment_mobile"
+                           name="attachment"
+                           class="hidden"
+                           onchange="document.getElementById('expense-file-chosen-text').textContent = this.files[0] ? this.files[0].name : 'No file chosen'">
+                </label>
+            </div>
+
+            {# Action Buttons: Cancel & Submit Claim #}
+            <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                <a href="{% url 'expense:staff_expense_list' %}"
+                   class="flex-1 py-3 text-center border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 transition-colors shadow-2xs">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="flex-1 py-3 bg-[#1877F2] hover:bg-blue-600 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm transition-all text-center">
+                    Submit Claim
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {# Bottom Navigation #}
+    <c-bottom-nav active_tab="profile"></c-bottom-nav>
+</div>
+
+{# ── DESKTOP & TABLET VIEW (hidden md:block) with Full Cotton Components Untouched ── #}
+<div class="hidden md:block px-4 md:px-6 py-6 md:py-8 max-w-2xl mx-auto">
     <!-- Header -->
     <div class="mb-6 flex items-center justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Claim Expense</h1>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Claim Expense</h1>
             <p class="text-sm text-gray-500 mt-1">Submit a new business expense claim for reimbursement.</p>
         </div>
-        <a href="{% url 'expense:staff_expense_list' %}" class="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors bg-white shadow-sm">
+        <a href="{% url 'expense:staff_expense_list' %}" class="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 dark:text-slate-200 text-sm font-semibold rounded-xl transition-colors bg-white dark:bg-slate-800 shadow-sm">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
             Back
         </a>
     </div>
 
     <!-- Form Card -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
         <form method="POST" enctype="multipart/form-data" class="p-6 space-y-6">
             {% csrf_token %}
             
@@ -38,45 +178,48 @@
 
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-bold text-gray-700">Project (Optional)</label>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-slate-300">Project (Optional)</label>
                     <div class="mt-1.5">{{ form.project }}</div>
                     {% if form.project.errors %}<p class="mt-1.5 text-xs text-red-650">{{ form.project.errors.0 }}</p>{% endif %}
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700">Amount (BDT)</label>
+                        <label class="block text-sm font-bold text-gray-700 dark:text-slate-300">Amount (BDT)</label>
                         <div class="mt-1.5">{{ form.amount }}</div>
                         {% if form.amount.errors %}<p class="mt-1.5 text-xs text-red-650">{{ form.amount.errors.0 }}</p>{% endif %}
                     </div>
 
                     <div>
-                        <label class="block text-sm font-bold text-gray-700">Category</label>
+                        <label class="block text-sm font-bold text-gray-700 dark:text-slate-300">Category</label>
                         <div class="mt-1.5">{{ form.category }}</div>
                         {% if form.category.errors %}<p class="mt-1.5 text-xs text-red-650">{{ form.category.errors.0 }}</p>{% endif %}
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-bold text-gray-700">Description</label>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-slate-300">Description</label>
                     <div class="mt-1.5">{{ form.description }}</div>
                     {% if form.description.errors %}<p class="mt-1.5 text-xs text-red-650">{{ form.description.errors.0 }}</p>{% endif %}
                 </div>
 
                 <div>
-                    <label class="block text-sm font-bold text-gray-700">Receipt Attachment (Optional)</label>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-slate-300">Receipt Attachment (Optional)</label>
                     <div class="mt-1.5">{{ form.attachment }}</div>
                     {% if form.attachment.errors %}<p class="mt-1.5 text-xs text-red-650">{{ form.attachment.errors.0 }}</p>{% endif %}
                 </div>
             </div>
 
             <!-- Action buttons -->
-            <div class="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                <a href="{% url 'expense:staff_expense_list' %}" class="px-4 py-2.5 border border-gray-300 text-gray-750 font-semibold rounded-xl hover:bg-gray-50 transition-colors bg-white text-sm">
+            <div class="pt-4 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3">
+                <a href="{% url 'expense:staff_expense_list' %}" class="px-4 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors bg-white text-sm">
                     Cancel
                 </a>
                 <button type="submit" class="px-6 py-2.5 bg-primary hover:opacity-90 text-white font-bold rounded-xl transition-colors shadow-sm text-sm">
                     Submit Claim
                 </button>
             </div>
+        </form>
+    </div>
+</div>
 </c-app-shell>

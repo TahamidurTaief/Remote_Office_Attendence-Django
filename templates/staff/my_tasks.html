@@ -153,92 +153,173 @@
         </div>
     </div>
 
-    <!-- Tasks List Container -->
-    <c-card extra_class="overflow-hidden p-0">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y" style="border-color:var(--border)">
-                <thead style="background:var(--surface-2)">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Project / Label</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Task / Activity</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Planned Finish</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Status</th>
-                        <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y" style="border-color:var(--border); background:var(--surface)">
-                    {% for task in assigned_tasks %}
-                    <tr class="transition-colors cursor-pointer" style="border-color:var(--border)"
-                        id="task-row-{{ task.pk }}"
-                        @click="openModal({{ task.pk }})">
-                        <td class="px-4 py-3.5">
-                            {% if task.project %}
-                            <div class="text-xs font-bold leading-tight" style="color:var(--text)">{{ task.project.name }}</div>
-                            <div class="text-[10px] mt-1 leading-none" style="color:var(--text-muted)">{{ task.project.branch.name|default:"No Branch" }}</div>
-                            {% else %}
-                            <div class="text-xs font-bold leading-tight" style="color:var(--text-secondary)">Standalone Task</div>
-                            <div class="text-[10px] mt-1 leading-none" style="color:var(--text-muted)">Global Workspace</div>
-                            {% endif %}
-                            <div class="text-[10px] font-bold mt-1" style="color:var(--primary)">Points: {{ task.points }}</div>
-                        </td>
-                        <td class="px-4 py-3.5">
-                            <div class="text-xs font-semibold leading-tight" style="color:var(--text)">{{ task.activity }}</div>
-                            {% if task.assignment_attachment or task.completion_attachment %}
-                            <div class="flex items-center gap-2 mt-1.5">
-                                {% if task.assignment_attachment %}
-                                <span class="inline-flex items-center text-[10px]" style="color:var(--text-muted)">
-                                    <i data-lucide="paperclip" class="w-3 h-3 mr-0.5"></i> Ref File
-                                </span>
-                                {% endif %}
-                                {% if task.completion_attachment %}
-                                <span class="inline-flex items-center text-[10px] text-green-600 font-semibold">
-                                    <i data-lucide="check-square" class="w-3 h-3 mr-0.5"></i> Proof Attached
-                                </span>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td class="px-4 py-3.5 whitespace-nowrap text-xs font-medium" style="color:var(--text-secondary)">
-                            {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
-                        </td>
-                        <td class="px-4 py-3.5 whitespace-nowrap">
-                            <div class="flex flex-col">
-                                <span class="self-start">
-                                    {% if task.status == 'Completed' %}
-                                    <c-badge label="Completed" variant="soft" status_color="emerald" ></c-badge>
-                                    {% elif task.status == 'Under Review' %}
-                                    <c-badge label="Under Review" variant="soft" status_color="amber" ></c-badge>
-                                    {% elif task.status == 'In Progress' %}
-                                    <c-badge label="In Progress" variant="soft" status_color="blue" ></c-badge>
-                                    {% elif task.status == 'Delayed' %}
-                                    <c-badge label="Delayed" variant="soft" status_color="rose" ></c-badge>
-                                    {% else %}
-                                    <c-badge label="Not Started" variant="soft" status_color="slate" ></c-badge>
-                                    {% endif %}
-                                </span>
-                                <span class="text-[10px] font-semibold mt-1" style="color:var(--text-muted)">
-                                    Progress: {{ task.progress_percent }}%
-                                    {% if task.pending_progress_percent is not None %}
-                                    <span class="text-amber-600 block text-[9px]">(Pending: {{ task.pending_progress_percent }}%)</span>
-                                    {% endif %}
-                                </span>
-                            </div>
-                        </td>
-                        <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold">
-                            <button type="button" @click.stop="openModal({{ task.pk }})" style="color:var(--primary)" class="hover:underline">View</button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="px-4 py-12 text-center italic text-xs" style="color:var(--text-muted)">
-                            No tasks found matching your filter selection.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- MOBILE VIEW (< md): Native Android Task Cards -->
+    <div class="md:hidden space-y-3 pb-24">
+        {% for task in assigned_tasks %}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs cursor-pointer active:scale-[0.99] transition-all space-y-3"
+             id="task-card-mobile-{{ task.pk }}"
+             @click="openModal({{ task.pk }})">
+            
+            {# Top Row: Project & Status Badge #}
+            <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+                        {% if task.project %}{{ task.project.name }}{% else %}Standalone Task{% endif %}
+                    </p>
+                    <p class="text-[10px] text-slate-400">
+                        {{ task.project.branch.name|default:"Global Workspace" }}
+                    </p>
+                </div>
+                <div>
+                    {% if task.status == 'Completed' %}
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#166534]">Completed</span>
+                    {% elif task.status == 'Under Review' %}
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#FEF3C7] text-[#92400E]">Under Review</span>
+                    {% elif task.status == 'In Progress' %}
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-[#1877F2]">In Progress</span>
+                    {% elif task.status == 'Delayed' %}
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Delayed</span>
+                    {% else %}
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Not Started</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Task Activity Title #}
+            <p class="text-sm font-bold text-slate-900 dark:text-white leading-snug">
+                {{ task.activity }}
+            </p>
+
+            {# Meta Info: Points, Attachments #}
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1">
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-[#1877F2]">Points: {{ task.points }}</span>
+                    {% if task.assignment_attachment %}
+                    <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                        <i data-lucide="paperclip" class="w-3 h-3"></i> Ref
+                    </span>
+                    {% endif %}
+                    {% if task.completion_attachment %}
+                    <span class="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
+                        <i data-lucide="check-square" class="w-3 h-3"></i> Proof
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="text-[11px] text-slate-400">
+                    Due: {{ task.planned_finish|date:"d M Y"|default:"—" }}
+                </div>
+            </div>
+
+            {# Progress Bar #}
+            <div class="space-y-1">
+                <div class="flex justify-between items-center text-[10px] font-semibold text-slate-400">
+                    <span>Progress</span>
+                    <span>{{ task.progress_percent }}%</span>
+                </div>
+                <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div class="bg-[#1877F2] h-full rounded-full" style="width: {{ task.progress_percent }}%"></div>
+                </div>
+            </div>
         </div>
-    </c-card>
+        {% empty %}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200/90 text-center shadow-xs">
+            <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                <i data-lucide="check-square" class="w-6 h-6 stroke-[1.8]"></i>
+            </div>
+            <p class="text-sm font-bold text-slate-900">No Tasks Found</p>
+            <p class="text-xs text-slate-400 mt-0.5">No tasks found matching your filter selection.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- DESKTOP VIEW (hidden md:block): Cotton Components Untouched -->
+    <div class="hidden md:block">
+        <c-card extra_class="overflow-hidden p-0">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y" style="border-color:var(--border)">
+                    <thead style="background:var(--surface-2)">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Project / Label</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Task / Activity</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Planned Finish</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Status</th>
+                            <th class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y" style="border-color:var(--border); background:var(--surface)">
+                        {% for task in assigned_tasks %}
+                        <tr class="transition-colors cursor-pointer" style="border-color:var(--border)"
+                            id="task-row-{{ task.pk }}"
+                            @click="openModal({{ task.pk }})">
+                            <td class="px-4 py-3.5">
+                                {% if task.project %}
+                                <div class="text-xs font-bold leading-tight" style="color:var(--text)">{{ task.project.name }}</div>
+                                <div class="text-[10px] mt-1 leading-none" style="color:var(--text-muted)">{{ task.project.branch.name|default:"No Branch" }}</div>
+                                {% else %}
+                                <div class="text-xs font-bold leading-tight" style="color:var(--text-secondary)">Standalone Task</div>
+                                <div class="text-[10px] mt-1 leading-none" style="color:var(--text-muted)">Global Workspace</div>
+                                {% endif %}
+                                <div class="text-[10px] font-bold mt-1" style="color:var(--primary)">Points: {{ task.points }}</div>
+                            </td>
+                            <td class="px-4 py-3.5">
+                                <div class="text-xs font-semibold leading-tight" style="color:var(--text)">{{ task.activity }}</div>
+                                {% if task.assignment_attachment or task.completion_attachment %}
+                                <div class="flex items-center gap-2 mt-1.5">
+                                    {% if task.assignment_attachment %}
+                                    <span class="inline-flex items-center text-[10px]" style="color:var(--text-muted)">
+                                        <i data-lucide="paperclip" class="w-3 h-3 mr-0.5"></i> Ref File
+                                    </span>
+                                    {% endif %}
+                                    {% if task.completion_attachment %}
+                                    <span class="inline-flex items-center text-[10px] text-green-600 font-semibold">
+                                        <i data-lucide="check-square" class="w-3 h-3 mr-0.5"></i> Proof Attached
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap text-xs font-medium" style="color:var(--text-secondary)">
+                                {{ task.planned_finish|date:"d/m/Y"|default:"—" }}
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap">
+                                <div class="flex flex-col">
+                                    <span class="self-start">
+                                        {% if task.status == 'Completed' %}
+                                        <c-badge label="Completed" variant="soft" status_color="emerald" ></c-badge>
+                                        {% elif task.status == 'Under Review' %}
+                                        <c-badge label="Under Review" variant="soft" status_color="amber" ></c-badge>
+                                        {% elif task.status == 'In Progress' %}
+                                        <c-badge label="In Progress" variant="soft" status_color="blue" ></c-badge>
+                                        {% elif task.status == 'Delayed' %}
+                                        <c-badge label="Delayed" variant="soft" status_color="rose" ></c-badge>
+                                        {% else %}
+                                        <c-badge label="Not Started" variant="soft" status_color="slate" ></c-badge>
+                                        {% endif %}
+                                    </span>
+                                    <span class="text-[10px] font-semibold mt-1" style="color:var(--text-muted)">
+                                        Progress: {{ task.progress_percent }}%
+                                        {% if task.pending_progress_percent is not None %}
+                                        <span class="text-amber-600 block text-[9px]">(Pending: {{ task.pending_progress_percent }}%)</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3.5 whitespace-nowrap text-right text-[11px] font-semibold">
+                                <button type="button" @click.stop="openModal({{ task.pk }})" style="color:var(--primary)" class="hover:underline">View</button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-4 py-12 text-center italic text-xs" style="color:var(--text-muted)">
+                                No tasks found matching your filter selection.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </c-card>
+    </div>
 
     <!-- Task Details, Discussion & File Viewer Modal -->
     <div x-show="showModal"
@@ -470,7 +551,7 @@
                 </template>
             </div>
         </div>
-    </div>
+    <c-bottom-nav active_tab="tasks"></c-bottom-nav>
 </div>
 </c-app-shell>
 
