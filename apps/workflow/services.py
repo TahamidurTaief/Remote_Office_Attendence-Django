@@ -114,6 +114,9 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
         delegated_by = None
         if step:
             now_date = timezone.localdate()
+            from apps.accounts.engine import PermissionEngine
+            is_authorized = actor.is_superuser or PermissionEngine.evaluate(actor, 'workflow.edit').allowed
+
             expected_approver = None
             if getattr(step, 'approver_resolution_type', 'static_role') == 'reporting_manager':
                 initiator = locked_instance.initiated_by
@@ -122,14 +125,11 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
                     employee = Employee.objects.filter(user=initiator).first()
                     if employee and employee.reporting_manager:
                         expected_approver = employee.reporting_manager.user
-                if not expected_approver:
-                    from django.contrib.auth import get_user_model
-                    User = get_user_model()
-                    expected_approver = User.objects.filter(role=step.approver_role, is_active=True).first()
-            else:
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                expected_approver = User.objects.filter(role=step.approver_role, is_active=True).first()
+
+            if expected_approver and actor == expected_approver:
+                is_authorized = True
+            elif not expected_approver and actor.role == step.approver_role:
+                is_authorized = True
 
             if expected_approver:
                 # Check active delegation specifically from this expected_approver
@@ -157,6 +157,7 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
 
             if del_obj:
                 delegated_by = del_obj.from_user
+                is_authorized = True
             elif expected_approver and actor != expected_approver:
                 # Check ManagerDelegation fallback
                 from apps.employees.models import ManagerDelegation
@@ -169,6 +170,26 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
                 ).first()
                 if mgr_del:
                     delegated_by = expected_approver
+                    is_authorized = True
+            elif not expected_approver and actor.role != step.approver_role:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                role_users = User.objects.filter(role=step.approver_role, is_active=True)
+                from apps.employees.models import ManagerDelegation
+                mgr_del = ManagerDelegation.objects.filter(
+                    manager__user__in=role_users,
+                    delegate_to__user=actor,
+                    is_active=True,
+                    start_date__lte=now_date,
+                    end_date__gte=now_date,
+                ).first()
+                if mgr_del:
+                    delegated_by = mgr_del.manager.user
+                    is_authorized = True
+
+            if not is_authorized:
+                from django.core.exceptions import PermissionDenied
+                raise PermissionDenied(f"User {actor} is not authorized for step {step.step_number}.")
 
         # Create the action
         wf_action = WorkflowAction.objects.create(
