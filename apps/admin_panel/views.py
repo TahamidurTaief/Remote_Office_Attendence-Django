@@ -468,7 +468,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         # Enforce Manager branch limits
         user = self.request.user
         eval_res = PermissionEngine.evaluate(user, 'attendance.view')
-        can_view_all = user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        can_view_all = getattr(user, 'role', '') != 'manager' and (user.is_superuser or eval_res.scope == DataScope.GLOBAL)
         role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(user, 'employee_profile', None)
 
@@ -586,7 +586,8 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
                     })
 
         for att in page_attendances:
-            att.leave_balances = balances_by_emp[att.employee.id]
+            att_emp_id = getattr(att, 'employee_id', getattr(getattr(att, 'employee', None), 'id', None))
+            att.leave_balances = balances_by_emp.get(att_emp_id, [])
 
         return context
 

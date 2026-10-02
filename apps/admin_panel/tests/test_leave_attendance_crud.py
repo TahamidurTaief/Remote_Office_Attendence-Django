@@ -153,3 +153,181 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
         resp = self.client.post(url)
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(Attendance.objects.filter(pk=self.attendance.pk).exists())
+
+    def test_attendance_list_query_bounded_growth(self):
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        from apps.branches.models import Branch
+
+        branch_a = Branch.objects.create(name='Branch A', address='A', latitude=23.8, longitude=90.4)
+        branch_b = Branch.objects.create(name='Branch B', address='B', latitude=22.8, longitude=91.4)
+        self.employee.branch = branch_a
+        self.employee.save()
+
+        # Create 20 attendance records
+        today = timezone.now().date()
+        for i in range(20):
+            Attendance.objects.create(
+                employee=self.employee,
+                date=today - datetime.timedelta(days=i),
+                type='office' if i % 2 == 0 else 'field',
+                status='on_time' if i % 2 == 0 else 'late',
+                attendance_type='check_in'
+            )
+
+        list_url = reverse('admin_panel:attendance_list')
+        with CaptureQueriesContext(connection) as ctx20:
+            resp20 = self.client.get(list_url)
+        self.assertEqual(resp20.status_code, 200)
+        q20_count = len(ctx20.captured_queries)
+
+        # Scale to 200 records across multiple employees
+        more_employees = []
+        for j in range(5):
+            u = User.objects.create_user(email=f'emp_extra_{j}@example.com', password=self.password)
+            emp = EmployeeProfile.objects.create(
+                user=u,
+                full_name=f'Extra Emp {j}',
+                joined_date=today,
+                employee_id=f'EMP-EXT-{j}',
+                phone=f'98765432{j}',
+                branch=branch_a
+            )
+            more_employees.append(emp)
+
+        for i in range(20, 200):
+            emp = more_employees[i % len(more_employees)]
+            Attendance.objects.create(
+                employee=emp,
+                date=today - datetime.timedelta(days=(i % 30)),
+                type='office' if i % 3 == 0 else 'field',
+                status='on_time' if i % 2 == 0 else 'late',
+                attendance_type='check_in'
+            )
+
+        with CaptureQueriesContext(connection) as ctx200:
+            resp200 = self.client.get(list_url)
+        self.assertEqual(resp200.status_code, 200)
+        q200_count = len(ctx200.captured_queries)
+
+        growth = q200_count - q20_count
+        self.assertLessEqual(growth, 3, f"Query count growth {growth} exceeded bound (q20={q20_count}, q200={q200_count})")
+
+    def test_attendance_list_filtered_results_and_summary_totals(self):
+        from apps.branches.models import Branch
+        branch = Branch.objects.create(name='Filter Branch', address='FB', latitude=23.8, longitude=90.4)
+        self.employee.branch = branch
+        self.employee.save()
+
+        today = timezone.now().date()
+        Attendance.objects.all().delete()
+
+        # Create known set: 3 office on_time, 2 field late
+        for i in range(3):
+            Attendance.objects.create(
+                employee=self.employee,
+                date=today,
+                type='office',
+                status='on_time',
+                attendance_type='check_in'
+            )
+        for i in range(2):
+            Attendance.objects.create(
+                employee=self.employee,
+                date=today,
+                type='field',
+                status='late',
+                attendance_type='check_in'
+            )
+
+        url = reverse('admin_panel:attendance_list') + f'?date_from={today.isoformat()}&date_to={today.isoformat()}&branch={branch.id}'
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['total_records'], 5)
+        self.assertEqual(resp.context['total_field'], 2)
+        self.assertEqual(resp.context['total_present'], 1)  # distinct (employee_id, date)
+        self.assertEqual(resp.context['total_late'], 1)     # distinct (employee_id, date)
+
+    def test_attendance_list_cross_branch_scoping_for_manager(self):
+        from apps.branches.models import Branch
+        from apps.accounts.rbac_models import Role, UserRoleAssignment
+        from apps.accounts.models import UserSession
+
+        branch_hq = Branch.objects.create(name='HQ', address='HQ', latitude=23.8, longitude=90.4)
+        branch_other = Branch.objects.create(name='Other', address='Other', latitude=22.8, longitude=91.4)
+
+        self.employee.branch = branch_hq
+        self.employee.save()
+
+        # Other employee in other branch
+        other_user = User.objects.create_user(email='other_branch@example.com', password=self.password)
+        other_emp = EmployeeProfile.objects.create(
+            user=other_user,
+            full_name='Other Branch Emp',
+            joined_date=timezone.now().date(),
+            employee_id='EMP-OTHER-456',
+            phone='444555666',
+            branch=branch_other
+        )
+
+        today = timezone.now().date()
+        Attendance.objects.create(employee=self.employee, date=today, type='office', status='on_time', attendance_type='check_in')
+        Attendance.objects.create(employee=other_emp, date=today, type='office', status='on_time', attendance_type='check_in')
+
+        # Manager user
+        manager_user = User.objects.create_user(email='manager_test@example.com', password=self.password, role='manager', is_superuser=True)
+        EmployeeProfile.objects.create(
+            user=manager_user,
+            full_name='Manager User',
+            joined_date=today,
+            employee_id='EMP-MGR-1',
+            phone='999000111',
+            branch=branch_hq
+        )
+        manager_role, _ = Role.objects.get_or_create(code='manager', defaults={'name': 'Manager'})
+        UserRoleAssignment.objects.create(user=manager_user, role=manager_role)
+
+        self.client.login(email='manager_test@example.com', password=self.password)
+        session = self.client.session
+        session.save()
+        UserSession.objects.create(user=manager_user, session_key=session.session_key, device_id='test_mgr', is_active=True)
+
+        url = reverse('admin_panel:attendance_list') + f'?branch={branch_other.id}'
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+        # Context attendances must only belong to manager's branch
+        for att in resp.context.get('attendances', []):
+            emp = getattr(att, 'employee', None)
+            if emp:
+                self.assertEqual(emp.branch_id, branch_hq.id)
+
+    def test_attendance_list_missing_optional_relationships_safe(self):
+        # Create attendance record with minimal fields (no photo, total_hours None, no project)
+        Attendance.objects.all().delete()
+        emp_no_branch = EmployeeProfile.objects.create(
+            user=User.objects.create_user(email='nobranch@example.com', password=self.password),
+            full_name='No Branch Emp',
+            joined_date=timezone.now().date(),
+            employee_id='EMP-NOBRANCH',
+            phone='000111222',
+            branch=None,
+            master_employee=None
+        )
+        Attendance.objects.create(
+            employee=emp_no_branch,
+            date=timezone.now().date(),
+            check_in_time=None,
+            check_out_time=None,
+            total_hours=None,
+            photo=None,
+            type='office',
+            status='on_time',
+            attendance_type='check_in'
+        )
+
+        url = reverse('admin_panel:attendance_list')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'No Branch Emp')
+        self.assertContains(resp, 'Unassigned')
