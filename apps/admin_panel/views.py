@@ -2063,7 +2063,7 @@ class LeaveEmployeeReportView(AdminRequiredMixin, View):
             'approved_count': approved_count,
             'pending_count': pending_count,
             'total_approved_days': total_approved_days,
-            'employees': EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
+            'employees': scoped_emps.filter(is_active=True).order_by('full_name'),
             'prev_m': prev_m, 'prev_y': prev_y,
             'next_m': next_m, 'next_y': next_y,
         })

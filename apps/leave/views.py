@@ -27,7 +27,7 @@ def _get_profile(user):
     return None
 
 
-def get_effective_leave_scope(user):
+def get_effective_leave_scope(user, permission_code='leave.view'):
     if not user or not user.is_authenticated:
         return None
     if user.is_superuser:
@@ -35,7 +35,8 @@ def get_effective_leave_scope(user):
         return DataScope.GLOBAL
     from apps.accounts.engine import PermissionEngine
     from apps.accounts.rbac_models import DataScope
-    eval_res = PermissionEngine.evaluate(user, 'leave.view', action_type='view')
+    action_type = 'approve' if permission_code == 'leave.approve' else ('edit' if permission_code == 'leave.edit' else 'view')
+    eval_res = PermissionEngine.evaluate(user, permission_code, action_type=action_type)
     if eval_res.allowed:
         return eval_res.data_scope
     if getattr(user, 'role', '') in ('admin', 'system_owner', 'super_admin'):
@@ -45,12 +46,12 @@ def get_effective_leave_scope(user):
     return None
 
 
-def get_scoped_employee_queryset(user):
+def get_scoped_employee_queryset(user, permission_code='leave.view'):
     from apps.accounts.rbac_models import DataScope
     from apps.employees.models import EmployeeProfile
     from django.db.models import Q
 
-    scope = get_effective_leave_scope(user)
+    scope = get_effective_leave_scope(user, permission_code=permission_code)
     if scope is None:
         return EmployeeProfile.objects.none()
 
@@ -58,16 +59,27 @@ def get_scoped_employee_queryset(user):
         return EmployeeProfile.objects.all()
 
     profile = _get_profile(user)
-
-    if scope == DataScope.BRANCH:
-        if profile and profile.branch_id:
-            return EmployeeProfile.objects.filter(branch_id=profile.branch_id)
+    if not profile:
         return EmployeeProfile.objects.none()
 
-    if scope in (DataScope.TEAM, DataScope.DEPARTMENT):
-        if not profile:
-            return EmployeeProfile.objects.none()
+    if scope == DataScope.BRANCH:
+        if profile.branch_id or (profile.master_employee_id and profile.master_employee.branch_id):
+            branch_id = profile.branch_id or profile.master_employee.branch_id
+            return EmployeeProfile.objects.filter(
+                Q(branch_id=branch_id) | Q(master_employee__branch_id=branch_id)
+            ).distinct()
+        return EmployeeProfile.objects.none()
 
+    if scope == DataScope.DEPARTMENT:
+        dept_name = profile.canonical_department
+        if dept_name:
+            return EmployeeProfile.objects.filter(
+                Q(master_employee__department__name=dept_name) |
+                Q(department=dept_name)
+            ).distinct()
+        return EmployeeProfile.objects.none()
+
+    if scope == DataScope.TEAM:
         from apps.projects.models import Project
         managed_projects = Project.objects.filter(project_managers=profile)
         team_q = (
@@ -84,18 +96,16 @@ def get_scoped_employee_queryset(user):
         return EmployeeProfile.objects.filter(team_q).distinct()
 
     if scope == DataScope.OWN:
-        if profile:
-            return EmployeeProfile.objects.filter(pk=profile.pk)
-        return EmployeeProfile.objects.none()
+        return EmployeeProfile.objects.filter(pk=profile.pk)
 
     return EmployeeProfile.objects.none()
 
 
-def get_scoped_leave_requests(user):
+def get_scoped_leave_requests(user, permission_code='leave.view'):
     from apps.accounts.rbac_models import DataScope
     from .models import LeaveRequest
 
-    scope = get_effective_leave_scope(user)
+    scope = get_effective_leave_scope(user, permission_code=permission_code)
     if scope is None:
         return LeaveRequest.objects.none()
 
@@ -103,20 +113,24 @@ def get_scoped_leave_requests(user):
         return LeaveRequest.objects.all()
 
     profile = _get_profile(user)
+    if not profile:
+        return LeaveRequest.objects.none()
 
     if scope == DataScope.BRANCH:
-        if profile and profile.branch_id:
-            return LeaveRequest.objects.filter(employee__branch_id=profile.branch_id)
+        if profile.branch_id or (profile.master_employee_id and profile.master_employee.branch_id):
+            branch_id = profile.branch_id or profile.master_employee.branch_id
+            from django.db.models import Q
+            return LeaveRequest.objects.filter(
+                Q(employee__branch_id=branch_id) | Q(employee__master_employee__branch_id=branch_id)
+            ).distinct()
         return LeaveRequest.objects.none()
 
     if scope in (DataScope.TEAM, DataScope.DEPARTMENT):
-        scoped_emps = get_scoped_employee_queryset(user)
+        scoped_emps = get_scoped_employee_queryset(user, permission_code=permission_code)
         return LeaveRequest.objects.filter(employee__in=scoped_emps)
 
     if scope == DataScope.OWN:
-        if profile:
-            return LeaveRequest.objects.filter(employee=profile)
-        return LeaveRequest.objects.none()
+        return LeaveRequest.objects.filter(employee=profile)
 
     return LeaveRequest.objects.none()
 
@@ -189,41 +203,18 @@ class BaseProcessLeaveRequestView(View):
             return redirect('/login/')
 
         from apps.accounts.engine import PermissionEngine
-        res = PermissionEngine.evaluate(request.user, 'leave.approve')
+        res = PermissionEngine.evaluate(request.user, 'leave.approve', action_type='approve')
         if not (res.allowed or request.user.is_superuser):
             from django.http import HttpResponseForbidden
             from django.template.loader import render_to_string
             content = render_to_string('cotton/permission_denied_hx.html', {'message': 'You do not have permission to approve leave requests.'}, request=request)
             return HttpResponseForbidden(content, content_type='text/html')
 
-        # Scoping check for manager/team scope
-        if res.allowed and res.data_scope != 'global' and not request.user.is_superuser:
-            leave_request = get_object_or_404(LeaveRequest, pk=kwargs.get('pk'))
-            profile = _get_profile(request.user)
-            
-            is_reporting_manager = False
-            emp_master = getattr(leave_request.employee, 'master_employee', None)
-            if emp_master and emp_master.reporting_manager:
-                if emp_master.reporting_manager.user == request.user:
-                    is_reporting_manager = True
-            
-            scoped = is_reporting_manager
-            if not scoped and profile:
-                if profile.branch and leave_request.employee.branch == profile.branch:
-                    scoped = True
-                elif not profile.branch:
-                    from django.db.models import Q
-                    from apps.projects.models import Project
-                    managed_projects = Project.objects.filter(project_managers=profile)
-                    project_employees = EmployeeProfile.objects.filter(
-                        Q(site_engineer_projects__in=managed_projects) |
-                        Q(assigned_tasks__project__in=managed_projects)
-                    ).distinct()
-                    if leave_request.employee in project_employees:
-                        scoped = True
-            if not scoped:
-                from django.http import HttpResponseForbidden
-                return HttpResponseForbidden("You do not have permission to process leave requests outside your scope.")
+        pk = kwargs.get('pk')
+        scoped_requests = get_scoped_leave_requests(request.user, permission_code='leave.approve')
+        if not scoped_requests.filter(pk=pk).exists():
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("You do not have permission to process leave requests outside your scope.")
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -647,7 +638,7 @@ class RescheduleLeaveRequestView(AdminRequiredMixin, UpdateView):
     template_name = 'admin_panel/leave/reschedule_form.html'
 
     def get_queryset(self):
-        return get_scoped_leave_requests(self.request.user)
+        return get_scoped_leave_requests(self.request.user, permission_code='leave.edit')
 
     def form_valid(self, form):
         form.instance.reviewed_by = self.request.user
