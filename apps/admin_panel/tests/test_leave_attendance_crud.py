@@ -274,8 +274,9 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
         Attendance.objects.create(employee=self.employee, date=today, type='office', status='on_time', attendance_type='check_in')
         Attendance.objects.create(employee=other_emp, date=today, type='office', status='on_time', attendance_type='check_in')
 
-        # Manager user
-        manager_user = User.objects.create_user(email='manager_test@example.com', password=self.password, role='manager', is_superuser=True)
+        # Manager user (non-superuser with branch-scoped attendance.view)
+        from apps.accounts.rbac_models import Module, Action, Permission, RolePermission, DataScope
+        manager_user = User.objects.create_user(email='manager_test@example.com', password=self.password, role='manager', is_superuser=False)
         EmployeeProfile.objects.create(
             user=manager_user,
             full_name='Manager User',
@@ -286,6 +287,14 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
         )
         manager_role, _ = Role.objects.get_or_create(code='manager', defaults={'name': 'Manager'})
         UserRoleAssignment.objects.create(user=manager_user, role=manager_role)
+        mod, _ = Module.objects.get_or_create(code='attendance', defaults={'name': 'Attendance'})
+        act, _ = Action.objects.get_or_create(code='view', defaults={'name': 'View'})
+        perm, _ = Permission.objects.get_or_create(module=mod, action=act, codename='attendance.view', defaults={'name': 'View Attendance'})
+        RolePermission.objects.update_or_create(
+            role=manager_role,
+            permission=perm,
+            defaults={'data_scope': DataScope.BRANCH}
+        )
 
         self.client.login(email='manager_test@example.com', password=self.password)
         session = self.client.session
@@ -331,3 +340,130 @@ class AdminLeaveAttendanceCRUDTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'No Branch Emp')
         self.assertContains(resp, 'Unassigned')
+
+    def test_attendance_list_realistic_query_bounded_growth(self):
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        from apps.branches.models import Branch
+        from apps.accounts.rbac_models import Role, UserRoleAssignment, Module, Action, Permission, RolePermission, DataScope
+        from apps.accounts.models import UserSession, SecurityPolicy, UserSecurityProfile
+        from apps.branches.utils import get_cached_branches
+        from apps.accounts.engine import PermissionEngine
+
+        # Build realistic non-superuser admin
+        admin_role, _ = Role.objects.get_or_create(code='admin', defaults={'name': 'Admin'})
+        mod, _ = Module.objects.get_or_create(code='attendance', defaults={'name': 'Attendance'})
+        act, _ = Action.objects.get_or_create(code='view', defaults={'name': 'View'})
+        perm, _ = Permission.objects.get_or_create(module=mod, action=act, codename='attendance.view', defaults={'name': 'View Attendance'})
+        RolePermission.objects.update_or_create(role=admin_role, permission=perm, defaults={'data_scope': DataScope.GLOBAL})
+
+        real_admin = User.objects.create_user(email='real_admin@example.com', password=self.password, role='admin', is_superuser=False)
+        UserRoleAssignment.objects.create(user=real_admin, role=admin_role)
+        SecurityPolicy.objects.get_or_create(role='admin', mfa_required=False)
+        UserSecurityProfile.objects.get_or_create(user=real_admin, mfa_enabled=True)
+
+        branch1 = Branch.objects.create(name='HQ Branch', latitude=23.8, longitude=90.4)
+        branch2 = Branch.objects.create(name='North Branch', latitude=24.0, longitude=90.5)
+
+        EmployeeProfile.objects.create(
+            user=real_admin,
+            full_name='Realistic Admin',
+            branch=branch1,
+            joined_date=datetime.date(2026, 1, 1),
+            employee_id='ADM-REAL-01',
+            phone='+10000000000'
+        )
+
+        lt_casual, _ = LeaveType.objects.get_or_create(name='Casual', defaults={'category': 'casual', 'default_days_per_year': 14})
+        lt_sick, _ = LeaveType.objects.get_or_create(name='Sick', defaults={'category': 'sick', 'default_days_per_year': 10})
+
+        employees = []
+        for i in range(37):
+            u = User.objects.create_user(email=f'emp_perf_{i}@example.com', password=self.password, role='staff')
+            br = branch1 if i % 2 == 0 else branch2
+            ep = EmployeeProfile.objects.create(
+                user=u,
+                full_name=f'Employee {i:02d}',
+                branch=br,
+                joined_date=datetime.date(2026, 1, 1),
+                employee_id=f'EMP-P-{i:03d}',
+                phone=f'+1999{i:07d}'
+            )
+            LeaveBalance.objects.create(employee=ep, leave_type=lt_casual, year=2026, total_days=14, used_days=2)
+            LeaveBalance.objects.create(employee=ep, leave_type=lt_sick, year=2026, total_days=10, used_days=1)
+            employees.append(ep)
+
+        now = timezone.now()
+        today = now.date()
+
+        # Seed initial 20 attendance records
+        for i in range(20):
+            emp = employees[i % len(employees)]
+            Attendance.objects.create(
+                employee=emp,
+                date=today - datetime.timedelta(days=i // 37),
+                check_in_time=now,
+                type='office',
+                status='on_time',
+                attendance_type='check_in'
+            )
+
+        client = Client()
+        client.login(email='real_admin@example.com', password=self.password)
+        session = client.session
+        session.save()
+        UserSession.objects.create(user=real_admin, session_key=session.session_key, device_id='perf_dev', is_active=True)
+
+        url = reverse('admin_panel:attendance_list')
+
+        # 1. Cold profile measurement
+        with CaptureQueriesContext(connection) as ctx_cold:
+            resp_cold = client.get(url)
+        self.assertEqual(resp_cold.status_code, 200)
+        qcount_cold = len(ctx_cold.captured_queries)
+
+        # 2. Warm request measurement
+        get_cached_branches()
+        PermissionEngine.evaluate(real_admin, 'attendance.view')
+
+        # Baseline capture with 20 records
+        with CaptureQueriesContext(connection) as ctx_20:
+            resp_20 = client.get(url)
+        self.assertEqual(resp_20.status_code, 200)
+        qcount_20 = len(ctx_20.captured_queries)
+
+        # Now add 180 more records -> 200 total records
+        for i in range(20, 200):
+            emp = employees[i % len(employees)]
+            Attendance.objects.create(
+                employee=emp,
+                date=today - datetime.timedelta(days=i // 37),
+                check_in_time=now,
+                type='office',
+                status='on_time',
+                attendance_type='check_in'
+            )
+
+        with CaptureQueriesContext(connection) as ctx_200:
+            resp_200 = client.get(url)
+        self.assertEqual(resp_200.status_code, 200)
+        qcount_200 = len(ctx_200.captured_queries)
+
+        import collections
+        counts = collections.Counter(q['sql'] for q in ctx_200.captured_queries)
+        print(f"\n[PROFILE RESULT] Cold: {qcount_cold} | Warm (20): {qcount_20} | Warm (200): {qcount_200} | Unique SQL: {len(counts)}")
+        print("ALL QUERIES in Warm (200):")
+        for idx, q in enumerate(ctx_200.captured_queries):
+            print(f"[{idx+1}] {q['sql']}")
+
+        # Assertions:
+        # - Query growth from 20 to 200 records no greater than 3
+        growth = qcount_200 - qcount_20
+        self.assertLessEqual(
+            growth, 3,
+            f"Query growth from 20 records ({qcount_20}) to 200 records ({qcount_200}) was {growth}, expected <= 3"
+        )
+        self.assertLessEqual(
+            qcount_200, 27,
+            f"Realistic 200-record query count {qcount_200} exceeded optimized threshold 27"
+        )

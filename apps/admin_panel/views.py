@@ -27,7 +27,7 @@ from apps.attendance.schedule_utils import (
 )
 from apps.employees.models import EmployeeProfile, EmployeeLocationSync
 from apps.branches.models import Branch, OfficeSchedule
-from apps.leave.models import LeaveType, LeaveBalance, LeaveRequest
+from apps.leave.models import LeaveType, LeaveBalance, LeaveRequest, get_cached_leave_types
 from .forms import ManualAttendanceForm
 
 def admin_required(view_func):
@@ -401,7 +401,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         # Enforce Manager branch limits
         user = self.request.user
         eval_res = PermissionEngine.evaluate(user, 'attendance.view')
-        can_view_all = getattr(user, 'role', '') != 'manager' and (user.is_superuser or eval_res.scope == DataScope.GLOBAL)
+        can_view_all = user.is_superuser or eval_res.scope == DataScope.GLOBAL
         role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(user, 'employee_profile', None)
 
@@ -468,7 +468,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         # Enforce Manager branch limits
         user = self.request.user
         eval_res = PermissionEngine.evaluate(user, 'attendance.view')
-        can_view_all = getattr(user, 'role', '') != 'manager' and (user.is_superuser or eval_res.scope == DataScope.GLOBAL)
+        can_view_all = user.is_superuser or eval_res.scope == DataScope.GLOBAL
         role_name = 'admin' if can_view_all else 'manager'
         profile = getattr(user, 'employee_profile', None)
 
@@ -539,7 +539,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         context['total_late'] = total_late
         context['total_field'] = total_field
 
-        context['employees'] = EmployeeProfile.objects.filter(is_active=True).only('id', 'full_name').order_by('full_name')
+        context['employees'] = list(EmployeeProfile.objects.filter(is_active=True).only('id', 'full_name').order_by('full_name'))
         from apps.branches.utils import get_cached_branches
         context['branches'] = get_cached_branches()
 
@@ -563,7 +563,7 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
         }
         employee_ids.discard(None)
 
-        leave_types = list(LeaveType.objects.all())
+        leave_types = get_cached_leave_types()
         balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year).select_related('leave_type')
 
         balances_by_emp = defaultdict(list)

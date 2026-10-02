@@ -104,16 +104,31 @@ class ReportingSecurityHardeningTests(TestCase):
         self.assertEqual(resp_other.context.get('role_variant'), 'manager')
 
     def test_manager_cannot_query_other_branch_attendance_list(self):
-        # Re-assign legacy and dynamic role to admin/manager combination so it bypasses mixins and enforces manager scoping
+        # Configure non-superuser manager with explicit branch-scoped attendance.view RBAC permission
+        from apps.accounts.rbac_models import Module, Action, Permission, RolePermission, DataScope
         self.manager_user.role = 'manager'
+        self.manager_user.is_superuser = False
         self.manager_user.save()
         UserRoleAssignment.objects.filter(user=self.manager_user).delete()
         UserRoleAssignment.objects.get_or_create(user=self.manager_user, role=self.manager_role)
-        # Since AdminRequiredMixin checks if role has admin/system_owner or is_superuser:
-        # For AdminAttendanceListView which uses AdminRequiredMixin, we temporarily mock is_superuser to True to bypass dispatcher,
-        # but keep role=='manager' for get_queryset branch overrides verification.
-        self.manager_user.is_superuser = True
-        self.manager_user.save()
+
+        mod, _ = Module.objects.get_or_create(code='attendance', defaults={'name': 'Attendance'})
+        act, _ = Action.objects.get_or_create(code='view', defaults={'name': 'View'})
+        perm, _ = Permission.objects.get_or_create(module=mod, action=act, codename='attendance.view', defaults={'name': 'View Attendance'})
+        RolePermission.objects.update_or_create(
+            role=self.manager_role,
+            permission=perm,
+            defaults={'data_scope': DataScope.BRANCH}
+        )
+
+        # Create own-branch attendance record for HQ manager
+        own_attendance = Attendance.objects.create(
+            employee=self.manager_profile,
+            date=datetime.date(2026, 8, 14),
+            check_in_time=timezone.now(),
+            type='office',
+            status='on_time'
+        )
 
         session = self.client.session
         session_key = session.session_key
@@ -124,8 +139,18 @@ class ReportingSecurityHardeningTests(TestCase):
         url = reverse('admin_panel:attendance_list') + f'?branch={self.branch_other.id}'
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        # Other branch employee attendance should not be visible in context or list
-        attendances = resp.context.get('attendances', [])
+
+        attendances = list(resp.context.get('attendances', []))
+        # Assertions required:
+        # - Result collection is not empty
+        # - At least one own-branch attendance record is returned
+        # - The own-branch attendance primary key is present
+        # - The foreign attendance primary key is absent
+        self.assertTrue(len(attendances) > 0)
+        returned_pks = [att.pk for att in attendances]
+        self.assertIn(own_attendance.pk, returned_pks)
+        self.assertNotIn(self.other_attendance.pk, returned_pks)
+        self.assertTrue(any(att.employee.branch_id == self.branch_hq.id for att in attendances))
         for att in attendances:
             self.assertEqual(att.employee.branch_id, self.branch_hq.id)
 
