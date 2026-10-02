@@ -27,6 +27,100 @@ def _get_profile(user):
     return None
 
 
+def get_effective_leave_scope(user):
+    if not user or not user.is_authenticated:
+        return None
+    if user.is_superuser:
+        from apps.accounts.rbac_models import DataScope
+        return DataScope.GLOBAL
+    from apps.accounts.engine import PermissionEngine
+    from apps.accounts.rbac_models import DataScope
+    eval_res = PermissionEngine.evaluate(user, 'leave.view', action_type='view')
+    if eval_res.allowed:
+        return eval_res.data_scope
+    if getattr(user, 'role', '') in ('admin', 'system_owner', 'super_admin'):
+        return DataScope.GLOBAL
+    if getattr(user, 'role', '') == 'manager':
+        return DataScope.BRANCH
+    return None
+
+
+def get_scoped_employee_queryset(user):
+    from apps.accounts.rbac_models import DataScope
+    from apps.employees.models import EmployeeProfile
+    from django.db.models import Q
+
+    scope = get_effective_leave_scope(user)
+    if scope is None:
+        return EmployeeProfile.objects.none()
+
+    if scope in (DataScope.GLOBAL, DataScope.COMPANY):
+        return EmployeeProfile.objects.all()
+
+    profile = _get_profile(user)
+
+    if scope == DataScope.BRANCH:
+        if profile and profile.branch_id:
+            return EmployeeProfile.objects.filter(branch_id=profile.branch_id)
+        return EmployeeProfile.objects.none()
+
+    if scope in (DataScope.TEAM, DataScope.DEPARTMENT):
+        if not profile:
+            return EmployeeProfile.objects.none()
+
+        from apps.projects.models import Project
+        managed_projects = Project.objects.filter(project_managers=profile)
+        team_q = (
+            Q(master_employee__reporting_manager__user=user) |
+            Q(site_engineer_projects__in=managed_projects) |
+            Q(assigned_tasks__project__in=managed_projects)
+        )
+        if getattr(profile, 'master_employee_id', None):
+            team_q |= Q(master_employee__reporting_manager_id=profile.master_employee_id)
+            from apps.employees.hierarchy_services import OrgHierarchyService
+            sub_ids = list(OrgHierarchyService.get_all_subordinates(profile.master_employee).values_list('id', flat=True))
+            if sub_ids:
+                team_q |= Q(master_employee_id__in=sub_ids)
+        return EmployeeProfile.objects.filter(team_q).distinct()
+
+    if scope == DataScope.OWN:
+        if profile:
+            return EmployeeProfile.objects.filter(pk=profile.pk)
+        return EmployeeProfile.objects.none()
+
+    return EmployeeProfile.objects.none()
+
+
+def get_scoped_leave_requests(user):
+    from apps.accounts.rbac_models import DataScope
+    from .models import LeaveRequest
+
+    scope = get_effective_leave_scope(user)
+    if scope is None:
+        return LeaveRequest.objects.none()
+
+    if scope in (DataScope.GLOBAL, DataScope.COMPANY):
+        return LeaveRequest.objects.all()
+
+    profile = _get_profile(user)
+
+    if scope == DataScope.BRANCH:
+        if profile and profile.branch_id:
+            return LeaveRequest.objects.filter(employee__branch_id=profile.branch_id)
+        return LeaveRequest.objects.none()
+
+    if scope in (DataScope.TEAM, DataScope.DEPARTMENT):
+        scoped_emps = get_scoped_employee_queryset(user)
+        return LeaveRequest.objects.filter(employee__in=scoped_emps)
+
+    if scope == DataScope.OWN:
+        if profile:
+            return LeaveRequest.objects.filter(employee=profile)
+        return LeaveRequest.objects.none()
+
+    return LeaveRequest.objects.none()
+
+
 class StaffOrManagerMixin(RoleRequiredMixin):
     allowed_roles = ['staff', 'manager', 'employee']
     required_permission = 'leave.view'
@@ -44,9 +138,30 @@ class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
     context_object_name = 'requests'
     paginate_by = 15
 
+    def get_scoped_base_queryset(self):
+        return get_scoped_leave_requests(self.request.user)
+
     def get_queryset(self):
+        base_qs = self.get_scoped_base_queryset()
         status = self.request.GET.get('status')
-        queryset = LeaveRequest.objects.all().select_related('employee', 'leave_type')
+        branch_id = self.request.GET.get('branch')
+        emp_id = self.request.GET.get('employee')
+
+        from apps.accounts.rbac_models import DataScope
+        scope = get_effective_leave_scope(self.request.user)
+        is_global = self.request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
+
+        queryset = base_qs.select_related('employee', 'employee__branch', 'leave_type')
+
+        if is_global:
+            if branch_id:
+                queryset = queryset.filter(employee__branch_id=branch_id)
+            if emp_id:
+                queryset = queryset.filter(employee_id=emp_id)
+        else:
+            if emp_id:
+                queryset = queryset.filter(employee_id=emp_id)
+
         if status in ['pending', 'approved', 'rejected']:
             queryset = queryset.filter(status=status)
         from django.db.models import Case, When
@@ -54,9 +169,10 @@ class AdminLeaveDashboardView(AdminRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['pending_count'] = LeaveRequest.objects.filter(status='pending').count()
-        context['approved_count'] = LeaveRequest.objects.filter(status='approved').count()
-        context['rejected_count'] = LeaveRequest.objects.filter(status='rejected').count()
+        base_qs = self.get_scoped_base_queryset()
+        context['pending_count'] = base_qs.filter(status='pending').count()
+        context['approved_count'] = base_qs.filter(status='approved').count()
+        context['rejected_count'] = base_qs.filter(status='rejected').count()
         context['current_status'] = self.request.GET.get('status', 'all')
         return context
 
@@ -193,7 +309,18 @@ class AdminEmployeeBalancesView(AdminRequiredMixin, ListView):
     context_object_name = 'employees'
 
     def get_queryset(self):
-        return EmployeeProfile.objects.filter(is_active=True).prefetch_related('leave_balances', 'leave_rules').order_by('full_name')
+        base_qs = get_scoped_employee_queryset(self.request.user)
+        branch_id = self.request.GET.get('branch')
+
+        from apps.accounts.rbac_models import DataScope
+        scope = get_effective_leave_scope(self.request.user)
+        is_global = self.request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
+
+        qs = base_qs.filter(is_active=True)
+        if is_global and branch_id:
+            qs = qs.filter(branch_id=branch_id)
+
+        return qs.select_related('branch', 'user').prefetch_related('leave_balances', 'leave_rules').order_by('full_name')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -245,6 +372,21 @@ class AdminEmployeeBalanceDetailView(AdminRequiredMixin, DetailView):
     context_object_name = 'employee'
     pk_url_kwarg = 'employee_id'
 
+    def get_queryset(self):
+        return get_scoped_employee_queryset(self.request.user).select_related('branch', 'user')
+
+    def get_object(self, queryset=None):
+        from django.core.exceptions import PermissionDenied
+        from django.http import Http404
+        emp_id = self.kwargs.get(self.pk_url_kwarg)
+        qs = self.get_queryset()
+        obj = qs.filter(pk=emp_id).first()
+        if obj:
+            return obj
+        if EmployeeProfile.objects.filter(pk=emp_id).exists():
+            raise PermissionDenied("You do not have permission to view this employee's leave balance.")
+        raise Http404("Employee profile not found.")
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         year = self.request.GET.get('year', timezone.localdate().year)
@@ -271,7 +413,8 @@ class AdminEmployeeBalanceDetailView(AdminRequiredMixin, DetailView):
                     'remaining_days': limit
                 })
 
-        history = LeaveRequest.objects.filter(employee=self.object).select_related('leave_type').order_by('-requested_at')
+        scoped_requests = get_scoped_leave_requests(self.request.user)
+        history = scoped_requests.filter(employee=self.object).select_related('leave_type').order_by('-requested_at')
 
         context.update({
             'back_url': reverse('leave:admin_balances'),
@@ -502,6 +645,9 @@ class RescheduleLeaveRequestView(AdminRequiredMixin, UpdateView):
     model = LeaveRequest
     form_class = AdminLeaveRequestRescheduleForm
     template_name = 'admin_panel/leave/reschedule_form.html'
+
+    def get_queryset(self):
+        return get_scoped_leave_requests(self.request.user)
 
     def form_valid(self, form):
         form.instance.reviewed_by = self.request.user

@@ -1861,6 +1861,8 @@ class LeaveMonthlyReportView(AdminRequiredMixin, View):
 
     def get(self, request):
         from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
+        from apps.leave.views import get_scoped_employee_queryset, get_scoped_leave_requests, get_effective_leave_scope
+        from apps.accounts.rbac_models import DataScope
         import datetime as dt_mod
 
         today = timezone.localdate()
@@ -1878,25 +1880,29 @@ class LeaveMonthlyReportView(AdminRequiredMixin, View):
         month_start = dt_mod.date(year, month, 1)
         month_end = dt_mod.date(year, month, last_day)
 
+        base_employees = get_scoped_employee_queryset(request.user)
+        scope = get_effective_leave_scope(request.user)
+        is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
+
         employees = (
-            EmployeeProfile.objects.filter(is_active=True)
+            base_employees.filter(is_active=True)
             .select_related('branch').order_by('full_name')
         )
         if emp_id:
             employees = employees.filter(id=emp_id)
-        if branch_id:
+        if is_global and branch_id:
             employees = employees.filter(branch_id=branch_id)
 
         leave_types = list(LeaveType.objects.all().order_by('name'))
 
-        leave_requests_qs = LeaveRequest.objects.filter(
+        leave_requests_qs = get_scoped_leave_requests(request.user).filter(
             start_date__lte=month_end,
             end_date__gte=month_start
         ).select_related('employee', 'leave_type')
 
         if emp_id:
             leave_requests_qs = leave_requests_qs.filter(employee_id=emp_id)
-        if branch_id:
+        if is_global and branch_id:
             leave_requests_qs = leave_requests_qs.filter(employee__branch_id=branch_id)
 
         leave_requests = list(leave_requests_qs)
@@ -1971,8 +1977,8 @@ class LeaveMonthlyReportView(AdminRequiredMixin, View):
             'leave_types': leave_types,
             'total_approved_days': total_approved_days,
             'total_pending_requests': total_pending_requests,
-            'employees': EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
-            'branches': Branch.objects.all(),
+            'employees': base_employees.filter(is_active=True).order_by('full_name'),
+            'branches': Branch.objects.all() if is_global else (Branch.objects.filter(pk=request.user.employee_profile.branch_id) if hasattr(request.user, 'employee_profile') and request.user.employee_profile and request.user.employee_profile.branch_id else Branch.objects.none()),
             'selected_employee': emp_id,
             'selected_branch': branch_id,
             'prev_m': prev_m, 'prev_y': prev_y,
@@ -1987,9 +1993,18 @@ class LeaveEmployeeReportView(AdminRequiredMixin, View):
 
     def get(self, request, pk, year=None, month=None):
         from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
+        from apps.leave.views import get_scoped_employee_queryset, get_scoped_leave_requests
+        from django.core.exceptions import PermissionDenied
+        from django.http import Http404
         import datetime as dt_mod
 
-        employee = get_object_or_404(EmployeeProfile.objects.select_related('branch', 'user'), pk=pk)
+        scoped_emps = get_scoped_employee_queryset(request.user)
+        employee = scoped_emps.select_related('branch', 'user').filter(pk=pk).first()
+        if not employee:
+            if EmployeeProfile.objects.filter(pk=pk).exists():
+                raise PermissionDenied("You do not have permission to view this employee's leave report.")
+            raise Http404("Employee profile not found.")
+
         today = timezone.localdate()
 
         if not year or not month:
@@ -2004,7 +2019,7 @@ class LeaveEmployeeReportView(AdminRequiredMixin, View):
         month_start = dt_mod.date(year, month, 1)
         month_end = dt_mod.date(year, month, last_day)
 
-        requests_qs = LeaveRequest.objects.filter(
+        requests_qs = get_scoped_leave_requests(request.user).filter(
             employee=employee
         ).select_related('leave_type', 'reviewed_by').order_by('-start_date')
 
@@ -2059,6 +2074,8 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
     action_type = 'export'
     def get(self, request):
         from apps.leave.models import LeaveRequest
+        from apps.leave.views import get_scoped_leave_requests, get_effective_leave_scope
+        from apps.accounts.rbac_models import DataScope
         from datetime import datetime, timedelta
         from django.db.models import Q
         from apps.branches.models import Holiday
@@ -2070,7 +2087,10 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
         status = request.GET.get('status')
         leave_type_id = request.GET.get('leave_type')
 
-        qs = LeaveRequest.objects.select_related('employee', 'employee__branch', 'leave_type', 'reviewed_by').order_by('-start_date')
+        scope = get_effective_leave_scope(request.user)
+        is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
+
+        qs = get_scoped_leave_requests(request.user).select_related('employee', 'employee__branch', 'leave_type', 'reviewed_by').order_by('-start_date')
 
         if date_from:
             qs = qs.filter(end_date__gte=date_from)
@@ -2078,7 +2098,7 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
             qs = qs.filter(start_date__lte=date_to)
         if emp_id:
             qs = qs.filter(employee_id=emp_id)
-        if branch_id:
+        if is_global and branch_id:
             qs = qs.filter(employee__branch_id=branch_id)
         if status:
             qs = qs.filter(status=status)
@@ -2166,6 +2186,8 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
     action_type = 'export'
     def get(self, request):
         from apps.leave.models import LeaveRequest
+        from apps.leave.views import get_scoped_leave_requests, get_effective_leave_scope
+        from apps.accounts.rbac_models import DataScope
         from datetime import datetime, timedelta
         from django.db.models import Q
         from apps.branches.models import Holiday
@@ -2177,7 +2199,10 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
         status = request.GET.get('status')
         leave_type_id = request.GET.get('leave_type')
 
-        qs = LeaveRequest.objects.select_related('employee', 'employee__branch', 'leave_type').order_by('-start_date')
+        scope = get_effective_leave_scope(request.user)
+        is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
+
+        qs = get_scoped_leave_requests(request.user).select_related('employee', 'employee__branch', 'leave_type').order_by('-start_date')
 
         if date_from:
             qs = qs.filter(end_date__gte=date_from)
@@ -2185,7 +2210,7 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
             qs = qs.filter(start_date__lte=date_to)
         if emp_id:
             qs = qs.filter(employee_id=emp_id)
-        if branch_id:
+        if is_global and branch_id:
             qs = qs.filter(employee__branch_id=branch_id)
         if status:
             qs = qs.filter(status=status)
@@ -2317,29 +2342,24 @@ def export_leave_monthly_xlsx(request):
     month_start = dt_mod.date(year, month, 1)
     month_end = dt_mod.date(year, month, last_day)
 
-    base_employees = EmployeeProfile.objects.filter(is_active=True).select_related('branch').order_by('full_name')
-    employees = PermissionEngine.filter_by_data_scope(
-        user=request.user,
-        queryset=base_employees,
-        codename='leave.view',
-        branch_field='branch'
-    )
+    from apps.leave.views import get_scoped_employee_queryset, get_scoped_leave_requests, get_effective_leave_scope
+    from apps.accounts.rbac_models import DataScope
+
+    scope = get_effective_leave_scope(request.user)
+    is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
+
+    base_employees = get_scoped_employee_queryset(request.user).filter(is_active=True).select_related('branch').order_by('full_name')
+    employees = base_employees
     if emp_id:
         employees = employees.filter(id=emp_id)
-    if branch_id:
+    if is_global and branch_id:
         employees = employees.filter(branch_id=branch_id)
 
     leave_types = list(LeaveType.objects.all().order_by('name'))
-    base_leave_requests = LeaveRequest.objects.filter(
+    base_leave_requests = get_scoped_leave_requests(request.user).filter(
         start_date__lte=month_end, end_date__gte=month_start
     ).select_related('employee', 'leave_type')
-    leave_requests = PermissionEngine.filter_by_data_scope(
-        user=request.user,
-        queryset=base_leave_requests,
-        codename='leave.view',
-        branch_field='employee__branch',
-        employee_field='employee'
-    )
+    leave_requests = base_leave_requests
 
     wb = openpyxl.Workbook()
     ws = wb.active
