@@ -387,6 +387,7 @@ class ShiftScheduleView(RoleRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         from apps.branches.models import OfficeSchedule, Branch
         from apps.attendance.models import AttendancePolicy
+        from apps.accounts.engine import PermissionEngine
 
         is_admin_or_manager = (
             request.user.is_superuser or

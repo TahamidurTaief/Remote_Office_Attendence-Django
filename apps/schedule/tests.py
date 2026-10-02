@@ -10,8 +10,75 @@ from apps.projects.models import Project, ProjectType, ProjectTask, DailyProgres
 from apps.leave.models import LeaveRequest, LeaveType
 from apps.branches.models import Branch, Holiday
 from apps.employees.models import EmployeeProfile
+from apps.accounts.rbac_models import (
+    Role, RolePermission, UserRoleAssignment, DataScope
+)
+from apps.accounts.rbac_registry import RBACRegistryService
+from apps.accounts.engine import PermissionEngine
 
 User = get_user_model()
+
+
+def setup_schedule_rbac_permissions():
+    """
+    Ensures canonical schedule permissions exist in the RBAC engine
+    and provisions role permission bindings with appropriate scopes.
+    """
+    perm_view = RBACRegistryService.ensure_permission('schedule.view')
+    perm_add = RBACRegistryService.ensure_permission('schedule.add')
+    perm_edit = RBACRegistryService.ensure_permission('schedule.edit')
+    perm_delete = RBACRegistryService.ensure_permission('schedule.delete')
+    perm_manage = RBACRegistryService.ensure_permission('schedule.manage')
+
+    # Manager Role: full schedule operations scoped to their assigned branch
+    mgr_role, _ = Role.objects.get_or_create(
+        code='manager',
+        defaults={'name': 'Branch Manager', 'description': 'Branch Manager', 'is_active': True}
+    )
+    for perm in (perm_view, perm_add, perm_edit, perm_delete, perm_manage):
+        RolePermission.objects.get_or_create(
+            role=mgr_role,
+            permission=perm,
+            defaults={'data_scope': DataScope.BRANCH}
+        )
+
+    # Staff Role: self-service view scoped to branch
+    staff_role, _ = Role.objects.get_or_create(
+        code='staff',
+        defaults={'name': 'Staff', 'description': 'Staff Member', 'is_active': True}
+    )
+    RolePermission.objects.get_or_create(
+        role=staff_role,
+        permission=perm_view,
+        defaults={'data_scope': DataScope.BRANCH}
+    )
+
+    # Employee Role: self-service view scoped to branch
+    emp_role, _ = Role.objects.get_or_create(
+        code='employee',
+        defaults={'name': 'Employee', 'description': 'Employee', 'is_active': True}
+    )
+    RolePermission.objects.get_or_create(
+        role=emp_role,
+        permission=perm_view,
+        defaults={'data_scope': DataScope.BRANCH}
+    )
+
+    return {
+        'manager': mgr_role,
+        'staff': staff_role,
+        'employee': emp_role,
+    }
+
+
+def assign_user_role(user, role_code):
+    """Assigns an RBAC role to a user and invalidates user permissions cache."""
+    roles = setup_schedule_rbac_permissions()
+    role = roles.get(role_code) or Role.objects.filter(code=role_code).first()
+    if role:
+        UserRoleAssignment.objects.get_or_create(user=user, role=role)
+        PermissionEngine.invalidate_user_cache(user)
+
 
 class ScheduleCalendarTests(TestCase):
     def setUp(self):
@@ -21,6 +88,7 @@ class ScheduleCalendarTests(TestCase):
             password=self.password,
             role='manager'
         )
+        assign_user_role(self.user, 'manager')
         self.client.login(email='manager@test.com', password=self.password)
 
         # Setup base objects for aggregation tests
@@ -35,6 +103,7 @@ class ScheduleCalendarTests(TestCase):
             password=self.password,
             role='staff'
         )
+        assign_user_role(self.employee_user, 'staff')
         self.employee = EmployeeProfile.objects.create(
             user=self.employee_user,
             branch=self.branch,
@@ -227,6 +296,7 @@ class ScheduleEventValidationAndConcurrencyTests(TestCase):
             password=self.password,
             role='manager'
         )
+        assign_user_role(self.user, 'manager')
         self.client.login(email='manager_gantt@test.com', password=self.password)
 
         self.branch = Branch.objects.create(
@@ -240,6 +310,7 @@ class ScheduleEventValidationAndConcurrencyTests(TestCase):
             password=self.password,
             role='staff'
         )
+        assign_user_role(self.employee_user, 'staff')
         self.employee = EmployeeProfile.objects.create(
             user=self.employee_user,
             branch=self.branch,
@@ -427,6 +498,12 @@ class CalendarHolidayAndPermissionScopingTests(TestCase):
 
         # 3. Office Holiday: branch is Chittagong
         self.ctg_holiday = Holiday.objects.create(name='Ctg Port Day', date=date(2026, 12, 16), branch=self.branch_ctg)
+
+        # Assign explicit RBAC roles and invalidate permission caches
+        assign_user_role(self.mgr_user, 'manager')
+        assign_user_role(self.emp1_user, 'employee')
+        assign_user_role(self.emp2_user, 'employee')
+        assign_user_role(self.emp_no_profile, 'employee')
 
     def test_government_holiday_visible_to_all(self):
         url = reverse('schedule:month_view') + '?year=2026&month=12'
@@ -744,6 +821,70 @@ class CalendarHolidayAndPermissionScopingTests(TestCase):
         self.assertEqual(res_emp.status_code, 200)
         self.assertEqual(res_emp.context['selected_branch'], self.branch_ctg)
         self.assertFalse(res_emp.context['is_admin'])
+
+    def test_unauthorized_user_lacking_schedule_view_forbidden(self):
+        """User lacking schedule.view permission receives HTTP 403 with no schedule data leakage."""
+        unauth_user = User.objects.create_user(
+            email='unauth_schedule@test.com',
+            phone='+8801700000030',
+            password=self.password,
+            role='staff'
+        )
+        PermissionEngine.invalidate_user_cache(unauth_user)
+        self.client.force_login(unauth_user)
+
+        url = reverse('schedule:month_view') + '?year=2026&month=12'
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 403)
+        self.assertNotIn('weeks_data', res.context or {})
+
+    def test_user_permission_cache_invalidation_refreshes_access(self):
+        """Permission records assigned dynamically must reflect immediately after cache invalidation."""
+        test_user = User.objects.create_user(
+            email='cache_refresh@test.com',
+            phone='+8801700000031',
+            password=self.password,
+            role='staff'
+        )
+        self.client.force_login(test_user)
+        url = reverse('schedule:month_view') + '?year=2026&month=12'
+
+        # 1. Initial request without permissions is denied HTTP 403
+        res_before = self.client.get(url)
+        self.assertEqual(res_before.status_code, 403)
+
+        # 2. Grant permission and invalidate cache
+        assign_user_role(test_user, 'employee')
+
+        # 3. Access is now permitted (HTTP 200)
+        res_after = self.client.get(url)
+        self.assertEqual(res_after.status_code, 200)
+
+    def test_manager_with_delete_permission_can_delete_event(self):
+        """Manager with schedule.delete permission can delete schedule events."""
+        event = ScheduleEvent.objects.create(
+            title='Obsolete Meeting',
+            date=date(2026, 12, 20),
+            created_by=self.mgr_user
+        )
+        self.client.force_login(self.mgr_user)
+        del_url = reverse('schedule:delete', args=[event.pk])
+        res = self.client.post(del_url)
+        self.assertEqual(res.status_code, 302)
+        self.assertFalse(ScheduleEvent.objects.filter(pk=event.pk).exists())
+
+    def test_employee_lacking_delete_permission_cannot_delete_event(self):
+        """Employee lacking schedule.delete permission is denied HTTP 403 on delete attempt."""
+        event = ScheduleEvent.objects.create(
+            title='Firm Strategy Meeting',
+            date=date(2026, 12, 20),
+            created_by=self.mgr_user
+        )
+        self.client.force_login(self.emp1_user)
+        del_url = reverse('schedule:delete', args=[event.pk])
+        res = self.client.post(del_url)
+        self.assertEqual(res.status_code, 403)
+        self.assertTrue(ScheduleEvent.objects.filter(pk=event.pk).exists())
 
     def _get_day_events(self, weeks_data, target_date):
         for week in weeks_data:
