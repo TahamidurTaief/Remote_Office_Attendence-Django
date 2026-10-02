@@ -101,122 +101,135 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
     Records a WorkflowAction for an instance.
     Checks if the action is done on behalf of a delegated user (WorkflowDelegation or ManagerDelegation).
     """
-    from apps.workflow.models import WorkflowStep
-    step = WorkflowStep.objects.filter(workflow=instance.definition, step_number=instance.current_step).first()
+    from django.db import transaction
+    from apps.workflow.models import WorkflowInstance, WorkflowStep
     
-    delegated_by = None
-    if step:
-        now_date = timezone.localdate()
-        expected_approver = None
-        if getattr(step, 'approver_resolution_type', 'static_role') == 'reporting_manager':
-            initiator = instance.initiated_by
-            if initiator:
-                from apps.employees.models import Employee
-                employee = Employee.objects.filter(user=initiator).first()
-                if employee and employee.reporting_manager:
-                    expected_approver = employee.reporting_manager.user
-            if not expected_approver:
+    with transaction.atomic():
+        locked_instance = WorkflowInstance.objects.select_for_update().get(pk=instance.pk)
+        if locked_instance.completed_at:
+            raise ValueError("Workflow is already completed.")
+
+        step = WorkflowStep.objects.filter(workflow=locked_instance.definition, step_number=locked_instance.current_step).first()
+
+        delegated_by = None
+        if step:
+            now_date = timezone.localdate()
+            expected_approver = None
+            if getattr(step, 'approver_resolution_type', 'static_role') == 'reporting_manager':
+                initiator = locked_instance.initiated_by
+                if initiator:
+                    from apps.employees.models import Employee
+                    employee = Employee.objects.filter(user=initiator).first()
+                    if employee and employee.reporting_manager:
+                        expected_approver = employee.reporting_manager.user
+                if not expected_approver:
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    expected_approver = User.objects.filter(role=step.approver_role, is_active=True).first()
+            else:
                 from django.contrib.auth import get_user_model
                 User = get_user_model()
                 expected_approver = User.objects.filter(role=step.approver_role, is_active=True).first()
-        else:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-            expected_approver = User.objects.filter(role=step.approver_role, is_active=True).first()
 
-        if expected_approver:
-            # Check active delegation specifically from this expected_approver
-            delegation = WorkflowDelegation.objects.filter(
-                to_user=actor,
-                from_user=expected_approver,
-                is_active=True,
-                start_date__lte=now_date,
-                end_date__gte=now_date,
-            )
-        else:
-            # Legacy static role delegation check
-            delegation = WorkflowDelegation.objects.filter(
-                to_user=actor,
-                from_user__role=step.approver_role,
-                is_active=True,
-                start_date__lte=now_date,
-                end_date__gte=now_date,
-            )
-        
-        w_code = instance.definition.code
-        del_obj = delegation.filter(workflow_code=w_code).first()
-        if not del_obj:
-            del_obj = delegation.filter(workflow_code='').first()
-            
-        if del_obj:
-            delegated_by = del_obj.from_user
-        elif expected_approver and actor != expected_approver:
-            # Check ManagerDelegation fallback
-            from apps.employees.models import ManagerDelegation
-            mgr_del = ManagerDelegation.objects.filter(
-                manager__user=expected_approver,
-                delegate_to__user=actor,
-                is_active=True,
-                start_date__lte=now_date,
-                end_date__gte=now_date,
-            ).first()
-            if mgr_del:
-                delegated_by = expected_approver
-
-    # Create the action
-    wf_action = WorkflowAction.objects.create(
-        instance=instance,
-        step_number=instance.current_step,
-        actor=actor,
-        action=action,
-        note=note,
-        delegated_by=delegated_by
-    )
-
-    # Process state transition if approved
-    if action == 'approve':
-        next_step = WorkflowStep.objects.filter(workflow=instance.definition, step_number=instance.current_step + 1).first()
-        if next_step:
-            instance.current_step = next_step.step_number
-            instance.current_status = next_step.from_status
-            if next_step.sla_hours:
-                instance.sla_deadline = timezone.now() + timezone.timedelta(hours=next_step.sla_hours)
+            if expected_approver:
+                # Check active delegation specifically from this expected_approver
+                delegation = WorkflowDelegation.objects.filter(
+                    to_user=actor,
+                    from_user=expected_approver,
+                    is_active=True,
+                    start_date__lte=now_date,
+                    end_date__gte=now_date,
+                )
             else:
-                instance.sla_deadline = None
-        else:
-            instance.current_status = step.to_status
-            instance.completed_at = timezone.now()
-            instance.sla_deadline = None
-        instance.save()
-    elif action == 'reject':
-        instance.current_status = 'rejected'
-        instance.completed_at = timezone.now()
-        instance.sla_deadline = None
-        instance.save()
-    elif action == 'cancel':
-        instance.current_status = 'cancelled'
-        instance.completed_at = timezone.now()
-        instance.sla_deadline = None
-        instance.save()
-    elif action == 'return' and step.allow_return:
-        if return_to_initiator:
-            instance.current_status = 'returned'
-            instance.sla_deadline = None
-        else:
-            prev_step = WorkflowStep.objects.filter(workflow=instance.definition, step_number=instance.current_step - 1).first()
-            if prev_step:
-                instance.current_step = prev_step.step_number
-                instance.current_status = prev_step.from_status
-                if prev_step.sla_hours:
-                    instance.sla_deadline = timezone.now() + timezone.timedelta(hours=prev_step.sla_hours)
+                # Legacy static role delegation check
+                delegation = WorkflowDelegation.objects.filter(
+                    to_user=actor,
+                    from_user__role=step.approver_role,
+                    is_active=True,
+                    start_date__lte=now_date,
+                    end_date__gte=now_date,
+                )
+
+            w_code = locked_instance.definition.code
+            del_obj = delegation.filter(workflow_code=w_code).first()
+            if not del_obj:
+                del_obj = delegation.filter(workflow_code='').first()
+
+            if del_obj:
+                delegated_by = del_obj.from_user
+            elif expected_approver and actor != expected_approver:
+                # Check ManagerDelegation fallback
+                from apps.employees.models import ManagerDelegation
+                mgr_del = ManagerDelegation.objects.filter(
+                    manager__user=expected_approver,
+                    delegate_to__user=actor,
+                    is_active=True,
+                    start_date__lte=now_date,
+                    end_date__gte=now_date,
+                ).first()
+                if mgr_del:
+                    delegated_by = expected_approver
+
+        # Create the action
+        wf_action = WorkflowAction.objects.create(
+            instance=locked_instance,
+            step_number=locked_instance.current_step,
+            actor=actor,
+            action=action,
+            note=note,
+            delegated_by=delegated_by
+        )
+
+        # Process state transition if approved
+        if action == 'approve':
+            next_step = WorkflowStep.objects.filter(workflow=locked_instance.definition, step_number=locked_instance.current_step + 1).first()
+            if next_step:
+                locked_instance.current_step = next_step.step_number
+                locked_instance.current_status = next_step.from_status
+                if next_step.sla_hours:
+                    locked_instance.sla_deadline = timezone.now() + timezone.timedelta(hours=next_step.sla_hours)
                 else:
-                    instance.sla_deadline = None
+                    locked_instance.sla_deadline = None
             else:
-                instance.current_status = 'returned'
-                instance.sla_deadline = None
-        instance.save()
+                locked_instance.current_status = step.to_status
+                locked_instance.completed_at = timezone.now()
+                locked_instance.sla_deadline = None
+            locked_instance.save()
+        elif action == 'reject':
+            locked_instance.current_status = 'rejected'
+            locked_instance.completed_at = timezone.now()
+            locked_instance.sla_deadline = None
+            locked_instance.save()
+        elif action == 'cancel':
+            locked_instance.current_status = 'cancelled'
+            locked_instance.completed_at = timezone.now()
+            locked_instance.sla_deadline = None
+            locked_instance.save()
+        elif action == 'return' and step.allow_return:
+            if return_to_initiator:
+                locked_instance.current_status = 'returned'
+                locked_instance.sla_deadline = None
+            else:
+                prev_step = WorkflowStep.objects.filter(workflow=locked_instance.definition, step_number=locked_instance.current_step - 1).first()
+                if prev_step:
+                    locked_instance.current_step = prev_step.step_number
+                    locked_instance.current_status = prev_step.from_status
+                    if prev_step.sla_hours:
+                        locked_instance.sla_deadline = timezone.now() + timezone.timedelta(hours=prev_step.sla_hours)
+                    else:
+                        locked_instance.sla_deadline = None
+                else:
+                    locked_instance.current_status = 'returned'
+                    locked_instance.sla_deadline = None
+            locked_instance.save()
 
-    return wf_action
+        # Sync back instance fields for the in-memory object passed by caller
+        instance.current_step = locked_instance.current_step
+        instance.current_status = locked_instance.current_status
+        instance.completed_at = locked_instance.completed_at
+        instance.sla_deadline = locked_instance.sla_deadline
+
+        return wf_action
 
 def cancel_workflow(instance, actor, reason=''):
     """

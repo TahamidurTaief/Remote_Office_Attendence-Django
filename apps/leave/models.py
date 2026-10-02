@@ -143,52 +143,140 @@ class LeaveRequest(models.Model):
     def calculate_deductible_days(self):
         return self.overlapping_days_in(self.start_date, self.end_date)
 
-    def save(self, *args, **kwargs):
-        # Autocalculate number of days excluding weekends, holidays, and active attendance days
-        if self.start_date and self.end_date:
-            self.number_of_days = self.calculate_deductible_days()
-            
+    def _deduct_retroactive_unexcused_absences(self):
+        import datetime
+        from django.utils import timezone
+        from django.conf import settings
+        from apps.attendance.models import Attendance, AttendanceAbsentLog, get_default_deduction_leave_type
+
+        today = timezone.localdate()
+        yesterday = today - datetime.timedelta(days=1)
+        end_limit = min(self.end_date, yesterday)
+
+        if self.start_date <= end_limit:
+            from apps.attendance.schedule_utils import get_branch_schedule
+            schedule = get_branch_schedule(self.employee)
+            deduct_type = get_default_deduction_leave_type(self.employee)
+
+            current_date = self.start_date
+            while current_date <= end_limit:
+                is_workday = False
+                if schedule:
+                    day_name = current_date.strftime('%A').lower()
+                    if day_name in schedule.working_days:
+                        is_workday = True
+                else:
+                    working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
+                    if current_date.weekday() in working_days:
+                        is_workday = True
+
+                if is_workday:
+                    if not Attendance.objects.filter(employee=self.employee, date=current_date).exists():
+                        if not AttendanceAbsentLog.objects.select_for_update().filter(employee=self.employee, date=current_date).exists():
+                            if deduct_type:
+                                from apps.employees.models import EmployeeLeaveRule
+                                rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=deduct_type).first()
+                                limit = rule.days_per_year if rule else deduct_type.default_days_per_year
+                                balance, _ = LeaveBalance.objects.get_or_create(
+                                    employee=self.employee,
+                                    leave_type=deduct_type,
+                                    year=current_date.year,
+                                    defaults={'total_days': limit}
+                                )
+                                LeaveBalance.objects.filter(pk=balance.pk).select_for_update().update(
+                                    used_days=F('used_days') + 1
+                                )
+                                AttendanceAbsentLog.objects.create(
+                                    employee=self.employee,
+                                    date=current_date,
+                                    leave_type_deducted=deduct_type
+                                )
+                current_date += datetime.timedelta(days=1)
+
+    def _handle_balance_transition(self, old_instance):
         from decimal import Decimal
-        from django.db import transaction
-        
-        is_new = self.pk is None
-        old_status = None
-        old_days = Decimal('0.0')
-        old_type = None
-        old_year = None
-        
-        with transaction.atomic():
-            if not is_new:
-                try:
-                    old_instance = LeaveRequest.objects.select_for_update().get(pk=self.pk)
-                    old_status = old_instance.status
-                    old_days = old_instance.number_of_days
-                    old_type = old_instance.leave_type
-                    old_year = old_instance.start_date.year
-                except LeaveRequest.DoesNotExist:
-                    pass
-                    
-            super().save(*args, **kwargs)
-            
-            year = self.start_date.year
-            
-            # Case 1: Status transitioned to approved
-            if self.status == 'approved' and old_status != 'approved':
-                from apps.employees.models import EmployeeLeaveRule
+        from apps.employees.models import EmployeeLeaveRule
+        from apps.attendance.models import AttendanceAbsentLog
+
+        year = self.start_date.year if self.start_date else None
+        old_status = old_instance.status if old_instance else None
+        old_days = old_instance.number_of_days if old_instance else Decimal('0.0')
+        old_type = old_instance.leave_type if old_instance else None
+        old_year = old_instance.start_date.year if old_instance and old_instance.start_date else None
+        old_start_date = old_instance.start_date if old_instance else None
+        old_end_date = old_instance.end_date if old_instance else None
+
+        # Case 1: Status transitioned to approved from a non-approved status
+        if self.status == 'approved' and old_status != 'approved':
+            rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
+            limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
+            balance, _ = LeaveBalance.objects.get_or_create(
+                employee=self.employee,
+                leave_type=self.leave_type,
+                year=year,
+                defaults={'total_days': limit}
+            )
+            LeaveBalance.objects.filter(pk=balance.pk).select_for_update().update(
+                used_days=F('used_days') + self.number_of_days
+            )
+
+            # Clean up overlapping absent logs to prevent double deduction
+            overlapping_logs = AttendanceAbsentLog.objects.select_for_update().filter(
+                employee=self.employee,
+                date__range=(self.start_date, self.end_date)
+            )
+            for log in overlapping_logs:
+                lt = log.leave_type_deducted
+                if lt:
+                    LeaveBalance.objects.filter(
+                        employee=self.employee,
+                        leave_type=lt,
+                        year=log.date.year
+                    ).select_for_update().update(used_days=F('used_days') - 1)
+                log.delete()
+
+        # Case 2: Status transitioned from approved to something else (e.g. pending/rejected/cancelled/returned)
+        elif old_status == 'approved' and self.status != 'approved':
+            LeaveBalance.objects.filter(
+                employee=self.employee,
+                leave_type=old_type,
+                year=old_year
+            ).select_for_update().update(used_days=F('used_days') - old_days)
+
+            if self.status == 'rejected':
+                self._deduct_retroactive_unexcused_absences()
+
+        # Case 3: Remains approved but details changed
+        elif self.status == 'approved' and old_status == 'approved':
+            details_changed = (
+                old_type != self.leave_type or
+                old_year != year or
+                old_days != self.number_of_days or
+                old_start_date != self.start_date or
+                old_end_date != self.end_date
+            )
+            if details_changed:
+                # Revert old balance
+                LeaveBalance.objects.filter(
+                    employee=self.employee,
+                    leave_type=old_type,
+                    year=old_year
+                ).select_for_update().update(used_days=F('used_days') - old_days)
+
+                # Apply new balance
                 rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
                 limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
-                balance, created = LeaveBalance.objects.get_or_create(
+                new_balance, _ = LeaveBalance.objects.get_or_create(
                     employee=self.employee,
                     leave_type=self.leave_type,
                     year=year,
                     defaults={'total_days': limit}
                 )
-                balance = LeaveBalance.objects.select_for_update().get(pk=balance.pk)
-                balance.used_days = F('used_days') + self.number_of_days
-                balance.save()
+                LeaveBalance.objects.filter(pk=new_balance.pk).select_for_update().update(
+                    used_days=F('used_days') + self.number_of_days
+                )
 
-                # Clean up overlapping absent logs to prevent double deduction
-                from apps.attendance.models import AttendanceAbsentLog
+                # Clean up overlapping absent logs for the new dates
                 overlapping_logs = AttendanceAbsentLog.objects.select_for_update().filter(
                     employee=self.employee,
                     date__range=(self.start_date, self.end_date)
@@ -196,133 +284,36 @@ class LeaveRequest(models.Model):
                 for log in overlapping_logs:
                     lt = log.leave_type_deducted
                     if lt:
-                        try:
-                            bal = LeaveBalance.objects.select_for_update().get(
-                                employee=self.employee,
-                                leave_type=lt,
-                                year=log.date.year
-                            )
-                            bal.used_days = F('used_days') - 1
-                            bal.save()
-                        except LeaveBalance.DoesNotExist:
-                            pass
-                    log.delete()
-                
-            # Case 2: Status transitioned from approved to something else (e.g. pending/rejected)
-            elif old_status == 'approved' and self.status != 'approved':
-                try:
-                    balance = LeaveBalance.objects.select_for_update().get(
-                        employee=self.employee,
-                        leave_type=old_type,
-                        year=old_year
-                    )
-                    balance.used_days = F('used_days') - old_days
-                    balance.save()
-                except LeaveBalance.DoesNotExist:
-                    pass
-                    
-            # Case 3: Remains approved but details changed
-            elif self.status == 'approved' and old_status == 'approved':
-                if old_type != self.leave_type or old_year != year or old_days != self.number_of_days:
-                    # Revert old balance
-                    try:
-                        old_balance = LeaveBalance.objects.select_for_update().get(
+                        LeaveBalance.objects.filter(
                             employee=self.employee,
-                            leave_type=old_type,
-                            year=old_year
-                        )
-                        old_balance.used_days = F('used_days') - old_days
-                        old_balance.save()
-                    except LeaveBalance.DoesNotExist:
-                        pass
-                    
-                    # Apply new balance
-                    from apps.employees.models import EmployeeLeaveRule
-                    rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
-                    limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
-                    new_balance, created = LeaveBalance.objects.get_or_create(
-                        employee=self.employee,
-                        leave_type=self.leave_type,
-                        year=year,
-                        defaults={'total_days': limit}
-                    )
-                    new_balance = LeaveBalance.objects.select_for_update().get(pk=new_balance.pk)
-                    new_balance.used_days = F('used_days') + self.number_of_days
-                    new_balance.save()
+                            leave_type=lt,
+                            year=log.date.year
+                        ).select_for_update().update(used_days=F('used_days') - 1)
+                    log.delete()
 
-                    # Clean up overlapping absent logs to prevent double deduction
-                    from apps.attendance.models import AttendanceAbsentLog
-                    overlapping_logs = AttendanceAbsentLog.objects.select_for_update().filter(
-                        employee=self.employee,
-                        date__range=(self.start_date, self.end_date)
-                    )
-                    for log in overlapping_logs:
-                        lt = log.leave_type_deducted
-                        if lt:
-                            try:
-                                bal = LeaveBalance.objects.select_for_update().get(
-                                    employee=self.employee,
-                                    leave_type=lt,
-                                    year=log.date.year
-                                )
-                                bal.used_days = F('used_days') - 1
-                                bal.save()
-                            except LeaveBalance.DoesNotExist:
-                                pass
-                        log.delete()
+        # Case 4: Status transitioned to rejected from a non-approved status
+        elif self.status == 'rejected' and old_status != 'rejected':
+            self._deduct_retroactive_unexcused_absences()
 
-            # Case 4: Status transitioned to rejected
-            if self.status == 'rejected' and old_status != 'rejected':
-                import datetime
-                from django.utils import timezone
-                from django.conf import settings
-                from apps.attendance.models import Attendance, AttendanceAbsentLog, get_default_deduction_leave_type
+    def save(self, *args, **kwargs):
+        # Autocalculate number of days excluding weekends, holidays, and active attendance days
+        if self.start_date and self.end_date:
+            self.number_of_days = self.calculate_deductible_days()
 
-                today = timezone.localdate()
-                yesterday = today - datetime.timedelta(days=1)
-                end_limit = min(self.end_date, yesterday)
+        from django.db import transaction
 
-                if self.start_date <= end_limit:
-                    from apps.attendance.schedule_utils import get_branch_schedule
-                    schedule = get_branch_schedule(self.employee)
-                    deduct_type = get_default_deduction_leave_type(self.employee)
+        is_new = self.pk is None
+        old_instance = None
 
-                    current_date = self.start_date
-                    while current_date <= end_limit:
-                        is_workday = False
-                        if schedule:
-                            day_name = current_date.strftime('%A').lower()
-                            if day_name in schedule.working_days:
-                                is_workday = True
-                        else:
-                            working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
-                            if current_date.weekday() in working_days:
-                                is_workday = True
+        with transaction.atomic():
+            if not is_new:
+                try:
+                    old_instance = LeaveRequest.objects.select_for_update().get(pk=self.pk)
+                except LeaveRequest.DoesNotExist:
+                    old_instance = None
 
-                        if is_workday:
-                            # Check attendance & absence logs
-                            if not Attendance.objects.filter(employee=self.employee, date=current_date).exists():
-                                if not AttendanceAbsentLog.objects.filter(employee=self.employee, date=current_date).exists():
-                                    if deduct_type:
-                                        from apps.employees.models import EmployeeLeaveRule
-                                        rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=deduct_type).first()
-                                        limit = rule.days_per_year if rule else deduct_type.default_days_per_year
-                                        balance, created = LeaveBalance.objects.get_or_create(
-                                            employee=self.employee,
-                                            leave_type=deduct_type,
-                                            year=current_date.year,
-                                            defaults={'total_days': limit}
-                                        )
-                                        balance = LeaveBalance.objects.select_for_update().get(pk=balance.pk)
-                                        balance.used_days = F('used_days') + 1
-                                        balance.save()
-
-                                        AttendanceAbsentLog.objects.create(
-                                            employee=self.employee,
-                                            date=current_date,
-                                            leave_type_deducted=deduct_type
-                                        )
-                        current_date += datetime.timedelta(days=1)
+            self._handle_balance_transition(old_instance)
+            super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
@@ -434,30 +425,32 @@ def create_leave_workflow_instance(sender, instance, created, **kwargs):
 def sync_leave_request_status(sender, instance, **kwargs):
     if instance.object_type == 'leave_request':
         from apps.leave.models import LeaveRequest
-        try:
-            leave_req = LeaveRequest.objects.get(pk=instance.object_id)
-            if leave_req.status != instance.current_status:
-                leave_req.status = instance.current_status
-                last_action = instance.actions.order_by('-timestamp').first()
-                if last_action:
-                    leave_req.reviewed_by = last_action.actor
-                    leave_req.reviewed_at = last_action.timestamp
-                leave_req.save()
-        except LeaveRequest.DoesNotExist:
-            pass
+        from django.db import transaction
+        with transaction.atomic():
+            try:
+                leave_req = LeaveRequest.objects.select_for_update().get(pk=instance.object_id)
+                if leave_req.status != instance.current_status:
+                    leave_req.status = instance.current_status
+                    last_action = instance.actions.order_by('-timestamp').first()
+                    if last_action:
+                        leave_req.reviewed_by = last_action.actor
+                        leave_req.reviewed_at = last_action.timestamp
+                    leave_req.save()
+            except LeaveRequest.DoesNotExist:
+                pass
 
 
 @receiver(post_delete, sender=LeaveRequest)
 def refund_leave_balance_on_delete(sender, instance, **kwargs):
     if instance.status == 'approved' and getattr(instance, 'employee_id', None) and getattr(instance, 'start_date', None):
         year = instance.start_date.year
-        try:
-            balance = LeaveBalance.objects.get(
+        from django.db import transaction
+        from django.db.models import F
+        with transaction.atomic():
+            LeaveBalance.objects.filter(
                 employee_id=instance.employee_id,
                 leave_type_id=instance.leave_type_id,
                 year=year
+            ).select_for_update().update(
+                used_days=F('used_days') - instance.number_of_days
             )
-            balance.used_days = F('used_days') - instance.number_of_days
-            balance.save()
-        except LeaveBalance.DoesNotExist:
-            pass

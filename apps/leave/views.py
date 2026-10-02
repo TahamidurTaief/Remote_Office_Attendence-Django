@@ -113,21 +113,26 @@ class BaseProcessLeaveRequestView(View):
 
 class ApproveLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
-        leave_request = get_object_or_404(LeaveRequest, pk=pk)
-        wf_instance = leave_request.workflow_instance
-        if wf_instance and not wf_instance.completed_at:
-            from apps.workflow.services import record_action
-            record_action(wf_instance, request.user, 'approve', 'Approved via view')
-            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been processed.")
-        else:
-            if leave_request.status in ('pending', 'manager_approved', 'returned'):
-                leave_request.status = 'approved'
-                leave_request.reviewed_by = request.user
-                leave_request.reviewed_at = timezone.now()
-                leave_request.save()
-                messages.success(request, f"Leave request for {leave_request.employee.full_name} has been approved.")
+        from django.db import transaction
+        with transaction.atomic():
+            leave_request = get_object_or_404(LeaveRequest.objects.select_for_update(), pk=pk)
+            wf_instance = leave_request.workflow_instance
+            if wf_instance and not wf_instance.completed_at:
+                from apps.workflow.services import record_action
+                try:
+                    record_action(wf_instance, request.user, 'approve', 'Approved via view')
+                    messages.success(request, f"Leave request for {leave_request.employee.full_name} has been processed.")
+                except ValueError as e:
+                    messages.error(request, str(e))
             else:
-                messages.error(request, "This request has already been processed.")
+                if leave_request.status in ('pending', 'manager_approved', 'returned'):
+                    leave_request.status = 'approved'
+                    leave_request.reviewed_by = request.user
+                    leave_request.reviewed_at = timezone.now()
+                    leave_request.save()
+                    messages.success(request, f"Leave request for {leave_request.employee.full_name} has been approved.")
+                else:
+                    messages.error(request, "This request has already been processed.")
         referer = request.META.get('HTTP_REFERER')
         if referer:
             return redirect(referer)
@@ -135,21 +140,26 @@ class ApproveLeaveRequestView(BaseProcessLeaveRequestView):
 
 class RejectLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
-        leave_request = get_object_or_404(LeaveRequest, pk=pk)
-        wf_instance = leave_request.workflow_instance
-        if wf_instance and not wf_instance.completed_at:
-            from apps.workflow.services import record_action
-            record_action(wf_instance, request.user, 'reject', 'Rejected via view')
-            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been processed.")
-        else:
-            if leave_request.status in ('pending', 'manager_approved', 'returned'):
-                leave_request.status = 'rejected'
-                leave_request.reviewed_by = request.user
-                leave_request.reviewed_at = timezone.now()
-                leave_request.save()
-                messages.success(request, f"Leave request for {leave_request.employee.full_name} has been rejected.")
+        from django.db import transaction
+        with transaction.atomic():
+            leave_request = get_object_or_404(LeaveRequest.objects.select_for_update(), pk=pk)
+            wf_instance = leave_request.workflow_instance
+            if wf_instance and not wf_instance.completed_at:
+                from apps.workflow.services import record_action
+                try:
+                    record_action(wf_instance, request.user, 'reject', 'Rejected via view')
+                    messages.success(request, f"Leave request for {leave_request.employee.full_name} has been processed.")
+                except ValueError as e:
+                    messages.error(request, str(e))
             else:
-                messages.error(request, "This request has already been processed.")
+                if leave_request.status in ('pending', 'manager_approved', 'returned'):
+                    leave_request.status = 'rejected'
+                    leave_request.reviewed_by = request.user
+                    leave_request.reviewed_at = timezone.now()
+                    leave_request.save()
+                    messages.success(request, f"Leave request for {leave_request.employee.full_name} has been rejected.")
+                else:
+                    messages.error(request, "This request has already been processed.")
         referer = request.META.get('HTTP_REFERER')
         if referer:
             return redirect(referer)
@@ -157,14 +167,19 @@ class RejectLeaveRequestView(BaseProcessLeaveRequestView):
 
 class ReturnLeaveRequestView(BaseProcessLeaveRequestView):
     def post(self, request, pk):
-        leave_request = get_object_or_404(LeaveRequest, pk=pk)
-        wf_instance = leave_request.workflow_instance
-        if wf_instance and not wf_instance.completed_at:
-            from apps.workflow.services import record_action
-            record_action(wf_instance, request.user, 'return', 'Returned via view')
-            messages.success(request, f"Leave request for {leave_request.employee.full_name} has been returned.")
-        else:
-            messages.error(request, "This request cannot be returned.")
+        from django.db import transaction
+        with transaction.atomic():
+            leave_request = get_object_or_404(LeaveRequest.objects.select_for_update(), pk=pk)
+            wf_instance = leave_request.workflow_instance
+            if wf_instance and not wf_instance.completed_at:
+                from apps.workflow.services import record_action
+                try:
+                    record_action(wf_instance, request.user, 'return', 'Returned via view')
+                    messages.success(request, f"Leave request for {leave_request.employee.full_name} has been returned.")
+                except ValueError as e:
+                    messages.error(request, str(e))
+            else:
+                messages.error(request, "This request cannot be returned.")
         referer = request.META.get('HTTP_REFERER')
         if referer:
             return redirect(referer)
@@ -507,34 +522,36 @@ class RescheduleLeaveRequestView(AdminRequiredMixin, UpdateView):
 
 class CancelLeaveRequestView(StaffOrManagerMixin, View):
     def post(self, request, pk):
-        leave_request = get_object_or_404(LeaveRequest, pk=pk)
-        
-        # Verify ownership
-        if leave_request.employee.user != request.user:
-            messages.error(request, "You do not have permission to cancel this request.")
-            return redirect('leave:staff_dashboard')
-            
-        # Verify status eligibility
-        if leave_request.status not in ('pending', 'manager_approved', 'returned'):
-            messages.error(request, f"This request cannot be cancelled because it is already {leave_request.status}.")
-            return redirect('leave:staff_dashboard')
-            
-        wf_instance = leave_request.workflow_instance
-        if wf_instance:
-            if not wf_instance.completed_at:
-                from apps.workflow.services import cancel_workflow
-                try:
-                    cancel_workflow(wf_instance, request.user, 'Cancelled by requester')
-                except Exception as e:
-                    messages.error(request, f"Failed to cancel workflow: {str(e)}")
-                    return redirect('leave:staff_dashboard')
-            else:
-                messages.error(request, "The workflow has already completed.")
+        from django.db import transaction
+        with transaction.atomic():
+            leave_request = get_object_or_404(LeaveRequest.objects.select_for_update(), pk=pk)
+
+            # Verify ownership
+            if leave_request.employee.user != request.user:
+                messages.error(request, "You do not have permission to cancel this request.")
                 return redirect('leave:staff_dashboard')
-        
-        # Transition leave request status to cancelled
-        leave_request.status = 'cancelled'
-        leave_request.save()
-        messages.success(request, "Your leave request has been cancelled.")
-        
-        return redirect('leave:staff_dashboard')
+
+            # Verify status eligibility
+            if leave_request.status not in ('pending', 'manager_approved', 'returned'):
+                messages.error(request, f"This request cannot be cancelled because it is already {leave_request.status}.")
+                return redirect('leave:staff_dashboard')
+
+            wf_instance = leave_request.workflow_instance
+            if wf_instance:
+                if not wf_instance.completed_at:
+                    from apps.workflow.services import cancel_workflow
+                    try:
+                        cancel_workflow(wf_instance, request.user, 'Cancelled by requester')
+                    except Exception as e:
+                        messages.error(request, f"Failed to cancel workflow: {str(e)}")
+                        return redirect('leave:staff_dashboard')
+                else:
+                    messages.error(request, "The workflow has already completed.")
+                    return redirect('leave:staff_dashboard')
+
+            # Transition leave request status to cancelled
+            leave_request.status = 'cancelled'
+            leave_request.save()
+            messages.success(request, "Your leave request has been cancelled.")
+
+            return redirect('leave:staff_dashboard')
