@@ -67,3 +67,37 @@ class EnterpriseAppShellTest(TestCase):
         self.assertIn('Employee Directory', rendered)
         self.assertIn('System Roles', rendered)
 
+    def test_app_shell_does_not_embed_browser_reload_events_script(self):
+        """Regression test: verify app-shell does not embed django_browser_reload:events as a script src.
+
+        django_browser_reload:events is an indefinite Server-Sent Events stream.
+        Loading it as a parser-managed <script src="..."> blocks window.onload forever.
+        Non-blocking reload is handled solely by BrowserReloadMiddleware when DEBUG=True.
+        """
+        # Under DEBUG=True context
+        rendered_debug = render_to_string(
+            'cotton/app-shell.html',
+            {'user': self.user, 'request': self._make_request(), 'debug': True}
+        )
+        self.assertNotIn('django_browser_reload:events', rendered_debug)
+        self.assertNotIn('/__reload__/events/', rendered_debug)
+        self.assertNotIn('<script src="{% url \'django_browser_reload:events\' %}"', rendered_debug)
+
+        # Under DEBUG=False context
+        rendered_prod = render_to_string(
+            'cotton/app-shell.html',
+            {'user': self.user, 'request': self._make_request(), 'debug': False}
+        )
+        self.assertNotIn('django_browser_reload', rendered_prod)
+        self.assertNotIn('/__reload__/', rendered_prod)
+
+        # Also verify shell request via test client
+        self.client.force_login(self.user)
+        res = self.client.get('/')
+        if res.status_code in (200, 302):
+            target = res.url if res.status_code == 302 else '/'
+            page_res = self.client.get(target, follow=True)
+            content = page_res.content.decode('utf-8', errors='ignore')
+            self.assertNotIn('<script src="/__reload__/events/"', content)
+            self.assertNotIn('django_browser_reload:events', content)
+
