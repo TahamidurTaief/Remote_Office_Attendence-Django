@@ -542,6 +542,8 @@ class Employee(models.Model):
     def _check_has_active_docs(self) -> bool:
         if hasattr(self, '_has_docs_annotated'):
             return bool(self._has_docs_annotated)
+        if hasattr(self, '_has_valid_docs'):
+            return bool(self._has_valid_docs)
         if hasattr(self, '_prefetched_objects_cache') and 'documents' in self._prefetched_objects_cache:
             today = timezone.localdate()
             return any(
@@ -558,9 +560,12 @@ class Employee(models.Model):
     def _check_has_active_assets(self) -> bool:
         if hasattr(self, '_has_assets_annotated'):
             return bool(self._has_assets_annotated)
+        if hasattr(self, '_has_unreturned_assets'):
+            return bool(self._has_unreturned_assets)
         if hasattr(self, '_prefetched_objects_cache') and 'asset_assignments' in self._prefetched_objects_cache:
             return any(a.returned_date is None for a in self.asset_assignments.all())
         return self.asset_assignments.filter(returned_date__isnull=True).exists()
+
 
     def get_completion_percentage(self) -> int:
         if hasattr(self, '_completion_percentage_cache'):

@@ -363,6 +363,85 @@ class EmployeeMasterTests(TestCase):
         self.dept = Department.objects.create(name='Engineering', code='ENG')
         self.desig = Designation.objects.create(name='Senior Software Engineer', code='SSE')
 
+    def test_employee_master_list_bounded_queries(self):
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        from apps.employees.models import EmployeeDocument, AssetAssignment, Asset
+
+
+        self.client.force_login(self.admin)
+        for i in range(5):
+            emp = Employee.objects.create(
+                employee_number=f'EMP-QUERY-S-{i}',
+                first_name=f'Small{i}',
+                last_name='User',
+                branch=self.branch,
+                department=self.dept,
+                designation=self.desig,
+                status=EmployeeStatus.ACTIVE
+            )
+            EmployeeDocument.objects.create(
+                employee_master=emp,
+                document_type='nid',
+                title=f'Doc {i}',
+                is_active=True,
+                is_archived=False
+            )
+            asset = Asset.objects.create(asset_type='laptop', asset_tag=f'AST-S-{i}', name=f'Laptop S-{i}')
+            AssetAssignment.objects.create(
+                asset=asset,
+                employee=emp,
+                assigned_date=date.today()
+            )
+
+
+        url = reverse('employees:master_list')
+        with CaptureQueriesContext(connection) as ctx_small:
+            res_small = self.client.get(url)
+        self.assertEqual(res_small.status_code, 200)
+        small_count = len(ctx_small.captured_queries)
+
+        for i in range(25):
+            emp = Employee.objects.create(
+                employee_number=f'EMP-QUERY-L-{i}',
+                first_name=f'Large{i}',
+                last_name='User',
+                branch=self.branch,
+                department=self.dept,
+                designation=self.desig,
+                status=EmployeeStatus.ACTIVE
+            )
+            EmployeeDocument.objects.create(
+                employee_master=emp,
+                document_type='nid',
+                title=f'Doc L-{i}',
+                is_active=True,
+                is_archived=False
+            )
+
+        with CaptureQueriesContext(connection) as ctx_large:
+            res_large = self.client.get(url)
+        self.assertEqual(res_large.status_code, 200)
+        large_count = len(ctx_large.captured_queries)
+
+        # Assert query count remains bounded as employee count increases from 5 to 30
+        self.assertLessEqual(large_count - small_count, 3)
+
+        # Test combined filtering (search + status + branch + department + designation)
+        filtered_res = self.client.get(url, {
+            'search': 'Small1',
+            'status': EmployeeStatus.ACTIVE,
+            'branch': self.branch.id,
+            'department': self.dept.id,
+            'designation': self.desig.id,
+        })
+        self.assertEqual(filtered_res.status_code, 200)
+        self.assertContains(filtered_res, 'EMP-QUERY-S-1')
+        self.assertNotContains(filtered_res, 'EMP-QUERY-S-2')
+
+
+
+
     def test_employee_master_creation(self):
         emp = Employee.objects.create(
             employee_number='EMP-MASTER-001',
