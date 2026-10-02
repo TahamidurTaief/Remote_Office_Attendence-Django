@@ -35,7 +35,14 @@ def get_effective_leave_scope(user, permission_code='leave.view'):
         return DataScope.GLOBAL
     from apps.accounts.engine import PermissionEngine
     from apps.accounts.rbac_models import DataScope
-    action_type = 'approve' if permission_code == 'leave.approve' else ('edit' if permission_code == 'leave.edit' else 'view')
+    if permission_code == 'leave.approve':
+        action_type = 'approve'
+    elif permission_code == 'leave.edit':
+        action_type = 'edit'
+    elif permission_code == 'reports.export':
+        action_type = 'export'
+    else:
+        action_type = 'view'
     eval_res = PermissionEngine.evaluate(user, permission_code, action_type=action_type)
     if eval_res.allowed:
         return eval_res.data_scope

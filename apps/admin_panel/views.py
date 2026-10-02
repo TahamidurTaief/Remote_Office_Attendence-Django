@@ -1880,8 +1880,8 @@ class LeaveMonthlyReportView(AdminRequiredMixin, View):
         month_start = dt_mod.date(year, month, 1)
         month_end = dt_mod.date(year, month, last_day)
 
-        base_employees = get_scoped_employee_queryset(request.user)
-        scope = get_effective_leave_scope(request.user)
+        base_employees = get_scoped_employee_queryset(request.user, permission_code='reports.view')
+        scope = get_effective_leave_scope(request.user, permission_code='reports.view')
         is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
 
         employees = (
@@ -1895,7 +1895,7 @@ class LeaveMonthlyReportView(AdminRequiredMixin, View):
 
         leave_types = list(LeaveType.objects.all().order_by('name'))
 
-        leave_requests_qs = get_scoped_leave_requests(request.user).filter(
+        leave_requests_qs = get_scoped_leave_requests(request.user, permission_code='reports.view').filter(
             start_date__lte=month_end,
             end_date__gte=month_start
         ).select_related('employee', 'leave_type')
@@ -1998,7 +1998,7 @@ class LeaveEmployeeReportView(AdminRequiredMixin, View):
         from django.http import Http404
         import datetime as dt_mod
 
-        scoped_emps = get_scoped_employee_queryset(request.user)
+        scoped_emps = get_scoped_employee_queryset(request.user, permission_code='reports.view')
         employee = scoped_emps.select_related('branch', 'user').filter(pk=pk).first()
         if not employee:
             if EmployeeProfile.objects.filter(pk=pk).exists():
@@ -2019,7 +2019,7 @@ class LeaveEmployeeReportView(AdminRequiredMixin, View):
         month_start = dt_mod.date(year, month, 1)
         month_end = dt_mod.date(year, month, last_day)
 
-        requests_qs = get_scoped_leave_requests(request.user).filter(
+        requests_qs = get_scoped_leave_requests(request.user, permission_code='reports.view').filter(
             employee=employee
         ).select_related('leave_type', 'reviewed_by').order_by('-start_date')
 
@@ -2087,10 +2087,10 @@ class ExportLeaveReportCSVView(AdminRequiredMixin, View):
         status = request.GET.get('status')
         leave_type_id = request.GET.get('leave_type')
 
-        scope = get_effective_leave_scope(request.user)
+        scope = get_effective_leave_scope(request.user, permission_code='reports.export')
         is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
 
-        qs = get_scoped_leave_requests(request.user).select_related('employee', 'employee__branch', 'leave_type', 'reviewed_by').order_by('-start_date')
+        qs = get_scoped_leave_requests(request.user, permission_code='reports.export').select_related('employee', 'employee__branch', 'leave_type', 'reviewed_by').order_by('-start_date')
 
         if date_from:
             qs = qs.filter(end_date__gte=date_from)
@@ -2199,10 +2199,10 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
         status = request.GET.get('status')
         leave_type_id = request.GET.get('leave_type')
 
-        scope = get_effective_leave_scope(request.user)
+        scope = get_effective_leave_scope(request.user, permission_code='reports.export')
         is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
 
-        qs = get_scoped_leave_requests(request.user).select_related('employee', 'employee__branch', 'leave_type').order_by('-start_date')
+        qs = get_scoped_leave_requests(request.user, permission_code='reports.export').select_related('employee', 'employee__branch', 'leave_type').order_by('-start_date')
 
         if date_from:
             qs = qs.filter(end_date__gte=date_from)
@@ -2319,8 +2319,8 @@ class ExportLeaveReportPDFView(AdminRequiredMixin, View):
 
 def export_leave_monthly_xlsx(request):
     from apps.accounts.engine import PermissionEngine
-    eval_res = PermissionEngine.evaluate(request.user, 'leave.view', action_type='view')
-    if not eval_res.allowed:
+    eval_res = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+    if not eval_res.allowed and not request.user.is_superuser:
         return HttpResponseForbidden("Access Denied")
 
     import openpyxl
@@ -2345,10 +2345,10 @@ def export_leave_monthly_xlsx(request):
     from apps.leave.views import get_scoped_employee_queryset, get_scoped_leave_requests, get_effective_leave_scope
     from apps.accounts.rbac_models import DataScope
 
-    scope = get_effective_leave_scope(request.user)
+    scope = get_effective_leave_scope(request.user, permission_code='reports.export')
     is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
 
-    base_employees = get_scoped_employee_queryset(request.user).filter(is_active=True).select_related('branch').order_by('full_name')
+    base_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export').filter(is_active=True).select_related('branch').order_by('full_name')
     employees = base_employees
     if emp_id:
         employees = employees.filter(id=emp_id)
@@ -2356,7 +2356,7 @@ def export_leave_monthly_xlsx(request):
         employees = employees.filter(branch_id=branch_id)
 
     leave_types = list(LeaveType.objects.all().order_by('name'))
-    base_leave_requests = get_scoped_leave_requests(request.user).filter(
+    base_leave_requests = get_scoped_leave_requests(request.user, permission_code='reports.export').filter(
         start_date__lte=month_end, end_date__gte=month_start
     ).select_related('employee', 'leave_type')
     leave_requests = base_leave_requests
