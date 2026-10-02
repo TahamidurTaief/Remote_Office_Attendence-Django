@@ -1,6 +1,10 @@
+from datetime import timedelta
+from django.utils import timezone
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
-from apps.employees.models import Employee, EmployeeProfile, Department, Designation
+from apps.employees.models import (
+    Employee, EmployeeProfile, Department, Designation, EmployeeDocument
+)
 from apps.branches.models import Branch
 from apps.admin_panel.dashboard_services import (
     determine_user_role_variant,
@@ -93,3 +97,41 @@ class RoleBasedDashboardTestCase(TestCase):
         response = client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "dashboard/admin_dashboard.html")
+
+    def test_hr_dashboard_with_employee_documents(self):
+        today = timezone.localdate()
+        doc = EmployeeDocument.objects.create(
+            employee_master=self.staff_emp,
+            employee=self.staff_profile,
+            title="Passport",
+            expiry_date=today + timedelta(days=10),
+            is_active=True,
+        )
+        data = get_hr_dashboard_data(self.admin_user)
+        self.assertIn(doc, list(data["expiring_documents"]))
+
+        client = Client()
+        client.force_login(self.admin_user)
+        response = client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("expiring_documents", response.context)
+        self.assertIn(doc, list(response.context["expiring_documents"]))
+
+    def test_hr_dashboard_without_employee_documents_or_employees(self):
+        # Case 1: Employees exist, but no documents exist
+        EmployeeDocument.objects.all().delete()
+        data = get_hr_dashboard_data(self.admin_user)
+        self.assertEqual(list(data["expiring_documents"]), [])
+
+        client = Client()
+        client.force_login(self.admin_user)
+        response = client.get("/dashboard/")
+        self.assertEqual(response.status_code, 200)
+
+        # Case 2: No employees exist in the organization (regression for UnboundLocalError)
+        Employee.objects.all().delete()
+        data_empty = get_hr_dashboard_data(self.admin_user)
+        self.assertEqual(list(data_empty["expiring_documents"]), [])
+
+        response_empty = client.get("/dashboard/")
+        self.assertEqual(response_empty.status_code, 200)

@@ -352,7 +352,7 @@ def get_hr_dashboard_data(user):
     all_employees = list(Employee.objects.select_related('department', 'designation', 'branch').all())
     emp_ids = [e.pk for e in all_employees]
     if emp_ids:
-        from apps.employees.models import AssetAssignment, EmployeeDocument
+        from apps.employees.models import AssetAssignment
         doc_emp_ids = set(EmployeeDocument.objects.filter(
             employee_master_id__in=emp_ids,
             is_active=True,
