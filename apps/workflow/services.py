@@ -112,10 +112,23 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
         step = WorkflowStep.objects.filter(workflow=locked_instance.definition, step_number=locked_instance.current_step).first()
 
         delegated_by = None
-        if step:
-            now_date = timezone.localdate()
+        if action == 'cancel':
             from apps.accounts.engine import PermissionEngine
-            is_authorized = actor.is_superuser or PermissionEngine.evaluate(actor, 'workflow.edit').allowed
+            is_cancel_authorized = (
+                actor.is_superuser
+                or actor == locked_instance.initiated_by
+                or PermissionEngine.evaluate(actor, 'workflow.edit').allowed
+            )
+            if not is_cancel_authorized:
+                from django.core.exceptions import PermissionDenied
+                raise PermissionDenied("You do not have permission to cancel this workflow.")
+        elif action in ('approve', 'reject', 'return'):
+            if not step:
+                from django.core.exceptions import PermissionDenied
+                raise PermissionDenied("Current workflow step not found.")
+
+            now_date = timezone.localdate()
+            is_authorized = actor.is_superuser
 
             expected_approver = None
             if getattr(step, 'approver_resolution_type', 'static_role') == 'reporting_manager':
@@ -190,6 +203,10 @@ def record_action(instance, actor, action, note='', return_to_initiator=False):
             if not is_authorized:
                 from django.core.exceptions import PermissionDenied
                 raise PermissionDenied(f"User {actor} is not authorized for step {step.step_number}.")
+        else:
+            if not actor.is_superuser:
+                from django.core.exceptions import PermissionDenied
+                raise PermissionDenied(f"Unknown workflow action: {action}")
 
         # Create the action
         wf_action = WorkflowAction.objects.create(
