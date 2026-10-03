@@ -1274,6 +1274,8 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
                     )
                     return self.form_invalid(form)
 
+                original_date = locked_event.date
+                original_start_time = locked_event.start_time
                 original_assignee_ids = set(
                     locked_event.assigned_to.values_list('id', flat=True)
                 )
@@ -1282,6 +1284,10 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
                 construct_instance(form, locked_event, form._meta.fields, form._meta.exclude)
                 form.instance = locked_event
                 response = super().form_valid(form)
+
+                if (self.object.date != original_date) or (self.object.start_time != original_start_time):
+                    self.get_queryset().filter(pk=self.object.pk).update(reminder_sent_at=None)
+                    self.object.reminder_sent_at = None
 
                 new_assignees_qs = self.object.assigned_to.all()
                 if original_assignee_ids:
