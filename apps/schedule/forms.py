@@ -32,13 +32,25 @@ class ScheduleEventForm(forms.ModelForm):
             'project': forms.Select(attrs={'class': SELECT_INPUT}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, scope_permission=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # S4: Use canonical Employee resolution by filtering querysets appropriately.
-        # Filter assigned_to to active employee profiles.
-        self.fields['assigned_to'].queryset = EmployeeProfile.objects.filter(is_active=True)
+        self.user = user
+        self.scope_permission = scope_permission
+
+        if user and scope_permission:
+            from apps.schedule.views import (
+                _get_effective_schedule_scope,
+                get_scoped_employee_queryset_for_schedule,
+                get_scoped_project_queryset_for_schedule,
+            )
+            scope = _get_effective_schedule_scope(user, scope_permission)
+            self.fields['assigned_to'].queryset = get_scoped_employee_queryset_for_schedule(user, scope)
+            self.fields['project'].queryset = get_scoped_project_queryset_for_schedule(user, scope)
+        else:
+            self.fields['assigned_to'].queryset = EmployeeProfile.objects.filter(is_active=True)
+            self.fields['project'].queryset = Project.objects.exclude(status='Completed')
+
         self.fields['assigned_to'].label_from_instance = lambda obj: f"{obj.canonical_full_name} ({obj.employee_id})"
-        self.fields['project'].queryset = Project.objects.exclude(status='Completed')
 
     def clean(self):
         cleaned_data = super().clean()
@@ -51,6 +63,22 @@ class ScheduleEventForm(forms.ModelForm):
         # Project validation
         if project and project.status == 'Completed':
             raise forms.ValidationError("Cannot schedule events for a completed project.")
+
+        # Server-side validation against forged employee or project IDs
+        if self.user and self.scope_permission:
+            allowed_emps = self.fields['assigned_to'].queryset
+            if assigned_employees:
+                for emp in assigned_employees:
+                    if not allowed_emps.filter(pk=emp.pk).exists():
+                        raise forms.ValidationError(
+                            f"Unauthorized employee assignment: {emp.canonical_full_name} is outside your authorized scope."
+                        )
+            if project:
+                allowed_projs = self.fields['project'].queryset
+                if not allowed_projs.filter(pk=project.pk).exists():
+                    raise forms.ValidationError(
+                        f"Unauthorized project selection: '{project.name}' is outside your authorized scope."
+                    )
 
         # S2: Conflict/overlap checks for assigned employees
         if event_date and assigned_employees:

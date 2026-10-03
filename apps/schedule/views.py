@@ -735,12 +735,318 @@ class ShiftScheduleView(RoleRequiredMixin, View):
         return render(request, 'schedule/shift_schedule.html', context)
 
 
+
+def _resolve_user_canonical_identity(user):
+    """
+    Resolves canonical employee, master record, branch, and department.
+    Fails closed if identity cannot be resolved.
+    """
+    profile = None
+    master_emp = None
+    canonical_branch = None
+    canonical_dept_name = None
+
+    if user and user.is_authenticated:
+        if hasattr(user, 'employee_profile') and user.employee_profile:
+            profile = user.employee_profile
+        master_emp = getattr(user, 'employee_master', None)
+        if not profile and master_emp and hasattr(master_emp, 'legacy_profile') and master_emp.legacy_profile:
+            profile = master_emp.legacy_profile
+        if not profile:
+            from apps.employees.hr_resolver import get_canonical_employee
+            canonical_emp = get_canonical_employee(user)
+            if canonical_emp:
+                if hasattr(canonical_emp, 'employee_profile'):
+                    profile = canonical_emp.employee_profile
+                elif hasattr(canonical_emp, 'legacy_profile') and canonical_emp.legacy_profile:
+                    profile = canonical_emp.legacy_profile
+                from apps.employees.models import EmployeeProfile
+                if isinstance(canonical_emp, EmployeeProfile):
+                    profile = canonical_emp
+        if not master_emp and profile and getattr(profile, 'master_employee', None):
+            master_emp = profile.master_employee
+
+        if profile and getattr(profile, 'canonical_branch', None):
+            canonical_branch = profile.canonical_branch
+        elif master_emp and getattr(master_emp, 'branch', None):
+            canonical_branch = master_emp.branch
+        elif profile and getattr(profile, 'branch', None):
+            canonical_branch = profile.branch
+
+        if profile and getattr(profile, 'canonical_department', None):
+            canonical_dept_name = profile.canonical_department
+        elif master_emp and getattr(master_emp, 'department', None):
+            canonical_dept_name = master_emp.department.name
+
+    return {
+        'profile': profile,
+        'master_emp': master_emp,
+        'canonical_branch': canonical_branch,
+        'canonical_dept_name': canonical_dept_name,
+    }
+
+
+def _get_effective_schedule_scope(user, permission_code):
+    """
+    Evaluates dynamic RBAC permission and returns effective DataScope.
+    Never falls back to schedule.view or schedule.manage.
+    """
+    if not user or not user.is_authenticated:
+        return None
+    if user.is_superuser:
+        from apps.accounts.rbac_models import DataScope
+        return DataScope.GLOBAL
+
+    from apps.accounts.engine import PermissionEngine
+    action_type = 'view'
+    if permission_code == 'schedule.add':
+        action_type = 'add'
+    elif permission_code == 'schedule.edit':
+        action_type = 'edit'
+    elif permission_code == 'schedule.delete':
+        action_type = 'delete'
+    elif permission_code == 'schedule.manage':
+        action_type = 'manage'
+
+    eval_res = PermissionEngine.evaluate(user, permission_code, action_type=action_type)
+    if eval_res.allowed:
+        return eval_res.data_scope
+    return None
+
+
+def _get_team_context_for_user(user, identity=None):
+    from apps.employees.models import EmployeeProfile
+    from apps.projects.models import Project
+    if not user or not user.is_authenticated:
+        return EmployeeProfile.objects.none(), Project.objects.none()
+
+    if identity is None:
+        identity = _resolve_user_canonical_identity(user)
+    profile = identity['profile']
+    master_emp = identity['master_emp']
+
+    managed_projs = Project.objects.filter(
+        Q(project_managers=profile) | Q(created_by=user)
+    ) if profile else Project.objects.filter(created_by=user)
+
+    team_q = (
+        Q(master_employee__reporting_manager__user=user) |
+        Q(site_engineer_projects__in=managed_projs) |
+        Q(assigned_tasks__project__in=managed_projs)
+    )
+    if profile:
+        team_q |= Q(pk=profile.pk)
+
+    resolved_m = master_emp or (getattr(profile, 'master_employee', None) if profile else None)
+    if resolved_m:
+        team_q |= Q(master_employee__reporting_manager=resolved_m)
+        try:
+            from apps.employees.hierarchy_services import OrgHierarchyService
+            sub_ids = list(OrgHierarchyService.get_all_subordinates(resolved_m).values_list('id', flat=True))
+            if sub_ids:
+                team_q |= Q(master_employee_id__in=sub_ids)
+        except Exception:
+            pass
+
+    team_emps = EmployeeProfile.objects.filter(team_q).distinct()
+    q_proj = Q(created_by=user)
+    if profile:
+        q_proj |= (
+            Q(project_managers=profile) |
+            Q(site_engineers=profile) |
+            Q(project_members=profile)
+        )
+    team_projs = Project.objects.filter(q_proj).distinct()
+    return team_emps, team_projs
+
+
+def get_scoped_employee_queryset_for_schedule(user, scope, identity=None):
+    from apps.accounts.rbac_models import DataScope
+    from apps.employees.models import EmployeeProfile
+
+    if not user or not user.is_authenticated or scope is None:
+        return EmployeeProfile.objects.none()
+
+    base = EmployeeProfile.objects.filter(is_active=True)
+
+    if user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY):
+        return base
+
+    if identity is None:
+        identity = _resolve_user_canonical_identity(user)
+    profile = identity['profile']
+    canonical_branch = identity['canonical_branch']
+    canonical_dept_name = identity['canonical_dept_name']
+
+    if scope == DataScope.BRANCH:
+        if not canonical_branch:
+            return EmployeeProfile.objects.none()
+        return base.filter(
+            Q(branch=canonical_branch) | Q(master_employee__branch=canonical_branch)
+        ).distinct()
+
+    if scope == DataScope.DEPARTMENT:
+        if not canonical_dept_name:
+            return EmployeeProfile.objects.none()
+        return base.filter(
+            Q(department=canonical_dept_name) | Q(master_employee__department__name=canonical_dept_name)
+        ).distinct()
+
+    if scope == DataScope.TEAM:
+        team_emps, _ = _get_team_context_for_user(user, identity)
+        return team_emps.filter(is_active=True)
+
+    if scope == DataScope.OWN:
+        if profile and profile.is_active:
+            return base.filter(pk=profile.pk)
+        return EmployeeProfile.objects.none()
+
+    return EmployeeProfile.objects.none()
+
+
+def get_scoped_project_queryset_for_schedule(user, scope, identity=None):
+    from apps.accounts.rbac_models import DataScope
+    from apps.projects.models import Project
+
+    if not user or not user.is_authenticated or scope is None:
+        return Project.objects.none()
+
+    base = Project.objects.exclude(status='Completed')
+
+    if user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY):
+        return base
+
+    if identity is None:
+        identity = _resolve_user_canonical_identity(user)
+    profile = identity['profile']
+    canonical_branch = identity['canonical_branch']
+    canonical_dept_name = identity['canonical_dept_name']
+
+    if scope == DataScope.BRANCH:
+        if not canonical_branch:
+            return Project.objects.none()
+        return base.filter(branch=canonical_branch)
+
+    if scope == DataScope.DEPARTMENT:
+        if not canonical_dept_name:
+            return Project.objects.none()
+        from apps.employees.models import EmployeeProfile
+        dept_emps = EmployeeProfile.objects.filter(
+            Q(department=canonical_dept_name) | Q(master_employee__department__name=canonical_dept_name)
+        )
+        return base.filter(
+            Q(project_managers__in=dept_emps) |
+            Q(site_engineers__in=dept_emps) |
+            Q(project_members__in=dept_emps) |
+            Q(created_by__employee_profile__in=dept_emps) |
+            Q(created_by__employee_master__department__name=canonical_dept_name)
+        ).distinct()
+
+    if scope == DataScope.TEAM:
+        _, team_projs = _get_team_context_for_user(user, identity)
+        return base.filter(pk__in=team_projs.values_list('pk', flat=True))
+
+    if scope == DataScope.OWN:
+        q_proj = Q(created_by=user)
+        if profile:
+            q_proj |= (
+                Q(project_managers=profile) |
+                Q(site_engineers=profile) |
+                Q(project_members=profile)
+            )
+        return base.filter(q_proj).distinct()
+
+    return Project.objects.none()
+
+
+def get_scoped_event_queryset_for_schedule(user, permission_code):
+    from apps.accounts.rbac_models import DataScope
+    from .models import ScheduleEvent
+
+    if not user or not user.is_authenticated:
+        return ScheduleEvent.objects.none()
+
+    if user.is_superuser:
+        return ScheduleEvent.objects.all()
+
+    scope = _get_effective_schedule_scope(user, permission_code)
+    if scope is None:
+        return ScheduleEvent.objects.none()
+
+    if scope in (DataScope.GLOBAL, DataScope.COMPANY):
+        return ScheduleEvent.objects.all()
+
+    identity = _resolve_user_canonical_identity(user)
+    canonical_branch = identity['canonical_branch']
+    canonical_dept_name = identity['canonical_dept_name']
+
+    events_base = ScheduleEvent.objects.all()
+
+    if scope == DataScope.BRANCH:
+        if not canonical_branch:
+            return ScheduleEvent.objects.none()
+        branch_events_q = Q(project__branch=canonical_branch) | (
+            Q(project__isnull=True) & (
+                Q(assigned_to__branch=canonical_branch) |
+                Q(assigned_to__master_employee__branch=canonical_branch) |
+                Q(created_by__employee_profile__branch=canonical_branch) |
+                Q(created_by__employee_master__branch=canonical_branch)
+            )
+        )
+        return events_base.filter(branch_events_q).distinct()
+
+    if scope == DataScope.DEPARTMENT:
+        if not canonical_dept_name:
+            return ScheduleEvent.objects.none()
+        dept_events_q = (
+            Q(assigned_to__department=canonical_dept_name) |
+            Q(assigned_to__master_employee__department__name=canonical_dept_name) |
+            Q(created_by__employee_profile__department=canonical_dept_name) |
+            Q(created_by__employee_master__department__name=canonical_dept_name)
+        )
+        return events_base.filter(dept_events_q).distinct()
+
+    if scope == DataScope.TEAM:
+        team_emps, team_projs = _get_team_context_for_user(user, identity)
+        team_events_q = (
+            Q(assigned_to__in=team_emps) |
+            Q(project__in=team_projs) |
+            Q(created_by=user)
+        )
+        return events_base.filter(team_events_q).distinct()
+
+    if scope == DataScope.OWN:
+        own_events_q = Q(created_by=user)
+        return events_base.filter(own_events_q).distinct()
+
+    return ScheduleEvent.objects.none()
+
+
 class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
     required_permission = 'schedule.add'
     action_type = 'add'
     model = ScheduleEvent
     form_class = ScheduleEventForm
     template_name = 'schedule/event_form.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+
+        if not request.user.is_superuser:
+            scope = _get_effective_schedule_scope(request.user, 'schedule.add')
+            if scope is None:
+                return self.handle_no_permission()
+            from apps.accounts.rbac_models import DataScope
+            identity = _resolve_user_canonical_identity(request.user)
+            if scope == DataScope.BRANCH and not identity['canonical_branch']:
+                return self.handle_no_permission()
+            if scope == DataScope.DEPARTMENT and not identity['canonical_dept_name']:
+                return self.handle_no_permission()
+            if scope == DataScope.OWN and not identity['profile']:
+                return self.handle_no_permission()
+
+        return super().dispatch(request, *args, **kwargs)
 
     def get_initial(self):
         initial = super().get_initial()
@@ -752,35 +1058,43 @@ class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
                 pass
         return initial
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        kwargs['scope_permission'] = 'schedule.add'
+        return kwargs
+
     def form_valid(self, form):
-        form.instance.created_by = self.request.user
-        response = super().form_valid(form)
-        
-        # Notify assigned employees
-        event = self.object
-        for employee in event.assigned_to.all():
-            if employee.user:
-                # DB Notification
-                Notification.objects.create(
-                    recipient=employee.user,
-                    employee=employee,
-                    title=f"New Event: {event.title}",
-                    message=f"You have been assigned to event '{event.title}' scheduled on {event.date.strftime('%d/%m/%Y')}.",
-                    notif_type='field_visit'
-                )
-                # Email Notification
-                subject = f"Assigned to Event: {event.title}"
-                message = (
-                    f"Hello {employee.full_name},\n\n"
-                    f"You have been assigned to the following event:\n"
-                    f"Title: {event.title}\n"
-                    f"Date: {event.date.strftime('%d/%m/%Y')}\n"
-                    f"Description: {event.description or 'No description'}\n\n"
-                    f"Regards,\nFieldTrack System"
-                )
-                send_email_notification(employee.user, subject, message)
-                
-        return response
+        from django.db import transaction
+        with transaction.atomic():
+            form.instance.created_by = self.request.user
+            response = super().form_valid(form)
+
+            # Notify assigned employees
+            event = self.object
+            for employee in event.assigned_to.all():
+                if employee.user:
+                    # DB Notification
+                    Notification.objects.create(
+                        recipient=employee.user,
+                        employee=employee,
+                        title=f"New Event: {event.title}",
+                        message=f"You have been assigned to event '{event.title}' scheduled on {event.date.strftime('%d/%m/%Y')}.",
+                        notif_type='field_visit'
+                    )
+                    # Email Notification
+                    subject = f"Assigned to Event: {event.title}"
+                    message = (
+                        f"Hello {employee.full_name},\n\n"
+                        f"You have been assigned to the following event:\n"
+                        f"Title: {event.title}\n"
+                        f"Date: {event.date.strftime('%d/%m/%Y')}\n"
+                        f"Description: {event.description or 'No description'}\n\n"
+                        f"Regards,\nFieldTrack System"
+                    )
+                    send_email_notification(employee.user, subject, message)
+
+            return response
 
     def get_success_url(self):
         return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
@@ -793,8 +1107,35 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
     form_class = ScheduleEventForm
     template_name = 'schedule/event_form.html'
 
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+
+        if not request.user.is_superuser:
+            scope = _get_effective_schedule_scope(request.user, 'schedule.edit')
+            if scope is None:
+                return self.handle_no_permission()
+            from apps.accounts.rbac_models import DataScope
+            identity = _resolve_user_canonical_identity(request.user)
+            if scope == DataScope.BRANCH and not identity['canonical_branch']:
+                return self.handle_no_permission()
+            if scope == DataScope.DEPARTMENT and not identity['canonical_dept_name']:
+                return self.handle_no_permission()
+            if scope == DataScope.OWN and not identity['profile']:
+                return self.handle_no_permission()
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return get_scoped_event_queryset_for_schedule(
+            self.request.user,
+            permission_code='schedule.edit'
+        )
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        kwargs['scope_permission'] = 'schedule.edit'
         return kwargs
 
     def form_valid(self, form):
@@ -826,6 +1167,31 @@ class ScheduleEventDeleteView(RoleRequiredMixin, DeleteView):
     required_permission = 'schedule.delete'
     action_type = 'delete'
     model = ScheduleEvent
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+
+        if not request.user.is_superuser:
+            scope = _get_effective_schedule_scope(request.user, 'schedule.delete')
+            if scope is None:
+                return self.handle_no_permission()
+            from apps.accounts.rbac_models import DataScope
+            identity = _resolve_user_canonical_identity(request.user)
+            if scope == DataScope.BRANCH and not identity['canonical_branch']:
+                return self.handle_no_permission()
+            if scope == DataScope.DEPARTMENT and not identity['canonical_dept_name']:
+                return self.handle_no_permission()
+            if scope == DataScope.OWN and not identity['profile']:
+                return self.handle_no_permission()
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return get_scoped_event_queryset_for_schedule(
+            self.request.user,
+            permission_code='schedule.delete'
+        )
 
     def delete(self, request, *args, **kwargs):
         # Optimistic concurrency check for delete
