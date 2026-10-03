@@ -1076,6 +1076,62 @@ def get_scoped_event_queryset_for_schedule(user, permission_code):
     return ScheduleEvent.objects.none()
 
 
+def _notify_assigned_employees(event, employee_iterable):
+    from django.db import transaction
+
+    notifications = []
+    email_payloads = []
+    seen_user_ids = set()
+    seen_emails = set()
+
+    event_title = str(event.title)
+    event_date_str = event.date.strftime('%d/%m/%Y')
+    event_desc = str(event.description or 'No description')
+
+    for employee in employee_iterable:
+        user = getattr(employee, 'user', None)
+        if not user:
+            continue
+
+        if user.pk not in seen_user_ids:
+            seen_user_ids.add(user.pk)
+            notifications.append(
+                Notification(
+                    recipient=user,
+                    employee=employee,
+                    title=f"New Event: {event_title}"[:200],
+                    message=f"You have been assigned to event '{event_title}' scheduled on {event_date_str}.",
+                    notif_type='field_visit'
+                )
+            )
+
+        recipient_email = (user.email or '').strip()
+        if recipient_email and recipient_email not in seen_emails:
+            seen_emails.add(recipient_email)
+            emp_name = str(getattr(employee, 'full_name', '') or 'Employee')
+            subject = f"Assigned to Event: {event_title}"
+            body = (
+                f"Hello {emp_name},\n\n"
+                f"You have been assigned to the following event:\n"
+                f"Title: {event_title}\n"
+                f"Date: {event_date_str}\n"
+                f"Description: {event_desc}\n\n"
+                f"Regards,\nFieldTrack System"
+            )
+            email_payloads.append((recipient_email, subject, body))
+
+    if notifications:
+        Notification.objects.bulk_create(notifications)
+
+    if email_payloads:
+        payloads_tuple = tuple(email_payloads)
+
+        def _dispatch_assignment_emails(payloads=payloads_tuple):
+            for email_addr, subj, msg in payloads:
+                send_email_notification(email_addr, subj, msg)
+
+        transaction.on_commit(_dispatch_assignment_emails)
+
 
 class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
     required_permission = 'schedule.add'
@@ -1126,36 +1182,8 @@ class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
             response = super().form_valid(form)
 
             # Notify assigned employees
-            event = self.object
-            email_payloads = []
-            for employee in event.assigned_to.all():
-                if employee.user:
-                    # DB Notification
-                    Notification.objects.create(
-                        recipient=employee.user,
-                        employee=employee,
-                        title=f"New Event: {event.title}",
-                        message=f"You have been assigned to event '{event.title}' scheduled on {event.date.strftime('%d/%m/%Y')}.",
-                        notif_type='field_visit'
-                    )
-                    # Email Notification (transaction safe dispatch)
-                    subject = f"Assigned to Event: {event.title}"
-                    message = (
-                        f"Hello {employee.full_name},\n\n"
-                        f"You have been assigned to the following event:\n"
-                        f"Title: {event.title}\n"
-                        f"Date: {event.date.strftime('%d/%m/%Y')}\n"
-                        f"Description: {event.description or 'No description'}\n\n"
-                        f"Regards,\nFieldTrack System"
-                    )
-                    email_payloads.append((employee.user, subject, message))
-
-            if email_payloads:
-                def _dispatch_assignment_emails():
-                    for user, subject, message in email_payloads:
-                        send_email_notification(user, subject, message)
-
-                transaction.on_commit(_dispatch_assignment_emails)
+            employees = self.object.assigned_to.select_related('user').all()
+            _notify_assigned_employees(self.object, employees)
 
             return response
 
@@ -1246,10 +1274,23 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
                     )
                     return self.form_invalid(form)
 
+                original_assignee_ids = set(
+                    locked_event.assigned_to.values_list('id', flat=True)
+                )
+
                 from django.forms.models import construct_instance
                 construct_instance(form, locked_event, form._meta.fields, form._meta.exclude)
                 form.instance = locked_event
                 response = super().form_valid(form)
+
+                new_assignees_qs = self.object.assigned_to.all()
+                if original_assignee_ids:
+                    new_assignees_qs = new_assignees_qs.exclude(id__in=original_assignee_ids)
+                new_assignees = list(new_assignees_qs.select_related('user'))
+
+                if new_assignees:
+                    _notify_assigned_employees(self.object, new_assignees)
+
                 return response
         except ValidationError as e:
             form.add_error(None, e)
