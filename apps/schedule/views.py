@@ -961,7 +961,10 @@ def get_scoped_project_queryset_for_schedule(user, scope, identity=None):
 
 def get_scoped_event_queryset_for_schedule(user, permission_code):
     from apps.accounts.rbac_models import DataScope
+    from apps.employees.models import EmployeeProfile
+    from apps.projects.models import Project
     from .models import ScheduleEvent
+    from django.db.models import Exists, OuterRef, Q
 
     if not user or not user.is_authenticated:
         return ScheduleEvent.objects.none()
@@ -977,49 +980,101 @@ def get_scoped_event_queryset_for_schedule(user, permission_code):
         return ScheduleEvent.objects.all()
 
     identity = _resolve_user_canonical_identity(user)
+    profile = identity['profile']
     canonical_branch = identity['canonical_branch']
     canonical_dept_name = identity['canonical_dept_name']
 
     events_base = ScheduleEvent.objects.all()
+    has_assignees = Exists(ScheduleEvent.assigned_to.through.objects.filter(scheduleevent_id=OuterRef('pk')))
 
     if scope == DataScope.BRANCH:
         if not canonical_branch:
             return ScheduleEvent.objects.none()
-        branch_events_q = Q(project__branch=canonical_branch) | (
-            Q(project__isnull=True) & (
-                Q(assigned_to__branch=canonical_branch) |
-                Q(assigned_to__master_employee__branch=canonical_branch) |
-                Q(created_by__employee_profile__branch=canonical_branch) |
-                Q(created_by__employee_master__branch=canonical_branch)
-            )
+
+        # 1. Project containment: if project exists, it must belong to user's branch
+        events_base = events_base.filter(Q(project__isnull=True) | Q(project__branch=canonical_branch))
+
+        # 2. Assignee full-containment: every assigned employee must belong to user's branch
+        out_of_branch_emps = EmployeeProfile.objects.exclude(
+            Q(branch=canonical_branch) | Q(master_employee__branch=canonical_branch)
         )
-        return events_base.filter(branch_events_q).distinct()
+        events_base = events_base.exclude(assigned_to__in=out_of_branch_emps)
+
+        # 3. Creator fallback: for event without project or assignees, creator must be in user's branch
+        creator_in_branch = (
+            Q(created_by__employee_profile__branch=canonical_branch) |
+            Q(created_by__employee_master__branch=canonical_branch)
+        )
+        events_base = events_base.exclude(Q(project__isnull=True) & ~has_assignees & ~creator_in_branch)
+
+        return events_base.distinct()
 
     if scope == DataScope.DEPARTMENT:
         if not canonical_dept_name:
             return ScheduleEvent.objects.none()
-        dept_events_q = (
-            Q(assigned_to__department=canonical_dept_name) |
-            Q(assigned_to__master_employee__department__name=canonical_dept_name) |
+
+        # 1. Project containment: if project exists, it must belong to department
+        dept_projs = get_scoped_project_queryset_for_schedule(user, DataScope.DEPARTMENT, identity)
+        events_base = events_base.filter(Q(project__isnull=True) | Q(project__in=dept_projs))
+
+        # 2. Assignee full-containment: every assigned employee must belong to user's department
+        out_of_dept_emps = EmployeeProfile.objects.exclude(
+            Q(department=canonical_dept_name) | Q(master_employee__department__name=canonical_dept_name)
+        )
+        events_base = events_base.exclude(assigned_to__in=out_of_dept_emps)
+
+        # 3. Creator fallback: for event without project or assignees, creator must be in user's department
+        creator_in_dept = (
             Q(created_by__employee_profile__department=canonical_dept_name) |
             Q(created_by__employee_master__department__name=canonical_dept_name)
         )
-        return events_base.filter(dept_events_q).distinct()
+        events_base = events_base.exclude(Q(project__isnull=True) & ~has_assignees & ~creator_in_dept)
+
+        return events_base.distinct()
 
     if scope == DataScope.TEAM:
         team_emps, team_projs = _get_team_context_for_user(user, identity)
-        team_events_q = (
-            Q(assigned_to__in=team_emps) |
-            Q(project__in=team_projs) |
-            Q(created_by=user)
-        )
-        return events_base.filter(team_events_q).distinct()
+        if not team_emps.exists() and not team_projs.exists() and not profile:
+            return ScheduleEvent.objects.none()
+
+        # 1. Project containment: if project exists, it must be in user's team projects
+        events_base = events_base.filter(Q(project__isnull=True) | Q(project__in=team_projs))
+
+        # 2. Assignee full-containment: every assigned employee must be in user's team
+        out_of_team_emps = EmployeeProfile.objects.exclude(pk__in=team_emps.values('pk'))
+        events_base = events_base.exclude(assigned_to__in=out_of_team_emps)
+
+        # 3. Creator fallback: for event without project or assignees, creator must be in user's team
+        creator_in_team = Q(created_by=user) | Q(created_by__employee_profile__in=team_emps)
+        events_base = events_base.exclude(Q(project__isnull=True) & ~has_assignees & ~creator_in_team)
+
+        return events_base.distinct()
 
     if scope == DataScope.OWN:
-        own_events_q = Q(created_by=user)
-        return events_base.filter(own_events_q).distinct()
+        if not profile:
+            return ScheduleEvent.objects.none()
+
+        # 1. Project containment: if project exists, user must be manager/member/creator
+        own_projs_q = (
+            Q(created_by=user) |
+            Q(project_managers=profile) |
+            Q(site_engineers=profile) |
+            Q(project_members=profile)
+        )
+        events_base = events_base.filter(Q(project__isnull=True) | Q(project__in=Project.objects.filter(own_projs_q)))
+
+        # 2. Assignee full-containment: every assigned employee must be the user's profile
+        out_of_own_emps = EmployeeProfile.objects.exclude(pk=profile.pk)
+        events_base = events_base.exclude(assigned_to__in=out_of_own_emps)
+
+        # 3. Creator fallback: for event without project or assignees, creator must be the user
+        creator_is_user = Q(created_by=user)
+        events_base = events_base.exclude(Q(project__isnull=True) & ~has_assignees & ~creator_is_user)
+
+        return events_base.distinct()
 
     return ScheduleEvent.objects.none()
+
 
 
 class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
