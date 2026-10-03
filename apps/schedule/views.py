@@ -1193,21 +1193,54 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
         kwargs['scope_permission'] = 'schedule.edit'
         return kwargs
 
+    def post(self, request, *args, **kwargs):
+        raw_version = request.POST.get('version')
+        try:
+            if raw_version is None or raw_version == '':
+                raise ValueError("Missing version")
+            int(raw_version)
+        except (ValueError, TypeError):
+            self.object = self.get_object()
+            form = self.get_form()
+            form.add_error(None, "A valid event version is required.")
+            return self.form_invalid(form)
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         from django.db import transaction
         from django.core.exceptions import ValidationError
-        
-        # Concurrency/retry implementation S6:
-        original_version = self.get_object().version
-        form_version = self.request.POST.get('version')
-        
-        if form_version and int(form_version) != original_version:
-            form.add_error(None, "The event was modified by another user concurrently. Please reload and try again.")
+        from django.http import Http404
+
+        raw_version = self.request.POST.get('version')
+        try:
+            if raw_version is None or raw_version == '':
+                raise ValueError("Missing version")
+            submitted_version = int(raw_version)
+        except (ValueError, TypeError):
+            form.add_error(None, "A valid event version is required.")
             return self.form_invalid(form)
 
         try:
             with transaction.atomic():
-                # Perform version verification and update
+                locked_event = (
+                    self.get_queryset()
+                    .select_for_update()
+                    .filter(pk=self.kwargs['pk'])
+                    .first()
+                )
+                if not locked_event:
+                    raise Http404("Event not found or unauthorized.")
+
+                if submitted_version != locked_event.version:
+                    form.add_error(
+                        None,
+                        "The event was modified by another user concurrently. Please reload and try again."
+                    )
+                    return self.form_invalid(form)
+
+                from django.forms.models import construct_instance
+                construct_instance(form, locked_event, form._meta.fields, form._meta.exclude)
+                form.instance = locked_event
                 response = super().form_valid(form)
                 return response
         except ValidationError as e:
@@ -1215,7 +1248,9 @@ class ScheduleEventUpdateView(RoleRequiredMixin, UpdateView):
             return self.form_invalid(form)
 
     def get_success_url(self):
-        return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
+        if getattr(self, 'object', None) and getattr(self.object, 'date', None):
+            return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
+        return reverse('schedule:month_view')
 
 
 class ScheduleEventDeleteView(RoleRequiredMixin, DeleteView):
@@ -1248,16 +1283,47 @@ class ScheduleEventDeleteView(RoleRequiredMixin, DeleteView):
             permission_code='schedule.delete'
         )
 
+    def post(self, request, *args, **kwargs):
+        return self.delete(request, *args, **kwargs)
+
     def delete(self, request, *args, **kwargs):
-        # Optimistic concurrency check for delete
-        self.object = self.get_object()
-        form_version = request.POST.get('version')
-        if form_version and int(form_version) != self.object.version:
-            from django.contrib import messages
-            messages.error(request, "The event was modified by another user concurrently. Delete cancelled.")
+        from django.db import transaction
+        from django.contrib import messages
+        from django.http import Http404
+
+        raw_version = request.POST.get('version')
+        try:
+            if raw_version is None or raw_version == '':
+                raise ValueError("Missing version")
+            submitted_version = int(raw_version)
+        except (ValueError, TypeError):
+            messages.error(request, "A valid event version is required to delete.")
             return redirect(self.get_success_url())
-        return super().delete(request, *args, **kwargs)
+
+        with transaction.atomic():
+            locked_event = (
+                self.get_queryset()
+                .select_for_update()
+                .filter(pk=self.kwargs['pk'])
+                .first()
+            )
+            if not locked_event:
+                raise Http404("Event not found or unauthorized.")
+
+            if submitted_version != locked_event.version:
+                messages.error(
+                    request,
+                    "The event was modified by another user concurrently. Delete cancelled."
+                )
+                self.object = locked_event
+                return redirect(self.get_success_url())
+
+            self.object = locked_event
+            success_url = self.get_success_url()
+            locked_event.delete()
+            return redirect(success_url)
 
     def get_success_url(self):
-        return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
-
+        if getattr(self, 'object', None) and getattr(self.object, 'date', None):
+            return f"{reverse('schedule:month_view')}?year={self.object.date.year}&month={self.object.date.month}"
+        return reverse('schedule:month_view')
