@@ -91,6 +91,52 @@ class NotificationViewPermissionsTest(TestCase):
         self.notif.refresh_from_db()
         self.assertTrue(self.notif.is_read)
 
+    def test_staff_user_can_view_schedule_alerts_and_unread_count(self):
+        # Create schedule alert (field_visit) and an admin-only alert (check_in)
+        schedule_notif = Notification.objects.create(
+            recipient=self.staff_user,
+            title='Reminder: Safety Drill',
+            message='Safety drill starts at 10:00 today.',
+            notif_type='field_visit'
+        )
+        admin_only_notif = Notification.objects.create(
+            recipient=self.staff_user,
+            title='Admin Only Check-in Alert',
+            message='Should not be exposed to staff.',
+            notif_type='check_in'
+        )
+
+        self.client.login(email='staff@example.com', password='password123')
+
+        # 1. Unread count includes task_assigned and field_visit, but excludes check_in
+        res_count = self.client.get(reverse('notifications:count'))
+        self.assertEqual(res_count.status_code, 200)
+        self.assertContains(res_count, '2')
+
+        # 2. Main notification list exposes schedule alerts, tabs, and calendar redirect
+        res_list = self.client.get(reverse('notifications:list'))
+        self.assertEqual(res_list.status_code, 200)
+        content = res_list.content.decode()
+        self.assertIn('Reminder: Safety Drill', content)
+        self.assertIn('Schedule Alerts', content)
+        self.assertIn(reverse('schedule:month_view'), content)
+        self.assertNotIn('Admin Only Check-in Alert', content)
+
+        # 3. Filter by type=field_visit returns the schedule alert
+        res_filter = self.client.get(reverse('notifications:list') + '?type=field_visit')
+        self.assertEqual(res_filter.status_code, 200)
+        self.assertContains(res_filter, 'Reminder: Safety Drill')
+        self.assertNotContains(res_filter, 'Staff Notif')
+
+        # 4. Meta-style drawer partial also renders schedule alert and redirect
+        res_partial = self.client.get(reverse('notifications:list') + '?partial=true')
+        self.assertEqual(res_partial.status_code, 200)
+        partial_content = res_partial.content.decode()
+        self.assertIn('Reminder: Safety Drill', partial_content)
+        self.assertIn('Schedule Alert', partial_content)
+        self.assertIn(reverse('schedule:month_view'), partial_content)
+        self.assertNotIn('Admin Only Check-in Alert', partial_content)
+
 
 class ActivityTimelineViewsTest(TestCase):
     def setUp(self):
@@ -101,7 +147,8 @@ class ActivityTimelineViewsTest(TestCase):
             full_name='Manager One',
             phone='1112223334',
             employee_id='EMP_MGR_01',
-            joined_date=date.today()
+            joined_date=date.today(),
+            is_project_manager=True
         )
         self.staff_user = User.objects.create_user(email='staff1@example.com', password='password123', role='staff')
         self.staff_emp = EmployeeProfile.objects.create(

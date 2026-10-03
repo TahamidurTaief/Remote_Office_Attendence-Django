@@ -29,7 +29,7 @@ def notification_list(request):
 
     is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed
     if not is_admin:
-        allowed_types = ['task_assigned', 'task_completed', 'task_delayed']
+        allowed_types = ['task_assigned', 'task_completed', 'task_delayed', 'field_visit']
         notifs = notifs.filter(notif_type__in=allowed_types)
         unread_count = Notification.objects.filter(
             recipient=request.user, is_read=False, notif_type__in=allowed_types
@@ -37,6 +37,7 @@ def notification_list(request):
         filter_tabs = [
             ('all', 'All'),
             ('unread', 'Unread'),
+            ('field_visit', 'Schedule Alerts'),
             ('task_assigned', 'Task Assigned'),
             ('task_completed', 'Task Completed'),
             ('task_delayed', 'Task Delayed'),
@@ -84,6 +85,7 @@ def notification_list(request):
             'filter_type': filter_type,
             'unread_count': unread_count,
             'filter_tabs': filter_tabs,
+            'is_admin': is_admin,
         })
 
     base_template = 'base/admin_base.html' if is_admin else 'base/staff_base.html'
@@ -95,6 +97,7 @@ def notification_list(request):
         'unread_count': unread_count,
         'base_template': base_template,
         'filter_tabs': filter_tabs,
+        'is_admin': is_admin,
     })
 
 
@@ -107,7 +110,7 @@ def notification_count(request):
     is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed
     if not is_admin:
         count_query = count_query.filter(
-            notif_type__in=['task_assigned', 'task_completed', 'task_delayed']
+            notif_type__in=['task_assigned', 'task_completed', 'task_delayed', 'field_visit']
         )
     count = count_query.count()
     badge = str(count) if count else ''

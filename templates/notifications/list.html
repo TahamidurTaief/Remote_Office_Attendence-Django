@@ -38,6 +38,8 @@
             {% else %}
                 {% if notif.notif_type == 'task_assigned' or notif.notif_type == 'task_completed' or notif.notif_type == 'task_delayed' %}
                     {% url 'staff:my_tasks' as item_redirect_url %}
+                {% elif notif.notif_type == 'field_visit' %}
+                    {% url 'schedule:month_view' as item_redirect_url %}
                 {% else %}
                     {% url 'notifications:list' as item_redirect_url %}
                 {% endif %}
