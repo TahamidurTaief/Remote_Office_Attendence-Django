@@ -1101,7 +1101,7 @@ def _notify_assigned_employees(event, employee_iterable):
                     employee=employee,
                     title=f"New Event: {event_title}"[:200],
                     message=f"You have been assigned to event '{event_title}' scheduled on {event_date_str}.",
-                    notif_type='field_visit'
+                    notif_type='schedule_alert'
                 )
             )
 

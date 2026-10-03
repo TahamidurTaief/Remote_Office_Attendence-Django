@@ -98,6 +98,15 @@ class ScheduleCalendarTests(TestCase):
             longitude=90.4125,
             radius_meters=100
         )
+        self.manager_profile = EmployeeProfile.objects.create(
+            user=self.user,
+            branch=self.branch,
+            employee_id='EMP-MGR-001',
+            full_name='Test Manager',
+            phone='+8801700000000',
+            joined_date=date(2026, 1, 1),
+            is_active=True
+        )
         self.employee_user = User.objects.create_user(
             email='employee@test.com',
             password=self.password,
@@ -251,7 +260,7 @@ class ScheduleCalendarTests(TestCase):
         notifs = Notification.objects.filter(recipient=self.employee_user)
         self.assertEqual(notifs.count(), 1)
         self.assertEqual(notifs.first().title, 'New Event: Safety Drill')
-        self.assertEqual(notifs.first().notif_type, 'field_visit')
+        self.assertEqual(notifs.first().notif_type, 'schedule_alert')
 
     def test_staff_role_scoping(self):
         # Create an event assigned to the staff user

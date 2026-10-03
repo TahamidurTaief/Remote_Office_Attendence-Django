@@ -7,6 +7,7 @@ class Notification(models.Model):
         ('check_in', 'Check In'),
         ('check_out', 'Check Out'),
         ('field_visit', 'Field Visit'),
+        ('schedule_alert', 'Schedule Alert'),
         ('late', 'Late Alert'),
         ('missing', 'Missing Employee'),
         ('document_expiry', 'Document Expiry'),
