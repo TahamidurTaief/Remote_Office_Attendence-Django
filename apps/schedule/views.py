@@ -88,13 +88,6 @@ class CalendarMonthView(RoleRequiredMixin, View):
                 canonical_branch = master_emp.branch
             elif profile and getattr(profile, 'branch', None):
                 canonical_branch = profile.branch
-            elif not canonical_branch:
-                from apps.branches.models import Branch
-                canonical_branch = Branch.objects.filter(
-                    Q(projects__created_by=request.user) |
-                    Q(projects__project_managers__user=request.user) |
-                    Q(projects__progress_logs__logged_by=request.user)
-                ).first()
 
             if profile and getattr(profile, 'canonical_department', None):
                 canonical_dept_name = profile.canonical_department
@@ -191,25 +184,23 @@ class CalendarMonthView(RoleRequiredMixin, View):
                         Q(assigned_to__branch=canonical_branch) |
                         Q(assigned_to__master_employee__branch=canonical_branch) |
                         Q(created_by__employee_profile__branch=canonical_branch) |
-                        Q(created_by__employee_master__branch=canonical_branch) |
-                        Q(created_by=request.user)
+                        Q(created_by__employee_master__branch=canonical_branch)
                     )
                 )
                 events_qs = events_base.filter(branch_events_q).distinct()
             else:
-                events_qs = events_base.filter(created_by=request.user).distinct()
+                events_qs = ScheduleEvent.objects.none()
         elif scope == DataScope.DEPARTMENT:
             if canonical_dept_name:
                 dept_events_q = (
                     Q(assigned_to__department=canonical_dept_name) |
                     Q(assigned_to__master_employee__department__name=canonical_dept_name) |
                     Q(created_by__employee_profile__department=canonical_dept_name) |
-                    Q(created_by__employee_master__department__name=canonical_dept_name) |
-                    Q(created_by=request.user)
+                    Q(created_by__employee_master__department__name=canonical_dept_name)
                 )
                 events_qs = events_base.filter(dept_events_q).distinct()
             else:
-                events_qs = events_base.filter(created_by=request.user).distinct()
+                events_qs = ScheduleEvent.objects.none()
         elif scope == DataScope.TEAM:
             team_emps, team_projs = _get_team_context()
             team_events_q = (
