@@ -1127,6 +1127,7 @@ class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
 
             # Notify assigned employees
             event = self.object
+            email_payloads = []
             for employee in event.assigned_to.all():
                 if employee.user:
                     # DB Notification
@@ -1137,7 +1138,7 @@ class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
                         message=f"You have been assigned to event '{event.title}' scheduled on {event.date.strftime('%d/%m/%Y')}.",
                         notif_type='field_visit'
                     )
-                    # Email Notification
+                    # Email Notification (transaction safe dispatch)
                     subject = f"Assigned to Event: {event.title}"
                     message = (
                         f"Hello {employee.full_name},\n\n"
@@ -1147,7 +1148,14 @@ class ScheduleEventCreateView(RoleRequiredMixin, CreateView):
                         f"Description: {event.description or 'No description'}\n\n"
                         f"Regards,\nFieldTrack System"
                     )
-                    send_email_notification(employee.user, subject, message)
+                    email_payloads.append((employee.user, subject, message))
+
+            if email_payloads:
+                def _dispatch_assignment_emails():
+                    for user, subject, message in email_payloads:
+                        send_email_notification(user, subject, message)
+
+                transaction.on_commit(_dispatch_assignment_emails)
 
             return response
 
