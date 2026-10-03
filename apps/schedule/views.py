@@ -53,79 +53,354 @@ class CalendarMonthView(RoleRequiredMixin, View):
         start_date = weeks[0][0]
         end_date = weeks[-1][-1]
 
-        # Get employee profile and branch for scoping
-        profile = None
-        user_branch = None
-        if request.user.is_authenticated:
-            master_emp = getattr(request.user, 'employee_master', None)
-            if master_emp:
-                profile = getattr(master_emp, 'legacy_profile', None)
-                user_branch = getattr(master_emp, 'branch', None)
-            if not profile:
-                profile = getattr(request.user, 'employee_profile', None)
-            if not user_branch and profile:
-                user_branch = getattr(profile, 'branch', None)
-
+        # Canonical identity resolution
         from apps.accounts.engine import PermissionEngine
-        res = PermissionEngine.evaluate(request.user, 'schedule.manage')
-        is_admin_or_manager = request.user.is_superuser or res.allowed
         from apps.accounts.rbac_models import DataScope
-        is_admin = request.user.is_superuser or (PermissionEngine.evaluate(request.user, 'schedule.edit').allowed and PermissionEngine.get_effective_scope(request.user, 'schedule.edit') == DataScope.GLOBAL)
 
-        # Role-based scoping:
-        # Admin / System Owner: global access across all active branches.
-        # Managers: manage schedule events and tasks, but MUST only access holidays and schedules of their assigned branch.
-        # Staff / Employees: strictly scoped to their own assignments, tasks, leaves, and branch holidays.
-        is_staff_or_employee = not is_admin_or_manager
+        profile = None
+        master_emp = None
+        canonical_branch = None
+        canonical_dept_name = None
 
-        # 1. Holidays (Government Holiday where branch=None; Office Holiday where branch matches user's branch)
-        # Both managers and employees must only see their assigned branch office holidays.
-        holidays_qs = Holiday.objects.filter(date__range=(start_date, end_date))
-        if not is_admin:
-            if user_branch:
-                holidays_qs = holidays_qs.filter(Q(branch__isnull=True) | Q(branch=user_branch))
+        if request.user.is_authenticated:
+            if hasattr(request.user, 'employee_profile') and request.user.employee_profile:
+                profile = request.user.employee_profile
+            master_emp = getattr(request.user, 'employee_master', None)
+            if not profile and master_emp and hasattr(master_emp, 'legacy_profile') and master_emp.legacy_profile:
+                profile = master_emp.legacy_profile
+            if not profile:
+                from apps.employees.hr_resolver import get_canonical_employee
+                canonical_emp = get_canonical_employee(request.user)
+                if canonical_emp:
+                    if hasattr(canonical_emp, 'employee_profile'):
+                        profile = canonical_emp.employee_profile
+                    elif hasattr(canonical_emp, 'legacy_profile') and canonical_emp.legacy_profile:
+                        profile = canonical_emp.legacy_profile
+                    from apps.employees.models import EmployeeProfile
+                    if isinstance(canonical_emp, EmployeeProfile):
+                        profile = canonical_emp
+            if not master_emp and profile and getattr(profile, 'master_employee', None):
+                master_emp = profile.master_employee
+
+            if profile and getattr(profile, 'canonical_branch', None):
+                canonical_branch = profile.canonical_branch
+            elif master_emp and getattr(master_emp, 'branch', None):
+                canonical_branch = master_emp.branch
+            elif profile and getattr(profile, 'branch', None):
+                canonical_branch = profile.branch
+            elif not canonical_branch:
+                from apps.branches.models import Branch
+                canonical_branch = Branch.objects.filter(
+                    Q(projects__created_by=request.user) |
+                    Q(projects__project_managers__user=request.user) |
+                    Q(projects__progress_logs__logged_by=request.user)
+                ).first()
+
+            if profile and getattr(profile, 'canonical_department', None):
+                canonical_dept_name = profile.canonical_department
+            elif master_emp and getattr(master_emp, 'department', None):
+                canonical_dept_name = master_emp.department.name
+
+        user_branch = canonical_branch
+
+        # Determine effective scope of schedule.view
+        scope = None
+        if request.user.is_authenticated:
+            if request.user.is_superuser:
+                scope = DataScope.GLOBAL
             else:
-                holidays_qs = holidays_qs.filter(branch__isnull=True)
-        holidays = holidays_qs.select_related('branch')
+                eval_view = PermissionEngine.evaluate(request.user, 'schedule.view', action_type='view')
+                if eval_view.allowed:
+                    scope = eval_view.data_scope
+
+        is_global = request.user.is_superuser or scope in (DataScope.GLOBAL, DataScope.COMPANY)
+
+        # UI actions (manage/edit) never widen data scoping
+        res_manage = PermissionEngine.evaluate(request.user, 'schedule.manage')
+        is_admin_or_manager = request.user.is_superuser or res_manage.allowed
+        is_admin = request.user.is_superuser or (
+            PermissionEngine.evaluate(request.user, 'schedule.edit').allowed and
+            PermissionEngine.get_effective_scope(request.user, 'schedule.edit') == DataScope.GLOBAL
+        )
+
+        def _get_team_context():
+            from apps.employees.models import EmployeeProfile
+            from apps.projects.models import Project
+            if not request.user.is_authenticated:
+                return EmployeeProfile.objects.none(), Project.objects.none()
+
+            managed_projs = Project.objects.filter(
+                Q(project_managers=profile) | Q(created_by=request.user)
+            ) if profile else Project.objects.filter(created_by=request.user)
+
+            team_q = (
+                Q(master_employee__reporting_manager__user=request.user) |
+                Q(site_engineer_projects__in=managed_projs) |
+                Q(assigned_tasks__project__in=managed_projs)
+            )
+            if profile:
+                team_q |= Q(pk=profile.pk)
+
+            resolved_m = master_emp or (getattr(profile, 'master_employee', None) if profile else None)
+            if resolved_m:
+                team_q |= Q(master_employee__reporting_manager=resolved_m)
+                try:
+                    from apps.employees.hierarchy_services import OrgHierarchyService
+                    sub_ids = list(OrgHierarchyService.get_all_subordinates(resolved_m).values_list('id', flat=True))
+                    if sub_ids:
+                        team_q |= Q(master_employee_id__in=sub_ids)
+                except Exception:
+                    pass
+
+            team_emps = EmployeeProfile.objects.filter(team_q).distinct()
+            q_proj = Q(created_by=request.user)
+            if profile:
+                q_proj |= (
+                    Q(project_managers=profile) |
+                    Q(site_engineers=profile) |
+                    Q(project_members=profile)
+                )
+            team_projs = Project.objects.filter(q_proj).distinct()
+            return team_emps, team_projs
+
+        # 1. Holidays
+        holidays_base = Holiday.objects.filter(date__range=(start_date, end_date))
+        if is_global:
+            holidays_qs = holidays_base
+        elif scope == DataScope.BRANCH:
+            if canonical_branch:
+                holidays_qs = holidays_base.filter(Q(branch__isnull=True) | Q(branch=canonical_branch))
+            else:
+                holidays_qs = holidays_base.filter(branch__isnull=True)
+        elif scope in (DataScope.DEPARTMENT, DataScope.TEAM, DataScope.OWN):
+            if canonical_branch:
+                holidays_qs = holidays_base.filter(Q(branch__isnull=True) | Q(branch=canonical_branch))
+            else:
+                holidays_qs = holidays_base.filter(branch__isnull=True)
+        else:
+            holidays_qs = Holiday.objects.none()
 
         # 2. Manual Schedule Events
-        events_qs = ScheduleEvent.objects.filter(date__range=(start_date, end_date))
-        if is_staff_or_employee:
-            if profile:
-                events_qs = events_qs.filter(assigned_to=profile)
+        events_base = ScheduleEvent.objects.filter(date__range=(start_date, end_date))
+        if is_global:
+            events_qs = events_base
+        elif scope == DataScope.BRANCH:
+            if canonical_branch:
+                branch_events_q = Q(project__branch=canonical_branch) | (
+                    Q(project__isnull=True) & (
+                        Q(assigned_to__branch=canonical_branch) |
+                        Q(assigned_to__master_employee__branch=canonical_branch) |
+                        Q(created_by__employee_profile__branch=canonical_branch) |
+                        Q(created_by__employee_master__branch=canonical_branch) |
+                        Q(created_by=request.user)
+                    )
+                )
+                events_qs = events_base.filter(branch_events_q).distinct()
             else:
-                events_qs = events_qs.none()
-        events = events_qs.prefetch_related('assigned_to', 'assigned_to__user', 'project')
+                events_qs = events_base.filter(created_by=request.user).distinct()
+        elif scope == DataScope.DEPARTMENT:
+            if canonical_dept_name:
+                dept_events_q = (
+                    Q(assigned_to__department=canonical_dept_name) |
+                    Q(assigned_to__master_employee__department__name=canonical_dept_name) |
+                    Q(created_by__employee_profile__department=canonical_dept_name) |
+                    Q(created_by__employee_master__department__name=canonical_dept_name) |
+                    Q(created_by=request.user)
+                )
+                events_qs = events_base.filter(dept_events_q).distinct()
+            else:
+                events_qs = events_base.filter(created_by=request.user).distinct()
+        elif scope == DataScope.TEAM:
+            team_emps, team_projs = _get_team_context()
+            team_events_q = (
+                Q(assigned_to__in=team_emps) |
+                Q(project__in=team_projs) |
+                Q(created_by=request.user)
+            )
+            events_qs = events_base.filter(team_events_q).distinct()
+        elif scope == DataScope.OWN:
+            own_events_q = Q(created_by=request.user)
+            if profile:
+                own_events_q |= Q(assigned_to=profile)
+            events_qs = events_base.filter(own_events_q).distinct()
+        else:
+            events_qs = ScheduleEvent.objects.none()
 
         # 3. Project Tasks
-        tasks_qs = ProjectTask.objects.filter(
+        tasks_base = ProjectTask.objects.filter(
             Q(planned_start__range=(start_date, end_date)) |
             Q(planned_finish__range=(start_date, end_date))
         )
-        if is_staff_or_employee:
-            if profile:
-                tasks_qs = tasks_qs.filter(responsible_person=profile)
+        if is_global:
+            tasks_qs = tasks_base
+        elif scope == DataScope.BRANCH:
+            if canonical_branch:
+                branch_tasks_q = Q(project__branch=canonical_branch) | (
+                    Q(project__isnull=True) & (
+                        Q(responsible_person__branch=canonical_branch) |
+                        Q(responsible_person__master_employee__branch=canonical_branch)
+                    )
+                )
+                tasks_qs = tasks_base.filter(branch_tasks_q).distinct()
             else:
-                tasks_qs = tasks_qs.none()
-        tasks = tasks_qs.select_related('project', 'responsible_person')
+                tasks_qs = ProjectTask.objects.none()
+        elif scope == DataScope.DEPARTMENT:
+            if canonical_dept_name:
+                dept_tasks_q = (
+                    Q(responsible_person__department=canonical_dept_name) |
+                    Q(responsible_person__master_employee__department__name=canonical_dept_name)
+                )
+                tasks_qs = tasks_base.filter(dept_tasks_q).distinct()
+            else:
+                tasks_qs = ProjectTask.objects.none()
+        elif scope == DataScope.TEAM:
+            team_emps, team_projs = _get_team_context()
+            team_tasks_q = (
+                Q(responsible_person__in=team_emps) |
+                Q(project__in=team_projs)
+            )
+            tasks_qs = tasks_base.filter(team_tasks_q).distinct()
+        elif scope == DataScope.OWN:
+            if profile:
+                tasks_qs = tasks_base.filter(responsible_person=profile)
+            else:
+                tasks_qs = ProjectTask.objects.none()
+        else:
+            tasks_qs = ProjectTask.objects.none()
 
         # 4. Approved Leaves
-        leaves_qs = LeaveRequest.objects.filter(
+        leaves_base = LeaveRequest.objects.filter(
             status='approved',
             start_date__lte=end_date,
             end_date__gte=start_date
         )
-        if is_staff_or_employee:
-            if profile:
-                leaves_qs = leaves_qs.filter(employee=profile)
+        if is_global:
+            leaves_qs = leaves_base
+        elif scope == DataScope.BRANCH:
+            if canonical_branch:
+                branch_leaves_q = (
+                    Q(employee__branch=canonical_branch) |
+                    Q(employee__master_employee__branch=canonical_branch)
+                )
+                leaves_qs = leaves_base.filter(branch_leaves_q).distinct()
             else:
-                leaves_qs = leaves_qs.none()
-        leaves = leaves_qs.select_related('employee', 'employee__user', 'leave_type')
+                leaves_qs = LeaveRequest.objects.none()
+        elif scope == DataScope.DEPARTMENT:
+            if canonical_dept_name:
+                dept_leaves_q = (
+                    Q(employee__department=canonical_dept_name) |
+                    Q(employee__master_employee__department__name=canonical_dept_name)
+                )
+                leaves_qs = leaves_base.filter(dept_leaves_q).distinct()
+            else:
+                leaves_qs = LeaveRequest.objects.none()
+        elif scope == DataScope.TEAM:
+            team_emps, _ = _get_team_context()
+            leaves_qs = leaves_base.filter(employee__in=team_emps).distinct()
+        elif scope == DataScope.OWN:
+            if profile:
+                leaves_qs = leaves_base.filter(employee=profile)
+            else:
+                leaves_qs = LeaveRequest.objects.none()
+        else:
+            leaves_qs = LeaveRequest.objects.none()
 
         # 5. Daily Progress Logs
-        logs_qs = DailyProgressLog.objects.filter(date__range=(start_date, end_date))
-        if is_staff_or_employee:
-            logs_qs = logs_qs.filter(logged_by=request.user)
+        logs_base = DailyProgressLog.objects.filter(date__range=(start_date, end_date))
+        if is_global:
+            logs_qs = logs_base
+        elif scope == DataScope.BRANCH:
+            if canonical_branch:
+                branch_logs_q = Q(project__branch=canonical_branch) | (
+                    Q(project__isnull=True) & (
+                        Q(logged_by__employee_profile__branch=canonical_branch) |
+                        Q(logged_by__employee_master__branch=canonical_branch)
+                    )
+                )
+                logs_qs = logs_base.filter(branch_logs_q).distinct()
+            else:
+                logs_qs = DailyProgressLog.objects.none()
+        elif scope == DataScope.DEPARTMENT:
+            if canonical_dept_name:
+                dept_logs_q = (
+                    Q(logged_by__employee_profile__department=canonical_dept_name) |
+                    Q(logged_by__employee_master__department__name=canonical_dept_name)
+                )
+                logs_qs = logs_base.filter(dept_logs_q).distinct()
+            else:
+                logs_qs = DailyProgressLog.objects.none()
+        elif scope == DataScope.TEAM:
+            team_emps, team_projs = _get_team_context()
+            team_logs_q = (
+                Q(project__in=team_projs) |
+                Q(logged_by=request.user) |
+                Q(logged_by__employee_profile__in=team_emps)
+            )
+            logs_qs = logs_base.filter(team_logs_q).distinct()
+        elif scope == DataScope.OWN:
+            logs_qs = logs_base.filter(logged_by=request.user)
+        else:
+            logs_qs = DailyProgressLog.objects.none()
+
+        # Guard against parameter-based widening
+        filter_branch_id = request.GET.get('branch_id') or request.GET.get('branch')
+        if filter_branch_id:
+            try:
+                b_id = int(filter_branch_id)
+                if is_global:
+                    holidays_qs = holidays_qs.filter(Q(branch__isnull=True) | Q(branch_id=b_id))
+                    events_qs = events_qs.filter(
+                        Q(project__branch_id=b_id) |
+                        (Q(project__isnull=True) & (
+                            Q(assigned_to__branch_id=b_id) |
+                            Q(created_by__employee_profile__branch_id=b_id)
+                        ))
+                    )
+                    tasks_qs = tasks_qs.filter(
+                        Q(project__branch_id=b_id) |
+                        (Q(project__isnull=True) & Q(responsible_person__branch_id=b_id))
+                    )
+                    leaves_qs = leaves_qs.filter(
+                        Q(employee__branch_id=b_id) |
+                        Q(employee__master_employee__branch_id=b_id)
+                    )
+                    logs_qs = logs_qs.filter(
+                        Q(project__branch_id=b_id) |
+                        (Q(project__isnull=True) & Q(logged_by__employee_profile__branch_id=b_id))
+                    )
+                elif scope == DataScope.BRANCH and canonical_branch and b_id != canonical_branch.id:
+                    holidays_qs = holidays_qs.none()
+                    events_qs = events_qs.none()
+                    tasks_qs = tasks_qs.none()
+                    leaves_qs = leaves_qs.none()
+                    logs_qs = logs_qs.none()
+            except (ValueError, TypeError):
+                pass
+
+        filter_emp_id = request.GET.get('employee_id') or request.GET.get('employee')
+        if filter_emp_id:
+            try:
+                emp_id = int(filter_emp_id)
+                events_qs = events_qs.filter(assigned_to__id=emp_id)
+                tasks_qs = tasks_qs.filter(responsible_person__id=emp_id)
+                leaves_qs = leaves_qs.filter(employee__id=emp_id)
+            except (ValueError, TypeError):
+                pass
+
+        filter_proj_id = request.GET.get('project_id') or request.GET.get('project')
+        if filter_proj_id:
+            try:
+                proj_id = int(filter_proj_id)
+                events_qs = events_qs.filter(project_id=proj_id)
+                tasks_qs = tasks_qs.filter(project_id=proj_id)
+                logs_qs = logs_qs.filter(project_id=proj_id)
+            except (ValueError, TypeError):
+                pass
+
+        holidays = holidays_qs.select_related('branch')
+        events = events_qs.prefetch_related('assigned_to', 'assigned_to__user', 'project')
+        tasks = tasks_qs.select_related('project', 'responsible_person')
+        leaves = leaves_qs.select_related('employee', 'employee__user', 'leave_type')
         logs = logs_qs.select_related('project')
 
         # Group all items by date
