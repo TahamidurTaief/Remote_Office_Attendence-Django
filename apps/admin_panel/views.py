@@ -29,6 +29,7 @@ from apps.employees.models import EmployeeProfile, EmployeeLocationSync
 from apps.branches.models import Branch, OfficeSchedule
 from apps.leave.models import LeaveType, LeaveBalance, LeaveRequest, get_cached_leave_types
 from .forms import ManualAttendanceForm
+from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_employee_or_404
 
 def admin_required(view_func):
     from functools import wraps
@@ -1020,14 +1021,17 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
     return synthetic_records
 
 
-def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branch_id=None, leave_type_id=None):
+def get_unified_deductions(date_from=None, date_to=None, employee_id=None, branch_id=None, leave_type_id=None, employee_queryset=None):
     from apps.attendance.models import AttendanceAbsentLog
     from apps.leave.models import LeaveRequest
     from apps.employees.models import EmployeeProfile
     from datetime import datetime, timedelta
 
     # 1. Fetch relevant active employees
-    employees = EmployeeProfile.objects.filter(is_active=True)
+    if employee_queryset is not None:
+        employees = employee_queryset.filter(is_active=True)
+    else:
+        employees = EmployeeProfile.objects.filter(is_active=True)
     if employee_id:
         employees = employees.filter(id=employee_id)
     if branch_id:
@@ -1212,7 +1216,7 @@ def _build_calendar_weeks(year, month, att_by_date, schedule, leave_dates=None):
     return weeks
 
 
-def _filter_qs_by_request(qs, request):
+def _filter_qs_by_request(qs, request, scoped_employees=None):
     """Apply shared GET filters (date/date_from/date_to/employee/branch)."""
     qs = qs.filter(is_expired=False)
     date_single = request.GET.get('date', '')
@@ -1221,19 +1225,23 @@ def _filter_qs_by_request(qs, request):
     emp         = request.GET.get('employee', '')
     branch      = request.GET.get('branch', '')
 
-    # Enforce Manager branch limits
-    eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
-    can_view_all = getattr(request.user, 'role', '') != 'manager' and (request.user.is_superuser or eval_res.scope == DataScope.GLOBAL)
-    role_name = 'admin' if can_view_all else 'manager'
-    profile = getattr(request.user, 'employee_profile', None)
+    if scoped_employees is not None:
+        authorized_emp_ids = list(scoped_employees.values_list('id', flat=True))
+        qs = qs.filter(employee_id__in=authorized_emp_ids)
+    else:
+        # Enforce Manager branch limits
+        eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
+        can_view_all = getattr(request.user, 'role', '') != 'manager' and (request.user.is_superuser or eval_res.scope == DataScope.GLOBAL)
+        role_name = 'admin' if can_view_all else 'manager'
+        profile = getattr(request.user, 'employee_profile', None)
 
-    if not can_view_all and role_name == 'manager':
-        if profile and profile.branch:
-            branch = str(profile.branch.id)
-        else:
+        if not can_view_all and role_name == 'manager':
+            if profile and profile.branch:
+                branch = str(profile.branch.id)
+            else:
+                branch = None
+        elif not can_view_all:
             branch = None
-    elif not can_view_all:
-        branch = None
 
     if date_single:
         qs = qs.filter(date=date_single)
@@ -1266,13 +1274,17 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         today = timezone.localdate()
         thirty_days_ago = today - timedelta(days=30)
 
-        # 1. Total headcount
-        employees = EmployeeProfile.objects.filter(is_active=True).only('id', 'full_name', 'employee_id').order_by('full_name')
+        # 1. Total headcount & employee selector
+        scoped_employees = get_scoped_employee_queryset(self.request.user, permission_code='reports.view', action='view')
+        authorized_emp_ids = list(scoped_employees.values_list('id', flat=True))
+
+        employees = scoped_employees.only('id', 'full_name', 'employee_id').order_by('full_name')
         ctx['employees'] = employees
-        total_employees = employees.count() or 1
+        total_employees = len(authorized_emp_ids)
 
         # 2. Query 30-day check-in records
         checkins_30d = Attendance.objects.filter(
+            employee_id__in=authorized_emp_ids,
             date__range=(thirty_days_ago, today),
             attendance_type='check_in',
             is_expired=False
@@ -1291,7 +1303,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
         # 4. Average Attendance Rate (days present / working days)
         daily_presence_counts = checkins_30d.values('date').annotate(count=Count('id'))
-        if daily_presence_counts:
+        if daily_presence_counts and total_employees > 0:
             avg_daily_present = sum(d['count'] for d in daily_presence_counts) / len(daily_presence_counts)
             avg_attendance_rate = int((avg_daily_present / total_employees) * 100)
             avg_attendance_rate = min(avg_attendance_rate, 100)
@@ -1306,6 +1318,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         # 5. Daily Attendance Trend for Chart (Last 15 days)
         fifteen_days_ago = today - timedelta(days=15)
         trend_qs = Attendance.objects.filter(
+            employee_id__in=authorized_emp_ids,
             date__range=(fifteen_days_ago, today),
             attendance_type='check_in',
             is_expired=False
@@ -1352,7 +1365,11 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         ctx['dept_stats'] = dept_stats
 
         # 8. Today Summary & Recent Log Preview for Direct Excel Table View
-        today_aggs = Attendance.objects.filter(date=today, is_expired=False).aggregate(
+        today_aggs = Attendance.objects.filter(
+            employee_id__in=authorized_emp_ids,
+            date=today,
+            is_expired=False
+        ).aggregate(
             present=Count('id', filter=Q(attendance_type='check_in')),
             late=Count('id', filter=Q(status='late'))
         )
@@ -1360,6 +1377,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         ctx['today_late_count'] = today_aggs['late'] or 0
 
         recent_logs = Attendance.objects.filter(
+            employee_id__in=authorized_emp_ids,
             is_expired=False
         ).select_related('employee', 'employee__branch', 'employee__user', 'employee__master_employee').prefetch_related('locations').order_by('-date', '-check_in_time')[:20]
 
@@ -1389,6 +1407,7 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         m_end = today.replace(day=m_last_day)
 
         approved_leaves_month = LeaveRequest.objects.filter(
+            employee_id__in=authorized_emp_ids,
             status='approved',
             start_date__lte=m_end,
             end_date__gte=m_start
@@ -1400,10 +1419,12 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
         ctx['leave_approved_days_month'] = total_leave_days_month
         ctx['leave_pending_count'] = LeaveRequest.objects.filter(
+            employee_id__in=authorized_emp_ids,
             status__in=['pending', 'manager_approved']
         ).count()
 
         top_leave_type_obj = LeaveRequest.objects.filter(
+            employee_id__in=authorized_emp_ids,
             start_date__lte=m_end,
             end_date__gte=m_start
         ).values('leave_type__name').annotate(count=Count('id')).order_by('-count').first()
@@ -1428,8 +1449,19 @@ class DailyReportView(AdminRequiredMixin, View):
         emp_id    = request.GET.get('employee', '')
         branch_id = request.GET.get('branch', '')
 
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.view', action='view')
+
+        eval_res = PermissionEngine.evaluate(request.user, 'reports.view', action_type='view')
+        if eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY):
+            branches = Branch.objects.all().order_by('name')
+        else:
+            auth_branch_ids = scoped_employees.filter(branch_id__isnull=False).values_list('branch_id', flat=True).distinct()
+            branches = Branch.objects.filter(id__in=auth_branch_ids).order_by('name')
+
+        selector_employees = scoped_employees.only('id', 'full_name').order_by('full_name')
+
         employees = (
-            EmployeeProfile.objects.filter(is_active=True)
+            scoped_employees
             .select_related('branch').order_by('full_name')
         )
         if emp_id:
@@ -1437,16 +1469,14 @@ class DailyReportView(AdminRequiredMixin, View):
         if branch_id:
             employees = employees.filter(branch_id=branch_id)
 
+        target_emp_ids = list(employees.values_list('id', flat=True))
+
         attendances = (
             Attendance.objects
-            .filter(date=report_date, is_expired=False)
+            .filter(employee_id__in=target_emp_ids, date=report_date, is_expired=False)
             .select_related('employee', 'employee__branch')
             .prefetch_related('locations')
         )
-        if emp_id:
-            attendances = attendances.filter(employee_id=emp_id)
-        if branch_id:
-            attendances = attendances.filter(employee__branch_id=branch_id)
 
         att_map = defaultdict(list)
         for a in attendances:
@@ -1498,8 +1528,8 @@ class DailyReportView(AdminRequiredMixin, View):
             'late':              late,
             'field_total':       field_total,
             'total_hours':       total_hours,
-            'employees':         EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
-            'branches':          Branch.objects.all(),
+            'employees':         selector_employees,
+            'branches':          branches,
             'selected_employee': emp_id,
             'selected_branch':   branch_id,
         })
@@ -1522,6 +1552,18 @@ class MonthlyReportView(AdminRequiredMixin, View):
         emp_id    = request.GET.get('employee', '')
         branch_id = request.GET.get('branch', '')
 
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.view', action='view')
+
+        eval_res = PermissionEngine.evaluate(request.user, 'reports.view', action_type='view')
+        if eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY):
+            branches = Branch.objects.only('id', 'name').order_by('name')
+        else:
+            auth_branch_ids = scoped_employees.filter(branch_id__isnull=False).values_list('branch_id', flat=True).distinct()
+            branches = Branch.objects.filter(id__in=auth_branch_ids).only('id', 'name').order_by('name')
+
+        selector_employees = scoped_employees.only('id', 'full_name').order_by('full_name')
+        authorized_emp_ids = set(scoped_employees.values_list('id', flat=True))
+
         from apps.attendance import reporting_service
         from datetime import date
         import calendar as cal_mod
@@ -1530,7 +1572,8 @@ class MonthlyReportView(AdminRequiredMixin, View):
             year=year,
             month=month,
             employee_id=emp_id or None,
-            branch_id=branch_id or None
+            branch_id=branch_id or None,
+            allowed_employee_ids=authorized_emp_ids
         )
 
         from django.core.paginator import Paginator
@@ -1555,8 +1598,8 @@ class MonthlyReportView(AdminRequiredMixin, View):
             'total_late':        data['total_late'],
             'total_field':       data['total_field'],
             'avg_att_pct':       data['avg_att_pct'],
-            'employees':         EmployeeProfile.objects.filter(is_active=True).only('id', 'full_name').order_by('full_name'),
-            'branches':          Branch.objects.only('id', 'name'),
+            'employees':         selector_employees,
+            'branches':          branches,
             'selected_employee': emp_id,
             'selected_branch':   branch_id,
             'prev_m': prev_m, 'prev_y': prev_y,
@@ -1600,7 +1643,7 @@ class EmployeeReportView(AdminRequiredMixin, View):
 
     def get(self, request, pk, year=None, month=None):
         import datetime as dt_mod
-        employee = get_object_or_404(EmployeeProfile, pk=pk)
+        employee = get_scoped_employee_or_404(request.user, pk=pk, permission_code='reports.view', action='view')
         today = timezone.localdate()
         if not year or not month:
             try:
@@ -1820,7 +1863,7 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
     required_permission = 'reports.view'
     action_type = 'view'
     def get(self, request, pk, date_str):
-        employee = get_object_or_404(EmployeeProfile, pk=pk)
+        employee = get_scoped_employee_or_404(request.user, pk=pk, permission_code='reports.view', action='view')
         try:
             day = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
@@ -2409,6 +2452,10 @@ class ExportReportCSVView(AdminRequiredMixin, View):
     required_permission = 'reports.export'
     action_type = 'export'
     def get(self, request):
+        eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+        if not (request.user.is_superuser or eval_export.allowed):
+            raise PermissionDenied("You do not have permission to export reports.")
+
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
         emp_id = request.GET.get('employee')
@@ -2416,26 +2463,17 @@ class ExportReportCSVView(AdminRequiredMixin, View):
         att_type = request.GET.get('type')
         status = request.GET.get('status')
 
-        # Enforce Manager branch limits
-        eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
-        can_view_all = getattr(request.user, 'role', '') != 'manager' and (request.user.is_superuser or eval_res.scope == DataScope.GLOBAL)
-        role_name = 'admin' if can_view_all else 'manager'
-        profile = getattr(request.user, 'employee_profile', None)
-
-        if not can_view_all and role_name == 'manager':
-            if profile and profile.branch:
-                branch_id = str(profile.branch.id)
-            else:
-                branch_id = None
-        elif not can_view_all:
-            branch_id = None
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+        if emp_id:
+            scoped_employees = scoped_employees.filter(id=emp_id)
+        if branch_id:
+            scoped_employees = scoped_employees.filter(branch_id=branch_id)
 
         if status == 'absent':
             records = get_absent_records(
                 date_from=date_from,
                 date_to=date_to,
-                employee_id=emp_id,
-                branch_id=branch_id
+                employee_queryset=scoped_employees
             )
         else:
             qs = (
@@ -2443,7 +2481,7 @@ class ExportReportCSVView(AdminRequiredMixin, View):
                 .select_related('employee', 'employee__branch')
                 .prefetch_related('locations')
             )
-            qs = _filter_qs_by_request(qs, request)
+            qs = _filter_qs_by_request(qs, request, scoped_employees=scoped_employees)
             if att_type:
                 qs = qs.filter(type=att_type)
             if status:
@@ -2487,6 +2525,10 @@ class ExportReportPDFView(AdminRequiredMixin, View):
     required_permission = 'reports.export'
     action_type = 'export'
     def get(self, request):
+        eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+        if not (request.user.is_superuser or eval_export.allowed):
+            raise PermissionDenied("You do not have permission to export reports.")
+
         # ── Filter (same logic as CSV export) ──────────────────────────
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
@@ -2495,33 +2537,24 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         att_type = request.GET.get('type')
         status = request.GET.get('status')
 
-        # Enforce Manager branch limits
-        eval_res = PermissionEngine.evaluate(request.user, 'reports.view')
-        can_view_all = request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
-        role_name = 'admin' if can_view_all else 'manager'
-        profile = getattr(request.user, 'employee_profile', None)
-
-        if not can_view_all and role_name == 'manager':
-            if profile and profile.branch:
-                branch_id = str(profile.branch.id)
-            else:
-                branch_id = None
-        elif not can_view_all:
-            branch_id = None
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+        if emp_id:
+            scoped_employees = scoped_employees.filter(id=emp_id)
+        if branch_id:
+            scoped_employees = scoped_employees.filter(branch_id=branch_id)
 
         if status == 'absent':
             attendances = get_absent_records(
                 date_from=date_from,
                 date_to=date_to,
-                employee_id=emp_id,
-                branch_id=branch_id
+                employee_queryset=scoped_employees
             )
         else:
             qs = (
                 Attendance.objects
                 .select_related('employee', 'employee__branch')
             )
-            qs = _filter_qs_by_request(qs, request)
+            qs = _filter_qs_by_request(qs, request, scoped_employees=scoped_employees)
             if att_type:
                 qs = qs.filter(type=att_type)
             if status:
@@ -2752,6 +2785,10 @@ from openpyxl.utils import get_column_letter
 
 @admin_required
 def export_attendance(request):
+    eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+    if not (request.user.is_superuser or eval_export.allowed):
+        raise PermissionDenied("You do not have permission to export reports.")
+
     format_type = request.GET.get('format', 'xlsx')
     year = request.GET.get('year')
     month = request.GET.get('month')
@@ -2779,36 +2816,30 @@ def get_monthly_grid_data(request):
     from datetime import date
     from apps.attendance import reporting_service
 
+    eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+    if not (request.user.is_superuser or eval_export.allowed):
+        raise PermissionDenied("You do not have permission to export reports.")
+
     year = int(request.GET.get('year', date.today().year))
     month = int(request.GET.get('month', date.today().month))
 
     branch_id = request.GET.get('branch') or request.GET.get('branch_id')
     employee_id = request.GET.get('employee')
 
-    from apps.accounts.engine import PermissionEngine
-    from apps.accounts.models import DataScope
+    scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+    if employee_id:
+        scoped_employees = scoped_employees.filter(id=employee_id)
+    if branch_id:
+        scoped_employees = scoped_employees.filter(branch_id=branch_id)
 
-    eval_res = PermissionEngine.evaluate(request.user, 'attendance.view', action_type='view')
-    has_role_access = request.user.is_superuser or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin', 'manager', 'staff')
-    if not (eval_res.allowed or has_role_access):
-        return {'year': year, 'month': month, 'all_days': [], 'employees': [], 'att_lookup': {}, 'employee_stats': {}, 'approved_leaves': [], 'total_present': 0, 'total_absent': 0}
-
-    can_view_all = request.user.is_superuser or eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY) or getattr(request.user, 'role', '') in ('admin', 'system_owner', 'super_admin', 'staff')
-    profile = getattr(request.user, 'employee_profile', None)
-
-    if not can_view_all:
-        if eval_res.data_scope == DataScope.BRANCH and profile and profile.branch:
-            branch_id = str(profile.branch.id)
-        elif eval_res.data_scope == DataScope.OWN and profile:
-            employee_id = str(profile.id)
-        else:
-            branch_id = None
+    authorized_emp_ids = set(scoped_employees.values_list('id', flat=True))
 
     return reporting_service.get_monthly_report_data(
         year=year,
         month=month,
         employee_id=employee_id or None,
-        branch_id=branch_id or None
+        branch_id=branch_id or None,
+        allowed_employee_ids=authorized_emp_ids
     )
 
 @admin_required
@@ -3486,12 +3517,15 @@ class AbsentReportView(AdminRequiredMixin, ListView):
         branch_id = self.request.GET.get('branch')
         lt_id = self.request.GET.get('leave_type')
 
+        scoped_employees = get_scoped_employee_queryset(self.request.user, permission_code='reports.view', action='view')
+
         return get_unified_deductions(
             date_from=date_from,
             date_to=date_to,
             employee_id=emp_id,
             branch_id=branch_id,
-            leave_type_id=lt_id
+            leave_type_id=lt_id,
+            employee_queryset=scoped_employees
         )
 
     def get_context_data(self, **kwargs):
@@ -3538,9 +3572,17 @@ class AbsentReportView(AdminRequiredMixin, ListView):
             for absence in absences:
                 absence['remaining_days'] = None
 
+        scoped_employees = get_scoped_employee_queryset(self.request.user, permission_code='reports.view', action='view')
+        eval_res = PermissionEngine.evaluate(self.request.user, 'reports.view', action_type='view')
+        if eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY):
+            branches = Branch.objects.all().only('id', 'name').order_by('name')
+        else:
+            auth_branch_ids = scoped_employees.filter(branch_id__isnull=False).values_list('branch_id', flat=True).distinct()
+            branches = Branch.objects.filter(id__in=auth_branch_ids).only('id', 'name').order_by('name')
+
         context.update({
-            'employees': EmployeeProfile.objects.all().only('id', 'full_name').order_by('full_name'),
-            'branches': Branch.objects.all().only('id', 'name').order_by('name'),
+            'employees': scoped_employees.only('id', 'full_name').order_by('full_name'),
+            'branches': branches,
             'leave_types': LeaveType.objects.all().only('id', 'name', 'default_days_per_year').order_by('name'),
             'selected_employee': self.request.GET.get('employee', ''),
             'selected_branch': self.request.GET.get('branch', ''),
@@ -3562,6 +3604,10 @@ class ExportAbsentReportExcelView(AdminRequiredMixin, View):
     required_permission = 'reports.export'
     action_type = 'export'
     def get(self, request):
+        eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+        if not (request.user.is_superuser or eval_export.allowed):
+            raise PermissionDenied("You do not have permission to export reports.")
+
         from apps.leave.models import LeaveBalance
         from django.utils import timezone
         import openpyxl
@@ -3573,12 +3619,15 @@ class ExportAbsentReportExcelView(AdminRequiredMixin, View):
         branch_id = request.GET.get('branch')
         lt_id = request.GET.get('leave_type')
 
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+
         deductions = get_unified_deductions(
             date_from=date_from,
             date_to=date_to,
             employee_id=emp_id,
             branch_id=branch_id,
-            leave_type_id=lt_id
+            leave_type_id=lt_id,
+            employee_queryset=scoped_employees
         )
 
         wb = openpyxl.Workbook()
@@ -3670,6 +3719,10 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
     required_permission = 'reports.export'
     action_type = 'export'
     def get(self, request):
+        eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+        if not (request.user.is_superuser or eval_export.allowed):
+            raise PermissionDenied("You do not have permission to export reports.")
+
         from reportlab.lib.pagesizes import A4
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib import colors
@@ -3683,12 +3736,15 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
         branch_id = request.GET.get('branch')
         lt_id = request.GET.get('leave_type')
 
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+
         deductions = get_unified_deductions(
             date_from=date_from,
             date_to=date_to,
             employee_id=emp_id,
             branch_id=branch_id,
-            leave_type_id=lt_id
+            leave_type_id=lt_id,
+            employee_queryset=scoped_employees
         )
 
         response = HttpResponse(content_type='application/pdf')

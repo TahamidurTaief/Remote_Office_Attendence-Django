@@ -105,7 +105,9 @@ def is_employee_holiday_optimized(employee, target_date, schedule, branch_holida
         
     return False
 
-def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
+from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_employee_or_404
+
+def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allowed_employee_ids=None, employee_queryset=None):
     """
     Canonical monthly attendance statistics service (optimized for speed & database access).
     """
@@ -125,6 +127,11 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None):
         'branch__schedule',
         'master_employee',
     ).order_by('full_name')
+
+    if employee_queryset is not None:
+        employees_qs = employees_qs.filter(id__in=employee_queryset.values_list('id', flat=True))
+    elif allowed_employee_ids is not None:
+        employees_qs = employees_qs.filter(id__in=allowed_employee_ids)
 
     if employee_id:
         employees_qs = employees_qs.filter(id=employee_id)
