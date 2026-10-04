@@ -59,7 +59,7 @@ SECURE_HSTS_PRELOAD = False
 
 WEB_PUSH_PUBLIC_KEY = os.getenv('WEB_PUSH_PUBLIC_KEY', '')
 WEB_PUSH_PRIVATE_KEY = os.getenv('WEB_PUSH_PRIVATE_KEY', '')
-WEB_PUSH_VAPID_CLAIM_EMAIL = os.getenv('WEB_PUSH_VAPID_CLAIM_EMAIL', 'admin@fieldtrack.com')
+WEB_PUSH_SUBJECT = os.getenv('WEB_PUSH_SUBJECT', 'mailto:admin@fieldtrack.com')
 
 
 # ── APPLICATION DEFINITION ───────────────────────────────────────────────────
