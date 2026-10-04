@@ -49,6 +49,7 @@ urlpatterns = [
     path('reports/leave/export/monthly-xlsx/', views.export_leave_monthly_xlsx, name='reports_leave_export_xlsx'),
 
     path('settings/schedule/', views.OfficeScheduleView.as_view(), name='schedule_settings'),
+    path('settings/company/', views.CompanyConfigurationView.as_view(), name='company_settings'),
     path('expired-data/', views.ExpiredDataView.as_view(), name='expired_data'),
     path('expired-data/delete/', views.delete_expired_selected, name='delete_expired_selected'),
     path('expired-data/delete-all/', views.delete_all_expired, name='delete_all_expired'),

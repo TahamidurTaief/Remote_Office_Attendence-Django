@@ -1,0 +1,86 @@
+<c-app-shell page_title="Company Configuration | FieldTrack Admin" active_href="{{ request.path }}">
+    <c-slot name="sidebar">
+        <c-sidebar active_href="{{ request.path }}"></c-sidebar>
+    </c-slot>
+
+    <c-page-container>
+        <c-page-header title="Company Configuration" subtitle="Tenant-scoped organization parameters, timezone, and operational preferences"></c-page-header>
+
+        {% if messages %}
+        <div class="mb-4 space-y-2">
+            {% for message in messages %}
+            <c-alert variant="{% if message.tags == 'error' %}error{% else %}success{% endif %}" message="{{ message }}"></c-alert>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <c-card>
+            <c-slot name="header">
+                <div class="flex justify-between items-center w-full pb-3 border-b border-indigo-100 dark:border-slate-800">
+                    <h2 class="text-sm font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Company & Localization Settings</h2>
+                    <c-badge variant="info" label="{{ canonical_tenant.name }}"></c-badge>
+                </div>
+            </c-slot>
+
+            <form method="POST" action="{% url 'tenants:company_settings' %}" class="space-y-4 mt-3">
+                {% csrf_token %}
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <c-input
+                        name="company_name"
+                        id="company_name"
+                        label="Company / Organization Name"
+                        value="{{ config.company_name }}"
+                        required="true"
+                    ></c-input>
+
+                    <c-input
+                        name="timezone"
+                        id="company_timezone"
+                        label="Company Timezone"
+                        value="{{ config.timezone }}"
+                        required="true"
+                        help="Canonical IANA timezone identifier (e.g. Asia/Dhaka, UTC)"
+                    ></c-input>
+
+                    <c-input
+                        name="currency"
+                        id="company_currency"
+                        label="Default Currency Code"
+                        value="{{ config.currency }}"
+                        help="e.g. BDT, USD, EUR"
+                    ></c-input>
+
+                    <c-input
+                        name="date_format"
+                        id="company_date_format"
+                        label="Date Display Format"
+                        value="{{ config.date_format }}"
+                        help="e.g. YYYY-MM-DD"
+                    ></c-input>
+
+                    <c-input
+                        name="contact_email"
+                        id="company_contact_email"
+                        label="Official Contact Email"
+                        type="email"
+                        value="{{ config.contact_email }}"
+                    ></c-input>
+
+                    <c-input
+                        name="api_secret"
+                        id="company_api_secret"
+                        label="Webhook / API Secret Key"
+                        type="password"
+                        value="{{ config_data.api_secret }}"
+                        help="Stored securely; masked upon display"
+                    ></c-input>
+                </div>
+
+                <div class="flex justify-end pt-3 border-t border-indigo-100 dark:border-slate-800">
+                    <c-button type="submit" variant="primary" label="Save Company Configuration"></c-button>
+                </div>
+            </form>
+        </c-card>
+    </c-page-container>
+</c-app-shell>

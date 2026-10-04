@@ -4317,3 +4317,5 @@ class AIChatbotResponseView(RoleRequiredMixin, View):
 
 # Backward-compatibility alias for URL patterns
 AIChatbotDummyResponseView = AIChatbotResponseView
+
+from apps.tenants.views import CompanyConfigurationView

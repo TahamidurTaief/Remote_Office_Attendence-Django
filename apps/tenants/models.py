@@ -121,3 +121,26 @@ class TenantTestModel(TenantBaseModel):
     def __str__(self):
         return self.name
 
+
+class CompanyConfiguration(TenantBaseModel):
+    tenant = models.OneToOneField(
+        Tenant,
+        on_delete=models.PROTECT,
+        related_name='company_configuration',
+        db_index=True
+    )
+    company_name = models.CharField(max_length=255, blank=True)
+    timezone = models.CharField(max_length=100, default='UTC')
+    date_format = models.CharField(max_length=50, default='YYYY-MM-DD')
+    time_format = models.CharField(max_length=20, default='24h')
+    currency = models.CharField(max_length=20, default='BDT')
+    contact_email = models.EmailField(blank=True)
+    api_secret = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = 'Company Configuration'
+        verbose_name_plural = 'Company Configurations'
+
+    def __str__(self):
+        return f"CompanyConfiguration({self.tenant.name} - {self.timezone})"
+
