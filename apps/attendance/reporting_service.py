@@ -107,7 +107,7 @@ def is_employee_holiday_optimized(employee, target_date, schedule, branch_holida
 
 from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_employee_or_404
 
-def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allowed_employee_ids=None, employee_queryset=None):
+def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allowed_employee_ids=None, employee_queryset=None, status=None, attendance_type=None):
     """
     Canonical monthly attendance statistics service (optimized for speed & database access).
     """
@@ -115,17 +115,26 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
     all_days = [date(year, month, d) for d in range(1, days_in_month + 1)]
     month_start = date(year, month, 1)
     month_end = date(year, month, days_in_month)
+    today = timezone.localdate()
+
+    if year < today.year or (year == today.year and month < today.month):
+        max_date = month_end
+    elif year == today.year and month == today.month:
+        max_date = today
+    else:
+        max_date = month_start - timedelta(days=1)
 
     # 1. Fetch active employees and employees active during reporting period
     from django.db.models import Q
     employees_qs = EmployeeProfile.objects.filter(
         Q(is_active=True) |
         Q(master_employee__employment_history__field_changed='status', master_employee__employment_history__effective_date__gte=month_start) |
-        Q(attendances__date__gte=month_start, attendances__date__lte=month_end)
+        Q(attendances__date__gte=month_start, attendances__date__lte=month_end, attendances__is_expired=False)
     ).distinct().select_related(
         'branch',
         'branch__schedule',
         'master_employee',
+        'master_employee__department',
     ).order_by('full_name')
 
     if employee_queryset is not None:
@@ -155,11 +164,12 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         else:
             global_holidays.add(h.date)
 
-    # 3. Fetch all attendances for the month in one query (ordered deterministically)
+    # 3. Fetch all attendances for the month in one query (ordered deterministically, non-expired only)
     attendances_qs = Attendance.objects.filter(
         date__gte=month_start,
         date__lte=month_end,
-        employee_id__in=employee_ids
+        employee_id__in=employee_ids,
+        is_expired=False
     ).order_by('date', 'check_in_time')
 
     att_by_emp_date = defaultdict(list)
@@ -223,16 +233,15 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
 
     # 6. Calculate statistics per employee
     display_att_lookup = defaultdict(dict)
+    daily_status_lookup = defaultdict(dict)
     employee_stats = {}
     rows = []
 
-    total_present = total_absent = total_on_leave = total_late = total_field = 0
-
     for emp in employees:
         schedule = OptimizedSchedule(emp, policies_by_branch, global_policy)
-        emp_working_days = sum(
+        emp_working_days_so_far = sum(
             1 for d in all_days 
-            if not is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
+            if d <= max_date and not is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
         )
 
         present_count = 0
@@ -243,9 +252,10 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         on_leave_count = 0
         field_visit_count = 0
         total_hours = 0.0
+        emp_daily_statuses = {}
 
         for d in all_days:
-            day_atts = att_by_emp_date[(emp.id, d)]
+            day_atts = att_by_emp_date.get((emp.id, d), [])
             
             main_att = next((a for a in day_atts if a.attendance_type == 'check_in'), None)
             if not main_att and day_atts:
@@ -254,39 +264,51 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             if main_att:
                 display_att_lookup[emp.id][d] = main_att
                 
-            has_check_in = any(a.attendance_type == 'check_in' for a in day_atts)
-            has_field_visit = any(a.attendance_type == 'field_visit' for a in day_atts)
+            check_in_sessions = [a for a in day_atts if a.attendance_type == 'check_in']
+            field_visits = [a for a in day_atts if a.attendance_type == 'field_visit']
+            has_check_in = len(check_in_sessions) > 0
+            has_field_visit = len(field_visits) > 0
             has_any_attendance = has_check_in or has_field_visit
-            
-            if has_check_in or has_field_visit:
-                present_count += 1
-            if has_field_visit:
-                field_visit_count += sum(1 for a in day_atts if a.attendance_type == 'field_visit')
-
-            day_has_late = False
-            for a in day_atts:
-                if a.attendance_type == 'check_in':
-                    if a.status == 'late':
-                        day_has_late = True
-                    if getattr(a, 'overtime_minutes', 0) > 0:
-                        total_ot_minutes += a.overtime_minutes
-                    if a.total_hours:
-                        total_hours += float(a.total_hours)
-
-            if day_has_late:
-                late_count += 1
 
             is_holiday = is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
-            if not is_holiday:
-                if not has_any_attendance:
-                    is_on_leave = d in approved_leaves_map[emp.id]
-                    if is_on_leave:
-                        on_leave_count += 1
-                    else:
-                        absent_count += 1
+            is_on_leave = d in approved_leaves_map.get(emp.id, {})
+
+            if d > today:
+                day_status = '—'
             else:
-                if has_check_in:
-                    holiday_work_count += 1
+                if has_any_attendance:
+                    present_count += 1
+                    day_has_late = any(a.status == 'late' for a in check_in_sessions)
+                    if day_has_late:
+                        late_count += 1
+                        day_status = 'Late'
+                    elif has_check_in:
+                        day_status = 'Present'
+                    else:
+                        day_status = 'Field Visit'
+
+                    if is_holiday:
+                        holiday_work_count += 1
+                elif is_on_leave:
+                    on_leave_count += 1
+                    day_status = 'On Leave'
+                elif is_holiday:
+                    day_status = 'Holiday'
+                else:
+                    absent_count += 1
+                    day_status = 'Absent'
+
+            if has_field_visit:
+                field_visit_count += len(field_visits)
+
+            for a in check_in_sessions:
+                if getattr(a, 'overtime_minutes', 0) > 0:
+                    total_ot_minutes += a.overtime_minutes
+                if a.total_hours:
+                    total_hours += float(a.total_hours)
+
+            emp_daily_statuses[d.day] = day_status
+            daily_status_lookup[emp.id][d] = day_status
 
         if getattr(emp, 'overtime_enabled', False) and total_ot_minutes > 0:
             ot_hours = total_ot_minutes / 60
@@ -294,7 +316,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         else:
             ot_display = '-'
             
-        att_pct = round((present_count / emp_working_days * 100) if emp_working_days else 0, 1)
+        att_pct = round(min(100.0, (present_count / emp_working_days_so_far * 100)), 1) if emp_working_days_so_far > 0 else 0.0
 
         employee_stats[emp.id] = {
             'present_count': present_count,
@@ -306,7 +328,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'is_overtime_enabled': getattr(emp, 'overtime_enabled', False)
         }
 
-        rows.append({
+        row_item = {
             'employee': emp,
             'present': present_count,
             'absent': absent_count,
@@ -315,14 +337,39 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'field_visits': field_visit_count,
             'total_hours': round(total_hours, 2),
             'att_pct': att_pct,
-            'leave_balances': balances_by_emp[emp.id]
-        })
+            'leave_balances': balances_by_emp[emp.id],
+            'daily_statuses': emp_daily_statuses,
+        }
 
-        total_present += present_count
-        total_absent += absent_count
-        total_on_leave += on_leave_count
-        total_late += late_count
-        total_field += field_visit_count
+        # Apply optional status / attendance_type filters
+        if status:
+            s_lower = status.lower()
+            if s_lower == 'present' and present_count == 0:
+                continue
+            elif s_lower == 'absent' and absent_count == 0:
+                continue
+            elif s_lower == 'late' and late_count == 0:
+                continue
+            elif s_lower in ('leave', 'on_leave') and on_leave_count == 0:
+                continue
+            elif s_lower == 'on_time' and (present_count - late_count) <= 0:
+                continue
+        if attendance_type:
+            at_lower = attendance_type.lower()
+            if at_lower in ('field_visit', 'field') and field_visit_count == 0:
+                continue
+            elif at_lower in ('check_in', 'office'):
+                has_any_ci = any(any(a.attendance_type == 'check_in' for a in att_by_emp_date.get((emp.id, d), [])) for d in all_days)
+                if not has_any_ci:
+                    continue
+
+        rows.append(row_item)
+
+    total_present = sum(r['present'] for r in rows)
+    total_absent = sum(r['absent'] for r in rows)
+    total_on_leave = sum(r['on_leave'] for r in rows)
+    total_late = sum(r['late'] for r in rows)
+    total_field = sum(r['field_visits'] for r in rows)
 
     avg_att_pct = round(
         sum(r['att_pct'] for r in rows) / len(rows) if rows else 0, 1
@@ -333,8 +380,9 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         'month': month,
         'days_in_month': days_in_month,
         'all_days': all_days,
-        'employees': employees,
+        'employees': [r['employee'] for r in rows],
         'att_lookup': display_att_lookup,
+        'daily_statuses': daily_status_lookup,
         'employee_stats': employee_stats,
         'approved_leaves': approved_leaves_map,
         'rows': rows,
