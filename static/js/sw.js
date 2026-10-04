@@ -116,3 +116,51 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+function isSafeSameOriginPath(url) {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return false;
+  }
+  try {
+    const baseOrigin = self.location ? self.location.origin : 'http://localhost';
+    const parsed = new URL(trimmed, baseOrigin);
+    return parsed.origin === baseOrigin && parsed.pathname.startsWith('/');
+  } catch (e) {
+    return false;
+  }
+}
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const rawUrl = event.notification.data && event.notification.data.url;
+  const targetPath = isSafeSameOriginPath(rawUrl) ? rawUrl : '/notifications/';
+  const targetUrl = new URL(targetPath, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          try {
+            const clientOrigin = new URL(client.url).origin;
+            if (clientOrigin === self.location.origin) {
+              if ('navigate' in client && client.url !== targetUrl) {
+                return client.navigate(targetUrl).then((navigated) => {
+                  return (navigated || client).focus();
+                });
+              }
+              return client.focus();
+            }
+          } catch (e) {
+            // Keep inspecting remaining clients
+          }
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});

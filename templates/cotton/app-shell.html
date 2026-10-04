@@ -532,6 +532,7 @@
 
       <div class="flex items-center gap-2 shrink-0">
         <button type="button"
+                data-notification-permission-trigger
                 @click="$dispatch('open-drawer-notifications')"
                 class="p-1 -mr-1 text-slate-800 dark:text-white hover:text-slate-600 active:scale-95 transition-all relative"
                 title="Notifications"
@@ -717,7 +718,7 @@
   </script>
 
   {% if request.user.is_authenticated %}
-  <script src="{% static 'js/notification_poller.js' %}"
+  <script src="{% static 'js/notification_poller.js' %}?v=1.1"
           data-feed-url="{% url 'notifications:feed' %}"
           data-user-id="{{ request.user.id }}"></script>
   {% endif %}

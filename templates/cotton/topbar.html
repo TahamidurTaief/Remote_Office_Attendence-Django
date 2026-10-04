@@ -102,6 +102,7 @@
          hx-target="#ft-notif-badge"
          hx-swap="outerHTML">
       <button type="button"
+              data-notification-permission-trigger
               @click.prevent="$dispatch('open-drawer', {id: 'notifications-drawer'}); $dispatch('open-drawer-notifications')"
               class="relative ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center">
         <i data-lucide="bell" class="w-4 h-4"></i>

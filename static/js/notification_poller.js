@@ -10,11 +10,67 @@
     if (!feedUrl || !userId) return;
 
     const storageKey = `ft_notif_cursor_${userId}`;
+    const permPromptedKey = `ft_notif_perm_prompted_${userId}`;
     let inFlight = false;
     let pollInterval = null;
 
     function isSafeSameOriginPath(url) {
-      return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') && !url.includes('\\');
+      if (typeof url !== 'string') return false;
+      const trimmed = url.trim();
+      if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+        return false;
+      }
+      try {
+        const baseOrigin = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
+        const parsed = new URL(trimmed, baseOrigin);
+        return parsed.origin === baseOrigin && parsed.pathname.startsWith('/');
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function requestDeviceNotificationPermission() {
+      if (typeof window === 'undefined' || !('Notification' in window)) return;
+      if (Notification.permission !== 'default') return;
+      if (localStorage.getItem(permPromptedKey)) return;
+
+      localStorage.setItem(permPromptedKey, '1');
+      try {
+        const res = Notification.requestPermission();
+        if (res && typeof res.then === 'function') {
+          res.catch(() => {});
+        }
+      } catch (e) {
+        // Silently recover if browser throws
+      }
+    }
+
+    function showDeviceNotification(item) {
+      if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+        return;
+      }
+      if (!('serviceWorker' in navigator) || typeof navigator.serviceWorker.getRegistration !== 'function') {
+        return;
+      }
+
+      navigator.serviceWorker.getRegistration().then((registration) => {
+        if (!registration || typeof registration.showNotification !== 'function') return;
+
+        const safeRedirect = isSafeSameOriginPath(item.redirect_url) ? item.redirect_url : '/notifications/';
+        const title = item.title || 'FieldTrack Alert';
+        const options = {
+          body: item.message || item.title || '',
+          icon: '/static/icons/icon.png',
+          tag: `ft-notif-${item.id}`,
+          data: {
+            id: item.id,
+            notification_id: item.id,
+            url: safeRedirect
+          }
+        };
+
+        registration.showNotification(title, options).catch(() => {});
+      }).catch(() => {});
     }
 
     async function poll() {
@@ -69,6 +125,13 @@
               if (typeof window.showToast === 'function') {
                 window.showToast(text, 'info', redirect);
               }
+
+              const isScheduleOrTask = item.type === 'schedule_event' ||
+                (typeof item.type === 'string' && (item.type.startsWith('task') || item.type === 'task'));
+
+              if (isScheduleOrTask) {
+                showDeviceNotification(item);
+              }
             });
           }
         }
@@ -101,6 +164,13 @@
 
     window.addEventListener('online', () => {
       resumeImmediately();
+    });
+
+    document.addEventListener('click', (event) => {
+      const trigger = event.target && event.target.closest && event.target.closest('[data-notification-permission-trigger]');
+      if (trigger) {
+        requestDeviceNotificationPermission();
+      }
     });
 
     // Initial bootstrap / poll and schedule interval
