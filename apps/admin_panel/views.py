@@ -1167,12 +1167,11 @@ def _get_working_days(year, month, schedule=None):
     return count
 
 
-def _build_calendar_weeks(year, month, att_by_date, schedule, leave_dates=None):
+def _build_calendar_weeks(year, month, att_by_date=None, schedule=None, leave_dates=None, day_calcs=None, employee=None):
     """
     Build calendar week rows for a month.
-    att_by_date: {date: [Attendance, ...]}
-    Returns list of 7-item lists; None = empty padding cell.
-    Colors: green=on_time, amber=late, red=absent, purple=field_visit_only, gray=non_working_day
+    Uses canonical employee-day calculation if day_calcs is provided or calculates consistently.
+    Colors: green=on_time, amber=late, red=absent, purple=field_visit_only, blue=on_leave, gray=holiday/off_day, future=future
     """
     cal_mod.setfirstweekday(cal_mod.SATURDAY)
     working_day_set = _get_working_day_set(schedule)
@@ -1185,33 +1184,34 @@ def _build_calendar_weeks(year, month, att_by_date, schedule, leave_dates=None):
                 row.append(None)
                 continue
             d = _date(year, month, day)
-            day_atts = att_by_date.get(d, [])
-            ci = next((a for a in day_atts if a.attendance_type == 'check_in'), None)
-            has_fv = any(a.attendance_type == 'field_visit' for a in day_atts)
-            is_weekend = cal_mod.day_name[d.weekday()].lower() not in working_day_set
-            is_late = bool(ci and calculate_attendance_status(ci.check_in_time, schedule) == 'late')
-            if is_weekend:
-                color = 'gray'
-            elif ci:
-                color = 'amber' if is_late else 'green'
-            elif has_fv:
-                color = 'purple'
-            elif leave_dates and d in leave_dates:
-                color = 'blue'
-            elif d > today:
-                color = 'future'
+            if day_calcs and d in day_calcs:
+                dc = day_calcs[d]
+                row.append({
+                    'day': day,
+                    'date': d,
+                    'date_str': d.strftime('%Y-%m-%d'),
+                    'check_in': dc.get('check_in'),
+                    'has_fv': dc.get('field_visit_count', 0) > 0,
+                    'is_weekend': dc.get('is_holiday', False),
+                    'is_late': dc.get('is_late', False),
+                    'color': dc.get('calendar_color', 'gray'),
+                })
             else:
-                color = 'red'
-            row.append({
-                'day': day,
-                'date': d,
-                'date_str': d.strftime('%Y-%m-%d'),
-                'check_in': ci,
-                'has_fv': has_fv,
-                'is_weekend': is_weekend,
-                'is_late': is_late,
-                'color': color,
-            })
+                day_atts = att_by_date.get(d, []) if att_by_date else []
+                from apps.attendance.reporting_service import calculate_employee_day, is_employee_holiday_optimized
+                is_hol = is_employee_holiday_optimized(employee, d, schedule) if employee else (cal_mod.day_name[d.weekday()].lower() not in working_day_set)
+                is_ol = bool(leave_dates and d in leave_dates)
+                dc = calculate_employee_day(employee, d, day_atts, schedule=schedule, is_holiday=is_hol, is_on_leave=is_ol, today=today)
+                row.append({
+                    'day': day,
+                    'date': d,
+                    'date_str': d.strftime('%Y-%m-%d'),
+                    'check_in': dc.get('check_in'),
+                    'has_fv': dc.get('field_visit_count', 0) > 0,
+                    'is_weekend': dc.get('is_holiday', False),
+                    'is_late': dc.get('is_late', False),
+                    'color': dc.get('calendar_color', 'gray'),
+                })
         weeks.append(row)
     return weeks
 
@@ -1456,10 +1456,10 @@ class DailyReportView(AdminRequiredMixin, View):
         except (ValueError, TypeError):
             report_date = timezone.localdate()
 
-        emp_id      = request.GET.get('employee', '')
-        branch_id   = request.GET.get('branch', '')
+        emp_id       = request.GET.get('employee', '')
+        branch_id    = request.GET.get('branch', '')
         status_param = request.GET.get('status', '')
-        type_param  = request.GET.get('type', '') or request.GET.get('attendance_type', '')
+        type_param   = request.GET.get('type', '') or request.GET.get('attendance_type', '')
 
         scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.view', action='view')
 
@@ -1472,152 +1472,29 @@ class DailyReportView(AdminRequiredMixin, View):
 
         selector_employees = scoped_employees.only('id', 'full_name').order_by('full_name')
 
-        employees = (
-            scoped_employees
-            .select_related('branch', 'branch__schedule', 'master_employee', 'master_employee__department')
-            .order_by('full_name')
+        from apps.attendance import reporting_service
+        data = reporting_service.get_daily_report_data(
+            report_date=report_date,
+            employee_id=emp_id or None,
+            branch_id=branch_id or None,
+            employee_queryset=scoped_employees,
+            status=status_param or None,
+            attendance_type=type_param or None,
         )
-        if emp_id:
-            employees = employees.filter(id=emp_id)
-        if branch_id:
-            employees = employees.filter(branch_id=branch_id)
-
-        target_emp_ids = list(employees.values_list('id', flat=True))
-        today = timezone.localdate()
-
-        # Policies and holidays in bulk
-        from apps.attendance.models import AttendancePolicy
-        from apps.branches.models import Holiday
-        from apps.leave.models import LeaveRequest
-        from apps.attendance.reporting_service import OptimizedSchedule, is_employee_holiday_optimized
-
-        policies = list(AttendancePolicy.objects.all())
-        policies_by_branch = {p.branch_id: p for p in policies if p.branch_id is not None}
-        global_policy = next((p for p in policies if p.branch_id is None), None)
-
-        holidays = list(Holiday.objects.filter(date=report_date))
-        branch_holidays = defaultdict(set)
-        global_holidays = set()
-        for h in holidays:
-            if h.branch_id:
-                branch_holidays[h.branch_id].add(h.date)
-            else:
-                global_holidays.add(h.date)
-
-        leave_requests = LeaveRequest.objects.filter(
-            employee_id__in=target_emp_ids,
-            status='approved',
-            start_date__lte=report_date,
-            end_date__gte=report_date
-        ).select_related('leave_type')
-        approved_leaves = {req.employee_id: req for req in leave_requests}
-
-        attendances = (
-            Attendance.objects
-            .filter(employee_id__in=target_emp_ids, date=report_date, is_expired=False)
-            .select_related('employee', 'employee__branch')
-            .prefetch_related('locations')
-        )
-
-        att_map = defaultdict(list)
-        for a in attendances:
-            att_map[a.employee_id].append(a)
-
-        rows = []
-        for emp in employees:
-            schedule = OptimizedSchedule(emp, policies_by_branch, global_policy)
-            is_holiday = is_employee_holiday_optimized(emp, report_date, schedule, branch_holidays, global_holidays)
-            is_on_leave = emp.id in approved_leaves
-
-            emp_atts = att_map.get(emp.id, [])
-            check_in_sessions = [a for a in emp_atts if a.attendance_type == 'check_in']
-            check_in = check_in_sessions[0] if check_in_sessions else None
-            fv_list  = [a for a in emp_atts if a.attendance_type == 'field_visit']
-            loc = check_in.locations.filter(event='check_in').first() if check_in else None
-
-            emp_total_hours = sum((float(a.total_hours or 0)) for a in check_in_sessions)
-            has_check_in = len(check_in_sessions) > 0
-            has_field_visit = len(fv_list) > 0
-            has_any_attendance = has_check_in or has_field_visit
-            day_has_late = any(a.status == 'late' for a in check_in_sessions)
-
-            if report_date > today:
-                status = 'scheduled'
-                is_present = False
-                is_absent = False
-            elif has_any_attendance:
-                is_present = True
-                is_absent = False
-                if day_has_late:
-                    status = 'late'
-                elif has_check_in:
-                    status = check_in.status if check_in else 'on_time'
-                else:
-                    status = 'on_time'
-            elif is_on_leave:
-                status = 'on_leave'
-                is_present = False
-                is_absent = False
-            elif is_holiday:
-                status = 'holiday'
-                is_present = False
-                is_absent = False
-            else:
-                status = 'absent'
-                is_present = False
-                is_absent = True
-
-            rows.append({
-                'employee':     emp,
-                'check_in':     check_in,
-                'check_in_sessions': check_in_sessions,
-                'total_hours':  emp_total_hours,
-                'field_visits': fv_list,
-                'location':     loc,
-                'status':       status,
-                'is_present':   is_present,
-                'is_absent':    is_absent,
-            })
-
-        if status_param:
-            sp = status_param.lower()
-            if sp == 'present':
-                rows = [r for r in rows if r['is_present']]
-            elif sp == 'absent':
-                rows = [r for r in rows if r['is_absent']]
-            elif sp == 'late':
-                rows = [r for r in rows if r['status'] == 'late']
-            elif sp in ('leave', 'on_leave'):
-                rows = [r for r in rows if r['status'] == 'on_leave']
-            elif sp in ('on_time', 'scheduled', 'holiday'):
-                rows = [r for r in rows if r['status'] == sp]
-
-        if type_param:
-            tp = type_param.lower()
-            if tp in ('check_in', 'office'):
-                rows = [r for r in rows if len(r['check_in_sessions']) > 0]
-            elif tp in ('field_visit', 'field'):
-                rows = [r for r in rows if len(r['field_visits']) > 0]
-
-        present     = sum(1 for r in rows if r['is_present'])
-        late        = sum(1 for r in rows if r['status'] == 'late')
-        absent      = sum(1 for r in rows if r['is_absent'])
-        field_total = sum(len(r['field_visits']) for r in rows)
-        total_hours = round(sum(r['total_hours'] for r in rows), 2)
 
         page_number = request.GET.get('page', 1)
-        paginator = Paginator(rows, 15)
+        paginator = Paginator(data['rows'], 15)
         page_obj = paginator.get_page(page_number)
 
         return render(request, self.template_name, {
             'report_date':       report_date,
             'page_obj':          page_obj,
             'rows':              page_obj.object_list,
-            'present':           present,
-            'absent':            absent,
-            'late':              late,
-            'field_total':       field_total,
-            'total_hours':       total_hours,
+            'present':           data['present'],
+            'absent':            data['absent'],
+            'late':              data['late'],
+            'field_total':       data['field_total'],
+            'total_hours':       data['total_hours'],
             'employees':         selector_employees,
             'branches':          branches,
             'selected_employee': emp_id,
@@ -1747,12 +1624,23 @@ class EmployeeReportView(AdminRequiredMixin, View):
                 year, month = today.year, today.month
         month = max(1, min(12, month))
 
-        schedule = _get_employee_schedule(employee)
-        _, last_day  = cal_mod.monthrange(year, month)
-        month_start  = _date(year, month, 1)
-        month_end    = _date(year, month, last_day)
-        working_days = _get_working_days(year, month, schedule)
-        working_day_set = _get_working_day_set(schedule)
+        from apps.attendance import reporting_service
+        data = reporting_service.get_monthly_report_data(
+            year=year,
+            month=month,
+            employee_id=employee.id,
+            allowed_employee_ids={employee.id}
+        )
+
+        emp_row = data['rows'][0] if data['rows'] else {
+            'present': 0, 'absent': 0, 'on_leave': 0, 'late': 0,
+            'field_visits': 0, 'total_hours': 0.0, 'att_pct': 0.0,
+            'day_calcs': {},
+        }
+
+        schedule = reporting_service.OptimizedSchedule(employee)
+        working_day_set = reporting_service._get_working_day_set(schedule)
+
         cal_mod.setfirstweekday(cal_mod.SATURDAY)
         first_wd = cal_mod.firstweekday()
         weekday_headers = [
@@ -1773,144 +1661,53 @@ class EmployeeReportView(AdminRequiredMixin, View):
             if cal_mod.day_name[idx].lower() not in working_day_set
         ]
 
-        attendances = list(
-            Attendance.objects.filter(
-                employee=employee, date__gte=month_start, date__lte=month_end, is_expired=False
-            ).prefetch_related('locations').order_by('date', 'check_in_time')
-        )
-
-        att_by_date = defaultdict(list)
-        for a in attendances:
-            att_by_date[a.date].append(a)
-
-        # Fetch approved leave requests in the month
-        leave_requests = LeaveRequest.objects.filter(
-            employee=employee,
-            status='approved',
-            start_date__lte=month_end,
-            end_date__gte=month_start
-        ).select_related('leave_type')
-
-        leave_dates = set()
-        for req in leave_requests:
-            s_date = max(req.start_date, month_start)
-            e_date = min(req.end_date, month_end)
-            curr = s_date
-            while curr <= e_date:
-                leave_dates.add(curr)
-                curr += dt_mod.timedelta(days=1)
-
-        calendar_weeks = _build_calendar_weeks(year, month, att_by_date, schedule, leave_dates=leave_dates)
-
-        cis     = [a for a in attendances if a.attendance_type == 'check_in']
-        fvs     = [a for a in attendances if a.attendance_type == 'field_visit']
-
-        check_in_dates = set(a.date for a in cis)
-        field_dates = set(a.date for a in fvs)
-
-        present = len(check_in_dates | field_dates)
-        late    = sum(1 for a in cis if calculate_attendance_status(a.check_in_time, schedule) == 'late')
-        early_checkouts = sum(
-            1 for a in cis
-            if a.check_out_time and calculate_early_checkout(a.check_out_time, schedule)
-        )
-
-        # Calculate stats considering current time limits (avoid marking future as absent)
-        if year < today.year or (year == today.year and month < today.month):
-            max_date = month_end
-        elif year == today.year and month == today.month:
-            max_date = today
-        else:
-            max_date = month_start - dt_mod.timedelta(days=1)
-
-        working_days_so_far = 0
-        on_leave_days = 0
-        absent_days = 0
-
-        current = month_start
-        while current <= month_end:
-            if _is_working_day(current, schedule):
-                if current <= max_date:
-                    working_days_so_far += 1
-                    day_atts = att_by_date.get(current, [])
-                    has_check_in = any(a.attendance_type == 'check_in' for a in day_atts)
-                    has_field_visit = any(a.attendance_type == 'field_visit' for a in day_atts)
-                    if not has_check_in and not has_field_visit:
-                        if current in leave_dates:
-                            on_leave_days += 1
-                        else:
-                            absent_days += 1
-            current += dt_mod.timedelta(days=1)
-
-        absent = absent_days
-        total_hours_sum = sum(float(a.total_hours or 0) for a in cis)
-        total_hours_str = format_hours_minutes(total_hours_sum)
-
-        overtime_minutes = sum(
-            calculate_overtime(a.check_out_time, schedule, employee)
-            if a.check_out_time else 0
-            for a in cis
-        )
-        overtime_hours_str = format_minutes(overtime_minutes)
-        att_pct = round(min(100.0, (present / working_days_so_far * 100)), 1) if working_days_so_far else 0.0
-
-        # Build full-month table
+        all_days = data['all_days']
         table_rows = []
-        current = month_start
-        while current <= month_end:
-            day_atts = att_by_date.get(current, [])
-            ci = next((a for a in day_atts if a.attendance_type == 'check_in'), None)
-            fv = [a for a in day_atts if a.attendance_type == 'field_visit']
-            is_weekend = not _is_working_day(current, schedule)
-            is_late = bool(ci and calculate_attendance_status(ci.check_in_time, schedule) == 'late')
-            is_early_checkout = bool(ci and ci.check_out_time and calculate_early_checkout(ci.check_out_time, schedule))
-            overtime_for_day = 0
-            overtime_str = ''
-            total_hours_for_day_str = ''
-
-            day_cis = [a for a in day_atts if a.attendance_type == 'check_in']
-            day_hours_sum = sum(float(a.total_hours or 0) for a in day_cis)
-            if day_hours_sum > 0:
-                total_hours_for_day_str = format_hours_minutes(day_hours_sum)
-
-            if ci and ci.check_out_time:
-                overtime_for_day = calculate_overtime(ci.check_out_time, schedule, employee)
-                if overtime_for_day > 0:
-                    overtime_str = format_minutes(overtime_for_day)
-
-            if is_weekend and not ci and not fv:
-                status_val = 'weekend'
-                status_display = 'Weekend'
-            elif fv and not ci:
-                status_val = 'on_time'
-                status_display = 'On Field'
-            elif ci:
-                status_val = 'late' if is_late else 'on_time'
-                status_display = 'Late' if is_late else 'On Time'
-            elif current in leave_dates:
-                status_val = 'on_leave'
-                status_display = 'On Leave'
-            elif current > today:
-                status_val = 'scheduled'
-                status_display = 'Scheduled'
-            else:
-                status_val = 'absent'
-                status_display = 'Absent'
+        for d in all_days:
+            dc = emp_row['day_calcs'].get(d)
+            if not dc:
+                continue
+            ci = dc['check_in']
+            fv = dc['field_visits']
+            is_early_co = bool(ci and ci.check_out_time and calculate_early_checkout(ci.check_out_time, schedule))
+            ot_min = dc['overtime_minutes']
 
             table_rows.append({
-                'date':         current,
-                'check_in':     ci,
+                'date': d,
+                'check_in': ci,
                 'field_visits': fv,
-                'is_weekend':   is_weekend,
-                'is_late':      is_late,
-                'is_early_checkout': is_early_checkout,
-                'status':       status_val,
-                'status_display': status_display,
-                'overtime_minutes': overtime_for_day,
-                'overtime_str': overtime_str,
-                'total_hours_str': total_hours_for_day_str,
+                'is_weekend': dc['is_holiday'],
+                'is_late': dc['is_late'],
+                'is_early_checkout': is_early_co,
+                'status': dc['status'],
+                'status_display': dc['status_display'],
+                'overtime_minutes': ot_min,
+                'overtime_str': format_minutes(ot_min) if ot_min > 0 else '',
+                'total_hours_str': format_hours_minutes(dc['total_hours']) if dc['total_hours'] > 0 else '',
             })
-            current += dt_mod.timedelta(days=1)
+
+        early_checkouts = sum(1 for r in table_rows if r['is_early_checkout'])
+
+        calendar_weeks = []
+        for week in cal_mod.monthcalendar(year, month):
+            week_row = []
+            for idx, day_num in enumerate(week):
+                if day_num == 0:
+                    week_row.append(None)
+                    continue
+                d = dt_mod.date(year, month, day_num)
+                dc = emp_row['day_calcs'].get(d)
+                week_row.append({
+                    'day': day_num,
+                    'date': d,
+                    'date_str': d.strftime('%Y-%m-%d'),
+                    'check_in': dc['check_in'] if dc else None,
+                    'has_fv': (dc['field_visit_count'] > 0) if dc else False,
+                    'is_weekend': dc['is_holiday'] if dc else False,
+                    'is_late': dc['is_late'] if dc else False,
+                    'color': dc['calendar_color'] if dc else 'gray',
+                })
+            calendar_weeks.append(week_row)
 
         from apps.projects.models import Project
         connected_projects = Project.objects.filter(
@@ -1925,6 +1722,8 @@ class EmployeeReportView(AdminRequiredMixin, View):
         prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
         next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
 
+        ot_display = data['employee_stats'].get(employee.id, {}).get('overtime_display', '-')
+
         return render(request, self.template_name, {
             'employee':        employee,
             'schedule':        schedule,
@@ -1934,15 +1733,15 @@ class EmployeeReportView(AdminRequiredMixin, View):
             'working_day_labels': working_day_labels,
             'off_day_labels':  off_day_labels,
             'calendar_weeks':  calendar_weeks,
-            'present':         present,
-            'absent':          absent,
-            'on_leave':        on_leave_days,
-            'late':            late,
+            'present':         emp_row['present'],
+            'absent':          emp_row['absent'],
+            'on_leave':        emp_row['on_leave'],
+            'late':            emp_row['late'],
             'early_checkouts': early_checkouts,
-            'field_visits':    len(fvs),
-            'total_hours':     total_hours_str,
-            'overtime_hours':  overtime_hours_str,
-            'att_pct':         att_pct,
+            'field_visits':    emp_row['field_visits'],
+            'total_hours':     format_hours_minutes(emp_row['total_hours']),
+            'overtime_hours':  ot_display,
+            'att_pct':         emp_row['att_pct'],
             'table_rows':      table_rows,
             'connected_projects': connected_projects,
             'completed_projects_count': completed_projects_count,
@@ -1968,8 +1767,8 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
         )
         ci      = next((a for a in day_atts if a.attendance_type == 'check_in'), None)
         fv_list = [a for a in day_atts if a.attendance_type == 'field_visit']
-        ci_loc  = ci.locations.filter(event='check_in').first() if ci else None
-        co_loc  = ci.locations.filter(event='check_out').first() if ci else None
+        ci_loc  = next((l for l in ci.locations.all() if l.event == 'check_in'), None) if ci else None
+        co_loc  = next((l for l in ci.locations.all() if l.event == 'check_out'), None) if ci else None
 
         if ci and getattr(ci, 'overtime_minutes', 0) > 0:
             ci.overtime_str = f"{ci.overtime_minutes // 60}h {ci.overtime_minutes % 60}m"
@@ -2557,44 +2356,29 @@ class ExportReportCSVView(AdminRequiredMixin, View):
         att_type = request.GET.get('type') or request.GET.get('attendance_type')
         status = request.GET.get('status')
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
-        if emp_id:
-            scoped_employees = scoped_employees.filter(id=emp_id)
-        if branch_id:
-            scoped_employees = scoped_employees.filter(branch_id=branch_id)
+        today = timezone.localdate()
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date() if date_from else today
+        except (ValueError, TypeError):
+            date_from_obj = today
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date() if date_to else date_from_obj
+        except (ValueError, TypeError):
+            date_to_obj = date_from_obj
 
-        if status == 'absent':
-            records = get_absent_records(
-                date_from=date_from,
-                date_to=date_to,
-                employee_queryset=scoped_employees
-            )
-            records = [r for r in records if r.status == 'absent']
-        elif status in ('leave', 'on_leave'):
-            records = get_absent_records(
-                date_from=date_from,
-                date_to=date_to,
-                employee_queryset=scoped_employees
-            )
-            records = [r for r in records if r.status == 'on_leave']
-        else:
-            qs = (
-                Attendance.objects
-                .select_related('employee', 'employee__branch')
-                .prefetch_related('locations')
-            )
-            qs = _filter_qs_by_request(qs, request, scoped_employees=scoped_employees)
-            if att_type:
-                if att_type in ('check_in', 'field_visit'):
-                    qs = qs.filter(attendance_type=att_type)
-                else:
-                    qs = qs.filter(type=att_type)
-            if status:
-                if status == 'present':
-                    qs = qs.filter(status__in=['on_time', 'late', 'present'])
-                else:
-                    qs = qs.filter(status=status)
-            records = list(qs.order_by('date', 'employee__full_name'))
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+
+        from apps.attendance import reporting_service
+        data = reporting_service.get_daily_report_data(
+            start_date=date_from_obj,
+            end_date=date_to_obj,
+            employee_id=emp_id or None,
+            branch_id=branch_id or None,
+            employee_queryset=scoped_employees,
+            status=status or None,
+            attendance_type=att_type or None,
+        )
+        records = data['rows']
 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = (
@@ -2606,22 +2390,40 @@ class ExportReportCSVView(AdminRequiredMixin, View):
             'Check-in', 'Check-out', 'Hours',
             'Type', 'Status', 'Location', 'Notes',
         ])
-        for idx, a in enumerate(records, 1):
-            loc = None
-            if not isinstance(a, SyntheticAttendance):
-                loc = a.locations.filter(event='check_in').first()
+        for idx, r in enumerate(records, 1):
+            ci = r['check_in']
+            cis = r['check_in_sessions']
+            fvs = r['field_visits']
+            latest_co = max((s.check_out_time for s in cis if s.check_out_time), default=None)
+
+            if cis and fvs:
+                type_display = 'Check In / Field Visit'
+            elif cis:
+                type_display = ci.get_type_display() if hasattr(ci, 'get_type_display') else 'Check In'
+            elif fvs:
+                type_display = 'Field Visit'
+            elif r['status'] == 'on_leave':
+                type_display = 'Leave'
+            elif r['status'] == 'holiday':
+                type_display = 'Holiday'
+            else:
+                type_display = '—'
+
+            loc_str = r['location'].address if r['location'] and hasattr(r['location'], 'address') else ''
+            notes = r['notes'] or ''
+
             writer.writerow([
                 idx,
-                a.employee.full_name,
-                a.employee.employee_id,
-                a.date,
-                timezone.localtime(a.check_in_time).strftime('%H:%M') if a.check_in_time else '',
-                timezone.localtime(a.check_out_time).strftime('%H:%M') if a.check_out_time else '',
-                str(a.total_hours) if a.total_hours else '',
-                a.get_type_display(),
-                a.get_status_display(),
-                loc.address if loc else '',
-                a.note or '',
+                r['employee'].full_name,
+                r['employee'].employee_id,
+                r['date'],
+                timezone.localtime(ci.check_in_time).strftime('%H:%M') if ci and ci.check_in_time else '',
+                timezone.localtime(latest_co).strftime('%H:%M') if latest_co else '',
+                str(r['total_hours']) if r['total_hours'] > 0 else '',
+                type_display,
+                r['status_display'],
+                loc_str,
+                notes,
             ])
         return response
 
@@ -2643,43 +2445,29 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         att_type = request.GET.get('type') or request.GET.get('attendance_type')
         status = request.GET.get('status')
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
-        if emp_id:
-            scoped_employees = scoped_employees.filter(id=emp_id)
-        if branch_id:
-            scoped_employees = scoped_employees.filter(branch_id=branch_id)
+        today = timezone.localdate()
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date() if date_from else today
+        except (ValueError, TypeError):
+            date_from_obj = today
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date() if date_to else date_from_obj
+        except (ValueError, TypeError):
+            date_to_obj = date_from_obj
 
-        if status == 'absent':
-            attendances = get_absent_records(
-                date_from=date_from,
-                date_to=date_to,
-                employee_queryset=scoped_employees
-            )
-            attendances = [r for r in attendances if r.status == 'absent']
-        elif status in ('leave', 'on_leave'):
-            attendances = get_absent_records(
-                date_from=date_from,
-                date_to=date_to,
-                employee_queryset=scoped_employees
-            )
-            attendances = [r for r in attendances if r.status == 'on_leave']
-        else:
-            qs = (
-                Attendance.objects
-                .select_related('employee', 'employee__branch')
-            )
-            qs = _filter_qs_by_request(qs, request, scoped_employees=scoped_employees)
-            if att_type:
-                if att_type in ('check_in', 'field_visit'):
-                    qs = qs.filter(attendance_type=att_type)
-                else:
-                    qs = qs.filter(type=att_type)
-            if status:
-                if status == 'present':
-                    qs = qs.filter(status__in=['on_time', 'late', 'present'])
-                else:
-                    qs = qs.filter(status=status)
-            attendances = list(qs.order_by('date', 'employee__full_name'))
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+
+        from apps.attendance import reporting_service
+        data = reporting_service.get_daily_report_data(
+            start_date=date_from_obj,
+            end_date=date_to_obj,
+            employee_id=emp_id or None,
+            branch_id=branch_id or None,
+            employee_queryset=scoped_employees,
+            status=status or None,
+            attendance_type=att_type or None,
+        )
+        records = data['rows']
 
         # ── HTTP response ───────────────────────────────────────────────
         response = HttpResponse(content_type='application/pdf')
@@ -2714,25 +2502,42 @@ class ExportReportPDFView(AdminRequiredMixin, View):
             'Check-in', 'Check-out', 'Hours',
             'Type', 'Status', 'Notes',
         ]
-        data = [header]
+        table_data = [header]
 
-        for idx, a in enumerate(attendances, 1):
-            branch = a.employee.branch.name if a.employee.branch else '—'
-            data.append([
+        for idx, r in enumerate(records, 1):
+            ci = r['check_in']
+            cis = r['check_in_sessions']
+            fvs = r['field_visits']
+            latest_co = max((s.check_out_time for s in cis if s.check_out_time), default=None)
+
+            if cis and fvs:
+                type_display = 'Check In / Field Visit'
+            elif cis:
+                type_display = ci.get_type_display() if hasattr(ci, 'get_type_display') else 'Check In'
+            elif fvs:
+                type_display = 'Field Visit'
+            elif r['status'] == 'on_leave':
+                type_display = 'Leave'
+            elif r['status'] == 'holiday':
+                type_display = 'Holiday'
+            else:
+                type_display = '—'
+
+            table_data.append([
                 str(idx),
-                a.employee.full_name,
-                a.employee.employee_id,
-                str(a.date),
-                timezone.localtime(a.check_in_time).strftime('%H:%M')  if a.check_in_time  else '—',
-                timezone.localtime(a.check_out_time).strftime('%H:%M') if a.check_out_time else '—',
-                f'{a.total_hours}h' if a.total_hours else '—',
-                a.get_type_display(),
-                a.get_status_display(),
-                a.note or '—',
+                r['employee'].full_name,
+                r['employee'].employee_id,
+                str(r['date']),
+                timezone.localtime(ci.check_in_time).strftime('%H:%M') if ci and ci.check_in_time else '—',
+                timezone.localtime(latest_co).strftime('%H:%M') if latest_co else '—',
+                f"{r['total_hours']}h" if r['total_hours'] > 0 else '—',
+                type_display,
+                r['status_display'],
+                r['notes'] or '—',
             ])
 
         col_widths = [25, 100, 50, 55, 50, 50, 40, 50, 50, 65]
-        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
         table.setStyle(TableStyle([
             # Header row
             ('BACKGROUND',    (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
