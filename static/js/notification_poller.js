@@ -34,6 +34,37 @@
       }
     }
 
+    function withTimeout(promise, ms = 10000) {
+      let timerId = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timerId = setTimeout(() => {
+          reject(new Error('Operation timed out'));
+        }, ms);
+      });
+      return Promise.race([promise, timeoutPromise]).finally(() => {
+        if (timerId) clearTimeout(timerId);
+      });
+    }
+
+    async function fetchWithTimeout(url, options = {}, ms = 10000) {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      let timerId = null;
+      const opts = Object.assign({}, options);
+      if (controller) {
+        timerId = setTimeout(() => {
+          controller.abort();
+        }, ms);
+        opts.signal = controller.signal;
+      }
+      try {
+        return await fetch(url, opts);
+      } finally {
+        if (timerId) {
+          clearTimeout(timerId);
+        }
+      }
+    }
+
     async function syncWebPushSubscription() {
       if (pushSyncInProgress) return;
       if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
@@ -48,32 +79,32 @@
 
       pushSyncInProgress = true;
       try {
-        const configRes = await fetch(pushConfigUrl, {
+        const configRes = await fetchWithTimeout(pushConfigUrl, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
           },
           cache: 'no-store'
-        });
+        }, 10000);
 
-        if (!configRes.ok) return;
+        if (!configRes || !configRes.ok) return;
         const config = await configRes.json();
         if (!config || !config.public_key || typeof config.public_key !== 'string' || !config.public_key.trim()) {
           return;
         }
 
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await withTimeout(navigator.serviceWorker.ready, 10000);
         if (!registration || !registration.pushManager) return;
 
-        let subscription = await registration.pushManager.getSubscription();
+        let subscription = await withTimeout(registration.pushManager.getSubscription(), 10000);
         if (!subscription) {
           const applicationServerKey = urlBase64ToUint8Array(config.public_key.trim());
           if (!applicationServerKey) return;
-          subscription = await registration.pushManager.subscribe({
+          subscription = await withTimeout(registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: applicationServerKey
-          });
+          }), 10000);
         }
 
         if (!subscription) return;
@@ -102,7 +133,7 @@
 
         const csrfToken = config.csrf_token || '';
 
-        await fetch(pushSubscriptionUrl, {
+        const postRes = await fetchWithTimeout(pushSubscriptionUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -118,9 +149,13 @@
               auth: auth
             }
           })
-        });
+        }, 10000);
+
+        if (!postRes || !postRes.ok) {
+          return;
+        }
       } catch (err) {
-        // Silently recover if browser push fails, keeping foreground notifications working
+        // Silently recover if browser push fails or times out, keeping foreground notifications working
       } finally {
         pushSyncInProgress = false;
       }

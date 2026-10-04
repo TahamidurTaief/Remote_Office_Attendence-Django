@@ -221,23 +221,11 @@ def notification_feed(request):
 
 def _get_canonical_request_tenant(request):
     """
-    Resolve active tenant strictly from canonical request context.
-    Never accepts tenant IDs from client payloads. Fails closed if no active tenant.
+    Resolve active tenant strictly via get_request_tenant helper.
+    Never accepts tenant IDs from client payloads. Fails closed if missing or inactive.
     """
-    tenant = getattr(request, 'tenant', None)
-    if not tenant:
-        from apps.tenants.context import _tenant_context
-        tenant = _tenant_context.get()
-    if not tenant and request.user and request.user.is_authenticated:
-        from apps.tenants.models import TenantMembership
-        membership = TenantMembership.objects.filter(
-            user=request.user,
-            is_active=True,
-            tenant__status='active'
-        ).select_related('tenant').first()
-        if membership:
-            tenant = membership.tenant
-
+    from apps.tenants.context import get_request_tenant
+    tenant = get_request_tenant(request)
     if tenant and getattr(tenant, 'status', None) == 'active':
         return tenant
     return None
@@ -271,21 +259,10 @@ def push_subscription(request):
     if not isinstance(data, dict):
         return JsonResponse({'error': 'Invalid payload format'}, status=400)
 
-    # Reject forged tenant or user payloads
-    client_tenant_id = data.get('tenant_id') or data.get('tenant')
-    client_user_id = data.get('user_id') or data.get('user')
-
-    if client_tenant_id is not None:
-        if str(client_tenant_id) not in (
-            str(canonical_tenant.id),
-            str(getattr(canonical_tenant, 'slug', '')),
-            str(getattr(canonical_tenant, 'uuid', ''))
-        ):
-            return JsonResponse({'error': 'Invalid tenant parameter'}, status=400)
-
-    if client_user_id is not None:
-        if str(client_user_id) != str(request.user.id):
-            return JsonResponse({'error': 'Invalid user parameter'}, status=400)
+    # Reject forbidden identity keys by presence regardless of value
+    forbidden_keys = {'tenant', 'tenant_id', 'user', 'user_id'}
+    if forbidden_keys.intersection(data.keys()):
+        return JsonResponse({'error': 'Client-supplied identity parameters are forbidden'}, status=400)
 
     endpoint = (data.get('endpoint') or '').strip()
 
@@ -321,15 +298,15 @@ def push_subscription(request):
     except Exception:
         return JsonResponse({'error': 'Malformed endpoint URL'}, status=400)
 
-    # Validate browser keys
+    # Validate browser keys (must match model max_length=255)
     keys = data.get('keys') if isinstance(data.get('keys'), dict) else {}
     p256dh = (keys.get('p256dh') or data.get('p256dh') or '').strip()
     auth = (keys.get('auth') or data.get('auth') or '').strip()
 
-    if not p256dh or len(p256dh) < 10 or len(p256dh) > 500:
+    if not p256dh or len(p256dh) < 10 or len(p256dh) > 255:
         return JsonResponse({'error': 'Invalid p256dh key'}, status=400)
 
-    if not auth or len(auth) < 6 or len(auth) > 500:
+    if not auth or len(auth) < 6 or len(auth) > 255:
         return JsonResponse({'error': 'Invalid auth key'}, status=400)
 
     endpoint_hash = hashlib.sha256(endpoint.encode('utf-8')).hexdigest()
