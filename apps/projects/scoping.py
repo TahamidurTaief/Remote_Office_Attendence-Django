@@ -5,6 +5,100 @@ from apps.accounts.engine import PermissionEngine
 from apps.accounts.models import DataScope
 
 
+def _extract_user_department_identity(user):
+    """
+    Extracts canonical department IDs and names from user context.
+    Supports both master Employee.department (FK) and EmployeeProfile.department (CharField).
+    Returns (set(dept_ids), set(dept_names)).
+    """
+    emp_master = getattr(user, 'employee_master', None)
+    emp_profile = getattr(user, 'employee_profile', None)
+
+    dept_ids = set()
+    dept_names = set()
+
+    if emp_master:
+        dept_fk = getattr(emp_master, 'department', None)
+        if dept_fk is not None:
+            if hasattr(dept_fk, 'id'):
+                dept_ids.add(dept_fk.id)
+                name = getattr(dept_fk, 'name', None)
+                if name and isinstance(name, str) and name.strip():
+                    dept_names.add(name.strip())
+            elif isinstance(dept_fk, int):
+                dept_ids.add(dept_fk)
+            elif isinstance(dept_fk, str) and dept_fk.strip():
+                dept_names.add(dept_fk.strip())
+        dept_id_attr = getattr(emp_master, 'department_id', None)
+        if dept_id_attr:
+            dept_ids.add(dept_id_attr)
+
+    if emp_profile:
+        prof_dept = getattr(emp_profile, 'department', None)
+        if prof_dept is not None:
+            if hasattr(prof_dept, 'id'):
+                dept_ids.add(prof_dept.id)
+                name = getattr(prof_dept, 'name', None)
+                if name and isinstance(name, str) and name.strip():
+                    dept_names.add(name.strip())
+            elif isinstance(prof_dept, int):
+                dept_ids.add(prof_dept)
+            elif isinstance(prof_dept, str) and prof_dept.strip():
+                dept_names.add(prof_dept.strip())
+
+    user_dept = getattr(user, 'department', None)
+    if user_dept is not None:
+        if hasattr(user_dept, 'id'):
+            dept_ids.add(user_dept.id)
+            name = getattr(user_dept, 'name', None)
+            if name and isinstance(name, str) and name.strip():
+                dept_names.add(name.strip())
+        elif isinstance(user_dept, int):
+            dept_ids.add(user_dept)
+        elif isinstance(user_dept, str) and user_dept.strip():
+            dept_names.add(user_dept.strip())
+
+    if dept_names:
+        from apps.employees.models import Department
+        try:
+            name_q = Q()
+            for name in dept_names:
+                name_q |= Q(name__iexact=name)
+            matched = Department.objects.filter(name_q).values('id', 'name')
+            for m in matched:
+                dept_ids.add(m['id'])
+                if m.get('name'):
+                    dept_names.add(m['name'].strip())
+        except Exception:
+            pass
+
+    if dept_ids and not dept_names:
+        from apps.employees.models import Department
+        try:
+            matched = Department.objects.filter(id__in=dept_ids).values_list('name', flat=True)
+            for n in matched:
+                if n and n.strip():
+                    dept_names.add(n.strip())
+        except Exception:
+            pass
+
+    return dept_ids, dept_names
+
+
+def _build_employee_dept_q(prefix, dept_ids, dept_names):
+    """
+    Builds Q filter for an EmployeeProfile relation matching department by ID or name.
+    Supports master Department FK and legacy department name.
+    """
+    dept_q = Q()
+    if dept_ids:
+        dept_q |= Q(**{f'{prefix}master_employee__department_id__in': dept_ids})
+    for name in dept_names:
+        dept_q |= Q(**{f'{prefix}department__iexact': name})
+        dept_q |= Q(**{f'{prefix}master_employee__department__name__iexact': name})
+    return dept_q
+
+
 def get_scoped_project_queryset(user, codename='projects.view', action='view', base_qs=None):
     """
     Authoritative database-scoped queryset for Project.
@@ -86,9 +180,16 @@ def get_scoped_project_queryset(user, codename='projects.view', action='view', b
             if user_branch:
                 q_filter |= Q(branch=user_branch)
         elif scope == DataScope.DEPARTMENT:
-            user_dept = getattr(emp_master, 'department', None) or getattr(emp_profile, 'department', None)
-            if user_dept:
-                q_filter |= Q(branch__department=user_dept)
+            dept_ids, dept_names = _extract_user_department_identity(user)
+            if not dept_ids and not dept_names:
+                return base_qs.none()
+            dept_filter = (
+                _build_employee_dept_q('project_managers__', dept_ids, dept_names) |
+                _build_employee_dept_q('project_members__', dept_ids, dept_names) |
+                _build_employee_dept_q('site_engineers__', dept_ids, dept_names) |
+                _build_employee_dept_q('tasks__responsible_person__', dept_ids, dept_names)
+            )
+            q_filter |= dept_filter
         elif scope == DataScope.TEAM:
             if emp_master:
                 from apps.employees.hierarchy_services import OrgHierarchyService
@@ -130,7 +231,7 @@ def get_scoped_project_or_404(user, pk, codename='projects.view', action='view',
         raise Http404("Project not found.")
 
     if select_for_update:
-        return Project.objects.select_for_update().get(pk=pk)
+        return scoped_qs.select_for_update().get(pk=pk)
     return scoped_qs.filter(pk=pk).first()
 
 
@@ -184,9 +285,17 @@ def get_scoped_project_task_queryset(user, action='view', base_qs=None):
                     Q(project__isnull=True) & Q(responsible_person__branch=user_branch)
                 )
         elif scope == DataScope.DEPARTMENT:
-            user_dept = getattr(emp_master, 'department', None) or getattr(emp_profile, 'department', None)
-            if user_dept:
-                q_filter |= Q(responsible_person__department=user_dept)
+            dept_ids, dept_names = _extract_user_department_identity(user)
+            if not dept_ids and not dept_names:
+                return base_qs.none()
+            dept_filter = (
+                _build_employee_dept_q('responsible_person__', dept_ids, dept_names) |
+                _build_employee_dept_q('project__project_managers__', dept_ids, dept_names) |
+                _build_employee_dept_q('project__project_members__', dept_ids, dept_names) |
+                _build_employee_dept_q('project__site_engineers__', dept_ids, dept_names) |
+                _build_employee_dept_q('project__tasks__responsible_person__', dept_ids, dept_names)
+            )
+            q_filter |= dept_filter
         elif scope == DataScope.TEAM:
             if emp_master:
                 from apps.employees.hierarchy_services import OrgHierarchyService
@@ -228,7 +337,7 @@ def get_scoped_project_task_or_404(user, pk, action='view', select_for_update=Fa
         raise Http404("Task not found.")
 
     if select_for_update:
-        return ProjectTask.objects.select_for_update().get(pk=pk)
+        return scoped_qs.select_for_update().get(pk=pk)
     return scoped_qs.filter(pk=pk).first()
 
 
@@ -258,7 +367,7 @@ def get_scoped_project_material_or_404(user, pk, codename='projects.edit', actio
         raise Http404("Material not found.")
 
     if select_for_update:
-        return ProjectMaterial.objects.select_for_update().get(pk=pk)
+        return scoped_qs.select_for_update().get(pk=pk)
     return scoped_qs.filter(pk=pk).first()
 
 
@@ -288,7 +397,7 @@ def get_scoped_progress_log_or_404(user, pk, codename='projects.edit', action='e
         raise Http404("Progress log not found.")
 
     if select_for_update:
-        return DailyProgressLog.objects.select_for_update().get(pk=pk)
+        return scoped_qs.select_for_update().get(pk=pk)
     return scoped_qs.filter(pk=pk).first()
 
 
@@ -318,7 +427,7 @@ def get_scoped_manpower_or_404(user, pk, codename='projects.edit', action='edit'
         raise Http404("Manpower log not found.")
 
     if select_for_update:
-        return ManpowerDeployment.objects.select_for_update().get(pk=pk)
+        return scoped_qs.select_for_update().get(pk=pk)
     return scoped_qs.filter(pk=pk).first()
 
 
@@ -333,5 +442,5 @@ def get_scoped_task_dependency_or_404(user, pk, action='edit', select_for_update
         raise Http404("Dependency not found.")
 
     if select_for_update:
-        return TaskDependency.objects.select_for_update().get(pk=pk)
+        return qs.select_for_update().get(pk=pk)
     return qs.filter(pk=pk).first()
