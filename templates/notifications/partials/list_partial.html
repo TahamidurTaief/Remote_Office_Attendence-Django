@@ -28,7 +28,7 @@
   <div class="flex-1 overflow-y-auto divide-y" style="border-color:var(--border-subtle)">
     {% for notif in notifs %}
       {% if request.user.is_superuser or 'notifications.view' in request.user.resolved_permissions %}
-        {% if notif.notif_type == 'schedule_alert' %}
+        {% if notif.notif_type == 'schedule_event' %}
           {% url 'schedule:month_view' as item_redirect_url %}
         {% elif notif.employee %}
           {% url 'employees:employee_detail' notif.employee.pk as item_redirect_url %}
@@ -38,7 +38,7 @@
       {% else %}
         {% if notif.notif_type == 'task_assigned' or notif.notif_type == 'task_completed' or notif.notif_type == 'task_delayed' %}
           {% url 'staff:my_tasks' as item_redirect_url %}
-        {% elif notif.notif_type == 'schedule_alert' %}
+        {% elif notif.notif_type == 'schedule_event' %}
           {% url 'schedule:month_view' as item_redirect_url %}
         {% else %}
           {% url 'notifications:list' as item_redirect_url %}
@@ -62,14 +62,14 @@
             {% if notif.notif_type == 'check_in' or notif.notif_type == 'check_out' %}bg-accent-500
             {% elif notif.notif_type == 'late' or notif.notif_type == 'missing' %}bg-red-500
             {% elif notif.notif_type == 'task_completed' %}bg-emerald-500
-            {% elif notif.notif_type == 'schedule_alert' %}bg-purple-500
+            {% elif notif.notif_type == 'schedule_event' %}bg-purple-500
             {% elif notif.notif_type == 'field_visit' %}bg-indigo-500
             {% else %}bg-blue-500{% endif %}">
             {% if notif.notif_type == 'check_in' %}I
             {% elif notif.notif_type == 'check_out' %}O
             {% elif notif.notif_type == 'late' %}L
             {% elif notif.notif_type == 'missing' %}M
-            {% elif notif.notif_type == 'schedule_alert' %}S
+            {% elif notif.notif_type == 'schedule_event' %}S
             {% elif notif.notif_type == 'field_visit' %}F
             {% else %}T{% endif %}
           </span>
@@ -85,10 +85,10 @@
               {% if notif.notif_type == 'check_in' or notif.notif_type == 'check_out' %}bg-accent-50 text-accent-700 dark:bg-accent-950 dark:text-accent-300
               {% elif notif.notif_type == 'late' or notif.notif_type == 'missing' %}bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300
               {% elif notif.notif_type == 'task_completed' %}bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300
-              {% elif notif.notif_type == 'schedule_alert' %}bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300
+              {% elif notif.notif_type == 'schedule_event' %}bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300
               {% elif notif.notif_type == 'field_visit' %}bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300
               {% else %}bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300{% endif %}">
-              {% if notif.notif_type == 'schedule_alert' %}Schedule Alert{% elif notif.notif_type == 'field_visit' %}Field Visit{% else %}{{ notif.notif_type }}{% endif %}
+              {% if notif.notif_type == 'schedule_event' %}Schedule Alert{% elif notif.notif_type == 'field_visit' %}Field Visit{% else %}{{ notif.notif_type }}{% endif %}
             </span>
           </div>
 

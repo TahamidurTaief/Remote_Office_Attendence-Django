@@ -260,7 +260,7 @@ class ScheduleCalendarTests(TestCase):
         notifs = Notification.objects.filter(recipient=self.employee_user)
         self.assertEqual(notifs.count(), 1)
         self.assertEqual(notifs.first().title, 'New Event: Safety Drill')
-        self.assertEqual(notifs.first().notif_type, 'schedule_alert')
+        self.assertEqual(notifs.first().notif_type, 'schedule_event')
 
     def test_staff_role_scoping(self):
         # Create an event assigned to the staff user

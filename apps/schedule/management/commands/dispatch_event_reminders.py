@@ -154,7 +154,7 @@ class Command(BaseCommand):
                                     employee=employee,
                                     title=f"Reminder: {event_title}"[:200],
                                     message=f"Reminder: '{event_title}' starts at {event_time_str} today ({event_date_str}).",
-                                    notif_type='schedule_alert',
+                                    notif_type='schedule_event',
                                 )
                             )
 
