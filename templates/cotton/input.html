@@ -13,9 +13,10 @@
    - extra_class: additional classes on wrapper
    - id: input id (defaults to name)
 {% endcomment %}
+<c-vars name="" id="" type="text" label="" value="" placeholder="" required="" disabled="" error="" help="" icon="" extra_class="" input_class="" attrs="" />
 <div class="flex flex-col gap-0.5 {{ extra_class }}">
   {% if label %}
-    <label for="{{ id|default:name }}" class="ft-label">
+    <label {% if id or name %}for="{{ id|default:name }}"{% endif %} class="ft-label">
       {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
     </label>
   {% endif %}
@@ -30,21 +31,21 @@
     <input
       type="{{ type|default:'text' }}"
       name="{{ name }}"
-      id="{{ id|default:name }}"
+      {% if id or name %}id="{{ id|default:name }}"{% endif %}
       value="{{ value }}"
       placeholder="{{ placeholder }}"
       {% if required %}required{% endif %}
       {% if disabled %}disabled{% endif %}
-      {% if error %}aria-invalid="true" aria-describedby="{{ id|default:name }}-error"{% elif help %}aria-describedby="{{ id|default:name }}-help"{% endif %}
+      {% if error %}aria-invalid="true" {% if id or name %}aria-describedby="{{ id|default:name }}-error"{% endif %}{% elif help %}{% if id or name %}aria-describedby="{{ id|default:name }}-help"{% endif %}{% endif %}
       class="ft-input {% if icon %}pl-8{% endif %} {% if error %}border-red-500 !border-red-500 focus:!box-shadow-[0_0_0_3px_rgba(239,68,68,0.15)]{% endif %} {{ input_class }}"
       {{ attrs }}
     >
   </div>
 
   {% if error %}
-    <p id="{{ id|default:name }}-error" class="ft-error-text">{{ error }}</p>
+    <p {% if id or name %}id="{{ id|default:name }}-error"{% endif %} class="ft-error-text">{{ error }}</p>
   {% endif %}
   {% if help and not error %}
-    <p id="{{ id|default:name }}-help" class="ft-help-text">{{ help }}</p>
+    <p {% if id or name %}id="{{ id|default:name }}-help"{% endif %} class="ft-help-text">{{ help }}</p>
   {% endif %}
 </div>

@@ -149,7 +149,7 @@
                 {% csrf_token %}
                 <input type="hidden" name="employee_id" :value="employee_id">
 
-                <c-input label="Employee" readonly="true" :value="employee_name"></c-input>
+                <c-input name="employee_name_display" id="create_employee_name_display" label="Employee" readonly="true" :value="employee_name"></c-input>
 
                 <c-select name="salary_structure_id" label="Salary Structure" required="true">
                     {% for s in structures %}
@@ -198,7 +198,7 @@
         }">
             <form id="edit-assignment-form" method="post" :action="action" class="space-y-4">
                 {% csrf_token %}
-                <c-input label="Employee" readonly="true" :value="employee_name"></c-input>
+                <c-input name="employee_name_display" id="edit_employee_name_display" label="Employee" readonly="true" :value="employee_name"></c-input>
 
                 <c-select name="salary_structure_id" label="Salary Structure" required="true" x-model="structure_id">
                     {% for s in structures %}
