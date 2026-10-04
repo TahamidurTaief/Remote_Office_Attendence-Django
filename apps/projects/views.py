@@ -489,7 +489,7 @@ class ProjectTaskCreateView(AdminRequiredMixin, CreateView):
                     'message': notif_msg,
                     'email_subject': subject,
                     'email_message': email_msg,
-                    'notif_type': 'field_visit'
+                    'notif_type': 'task_assigned'
                 },
                 notify_users=[task.responsible_person.user],
                 email_also=True
@@ -579,7 +579,7 @@ class ProjectTaskUpdateView(RoleRequiredMixin, UpdateView):
                         'message': notif_msg,
                         'email_subject': subject,
                         'email_message': email_msg,
-                        'notif_type': 'field_visit'
+                        'notif_type': 'task_assigned'
                     },
                     notify_users=[new_task.responsible_person.user],
                     email_also=True
@@ -1922,7 +1922,7 @@ class GlobalTaskCreateView(RoleRequiredMixin, CreateView):
                 employee=task.responsible_person,
                 title=f"New Task Assigned: {task.activity}",
                 message=f"You have been assigned to task '{task.activity}' ({project_label}).",
-                notif_type='field_visit'
+                notif_type='task_assigned'
             )
             subject = f"New Task Assigned: {task.activity}"
             message = (

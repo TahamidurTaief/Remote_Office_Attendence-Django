@@ -780,7 +780,7 @@ def my_project_add_task(request, project_id):
                         'message': notif_msg,
                         'email_subject': subject,
                         'email_message': message_text,
-                        'notif_type': 'field_visit'
+                        'notif_type': 'task_assigned'
                     },
                     notify_users=[task.responsible_person.user],
                     email_also=True
@@ -951,7 +951,7 @@ def my_project_edit_task(request, task_id):
                         'message': notif_msg,
                         'email_subject': subject,
                         'email_message': message_text,
-                        'notif_type': 'field_visit'
+                        'notif_type': 'task_assigned'
                     },
                     notify_users=[task.responsible_person.user],
                     email_also=True
