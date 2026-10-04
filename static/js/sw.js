@@ -132,6 +132,41 @@ function isSafeSameOriginPath(url) {
   }
 }
 
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      try {
+        data = { title: event.data.text() };
+      } catch (err) {
+        data = {};
+      }
+    }
+  }
+
+  const title = data.title || 'FieldTrack Alert';
+  const targetUrl = isSafeSameOriginPath(data.url || data.redirect_url) ? (data.url || data.redirect_url) : '/notifications/';
+  const notifId = data.id || data.notification_id || 'push';
+
+  const options = {
+    body: data.body || data.message || '',
+    icon: data.icon || '/static/icons/icon.png',
+    badge: '/static/icons/icon.png',
+    tag: data.tag || `ft-notif-${notifId}`,
+    data: {
+      id: notifId,
+      notification_id: notifId,
+      url: targetUrl
+    }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 

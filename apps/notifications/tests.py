@@ -101,6 +101,7 @@ class ActivityTimelineViewsTest(TestCase):
             full_name='Manager One',
             phone='1112223334',
             employee_id='EMP_MGR_01',
+            is_project_manager=True,
             joined_date=date.today()
         )
         self.staff_user = User.objects.create_user(email='staff1@example.com', password='password123', role='staff')
@@ -168,3 +169,62 @@ class ActivityTimelineViewsTest(TestCase):
         self.assertEqual(len(activities_staff), 2)
 
 
+from unittest.mock import patch, MagicMock
+from apps.tenants.models import Tenant
+from apps.notifications.models import WebPushSubscription
+from apps.notifications.web_push import send_web_push, deliver_notification_web_push
+
+
+class WebPushDeliveryTest(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name='Test Tenant', slug='delivery-tenant', status='active')
+        self.user = User.objects.create_user(email='push_user@example.com', password='password123')
+        self.sub = WebPushSubscription.objects.create(
+            tenant=self.tenant,
+            user=self.user,
+            endpoint='https://fcm.googleapis.com/fcm/send/test-token-123',
+            endpoint_hash='hash123',
+            p256dh='BP8xNeM-52elJG2P7sevn68tJNzHbLrLh5YO-Aixae99zqCPpWgIB5q2OMB2hsFZSJHpfBH799hX4TPoFugiFi8',
+            auth='SWtRNrFW2_SMqOlBpM7byw',
+            is_active=True
+        )
+
+    @patch('apps.notifications.web_push.requests.post')
+    def test_send_web_push_success(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_post.return_value = mock_resp
+
+        result = send_web_push(self.sub, {'title': 'Hello', 'body': 'World'})
+        self.assertTrue(result)
+        self.sub.refresh_from_db()
+        self.assertTrue(self.sub.is_active)
+        self.assertIsNotNone(self.sub.last_seen_at)
+
+    @patch('apps.notifications.web_push.requests.post')
+    def test_send_web_push_expired_deactivates_subscription(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 410
+        mock_post.return_value = mock_resp
+
+        result = send_web_push(self.sub, {'title': 'Expired'})
+        self.assertFalse(result)
+        self.sub.refresh_from_db()
+        self.assertFalse(self.sub.is_active)
+
+    @patch('apps.notifications.web_push.send_web_push')
+    def test_deliver_notification_web_push(self, mock_send):
+        mock_send.return_value = True
+        notif = Notification.objects.create(
+            recipient=self.user,
+            title='Schedule Alert',
+            message='Shift starts soon',
+            notif_type='schedule_event'
+        )
+        count = deliver_notification_web_push(notif)
+        self.assertEqual(count, 1)
+        mock_send.assert_called_once()
+        args, kwargs = mock_send.call_args
+        self.assertEqual(args[0], self.sub)
+        self.assertEqual(args[1]['title'], 'Schedule Alert')
+        self.assertEqual(args[1]['redirect_url'], reverse('schedule:month_view'))
