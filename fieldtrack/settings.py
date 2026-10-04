@@ -57,6 +57,8 @@ SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 
+WEB_PUSH_PUBLIC_KEY = os.getenv('WEB_PUSH_PUBLIC_KEY', '')
+
 
 # ── APPLICATION DEFINITION ───────────────────────────────────────────────────
 

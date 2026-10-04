@@ -1,8 +1,15 @@
+import json
+import hashlib
+from urllib.parse import urlparse
+from django.conf import settings
+from django.db import transaction, IntegrityError
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
+from django.middleware.csrf import get_token
+from django.utils import timezone
 from django.views.decorators.http import require_POST
-from .models import Notification
+from .models import Notification, WebPushSubscription
 
 
 def _admin_required(view_func):
@@ -209,4 +216,183 @@ def notification_feed(request):
         'next_cursor': next_cursor,
     })
     response['Cache-Control'] = 'no-store'
+    return response
+
+
+def _get_canonical_request_tenant(request):
+    """
+    Resolve active tenant strictly from canonical request context.
+    Never accepts tenant IDs from client payloads. Fails closed if no active tenant.
+    """
+    tenant = getattr(request, 'tenant', None)
+    if not tenant:
+        from apps.tenants.context import _tenant_context
+        tenant = _tenant_context.get()
+    if not tenant and request.user and request.user.is_authenticated:
+        from apps.tenants.models import TenantMembership
+        membership = TenantMembership.objects.filter(
+            user=request.user,
+            is_active=True,
+            tenant__status='active'
+        ).select_related('tenant').first()
+        if membership:
+            tenant = membership.tenant
+
+    if tenant and getattr(tenant, 'status', None) == 'active':
+        return tenant
+    return None
+
+
+@login_required
+def push_config(request):
+    public_key = getattr(settings, 'WEB_PUSH_PUBLIC_KEY', '') or ''
+    response = JsonResponse({
+        'public_key': public_key,
+        'csrf_token': get_token(request),
+    })
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    return response
+
+
+@login_required
+def push_subscription(request):
+    if request.method not in ('POST', 'PUT', 'DELETE'):
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    canonical_tenant = _get_canonical_request_tenant(request)
+    if not canonical_tenant:
+        return JsonResponse({'error': 'No active tenant context'}, status=400)
+
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else {}
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'Invalid payload format'}, status=400)
+
+    # Reject forged tenant or user payloads
+    client_tenant_id = data.get('tenant_id') or data.get('tenant')
+    client_user_id = data.get('user_id') or data.get('user')
+
+    if client_tenant_id is not None:
+        if str(client_tenant_id) not in (
+            str(canonical_tenant.id),
+            str(getattr(canonical_tenant, 'slug', '')),
+            str(getattr(canonical_tenant, 'uuid', ''))
+        ):
+            return JsonResponse({'error': 'Invalid tenant parameter'}, status=400)
+
+    if client_user_id is not None:
+        if str(client_user_id) != str(request.user.id):
+            return JsonResponse({'error': 'Invalid user parameter'}, status=400)
+
+    endpoint = (data.get('endpoint') or '').strip()
+
+    # Handle Unsubscribe
+    if request.method == 'DELETE' or data.get('action') == 'unsubscribe':
+        if not endpoint:
+            return JsonResponse({'error': 'Endpoint required'}, status=400)
+
+        endpoint_hash = hashlib.sha256(endpoint.encode('utf-8')).hexdigest()
+        with transaction.atomic():
+            sub = WebPushSubscription.objects.select_for_update().filter(
+                endpoint_hash=endpoint_hash,
+                user=request.user,
+                tenant=canonical_tenant
+            ).first()
+            if sub:
+                sub.is_active = False
+                sub.last_seen_at = timezone.now()
+                sub.save(update_fields=['is_active', 'last_seen_at', 'updated_at'])
+
+        response = JsonResponse({'status': 'ok', 'active': False})
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+        return response
+
+    # Validate HTTPS endpoint length and format
+    if not endpoint or len(endpoint) < 10 or len(endpoint) > 2048:
+        return JsonResponse({'error': 'Invalid endpoint length'}, status=400)
+
+    try:
+        parsed = urlparse(endpoint)
+        if parsed.scheme.lower() != 'https' or not parsed.netloc:
+            return JsonResponse({'error': 'Endpoint must be a valid HTTPS URL'}, status=400)
+    except Exception:
+        return JsonResponse({'error': 'Malformed endpoint URL'}, status=400)
+
+    # Validate browser keys
+    keys = data.get('keys') if isinstance(data.get('keys'), dict) else {}
+    p256dh = (keys.get('p256dh') or data.get('p256dh') or '').strip()
+    auth = (keys.get('auth') or data.get('auth') or '').strip()
+
+    if not p256dh or len(p256dh) < 10 or len(p256dh) > 500:
+        return JsonResponse({'error': 'Invalid p256dh key'}, status=400)
+
+    if not auth or len(auth) < 6 or len(auth) > 500:
+        return JsonResponse({'error': 'Invalid auth key'}, status=400)
+
+    endpoint_hash = hashlib.sha256(endpoint.encode('utf-8')).hexdigest()
+
+    with transaction.atomic():
+        existing = WebPushSubscription.objects.select_for_update().filter(
+            endpoint_hash=endpoint_hash
+        ).first()
+
+        if existing:
+            if existing.user_id != request.user.id:
+                # Cross-user duplicate conflict: reject with 409 and preserve existing
+                return JsonResponse({'error': 'Subscription conflict'}, status=409)
+
+            # Same user: refresh existing subscription
+            existing.tenant = canonical_tenant
+            existing.endpoint = endpoint
+            existing.p256dh = p256dh
+            existing.auth = auth
+            existing.is_active = True
+            existing.last_seen_at = timezone.now()
+            existing.save(update_fields=[
+                'tenant', 'endpoint', 'p256dh', 'auth', 'is_active', 'last_seen_at', 'updated_at'
+            ])
+            created = False
+        else:
+            try:
+                WebPushSubscription.objects.create(
+                    tenant=canonical_tenant,
+                    user=request.user,
+                    endpoint=endpoint,
+                    endpoint_hash=endpoint_hash,
+                    p256dh=p256dh,
+                    auth=auth,
+                    is_active=True,
+                    last_seen_at=timezone.now(),
+                )
+                created = True
+            except IntegrityError:
+                # Concurrency safety: check if another thread inserted
+                race_sub = WebPushSubscription.objects.select_for_update().filter(
+                    endpoint_hash=endpoint_hash
+                ).first()
+                if race_sub and race_sub.user_id != request.user.id:
+                    return JsonResponse({'error': 'Subscription conflict'}, status=409)
+                elif race_sub:
+                    race_sub.tenant = canonical_tenant
+                    race_sub.endpoint = endpoint
+                    race_sub.p256dh = p256dh
+                    race_sub.auth = auth
+                    race_sub.is_active = True
+                    race_sub.last_seen_at = timezone.now()
+                    race_sub.save(update_fields=[
+                        'tenant', 'endpoint', 'p256dh', 'auth', 'is_active', 'last_seen_at', 'updated_at'
+                    ])
+                    created = False
+                else:
+                    return JsonResponse({'error': 'Database conflict'}, status=409)
+
+    response = JsonResponse({
+        'status': 'ok',
+        'active': True,
+        'action': 'created' if created else 'refreshed'
+    })
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
     return response

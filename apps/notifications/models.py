@@ -131,3 +131,40 @@ def log_audit(actor, action, target=None, summary='', ip=None, metadata=None):
     )
 
 
+class WebPushSubscription(models.Model):
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        related_name='web_push_subscriptions',
+        db_index=True
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='web_push_subscriptions',
+        db_index=True
+    )
+    endpoint = models.TextField()
+    endpoint_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'notifications_webpushsubscription'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['tenant', 'user', 'is_active']),
+            models.Index(fields=['endpoint_hash']),
+        ]
+
+    def __str__(self):
+        status = 'active' if self.is_active else 'inactive'
+        masked_hash = f"{self.endpoint_hash[:8]}..." if self.endpoint_hash else 'none'
+        return f"WebPushSubscription(user_id={self.user_id}, tenant_id={self.tenant_id}, hash={masked_hash}, status={status})"
+
+    def __repr__(self):
+        return self.__str__()

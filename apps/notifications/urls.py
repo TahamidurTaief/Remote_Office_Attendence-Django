@@ -9,4 +9,8 @@ urlpatterns = [
     path('feed/', views.notification_feed, name='feed'),
     path('<int:pk>/read/', views.mark_read, name='mark_read'),
     path('read-all/', views.mark_all_read, name='mark_all_read'),
+    path('push/config/', views.push_config, name='push_config'),
+    path('push/subscription/', views.push_subscription, name='push_subscription'),
+    path('push-config/', views.push_config),
+    path('push/subscribe/', views.push_subscription),
 ]

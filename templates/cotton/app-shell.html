@@ -718,8 +718,10 @@
   </script>
 
   {% if request.user.is_authenticated %}
-  <script src="{% static 'js/notification_poller.js' %}?v=1.1"
+  <script src="{% static 'js/notification_poller.js' %}?v=1.2"
           data-feed-url="{% url 'notifications:feed' %}"
+          data-push-config-url="{% url 'notifications:push_config' %}"
+          data-push-subscription-url="{% url 'notifications:push_subscription' %}"
           data-user-id="{{ request.user.id }}"></script>
   {% endif %}
 
