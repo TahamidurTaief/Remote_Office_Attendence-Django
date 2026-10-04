@@ -317,8 +317,8 @@
     window.confirmAction = (message, onConfirm) =>
       window.dispatchEvent(new CustomEvent('open-confirm-modal', { detail: { message, onConfirm } }));
 
-    window.showToast = (message, type = 'info') =>
-      window.dispatchEvent(new CustomEvent('new-toast', { detail: { message, type } }));
+    window.showToast = (message, type = 'info', redirectUrl = null) =>
+      window.dispatchEvent(new CustomEvent('new-toast', { detail: { message, type, redirectUrl } }));
 
     // Universal sound effect on all buttons, links & interactive controls
     document.addEventListener('click', e => {
@@ -568,18 +568,26 @@
   {# ── Global Toast Notifications ──────────────────────────────────── #}
   <div x-data="{
          toasts: [],
-         addToast(msg, type) {
+         addToast(msg, type, redirectUrl) {
            const id = Date.now() + Math.random();
-           this.toasts.push({ id, message: msg, type });
+           this.toasts.push({ id, message: msg, type, redirectUrl });
            if (window.SoundFX) {
              type === 'error' ? SoundFX.playToastError() : SoundFX.playToastSuccess();
            }
            this.$nextTick(() => { if(window.lucide) lucide.createIcons(); });
            setTimeout(() => this.removeToast(id), 4500);
          },
-         removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); }
+         removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); },
+         handleToastClick(toast) {
+           this.removeToast(toast.id);
+           if (toast.redirectUrl && typeof toast.redirectUrl === 'string') {
+             if (toast.redirectUrl.startsWith('/') && !toast.redirectUrl.startsWith('//') && !toast.redirectUrl.includes('\\')) {
+               window.location.href = toast.redirectUrl;
+             }
+           }
+         }
        }"
-       @new-toast.window="addToast($event.detail.message, $event.detail.type)"
+       @new-toast.window="addToast($event.detail.message, $event.detail.type, $event.detail.redirectUrl)"
        class="fixed right-4 z-[80] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
        style="top: calc(1rem + env(safe-area-inset-top, 0px))">
     <template x-for="toast in toasts" :key="toast.id">
@@ -590,7 +598,7 @@
            x-transition:leave="transition ease-in duration-200"
            x-transition:leave-start="opacity-100"
            x-transition:leave-end="opacity-0 scale-95"
-           @click="removeToast(toast.id)"
+           @click="handleToastClick(toast)"
            class="pointer-events-auto cursor-pointer px-4 py-3 rounded-card border flex items-center gap-3"
            :class="{
              'bg-accent-50 border-accent-200 text-accent-800': toast.type==='success',
@@ -604,7 +612,7 @@
         <template x-if="toast.type==='warning'"><i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-amber-600"></i></template>
         <template x-if="toast.type==='info'"><i data-lucide="info" class="w-4 h-4 shrink-0 text-primary-600"></i></template>
         <span class="text-[12px] font-semibold truncate flex-1" x-text="toast.message"></span>
-        <button class="opacity-50 hover:opacity-100 transition-opacity">
+        <button @click.stop="removeToast(toast.id)" class="opacity-50 hover:opacity-100 transition-opacity">
           <i data-lucide="x" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -707,6 +715,15 @@
         }
     });
   </script>
+
+  {% if request.user.is_authenticated %}
+  <div id="notification-poller-config"
+       data-feed-url="{% url 'notifications:feed' %}"
+       data-user-id="{{ request.user.id }}"
+       class="hidden"
+       style="display:none"></div>
+  <script src="{% static 'js/notification_poller.js' %}"></script>
+  {% endif %}
 
   {{ scripts }}
 </body>

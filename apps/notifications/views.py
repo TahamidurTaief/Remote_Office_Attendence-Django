@@ -141,3 +141,66 @@ def mark_all_read(request):
         recipient=request.user, is_read=False
     ).update(is_read=True)
     return redirect('notifications:list')
+
+
+def _safe_internal_redirect(path):
+    if path and isinstance(path, str) and path.startswith('/') and not path.startswith('//') and '\\' not in path:
+        return path
+    return '/notifications/'
+
+
+@login_required
+def notification_feed(request):
+    from django.urls import reverse
+
+    allowed_types = ['schedule_event', 'task_assigned', 'task_completed', 'task_delayed']
+    notifs = Notification.objects.filter(
+        recipient=request.user,
+        notif_type__in=allowed_types
+    )
+
+    after_raw = request.GET.get('after')
+    if after_raw is None:
+        latest_id = notifs.order_by('-id').values_list('id', flat=True).first() or 0
+        response = JsonResponse({
+            'notifications': [],
+            'next_cursor': latest_id,
+        })
+        response['Cache-Control'] = 'no-store'
+        return response
+
+    if not after_raw.isdigit():
+        return JsonResponse({'error': 'Invalid cursor'}, status=400)
+
+    try:
+        cursor = int(after_raw)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid cursor'}, status=400)
+
+    if cursor < 0 or cursor > 9223372036854775807:
+        return JsonResponse({'error': 'Cursor out of range'}, status=400)
+
+    batch = list(notifs.filter(id__gt=cursor).order_by('id')[:20])
+    next_cursor = batch[-1].id if batch else cursor
+
+    results = []
+    for n in batch:
+        if n.notif_type == 'schedule_event':
+            redirect_url = reverse('schedule:month_view')
+        else:
+            redirect_url = reverse('staff:my_tasks')
+
+        results.append({
+            'id': n.id,
+            'type': n.notif_type,
+            'title': n.title,
+            'message': n.message or n.title,
+            'redirect_url': _safe_internal_redirect(redirect_url),
+        })
+
+    response = JsonResponse({
+        'notifications': results,
+        'next_cursor': next_cursor,
+    })
+    response['Cache-Control'] = 'no-store'
+    return response
