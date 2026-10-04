@@ -717,12 +717,9 @@
   </script>
 
   {% if request.user.is_authenticated %}
-  <div id="notification-poller-config"
-       data-feed-url="{% url 'notifications:feed' %}"
-       data-user-id="{{ request.user.id }}"
-       class="hidden"
-       style="display:none"></div>
-  <script src="{% static 'js/notification_poller.js' %}"></script>
+  <script src="{% static 'js/notification_poller.js' %}"
+          data-feed-url="{% url 'notifications:feed' %}"
+          data-user-id="{{ request.user.id }}"></script>
   {% endif %}
 
   {{ scripts }}

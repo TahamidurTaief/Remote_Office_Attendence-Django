@@ -1,6 +1,8 @@
 (function () {
+  const currentScript = document.currentScript;
+
   function initNotificationPoller() {
-    const configEl = document.getElementById('notification-poller-config');
+    const configEl = currentScript || document.querySelector('script[data-feed-url]') || document.querySelector('script[src*="notification_poller.js"]');
     if (!configEl) return;
 
     const feedUrl = configEl.getAttribute('data-feed-url');
@@ -20,6 +22,15 @@
       if (document.hidden || !navigator.onLine) return;
 
       inFlight = true;
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      let timeoutId = null;
+
+      if (controller) {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 10000);
+      }
+
       try {
         const storedCursor = localStorage.getItem(storageKey);
         let url = feedUrl;
@@ -28,14 +39,19 @@
           url = `${url}${sep}after=${encodeURIComponent(storedCursor)}`;
         }
 
-        const res = await fetch(url, {
+        const fetchOptions = {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
           },
           cache: 'no-store'
-        });
+        };
+        if (controller) {
+          fetchOptions.signal = controller.signal;
+        }
+
+        const res = await fetch(url, fetchOptions);
 
         if (res.status === 400) {
           // If server rejects a corrupted cursor, reset cursor for clean bootstrap
@@ -59,6 +75,9 @@
       } catch (err) {
         // Silently recover from network errors without infinite loading
       } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         inFlight = false;
       }
     }

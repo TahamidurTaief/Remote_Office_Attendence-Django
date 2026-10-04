@@ -170,15 +170,21 @@ def notification_feed(request):
         return response
 
     if not after_raw.isdigit():
-        return JsonResponse({'error': 'Invalid cursor'}, status=400)
+        response = JsonResponse({'error': 'Invalid cursor'}, status=400)
+        response['Cache-Control'] = 'no-store'
+        return response
 
     try:
         cursor = int(after_raw)
     except ValueError:
-        return JsonResponse({'error': 'Invalid cursor'}, status=400)
+        response = JsonResponse({'error': 'Invalid cursor'}, status=400)
+        response['Cache-Control'] = 'no-store'
+        return response
 
     if cursor < 0 or cursor > 9223372036854775807:
-        return JsonResponse({'error': 'Cursor out of range'}, status=400)
+        response = JsonResponse({'error': 'Cursor out of range'}, status=400)
+        response['Cache-Control'] = 'no-store'
+        return response
 
     batch = list(notifs.filter(id__gt=cursor).order_by('id')[:20])
     next_cursor = batch[-1].id if batch else cursor
