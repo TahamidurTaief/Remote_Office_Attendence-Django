@@ -10,8 +10,9 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib import messages
 from apps.attendance.sync_utils import parse_and_validate_client_time
 from django.db.models import Q, Prefetch
-from datetime import date, timedelta
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
+from apps.projects.scoping import get_scoped_project_task_queryset
 from apps.accounts.mixins import AdminRequiredMixin as BaseAdminRequiredMixin, RoleRequiredMixin as BaseRoleRequiredMixin
 
 
@@ -508,12 +509,10 @@ class ProjectTaskUpdateView(RoleRequiredMixin, UpdateView):
     template_name = 'projects/task_form.html'
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        return PermissionEngine.filter_queryset(
-            user=self.request.user,
-            queryset=qs,
-            codename='projects.edit',
-            branch_field='project__branch'
+        return get_scoped_project_task_queryset(
+            self.request.user,
+            action='edit',
+            base_qs=super().get_queryset()
         )
 
     def get_context_data(self, **kwargs):
@@ -1793,14 +1792,8 @@ class GlobalTaskListView(RoleRequiredMixin, ListView):
     context_object_name = 'tasks'
     
     def get_queryset(self):
-        base_qs = ProjectTask.objects.select_related('project', 'responsible_person').all().order_by('project__name', 'order')
-        qs = PermissionEngine.filter_by_data_scope(
-            user=self.request.user,
-            queryset=base_qs,
-            codename='projects.view',
-            branch_field='project__branch',
-            employee_field='responsible_person'
-        )
+        base_qs = ProjectTask.objects.select_related('project', 'project__branch', 'responsible_person').all().order_by('project__name', 'order')
+        qs = get_scoped_project_task_queryset(self.request.user, action='view', base_qs=base_qs)
         
         # Apply filters
         employee_id = self.request.GET.get('employee')
@@ -1959,26 +1952,7 @@ import json
 def staff_task_complete(request, pk):
     if not check_staff_role(request.user):
         return JsonResponse({'error': 'Unauthorized'}, status=403)
-    
-    task = get_object_or_404(ProjectTask, pk=pk)
-    
-    # Verify permissions:
-    # 1. If task is unassigned: only project managers of the project or admins can complete it
-    # 2. If task is assigned: only the assigned employee can complete it
-    employee = getattr(request.user, 'employee_profile', None)
-    if not task.responsible_person:
-        is_authorized = False
-        from apps.accounts.engine import PermissionEngine
-        if request.user.is_superuser or getattr(request.user, 'role', '') in ['admin', 'manager'] or PermissionEngine.evaluate(request.user, 'projects.edit').allowed:
-            is_authorized = True
-        if employee and task.project and task.project.project_managers.filter(id=employee.id).exists():
-            is_authorized = True
-        if not is_authorized:
-            return JsonResponse({'error': 'Only project managers or admins can update unassigned tasks.'}, status=403)
-    else:
-        if not employee or task.responsible_person != employee:
-            return JsonResponse({'error': 'You are not assigned to this task.'}, status=403)
-        
+
     note = ""
     progress_percent = None
     if request.content_type == 'application/json':
@@ -1991,7 +1965,7 @@ def staff_task_complete(request, pk):
     else:
         note = request.POST.get('note', '')
         progress_percent = request.POST.get('progress_percent')
-        
+
     if progress_percent is not None:
         try:
             progress_percent = int(progress_percent)
@@ -2005,87 +1979,107 @@ def staff_task_complete(request, pk):
     completion_attachments = request.FILES.getlist('completion_attachments')
     if completion_attachments:
         from django.core.exceptions import ValidationError
-        from apps.projects.models import TaskAttachment, validate_task_attachment
+        from apps.projects.models import validate_task_attachment
         for attachment in completion_attachments:
             try:
                 validate_task_attachment(attachment)
             except ValidationError as e:
                 return JsonResponse({'error': f"File validation failed for {attachment.name}: {e.message}"}, status=400)
-        
-        # Save attachments
-        for index, attachment in enumerate(completion_attachments):
-            if index == 0 and not task.completion_attachment:
-                task.completion_attachment = attachment
-                task.save(update_fields=['completion_attachment'])
-            
-            TaskAttachment.objects.create(
-                task=task,
-                file=attachment,
-                attachment_type='completion'
-            )
 
-    is_manager_or_admin = False
-    from apps.accounts.engine import PermissionEngine
-    if request.user.is_superuser or getattr(request.user, 'role', '') in ['admin', 'manager'] or PermissionEngine.evaluate(request.user, 'projects.update', action_type='update').allowed:
-        is_manager_or_admin = True
-    elif employee and task.project:
-        if task.project.project_managers.filter(id=employee.id).exists():
-            is_manager_or_admin = True
+    with transaction.atomic():
+        scoped_qs = get_scoped_project_task_queryset(request.user, action='view')
+        task = scoped_qs.select_for_update().filter(pk=pk).first()
+        if not task:
+            if ProjectTask.objects.filter(pk=pk).exists():
+                return JsonResponse({'error': 'Permission denied'}, status=403)
+            return JsonResponse({'error': 'Task not found'}, status=404)
 
-    if is_manager_or_admin:
-        task.progress_percent = progress_percent
-        task.pending_progress_percent = None
-        task.employee_note = note
-        task.pending_employee_note = ""
-        if progress_percent == 100:
-            task.status = 'Completed'
-            if not task.completed_at:
-                task.completed_at = timezone.now()
+        employee = getattr(request.user, 'employee_profile', None)
+
+        if task.responsible_person:
+            # Assigned tasks may be submitted only by the assigned employee
+            if not employee or task.responsible_person_id != employee.id:
+                return JsonResponse({'error': 'Only the assigned employee can submit this task.'}, status=403)
         else:
-            task.status = 'In Progress'
-    else:
-        task.pending_progress_percent = progress_percent
-        task.pending_employee_note = note
-        task.status = 'Under Review'
-        
-    task.save()
-    if task.project:
-        task.project.recalculate_progress()
+            # Unassigned tasks may be completed only by the task's actual project manager, an authorized scoped editor, or superuser—never by role name alone.
+            is_pm = bool(employee and task.project and task.project.project_managers.filter(id=employee.id).exists())
+            has_scoped_edit = get_scoped_project_task_queryset(request.user, action='edit').filter(pk=task.pk).exists()
+            if not (request.user.is_superuser or is_pm or has_scoped_edit):
+                return JsonResponse({'error': 'Only project managers or authorized editors can update unassigned tasks.'}, status=403)
 
-    progress = task.project.progress_percent if task.project else 0
-    return JsonResponse({
-        'success': True,
-        'progress_percent': progress,
-        'completion_attachment_url': task.completion_attachment.url if task.completion_attachment else None
-    })
+        # Save attachments
+        if completion_attachments:
+            from apps.projects.models import TaskAttachment
+            for index, attachment in enumerate(completion_attachments):
+                if index == 0 and not task.completion_attachment:
+                    task.completion_attachment = attachment
+                    task.save(update_fields=['completion_attachment'])
+
+                TaskAttachment.objects.create(
+                    task=task,
+                    file=attachment,
+                    attachment_type='completion'
+                )
+
+        is_pm = bool(employee and task.project and task.project.project_managers.filter(id=employee.id).exists())
+        has_scoped_edit = get_scoped_project_task_queryset(request.user, action='edit').filter(pk=task.pk).exists()
+        is_manager_or_admin = bool(request.user.is_superuser or is_pm or has_scoped_edit)
+
+        if not task.responsible_person and is_manager_or_admin:
+            task.progress_percent = progress_percent
+            task.pending_progress_percent = None
+            task.employee_note = note
+            task.pending_employee_note = ""
+            if progress_percent == 100:
+                task.status = 'Completed'
+                if not task.completed_at:
+                    task.completed_at = timezone.now()
+            else:
+                task.status = 'In Progress'
+        elif task.responsible_person and (is_pm or request.user.is_superuser):
+            task.progress_percent = progress_percent
+            task.pending_progress_percent = None
+            task.employee_note = note
+            task.pending_employee_note = ""
+            if progress_percent == 100:
+                task.status = 'Completed'
+                if not task.completed_at:
+                    task.completed_at = timezone.now()
+            else:
+                task.status = 'In Progress'
+        else:
+            task.pending_progress_percent = progress_percent
+            task.pending_employee_note = note
+            task.status = 'Under Review'
+
+        task.save()
+        if task.project:
+            task.project.recalculate_progress()
+
+        progress = task.project.progress_percent if task.project else 0
+        return JsonResponse({
+            'success': True,
+            'progress_percent': progress,
+            'completion_attachment_url': task.completion_attachment.url if task.completion_attachment else None
+        })
 
 
 def check_task_view_permission(user, task):
-    from apps.accounts.engine import PermissionEngine
-    if user.is_superuser or PermissionEngine.evaluate(user, 'projects.view').allowed:
-        return True
-    employee = getattr(user, 'employee_profile', None)
-    if not employee:
+    if not user or not user.is_authenticated or not task:
         return False
-    if task.responsible_person == employee:
-        return True
-    if task.project:
-        if task.project.project_members.filter(id=employee.id).exists():
-            return True
-        if task.project.site_engineers.filter(id=employee.id).exists():
-            return True
-        if task.project.project_managers.filter(id=employee.id).exists():
-            return True
-    return False
+    return get_scoped_project_task_queryset(user, action='view').filter(pk=task.pk).exists()
 
 
 @login_required
 def task_detail_api(request, pk):
     import os
-    task = get_object_or_404(ProjectTask, pk=pk)
-    if not check_task_view_permission(request.user, task):
-        return JsonResponse({'error': 'Permission denied'}, status=403)
-        
+    scoped_qs = get_scoped_project_task_queryset(request.user, action='view')
+    task = scoped_qs.select_related('project', 'project__branch', 'responsible_person').filter(pk=pk).first()
+    if not task:
+        if ProjectTask.objects.filter(pk=pk).exists():
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+        return JsonResponse({'error': 'Task not found'}, status=404)
+
     attachments_data = []
     # Fetch from TaskAttachment
     for att in task.attachments.all():
@@ -2100,7 +2094,7 @@ def task_detail_api(request, pk):
             'is_image': is_image,
             'is_pdf': is_pdf
         })
-        
+
     # Also support legacy files if not already in TaskAttachment
     legacy_assignment = task.assignment_attachment
     if legacy_assignment and not any(a['url'] == legacy_assignment.url for a in attachments_data):
@@ -2131,7 +2125,7 @@ def task_detail_api(request, pk):
         full_name = emp.full_name if emp else (reply.user.email or reply.user.phone or "Unknown User")
         role = reply.user.role.capitalize() if hasattr(reply.user, 'role') else 'User'
         photo_url = emp.profile_photo.url if emp and emp.profile_photo else None
-        
+
         replies_data.append({
             'author_name': full_name,
             'author_role': role,
@@ -2172,10 +2166,6 @@ def task_detail_api(request, pk):
 @login_required
 @require_POST
 def task_add_reply_api(request, pk):
-    task = get_object_or_404(ProjectTask, pk=pk)
-    if not check_task_view_permission(request.user, task):
-        return JsonResponse({'error': 'Permission denied'}, status=403)
-        
     message = request.POST.get('message', '').strip()
     if not message:
         if request.content_type == 'application/json':
@@ -2184,90 +2174,118 @@ def task_add_reply_api(request, pk):
                 message = payload.get('message', '').strip()
             except json.JSONDecodeError:
                 pass
-                
+
     if not message:
         return JsonResponse({'error': 'Message cannot be empty'}, status=400)
-        
-    from apps.projects.models import ProjectTaskReply
-    ProjectTaskReply.objects.create(
-        task=task,
-        user=request.user,
-        message=message
-    )
-    
-    replies_data = []
-    for r in task.replies.select_related('user', 'user__employee_profile').order_by('created_at'):
-        emp = getattr(r.user, 'employee_profile', None)
-        full_name = emp.full_name if emp else (r.user.email or r.user.phone or "Unknown User")
-        role = r.user.role.capitalize() if hasattr(r.user, 'role') else 'User'
-        photo_url = emp.profile_photo.url if emp and emp.profile_photo else None
-        
-        replies_data.append({
-            'author_name': full_name,
-            'author_role': role,
-            'author_photo_url': photo_url,
-            'message': r.message,
-            'created_at': r.created_at.strftime('%d/%m/%Y %H:%M')
+
+    with transaction.atomic():
+        scoped_qs = get_scoped_project_task_queryset(request.user, action='view')
+        task = scoped_qs.select_for_update().filter(pk=pk).first()
+        if not task:
+            if ProjectTask.objects.filter(pk=pk).exists():
+                return JsonResponse({'error': 'Permission denied'}, status=403)
+            return JsonResponse({'error': 'Task not found'}, status=404)
+
+        from apps.projects.models import ProjectTaskReply
+        ProjectTaskReply.objects.create(
+            task=task,
+            user=request.user,
+            message=message
+        )
+
+        replies_data = []
+        for r in task.replies.select_related('user', 'user__employee_profile').order_by('created_at'):
+            emp = getattr(r.user, 'employee_profile', None)
+            full_name = emp.full_name if emp else (r.user.email or r.user.phone or "Unknown User")
+            role = r.user.role.capitalize() if hasattr(r.user, 'role') else 'User'
+            photo_url = emp.profile_photo.url if emp and emp.profile_photo else None
+
+            replies_data.append({
+                'author_name': full_name,
+                'author_role': role,
+                'author_photo_url': photo_url,
+                'message': r.message,
+                'created_at': r.created_at.strftime('%d/%m/%Y %H:%M')
+            })
+
+        return JsonResponse({
+            'success': True,
+            'replies': replies_data
         })
-        
-    return JsonResponse({
-        'success': True,
-        'replies': replies_data
-    })
 
 
 @login_required
 @require_POST
 def task_approve_api(request, pk):
-    from apps.accounts.engine import PermissionEngine
-    if not (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.edit').allowed):
-        return JsonResponse({'error': 'Permission denied'}, status=403)
-        
-    task = get_object_or_404(ProjectTask, pk=pk)
     action = request.POST.get('action', 'approve')
-    
-    if action == 'approve':
-        if task.pending_progress_percent is not None:
-            task.progress_percent = task.pending_progress_percent
-        else:
-            task.progress_percent = 100
-        
-        if task.pending_employee_note:
-            task.employee_note = task.pending_employee_note
-            
-        task.pending_progress_percent = None
-        task.pending_employee_note = ""
-        
-        if task.progress_percent == 100:
-            task.status = 'Completed'
-            if not task.completed_at:
-                task.completed_at = timezone.now()
-        else:
-            task.status = 'In Progress'
-            
-        task.save()
-        if task.project:
-            task.project.recalculate_progress()
-            
-    elif action == 'reject':
-        task.pending_progress_percent = None
-        task.pending_employee_note = ""
-        
-        if task.progress_percent > 0:
-            task.status = 'In Progress'
-        else:
-            task.status = 'Not Started'
-            
-        task.save()
-        if task.project:
-            task.project.recalculate_progress()
-            
-    return JsonResponse({
-        'success': True,
-        'status': task.status,
-        'progress_percent': task.progress_percent,
-        'project_progress': task.project.progress_percent if task.project else 0
-    })
+    if action not in ('approve', 'reject'):
+        return JsonResponse({'error': 'Invalid action'}, status=400)
+
+    with transaction.atomic():
+        scoped_qs = get_scoped_project_task_queryset(request.user, action='view')
+        task = scoped_qs.select_for_update().filter(pk=pk).first()
+        if not task:
+            if ProjectTask.objects.filter(pk=pk).exists():
+                return JsonResponse({'error': 'Permission denied'}, status=403)
+            return JsonResponse({'error': 'Task not found'}, status=404)
+
+        employee = getattr(request.user, 'employee_profile', None)
+        is_pm = bool(employee and task.project and task.project.project_managers.filter(id=employee.id).exists())
+        has_scoped_edit = get_scoped_project_task_queryset(request.user, action='edit').filter(pk=task.pk).exists()
+
+        if not (request.user.is_superuser or is_pm or has_scoped_edit):
+            return JsonResponse({'error': 'Permission denied'}, status=403)
+
+        if action == 'approve':
+            if task.status == 'Completed' and task.pending_progress_percent is None:
+                return JsonResponse({
+                    'success': True,
+                    'status': task.status,
+                    'progress_percent': task.progress_percent,
+                    'project_progress': task.project.progress_percent if task.project else 0
+                })
+
+            if task.pending_progress_percent is not None:
+                task.progress_percent = task.pending_progress_percent
+            else:
+                task.progress_percent = 100
+
+            if task.pending_employee_note:
+                task.employee_note = task.pending_employee_note
+
+            task.pending_progress_percent = None
+            task.pending_employee_note = ""
+
+            if task.progress_percent == 100:
+                task.status = 'Completed'
+                if not task.completed_at:
+                    task.completed_at = timezone.now()
+            else:
+                task.status = 'In Progress'
+
+            task.save()
+            if task.project:
+                task.project.recalculate_progress()
+
+        elif action == 'reject':
+            task.pending_progress_percent = None
+            task.pending_employee_note = ""
+
+            if task.progress_percent > 0:
+                task.status = 'In Progress'
+            else:
+                task.status = 'Not Started'
+
+            task.save()
+            if task.project:
+                task.project.recalculate_progress()
+
+        return JsonResponse({
+            'success': True,
+            'status': task.status,
+            'progress_percent': task.progress_percent,
+            'project_progress': task.project.progress_percent if task.project else 0
+        })
 
 
 # ─────────────────────────────────────────────────────────────────────────────

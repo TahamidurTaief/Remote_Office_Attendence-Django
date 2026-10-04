@@ -1028,15 +1028,22 @@ def my_tasks(request):
         return redirect('accounts:login')
 
     employee = getattr(request.user, 'employee_profile', None)
-    from apps.projects.models import ProjectTask
+    from apps.projects.scoping import get_scoped_project_task_queryset
+    from apps.accounts.models import DataScope
+
+    scoped_base = get_scoped_project_task_queryset(request.user, action='view').select_related(
+        'project', 'project__branch'
+    ).prefetch_related('attachments').order_by('status', 'planned_finish')
 
     if employee:
-        tasks = ProjectTask.objects.filter(responsible_person=employee).select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
-    elif request.user.is_superuser or PermissionEngine.evaluate(request.user, 'projects.view').allowed:
-        # Admins, superusers, and managers without a profile see all tasks
-        tasks = ProjectTask.objects.all().select_related('project', 'project__branch').prefetch_related('attachments').order_by('status', 'planned_finish')
+        tasks = scoped_base.filter(responsible_person=employee)
+    elif request.user.is_superuser or (
+        PermissionEngine.evaluate(request.user, 'projects.view').allowed
+        and PermissionEngine.get_effective_scope(request.user, 'projects.view') in (DataScope.GLOBAL, DataScope.COMPANY)
+    ):
+        tasks = scoped_base
     else:
-        tasks = ProjectTask.objects.none()
+        tasks = scoped_base.none()
 
     status_filter = request.GET.get('status', 'pending')
 

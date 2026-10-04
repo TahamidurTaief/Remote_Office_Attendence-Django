@@ -652,3 +652,7 @@ class GanttImportBatch(models.Model):
 
     def __str__(self):
         return f"Gantt Import {self.uuid} ({self.filename}) - {self.status}"
+
+
+from apps.projects.scoping import get_scoped_project_task_queryset
+
