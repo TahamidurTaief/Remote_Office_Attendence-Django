@@ -162,12 +162,14 @@ _sqlite_path = Path(os.getenv('SQLITE_PATH', str(BASE_DIR / 'db.sqlite3'))).reso
 _sqlite_timeout = float(os.getenv('SQLITE_TIMEOUT', '20.0'))
 
 if DATABASE_URL:
+    db_config = env.db_url_config(DATABASE_URL)
+    # Only use DB_NAME if DATABASE_URL did not specify a database name
+    if not db_config.get('NAME') and os.getenv('DB_NAME'):
+        db_config['NAME'] = os.getenv('DB_NAME')
     DATABASES = {
-        'default': env.db_url_config(DATABASE_URL),
+        'default': db_config,
     }
     DATABASES['default']['CONN_MAX_AGE'] = int(os.getenv('DB_CONN_MAX_AGE', '600'))
-    if os.getenv('DB_NAME'):
-        DATABASES['default']['NAME'] = os.getenv('DB_NAME')
     # If sqlite file exists, make it accessible for data import/sync
     if _sqlite_path.exists():
         DATABASES['sqlite_source'] = {

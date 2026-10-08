@@ -13,12 +13,40 @@ import sys, time
 import django
 django.setup()
 from django.db import connection
+from django.conf import settings
+
+target_db = settings.DATABASES['default']
+db_name = target_db.get('NAME')
+
 for attempt in range(1, 31):
     try:
         connection.ensure_connection()
-        print('==> Database connection established successfully!')
+        print(f'==> Database connection established successfully to {db_name}!')
         sys.exit(0)
     except Exception as e:
+        err_msg = str(e)
+        if 'does not exist' in err_msg and 'postgresql' in target_db.get('ENGINE', ''):
+            print(f'==> Target database \"{db_name}\" does not exist. Attempting auto-creation...')
+            try:
+                import psycopg2
+                from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+                conn = psycopg2.connect(
+                    dbname='postgres',
+                    user=target_db.get('USER'),
+                    password=target_db.get('PASSWORD'),
+                    host=target_db.get('HOST'),
+                    port=target_db.get('PORT') or 5432,
+                )
+                conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+                cur = conn.cursor()
+                cur.execute(f'CREATE DATABASE \"{db_name}\"')
+                conn.close()
+                print(f'==> Database \"{db_name}\" created successfully!')
+                connection.close()
+                connection.ensure_connection()
+                sys.exit(0)
+            except Exception as ce:
+                print(f'==> Auto-creation warning: {ce}')
         print(f'==> Waiting for database (attempt {attempt}/30)... {e}')
         time.sleep(2)
 sys.exit(1)
