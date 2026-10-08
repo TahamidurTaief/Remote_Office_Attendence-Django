@@ -132,6 +132,8 @@ urlpatterns = [
 ]
 
 from django.conf.urls.static import static
+from django.urls import re_path
+from django.views.static import serve
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
@@ -139,3 +141,8 @@ if settings.DEBUG:
     urlpatterns += [path('__reload__/', include('django_browser_reload.urls'))]
     if getattr(settings, 'ENABLE_DEBUG_TOOLBAR', False):
         urlpatterns.insert(0, path('__debug__/', include('debug_toolbar.urls')))
+else:
+    # Serve media files in standalone container deployments (e.g., Coolify)
+    urlpatterns += [
+        re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    ]

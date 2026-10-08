@@ -1497,8 +1497,8 @@ class Command(BaseCommand):
             self.stdout.write(f"{m:<32} | {c:<8} | {u:<8} | {s:<8}")
 
         # Completeness Check
-        active_emps = Employee.objects.all()
-        avg_completion = sum(e.get_completion_percentage() for e in active_emps) / len(active_emps)
+        active_emps = list(Employee.objects.all())
+        avg_completion = (sum(e.get_completion_percentage() for e in active_emps) / len(active_emps)) if active_emps else 0.0
         self.stdout.write(
             self.style.SUCCESS(
                 f"\nEmployee Completeness: {avg_completion:.1f}% average across all {len(active_emps)} employees (Safe target reached without fake files)."

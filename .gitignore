@@ -23,11 +23,13 @@ staticfiles/
 
 
 
-# ── MEDIA / USER UPLOADS (NEVER COMMIT) ──────────────────────────────────────
-media/*
-!media/.gitkeep
+# ── MEDIA / USER UPLOADS ──────────────────────────────────────────────────
+# media tracked per user instruction
 
 # ── ENVIRONMENT / SECRETS ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
 
 
 

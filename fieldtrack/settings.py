@@ -4,6 +4,15 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+try:
+    import environ
+    env = environ.Env()
+    _env_file = BASE_DIR / '.env'
+    if _env_file.exists():
+        environ.Env.read_env(str(_env_file))
+except Exception:
+    pass
+
 def _parse_comma_separated(value, default=None):
     if value is None:
         return list(default) if default else []
@@ -22,10 +31,12 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-development-only-key-field
 
 # Hosts Configuration
 _env_allowed = _parse_comma_separated(os.getenv('ALLOWED_HOSTS'))
-ALLOWED_HOSTS = _env_allowed if _env_allowed else ['*']
+ALLOWED_HOSTS = _env_allowed if _env_allowed else ['trackme.signtechlimited.com', 'localhost', '127.0.0.1', '*']
 
 # CSRF Trusted Origins
 _default_csrf_origins = [
+    'https://trackme.signtechlimited.com',
+    'http://trackme.signtechlimited.com',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://127.0.0.1',
@@ -145,20 +156,59 @@ TEMPLATES = [
 WSGI_APPLICATION = 'fieldtrack.wsgi.application'
 
 
-# ── DATABASE CONFIGURATION (SQLITE RUNTIME LOCK) ──────────────────────────────
+# ── DATABASE CONFIGURATION (POSTGRESQL / SQLITE HYBRID) ─────────────────────
+DATABASE_URL = os.getenv('DATABASE_URL', '')
+_sqlite_path = Path(os.getenv('SQLITE_PATH', str(BASE_DIR / 'db.sqlite3'))).resolve()
+_sqlite_timeout = float(os.getenv('SQLITE_TIMEOUT', '20.0'))
 
-_sqlite_path = (BASE_DIR / 'db.sqlite3').resolve()
-_sqlite_timeout = 5.0
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': _sqlite_path,
-        'OPTIONS': {
-            'timeout': _sqlite_timeout,
+if DATABASE_URL:
+    DATABASES = {
+        'default': env.db_url_config(DATABASE_URL),
+    }
+    DATABASES['default']['CONN_MAX_AGE'] = int(os.getenv('DB_CONN_MAX_AGE', '600'))
+    if os.getenv('DB_NAME'):
+        DATABASES['default']['NAME'] = os.getenv('DB_NAME')
+    # If sqlite file exists, make it accessible for data import/sync
+    if _sqlite_path.exists():
+        DATABASES['sqlite_source'] = {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': _sqlite_path,
+            'OPTIONS': {
+                'timeout': _sqlite_timeout,
+            }
+        }
+elif os.getenv('DB_HOST'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'trackme'),
+            'USER': os.getenv('DB_USER', 'trackme'),
+            'PASSWORD': os.getenv('DB_PASSWORD', '#trackme@'),
+            'HOST': os.getenv('DB_HOST'),
+            'PORT': int(os.getenv('DB_PORT', '5432')),
+            'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '600')),
         }
     }
-}
+    if _sqlite_path.exists():
+        DATABASES['sqlite_source'] = {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': _sqlite_path,
+            'OPTIONS': {
+                'timeout': _sqlite_timeout,
+            }
+        }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': _sqlite_path,
+            'OPTIONS': {
+                'timeout': _sqlite_timeout,
+            }
+        }
+    }
+
+DEFAULT_TENANT_SLUG = os.getenv('DEFAULT_TENANT_SLUG', 'signtech')
 
 
 # ── PASSWORD VALIDATION ──────────────────────────────────────────────────────
