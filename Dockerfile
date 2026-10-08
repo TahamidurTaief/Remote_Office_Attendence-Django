@@ -68,8 +68,8 @@ USER appuser
 
 EXPOSE 8000
 
-# Coolify / Docker Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# Coolify / Docker Healthcheck (start-period=90s gives ample time for first-boot migrations)
+HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
     CMD curl -f http://localhost:${PORT:-8000}/login/ || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

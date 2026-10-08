@@ -60,18 +60,12 @@ python manage.py migrate --noinput
 echo "==> Checking if initial database data needs to be imported from SQLite..."
 python manage.py copy_sqlite_to_pg || echo "SQLite import skipped or already populated."
 
-# 4. Bootstrap tenant, RBAC, workflows, and banks
+# 4. Bootstrap tenant and RBAC registry
 echo "==> Bootstrapping tenant and system configuration..."
 python manage.py bootstrap_tenant || true
 python manage.py bootstrap_rbac || true
-python manage.py seed_workflow_definitions || true
-python manage.py seed_bangladesh_banks || true
 
-# 5. Build Tailwind CSS (production bundle)
-echo "==> Building Tailwind CSS assets..."
-python manage.py tailwind build || echo "Tailwind build skipped or using prebuilt CSS."
-
-# 6. Collect Static Files for WhiteNoise
+# 5. Collect Static Files for WhiteNoise
 echo "==> Collecting static files..."
 python manage.py collectstatic --noinput
 

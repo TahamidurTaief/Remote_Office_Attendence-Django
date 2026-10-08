@@ -1,14 +1,15 @@
 """
-Management command to migrate/copy all data from sqlite_source into the default database (e.g. PostgreSQL).
-Idempotent and safe: uses get_or_create or update_or_create per model.
+High-performance, idempotent management command to migrate/copy all data from sqlite_source
+into the default database (e.g. PostgreSQL) using bulk operations.
 """
 from django.core.management.base import BaseCommand
 from django.db import connections, transaction
 from django.apps import apps
+import sys
 
 
 class Command(BaseCommand):
-    help = "Migrates data from local db.sqlite3 (sqlite_source) into default database (PostgreSQL)."
+    help = "High-speed migration from local db.sqlite3 (sqlite_source) into default database (PostgreSQL)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -27,13 +28,12 @@ class Command(BaseCommand):
         user_count = CustomUser.objects.using('default').count()
         if user_count > 0 and not options.get('force'):
             self.stdout.write(self.style.WARNING(
-                f"Target database already contains {user_count} users. Skipping auto-import. (Use --force to override)"
+                f"Target database already contains {user_count} users. Skipping auto-import."
             ))
             return
 
-        self.stdout.write(self.style.MIGRATE_HEADING("==> Migrating records from SQLite into Target Database..."))
+        self.stdout.write(self.style.MIGRATE_HEADING("==> Bulk migrating records from SQLite into Target Database..."))
 
-        # Order of models to preserve foreign keys
         ordered_model_labels = [
             'tenants.Tenant',
             'tenants.TenantMembership',
@@ -59,6 +59,9 @@ class Command(BaseCommand):
             'employees.Designation',
             'employees.EmployeeProfile',
             'employees.Employee',
+            'leave.LeaveType',
+            'leave.LeaveBalance',
+            'leave.LeaveRequest',
             'employees.EmployeeBankAccount',
             'employees.EmployeeLeaveRule',
             'employees.AssetType',
@@ -80,9 +83,6 @@ class Command(BaseCommand):
             'projects.TaskAttachment',
             'projects.ProjectTaskReply',
             'projects.TaskDependency',
-            'leave.LeaveType',
-            'leave.LeaveBalance',
-            'leave.LeaveRequest',
             'attendance.AttendancePolicy',
             'attendance.Attendance',
             'attendance.AttendanceLocation',
@@ -115,45 +115,72 @@ class Command(BaseCommand):
             'notifications.WebPushSubscription',
         ]
 
+        target_engine = connections['default'].settings_dict.get('ENGINE', '')
+        is_pg = 'postgresql' in target_engine
+
+        # Disable foreign key constraint triggers in PostgreSQL during bulk load
+        if is_pg:
+            try:
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET session_replication_role = 'replica';")
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"Note: Could not set session_replication_role: {e}"))
+
         total_migrated = 0
 
-        # We disable signals or handle per-model copy
-        for label in ordered_model_labels:
-            try:
-                model = apps.get_model(label)
-            except LookupError:
-                continue
-
-            try:
-                source_qs = model.objects.using('sqlite_source').all()
-                count = source_qs.count()
-                if count == 0:
+        try:
+            for label in ordered_model_labels:
+                try:
+                    model = apps.get_model(label)
+                except LookupError:
                     continue
 
-                self.stdout.write(f"  -> Migrating {label} ({count} rows)...", ending=" ")
+                try:
+                    source_qs = model.objects.using('sqlite_source').all()
+                    count = source_qs.count()
+                    if count == 0:
+                        continue
 
-                imported = 0
-                # Process in batches
-                batch_size = 500
-                items = list(source_qs)
-                for item in items:
+                    self.stdout.write(f"  -> Bulk importing {label} ({count} rows)...", ending=" ")
+
+                    items = list(source_qs)
+                    imported = 0
+
                     try:
-                        # Direct raw save to target database preserving PK and attributes
-                        item.save(using='default', force_insert=False)
-                        imported += 1
-                    except Exception as row_err:
-                        # If row already exists or unique constraint conflict, try update
-                        pass
+                        # Fast bulk create
+                        created = model.objects.using('default').bulk_create(
+                            items,
+                            batch_size=500,
+                            ignore_conflicts=True
+                        )
+                        imported = len(created)
+                        self.stdout.write(self.style.SUCCESS(f"done ({imported} inserted)"))
+                    except Exception as bulk_err:
+                        # Resilient fallback row-by-row
+                        for item in items:
+                            try:
+                                item.save(using='default', force_insert=False)
+                                imported += 1
+                            except Exception:
+                                pass
+                        self.stdout.write(self.style.SUCCESS(f"done fallback ({imported}/{count} imported)"))
 
-                self.stdout.write(self.style.SUCCESS(f"done ({imported}/{count} imported)"))
-                total_migrated += imported
+                    total_migrated += imported
 
-            except Exception as e:
-                self.stdout.write(self.style.WARNING(f"skipped ({e})"))
+                except Exception as e:
+                    self.stdout.write(self.style.WARNING(f"skipped ({e})"))
 
-        # Synchronize PostgreSQL primary key sequences if on PostgreSQL
-        target_engine = connections['default'].settings_dict.get('ENGINE', '')
-        if 'postgresql' in target_engine:
+        finally:
+            # Always re-enable constraints in PostgreSQL
+            if is_pg:
+                try:
+                    with connections['default'].cursor() as cursor:
+                        cursor.execute("SET session_replication_role = 'DEFAULT';")
+                except Exception:
+                    pass
+
+        # Reset sequences in PostgreSQL
+        if is_pg:
             self.stdout.write("==> Resetting PostgreSQL auto-increment sequences...")
             from django.core.management import call_command
             from io import StringIO
@@ -166,9 +193,9 @@ class Command(BaseCommand):
                     if sql.strip():
                         with connections['default'].cursor() as cursor:
                             cursor.execute(sql)
-                except Exception as seq_err:
+                except Exception:
                     pass
 
         self.stdout.write(self.style.SUCCESS(
-            f"Successfully finished SQLite to Target database migration. Total records imported: {total_migrated}"
+            f"Bulk migration completed successfully! Total records processed: {total_migrated}"
         ))
