@@ -114,10 +114,10 @@
       </div>
       <div class="flex-1 min-w-0">
         <p id="gps-loading-title" class="text-xs font-bold text-amber-600">
-          Getting location...
+          Acquiring live location...
         </p>
         <p id="gps-loading-subtitle" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-          Please wait...
+          Tracking satellite coordinates...
         </p>
       </div>
       <button type="button"
@@ -128,29 +128,51 @@
       </button>
     </div>
 
-    {# State B: Location Verified (Image 3) #}
-    <div id="gps-verified-card" class="hidden bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900/60 rounded-2xl p-3.5 shadow-xs flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="w-10 h-10 rounded-full bg-[#DCFCE7] dark:bg-emerald-900/50 text-[#16A34A] flex items-center justify-center shrink-0">
-          <i data-lucide="map-pin" class="w-5 h-5 fill-[#16A34A]"></i>
+    {# State B: Live Tracked Location Verified #}
+    <div id="gps-verified-card" class="hidden bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900/60 rounded-2xl p-3.5 shadow-xs transition-all">
+      {# Header: Live Tracking Indicator & Accuracy Badge #}
+      <div class="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[#DCFCE7] dark:border-emerald-900/50">
+        <div class="flex items-center gap-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span class="text-xs font-bold text-[#15803D] dark:text-emerald-300 uppercase tracking-wide">
+            Live Location Tracked
+          </span>
         </div>
-        <div class="min-w-0">
-          <p class="text-xs font-bold text-[#15803D] dark:text-emerald-300">
-            Location verified
+        <span id="gps-accuracy-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] dark:bg-emerald-900/40 dark:border-emerald-800 shadow-xs">
+          <i data-lucide="check" class="w-3 h-3 stroke-[3]"></i>
+          <span id="gps-accuracy-label">Accurate</span>
+        </span>
+      </div>
+
+      {# Live Address #}
+      <div class="flex items-start gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-[#DCFCE7] dark:bg-emerald-900/50 text-[#16A34A] flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="map-pin" class="w-4 h-4 fill-[#16A34A]"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            Current Live Address
           </p>
-          <p class="text-[12px] font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">
-            {% if branch %}{{ branch.name }}{% elif employee and employee.branch %}{{ employee.branch.name }}{% else %}Dhaka Head Office{% endif %}
-          </p>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Within <span id="gps-distance-display" class="font-semibold text-slate-700 dark:text-slate-300">38</span> m of office
+          <p id="gps-live-address" class="text-xs font-bold text-slate-900 dark:text-white leading-snug break-words mt-0.5">
+            Detecting live address...
           </p>
         </div>
       </div>
-      <div class="shrink-0">
-        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] dark:bg-emerald-900/40 dark:border-emerald-800 shadow-xs">
-          <i data-lucide="check" class="w-3 h-3 stroke-[3]"></i>
-          <span>Accurate</span>
-        </span>
+
+      {# Coordinates & Branch Proximity #}
+      <div class="mt-2.5 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+        <div class="flex items-center gap-1 font-mono text-[10.5px] text-slate-700 dark:text-slate-300">
+          <i data-lucide="crosshair" class="w-3 h-3 text-[#16A34A]"></i>
+          <span id="gps-live-coords">-- , --</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span class="text-slate-400">Office Proximity:</span>
+          <span id="gps-distance-text" class="font-bold text-slate-800 dark:text-slate-200">Checking...</span>
+          <span class="hidden" id="gps-distance-display">0</span>
+        </div>
       </div>
     </div>
 
@@ -191,14 +213,18 @@
                onclick="document.getElementById('camera-input').click()"
                class="w-20 h-20 rounded-full border-2 border-dashed border-[#1877F2]/70 bg-blue-50/40 dark:bg-blue-950/30 flex items-center justify-center cursor-pointer relative overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-xs group">
             {# Silhouette placeholder #}
-            <div id="photo-placeholder" class="flex flex-col items-center justify-center text-slate-400 group-hover:text-[#1877F2]">
+            <div id="photo-placeholder" class="{% if active_session and active_session.photo %}hidden{% else %}flex{% endif %} flex-col items-center justify-center text-slate-400 group-hover:text-[#1877F2]">
               <i data-lucide="user" class="w-9 h-9 stroke-[1.5]"></i>
             </div>
             {# Photo preview image #}
-            <img id="photo-preview-img" class="hidden w-full h-full object-cover rounded-full" alt="Attendance selfie">
+            {% if active_session and active_session.photo %}
+              <img id="photo-preview-img" src="{{ active_session.photo.url }}" class="w-full h-full object-cover rounded-full" alt="Attendance selfie">
+            {% else %}
+              <img id="photo-preview-img" class="hidden w-full h-full object-cover rounded-full" alt="Attendance selfie">
+            {% endif %}
           </div>
           <p id="photo-circle-text" class="text-[9.5px] font-medium text-slate-500 dark:text-slate-400 mt-1 text-center max-w-[90px] leading-tight">
-            Capture attendance photo
+            {% if active_session %}Check-in photo{% else %}Capture attendance photo{% endif %}
           </p>
           <button type="button"
                   id="retake-photo-btn"
@@ -271,6 +297,14 @@
           <p class="text-[11px] font-bold text-emerald-600">
             {{ active_session.check_in_time|time:"h:i A" }}
           </p>
+        {% elif today_attendance and today_attendance.check_in_time %}
+          <div class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 border-2 border-emerald-400 flex items-center justify-center mb-1">
+            <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+          </div>
+          <p class="text-[10px] text-slate-400 font-medium">Check-in</p>
+          <p class="text-[11px] font-bold text-emerald-600">
+            {{ today_attendance.check_in_time|time:"h:i A" }}
+          </p>
         {% else %}
           <div class="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-950/50 text-[#F97316] border-2 border-orange-400 dark:border-orange-600 flex items-center justify-center mb-1">
             <i data-lucide="clock" class="w-4 h-4"></i>
@@ -282,13 +316,23 @@
 
       {# Point 3: Check-out #}
       <div class="flex flex-col items-center text-center relative z-10">
-        <div class="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center mb-1">
-          <i data-lucide="clock" class="w-4 h-4"></i>
-        </div>
-        <p class="text-[10px] text-slate-400 font-medium">Check-out</p>
-        <p class="text-[11px] font-bold text-slate-800 dark:text-white">
-          {{ branch.schedule.office_end_time|time:"h:i A"|default:"06:00 PM" }}
-        </p>
+        {% if today_attendance and today_attendance.check_out_time %}
+          <div class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 border-2 border-emerald-400 flex items-center justify-center mb-1">
+            <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+          </div>
+          <p class="text-[10px] text-slate-400 font-medium">Check-out</p>
+          <p class="text-[11px] font-bold text-emerald-600">
+            {{ today_attendance.check_out_time|time:"h:i A" }}
+          </p>
+        {% else %}
+          <div class="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center mb-1">
+            <i data-lucide="clock" class="w-4 h-4"></i>
+          </div>
+          <p class="text-[10px] text-slate-400 font-medium">Check-out</p>
+          <p class="text-[11px] font-bold text-slate-800 dark:text-white">
+            {{ branch.schedule.office_end_time|time:"h:i A"|default:"06:00 PM" }}
+          </p>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -533,17 +577,41 @@
   function handleLocationSuccess(position) {
     const lat = position.coords.latitude;
     const lng = position.coords.longitude;
-    const acc = position.coords.accuracy || 25;
+    const acc = position.coords.accuracy || 20;
 
     document.getElementById('id_latitude').value = lat;
     document.getElementById('id_longitude').value = lng;
     document.getElementById('id_accuracy').value = acc.toFixed(1);
 
-    // Calculate distance to branch
+    // Update Live Coordinates Display
+    const coordsEl = document.getElementById('gps-live-coords');
+    if (coordsEl) coordsEl.textContent = `${lat.toFixed(5)}°, ${lng.toFixed(5)}° (±${Math.round(acc)}m)`;
+
+    // Calculate real distance to office branch
     const dist = calculateDistance(lat, lng, officeLat, officeLng);
-    const displayDist = Math.max(12, dist > 5000 ? 38 : dist); // Realistic bounded representation
     const distEl = document.getElementById('gps-distance-display');
-    if (distEl) distEl.textContent = displayDist;
+    if (distEl) distEl.textContent = Math.round(dist);
+
+    const distTextEl = document.getElementById('gps-distance-text');
+    if (distTextEl) {
+      if (dist < 1000) {
+        distTextEl.textContent = `${Math.round(dist)} m (${dist <= 200 ? 'Within geofence' : 'Near branch'})`;
+      } else {
+        distTextEl.textContent = `${(dist / 1000).toFixed(2)} km from branch`;
+      }
+    }
+
+    // Accuracy badge
+    const accLabel = document.getElementById('gps-accuracy-label');
+    if (accLabel) {
+      if (acc <= 50) {
+        accLabel.textContent = `High Precision (±${Math.round(acc)}m)`;
+      } else if (acc <= 200) {
+        accLabel.textContent = `Accurate (±${Math.round(acc)}m)`;
+      } else {
+        accLabel.textContent = `GPS (±${Math.round(acc)}m)`;
+      }
+    }
 
     // Update Step 1 Indicator Card
     const stepCard = document.getElementById('step-gps-card');
@@ -563,6 +631,12 @@
     isGpsReady = true;
     checkEligibility();
 
+    // Set immediate address preview before network geocode returns
+    const liveAddrEl = document.getElementById('gps-live-address');
+    if (liveAddrEl && (!liveAddrEl.dataset.resolved || liveAddrEl.textContent.includes('Detecting'))) {
+      liveAddrEl.textContent = `Coordinates: ${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`;
+    }
+
     // Fast non-blocking reverse geocode in background
     fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
       headers: { 'Accept-Language': 'en' },
@@ -572,10 +646,18 @@
     .then(data => {
       if (data && data.display_name) {
         document.getElementById('id_address').value = data.display_name;
+        if (liveAddrEl) {
+          liveAddrEl.textContent = data.display_name;
+          liveAddrEl.dataset.resolved = 'true';
+        }
       }
     })
     .catch(() => {
-      document.getElementById('id_address').value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      document.getElementById('id_address').value = fallback;
+      if (liveAddrEl && !liveAddrEl.dataset.resolved) {
+        liveAddrEl.textContent = fallback;
+      }
     });
   }
 
@@ -736,6 +818,10 @@
         setTimeout(() => { window.location.href = '/staff/home/'; }, 800);
       } else {
         if (window.showToast) showToast(data.error || 'Check-in failed', 'error');
+        if (data.error && data.error.includes('already checked in')) {
+          setTimeout(() => { window.location.reload(); }, 1200);
+          return;
+        }
         btn.disabled = false;
         btn.innerHTML = '<i data-lucide="fingerprint" class="w-5 h-5"></i> Check In Now';
       }

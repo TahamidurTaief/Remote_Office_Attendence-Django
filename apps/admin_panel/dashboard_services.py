@@ -58,11 +58,15 @@ def get_employee_dashboard_data(user):
     today = timezone.localdate()
     data = {}
 
-    emp_profile = getattr(user, 'employee_profile', None)
+    from apps.attendance.views import get_employee
+    from apps.attendance.transaction_service import auto_close_past_sessions
+
+    emp_profile = get_employee(user) or getattr(user, 'employee_profile', None)
     emp_master = getattr(user, 'employee_master', None)
 
     # Today's attendance
     if emp_profile:
+        auto_close_past_sessions(emp_profile, today)
         data['today_attendance'] = Attendance.objects.select_related('employee', 'employee__branch').filter(
             employee=emp_profile, date=today
         ).first()
@@ -384,12 +388,12 @@ def get_hr_dashboard_data(user):
     ))
     data['_today_attendances'] = today_attendances
 
-    data['today_attendance_count'] = sum(1 for a in today_attendances if not a['is_expired'] and a['status'] == 'present')
-    data['today_late_count'] = sum(1 for a in today_attendances if not a['is_expired'] and a['status'] == 'late')
+    data['today_attendance_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] in ('on_time', 'present', 'late', 'holiday_attendance')})
+    data['today_late_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] == 'late'})
 
     # HR Breakdown
     active_profiles_qs = EmployeeProfile.objects.filter(master_employee__status=EmployeeStatus.ACTIVE)
-    data['hr_present_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] in ('on_time', 'present')})
+    data['hr_present_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] in ('on_time', 'present', 'late', 'holiday_attendance')})
     data['hr_late_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] == 'late'})
     data['hr_remote_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['type'] == 'field'})
     data['hr_holiday_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['status'] == 'holiday_attendance'})

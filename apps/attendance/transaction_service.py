@@ -1,6 +1,7 @@
 import json
 import uuid
 import datetime
+import decimal
 from django.utils import timezone
 from django.db import transaction
 from apps.attendance.models import Attendance, AttendanceLocation
@@ -8,6 +9,50 @@ from apps.attendance.sync_utils import parse_and_validate_client_time
 from apps.branches.utils import is_within_geofence
 from apps.notifications.utils import notify_admins
 from apps.employees.models import EmployeeProfile
+
+
+def auto_close_past_sessions(employee=None, today=None):
+    """
+    Closes any dangling unclosed check-in sessions from dates before `today`.
+    If employee is provided, closes past unclosed sessions for that employee.
+    If employee is None, closes past unclosed sessions across all employees.
+    """
+    if today is None:
+        today = timezone.localdate()
+
+    qs = Attendance.objects.filter(
+        date__lt=today,
+        attendance_type='check_in',
+        check_out_time__isnull=True,
+        is_expired=False
+    )
+    if employee:
+        qs = qs.filter(employee=employee)
+
+    from apps.attendance.schedule_utils import get_branch_schedule
+
+    count = 0
+    for sess in qs:
+        sched = get_branch_schedule(sess.employee)
+        if sched and hasattr(sched, 'office_end_time') and sched.office_end_time:
+            end_t = sched.office_end_time
+            combined_dt = datetime.datetime.combine(sess.date, end_t)
+            if timezone.is_aware(sess.check_in_time):
+                auto_out = timezone.make_aware(combined_dt, timezone.get_current_timezone())
+            else:
+                auto_out = combined_dt
+            if auto_out <= sess.check_in_time:
+                auto_out = sess.check_in_time + datetime.timedelta(hours=8)
+        else:
+            auto_out = sess.check_in_time + datetime.timedelta(hours=8)
+
+        sess.check_out_time = auto_out
+        diff = (sess.check_out_time - sess.check_in_time).total_seconds() / 3600.0
+        sess.total_hours = round(decimal.Decimal(str(max(0.0, diff))), 2)
+        sess.note = f"{sess.note} [Auto-closed: unclosed session from {sess.date.strftime('%d/%m/%Y')}]".strip()
+        sess.save(update_fields=['check_out_time', 'total_hours', 'note'])
+        count += 1
+    return count
 
 class AttendanceTransactionError(Exception):
     def __init__(self, message, status_code=400):
@@ -66,8 +111,12 @@ class AttendanceTransactionService:
                 synced_at = None
                 today = timezone.localdate()
 
+            # Cleanly auto-close any unclosed past sessions from previous dates for this employee
+            auto_close_past_sessions(emp_locked, today)
+
             active_session = Attendance.objects.filter(
                 employee=emp_locked,
+                date=today,
                 attendance_type='check_in',
                 check_out_time__isnull=True,
                 is_expired=False

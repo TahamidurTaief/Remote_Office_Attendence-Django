@@ -77,11 +77,16 @@ class AdminDashboardView(RoleRequiredMixin, TemplateView):
         employee_id = self.request.GET.get('employee')
 
         eval_res = PermissionEngine.evaluate(self.request.user, 'dashboard.view')
-        can_view_all = self.request.user.is_superuser or eval_res.scope == DataScope.GLOBAL
+        can_view_all = (
+            self.request.user.is_superuser
+            or getattr(self.request.user, 'role', '') in ('admin', 'super_admin', 'system_owner')
+            or eval_res.scope in (DataScope.GLOBAL, DataScope.COMPANY)
+        )
         role_name = 'admin' if can_view_all else 'manager'
 
         # Scoping variables
-        profile = getattr(self.request.user, 'employee_profile', None)
+        from apps.attendance.views import get_employee
+        profile = get_employee(self.request.user) or getattr(self.request.user, 'employee_profile', None)
         manager_branch = None
         project_employees = None
 

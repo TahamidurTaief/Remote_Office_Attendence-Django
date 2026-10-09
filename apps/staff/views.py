@@ -23,8 +23,14 @@ def home(request):
     if not check_staff_role(request.user):
         return redirect('accounts:login')
 
-    employee = getattr(request.user, 'employee_profile', None)
+    from apps.attendance.views import get_employee
+    from apps.attendance.transaction_service import auto_close_past_sessions
+
+    employee = get_employee(request.user) or getattr(request.user, 'employee_profile', None)
     today = timezone.localdate()
+    if employee:
+        auto_close_past_sessions(employee, today)
+
     field_visits = Attendance.objects.filter(
         employee=employee,
         date=today,
@@ -120,8 +126,13 @@ def attendance_card(request):
     if not check_staff_role(request.user):
         return redirect('accounts:login')
 
-    employee = getattr(request.user, 'employee_profile', None)
+    from apps.attendance.views import get_employee
+    from apps.attendance.transaction_service import auto_close_past_sessions
+
+    employee = get_employee(request.user) or getattr(request.user, 'employee_profile', None)
     today = timezone.localdate()
+    if employee:
+        auto_close_past_sessions(employee, today)
 
     # Active (unclosed) session
     active_session = Attendance.objects.filter(
@@ -198,8 +209,13 @@ def check_in_page(request):
     if not check_staff_role(request.user):
         return redirect('accounts:login')
 
-    employee = getattr(request.user, 'employee_profile', None)
+    from apps.attendance.views import get_employee
+    from apps.attendance.transaction_service import auto_close_past_sessions
+
+    employee = get_employee(request.user) or getattr(request.user, 'employee_profile', None)
     today = timezone.localdate()
+    if employee:
+        auto_close_past_sessions(employee, today)
 
     active = Attendance.objects.filter(
         employee=employee,
@@ -208,6 +224,13 @@ def check_in_page(request):
         check_out_time__isnull=True,
         is_expired=False
     ).first()
+
+    today_attendance = Attendance.objects.filter(
+        employee=employee,
+        date=today,
+        attendance_type='check_in',
+        is_expired=False
+    ).order_by('-check_in_time').first()
 
     from apps.attendance.views import get_attendance_policy
     policy = get_attendance_policy(employee)
@@ -234,6 +257,7 @@ def check_in_page(request):
         'employee': employee,
         'policy': policy,
         'active_session': active,
+        'today_attendance': today_attendance,
         'recent_attendances': recent_attendances,
         'unread_notifications': unread_notifications,
         'shift_info': shift_info,
