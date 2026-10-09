@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     curl \
     netcat-openbsd \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy python virtual environment from builder stage
@@ -63,8 +64,6 @@ RUN chmod +x /app/docker-entrypoint.sh && \
     mkdir -p /app/staticfiles /app/media /app/data && \
     useradd -u 1000 -m appuser && \
     chown -R appuser:appuser /app
-
-USER appuser
 
 EXPOSE 8000
 

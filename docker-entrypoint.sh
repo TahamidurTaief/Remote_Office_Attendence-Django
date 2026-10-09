@@ -1,6 +1,21 @@
 #!/bin/sh
 set -e
 
+# 0. Ensure runtime storage volume permissions & drop to appuser if running as root
+if [ "$(id -u)" = "0" ]; then
+    echo "==> Ensuring storage volume permissions for appuser..."
+    mkdir -p /app/staticfiles /app/media /app/data /app/media/attendance/photos /app/media/cache
+    chown -R appuser:appuser /app/staticfiles /app/media /app/data
+    chmod -R 775 /app/staticfiles /app/media /app/data
+    if command -v gosu >/dev/null 2>&1; then
+        exec gosu appuser "$0" "$@"
+    elif command -v su-exec >/dev/null 2>&1; then
+        exec su-exec appuser "$0" "$@"
+    else
+        exec su -s /bin/sh appuser -c "$0 $*"
+    fi
+fi
+
 echo "========================================================="
 echo "==> Starting FieldTrack Production Deployment..."
 echo "==> Domain: trackme.signtechlimited.com"
@@ -68,6 +83,12 @@ python manage.py bootstrap_rbac || true
 # 5. Collect Static Files for WhiteNoise
 echo "==> Collecting static files..."
 python manage.py collectstatic --noinput
+
+# 6. Execute Custom Command or Gunicorn WSGI Server
+if [ $# -gt 0 ]; then
+    echo "==> Executing custom command: $@"
+    exec "$@"
+fi
 
 # 7. Execute Gunicorn WSGI Server (Fast, Multithreaded, Production-Hardened)
 echo "==> Launching Gunicorn server on port ${PORT:-8000}..."

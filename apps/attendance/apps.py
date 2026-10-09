@@ -15,3 +15,10 @@ class AttendanceConfig(AppConfig):
                 with connection.cursor() as cursor:
                     cursor.execute('PRAGMA journal_mode=WAL;')
                     cursor.execute('PRAGMA busy_timeout=5000;')
+
+        import os
+        from django.conf import settings
+        try:
+            os.makedirs(os.path.join(settings.MEDIA_ROOT, 'attendance', 'photos'), exist_ok=True)
+        except OSError:
+            pass

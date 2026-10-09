@@ -265,6 +265,13 @@ STORAGES = {
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+FILE_UPLOAD_PERMISSIONS = 0o664
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o775
+
+try:
+    os.makedirs(MEDIA_ROOT, exist_ok=True)
+except OSError:
+    pass
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
