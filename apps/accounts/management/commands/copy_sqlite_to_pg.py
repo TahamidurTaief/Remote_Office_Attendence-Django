@@ -182,19 +182,11 @@ class Command(BaseCommand):
         # Reset sequences in PostgreSQL
         if is_pg:
             self.stdout.write("==> Resetting PostgreSQL auto-increment sequences...")
-            from django.core.management import call_command
-            from io import StringIO
-            app_labels = sorted(set(lbl.split('.')[0] for lbl in ordered_model_labels))
-            for app_lbl in app_labels:
-                try:
-                    out = StringIO()
-                    call_command('sqlsequencereset', app_lbl, stdout=out)
-                    sql = out.getvalue()
-                    if sql.strip():
-                        with connections['default'].cursor() as cursor:
-                            cursor.execute(sql)
-                except Exception:
-                    pass
+            try:
+                from django.core.management import call_command
+                call_command('reset_pg_sequences', database='default')
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"Sequence reset warning: {e}"))
 
         self.stdout.write(self.style.SUCCESS(
             f"Bulk migration completed successfully! Total records processed: {total_migrated}"

@@ -71,16 +71,21 @@ sys.exit(1)
 echo "==> Running database migrations..."
 python manage.py migrate --noinput
 
-# 3. If target database has 0 users and sqlite_source exists, import data from SQLite
+# 3. Synchronize PostgreSQL Primary Key Sequences with Table Max IDs
+echo "==> Synchronizing database primary key sequences..."
+python manage.py reset_pg_sequences || true
+
+# 4. If target database has 0 users and sqlite_source exists, import data from SQLite
 echo "==> Checking if initial database data needs to be imported from SQLite..."
 python manage.py copy_sqlite_to_pg || echo "SQLite import skipped or already populated."
+python manage.py reset_pg_sequences || true
 
-# 4. Bootstrap tenant and RBAC registry
+# 5. Bootstrap tenant and RBAC registry
 echo "==> Bootstrapping tenant and system configuration..."
 python manage.py bootstrap_tenant || true
 python manage.py bootstrap_rbac || true
 
-# 5. Collect Static Files for WhiteNoise
+# 6. Collect Static Files for WhiteNoise
 echo "==> Collecting static files..."
 python manage.py collectstatic --noinput
 

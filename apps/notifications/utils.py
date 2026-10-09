@@ -35,4 +35,11 @@ def notify_admins(employee, notif_type, location=''):
         )
         for admin in admins
     ]
-    Notification.objects.bulk_create(notifications)
+    try:
+        Notification.objects.bulk_create(notifications, ignore_conflicts=True)
+    except Exception:
+        for notif in notifications:
+            try:
+                notif.save()
+            except Exception:
+                pass

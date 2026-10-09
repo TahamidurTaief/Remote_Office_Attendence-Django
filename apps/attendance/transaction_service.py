@@ -59,6 +59,45 @@ class AttendanceTransactionError(Exception):
         super().__init__(message)
         self.status_code = status_code
 
+
+def _sync_pg_sequence_for_model(model):
+    """Synchronize PostgreSQL serial/identity sequence to MAX(id) if out of sync."""
+    from django.db import connection
+    try:
+        if 'postgresql' in connection.settings_dict.get('ENGINE', ''):
+            table = model._meta.db_table
+            pk_col = model._meta.pk.column
+            with connection.cursor() as cursor:
+                cursor.execute(f"""
+                    SELECT setval(
+                        pg_get_serial_sequence('{table}', '{pk_col}'),
+                        COALESCE((SELECT MAX({pk_col}) FROM {table}), 1),
+                        (SELECT MAX({pk_col}) IS NOT NULL FROM {table})
+                    );
+                """)
+    except Exception:
+        pass
+
+
+def _safe_create_with_seq_retry(model, **kwargs):
+    """
+    Creates a model instance inside a savepoint. If a duplicate key / unique constraint
+    error occurs due to a PostgreSQL sequence desync, synchronizes the sequence and retries.
+    """
+    from django.db import transaction, IntegrityError
+    try:
+        with transaction.atomic():
+            return model.objects.create(**kwargs)
+    except IntegrityError as e:
+        err_msg = str(e).lower()
+        if 'duplicate key' in err_msg or 'unique' in err_msg or '_pkey' in err_msg:
+            _sync_pg_sequence_for_model(model)
+            if 'sync_uuid' in err_msg and 'sync_uuid' in kwargs:
+                kwargs['sync_uuid'] = uuid.uuid4()
+            with transaction.atomic():
+                return model.objects.create(**kwargs)
+        raise e
+
 class AttendanceTransactionService:
     @staticmethod
     def check_in(user, data, photo=None, validate_photo=True):
@@ -274,7 +313,8 @@ class AttendanceTransactionService:
                 except Exception:
                     pass
 
-            attendance = Attendance.objects.create(
+            attendance = _safe_create_with_seq_retry(
+                Attendance,
                 employee=emp_locked,
                 project=project,
                 date=today,
@@ -292,7 +332,8 @@ class AttendanceTransactionService:
                 synced_at=synced_at
             )
 
-            AttendanceLocation.objects.create(
+            _safe_create_with_seq_retry(
+                AttendanceLocation,
                 attendance=attendance,
                 event='check_in',
                 latitude=float(lat),
@@ -309,11 +350,15 @@ class AttendanceTransactionService:
             notify_admins(emp_locked, notif_type, location=address)
 
             from apps.attendance.models import AttendanceActivityLog
-            AttendanceActivityLog.objects.create(
-                employee=emp_locked,
-                action='check_in',
-                description=f"Checked In at {event_time.strftime('%I:%M %p')}"
-            )
+            try:
+                _safe_create_with_seq_retry(
+                    AttendanceActivityLog,
+                    employee=emp_locked,
+                    action='check_in',
+                    description=f"Checked In at {event_time.strftime('%I:%M %p')}"
+                )
+            except Exception:
+                pass
 
             return {
                 'success': True,
@@ -449,7 +494,8 @@ class AttendanceTransactionService:
 
             attendance.save()
 
-            AttendanceLocation.objects.create(
+            _safe_create_with_seq_retry(
+                AttendanceLocation,
                 attendance=attendance,
                 event='check_out',
                 latitude=float(lat),
@@ -466,11 +512,15 @@ class AttendanceTransactionService:
             notify_admins(emp_locked, 'check_out', location=address)
 
             from apps.attendance.models import AttendanceActivityLog
-            AttendanceActivityLog.objects.create(
-                employee=emp_locked,
-                action='check_out',
-                description=f"Checked Out at {event_time.strftime('%I:%M %p')}"
-            )
+            try:
+                _safe_create_with_seq_retry(
+                    AttendanceActivityLog,
+                    employee=emp_locked,
+                    action='check_out',
+                    description=f"Checked Out at {event_time.strftime('%I:%M %p')}"
+                )
+            except Exception:
+                pass
 
             return {
                 'success': True,
@@ -579,7 +629,8 @@ class AttendanceTransactionService:
                 except Exception:
                     pass
 
-            attendance = Attendance.objects.create(
+            attendance = _safe_create_with_seq_retry(
+                Attendance,
                 employee=emp_locked,
                 project=project,
                 date=today,
@@ -597,7 +648,8 @@ class AttendanceTransactionService:
                 synced_at=synced_at
             )
 
-            AttendanceLocation.objects.create(
+            _safe_create_with_seq_retry(
+                AttendanceLocation,
                 attendance=attendance,
                 event='check_in',
                 latitude=float(lat),
@@ -613,11 +665,15 @@ class AttendanceTransactionService:
             notify_admins(emp_locked, 'field_visit', location=site_address or address)
 
             from apps.attendance.models import AttendanceActivityLog
-            AttendanceActivityLog.objects.create(
-                employee=emp_locked,
-                action='field_visit',
-                description=f"Field visit recorded: {visit_title or client_name or 'Visit'}"
-            )
+            try:
+                _safe_create_with_seq_retry(
+                    AttendanceActivityLog,
+                    employee=emp_locked,
+                    action='field_visit',
+                    description=f"Field visit recorded: {visit_title or client_name or 'Visit'}"
+                )
+            except Exception:
+                pass
 
             return {
                 'success': True,
