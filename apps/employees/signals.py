@@ -33,4 +33,19 @@ def sync_employee_master_to_legacy_profile(sender, instance, **kwargs):
             update_fields.append('is_active')
 
         if update_fields and profile.pk:
+            profile._syncing_from_master = True
             profile.save(update_fields=update_fields)
+
+
+@receiver(post_save, sender=EmployeeProfile)
+def sync_legacy_profile_to_employee_master(sender, instance, created, **kwargs):
+    """
+    Ensures that when an EmployeeProfile is created or modified,
+    an Employee master record exists and is linked.
+    """
+    if getattr(instance, '_syncing_from_master', False):
+        return
+
+    from apps.employees.reconciliation import reconcile_all_employee_profiles
+    if not instance.master_employee_id or not Employee.objects.filter(pk=instance.master_employee_id).exists():
+        reconcile_all_employee_profiles()

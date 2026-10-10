@@ -26,13 +26,11 @@
   class="ft-btn ft-btn-ghost ft-btn-sm w-8 h-8 p-0 flex items-center justify-center"
 >
   {# Sun icon — shown in dark mode #}
-  <i data-lucide="sun"
-     class="w-4 h-4"
-     x-show="dark"
-     x-cloak></i>
+  <span x-show="dark" x-cloak class="inline-flex items-center justify-center">
+    <i data-lucide="sun" class="w-4 h-4"></i>
+  </span>
   {# Moon icon — shown in light mode #}
-  <i data-lucide="moon"
-     class="w-4 h-4"
-     x-show="!dark"
-     x-cloak></i>
+  <span x-show="!dark" x-cloak class="inline-flex items-center justify-center">
+    <i data-lucide="moon" class="w-4 h-4"></i>
+  </span>
 </button>

@@ -26,11 +26,11 @@ class Command(BaseCommand):
         from apps.accounts.models import CustomUser
 
         user_count = CustomUser.objects.using('default').count()
-        if user_count > 0 and not options.get('force'):
+        force = options.get('force', False)
+        if user_count > 0 and not force:
             self.stdout.write(self.style.WARNING(
-                f"Target database already contains {user_count} users. Skipping auto-import."
+                f"Target database already contains {user_count} users. Will populate missing/empty tables only."
             ))
-            return
 
         self.stdout.write(self.style.MIGRATE_HEADING("==> Bulk migrating records from SQLite into Target Database..."))
 
@@ -57,8 +57,8 @@ class Command(BaseCommand):
             'employees.BankBranch',
             'employees.Department',
             'employees.Designation',
-            'employees.EmployeeProfile',
             'employees.Employee',
+            'employees.EmployeeProfile',
             'leave.LeaveType',
             'leave.LeaveBalance',
             'leave.LeaveRequest',
@@ -136,6 +136,11 @@ class Command(BaseCommand):
                     continue
 
                 try:
+                    target_count = model.objects.using('default').count()
+                    if target_count > 0 and not force:
+                        self.stdout.write(self.style.WARNING(f"  -> Skipping {label} ({target_count} rows already present in default)"))
+                        continue
+
                     source_qs = model.objects.using('sqlite_source').all()
                     count = source_qs.count()
                     if count == 0:
@@ -157,12 +162,31 @@ class Command(BaseCommand):
                         self.stdout.write(self.style.SUCCESS(f"done ({imported} inserted)"))
                     except Exception as bulk_err:
                         # Resilient fallback row-by-row
+                        deferred_updates = []
                         for item in items:
                             try:
                                 item.save(using='default', force_insert=False)
                                 imported += 1
                             except Exception:
-                                pass
+                                if label == 'employees.Employee' and getattr(item, 'reporting_manager_id', None):
+                                    mgr_id = item.reporting_manager_id
+                                    item.reporting_manager_id = None
+                                    try:
+                                        item.save(using='default', force_insert=False)
+                                        imported += 1
+                                        deferred_updates.append((item.pk, mgr_id))
+                                    except Exception:
+                                        pass
+                                else:
+                                    pass
+
+                        if deferred_updates:
+                            for emp_id, mgr_id in deferred_updates:
+                                try:
+                                    model.objects.using('default').filter(pk=emp_id).update(reporting_manager_id=mgr_id)
+                                except Exception:
+                                    pass
+
                         self.stdout.write(self.style.SUCCESS(f"done fallback ({imported}/{count} imported)"))
 
                     total_migrated += imported
@@ -187,6 +211,15 @@ class Command(BaseCommand):
                 call_command('reset_pg_sequences', database='default')
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"Sequence reset warning: {e}"))
+
+        # Automatic reconciliation: ensure all EmployeeProfile records are linked to Employee master
+        try:
+            from apps.employees.reconciliation import reconcile_all_employee_profiles
+            reconciled = reconcile_all_employee_profiles()
+            if reconciled:
+                self.stdout.write(self.style.SUCCESS(f"==> Reconciled {reconciled} employee profile(s) into master records."))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"Reconciliation note: {e}"))
 
         self.stdout.write(self.style.SUCCESS(
             f"Bulk migration completed successfully! Total records processed: {total_migrated}"

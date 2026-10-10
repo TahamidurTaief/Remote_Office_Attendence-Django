@@ -122,12 +122,12 @@ def notification_count(request):
         )
     count = count_query.count()
     badge = str(count) if count else ''
-    hidden_class = '' if count else ' hidden'
+    display_class = 'flex' if count else 'hidden'
     return HttpResponse(
-        f'<span id="notif-badge" '
-        f'class="absolute -top-1 -right-1 w-5 h-5 '
-        f'bg-red-500 text-white text-xs rounded-full '
-        f'flex items-center justify-center{hidden_class}">'
+        f'<span id="ft-notif-badge" '
+        f'class="absolute -top-0.5 -right-0.5 w-4 h-4 '
+        f'bg-red-500 text-white text-[9px] rounded-full '
+        f'{display_class} items-center justify-center font-bold">'
         f'{badge}</span>'
     )
 

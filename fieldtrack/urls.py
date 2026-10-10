@@ -104,6 +104,15 @@ def assetlinks_view(request):
     }]
     return JsonResponse(data, safe=False)
 
+
+def favicon_view(request):
+    fav_path = os.path.join(settings.BASE_DIR, 'static', 'favicon.ico')
+    if os.path.exists(fav_path):
+        with open(fav_path, 'rb') as f:
+            return HttpResponse(f.read(), content_type='image/x-icon')
+    return HttpResponse(status=204)
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.accounts.urls')),
@@ -126,6 +135,7 @@ urlpatterns = [
     # PWA URLs served from root
     path('manifest.json', manifest_view, name='manifest'),
     path('sw.js', sw_view, name='sw'),
+    path('favicon.ico', favicon_view, name='favicon'),
 
     # Digital Asset Links — required for TWA full-screen verification
     path('.well-known/assetlinks.json', assetlinks_view, name='assetlinks'),

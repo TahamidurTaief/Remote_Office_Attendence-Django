@@ -379,6 +379,12 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
+        from apps.employees.reconciliation import reconcile_all_employee_profiles
+        if not Employee.objects.filter(is_trashed=False).exists() and EmployeeProfile.objects.exists():
+            reconcile_all_employee_profiles()
+        elif EmployeeProfile.objects.filter(master_employee__isnull=True).exists():
+            reconcile_all_employee_profiles()
+
         from django.db.models import Prefetch
         from apps.employees.models import EmployeeSuspension
 

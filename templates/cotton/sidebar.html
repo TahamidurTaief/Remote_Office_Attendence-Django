@@ -72,7 +72,7 @@
        matchModule(mod) {
          if (this.search) return true;
          if (!mod || mod === 'ai_workspace') return true;
-         const current = this.activeModule || ($store.moduleFilter ? $store.moduleFilter.active : 'all');
+         const current = this.activeModule || ((typeof $store !== 'undefined' && $store && $store.moduleFilter) ? $store.moduleFilter.active : 'all');
          if (current === 'all') return true;
          return current === mod;
        }
@@ -468,11 +468,12 @@
               <i data-lucide="layout-dashboard" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>Dashboard</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('dashboards') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('dashboards') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
 
           {# Submenu #}
@@ -521,11 +522,12 @@
               <i data-lucide="pin" class="ft-icon text-indigo-500"></i>
               <span class="ft-nav-label font-bold" x-show="!collapsed" x-cloak>Pinned</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('pinned_submenu') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('pinned_submenu') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('pinned_submenu') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -584,11 +586,12 @@
               <i data-lucide="users" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>Employees</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('employees') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('employees') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('employees') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -612,11 +615,12 @@
               <i data-lucide="clock" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>Attendance</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('attendance') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('attendance') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('attendance') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -648,11 +652,12 @@
               {% if pending_leave_count %}
                 <span class="ft-badge-pill" x-show="!collapsed" x-cloak>{{ pending_leave_count }}</span>
               {% endif %}
-              <i data-lucide="chevron-down"
-                 x-show="!collapsed"
-                 class="w-3.5 h-3.5 transition-transform duration-200"
-                 :class="isSubmenuOpen('leave') ? 'rotate-180' : ''"
-                 x-cloak></i>
+              <span x-show="!collapsed"
+                    class="inline-flex items-center transition-transform duration-200"
+                    :class="isSubmenuOpen('leave') ? 'rotate-180' : ''"
+                    x-cloak>
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+              </span>
             </div>
           </button>
           <div x-show="(isSubmenuOpen('leave') || search) && !collapsed"
@@ -676,11 +681,12 @@
               <i data-lucide="calendar" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>Schedule</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('schedule') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('schedule') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('schedule') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -719,11 +725,12 @@
               <i data-lucide="briefcase" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>Projects</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('projects') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('projects') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('projects') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -746,11 +753,12 @@
               <i data-lucide="check-square" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>Tasks</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('tasks') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('tasks') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('tasks') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -808,11 +816,12 @@
               <i data-lucide="calculator" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>Payroll</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('payroll') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('payroll') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('payroll') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -877,11 +886,12 @@
               <i data-lucide="bar-chart-2" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>System Reports</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('reports') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('reports') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('reports') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -951,11 +961,12 @@
               <i data-lucide="settings" class="ft-icon"></i>
               <span class="ft-nav-label" x-show="!collapsed" x-cloak>System Settings</span>
             </div>
-            <i data-lucide="chevron-down"
-               x-show="!collapsed"
-               class="w-3.5 h-3.5 transition-transform duration-200"
-               :class="isSubmenuOpen('system') ? 'rotate-180' : ''"
-               x-cloak></i>
+            <span x-show="!collapsed"
+                  class="inline-flex items-center transition-transform duration-200"
+                  :class="isSubmenuOpen('system') ? 'rotate-180' : ''"
+                  x-cloak>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </span>
           </button>
           <div x-show="(isSubmenuOpen('system') || search) && !collapsed"
                x-collapse.duration.200ms
@@ -1017,9 +1028,10 @@
             </div>
             <div class="flex items-center gap-1" x-show="!collapsed" x-cloak>
               <span class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">AI</span>
-              <i data-lucide="chevron-down"
-                 class="w-3.5 h-3.5 transition-transform duration-200"
-                 :class="isSubmenuOpen('ai_workspace') ? 'rotate-180' : ''"></i>
+              <span class="inline-flex items-center transition-transform duration-200"
+                    :class="isSubmenuOpen('ai_workspace') ? 'rotate-180' : ''">
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+              </span>
             </div>
           </button>
 

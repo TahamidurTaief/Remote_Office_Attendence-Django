@@ -286,7 +286,12 @@
                                 <p><strong class="text-slate-700 dark:text-slate-300">Target / Assignees:</strong> <span class="text-slate-600 dark:text-slate-400" x-text="event.assigned_employees"></span></p>
                                 <template x-if="event.source_type === 'manual_event' && event.edit_url">
                                     <div class="pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                                        <c-button href="" ::href="event.edit_url" variant="primary" size="sm" label="Edit Event" extra_class="min-h-[38px]"></c-button>
+                                        <c-button type="button"
+                                                  variant="primary"
+                                                  size="sm"
+                                                  label="Edit Event"
+                                                  extra_class="min-h-[38px]"
+                                                  @click="window.location.href = event.edit_url"></c-button>
                                     </div>
                                 </template>
                             </div>
@@ -329,22 +334,22 @@
                 <div>
                     {% if is_admin_or_manager %}
                     <template x-if="modalMode === 'day_list'">
-                        <c-button href=""
-                                  ::href="'/schedule/create/?date=' + modalDateStr"
+                        <c-button type="button"
                                   variant="primary"
                                   size="sm"
                                   icon="plus"
                                   label="Add Event"
-                                  extra_class="min-h-[44px]"></c-button>
+                                  extra_class="min-h-[44px]"
+                                  @click="window.location.href = '/schedule/create/?date=' + modalDateStr"></c-button>
                     </template>
                     <template x-if="modalMode === 'item_detail' && modalSelectedEvent && modalSelectedEvent.source_type === 'manual_event' && modalSelectedEvent.edit_url">
-                        <c-button href=""
-                                  ::href="modalSelectedEvent.edit_url"
+                        <c-button type="button"
                                   variant="primary"
                                   size="sm"
                                   icon="edit-2"
                                   label="Edit Event"
-                                  extra_class="min-h-[44px]"></c-button>
+                                  extra_class="min-h-[44px]"
+                                  @click="window.location.href = modalSelectedEvent.edit_url"></c-button>
                     </template>
                     {% endif %}
                 </div>

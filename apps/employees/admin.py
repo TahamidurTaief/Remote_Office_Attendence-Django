@@ -1,5 +1,13 @@
 from django.contrib import admin
-from .models import EmployeeProfile, EmployeeAuditLog, Bank, BankBranch, EmployeeBankAccount
+from .models import Employee, EmployeeProfile, EmployeeAuditLog, Bank, BankBranch, EmployeeBankAccount
+
+
+@admin.register(Employee)
+class EmployeeAdmin(admin.ModelAdmin):
+    list_display = ('employee_number', 'first_name', 'last_name', 'department', 'designation', 'branch', 'status', 'joined_date')
+    list_filter = ('status', 'branch', 'department', 'designation', 'is_suspended', 'is_trashed')
+    search_fields = ('employee_number', 'first_name', 'last_name', 'personal_email', 'phone', 'user__email')
+
 
 @admin.register(EmployeeProfile)
 class EmployeeProfileAdmin(admin.ModelAdmin):
