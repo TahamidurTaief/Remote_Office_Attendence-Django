@@ -111,12 +111,13 @@
     </c-card>
 
     <!-- Summary KPI Row -->
-    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
       <c-kpi-widget title="Working Days" value="{{ working_days }}" label="Target days" icon="calendar" color="teal"></c-kpi-widget>
       <c-kpi-widget title="Total Present" value="{{ total_present }}" label="Present days" icon="user-check" color="success"></c-kpi-widget>
       <c-kpi-widget title="Total Absent" value="{{ total_absent }}" label="Absent days" icon="user-x" color="rose"></c-kpi-widget>
       <c-kpi-widget title="Total Leave" value="{{ total_on_leave }}" label="Approved leaves" icon="plane" color="sky"></c-kpi-widget>
       <c-kpi-widget title="Total Late" value="{{ total_late }}" label="Late check-ins" icon="clock" color="amber"></c-kpi-widget>
+      <c-kpi-widget title="Total Overtime" value="{{ total_overtime }}" label="Overtime hours" icon="clock-4" color="indigo"></c-kpi-widget>
       <c-kpi-widget title="Avg Attendance" value="{{ avg_att_pct }}%" label="Attendance rate" icon="trending-up" color="purple"></c-kpi-widget>
     </div>
 
@@ -135,6 +136,7 @@
                   <th class="px-4 py-3 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Late</th>
                   <th class="px-4 py-3 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Field Visits</th>
                   <th class="px-4 py-3 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Total Hours</th>
+                  <th class="px-4 py-3 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Overtime</th>
                   <th class="px-4 py-3 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Attendance %</th>
                   <th class="px-4 py-3 font-bold">Actions</th>
                 </tr>
@@ -167,6 +169,7 @@
                     <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center font-bold text-xs {% if row.late > 0 %}text-amber-500{% else %}text-slate-400{% endif %}">{{ row.late }}</td>
                     <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center text-purple-600 text-xs font-semibold">{{ row.field_visits }}</td>
                     <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center text-slate-700 dark:text-slate-300 text-xs font-semibold">{{ row.total_hours }}h</td>
+                    <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center text-indigo-600 dark:text-indigo-400 text-xs font-semibold">{{ row.overtime|default:"—" }}</td>
                     <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center">
                       {% if row.att_pct >= 90 %}
                         <c-status-pill status="active" label="{{ row.att_pct }}%"></c-status-pill>
@@ -190,7 +193,9 @@
                   <td class="px-4 py-2.5 text-center border-r border-slate-200 dark:border-slate-700 text-sky-600">{{ total_on_leave }}</td>
                   <td class="px-4 py-2.5 text-center border-r border-slate-200 dark:border-slate-700 text-amber-500">{{ total_late }}</td>
                   <td class="px-4 py-2.5 text-center border-r border-slate-200 dark:border-slate-700 text-purple-600">{{ total_field }}</td>
-                  <td colspan="3" class="px-4 py-2.5 text-primary text-right font-bold">Average Rate: {{ avg_att_pct }}%</td>
+                  <td class="px-4 py-2.5 text-center border-r border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold">—</td>
+                  <td class="px-4 py-2.5 text-center border-r border-slate-200 dark:border-slate-700 text-indigo-600 font-bold">{{ total_overtime }}</td>
+                  <td colspan="2" class="px-4 py-2.5 text-primary text-right font-bold">Average Rate: {{ avg_att_pct }}%</td>
                 </tr>
               </tfoot>
             </table>

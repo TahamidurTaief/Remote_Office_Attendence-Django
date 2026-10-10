@@ -1573,7 +1573,9 @@ class MonthlyReportView(AdminRequiredMixin, View):
             'total_on_leave':    data['total_on_leave'],
             'total_late':        data['total_late'],
             'total_field':       data['total_field'],
+            'total_overtime':    data.get('total_overtime', '0h'),
             'avg_att_pct':       data['avg_att_pct'],
+            'all_days':          data.get('all_days', []),
             'employees':         selector_employees,
             'branches':          branches,
             'selected_employee': emp_id,
@@ -2793,11 +2795,13 @@ def get_monthly_grid_data(request):
 @admin_required
 def export_monthly_xlsx(request):
     from datetime import date
+    from apps.attendance.reporting_service import format_bd_time_12h
     data = get_monthly_grid_data(request)
     year = data['year']
     month = data['month']
     all_days = data['all_days']
     rows = data['rows']
+    num_days = len(all_days)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -2806,17 +2810,21 @@ def export_monthly_xlsx(request):
 
     company_font = Font(name='Calibri', bold=True, size=14)
     header_font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
+    subheader_font = Font(name='Calibri', bold=True, size=9, color='FFFFFF')
     normal_font = Font(name='Calibri', size=9)
     bold_font = Font(name='Calibri', bold=True, size=9)
-    late_font = Font(name='Calibri', size=9, color='C00000')
-    absent_font = Font(name='Calibri', size=9, color='9C0006')
-    leave_font = Font(name='Calibri', size=9, color='0070C0')
+    muted_font = Font(name='Calibri', size=9, color='595959')
+    late_font = Font(name='Calibri', bold=True, size=9, color='C00000')
+    absent_font = Font(name='Calibri', bold=True, size=9, color='9C0006')
+    leave_font = Font(name='Calibri', bold=True, size=9, color='0070C0')
 
     header_fill = PatternFill('solid', fgColor='1F4E79')
+    subheader_fill = PatternFill('solid', fgColor='2F5597')
     footer_fill = PatternFill('solid', fgColor='D9E1F2')
     holiday_fill = PatternFill('solid', fgColor='F2F2F2')
     late_fill = PatternFill('solid', fgColor='FFF2CC')
     absent_fill = PatternFill('solid', fgColor='FFC7CE')
+    leave_fill = PatternFill('solid', fgColor='D9E1F2')
 
     center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     left = Alignment(horizontal='left', vertical='center')
@@ -2824,7 +2832,8 @@ def export_monthly_xlsx(request):
     thin = Side(style='thin', color='D9D9D9')
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    total_cols = 2 + len(all_days) + 7
+    start_sum_col = 3 + (num_days * 2)
+    total_cols = start_sum_col + 7
 
     # Row 1: Title
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_cols)
@@ -2832,54 +2841,164 @@ def export_monthly_xlsx(request):
     title_cell.value = f"Monthly Attendance Matrix — {date(year, month, 1).strftime('%B %Y')}"
     title_cell.font = company_font
     title_cell.alignment = left
+    ws.row_dimensions[1].height = 28
 
-    # Row 2: Headers
-    headers = ['SN', 'Employee Name + Department'] + [d.day for d in all_days] + [
-        'Present', 'Absent', 'On Leave', 'Late', 'Field Visits', 'Total Hours', 'Attendance %'
+    # Row 2 & 3: Headers
+    ws.row_dimensions[2].height = 22
+    ws.row_dimensions[3].height = 18
+
+    # Col 1: SN
+    ws.merge_cells(start_row=2, start_column=1, end_row=3, end_column=1)
+    c1_2 = ws.cell(row=2, column=1, value='SN')
+    c1_2.font = header_font
+    c1_2.fill = header_fill
+    c1_2.alignment = center
+    c1_2.border = border
+    c1_3 = ws.cell(row=3, column=1)
+    c1_3.fill = header_fill
+    c1_3.border = border
+
+    # Col 2: Employee Name + Department
+    ws.merge_cells(start_row=2, start_column=2, end_row=3, end_column=2)
+    c2_2 = ws.cell(row=2, column=2, value='Employee Name + Department')
+    c2_2.font = header_font
+    c2_2.fill = header_fill
+    c2_2.alignment = left
+    c2_2.border = border
+    c2_3 = ws.cell(row=3, column=2)
+    c2_3.fill = header_fill
+    c2_3.border = border
+
+    # Date Columns (each date has 2 cols: In, Out)
+    for d_idx, d in enumerate(all_days):
+        col_in = 3 + (d_idx * 2)
+        col_out = col_in + 1
+
+        # Date header on row 2 merged across In and Out
+        ws.merge_cells(start_row=2, start_column=col_in, end_row=2, end_column=col_out)
+        cd = ws.cell(row=2, column=col_in, value=d.day)
+        cd.font = header_font
+        cd.fill = header_fill
+        cd.alignment = center
+        cd.border = border
+
+        cd_out = ws.cell(row=2, column=col_out)
+        cd_out.border = border
+        cd_out.fill = header_fill
+
+        # Row 3: In & Out subheaders
+        ci = ws.cell(row=3, column=col_in, value='In')
+        ci.font = subheader_font
+        ci.fill = subheader_fill
+        ci.alignment = center
+        ci.border = border
+
+        co = ws.cell(row=3, column=col_out, value='Out')
+        co.font = subheader_font
+        co.fill = subheader_fill
+        co.alignment = center
+        co.border = border
+
+    # Summary Headers (merged rows 2 and 3)
+    summary_headers = [
+        'Present', 'Absent', 'On Leave', 'Late', 'Field Visits', 'Total Hours', 'Overtime', 'Attendance %'
     ]
-    for c_idx, h_text in enumerate(headers, 1):
-        cell = ws.cell(row=2, column=c_idx, value=h_text)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = left if c_idx == 2 else center
-        cell.border = border
+    for s_idx, s_text in enumerate(summary_headers):
+        col_s = start_sum_col + s_idx
+        ws.merge_cells(start_row=2, start_column=col_s, end_row=3, end_column=col_s)
+        cs_2 = ws.cell(row=2, column=col_s, value=s_text)
+        cs_2.font = header_font
+        cs_2.fill = header_fill
+        cs_2.alignment = center
+        cs_2.border = border
 
-    # Row 3+: Employee rows
-    curr_row = 3
+        cs_3 = ws.cell(row=3, column=col_s)
+        cs_3.fill = header_fill
+        cs_3.border = border
+
+    # Row 4+: Employee rows
+    curr_row = 4
     for idx, row in enumerate(rows, 1):
+        ws.row_dimensions[curr_row].height = 20
         emp = row['employee']
         dept = emp.canonical_department if hasattr(emp, 'canonical_department') else (getattr(emp, 'department', '') or '')
         if callable(dept):
             dept = dept()
         emp_display = f"{emp.full_name} ({dept})" if dept else emp.full_name
 
-        c1 = ws.cell(row=curr_row, column=1, value=idx)
-        c1.alignment = center
-        c1.border = border
-        c1.font = normal_font
+        c_idx_cell = ws.cell(row=curr_row, column=1, value=idx)
+        c_idx_cell.alignment = center
+        c_idx_cell.border = border
+        c_idx_cell.font = normal_font
 
-        c2 = ws.cell(row=curr_row, column=2, value=emp_display)
-        c2.alignment = left
-        c2.border = border
-        c2.font = normal_font
+        c_name_cell = ws.cell(row=curr_row, column=2, value=emp_display)
+        c_name_cell.alignment = left
+        c_name_cell.border = border
+        c_name_cell.font = normal_font
 
-        for d_idx, d in enumerate(all_days, 1):
-            st = row['daily_statuses'].get(d.day, '—')
-            cell = ws.cell(row=curr_row, column=2 + d_idx, value=st)
-            cell.alignment = center
-            cell.border = border
-            cell.font = normal_font
+        day_calcs = row.get('day_calcs', {})
 
-            if st == 'Late':
-                cell.font = late_font
-                cell.fill = late_fill
-            elif st == 'Absent':
-                cell.font = absent_font
-                cell.fill = absent_fill
-            elif st in ('Holiday', 'Weekend'):
-                cell.fill = holiday_fill
-            elif st == 'On Leave':
-                cell.font = leave_font
+        for d_idx, d in enumerate(all_days):
+            col_in = 3 + (d_idx * 2)
+            col_out = col_in + 1
+            calc = day_calcs.get(d, {})
+            is_present = calc.get('is_present', False)
+            monthly_status = calc.get('monthly_status', '—')
+            is_late = calc.get('is_late', False)
+
+            if is_present:
+                in_time_str = calc.get('check_in_time_str')
+                out_time_str = calc.get('check_out_time_str')
+
+                if not in_time_str and calc.get('check_in'):
+                    in_time_str = format_bd_time_12h(calc['check_in'].check_in_time)
+                if not out_time_str and calc.get('check_in') and calc['check_in'].check_out_time:
+                    out_time_str = format_bd_time_12h(calc['check_in'].check_out_time)
+
+                if not in_time_str:
+                    in_time_str = 'Field' if calc.get('field_visits') else 'Present'
+                if not out_time_str:
+                    out_time_str = '—'
+
+                c_in = ws.cell(row=curr_row, column=col_in, value=in_time_str)
+                c_in.alignment = center
+                c_in.border = border
+                if is_late:
+                    c_in.font = late_font
+                    c_in.fill = late_fill
+                else:
+                    c_in.font = normal_font
+
+                c_out = ws.cell(row=curr_row, column=col_out, value=out_time_str)
+                c_out.alignment = center
+                c_out.border = border
+                c_out.font = normal_font
+            else:
+                ws.merge_cells(start_row=curr_row, start_column=col_in, end_row=curr_row, end_column=col_out)
+                c_in = ws.cell(row=curr_row, column=col_in, value=monthly_status)
+                c_in.alignment = center
+                c_in.border = border
+                c_out = ws.cell(row=curr_row, column=col_out)
+                c_out.border = border
+
+                if monthly_status in ('Holiday', 'Weekend'):
+                    c_in.fill = holiday_fill
+                    c_in.font = muted_font
+                    c_out.fill = holiday_fill
+                elif monthly_status == 'On Leave':
+                    c_in.fill = leave_fill
+                    c_in.font = leave_font
+                    c_out.fill = leave_fill
+                elif monthly_status == 'Absent':
+                    c_in.fill = absent_fill
+                    c_in.font = absent_font
+                    c_out.fill = absent_fill
+                else:
+                    c_in.font = normal_font
+
+        # Summary values
+        ot_mins = row.get('total_ot_minutes', 0)
+        ot_val = f"{ot_mins // 60}h {ot_mins % 60}m" if ot_mins > 0 else "—"
 
         summary_values = [
             row['present'],
@@ -2887,10 +3006,10 @@ def export_monthly_xlsx(request):
             row['on_leave'],
             row['late'],
             row['field_visits'],
-            row['total_hours'],
+            f"{row['total_hours']}h",
+            ot_val,
             f"{row['att_pct']}%"
         ]
-        start_sum_col = 3 + len(all_days)
         for s_idx, val in enumerate(summary_values):
             cell = ws.cell(row=curr_row, column=start_sum_col + s_idx, value=val)
             cell.alignment = center
@@ -2900,15 +3019,7 @@ def export_monthly_xlsx(request):
         curr_row += 1
 
     # Footer Row: Totals
-    footer_values = [
-        data['total_present'],
-        data['total_absent'],
-        data['total_on_leave'],
-        data['total_late'],
-        data['total_field'],
-        round(sum(r['total_hours'] for r in rows), 2),
-        f"{data['avg_att_pct']}%"
-    ]
+    ws.row_dimensions[curr_row].height = 22
     f1 = ws.cell(row=curr_row, column=1, value='')
     f1.border = border
     f1.fill = footer_fill
@@ -2919,12 +3030,24 @@ def export_monthly_xlsx(request):
     f2.border = border
     f2.fill = footer_fill
 
-    for d_idx in range(1, len(all_days) + 1):
-        c = ws.cell(row=curr_row, column=2 + d_idx, value='')
-        c.border = border
-        c.fill = footer_fill
+    for c in range(3, start_sum_col):
+        fc = ws.cell(row=curr_row, column=c, value='')
+        fc.border = border
+        fc.fill = footer_fill
 
-    start_sum_col = 3 + len(all_days)
+    total_ot_all = sum(r.get('total_ot_minutes', 0) for r in rows)
+    total_ot_val = f"{total_ot_all // 60}h {total_ot_all % 60}m" if total_ot_all > 0 else "0h"
+
+    footer_values = [
+        data['total_present'],
+        data['total_absent'],
+        data['total_on_leave'],
+        data['total_late'],
+        data['total_field'],
+        f"{round(sum(r['total_hours'] for r in rows), 1)}h",
+        total_ot_val,
+        f"{data['avg_att_pct']}%"
+    ]
     for s_idx, val in enumerate(footer_values):
         cell = ws.cell(row=curr_row, column=start_sum_col + s_idx, value=val)
         cell.font = bold_font
@@ -2932,17 +3055,21 @@ def export_monthly_xlsx(request):
         cell.border = border
         cell.fill = footer_fill
 
+    # Column Widths
     ws.column_dimensions['A'].width = 6
     ws.column_dimensions['B'].width = 28
-    for d_idx, d in enumerate(all_days, 1):
-        col_letter = get_column_letter(2 + d_idx)
-        ws.column_dimensions[col_letter].width = 11
+    for d_idx in range(num_days):
+        col_in_letter = get_column_letter(3 + (d_idx * 2))
+        col_out_letter = get_column_letter(4 + (d_idx * 2))
+        ws.column_dimensions[col_in_letter].width = 8.5
+        ws.column_dimensions[col_out_letter].width = 8.5
 
-    for s_idx in range(7):
+    for s_idx in range(8):
         col_letter = get_column_letter(start_sum_col + s_idx)
-        ws.column_dimensions[col_letter].width = 13
+        ws.column_dimensions[col_letter].width = 12
 
-    ws.freeze_panes = 'C3'
+    # Freeze Panes at C4 (Row 1-3 and Cols A-B locked)
+    ws.freeze_panes = 'C4'
 
     filename = f"attendance_{month_name}.xlsx"
     response = HttpResponse(
@@ -2955,6 +3082,7 @@ def export_monthly_xlsx(request):
 @admin_required
 def export_monthly_csv(request):
     from datetime import date
+    from apps.attendance.reporting_service import format_bd_time_12h
     data = get_monthly_grid_data(request)
     year = data['year']
     month = data['month']
@@ -2970,9 +3098,12 @@ def export_monthly_csv(request):
 
     writer = csv.writer(response)
 
-    headers = ['SN', 'Employee Name + Department'] + [str(d.day) for d in all_days] + [
-        'Present', 'Absent', 'On Leave', 'Late', 'Field Visits', 'Total Hours', 'Attendance %'
-    ]
+    headers = ['SN', 'Employee Name + Department']
+    for d in all_days:
+        headers.extend([f"Day {d.day} In", f"Day {d.day} Out"])
+    headers.extend([
+        'Present', 'Absent', 'On Leave', 'Late', 'Field Visits', 'Total Hours', 'Overtime', 'Attendance %'
+    ])
     writer.writerow(headers)
 
     for idx, row in enumerate(rows, 1):
@@ -2981,7 +3112,28 @@ def export_monthly_csv(request):
         if callable(dept):
             dept = dept()
         emp_display = f"{emp.full_name} ({dept})" if dept else emp.full_name
-        daily_vals = [row['daily_statuses'].get(d.day, '—') for d in all_days]
+
+        daily_vals = []
+        day_calcs = row.get('day_calcs', {})
+        for d in all_days:
+            calc = day_calcs.get(d, {})
+            is_present = calc.get('is_present', False)
+            monthly_status = calc.get('monthly_status', '—')
+
+            if is_present:
+                in_t = calc.get('check_in_time_str')
+                out_t = calc.get('check_out_time_str')
+                if not in_t and calc.get('check_in'):
+                    in_t = format_bd_time_12h(calc['check_in'].check_in_time)
+                if not out_t and calc.get('check_in') and calc['check_in'].check_out_time:
+                    out_t = format_bd_time_12h(calc['check_in'].check_out_time)
+                daily_vals.extend([in_t or 'Present', out_t or '—'])
+            else:
+                daily_vals.extend([monthly_status, monthly_status])
+
+        ot_mins = row.get('total_ot_minutes', 0)
+        ot_val = f"{ot_mins // 60}h {ot_mins % 60}m" if ot_mins > 0 else "0h"
+
         row_vals = [
             idx,
             emp_display,
@@ -2991,26 +3143,32 @@ def export_monthly_csv(request):
             row['on_leave'],
             row['late'],
             row['field_visits'],
-            row['total_hours'],
+            f"{row['total_hours']}h",
+            ot_val,
             f"{row['att_pct']}%"
         ]
         writer.writerow(row_vals)
 
+    total_ot_all = sum(r.get('total_ot_minutes', 0) for r in rows)
+    total_ot_val = f"{total_ot_all // 60}h {total_ot_all % 60}m" if total_ot_all > 0 else "0h"
+
     footer_row = [
         '',
         'Monthly Totals',
-        *['' for _ in all_days],
+        *['' for _ in range(len(all_days) * 2)],
         data['total_present'],
         data['total_absent'],
         data['total_on_leave'],
         data['total_late'],
         data['total_field'],
-        round(sum(r['total_hours'] for r in rows), 2),
+        f"{round(sum(r['total_hours'] for r in rows), 1)}h",
+        total_ot_val,
         f"{data['avg_att_pct']}%"
     ]
     writer.writerow(footer_row)
 
     return response
+
 
 @admin_required
 def export_monthly_pdf(request):
@@ -3094,7 +3252,7 @@ def export_monthly_pdf(request):
     elements.append(Paragraph(f"Generated: {timezone.localtime().strftime('%d %b %Y, %I:%M %p')}", subtitle_style))
     elements.append(Spacer(1, 10))
 
-    headers = ['SN', 'Employee (Department)', 'Present', 'Absent', 'On Leave', 'Late', 'Field Visits', 'Total Hours', 'Attendance %']
+    headers = ['SN', 'Employee (Department)', 'Present', 'Absent', 'On Leave', 'Late', 'Field Visits', 'Total Hours', 'Overtime', 'Attendance %']
     table_data = [headers]
 
     t_style = [
@@ -3126,6 +3284,7 @@ def export_monthly_pdf(request):
         ol_cnt = row['on_leave']
         fv_cnt = row['field_visits']
         tot_hrs = f"{row['total_hours']}h"
+        ot_val = row.get('overtime', '—')
         att_pct = f"{row['att_pct']}%"
 
         row_data = [
@@ -3137,6 +3296,7 @@ def export_monthly_pdf(request):
             Paragraph(str(l_cnt), cell_style),
             Paragraph(str(fv_cnt), cell_style),
             Paragraph(tot_hrs, cell_style),
+            Paragraph(ot_val, cell_style),
             Paragraph(att_pct, cell_style)
         ]
 
@@ -3160,13 +3320,14 @@ def export_monthly_pdf(request):
         Paragraph(str(data['total_late']), cell_style_bold),
         Paragraph(str(data['total_field']), cell_style_bold),
         Paragraph(f"{round(sum(r['total_hours'] for r in rows), 2)}h", cell_style_bold),
+        Paragraph(data.get('total_overtime', '0h'), cell_style_bold),
         Paragraph(f"{data['avg_att_pct']}%", cell_style_bold)
     ]
     table_data.append(footer_row)
     t_style.append(('BACKGROUND', (0, r_idx), (-1, r_idx), colors.HexColor('#D9E1F2')))
     t_style.append(('FONTNAME', (0, r_idx), (-1, r_idx), 'Helvetica-Bold'))
 
-    col_widths = [25, 200, 65, 65, 65, 65, 65, 75, 75]
+    col_widths = [25, 185, 55, 55, 55, 55, 55, 65, 65, 65]
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle(t_style))
     elements.append(table)

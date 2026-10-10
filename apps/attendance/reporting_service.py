@@ -144,7 +144,26 @@ def is_employee_holiday_optimized(employee, target_date, schedule, branch_holida
         
     return False
 
+from zoneinfo import ZoneInfo
 from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_employee_or_404
+
+BD_TZ = ZoneInfo('Asia/Dhaka')
+
+def format_bd_time_12h(dt):
+    """
+    Formats datetime in Bangladesh Standard Time (UTC+6) 12-hour format:
+    e.g. 9:34A, 3:56P, 12:05P.
+    """
+    if not dt:
+        return ''
+    if timezone.is_aware(dt):
+        local_dt = timezone.localtime(dt, BD_TZ)
+    else:
+        local_dt = timezone.make_aware(dt, timezone.utc).astimezone(BD_TZ) if timezone.is_naive(dt) else dt
+    hour = str(int(local_dt.strftime('%I')))
+    minute = local_dt.strftime('%M')
+    ampm = 'A' if local_dt.strftime('%p').upper() == 'AM' else 'P'
+    return f"{hour}:{minute}{ampm}"
 
 def calculate_employee_day(
     employee,
@@ -194,6 +213,10 @@ def calculate_employee_day(
             'total_hours': 0.0,
             'overtime_minutes': 0,
             'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': '—',
+            'check_out_time_str': '—',
             'check_in_sessions': [],
             'field_visits': [],
         }
@@ -242,7 +265,16 @@ def calculate_employee_day(
                 for a in check_in_sessions
             )
 
-        primary_ci = check_in_sessions[0] if check_in_sessions else None
+        all_sessions = check_in_sessions + field_visits
+        ci_times = [s.check_in_time for s in all_sessions if s and s.check_in_time]
+        co_times = [s.check_out_time for s in all_sessions if s and s.check_out_time]
+        earliest_ci = min(ci_times) if ci_times else None
+        latest_co = max(co_times) if co_times else None
+
+        primary_ci = check_in_sessions[0] if check_in_sessions else (field_visits[0] if field_visits else None)
+
+        in_time_str = format_bd_time_12h(earliest_ci) if earliest_ci else ('Field' if field_visits else 'Present')
+        out_time_str = format_bd_time_12h(latest_co) if latest_co else '—'
 
         return {
             'date': target_date,
@@ -265,9 +297,14 @@ def calculate_employee_day(
             'total_hours': round(total_hours, 2),
             'overtime_minutes': ot_minutes,
             'check_in': primary_ci,
+            'check_in_time': earliest_ci,
+            'check_out_time': latest_co,
+            'check_in_time_str': in_time_str,
+            'check_out_time_str': out_time_str,
             'check_in_sessions': check_in_sessions,
             'field_visits': field_visits,
         }
+
 
     # 2. No attendance: Check approved leave
     if is_on_leave:
@@ -292,6 +329,10 @@ def calculate_employee_day(
             'total_hours': 0.0,
             'overtime_minutes': 0,
             'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': 'On Leave',
+            'check_out_time_str': 'On Leave',
             'check_in_sessions': [],
             'field_visits': [],
         }
@@ -320,6 +361,10 @@ def calculate_employee_day(
             'total_hours': 0.0,
             'overtime_minutes': 0,
             'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': 'Holiday',
+            'check_out_time_str': 'Holiday',
             'check_in_sessions': [],
             'field_visits': [],
         }
@@ -346,6 +391,10 @@ def calculate_employee_day(
         'total_hours': 0.0,
         'overtime_minutes': 0,
         'check_in': None,
+        'check_in_time': None,
+        'check_out_time': None,
+        'check_in_time_str': 'Absent',
+        'check_out_time_str': 'Absent',
         'check_in_sessions': [],
         'field_visits': [],
     }
@@ -732,11 +781,12 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             if day_calc['is_present'] and is_holiday:
                 holiday_work_count += 1
 
-        if getattr(emp, 'overtime_enabled', False) and total_ot_minutes > 0:
-            ot_hours = total_ot_minutes / 60
-            ot_display = f"{int(ot_hours)}h {int(total_ot_minutes % 60)}m"
+        if total_ot_minutes > 0:
+            ot_hours = total_ot_minutes // 60
+            ot_mins = total_ot_minutes % 60
+            ot_display = f"{ot_hours}h {ot_mins}m" if ot_mins > 0 else f"{ot_hours}h"
         else:
-            ot_display = '-'
+            ot_display = '—'
             
         att_pct = round(min(100.0, (present_count / emp_working_days_so_far * 100)), 1) if emp_working_days_so_far > 0 else 0.0
 
@@ -744,9 +794,10 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'present_count': present_count,
             'late_count': late_count,
             'total_ot_minutes': total_ot_minutes,
+            'overtime_display': ot_display,
+            'overtime_hours': round(total_ot_minutes / 60.0, 2),
             'absent_count': absent_count,
             'holiday_work_count': holiday_work_count,
-            'overtime_display': ot_display,
             'is_overtime_enabled': getattr(emp, 'overtime_enabled', False)
         }
 
@@ -758,6 +809,10 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'late': late_count,
             'field_visits': field_visit_count,
             'total_hours': round(total_hours, 2),
+            'total_ot_minutes': total_ot_minutes,
+            'overtime_hours': round(total_ot_minutes / 60.0, 2),
+            'overtime': ot_display,
+            'overtime_display': ot_display,
             'att_pct': att_pct,
             'leave_balances': balances_by_emp[emp.id],
             'daily_statuses': emp_daily_statuses,
@@ -795,6 +850,13 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
     total_late = sum(r['late'] for r in rows)
     total_field = sum(r['field_visits'] for r in rows)
 
+    total_ot_all = sum(r.get('total_ot_minutes', 0) for r in rows)
+    ot_h_all = total_ot_all // 60
+    ot_m_all = total_ot_all % 60
+    total_ot_str = f"{ot_h_all}h {ot_m_all}m" if ot_m_all > 0 else f"{ot_h_all}h"
+    if total_ot_all == 0:
+        total_ot_str = "0h"
+
     avg_att_pct = round(
         sum(r['att_pct'] for r in rows) / len(rows) if rows else 0, 1
     )
@@ -815,6 +877,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         'total_on_leave': total_on_leave,
         'total_late': total_late,
         'total_field': total_field,
+        'total_overtime': total_ot_str,
+        'total_overtime_minutes': total_ot_all,
         'avg_att_pct': avg_att_pct,
         'working_days': working_days,
     }
