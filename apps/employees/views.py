@@ -244,10 +244,19 @@ class ToggleStatusView(AdminRequiredMixin, View):
     required_permission = 'employees.edit'
     action_type = 'edit'
     def post(self, request, pk):
-        employee = get_object_or_404(EmployeeProfile, pk=pk)
-        employee.is_active = not employee.is_active
-        employee.save()
-        return render(request, 'employees/partials/status_badge.html', {'employee': employee})
+        profile = EmployeeProfile.objects.filter(pk=pk).first()
+        if not profile:
+            profile = EmployeeProfile.objects.filter(master_employee_id=pk).first()
+        if not profile:
+            from django.http import Http404
+            raise Http404("Employee profile not found")
+        profile.is_active = not profile.is_active
+        profile.save()
+        if profile.master_employee_id:
+            master = profile.master_employee
+            master.status = EmployeeStatus.ACTIVE if profile.is_active else EmployeeStatus.INACTIVE
+            master.save(update_fields=['status'])
+        return render(request, 'employees/partials/status_badge.html', {'employee': profile})
 
 class EmployeeDocumentCreateView(AdminRequiredMixin, CreateView):
     required_permission = 'employees.add'
@@ -257,7 +266,13 @@ class EmployeeDocumentCreateView(AdminRequiredMixin, CreateView):
     template_name = 'employees/document_form.html'
 
     def dispatch(self, request, *args, **kwargs):
-        self.employee = get_object_or_404(EmployeeProfile, pk=kwargs['employee_pk'])
+        emp_pk = kwargs['employee_pk']
+        self.employee = EmployeeProfile.objects.filter(pk=emp_pk).first()
+        if not self.employee:
+            self.employee = EmployeeProfile.objects.filter(master_employee_id=emp_pk).first()
+        if not self.employee:
+            from django.http import Http404
+            raise Http404("Employee profile not found")
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -267,11 +282,15 @@ class EmployeeDocumentCreateView(AdminRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.employee = self.employee
+        if self.employee.master_employee_id:
+            form.instance.employee_master_id = self.employee.master_employee_id
         messages.success(self.request, 'Document uploaded successfully.')
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy('employees:employee_detail', kwargs={'pk': self.employee.pk})
+        target_pk = self.employee.master_employee_id or self.employee.pk
+        return reverse_lazy('employees:employee_detail', kwargs={'pk': target_pk})
+
 
 class EmployeeDocumentEditView(AdminRequiredMixin, UpdateView):
     required_permission = 'employees.edit'
@@ -370,6 +389,43 @@ from apps.employees.forms import EmployeeMasterForm, DepartmentForm, Designation
 from apps.notifications.models import log_audit
 
 
+def get_employee_master(pk):
+    """
+    Resolves an Employee master record from pk.
+    Accepts:
+    1. Direct Employee.pk
+    2. Legacy EmployeeProfile.pk (reconciles on-the-fly if needed)
+    3. User.pk
+    4. legacy_profile__id
+    5. employee_number
+    """
+    if not pk:
+        return None
+    emp = Employee.objects.filter(pk=pk).first()
+    if emp:
+        return emp
+    from apps.employees.models import EmployeeProfile
+    prof = EmployeeProfile.objects.filter(pk=pk).select_related('master_employee').first()
+    if prof:
+        if not prof.master_employee_id:
+            from apps.employees.reconciliation import reconcile_single_profile
+            reconcile_single_profile(prof)
+            prof.refresh_from_db()
+        if prof.master_employee:
+            return prof.master_employee
+    emp = Employee.objects.filter(user_id=pk).first()
+    if emp:
+        return emp
+    emp = Employee.objects.filter(legacy_profile__id=pk).first()
+    if emp:
+        return emp
+    emp = Employee.objects.filter(
+        Q(employee_number=str(pk)) |
+        Q(employee_number=f"EMP-{pk:04d}" if isinstance(pk, int) else f"EMP-{pk}")
+    ).first()
+    return emp
+
+
 class EmployeeMasterListView(AdminRequiredMixin, ListView):
     required_permission = 'employees.view'
     action_type = 'view'
@@ -380,9 +436,11 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
 
     def get_queryset(self):
         from apps.employees.reconciliation import reconcile_all_employee_profiles
-        if not Employee.objects.filter(is_trashed=False).exists() and EmployeeProfile.objects.exists():
-            reconcile_all_employee_profiles()
-        elif EmployeeProfile.objects.filter(master_employee__isnull=True).exists():
+        from apps.employees.models import EmployeeProfile
+        has_unlinked = EmployeeProfile.objects.filter(
+            Q(master_employee__isnull=True) | ~Q(master_employee_id__in=Employee.objects.values('pk'))
+        ).exists()
+        if has_unlinked or not Employee.objects.filter(is_trashed=False).exists() or Employee.objects.filter(is_trashed=False).count() < EmployeeProfile.objects.filter(is_active=True).count():
             reconcile_all_employee_profiles()
 
         from django.db.models import Prefetch
@@ -506,6 +564,20 @@ class EmployeeMasterDetailView(AdminRequiredMixin, DetailView):
             'asset_assignments__reassigned_to__employee'
         )
 
+    def get_object(self, queryset=None):
+        if queryset is None:
+            queryset = self.get_queryset()
+        pk = self.kwargs.get(self.pk_url_kwarg or 'pk')
+        obj = queryset.filter(pk=pk).first()
+        if not obj:
+            resolved = get_employee_master(pk)
+            if resolved:
+                obj = queryset.filter(pk=resolved.pk).first()
+        if not obj:
+            from django.http import Http404
+            raise Http404(f"No Employee found matching ID {pk}")
+        return obj
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['active_tab'] = self.request.GET.get('tab', 'identity')
@@ -582,6 +654,21 @@ class EmployeeMasterEditView(AdminRequiredMixin, UpdateView):
 
     def get_queryset(self):
         return Employee.objects.select_related('branch', 'department', 'designation', 'reporting_manager', 'user')
+
+    def get_object(self, queryset=None):
+        if queryset is None:
+            queryset = self.get_queryset()
+        pk = self.kwargs.get(self.pk_url_kwarg or 'pk')
+        obj = queryset.filter(pk=pk).first()
+        if not obj:
+            resolved = get_employee_master(pk)
+            if resolved:
+                obj = queryset.filter(pk=resolved.pk).first()
+        if not obj:
+            from django.http import Http404
+            raise Http404(f"No Employee found matching ID {pk}")
+        return obj
+
 
     def form_valid(self, form):
         old_instance = Employee.objects.get(pk=self.object.pk)
@@ -1918,7 +2005,10 @@ class EmployeeSuspendToggleView(AdminRequiredMixin, View):
     required_permission = 'employees.edit'
     action_type = 'edit'
     def post(self, request, pk):
-        employee = get_object_or_404(Employee, pk=pk)
+        employee = get_employee_master(pk)
+        if not employee:
+            from django.http import Http404
+            raise Http404(f"No Employee found matching ID {pk}")
         reason = request.POST.get('reason', '').strip()
         if not reason:
             if request.headers.get('HX-Request'):
@@ -2008,7 +2098,10 @@ class EmployeeSuspendModalView(AdminRequiredMixin, View):
     required_permission = 'employees.view'
     action_type = 'view'
     def get(self, request, pk):
-        employee = get_object_or_404(Employee, pk=pk)
+        employee = get_employee_master(pk)
+        if not employee:
+            from django.http import Http404
+            raise Http404(f"No Employee found matching ID {pk}")
         from django.urls import reverse
         title = "Un-suspend employee?" if employee.is_suspended else "Suspend employee?"
         action_label = "Un-suspend Profile" if employee.is_suspended else "Suspend Profile"
@@ -2036,7 +2129,10 @@ class EmployeeAuditLogView(AdminRequiredMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        self.employee = get_object_or_404(Employee, pk=self.kwargs['pk'])
+        self.employee = get_employee_master(self.kwargs['pk'])
+        if not self.employee:
+            from django.http import Http404
+            raise Http404(f"No Employee found matching ID {self.kwargs['pk']}")
         from apps.employees.models import EmployeeAuditLog
         return EmployeeAuditLog.objects.filter(employee=self.employee).select_related('changed_by')
 

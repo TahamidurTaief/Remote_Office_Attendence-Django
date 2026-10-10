@@ -4,7 +4,7 @@
  * Business data and dynamic API endpoints are NEVER cached here.
  */
 
-const CACHE_NAME = 'fieldtrack-static-v5';
+const CACHE_NAME = 'fieldtrack-static-v6';
 
 const STATIC_ASSETS = [
   '/',
@@ -50,7 +50,28 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  // 0. Only handle HTTP/HTTPS GET requests from same origin
+  if (!event.request || !event.request.url || event.request.method !== 'GET') {
+    return;
+  }
+
+  const reqUrl = event.request.url;
+  if (!reqUrl.startsWith('http://') && !reqUrl.startsWith('https://')) {
+    // Ignore non-http(s) schemes like chrome-extension://, moz-extension://, blob:, data:
+    return;
+  }
+
+  let url;
+  try {
+    url = new URL(reqUrl);
+  } catch (e) {
+    return;
+  }
+
+  // Strictly ignore cross-origin and extension requests
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
   // 1. NEVER cache business data, API calls, or sensitive documents/media
   if (
@@ -67,8 +88,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/branches/') ||
     url.pathname.startsWith('/reports/') ||
     url.pathname.startsWith('/media/') ||     // Employee docs, NID, salary PDFs — never cache
-    url.pathname.startsWith('/backups/') ||
-    event.request.method !== 'GET'
+    url.pathname.startsWith('/backups/')
   ) {
     // Network-only for all business logic & sensitive data
     return;
@@ -89,9 +109,13 @@ self.addEventListener('fetch', (event) => {
           // Return cached asset and update cache in background
           fetch(event.request)
             .then((networkResponse) => {
-              if (networkResponse && networkResponse.status === 200) {
+              if (
+                networkResponse &&
+                networkResponse.status === 200 &&
+                (event.request.url.startsWith('http://') || event.request.url.startsWith('https://'))
+              ) {
                 caches.open(CACHE_NAME).then((cache) => {
-                  cache.put(event.request, networkResponse);
+                  cache.put(event.request, networkResponse).catch(() => {});
                 });
               }
             })
@@ -103,11 +127,12 @@ self.addEventListener('fetch', (event) => {
           if (
             networkResponse &&
             networkResponse.status === 200 &&
-            networkResponse.type === 'basic'
+            networkResponse.type === 'basic' &&
+            (event.request.url.startsWith('http://') || event.request.url.startsWith('https://'))
           ) {
             const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
+              cache.put(event.request, responseToCache).catch(() => {});
             });
           }
           return networkResponse;
