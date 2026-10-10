@@ -656,7 +656,7 @@ class EmployeeWizardFullTestSuite(TestCase):
         self.assertEqual(dest.get_wallet_number(), '01811223344')
         self.assertEqual(dest.notes, 'TXN-NAGAD-999')
 
-    def test_wizard_step_3_ui_choices(self):
+    def test_wizard_step_4_ui_choices(self):
         """Step 3 UI renders Mobile Financial Service and no Mobile Banking."""
         emp = Employee.objects.create(
             employee_number='EMP-PAY-005',
@@ -676,5 +676,118 @@ class EmployeeWizardFullTestSuite(TestCase):
         self.assertIn('Banking Method', content)
         self.assertIn('Transaction Number', content)
         self.assertIn('Transaction ID', content)
+
+    def test_wizard_step_4_phone_login_creation_and_auth(self):
+        """Step 4 allows setting up login via phone number and logging in with it."""
+        from django.contrib.auth import authenticate
+
+        emp = Employee.objects.create(
+            employee_number='EMP-PHONE-001',
+            first_name='Tariq',
+            last_name='Islam',
+            phone='01872352434',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s4 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 4})
+        res = self.client.post(url_s4, {
+            'login_method': 'phone',
+            'login_phone': '01872352434',
+            'password1': 'SecurePass123!',
+            'password2': 'SecurePass123!',
+            'roles': [self.role.pk],
+            'data_scope': 'branch',
+            'next_step': '5'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        emp.refresh_from_db()
+        self.assertIsNotNone(emp.user)
+        self.assertEqual(emp.user.phone, '01872352434')
+        self.assertIsNone(emp.user.email)
+
+        # Authenticate by phone number directly
+        auth_user = authenticate(username='01872352434', password='SecurePass123!')
+        self.assertIsNotNone(auth_user)
+        self.assertEqual(auth_user.pk, emp.user.pk)
+
+        # Authenticate with +880 variation
+        auth_user_var = authenticate(username='+8801872352434', password='SecurePass123!')
+        self.assertIsNotNone(auth_user_var)
+        self.assertEqual(auth_user_var.pk, emp.user.pk)
+
+        # Activate employee to test Web Login View
+        emp.status = EmployeeStatus.ACTIVE
+        emp.save()
+
+        anon_client = Client()
+        login_res = anon_client.post(reverse('accounts:login'), {
+            'email': '01872352434',
+            'password': 'SecurePass123!'
+        })
+        self.assertEqual(login_res.status_code, 302)
+
+    def test_wizard_step_4_email_login_creation_and_auth(self):
+        """Step 4 allows setting up login via email and logging in with it."""
+        from django.contrib.auth import authenticate
+
+        emp = Employee.objects.create(
+            employee_number='EMP-EMAIL-001',
+            first_name='Nadia',
+            last_name='Akter',
+            personal_email='nadia@example.com',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s4 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 4})
+        res = self.client.post(url_s4, {
+            'login_method': 'email',
+            'login_email': 'nadia.login@company.com',
+            'password1': 'NadiaPass123!',
+            'password2': 'NadiaPass123!',
+            'roles': [self.role.pk],
+            'data_scope': 'branch',
+            'next_step': '5'
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(res.status_code, 200)
+
+        emp.refresh_from_db()
+        self.assertIsNotNone(emp.user)
+        self.assertEqual(emp.user.email, 'nadia.login@company.com')
+
+        auth_user = authenticate(username='nadia.login@company.com', password='NadiaPass123!')
+        self.assertIsNotNone(auth_user)
+        self.assertEqual(auth_user.pk, emp.user.pk)
+
+    def test_wizard_step_4_validation_requires_selected_credential(self):
+        """Step 4 enforces email when email method selected, and phone when phone method selected."""
+        emp = Employee.objects.create(
+            employee_number='EMP-VAL-001',
+            first_name='Val',
+            last_name='Test',
+            status=EmployeeStatus.DRAFT
+        )
+        url_s4 = reverse('employees:employee_wizard_step', kwargs={'uuid': emp.uuid, 'step': 4})
+
+        # Missing email when method is email
+        r_email_missing = self.client.post(url_s4, {
+            'login_method': 'email',
+            'login_email': '',
+            'password1': 'Pass123!',
+            'password2': 'Pass123!',
+            'roles': [self.role.pk]
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(r_email_missing.status_code, 200)
+        self.assertIn('Login email is required', r_email_missing.content.decode('utf-8'))
+
+        # Missing phone when method is phone
+        r_phone_missing = self.client.post(url_s4, {
+            'login_method': 'phone',
+            'login_phone': '',
+            'password1': 'Pass123!',
+            'password2': 'Pass123!',
+            'roles': [self.role.pk]
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(r_phone_missing.status_code, 200)
+        self.assertIn('Login phone number is required', r_phone_missing.content.decode('utf-8'))
+
 
 

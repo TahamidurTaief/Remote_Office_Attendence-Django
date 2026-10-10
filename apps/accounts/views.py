@@ -26,6 +26,7 @@ from apps.accounts.login_protection import (
     record_successful_login,
     get_or_create_protection
 )
+from apps.accounts.backends import get_identifier_query
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class CustomLoginView(View):
         ua = request.META.get('HTTP_USER_AGENT', '')
         device_id = get_device_id(request)
 
-        user_obj = CustomUser.objects.filter(Q(email__iexact=email) | Q(phone__iexact=email)).first()
+        user_obj = CustomUser.objects.filter(get_identifier_query(email)).first()
 
         def pad_response():
             elapsed = time.time() - start_time
@@ -393,9 +394,7 @@ class ForgotPasswordRequestView(View):
                 'error': 'Please enter your email address or phone number.'
             })
 
-        user = CustomUser.objects.filter(
-            Q(email__iexact=identifier) | Q(phone__iexact=identifier)
-        ).first()
+        user = CustomUser.objects.filter(get_identifier_query(identifier)).first()
 
         if not user:
             return render(request, 'accounts/partials/forgot_step2.html', {

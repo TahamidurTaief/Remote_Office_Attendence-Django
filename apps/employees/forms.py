@@ -1325,10 +1325,22 @@ class WizardStep3Form(forms.ModelForm):
 
 
 class WizardStep4Form(forms.Form):
+    login_method = forms.ChoiceField(
+        choices=[('email', 'Email Address'), ('phone', 'Phone Number')],
+        widget=forms.RadioSelect,
+        initial='email',
+        required=False,
+        label="Login Method"
+    )
     login_email = forms.EmailField(
         label="Login Email",
         widget=forms.EmailInput(attrs={'class': TEXT_INPUT, 'placeholder': 'user@company.com'}),
-        required=True
+        required=False
+    )
+    login_phone = forms.CharField(
+        label="Login Phone Number",
+        widget=forms.TextInput(attrs={'class': TEXT_INPUT, 'placeholder': '01XXXXXXXXX or +8801XXXXXXXXX'}),
+        required=False
     )
     password1 = forms.CharField(
         label="Password",
@@ -1372,8 +1384,15 @@ class WizardStep4Form(forms.Form):
         import json
         self.fields['roles'].available_permissions = RBACRegistryService.get_canonical_permissions_catalog()
 
+        login_method_initial = 'email'
         if employee and employee.user:
-            self.fields['login_email'].initial = employee.user.email
+            u = employee.user
+            if u.phone and not u.email:
+                login_method_initial = 'phone'
+            self.fields['login_email'].initial = u.email or ''
+            self.fields['login_phone'].initial = u.phone or employee.phone or ''
+            self.initial['login_email'] = u.email or ''
+            self.initial['login_phone'] = u.phone or employee.phone or ''
             self.fields['data_scope'].initial = employee.data_scope
             self.fields['mfa_required'].initial = employee.mfa_required
             assigned_role_ids = list(UserRoleAssignment.objects.filter(user=employee.user).values_list('role_id', flat=True))
@@ -1396,20 +1415,23 @@ class WizardStep4Form(forms.Form):
                     }
                     for ov in existing_overrides
                 ])
-        elif not self.initial.get('roles'):
+        elif employee:
+            self.fields['login_email'].initial = employee.personal_email or ''
+            self.fields['login_phone'].initial = employee.phone or ''
+            self.initial['login_email'] = employee.personal_email or ''
+            self.initial['login_phone'] = employee.phone or ''
+            if employee.phone and not employee.personal_email:
+                login_method_initial = 'phone'
+
+        if 'login_method' not in self.initial:
+            self.initial['login_method'] = login_method_initial
+        self.fields['login_method'].initial = login_method_initial
+
+        if not self.initial.get('roles'):
             default_role = assignable_qs.filter(code='staff').first()
             if default_role:
                 self.initial['roles'] = [default_role.pk]
                 self.fields['roles'].initial = [default_role.pk]
-
-    def clean_login_email(self):
-        email = self.cleaned_data.get('login_email', '').strip()
-        qs = User.objects.filter(email__iexact=email)
-        if self.employee and self.employee.user:
-            qs = qs.exclude(pk=self.employee.user.pk)
-        if qs.exists():
-            raise forms.ValidationError("A user account with this login email already exists.")
-        return email
 
     def clean_roles(self):
         roles = list(self.cleaned_data.get('roles') or [])
@@ -1433,6 +1455,38 @@ class WizardStep4Form(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        login_method = cleaned_data.get('login_method') or self.data.get('login_method') or 'email'
+        cleaned_data['login_method'] = login_method
+
+        email = (cleaned_data.get('login_email') or '').strip()
+        phone = (cleaned_data.get('login_phone') or '').strip()
+
+        if login_method == 'email':
+            if not email:
+                self.add_error('login_email', "Login email is required when Email method is selected.")
+            else:
+                qs = User.objects.filter(email__iexact=email)
+                if self.employee and self.employee.user:
+                    qs = qs.exclude(pk=self.employee.user.pk)
+                if qs.exists():
+                    self.add_error('login_email', "A user account with this login email already exists.")
+            cleaned_data['login_email'] = email
+        elif login_method == 'phone':
+            if not phone:
+                self.add_error('login_phone', "Login phone number is required when Phone Number method is selected.")
+            else:
+                digits = re.sub(r'\D', '', phone)
+                if len(digits) < 6:
+                    self.add_error('login_phone', "Please enter a valid phone number (at least 6 digits).")
+                else:
+                    from apps.accounts.backends import get_identifier_query
+                    qs = User.objects.filter(get_identifier_query(phone))
+                    if self.employee and self.employee.user:
+                        qs = qs.exclude(pk=self.employee.user.pk)
+                    if qs.exists():
+                        self.add_error('login_phone', "A user account with this phone number already exists.")
+            cleaned_data['login_phone'] = phone
+
         p1 = cleaned_data.get('password1')
         p2 = cleaned_data.get('password2')
         # If new account (no employee.user), password is required
@@ -1448,30 +1502,61 @@ class WizardStep4Form(forms.Form):
     @transaction.atomic
     def save(self):
         cleaned_data = self.cleaned_data
-        email = cleaned_data['login_email']
+        login_method = cleaned_data.get('login_method', 'email')
         p1 = cleaned_data.get('password1')
         roles = cleaned_data['roles']
         data_scope = cleaned_data['data_scope']
         mfa_required = cleaned_data['mfa_required']
 
         compat_role = RoleAssignmentService.compute_compatibility_persona(roles)
-
         user = self.employee.user if self.employee else None
+
+        if login_method == 'email':
+            email = (cleaned_data.get('login_email') or '').strip()
+            # Non-conflicting secondary phone
+            phone_cand = (cleaned_data.get('login_phone') or getattr(self.employee, 'phone', None) or '').strip() or None
+            phone = None
+            if phone_cand:
+                p_qs = User.objects.filter(phone=phone_cand)
+                if user:
+                    p_qs = p_qs.exclude(pk=user.pk)
+                if not p_qs.exists():
+                    phone = phone_cand
+        else:
+            phone = (cleaned_data.get('login_phone') or '').strip()
+            # Non-conflicting secondary email
+            email_cand = (cleaned_data.get('login_email') or getattr(self.employee, 'personal_email', None) or '').strip() or None
+            email = None
+            if email_cand:
+                e_qs = User.objects.filter(email__iexact=email_cand)
+                if user:
+                    e_qs = e_qs.exclude(pk=user.pk)
+                if not e_qs.exists():
+                    email = email_cand
+
         if not user:
-            # Check if user with email exists
-            user = User.objects.filter(email__iexact=email).first()
+            # Check if user with this primary identifier exists
+            if login_method == 'email':
+                user = User.objects.filter(email__iexact=email).first()
+            else:
+                from apps.accounts.backends import get_identifier_query
+                user = User.objects.filter(get_identifier_query(phone)).first()
 
         if not user:
             user = User.objects.create_user(
-                email=email,
-                phone=self.employee.phone or None,
+                email=email or None,
+                phone=phone or None,
                 password=p1,
                 role=compat_role
             )
         else:
+            user.email = email or None
+            user.phone = phone or None
+            user.role = compat_role
             if p1:
                 user.set_password(p1)
-                user.save()
+            user.save()
+            if p1:
                 from apps.accounts.models import UserSession
                 from django.contrib.sessions.models import Session
                 from apps.audit.services import AuditService
@@ -1505,6 +1590,10 @@ class WizardStep4Form(forms.Form):
         self.employee.user = user
         self.employee.data_scope = data_scope
         self.employee.mfa_required = mfa_required
+        if login_method == 'phone' and phone:
+            self.employee.phone = phone
+        elif login_method == 'email' and email and not self.employee.personal_email:
+            self.employee.personal_email = email
         self.employee.save()
 
         # Auto-create or sync EmployeeProfile legacy bridge
@@ -1523,6 +1612,9 @@ class WizardStep4Form(forms.Form):
                 joined_date=self.employee.joined_date or timezone.localdate(),
                 branch=self.employee.branch
             )
+        elif user.phone and profile.phone != user.phone:
+            profile.phone = user.phone
+            profile.save(update_fields=['phone'])
 
         # Atomic role diff assignment preserving protected roles
         RoleAssignmentService.sync_user_roles(
