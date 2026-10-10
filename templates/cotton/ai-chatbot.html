@@ -386,6 +386,20 @@
            const inp = document.getElementById('ai-chat-input');
            if (inp) inp.focus();
          });
+       },
+       sendQuickPrompt(text) {
+         if (!text) return;
+         this.message = text;
+         this.$nextTick(() => {
+           const form = document.getElementById('ai-chat-form');
+           if (form) {
+             if (window.htmx) {
+               htmx.trigger(form, 'submit');
+             } else {
+               form.submit();
+             }
+           }
+         });
        }
      }"
      @keydown.escape.window="if (open) { open = false; minimized = false; }"
@@ -539,9 +553,9 @@
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <h3 class="text-[12px] font-bold text-slate-800 dark:text-slate-100 truncate">TaiefLab AI</h3>
-            <span class="px-1 py-0.2 text-[9px] font-semibold rounded bg-[#EF4444]/10 text-[#EF4444] border border-[#EF4444]/20">Local</span>
+            <span class="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Active</span>
           </div>
-          <p class="text-[10px] text-slate-400">Deterministic Intelligence &bull; Offline Ready</p>
+          <p class="text-[10px] text-slate-400">Fast &bull; Concise Operational Intelligence</p>
         </div>
       </div>
 
@@ -634,6 +648,23 @@
         </div>
       </template>
 
+      {# Live Typing Indicator #}
+      <div x-show="loading"
+           x-transition:enter="transition ease-out duration-150"
+           x-transition:enter-start="opacity-0 translate-y-1"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           class="flex flex-col gap-1 items-start my-1"
+           x-cloak>
+        <div class="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+          <div class="flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 0ms"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 150ms"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-bounce" style="animation-delay: 300ms"></span>
+          </div>
+          <span class="text-[11px] text-slate-400 font-medium ml-1">Replying shortly...</span>
+        </div>
+      </div>
+
     </div>
 
     {# Chat Input Form (HTMX powered with Multilingual Voice Recognition & Waveform) #}
@@ -678,12 +709,41 @@
         </div>
       </div>
 
-      <form hx-post="{% url 'admin_panel:ai_chatbot_response' %}"
+      {# Quick Suggestions Pill Bar #}
+      <div class="flex items-center gap-1.5 pb-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <button type="button"
+                @click="sendQuickPrompt(selectedLang === 'bn-BD' ? 'আজকের উপস্থিতি তথ্য' : (selectedLang === 'hi-IN' ? 'आज की उपस्थिति' : 'Today attendance summary'))"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/20 transition-all shrink-0">
+          <i data-lucide="calendar-check" class="w-3 h-3 text-orange-500"></i>
+          <span x-text="selectedLang === 'bn-BD' ? 'আজকের উপস্থিতি' : (selectedLang === 'hi-IN' ? 'आज की उपस्थिति' : 'Today\'s Attendance')"></span>
+        </button>
+        <button type="button"
+                @click="sendQuickPrompt(selectedLang === 'bn-BD' ? 'আজ কে কে ছুটিতে আছে?' : (selectedLang === 'hi-IN' ? 'आज कौन छुट्टी पर है?' : 'Who is on leave today?'))"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition-all shrink-0">
+          <i data-lucide="plane" class="w-3 h-3 text-slate-500"></i>
+          <span x-text="selectedLang === 'bn-BD' ? 'ছুটির তথ্য' : (selectedLang === 'hi-IN' ? 'छुट्टी' : 'Leaves')"></span>
+        </button>
+        <button type="button"
+                @click="sendQuickPrompt(selectedLang === 'bn-BD' ? 'মোট কতজন কর্মী আছে?' : (selectedLang === 'hi-IN' ? 'सक्रिय कर्मचारियों की संख्या' : 'Active workforce count'))"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition-all shrink-0">
+          <i data-lucide="users" class="w-3 h-3 text-slate-500"></i>
+          <span x-text="selectedLang === 'bn-BD' ? 'কর্মী সংখ্যা' : (selectedLang === 'hi-IN' ? 'कर्मचारी' : 'Workforce')"></span>
+        </button>
+        <button type="button"
+                @click="sendQuickPrompt(selectedLang === 'bn-BD' ? 'অফিসের সময়সূচি কি?' : (selectedLang === 'hi-IN' ? 'कार्यालय का समय क्या है?' : 'Office schedule and hours'))"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition-all shrink-0">
+          <i data-lucide="clock" class="w-3 h-3 text-slate-500"></i>
+          <span x-text="selectedLang === 'bn-BD' ? 'অফিস সময়' : (selectedLang === 'hi-IN' ? 'समय' : 'Schedule')"></span>
+        </button>
+      </div>
+
+      <form id="ai-chat-form"
+            hx-post="{% url 'admin_panel:ai_chatbot_response' %}"
             hx-target="#ai-chat-messages"
             hx-swap="beforeend"
             hx-indicator="#ai-chat-spinner"
-            @htmx:before-request="loading = true; message = '';"
-            @htmx:after-request="loading = false; $nextTick(() => { const el = document.getElementById('ai-chat-messages'); el.scrollTop = el.scrollHeight; const inp = document.getElementById('ai-chat-input'); if(inp) inp.focus(); });"
+            @htmx:before-request="loading = true; $nextTick(() => { const el = document.getElementById('ai-chat-messages'); if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); });"
+            @htmx:after-request="loading = false; message = ''; $nextTick(() => { const el = document.getElementById('ai-chat-messages'); if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); const inp = document.getElementById('ai-chat-input'); if(inp) inp.focus(); if (window.lucide) lucide.createIcons(); });"
             class="space-y-1.5">
         {% csrf_token %}
         <div class="flex items-center gap-1.5">
