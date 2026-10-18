@@ -3888,11 +3888,16 @@ class GlobalSearchView(RoleRequiredMixin, View):
         leave_results = []
 
         if query:
+            from django.db.models.functions import Concat
+            from django.db.models import Value
             employee_results = Employee.objects.select_related(
                 'branch', 'department', 'designation', 'reporting_manager', 'user'
+            ).annotate(
+                full_name_concat=Concat('first_name', Value(' '), 'last_name')
             ).filter(
                 Q(first_name__icontains=query) |
                 Q(last_name__icontains=query) |
+                Q(full_name_concat__icontains=query) |
                 Q(employee_number__icontains=query) |
                 Q(personal_email__icontains=query) |
                 Q(phone__icontains=query) |

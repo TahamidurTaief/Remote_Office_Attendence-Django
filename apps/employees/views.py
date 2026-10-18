@@ -460,9 +460,14 @@ class EmployeeMasterListView(AdminRequiredMixin, ListView):
         desig_filter = self.request.GET.get('designation', '').strip()
 
         if search:
-            queryset = queryset.filter(
+            from django.db.models.functions import Concat
+            from django.db.models import Value
+            queryset = queryset.annotate(
+                full_name_concat=Concat('first_name', Value(' '), 'last_name')
+            ).filter(
                 Q(first_name__icontains=search) |
                 Q(last_name__icontains=search) |
+                Q(full_name_concat__icontains=search) |
                 Q(employee_number__icontains=search) |
                 Q(personal_email__icontains=search) |
                 Q(phone__icontains=search)
