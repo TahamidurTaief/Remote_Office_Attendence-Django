@@ -89,13 +89,13 @@ python manage.py bootstrap_rbac || true
 echo "==> Collecting static files..."
 python manage.py collectstatic --noinput
 
-# 6. Execute Custom Command or Gunicorn WSGI Server
+# 7. Execute Custom Command or Gunicorn WSGI Server
 if [ $# -gt 0 ]; then
     echo "==> Executing custom command: $@"
     exec "$@"
 fi
 
-# 7. Execute Gunicorn WSGI Server (Fast, Multithreaded, Production-Hardened)
+# 8. Execute Gunicorn WSGI Server (Fast, Multithreaded, Production-Hardened)
 echo "==> Launching Gunicorn server on port ${PORT:-8000}..."
 exec gunicorn fieldtrack.wsgi:application \
     --bind 0.0.0.0:${PORT:-8000} \
