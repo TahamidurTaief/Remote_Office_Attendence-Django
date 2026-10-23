@@ -157,25 +157,64 @@ class Command(BaseCommand):
                 Attendance.objects.using(db).filter(id__in=seed_att_ids).delete()
 
                 # Delete Seed Projects
-                TaskDependency.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
-                TaskAttachment.objects.using(db).filter(task__project_id__in=seed_proj_ids).delete()
-                ProjectTaskReply.objects.using(db).filter(task__project_id__in=seed_proj_ids).delete()
-                DailyProgressLog.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
-                ManpowerDeployment.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
-                ProjectMaterial.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
-                ProjectSignOff.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
-                ProjectTask.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
+                try:
+                    TaskDependency.objects.using(db).filter(predecessor__project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
+                try:
+                    TaskAttachment.objects.using(db).filter(task__project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
+                try:
+                    ProjectTaskReply.objects.using(db).filter(task__project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
+                try:
+                    DailyProgressLog.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
+                try:
+                    ManpowerDeployment.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
+                try:
+                    ProjectMaterial.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
+                try:
+                    ProjectSignOff.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
+                try:
+                    ProjectTask.objects.using(db).filter(project_id__in=seed_proj_ids).delete()
+                except Exception:
+                    pass
                 seed_projs.delete()
 
                 # Delete Seed Expenses
-                ExpenseHistory.objects.using(db).filter(expense__in=seed_expenses).delete()
-                ExpenseReturnEvent.objects.using(db).filter(expense__in=seed_expenses).delete()
+                try:
+                    ExpenseHistory.objects.using(db).filter(expense__in=seed_expenses).delete()
+                except Exception:
+                    pass
+                try:
+                    ExpenseReturnEvent.objects.using(db).filter(expense__in=seed_expenses).delete()
+                except Exception:
+                    pass
                 seed_expenses.delete()
 
                 # Delete Seed Payroll
-                PayrollAdjustment.objects.using(db).filter(calculation__payroll_run__in=seed_payroll_runs).delete()
-                PayrollWorkflowAudit.objects.using(db).filter(payroll_run__in=seed_payroll_runs).delete()
-                EmployeePayrollCalculation.objects.using(db).filter(payroll_run__in=seed_payroll_runs).delete()
+                try:
+                    PayrollAdjustment.objects.using(db).filter(calculation__payroll_run__in=seed_payroll_runs).delete()
+                except Exception:
+                    pass
+                try:
+                    PayrollWorkflowAudit.objects.using(db).filter(payroll_run__in=seed_payroll_runs).delete()
+                except Exception:
+                    pass
+                try:
+                    EmployeePayrollCalculation.objects.using(db).filter(payroll_run__in=seed_payroll_runs).delete()
+                except Exception:
+                    pass
                 seed_payroll_runs.delete()
 
                 # Delete Seed Leaves & Revert balance deductions
