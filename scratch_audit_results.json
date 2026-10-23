@@ -1,0 +1,566 @@
+{
+  "total_before_seed": 1784,
+  "total_current_db": 2468,
+  "confirmed_real_count": 1776,
+  "confirmed_seed_count": 626,
+  "uncertain_count": 66,
+  "uncertain_records": [
+    {
+      "id": 1610,
+      "employee": "Imran Ahommed",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 02:55:27.155219",
+      "note": "Client visit with Kamruzzaman boss",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1611,
+      "employee": "Md. Radwan Ahammed",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 02:59:21.784461",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1612,
+      "employee": "Polok Sarker",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:01:16.281645",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1613,
+      "employee": "Md. Mustafizur Rahman",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:03:24.989291",
+      "note": "BHL",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1614,
+      "employee": "Sujon Mia",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:05:03.773261",
+      "note": "মানিকগঞ্জ প্রজেক্টে যাইতেসি এই জন্য আজকে অনেক লেট হবে রোডে অনেক জেম",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1615,
+      "employee": "Md. Ripon Islam",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:05:44.700367",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1616,
+      "employee": "Md. Shariful Islam",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:06:31.045092",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1617,
+      "employee": "Md. Abdullah Al Noman",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:10:33.050814",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1618,
+      "employee": "Md. Mahmud Hasan",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:10:39.172483",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1619,
+      "employee": "Anowar Hossain",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:35:29.413464",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1620,
+      "employee": "Md. Abu Sahad",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:36:02.279716",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1621,
+      "employee": "Sohel Rana",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:43:11.335233",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1622,
+      "employee": "Md.Abdur Rahman Jewel",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 03:50:32.303444",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1623,
+      "employee": "Md. Kamruzzaman",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 04:08:04.207767",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1624,
+      "employee": "Md. Murad Hussain",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 04:22:25.367634",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1625,
+      "employee": "Imran Ahommed",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 04:25:19.441706",
+      "note": "July mujeum",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1626,
+      "employee": "Rashik Ahmed",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 06:10:07.515176",
+      "note": "Sorry for the late checkin.. I forgot to provide",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1627,
+      "employee": "Rashik Ahmed",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 06:11:22.663277",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1628,
+      "employee": "Sakib Naim",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 06:13:33.723574",
+      "note": "Today is my first day of joining at Signtech Technology Ltd.",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1629,
+      "employee": "MD ASHRAFUL KHAN",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 10:27:28.938016",
+      "note": "নাইট ডিউটি করে এখন আবার ডিউটিতে আসছি",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1630,
+      "employee": "MD.SHAKIBUL ISLAM",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 10:50:26.654978",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1631,
+      "employee": "Md Arif Hossain",
+      "date": "2026-08-30",
+      "check_in": "2026-08-30 12:23:02.292030",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1632,
+      "employee": "MD.SHAKIBUL ISLAM",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 02:47:46.023280",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1633,
+      "employee": "MD ASHRAFUL KHAN",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 02:47:54.792139",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1634,
+      "employee": "Md. Abdullah Al Noman",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 02:52:51.056582",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1635,
+      "employee": "Polok Sarker",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 02:57:44.408648",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1636,
+      "employee": "Plabon Sikder",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:02:03.980186",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1637,
+      "employee": "Sujon Mia",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:04:06.660005",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1638,
+      "employee": "Md. Shariful Islam",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:06:48.001892",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1639,
+      "employee": "Md. Mustafizur Rahman",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:09:41.722411",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1640,
+      "employee": "Md Arif Hossain",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:10:05.820357",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1641,
+      "employee": "Md. Radwan Ahammed",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:12:00.952617",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1642,
+      "employee": "Sohel Rana",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:13:10.213074",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1643,
+      "employee": "Imran Ahommed",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:13:10.310210",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1644,
+      "employee": "Md. Ripon Islam",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:13:41.296375",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1645,
+      "employee": "Md. Mahmud Hasan",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:14:07.225504",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1646,
+      "employee": "Shafayat Ullah",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:16:32.637385",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1647,
+      "employee": "Md. Ariful Islam",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:24:46.328799",
+      "note": "গাড়ির চাকা ব্লাস্ট হওয়ার কারণে দেরি হয়েছে ",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1648,
+      "employee": "Md.Abdur Rahman Jewel",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:42:31.390775",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1649,
+      "employee": "Sakib Naim",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 03:44:00.855828",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1650,
+      "employee": "Anowar Hossain",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 04:07:03.835477",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1651,
+      "employee": "Md. Kamruzzaman",
+      "date": "2026-08-31",
+      "check_in": "2026-08-31 05:48:59.499284",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1652,
+      "employee": "MD ASHRAFUL KHAN",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 02:37:46.192481",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1653,
+      "employee": "MD.SHAKIBUL ISLAM",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 02:43:27.353682",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1654,
+      "employee": "Shafayat Ullah",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 02:47:12.910776",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1655,
+      "employee": "Md. Abdullah Al Noman",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 02:54:53.046960",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1656,
+      "employee": "Polok Sarker",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:00:27.492622",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1657,
+      "employee": "Md. Mustafizur Rahman",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:02:39.779522",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1658,
+      "employee": "Md. Shariful Islam",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:07:18.115151",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1659,
+      "employee": "Plabon Sikder",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:08:52.617459",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1660,
+      "employee": "Md. Radwan Ahammed",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:12:24.811722",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1661,
+      "employee": "Sohel Rana",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:14:12.727762",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1662,
+      "employee": "Md. Ariful Islam",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:14:48.622855",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1663,
+      "employee": "Md. Ripon Islam",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:15:32.309809",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1664,
+      "employee": "Sujon Mia",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:27:21.096468",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1665,
+      "employee": "Md. Murad Hussain",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:34:58.436753",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1666,
+      "employee": "Md.Abdur Rahman Jewel",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:35:40.958348",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1667,
+      "employee": "Md. Murad Hussain",
+      "date": "2026-08-04",
+      "check_in": "2026-08-04 03:41:00",
+      "note": "Admin Override: .",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1668,
+      "employee": "Md. Abu Sahad",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 03:45:52.221673",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1669,
+      "employee": "Md. Ariful Islam",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 04:05:54.299454",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1670,
+      "employee": "Md Arif Hossain",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 04:09:58.418934",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1671,
+      "employee": "Md. Kamruzzaman",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 04:34:39.996350",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1672,
+      "employee": "Anowar Hossain",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 04:38:18.931990",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1673,
+      "employee": "Imran Ahommed",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 04:44:05.594084",
+      "note": "",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 1674,
+      "employee": "Md. Mahmud Hasan",
+      "date": "2026-09-01",
+      "check_in": "2026-09-01 11:06:45.898223",
+      "note": "সকালে ইন্টারনেট ছিলোনা। ",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    },
+    {
+      "id": 2357,
+      "employee": "Tahamidur Taief",
+      "date": "2026-09-07",
+      "check_in": "2026-09-07 10:19:22.141620",
+      "note": "[POLICY EXCEPTION: Checked in 6715823m outside geofence GEOFENCE WARNING]",
+      "reason": "Not in before_seed and does not match explicit seed note"
+    }
+  ],
+  "seed_id_sample": [
+    1676,
+    1677,
+    1678,
+    1679,
+    1680,
+    1681,
+    1682,
+    1683,
+    1684,
+    1686,
+    1687,
+    1688,
+    1689,
+    1690,
+    1691,
+    1692,
+    1693,
+    1694,
+    1695,
+    1696
+  ],
+  "seed_id_range": [
+    1676,
+    2356
+  ],
+  "ot_impacted_count": 60,
+  "corr_impacted_count": 1,
+  "forgot_impacted_count": 1
+}
