@@ -34,6 +34,7 @@ urlpatterns = [
     path('reports/employee/<int:pk>/day/<str:date_str>/', views.EmployeeDayDetailView.as_view(), name='reports_employee_day'),
     path('reports/export/', views.export_attendance, name='export_attendance'),
     path('reports/export/csv/', views.ExportReportCSVView.as_view(), name='reports_export_csv'),
+    path('reports/export/excel/', views.ExportReportExcelView.as_view(), name='reports_export_excel'),
     path('reports/export/pdf/', views.ExportReportPDFView.as_view(), name='reports_export_pdf'),
     path('reports/export/monthly-xlsx/', views.export_monthly_xlsx, name='reports_export_monthly_xlsx'),
     path('reports/absent/', views.AbsentReportView.as_view(), name='reports_absent'),

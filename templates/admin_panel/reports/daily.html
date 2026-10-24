@@ -23,17 +23,13 @@
                 <span x-text="excelView ? 'Excel View Active' : 'Excel Grid View'"></span>
             </button>
 
-            {% url 'admin_panel:reports_export_csv' as export_csv_base %}
-            {% url 'admin_panel:reports_export_pdf' as export_pdf_base %}
-            {% url 'admin_panel:reports_export_monthly_xlsx' as export_xlsx_base %}
-
-            <c-button :href="export_csv_base|add:'?date='|add:report_date|date:'Y-m-d'"
+            <c-button href="{% url 'admin_panel:reports_export_csv' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
                       variant="primary" size="md" icon="download" label="CSV" extra_class="!bg-blue-600 hover:!bg-blue-700 !text-white text-xs" ></c-button>
 
-            <c-button :href="export_xlsx_base|add:'?date='|add:report_date|date:'Y-m-d'"
+            <c-button href="{% url 'admin_panel:reports_export_excel' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
                       variant="primary" size="md" icon="file-spreadsheet" label="Excel" extra_class="!bg-emerald-600 hover:!bg-emerald-700 !text-white text-xs" ></c-button>
 
-            <c-button :href="export_pdf_base|add:'?date='|add:report_date|date:'Y-m-d'"
+            <c-button href="{% url 'admin_panel:reports_export_pdf' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
                       variant="danger" size="md" icon="file-text" label="PDF" extra_class="!bg-rose-600 hover:!bg-rose-700 !text-white text-xs" ></c-button>
 
             <button type="button"

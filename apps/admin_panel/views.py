@@ -2389,7 +2389,7 @@ class ExportReportCSVView(AdminRequiredMixin, View):
 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = (
-            f'attachment; filename="attendance_report_{timezone.localdate()}.csv"'
+            f'attachment; filename="attendance_report_{date_from_obj}.csv"'
         )
         writer = csv.writer(response)
         writer.writerow([
@@ -2479,7 +2479,7 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         # ── HTTP response ───────────────────────────────────────────────
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = (
-            f'attachment; filename="attendance_report_{timezone.localdate()}.pdf"'
+            f'attachment; filename="attendance_report_{date_from_obj}.pdf"'
         )
 
         # ── ReportLab document ─────────────────────────────────────────
@@ -2578,6 +2578,160 @@ class ExportReportPDFView(AdminRequiredMixin, View):
 
         doc.build(elements)
         return response
+
+
+class ExportReportExcelView(AdminRequiredMixin, View):
+    required_permission = 'reports.export'
+    action_type = 'export'
+    def get(self, request):
+        eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+        if not (request.user.is_superuser or eval_export.allowed):
+            raise PermissionDenied("You do not have permission to export reports.")
+
+        date_single = request.GET.get('date')
+        date_from = request.GET.get('date_from') or date_single
+        date_to = request.GET.get('date_to') or date_single
+        emp_id = request.GET.get('employee')
+        branch_id = request.GET.get('branch')
+        att_type = request.GET.get('type') or request.GET.get('attendance_type')
+        status = request.GET.get('status')
+
+        today = timezone.localdate()
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date() if date_from else today
+        except (ValueError, TypeError):
+            date_from_obj = today
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date() if date_to else date_from_obj
+        except (ValueError, TypeError):
+            date_to_obj = date_from_obj
+
+        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+
+        from apps.attendance import reporting_service
+        data = reporting_service.get_daily_report_data(
+            start_date=date_from_obj,
+            end_date=date_to_obj,
+            employee_id=emp_id or None,
+            branch_id=branch_id or None,
+            employee_queryset=scoped_employees,
+            status=status or None,
+            attendance_type=att_type or None,
+        )
+        records = data['rows']
+
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Daily Attendance"
+        ws.views.sheetView[0].showGridLines = True
+
+        title_font = Font(name="Calibri", size=14, bold=True, color="1E293B")
+        subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+        header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        regular_font = Font(name="Calibri", size=9)
+        center_align = Alignment(horizontal="center", vertical="center")
+        left_align = Alignment(horizontal="left", vertical="center")
+        right_align = Alignment(horizontal="right", vertical="center")
+        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        thin_side = Side(style='thin', color='E5E7EB')
+        thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+        ws.merge_cells('A1:K1')
+        ws['A1'] = "FieldTrack — Daily Attendance Report"
+        ws['A1'].font = title_font
+        ws['A1'].alignment = left_align
+
+        ws.merge_cells('A2:K2')
+        filter_str = f"Date: {date_from_obj}" if date_from_obj == date_to_obj else f"Date: {date_from_obj} to {date_to_obj}"
+        ws['A2'] = f"Generated: {timezone.localtime().strftime('%d %B %Y, %I:%M %p')} | {filter_str}"
+        ws['A2'].font = subtitle_font
+        ws['A2'].alignment = left_align
+
+        headers = [
+            'SN', 'Employee', 'Employee ID', 'Date',
+            'Check-in', 'Check-out', 'Hours',
+            'Type', 'Status', 'Location', 'Notes'
+        ]
+        ws.row_dimensions[4].height = 24
+        for col_num, header_title in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col_num, value=header_title)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_align
+            cell.border = thin_border
+
+        row_idx = 5
+        for idx, r in enumerate(records, 1):
+            ci = r['check_in']
+            cis = r['check_in_sessions']
+            fvs = r['field_visits']
+            latest_co = max((s.check_out_time for s in cis if s.check_out_time), default=None)
+
+            if cis and fvs:
+                type_display = 'Check In / Field Visit'
+            elif cis:
+                type_display = ci.get_type_display() if hasattr(ci, 'get_type_display') else 'Check In'
+            elif fvs:
+                type_display = 'Field Visit'
+            elif r['status'] == 'on_leave':
+                type_display = 'Leave'
+            elif r['status'] == 'holiday':
+                type_display = 'Holiday'
+            else:
+                type_display = '—'
+
+            loc_str = r['location'].address if r['location'] and hasattr(r['location'], 'address') else ''
+            notes = r['notes'] or ''
+            ci_time = timezone.localtime(ci.check_in_time).strftime('%H:%M') if ci and ci.check_in_time else '—'
+            co_time = timezone.localtime(latest_co).strftime('%H:%M') if latest_co else '—'
+            hrs = float(r['total_hours']) if r['total_hours'] > 0 else 0.0
+
+            ws.row_dimensions[row_idx].height = 20
+            row_vals = [
+                (idx, center_align),
+                (r['employee'].full_name, left_align),
+                (r['employee'].employee_id, center_align),
+                (str(r['date']), center_align),
+                (ci_time, center_align),
+                (co_time, center_align),
+                (f"{hrs}h" if hrs > 0 else "—", right_align),
+                (type_display, center_align),
+                (r['status_display'], center_align),
+                (loc_str, left_align),
+                (notes, left_align),
+            ]
+            for col_num, (val, align) in enumerate(row_vals, 1):
+                cell = ws.cell(row=row_idx, column=col_num, value=val)
+                cell.font = regular_font
+                cell.alignment = align
+                cell.border = thin_border
+
+            row_idx += 1
+
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                if cell.row < 4:
+                    continue
+                val_str = str(cell.value or '')
+                if len(val_str) > max_len:
+                    max_len = len(val_str)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 10)
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = (
+            f'attachment; filename="attendance_report_{date_from_obj}.xlsx"'
+        )
+        wb.save(response)
+        return response
+
 
 # ─────────────────────────────────────────────────────────────────
 # SCHEDULE SETTINGS
@@ -2732,14 +2886,14 @@ def export_attendance(request):
         else:
             return export_monthly_xlsx(request)
     else:
-        if format_type == 'xlsx':
-            return export_monthly_xlsx(request)
+        if format_type in ('xlsx', 'excel'):
+            return ExportReportExcelView.as_view()(request)
         elif format_type == 'csv':
             return ExportReportCSVView.as_view()(request)
         elif format_type == 'pdf':
             return ExportReportPDFView.as_view()(request)
         else:
-            return export_monthly_xlsx(request)
+            return ExportReportExcelView.as_view()(request)
 
 def get_monthly_grid_data(request):
     from datetime import date, datetime
