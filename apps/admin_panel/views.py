@@ -2352,7 +2352,7 @@ class ExportReportCSVView(AdminRequiredMixin, View):
     action_type = 'export'
     def get(self, request):
         eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
-        if not (request.user.is_superuser or eval_export.allowed):
+        if not (request.user.is_superuser or request.user.role in ('admin', 'system_owner', 'super_admin') or eval_export.allowed):
             raise PermissionDenied("You do not have permission to export reports.")
 
         date_single = request.GET.get('date')
@@ -2440,7 +2440,7 @@ class ExportReportPDFView(AdminRequiredMixin, View):
     action_type = 'export'
     def get(self, request):
         eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
-        if not (request.user.is_superuser or eval_export.allowed):
+        if not (request.user.is_superuser or request.user.role in ('admin', 'system_owner', 'super_admin') or eval_export.allowed):
             raise PermissionDenied("You do not have permission to export reports.")
 
         # ── Filter (same logic as CSV export) ──────────────────────────
@@ -2585,7 +2585,7 @@ class ExportReportExcelView(AdminRequiredMixin, View):
     action_type = 'export'
     def get(self, request):
         eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
-        if not (request.user.is_superuser or eval_export.allowed):
+        if not (request.user.is_superuser or request.user.role in ('admin', 'system_owner', 'super_admin') or eval_export.allowed):
             raise PermissionDenied("You do not have permission to export reports.")
 
         date_single = request.GET.get('date')

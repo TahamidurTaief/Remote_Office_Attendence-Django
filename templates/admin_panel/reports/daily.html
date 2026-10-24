@@ -23,18 +23,40 @@
                 <span x-text="excelView ? 'Excel View Active' : 'Excel Grid View'"></span>
             </button>
 
-            <c-button href="{% url 'admin_panel:reports_export_csv' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
-                      variant="primary" size="md" icon="download" label="CSV" extra_class="!bg-blue-600 hover:!bg-blue-700 !text-white text-xs" ></c-button>
+            <a href="{% url 'admin_panel:reports_export_csv' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
+               download
+               target="_blank"
+               onclick="triggerDailyDownload(event, this.href)"
+               class="ft-btn ft-btn-sm text-xs font-semibold !bg-blue-600 hover:!bg-blue-700 !text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+               title="Download CSV dataset">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span>CSV</span>
+            </a>
 
-            <c-button href="{% url 'admin_panel:reports_export_excel' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
-                      variant="primary" size="md" icon="file-spreadsheet" label="Excel" extra_class="!bg-emerald-600 hover:!bg-emerald-700 !text-white text-xs" ></c-button>
+            <a href="{% url 'admin_panel:reports_export_excel' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
+               download
+               target="_blank"
+               onclick="triggerDailyDownload(event, this.href)"
+               class="ft-btn ft-btn-sm text-xs font-semibold !bg-emerald-600 hover:!bg-emerald-700 !text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+               title="Download formatted Excel workbook">
+                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                <span>Excel</span>
+            </a>
 
-            <c-button href="{% url 'admin_panel:reports_export_pdf' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
-                      variant="danger" size="md" icon="file-text" label="PDF" extra_class="!bg-rose-600 hover:!bg-rose-700 !text-white text-xs" ></c-button>
+            <a href="{% url 'admin_panel:reports_export_pdf' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
+               download
+               target="_blank"
+               onclick="triggerDailyDownload(event, this.href)"
+               class="ft-btn ft-btn-sm text-xs font-semibold !bg-rose-600 hover:!bg-rose-700 !text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+               title="Download printable PDF document">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+                <span>PDF</span>
+            </a>
 
             <button type="button"
-                    onclick="copyDailyTableTSV()"
-                    class="ft-btn ft-btn-sm text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                    onclick="copyDailyTableTSV(event)"
+                    class="ft-btn ft-btn-sm text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                    title="Copy table to clipboard for Google Sheets">
                 <i data-lucide="copy" class="w-4 h-4"></i>
                 <span>Sheets</span>
             </button>
@@ -214,20 +236,76 @@
 </div>
 
 <script>
-  function copyDailyTableTSV() {
+  function triggerDailyDownload(event, fallbackUrl) {
+    if (event) {
+      event.stopPropagation();
+    }
+    try {
+      const dateInput = document.querySelector('input[name="date"]');
+      const empInput = document.querySelector('select[name="employee"]');
+      const branchInput = document.querySelector('select[name="branch"]');
+
+      let url = new URL(fallbackUrl, window.location.origin);
+      if (dateInput && dateInput.value) url.searchParams.set('date', dateInput.value);
+      if (empInput && empInput.value) url.searchParams.set('employee', empInput.value);
+      if (branchInput && branchInput.value) url.searchParams.set('branch', branchInput.value);
+
+      const targetUrl = url.toString();
+      const a = document.createElement('a');
+      a.href = targetUrl;
+      a.setAttribute('download', '');
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      if (event) event.preventDefault();
+    } catch (e) {
+      // Fallback: direct navigation
+      window.location.assign(fallbackUrl);
+    }
+  }
+
+  function copyDailyTableTSV(event) {
+    if (event) event.stopPropagation();
     const table = document.getElementById('dailyReportTable');
-    if (!table) return;
+    if (!table) {
+      alert('No daily report table available to copy.');
+      return;
+    }
     let tsv = [];
     table.querySelectorAll('tr').forEach(row => {
       let rowData = [];
       row.querySelectorAll('th, td').forEach(col => {
-        rowData.push(col.innerText.replace(/\n/g, ' ').trim());
+        rowData.push(col.innerText.replace(/[\n\r\t]+/g, ' ').trim());
       });
       tsv.push(rowData.join('\t'));
     });
-    navigator.clipboard.writeText(tsv.join('\n')).then(() => {
+    const text = tsv.join('\n');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Daily report data copied in TSV format! Ready to paste into Google Sheets or Excel.');
+      }).catch(() => fallbackCopyTSV(text));
+    } else {
+      fallbackCopyTSV(text);
+    }
+  }
+
+  function fallbackCopyTSV(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
       alert('Daily report data copied in TSV format! Ready to paste into Google Sheets or Excel.');
-    });
+    } catch (err) {
+      alert('Failed to copy to clipboard automatically. Please select the table and copy manually.');
+    }
+    document.body.removeChild(ta);
   }
 </script>
 </c-app-shell>
