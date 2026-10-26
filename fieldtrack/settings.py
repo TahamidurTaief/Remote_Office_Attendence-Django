@@ -49,6 +49,11 @@ CSRF_TRUSTED_ORIGINS = _env_csrf_origins if _env_csrf_origins else _default_csrf
 
 # Reverse Proxy SSL Header (For Traefik / Coolify / Nginx)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
+# Custom CSRF failure view with stable error code & request ID for attendance/API
+CSRF_FAILURE_VIEW = 'apps.attendance.csrf.csrf_failure_view'
 
 
 # ── SECURITY HARDENING & HEADERS ─────────────────────────────────────────────
@@ -144,6 +149,7 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
+                'django.template.context_processors.csrf',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'apps.accounts.context_processors.notifications',
@@ -250,7 +256,7 @@ APPEND_SLASH = True
 
 # ── STATIC & MEDIA STORAGE ───────────────────────────────────────────────────
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
@@ -263,8 +269,8 @@ STORAGES = {
     },
 }
 
-MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = Path(os.getenv('MEDIA_ROOT', str(BASE_DIR / 'media'))).resolve()
 FILE_UPLOAD_PERMISSIONS = 0o664
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o775
 

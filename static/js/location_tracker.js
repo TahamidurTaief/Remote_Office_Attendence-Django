@@ -16,10 +16,14 @@
         },
 
         getCsrf() {
+            if (window.CSRFProvider && typeof window.CSRFProvider.getToken === 'function') {
+                return window.CSRFProvider.getToken();
+            }
             const el = document.querySelector('[name=csrfmiddlewaretoken]');
             if (el) return el.value;
-            const m = document.cookie.match(/csrftoken=([^;]+)/);
-            return m ? m[1] : '';
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta && meta.content) return meta.content;
+            return '';
         },
 
         getIntervalMinutes() {

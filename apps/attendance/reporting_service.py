@@ -531,7 +531,12 @@ def get_daily_report_data(
             loc = next((l for l in ci.locations.all() if l.event == 'check_in'), None) if ci else None
 
             # Notes
-            notes = ci.note if ci and ci.note else (fvs[0].note if fvs and fvs[0].note else '')
+            all_notes = [s.note.strip() for s in (cis or []) + (fvs or []) if getattr(s, 'note', None) and s.note.strip()]
+            if all_notes:
+                seen_n = set()
+                notes = " | ".join(n for n in all_notes if not (n in seen_n or seen_n.add(n)))
+            else:
+                notes = ci.note if ci and ci.note else (fvs[0].note if fvs and fvs[0].note else '')
 
             if ci:
                 ci.total_hours = day_calc['total_hours']

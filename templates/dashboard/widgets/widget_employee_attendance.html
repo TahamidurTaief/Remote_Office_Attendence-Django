@@ -228,10 +228,14 @@
   <script>
     (function () {
       function getCsrf() {
-        const el = document.querySelector('#csrf-token-container [name=csrfmiddlewaretoken]');
+        if (window.CSRFProvider && typeof window.CSRFProvider.getToken === 'function') {
+          return window.CSRFProvider.getToken();
+        }
+        const el = document.querySelector('#csrf-token-container [name=csrfmiddlewaretoken]') || document.querySelector('[name=csrfmiddlewaretoken]');
         if (el) return el.value;
-        const m = document.cookie.match(/csrftoken=([^;]+)/);
-        return m ? m[1] : '';
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta && meta.content) return meta.content;
+        return '';
       }
 
       const btn = document.getElementById('checkout-btn-widget');
@@ -243,12 +247,38 @@
           // Trigger file selection for checkout
           photoInput.click();
 
+          let widgetPreparedPhoto = null;
+          let widgetPunchUuid = null;
+          let widgetCaptureTimestamp = null;
+
           // Wait for photo input change to start checkout process
-          photoInput.onchange = function() {
+          photoInput.onchange = async function() {
             if (!photoInput.files || !photoInput.files[0]) {
               if (window.showToast) window.showToast('Photo is required for check out.', 'error');
               return;
             }
+            const file = photoInput.files[0];
+            widgetCaptureTimestamp = new Date().toISOString();
+            widgetPunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+
+            if (window.FieldTrackPhoto && typeof window.FieldTrackPhoto.preparePhoto === 'function') {
+              widgetPreparedPhoto = await window.FieldTrackPhoto.preparePhoto(file, { captureTimestamp: widgetCaptureTimestamp });
+            } else {
+              const fallbackUrl = URL.createObjectURL(file);
+              widgetPreparedPhoto = {
+                blob: file,
+                file: file,
+                previewUrl: fallbackUrl,
+                captureTimestamp: widgetCaptureTimestamp,
+                getDataUrl: () => new Promise(resolve => {
+                  const fr = new FileReader();
+                  fr.onload = () => resolve(fr.result);
+                  fr.readAsDataURL(file);
+                }),
+                destroy: () => URL.revokeObjectURL(fallbackUrl)
+              };
+            }
+
             if (window.confirmAction) {
               window.confirmAction('Are you sure you want to check out?', performCheckout);
             } else if (confirm('Are you sure you want to check out?')) {
@@ -260,10 +290,11 @@
             btn.innerHTML = '<div class="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin mr-1 inline-block"></div> GPS...';
             btn.disabled = true;
 
-            function doCheckout(lat, lng, acc, address) {
+            async function doCheckout(lat, lng, acc, address) {
+              const sync_uuid = widgetPunchUuid || ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)));
+              const clientEventTime = widgetCaptureTimestamp || new Date().toISOString();
+
               if (!navigator.onLine) {
-                const sync_uuid = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (c === 'x' ? (Math.random() * 16) | 0 : ((Math.random() * 16) | 0 & 0x3) | 0x8).toString(16));
-                
                 const enqueue = (photoBase64) => {
                   if (window.queueOfflineAction) {
                     window.queueOfflineAction({
@@ -273,7 +304,7 @@
                       accuracy: acc || 0,
                       address: address || 'Offline Check-out location',
                       sync_uuid: sync_uuid,
-                      client_event_time: new Date().toISOString(),
+                      client_event_time: clientEventTime,
                       photo: photoBase64 || null
                     }).then(() => {
                       if (window.LocationTracker) window.LocationTracker.stopTracking();
@@ -289,15 +320,24 @@
                   }
                 };
 
-                const photoFile = photoInput ? photoInput.files[0] : null;
-                if (photoFile) {
-                  const reader = new FileReader();
-                  reader.onload = function(e) {
-                    enqueue(e.target.result);
-                  };
-                  reader.readAsDataURL(photoFile);
+                if (widgetPreparedPhoto && typeof widgetPreparedPhoto.getDataUrl === 'function') {
+                  try {
+                    const b64 = await widgetPreparedPhoto.getDataUrl();
+                    enqueue(b64);
+                  } catch (e) {
+                    enqueue(null);
+                  }
                 } else {
-                  enqueue(null);
+                  const photoFile = photoInput ? photoInput.files[0] : null;
+                  if (photoFile) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                      enqueue(e.target.result);
+                    };
+                    reader.readAsDataURL(photoFile);
+                  } else {
+                    enqueue(null);
+                  }
                 }
                 return;
               }
@@ -307,12 +347,23 @@
               fd.append('longitude', lng || '0');
               fd.append('accuracy', acc || '0');
               fd.append('address', address || (lat + ', ' + lng) || 'Unknown location');
-              fd.append('photo', photoInput.files[0]);
+              fd.append('sync_uuid', sync_uuid);
+              fd.append('client_event_time', clientEventTime);
+              if (widgetPreparedPhoto && (widgetPreparedPhoto.file || widgetPreparedPhoto.blob)) {
+                fd.append('photo', widgetPreparedPhoto.file || widgetPreparedPhoto.blob, 'checkout.jpg');
+              } else if (photoInput && photoInput.files && photoInput.files[0]) {
+                fd.append('photo', photoInput.files[0]);
+              }
 
               btn.innerHTML = 'Saving...';
 
-              fetch('/attendance/check-out/', {
+              const fetchFn = (window.CSRFProvider && typeof window.CSRFProvider.fetchWithCsrf === 'function')
+                ? window.CSRFProvider.fetchWithCsrf.bind(window.CSRFProvider)
+                : fetch;
+
+              fetchFn('/attendance/check-out/', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'X-CSRFToken': getCsrf() },
                 body: fd
               })

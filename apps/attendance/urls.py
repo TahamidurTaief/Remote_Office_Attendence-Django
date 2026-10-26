@@ -6,6 +6,7 @@ app_name = 'attendance'
 urlpatterns = [
     path('check-in/',       views.check_in,           name='check_in'),
     path('check-out/',      views.check_out,          name='check_out'),
+    path('csrf-token/',     views.get_csrf_token_view, name='csrf_token'),
     path('status/',         views.attendance_status,  name='status'),
     path('field-visit/',    views.field_visit_submit, name='field_visit_submit'),
     path('location-sync/',  views.location_sync,      name='location_sync'),

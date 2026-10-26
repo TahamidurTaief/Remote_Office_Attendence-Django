@@ -473,8 +473,12 @@
     );
   }
 
-  // 3. Photo Capture & Preview
-  function handlePhotoSelect(input) {
+  // 3. Photo Capture, Preparation & Preview
+  let activePreparedPhoto = null;
+  let activePunchUuid = null;
+  let activeCaptureTimestamp = null;
+
+  async function handlePhotoSelect(input) {
     if (input.files && input.files[0]) {
       const file = input.files[0];
       if (file.size > 10 * 1024 * 1024) {
@@ -483,45 +487,79 @@
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const preview = document.getElementById('photo-preview-img');
-        const placeholder = document.getElementById('photo-placeholder');
-        const retakeBtn = document.getElementById('retake-photo-btn');
-        const photoText = document.getElementById('photo-circle-text');
+      const captureTime = new Date().toISOString();
+      if (!activePunchUuid) {
+        activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+      }
+      activeCaptureTimestamp = captureTime;
 
-        if (preview) {
-          preview.src = e.target.result;
-          preview.classList.remove('hidden');
-        }
-        if (placeholder) placeholder.classList.add('hidden');
-        if (retakeBtn) retakeBtn.classList.remove('hidden');
-        if (photoText) photoText.textContent = 'Photo captured';
+      const photoText = document.getElementById('photo-circle-text');
+      if (photoText) photoText.textContent = 'Processing...';
 
-        // Step 2 indicator
-        const stepCard = document.getElementById('step-photo-card');
-        const stepIconBox = document.getElementById('step-photo-icon-box');
-        const stepText = document.getElementById('step-photo-text');
-        if (stepCard && stepIconBox && stepText) {
-          stepCard.classList.remove('border-slate-200/90', 'dark:border-slate-800');
-          stepCard.classList.add('border-emerald-300', 'bg-[#F0FDF4]', 'dark:bg-emerald-950/20');
-          stepIconBox.classList.remove('bg-blue-50', 'text-[#1877F2]');
-          stepIconBox.classList.add('bg-[#DCFCE7]', 'text-[#16A34A]');
-          stepText.textContent = 'Photo Ready';
-          stepText.classList.remove('text-slate-800');
-          stepText.classList.add('text-[#15803D]');
-        }
+      if (activePreparedPhoto && typeof activePreparedPhoto.destroy === 'function') {
+        activePreparedPhoto.destroy();
+      }
 
-        isPhotoReady = true;
-        checkFormReady();
-      };
-      reader.readAsDataURL(file);
+      if (window.FieldTrackPhoto && typeof window.FieldTrackPhoto.preparePhoto === 'function') {
+        activePreparedPhoto = await window.FieldTrackPhoto.preparePhoto(file, { captureTimestamp: captureTime });
+      } else {
+        const fallbackUrl = URL.createObjectURL(file);
+        activePreparedPhoto = {
+          blob: file,
+          file: file,
+          previewUrl: fallbackUrl,
+          captureTimestamp: captureTime,
+          getDataUrl: () => new Promise((resolve) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(fr.result);
+            fr.readAsDataURL(file);
+          }),
+          destroy: () => URL.revokeObjectURL(fallbackUrl)
+        };
+      }
+
+      const preview = document.getElementById('photo-preview-img');
+      const placeholder = document.getElementById('photo-placeholder');
+      const retakeBtn = document.getElementById('retake-photo-btn');
+
+      if (preview) {
+        preview.src = activePreparedPhoto.previewUrl;
+        preview.classList.remove('hidden');
+      }
+      if (placeholder) placeholder.classList.add('hidden');
+      if (retakeBtn) retakeBtn.classList.remove('hidden');
+      if (photoText) photoText.textContent = 'Photo captured';
+
+      // Step 2 indicator
+      const stepCard = document.getElementById('step-photo-card');
+      const stepIconBox = document.getElementById('step-photo-icon-box');
+      const stepText = document.getElementById('step-photo-text');
+      if (stepCard && stepIconBox && stepText) {
+        stepCard.classList.remove('border-slate-200/90', 'dark:border-slate-800');
+        stepCard.classList.add('border-emerald-300', 'bg-[#F0FDF4]', 'dark:bg-emerald-950/20');
+        stepIconBox.classList.remove('bg-blue-50', 'text-[#1877F2]');
+        stepIconBox.classList.add('bg-[#DCFCE7]', 'text-[#16A34A]');
+        stepText.textContent = 'Photo Ready';
+        stepText.classList.remove('text-slate-800');
+        stepText.classList.add('text-[#15803D]');
+      }
+
+      isPhotoReady = true;
+      checkFormReady();
     }
   }
 
   function retakePhoto() {
     const input = document.getElementById('camera-input');
     if (input) input.value = '';
+
+    if (activePreparedPhoto && typeof activePreparedPhoto.destroy === 'function') {
+      activePreparedPhoto.destroy();
+    }
+    activePreparedPhoto = null;
+    activePunchUuid = null;
+    activeCaptureTimestamp = null;
+
     const preview = document.getElementById('photo-preview-img');
     const placeholder = document.getElementById('photo-placeholder');
     const retakeBtn = document.getElementById('retake-photo-btn');
@@ -582,7 +620,7 @@
   }
 
   // 5. Submit Action
-  function submitFieldVisit() {
+  async function submitFieldVisit() {
     const title = (document.getElementById('id_visit_title').value || '').trim();
     if (!isGpsReady || !isPhotoReady || !title) {
       if (window.showToast) showToast('GPS, photo and visit title are required.', 'error');
@@ -594,11 +632,16 @@
     btn.disabled = true;
     if (btnText) btnText.textContent = 'Submitting visit...';
 
+    if (!activePunchUuid) {
+      activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+    }
+    const sync_uuid = activePunchUuid;
+    const clientEventTime = activeCaptureTimestamp || new Date().toISOString();
+
     // Offline handling
     if (!navigator.onLine) {
       const enqueue = (photoBase64) => {
         if (window.queueOfflineAction) {
-          const sync_uuid = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (c === 'x' ? (Math.random() * 16) | 0 : ((Math.random() * 16) | 0 & 0x3) | 0x8).toString(16));
           window.queueOfflineAction({
             action: 'field_visit',
             latitude: document.getElementById('id_latitude').value || 0,
@@ -610,7 +653,7 @@
             site_address: document.getElementById('id_site_address').value || '',
             note: document.getElementById('id_note').value || '',
             sync_uuid: sync_uuid,
-            client_event_time: new Date().toISOString(),
+            client_event_time: clientEventTime,
             photo: photoBase64 || null
           }).then(() => {
             if (window.showToast) showToast('Offline visit stored. Will sync once connected.', 'info');
@@ -623,13 +666,22 @@
         }
       };
 
-      const photoFile = document.getElementById('camera-input').files[0];
-      if (photoFile) {
-        const reader = new FileReader();
-        reader.onload = function(e) { enqueue(e.target.result); };
-        reader.readAsDataURL(photoFile);
+      if (activePreparedPhoto && typeof activePreparedPhoto.getDataUrl === 'function') {
+        try {
+          const photoBase64 = await activePreparedPhoto.getDataUrl();
+          enqueue(photoBase64);
+        } catch (e) {
+          enqueue(null);
+        }
       } else {
-        enqueue(null);
+        const photoFile = document.getElementById('camera-input').files[0];
+        if (photoFile) {
+          const reader = new FileReader();
+          reader.onload = function(e) { enqueue(e.target.result); };
+          reader.readAsDataURL(photoFile);
+        } else {
+          enqueue(null);
+        }
       }
       return;
     }
@@ -640,25 +692,52 @@
     formData.append('longitude', document.getElementById('id_longitude').value);
     formData.append('accuracy', document.getElementById('id_accuracy').value);
     formData.append('address', document.getElementById('id_address').value);
-    const photoFile = document.getElementById('camera-input').files[0];
-    if (photoFile) formData.append('photo', photoFile);
+    if (activePreparedPhoto && (activePreparedPhoto.file || activePreparedPhoto.blob)) {
+      formData.append('photo', activePreparedPhoto.file || activePreparedPhoto.blob, 'field_visit.jpg');
+    } else {
+      const photoFile = document.getElementById('camera-input').files[0];
+      if (photoFile) formData.append('photo', photoFile);
+    }
     formData.append('visit_title', title);
     formData.append('client_name', document.getElementById('id_client_name').value || '');
     formData.append('site_address', document.getElementById('id_site_address').value || '');
     formData.append('note', document.getElementById('id_note').value || '');
-    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    formData.append('sync_uuid', sync_uuid);
+    formData.append('client_event_time', clientEventTime);
 
     const ctrl = new AbortController();
     const hardTimeout = setTimeout(() => ctrl.abort(), 25000);
 
-    fetch('/attendance/field-visit/', {
+    const fetchFn = (window.CSRFProvider && typeof window.CSRFProvider.fetchWithCsrf === 'function')
+      ? window.CSRFProvider.fetchWithCsrf.bind(window.CSRFProvider)
+      : fetch;
+
+    return fetchFn('/attendance/field-visit/', {
       method: 'POST',
       body: formData,
+      credentials: 'same-origin',
       signal: ctrl.signal
     })
-    .then(res => res.json())
-    .then(data => {
+    .then(async res => {
       clearTimeout(hardTimeout);
+      if (res.redirected && res.url && res.url.includes('/login')) {
+        if (window.showToast) showToast('Session expired. Redirecting to login...', 'warning');
+        setTimeout(() => { window.location.href = res.url; }, 1000);
+        return { success: false, error: 'Session expired' };
+      }
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const text = await res.text();
+        if (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('login')) {
+          if (window.showToast) showToast('Session expired. Please log in again.', 'warning');
+          setTimeout(() => { window.location.href = '/login/'; }, 1000);
+          return { success: false, error: 'Session expired' };
+        }
+        throw new Error('Unexpected response format from server');
+      }
+      return res.json();
+    })
+    .then(data => {
       if (data.success) {
         if (window.showToast) showToast('Field visit recorded successfully!', 'success');
         setTimeout(() => { window.location.href = '/staff/home/'; }, 800);

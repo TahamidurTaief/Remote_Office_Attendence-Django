@@ -1,16 +1,57 @@
 import json
 import datetime
 import uuid
+import base64
+import re
+import logging
 from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render, redirect
+from django.middleware.csrf import get_token
+from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.attendance.models import Attendance, AttendanceLocation
 from apps.attendance.sync_utils import parse_and_validate_client_time
 from apps.employees.models import EmployeeLocationSync
 from apps.branches.utils import is_within_geofence
 from apps.notifications.utils import notify_admins
+
+logger = logging.getLogger(__name__)
+
+
+def _decode_offline_photo(photo_data, sync_uuid=None):
+    """
+    Decodes base64 data URI or raw base64 string into a SimpleUploadedFile.
+    Returns None if no photo data or decoding fails.
+    """
+    if not photo_data or not isinstance(photo_data, str) or len(photo_data.strip()) == 0:
+        return None
+    try:
+        data = photo_data.strip()
+        ext = 'jpg'
+        content_type = 'image/jpeg'
+        if data.startswith('data:'):
+            match = re.match(r'^data:(image\/(jpeg|jpg|png|webp));base64,(.*)$', data, re.IGNORECASE)
+            if match:
+                content_type = match.group(1).lower()
+                fmt = match.group(2).lower()
+                ext = 'jpg' if fmt in ('jpeg', 'jpg') else fmt
+                base64_str = match.group(3)
+            else:
+                parts = data.split(';base64,', 1)
+                base64_str = parts[1] if len(parts) > 1 else parts[0]
+        else:
+            base64_str = data
+
+        file_bytes = base64.b64decode(base64_str)
+        if len(file_bytes) < 30:
+            return None
+        filename = f"offline_{sync_uuid or uuid.uuid4()}.{ext}"
+        return SimpleUploadedFile(filename, file_bytes, content_type=content_type)
+    except Exception as e:
+        logger.warning(f"Failed to decode offline photo: {e}")
+        return None
 
 
 def get_employee(user):
@@ -51,6 +92,33 @@ def get_attendance_policy(employee):
         return global_policy
     # default in-memory policy
     return AttendancePolicy(photo_required=True, geofencing_policy='warning')
+
+
+# ─────────────────────────────────────────────────────────────────
+# CSRF TOKEN REFRESH (Same-Origin, Authenticated, Non-Cacheable)
+# ─────────────────────────────────────────────────────────────────
+@require_GET
+def get_csrf_token_view(request):
+    """
+    Same-origin, authenticated, non-cacheable CSRF token provider.
+    Backed by Django get_token() to provide fresh masked token.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required.',
+            'code': 'UNAUTHENTICATED'
+        }, status=401)
+
+    token = get_token(request)
+    response = JsonResponse({
+        'success': True,
+        'csrf_token': token
+    })
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    return response
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -758,27 +826,35 @@ def bulk_sync(request):
             if item_uuid and 'sync_uuid' not in payload:
                 payload['sync_uuid'] = item_uuid
 
+            # Extract and decode offline photo if present
+            raw_photo = payload.get('photo') or item.get('photo') or payload.get('event_photo') or item.get('event_photo')
+            photo_file = _decode_offline_photo(raw_photo, item_uuid)
+
             try:
+                # Strictly preserve photo-required policy (validate_photo=True).
+                # Missing required photos will raise AttendanceTransactionError and remain pending.
                 if action_type == 'check_in':
-                    res = AttendanceTransactionService.check_in(request.user, payload, validate_photo=False)
+                    res = AttendanceTransactionService.check_in(request.user, payload, photo=photo_file, validate_photo=True)
                     synced_count += 1
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 elif action_type == 'check_out':
-                    res = AttendanceTransactionService.check_out(request.user, payload, validate_photo=False)
+                    res = AttendanceTransactionService.check_out(request.user, payload, photo=photo_file, validate_photo=True)
                     synced_count += 1
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 elif action_type == 'field_visit':
-                    res = AttendanceTransactionService.field_visit(request.user, payload, validate_photo=False)
+                    res = AttendanceTransactionService.field_visit(request.user, payload, photo=photo_file, validate_photo=True)
                     synced_count += 1
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 else:
                     results.append({'uuid': item_uuid, 'status': 'skipped', 'error': 'Unknown action'})
             except AttendanceTransactionError as e:
+                err_str = str(e)
+                is_missing_photo = 'photo is required' in err_str.lower()
                 results.append({
                     'uuid': item_uuid,
                     'status': 'failed',
-                    'permanent': e.status_code != 500,
-                    'error': str(e)
+                    'permanent': False if is_missing_photo else (e.status_code != 500),
+                    'error': 'Photo is required by policy. Offline punch remains pending until photo is attached.' if is_missing_photo else err_str
                 })
             except Exception as e:
                 results.append({

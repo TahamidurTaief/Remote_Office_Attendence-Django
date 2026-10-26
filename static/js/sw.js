@@ -4,11 +4,11 @@
  * Business data and dynamic API endpoints are NEVER cached here.
  */
 
-const CACHE_NAME = 'fieldtrack-static-v6';
+const CACHE_NAME = 'fieldtrack-static-v7';
 
 const STATIC_ASSETS = [
-  '/',
   '/static/css/dist/styles.css',
+  '/static/js/csrf_provider.js',
   '/static/vendor/htmx.min.js',
   '/static/vendor/alpine-collapse.min.js',
   '/static/vendor/alpine.min.js',
@@ -18,6 +18,7 @@ const STATIC_ASSETS = [
   '/static/js/location_guard.js',
   '/static/js/offline/db.js',
   '/static/js/offline/sync_engine.js',
+  '/static/js/photo_prep.js',
   '/static/icons/icon-72.png',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',

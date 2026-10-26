@@ -98,6 +98,39 @@ def _safe_create_with_seq_retry(model, **kwargs):
                 return model.objects.create(**kwargs)
         raise e
 
+def validate_uploaded_photo(photo):
+    """
+    Validates uploaded photo:
+    - Checks file size <= 10MB
+    - Checks content_type is an allowed image type
+    - Inspects and verifies actual image header/bytes with PIL,
+      ensuring client MIME headers are not spoofed and photo is not corrupted.
+    """
+    if not photo:
+        return
+    allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if getattr(photo, 'content_type', None) not in allowed_types:
+        raise AttendanceTransactionError('Invalid file type. Only images allowed.', 400)
+    if photo.size > 10 * 1024 * 1024:
+        raise AttendanceTransactionError('Photo too large. Max 10MB allowed.', 400)
+
+    try:
+        from PIL import Image as PILImage
+        pos = photo.tell() if hasattr(photo, 'tell') else 0
+        if hasattr(photo, 'seek'):
+            photo.seek(0)
+        img = PILImage.open(photo)
+        img.verify()
+        if (img.format or '').lower() not in ('jpeg', 'png', 'webp'):
+            raise AttendanceTransactionError('Invalid image format.', 400)
+        if hasattr(photo, 'seek'):
+            photo.seek(pos)
+    except AttendanceTransactionError:
+        raise
+    except Exception:
+        raise AttendanceTransactionError('Invalid or corrupted image file.', 400)
+
+
 class AttendanceTransactionService:
     @staticmethod
     def check_in(user, data, photo=None, validate_photo=True):
@@ -233,11 +266,7 @@ class AttendanceTransactionService:
                 raise AttendanceTransactionError('Photo is required for attendance.', 400)
 
             if photo:
-                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-                if photo.content_type not in allowed_types:
-                    raise AttendanceTransactionError('Invalid file type. Only images allowed.', 400)
-                if photo.size > 10 * 1024 * 1024:
-                    raise AttendanceTransactionError('Photo too large. Max 10MB allowed.', 400)
+                validate_uploaded_photo(photo)
 
             attendance_type = data.get('type', '')
             if attendance_type not in ('office', 'field'):
@@ -466,11 +495,7 @@ class AttendanceTransactionService:
                 raise AttendanceTransactionError('Photo is required for attendance.', 400)
 
             if photo:
-                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-                if photo.content_type not in allowed_types:
-                    raise AttendanceTransactionError('Invalid file type. Only images allowed.', 400)
-                if photo.size > 10 * 1024 * 1024:
-                    raise AttendanceTransactionError('Photo too large. Max 10MB allowed.', 400)
+                validate_uploaded_photo(photo)
 
             attendance.check_out_time = event_time
             duration = event_time - attendance.check_in_time
@@ -601,11 +626,7 @@ class AttendanceTransactionService:
                 raise AttendanceTransactionError('Photo is required.', 400)
 
             if photo:
-                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-                if photo.content_type not in allowed_types:
-                    raise AttendanceTransactionError('Invalid file type.', 400)
-                if photo.size > 10 * 1024 * 1024:
-                    raise AttendanceTransactionError('Photo too large. Max 10MB allowed.', 400)
+                validate_uploaded_photo(photo)
 
             project = None
             project_id = data.get('project') or data.get('project_id')

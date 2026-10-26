@@ -1,0 +1,53 @@
+[
+  {
+    "scenario": "Camera 4K Landscape (4032x3024)",
+    "orig_dims": "4032x3024",
+    "prep_dims": "1280x960",
+    "orig_size_mb": 3.4103565216064453,
+    "prep_size_kb": 167.7880859375,
+    "reduction_pct": 95.19535416208755,
+    "browser_prep_ms": 56.93436000001384,
+    "server_raw_ms": 345.9481509999023,
+    "server_opt_ms": 191.22656699983054,
+    "server_saving_pct": 44.72392280544822,
+    "raw_uplink_ms": 6984.41015625,
+    "opt_uplink_ms": 335.576171875,
+    "total_raw_ms": 7330.358307249902,
+    "total_opt_ms": 583.7370988748444,
+    "speedup": 12.557636513730579
+  },
+  {
+    "scenario": "Camera Portrait EXIF (3024x4032)",
+    "orig_dims": "3024x4032",
+    "prep_dims": "960x1280",
+    "orig_size_mb": 3.566634178161621,
+    "prep_size_kb": 196.388671875,
+    "reduction_pct": 94.62277870962411,
+    "browser_prep_ms": 55.94839500008675,
+    "server_raw_ms": 308.4400719999394,
+    "server_opt_ms": 120.55712599976687,
+    "server_saving_pct": 60.913922364863616,
+    "raw_uplink_ms": 7304.466796875,
+    "opt_uplink_ms": 392.77734375,
+    "total_raw_ms": 7612.906868874939,
+    "total_opt_ms": 569.2828647498536,
+    "speedup": 13.372801712941241
+  },
+  {
+    "scenario": "High-Res Wide Photo (3840x2160)",
+    "orig_dims": "3840x2160",
+    "prep_dims": "1280x720",
+    "orig_size_mb": 2.347841262817383,
+    "prep_size_kb": 131.3369140625,
+    "reduction_pct": 94.53716453618968,
+    "browser_prep_ms": 41.669310001452686,
+    "server_raw_ms": 211.18087700051547,
+    "server_opt_ms": 85.61936300066009,
+    "server_saving_pct": 59.45685792352728,
+    "raw_uplink_ms": 4808.37890625,
+    "opt_uplink_ms": 262.673828125,
+    "total_raw_ms": 5019.5597832505155,
+    "total_opt_ms": 389.9625011271128,
+    "speedup": 12.871903756752069
+  }
+]

@@ -40,6 +40,7 @@ urlpatterns = [
     # API and Session endpoints
     path('api/sync/', views.SyncApiView.as_view(), name='api_sync'),
     path('api/session/validate/', views.SessionValidateView.as_view(), name='api_session_validate'),
+    path('api/csrf-token/', views.get_csrf_token_view if hasattr(views, 'get_csrf_token_view') else __import__('apps.attendance.views', fromlist=['get_csrf_token_view']).get_csrf_token_view, name='api_csrf_token'),
     path('account/sessions/', views.UserSessionsView.as_view(), name='user_sessions'),
 
     # Security Settings Page + MFA Wizard (Phase 1 – Step 9 UX refactor)

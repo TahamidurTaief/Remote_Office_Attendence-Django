@@ -82,11 +82,16 @@
         const tx = db.transaction('sync_queue', 'readwrite');
         const store = tx.objectStore('sync_queue');
 
+        const safePayload = Object.assign({}, payload || {});
+        delete safePayload.csrfmiddlewaretoken;
+        delete safePayload.csrf_token;
+        delete safePayload.csrftoken;
+
         const record = {
-          uuid: forcedUuid || payload.sync_uuid || generateUUID(),
+          uuid: forcedUuid || safePayload.sync_uuid || generateUUID(),
           module: moduleName,
           action: action,
-          payload: payload || {},
+          payload: safePayload,
           priority: priority,
           status: 'pending',
           retry_count: 0,
@@ -149,6 +154,20 @@
         };
 
         getReq.onerror = (e) => reject(e.target.error);
+      });
+    },
+
+    /**
+     * Get a single item from sync_queue by uuid
+     */
+    getSyncItem: async function (uuid) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('sync_queue', 'readonly');
+        const store = tx.objectStore('sync_queue');
+        const req = store.get(uuid);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = (e) => reject(e.target.error);
       });
     },
 
@@ -230,6 +249,9 @@
     const payload = { ...data };
     const uuid = data.sync_uuid || generateUUID();
     delete payload.sync_uuid;
+    delete payload.csrfmiddlewaretoken;
+    delete payload.csrf_token;
+    delete payload.csrftoken;
     return FieldTrackDB.enqueueSyncItem('attendance', action, payload, priority, uuid);
   };
 

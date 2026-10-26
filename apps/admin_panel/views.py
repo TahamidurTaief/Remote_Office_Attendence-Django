@@ -2476,107 +2476,20 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         )
         records = data['rows']
 
-        # ── HTTP response ───────────────────────────────────────────────
-        response = HttpResponse(content_type='application/pdf')
+        filters = {
+            'branch_name': (Branch.objects.filter(id=branch_id).values_list('name', flat=True).first() if branch_id else 'All Branches'),
+            'department_name': 'All Departments',
+            'status': status or 'All Statuses',
+            'attendance_type': att_type or 'All Types',
+        }
+
+        from apps.attendance.pdf_export import render_daily_attendance_pdf
+        pdf_bytes = render_daily_attendance_pdf(data, filters=filters, user=request.user)
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = (
             f'attachment; filename="attendance_report_{date_from_obj}.pdf"'
         )
-
-        # ── ReportLab document ─────────────────────────────────────────
-        doc = SimpleDocTemplate(
-            response,
-            pagesize=A4,
-            rightMargin=30,
-            leftMargin=30,
-            topMargin=30,
-            bottomMargin=30,
-        )
-
-        styles  = getSampleStyleSheet()
-        elements = []
-
-        # Title & timestamp
-        elements.append(Paragraph('Signtech Track — Attendance Report', styles['Title']))
-        elements.append(Paragraph(
-            f'Generated: {timezone.localtime(timezone.now()).strftime("%d %b %Y, %I:%M %p")}',
-            styles['Normal'],
-        ))
-        elements.append(Spacer(1, 16))
-
-        # ── Table ───────────────────────────────────────────────────────
-        header = [
-            'SN', 'Employee', 'Emp ID', 'Date',
-            'Check-in', 'Check-out', 'Hours',
-            'Type', 'Status', 'Notes',
-        ]
-        table_data = [header]
-
-        for idx, r in enumerate(records, 1):
-            ci = r['check_in']
-            cis = r['check_in_sessions']
-            fvs = r['field_visits']
-            latest_co = max((s.check_out_time for s in cis if s.check_out_time), default=None)
-
-            if cis and fvs:
-                type_display = 'Check In / Field Visit'
-            elif cis:
-                type_display = ci.get_type_display() if hasattr(ci, 'get_type_display') else 'Check In'
-            elif fvs:
-                type_display = 'Field Visit'
-            elif r['status'] == 'on_leave':
-                type_display = 'Leave'
-            elif r['status'] == 'holiday':
-                type_display = 'Holiday'
-            else:
-                type_display = '—'
-
-            table_data.append([
-                str(idx),
-                r['employee'].full_name,
-                r['employee'].employee_id,
-                str(r['date']),
-                timezone.localtime(ci.check_in_time).strftime('%H:%M') if ci and ci.check_in_time else '—',
-                timezone.localtime(latest_co).strftime('%H:%M') if latest_co else '—',
-                f"{r['total_hours']}h" if r['total_hours'] > 0 else '—',
-                type_display,
-                r['status_display'],
-                r['notes'] or '—',
-            ])
-
-        col_widths = [25, 100, 50, 55, 50, 50, 40, 50, 50, 65]
-        table = Table(table_data, colWidths=col_widths, repeatRows=1)
-        table.setStyle(TableStyle([
-            # Header row
-            ('BACKGROUND',    (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
-            ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
-            ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE',      (0, 0), (-1, 0), 9),
-            ('ALIGN',         (0, 0), (-1, 0), 'CENTER'),
-            ('TOPPADDING',    (0, 0), (-1, 0), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            # Body rows
-            ('FONTNAME',      (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE',      (0, 1), (-1, -1), 8),
-            ('ALIGN',         (0, 1), (-1, -1), 'CENTER'),
-            ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING',    (0, 1), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
-            # Alternating row backgrounds
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1),
-             [colors.white, colors.HexColor('#F9FAFB')]),
-            # Grid & border
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#E5E7EB')),
-            ('BOX',  (0, 0), (-1, -1), 0.8, colors.HexColor('#D1D5DB')),
-        ]))
-
-        elements.append(table)
-        elements.append(Spacer(1, 20))
-        elements.append(Paragraph(
-            'Signtech Track Attendance Management System',
-            styles['Normal'],
-        ))
-
-        doc.build(elements)
         return response
 
 
@@ -2609,6 +2522,8 @@ class ExportReportExcelView(AdminRequiredMixin, View):
         scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
 
         from apps.attendance import reporting_service
+        from apps.attendance.pdf_export import format_time_with_seconds, get_employee_department_name, BD_TZ
+
         data = reporting_service.get_daily_report_data(
             start_date=date_from_obj,
             end_date=date_to_obj,
@@ -2640,39 +2555,48 @@ class ExportReportExcelView(AdminRequiredMixin, View):
         thin_side = Side(style='thin', color='E5E7EB')
         thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
 
-        ws.merge_cells('A1:K1')
+        ws.merge_cells('A1:J1')
         ws['A1'] = "FieldTrack — Daily Attendance Report"
         ws['A1'].font = title_font
         ws['A1'].alignment = left_align
 
-        ws.merge_cells('A2:K2')
+        ws.merge_cells('A2:J2')
         filter_str = f"Date: {date_from_obj}" if date_from_obj == date_to_obj else f"Date: {date_from_obj} to {date_to_obj}"
-        ws['A2'] = f"Generated: {timezone.localtime().strftime('%d %B %Y, %I:%M %p')} | {filter_str}"
+        ws['A2'] = f"Generated: {timezone.localtime(timezone.now(), BD_TZ).strftime('%d %B %Y, %I:%M:%S %p')} | Timezone: Asia/Dhaka | {filter_str}"
         ws['A2'].font = subtitle_font
         ws['A2'].alignment = left_align
 
         headers = [
-            'SN', 'Employee', 'Employee ID', 'Date',
-            'Check-in', 'Check-out', 'Hours',
-            'Type', 'Status', 'Location', 'Notes'
+            'SN', 'Employee + Department', 'Employee ID', 'Date',
+            'In', 'Out', 'Hours',
+            'Type', 'Status', 'Remarks'
         ]
         ws.row_dimensions[4].height = 24
         for col_num, header_title in enumerate(headers, 1):
             cell = ws.cell(row=4, column=col_num, value=header_title)
             cell.fill = header_fill
             cell.font = header_font
-            cell.alignment = center_align
+            cell.alignment = center_align if col_num not in (2, 10) else left_align
             cell.border = thin_border
 
         row_idx = 5
         for idx, r in enumerate(records, 1):
+            emp = r['employee']
             ci = r['check_in']
-            cis = r['check_in_sessions']
-            fvs = r['field_visits']
-            latest_co = max((s.check_out_time for s in cis if s.check_out_time), default=None)
+            cis = r['check_in_sessions'] or []
+            fvs = r['field_visits'] or []
+            all_s = cis + fvs
+
+            ci_times = [s.check_in_time for s in all_s if s and s.check_in_time]
+            co_times = [s.check_out_time for s in all_s if s and s.check_out_time]
+            earliest_ci = min(ci_times) if ci_times else None
+            latest_co = max(co_times) if co_times else None
+            has_open_session = any(s and s.check_in_time and not s.check_out_time for s in all_s)
 
             if cis and fvs:
                 type_display = 'Check In / Field Visit'
+            elif len(cis) > 1:
+                type_display = f"Check In ({len(cis)} Sessions)"
             elif cis:
                 type_display = ci.get_type_display() if hasattr(ci, 'get_type_display') else 'Check In'
             elif fvs:
@@ -2684,25 +2608,52 @@ class ExportReportExcelView(AdminRequiredMixin, View):
             else:
                 type_display = '—'
 
-            loc_str = r['location'].address if r['location'] and hasattr(r['location'], 'address') else ''
-            notes = r['notes'] or ''
-            ci_time = timezone.localtime(ci.check_in_time).strftime('%H:%M') if ci and ci.check_in_time else '—'
-            co_time = timezone.localtime(latest_co).strftime('%H:%M') if latest_co else '—'
-            hrs = float(r['total_hours']) if r['total_hours'] > 0 else 0.0
+            # In time string (with seconds)
+            if earliest_ci:
+                in_str = format_time_with_seconds(earliest_ci)
+            elif r['status'] == 'on_leave':
+                in_str = 'Leave'
+            elif r['status'] == 'holiday':
+                in_str = 'Holiday'
+            elif r.get('is_absent'):
+                in_str = 'Absent'
+            else:
+                in_str = '—'
+
+            # Out time string (with seconds / explicit Open)
+            if latest_co:
+                out_str = format_time_with_seconds(latest_co)
+                if has_open_session:
+                    out_str += ' (Open)'
+            elif has_open_session:
+                out_str = 'Open'
+            else:
+                out_str = '—'
+
+            hrs = float(r.get('total_hours') or 0.0)
+            hrs_str = f"{hrs:.2f}h" if hrs > 0 else "0.00h"
+
+            dept_name = get_employee_department_name(emp)
+            emp_display = f"{emp.full_name} ({dept_name})" if dept_name else emp.full_name
+
+            raw_notes = (r.get('notes') or '').strip()
+            loc_str = r['location'].address.strip() if r.get('location') and hasattr(r['location'], 'address') and r['location'].address else ''
+            full_remarks = raw_notes
+            if loc_str and loc_str not in full_remarks:
+                full_remarks = f"{full_remarks} ({loc_str})" if full_remarks else loc_str
 
             ws.row_dimensions[row_idx].height = 20
             row_vals = [
                 (idx, center_align),
-                (r['employee'].full_name, left_align),
-                (r['employee'].employee_id, center_align),
+                (emp_display, left_align),
+                (emp.employee_id or '—', center_align),
                 (str(r['date']), center_align),
-                (ci_time, center_align),
-                (co_time, center_align),
-                (f"{hrs}h" if hrs > 0 else "—", right_align),
+                (in_str, center_align),
+                (out_str, center_align),
+                (hrs_str, right_align),
                 (type_display, center_align),
                 (r['status_display'], center_align),
-                (loc_str, left_align),
-                (notes, left_align),
+                (full_remarks or '—', left_align),
             ]
             for col_num, (val, align) in enumerate(row_vals, 1):
                 cell = ws.cell(row=row_idx, column=col_num, value=val)
@@ -2721,7 +2672,7 @@ class ExportReportExcelView(AdminRequiredMixin, View):
                 val_str = str(cell.value or '')
                 if len(val_str) > max_len:
                     max_len = len(val_str)
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 10)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 11)
 
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -2875,6 +2826,23 @@ def export_attendance(request):
     format_type = request.GET.get('format', 'xlsx')
     year = request.GET.get('year')
     month = request.GET.get('month')
+    emp_id = request.GET.get('employee')
+
+    if emp_id and (year and month):
+        try:
+            y_int, m_int = int(year), int(month)
+        except (ValueError, TypeError):
+            today = timezone.localdate()
+            y_int, m_int = today.year, today.month
+
+        if format_type == 'pdf':
+            return export_individual_pdf(request, emp_id, y_int, m_int)
+        elif format_type in ('xlsx', 'excel'):
+            return export_individual_xlsx(request, emp_id, y_int, m_int)
+        elif format_type == 'csv':
+            return export_monthly_csv(request)
+        else:
+            return export_individual_pdf(request, emp_id, y_int, m_int)
 
     if year and month:
         if format_type == 'xlsx':
@@ -2894,6 +2862,195 @@ def export_attendance(request):
             return ExportReportPDFView.as_view()(request)
         else:
             return ExportReportExcelView.as_view()(request)
+
+
+@admin_required
+def export_individual_pdf(request, emp_id, year, month):
+    eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+    if not (request.user.is_superuser or eval_export.allowed):
+        raise PermissionDenied("You do not have permission to export reports.")
+
+    employee = get_scoped_employee_or_404(request.user, pk=emp_id, permission_code='reports.export', action='export')
+    from apps.attendance import reporting_service
+    monthly_data = reporting_service.get_monthly_report_data(
+        year=year,
+        month=month,
+        employee_id=employee.id,
+        allowed_employee_ids={employee.id}
+    )
+    from apps.attendance.pdf_export import render_individual_attendance_pdf
+    pdf_bytes = render_individual_attendance_pdf(employee, year, month, monthly_data, user=request.user)
+
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    month_slug = date(year, month, 1).strftime('%b_%Y')
+    emp_slug = (employee.employee_id or str(employee.id)).replace(' ', '_')
+    response['Content-Disposition'] = f'attachment; filename="attendance_{emp_slug}_{month_slug}.pdf"'
+    return response
+
+
+@admin_required
+def export_individual_xlsx(request, emp_id, year, month):
+    eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
+    if not (request.user.is_superuser or eval_export.allowed):
+        raise PermissionDenied("You do not have permission to export reports.")
+
+    employee = get_scoped_employee_or_404(request.user, pk=emp_id, permission_code='reports.export', action='export')
+    from apps.attendance import reporting_service
+    from apps.attendance.pdf_export import format_time_with_seconds, get_employee_department_name, BD_TZ
+
+    monthly_data = reporting_service.get_monthly_report_data(
+        year=year,
+        month=month,
+        employee_id=employee.id,
+        allowed_employee_ids={employee.id}
+    )
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    month_name = date(year, month, 1).strftime('%B-%y')
+    ws.title = f"Attendance {month_name}"
+    ws.views.sheetView[0].showGridLines = True
+
+    title_font = Font(name="Calibri", size=14, bold=True, color="1E293B")
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    regular_font = Font(name="Calibri", size=9)
+    center_align = Alignment(horizontal="center", vertical="center")
+    left_align = Alignment(horizontal="left", vertical="center")
+    right_align = Alignment(horizontal="right", vertical="center")
+    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    weekend_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    thin_side = Side(style='thin', color='E5E7EB')
+    thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    ws.merge_cells('A1:H1')
+    ws['A1'] = f"FieldTrack — Individual Attendance Statement — {date(year, month, 1).strftime('%B %Y')}"
+    ws['A1'].font = title_font
+    ws['A1'].alignment = left_align
+
+    ws.merge_cells('A2:H2')
+    dept_name = get_employee_department_name(employee)
+    branch_name = employee.branch.name if employee.branch else 'Main Branch'
+    gen_time_str = timezone.localtime(timezone.now(), BD_TZ).strftime('%d %B %Y, %I:%M:%S %p')
+    ws['A2'] = (
+        f"Employee: {employee.full_name} | ID: {employee.employee_id or '—'} | "
+        f"Dept: {dept_name or '—'} | Branch: {branch_name} | Timezone: Asia/Dhaka | Generated: {gen_time_str}"
+    )
+    ws['A2'].font = subtitle_font
+    ws['A2'].alignment = left_align
+
+    headers = ['Date', 'Day', 'In', 'Out', 'Hours', 'Type', 'Status', 'Remarks']
+    ws.row_dimensions[4].height = 24
+    for col_num, h_title in enumerate(headers, 1):
+        c = ws.cell(row=4, column=col_num, value=h_title)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = center_align if col_num != 8 else left_align
+        c.border = thin_border
+
+    emp_row = monthly_data['rows'][0] if monthly_data.get('rows') else {}
+    all_days = monthly_data.get('all_days', [])
+    day_calcs = emp_row.get('day_calcs', {})
+
+    row_idx = 5
+    for d in all_days:
+        dc = day_calcs.get(d, {})
+        ci = dc.get('check_in')
+        cis = dc.get('check_in_sessions') or []
+        fvs = dc.get('field_visits') or []
+        all_s = cis + fvs
+
+        ci_times = [s.check_in_time for s in all_s if s and s.check_in_time]
+        co_times = [s.check_out_time for s in all_s if s and s.check_out_time]
+        earliest_ci = min(ci_times) if ci_times else None
+        latest_co = max(co_times) if co_times else None
+        has_open = any(s and s.check_in_time and not s.check_out_time for s in all_s)
+
+        if earliest_ci:
+            in_str = format_time_with_seconds(earliest_ci)
+        elif dc.get('is_on_leave'):
+            in_str = 'Leave'
+        elif dc.get('is_holiday'):
+            in_str = 'Holiday'
+        elif dc.get('is_absent'):
+            in_str = 'Absent'
+        else:
+            in_str = '—'
+
+        if latest_co:
+            out_str = format_time_with_seconds(latest_co)
+            if has_open:
+                out_str += ' (Open)'
+        elif has_open:
+            out_str = 'Open'
+        else:
+            out_str = '—'
+
+        hrs = float(dc.get('total_hours') or 0.0)
+        hrs_str = f"{hrs:.2f}h" if hrs > 0 else "0.00h"
+
+        if len(cis) > 0 and len(fvs) > 0:
+            type_str = f"Office / Field ({len(cis)}+{len(fvs)})"
+        elif len(cis) > 1:
+            type_str = f"Office ({len(cis)} Sessions)"
+        elif len(cis) == 1:
+            type_str = 'Office'
+        elif len(fvs) > 0:
+            type_str = f"Field Visit ({len(fvs)})" if len(fvs) > 1 else "Field Visit"
+        elif dc.get('is_on_leave'):
+            type_str = 'Leave'
+        elif dc.get('is_holiday'):
+            type_str = 'Holiday'
+        else:
+            type_str = '—'
+
+        raw_notes = (ci.note if ci and ci.note else (fvs[0].note if fvs and fvs[0].note else '')).strip()
+        is_wknd = dc.get('is_holiday', False)
+
+        row_vals = [
+            (d.strftime('%Y-%m-%d'), center_align),
+            (d.strftime('%a'), center_align),
+            (in_str, center_align),
+            (out_str, center_align),
+            (hrs_str, right_align),
+            (type_str, center_align),
+            (dc.get('status_display', 'Present'), center_align),
+            (raw_notes or '—', left_align),
+        ]
+        ws.row_dimensions[row_idx].height = 20
+        for col_num, (val, align) in enumerate(row_vals, 1):
+            cell = ws.cell(row=row_idx, column=col_num, value=val)
+            cell.font = regular_font
+            cell.alignment = align
+            cell.border = thin_border
+            if is_wknd:
+                cell.fill = weekend_fill
+
+        row_idx += 1
+
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.row < 4:
+                continue
+            v = str(cell.value or '')
+            if len(v) > max_len:
+                max_len = len(v)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 11)
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    month_slug = date(year, month, 1).strftime('%b_%Y')
+    emp_slug = (employee.employee_id or str(employee.id)).replace(' ', '_')
+    response['Content-Disposition'] = f'attachment; filename="attendance_{emp_slug}_{month_slug}.xlsx"'
+    wb.save(response)
+    return response
 
 def get_monthly_grid_data(request):
     from datetime import date, datetime
@@ -3326,167 +3483,29 @@ def export_monthly_csv(request):
 
 @admin_required
 def export_monthly_pdf(request):
-    from datetime import date
-    from reportlab.lib.pagesizes import landscape, A4
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-
     data = get_monthly_grid_data(request)
     year = data['year']
     month = data['month']
-    rows = data['rows']
+
+    branch_id = request.GET.get('branch') or request.GET.get('branch_id')
+    branch_name = 'All Branches'
+    if branch_id:
+        b = Branch.objects.filter(id=branch_id).first()
+        if b:
+            branch_name = b.name
+
+    filters = {
+        'branch_name': branch_name,
+        'department_name': 'All Departments',
+        'status': request.GET.get('status', 'All Statuses'),
+    }
+
+    from apps.attendance.pdf_export import render_monthly_attendance_pdf
+    pdf_bytes = render_monthly_attendance_pdf(data, filters=filters, user=request.user)
 
     month_name = date(year, month, 1).strftime('%B-%y')
-
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = (
-        f'attachment; filename="attendance_{month_name}.pdf"'
-    )
-
-    doc = SimpleDocTemplate(
-        response,
-        pagesize=landscape(A4),
-        rightMargin=15,
-        leftMargin=15,
-        topMargin=20,
-        bottomMargin=20,
-    )
-
-    styles = getSampleStyleSheet()
-
-    cell_style = ParagraphStyle(
-        'GridCell',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=8,
-        leading=10,
-        alignment=1
-    )
-    cell_style_left = ParagraphStyle(
-        'GridCellLeft',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=8,
-        leading=10,
-        alignment=0
-    )
-    cell_style_bold = ParagraphStyle(
-        'GridCellBold',
-        parent=cell_style,
-        fontName='Helvetica-Bold',
-    )
-    late_text_style = ParagraphStyle(
-        'LateText',
-        parent=cell_style,
-        textColor=colors.HexColor('#C00000')
-    )
-
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
-        fontSize=14,
-        leading=16,
-        textColor=colors.HexColor('#1F4E79'),
-        alignment=0
-    )
-
-    subtitle_style = ParagraphStyle(
-        'SubtitleStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=8,
-        leading=10,
-        textColor=colors.HexColor('#4B5563')
-    )
-
-    elements = []
-    elements.append(Paragraph(f"Monthly Attendance Report — {date(year, month, 1).strftime('%B %Y')}", title_style))
-    elements.append(Paragraph(f"Generated: {timezone.localtime().strftime('%d %b %Y, %I:%M %p')}", subtitle_style))
-    elements.append(Spacer(1, 10))
-
-    headers = ['SN', 'Employee (Department)', 'Present', 'Absent', 'On Leave', 'Late', 'Field Visits', 'Total Hours', 'Overtime', 'Attendance %']
-    table_data = [headers]
-
-    t_style = [
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-        ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#D1D5DB')),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1F4E79')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('TOPPADDING', (0, 0), (-1, 0), 6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
-        ('TOPPADDING', (0, 1), (-1, -1), 5),
-    ]
-
-    r_idx = 1
-    for idx, row in enumerate(rows, 1):
-        emp = row['employee']
-        dept = emp.canonical_department if hasattr(emp, 'canonical_department') else (getattr(emp, 'department', '') or '')
-        if callable(dept):
-            dept = dept()
-        emp_display = f"{emp.full_name} ({dept})" if dept else emp.full_name
-
-        p_cnt = row['present']
-        a_cnt = row['absent']
-        l_cnt = row['late']
-        ol_cnt = row['on_leave']
-        fv_cnt = row['field_visits']
-        tot_hrs = f"{row['total_hours']}h"
-        ot_val = row.get('overtime', '—')
-        att_pct = f"{row['att_pct']}%"
-
-        row_data = [
-            Paragraph(str(idx), cell_style),
-            Paragraph(emp_display, cell_style_left),
-            Paragraph(str(p_cnt), cell_style),
-            Paragraph(str(a_cnt), cell_style),
-            Paragraph(str(ol_cnt), cell_style),
-            Paragraph(str(l_cnt), cell_style),
-            Paragraph(str(fv_cnt), cell_style),
-            Paragraph(tot_hrs, cell_style),
-            Paragraph(ot_val, cell_style),
-            Paragraph(att_pct, cell_style)
-        ]
-
-        if a_cnt > 0:
-            t_style.append(('BACKGROUND', (3, r_idx), (3, r_idx), colors.HexColor('#FFE0E0')))
-            row_data[3] = Paragraph(str(a_cnt), late_text_style)
-
-        if l_cnt > 0:
-            t_style.append(('BACKGROUND', (5, r_idx), (5, r_idx), colors.HexColor('#FFF2CC')))
-            row_data[5] = Paragraph(str(l_cnt), late_text_style)
-
-        table_data.append(row_data)
-        r_idx += 1
-
-    footer_row = [
-        Paragraph('', cell_style),
-        Paragraph('Monthly Totals', cell_style_left),
-        Paragraph(str(data['total_present']), cell_style_bold),
-        Paragraph(str(data['total_absent']), cell_style_bold),
-        Paragraph(str(data['total_on_leave']), cell_style_bold),
-        Paragraph(str(data['total_late']), cell_style_bold),
-        Paragraph(str(data['total_field']), cell_style_bold),
-        Paragraph(f"{round(sum(r['total_hours'] for r in rows), 2)}h", cell_style_bold),
-        Paragraph(data.get('total_overtime', '0h'), cell_style_bold),
-        Paragraph(f"{data['avg_att_pct']}%", cell_style_bold)
-    ]
-    table_data.append(footer_row)
-    t_style.append(('BACKGROUND', (0, r_idx), (-1, r_idx), colors.HexColor('#D9E1F2')))
-    t_style.append(('FONTNAME', (0, r_idx), (-1, r_idx), 'Helvetica-Bold'))
-
-    col_widths = [25, 185, 55, 55, 55, 55, 55, 65, 65, 65]
-    table = Table(table_data, colWidths=col_widths, repeatRows=1)
-    table.setStyle(TableStyle(t_style))
-    elements.append(table)
-
-    doc.build(elements)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="attendance_{month_name}.pdf"'
     return response
 
 # ─────────────────────────────────────────────────────────────────

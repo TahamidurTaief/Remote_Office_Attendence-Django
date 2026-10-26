@@ -32,6 +32,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <title>{{ page_title|default:"FieldTrack" }}</title>
+  <meta name="csrf-token" content="{{ csrf_token }}">
 
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#1877F2">
@@ -41,12 +42,14 @@
   <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
 
   {# ── Scripts (100% Local Vendor Assets - Zero External Network Latency) ── #}
+  <script src="{% static 'js/csrf_provider.js' %}"></script>
   <script src="{% static 'vendor/htmx.min.js' %}"></script>
   <script defer src="{% static 'vendor/alpine-collapse.min.js' %}"></script>
   <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
   <script src="{% static 'vendor/lucide.min.js' %}"></script>
   <script src="{% static 'js/offline/db.js' %}"></script>
   <script src="{% static 'js/offline/sync_engine.js' %}"></script>
+  <script src="{% static 'js/photo_prep.js' %}"></script>
   <script src="{% static 'js/location_guard.js' %}?v=3.2"></script>
   <script src="{% static 'js/location_tracker.js' %}?v=3.2"></script>
   <script>

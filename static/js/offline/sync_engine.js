@@ -67,13 +67,16 @@
   }
 
   /**
-   * Helper to fetch CSRF token from DOM cookies
+   * Helper to fetch CSRF token from shared CSRFProvider (HttpOnly preserved)
    */
   function getCsrfToken() {
-    const cookie = document.cookie
-      .split('; ')
-      .find((row) => row.startsWith('csrftoken='));
-    return cookie ? cookie.split('=')[1] : '';
+    if (window.CSRFProvider && typeof window.CSRFProvider.getToken === 'function') {
+      return window.CSRFProvider.getToken();
+    }
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content && !meta.content.includes('<input')) return meta.content.trim();
+    const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return input ? input.value.trim() : '';
   }
 
   const SyncEngine = {
@@ -103,9 +106,17 @@
     },
 
     /**
-     * Triggered automatically when device reconnects
+     * Triggered automatically when device reconnects.
+     * Obtains a fresh masked token from backend before synchronizing.
      */
     onNetworkReconnect: async function () {
+      if (window.CSRFProvider && typeof window.CSRFProvider.refreshToken === 'function') {
+        try {
+          await window.CSRFProvider.refreshToken();
+        } catch (e) {
+          console.warn('[SyncEngine] Network reconnect CSRF token refresh warning:', e);
+        }
+      }
       const sessionValid = await this.revalidateSession();
       if (sessionValid) {
         await this.processQueue();
@@ -125,8 +136,13 @@
 
       try {
         const cachedSession = await window.FieldTrackDB.getOfflineSession();
-        const response = await fetch('/api/session/validate/', {
+        const fetchFn = (window.CSRFProvider && typeof window.CSRFProvider.fetchWithCsrf === 'function')
+          ? window.CSRFProvider.fetchWithCsrf.bind(window.CSRFProvider)
+          : fetch;
+
+        const response = await fetchFn('/api/session/validate/', {
           method: 'POST',
+          credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCsrfToken()
@@ -190,9 +206,14 @@
 
         console.log(`[SyncEngine] Processing ${readyItems.length} queued items...`);
 
-        // Bulk sync upload call to POST /api/sync/
-        const response = await fetch('/api/sync/', {
+        // Bulk sync upload call to POST /attendance/bulk-sync/
+        const fetchFn = (window.CSRFProvider && typeof window.CSRFProvider.fetchWithCsrf === 'function')
+          ? window.CSRFProvider.fetchWithCsrf.bind(window.CSRFProvider)
+          : fetch;
+
+        const response = await fetchFn('/attendance/bulk-sync/', {
           method: 'POST',
+          credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCsrfToken()
@@ -217,9 +238,10 @@
               if (handler) await handler(item);
             } else {
               const permanent = res && res.permanent;
-              const newRetryCount = permanent ? MAX_RETRIES : (item.retry_count || 0) + 1;
+              const isMissingPhoto = res && res.error && res.error.toLowerCase().includes('photo is required');
+              const newRetryCount = permanent ? MAX_RETRIES : (isMissingPhoto ? (item.retry_count || 0) : (item.retry_count || 0) + 1);
               await window.FieldTrackDB.updateSyncItem(item.uuid, {
-                status: newRetryCount >= MAX_RETRIES ? 'failed' : 'pending',
+                status: isMissingPhoto ? 'pending' : (newRetryCount >= MAX_RETRIES ? 'failed' : 'pending'),
                 retry_count: newRetryCount,
                 last_attempt_time: new Date().toISOString(),
                 last_error: res ? res.error : 'Sync failed'

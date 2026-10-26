@@ -687,47 +687,88 @@
     }
   }
 
-  // 5. Photo Handling
-  function handlePhotoSelect(input) {
+  // 5. Photo Handling & State Preservation
+  let activePreparedPhoto = null;
+  let activePunchUuid = null;
+  let activeCaptureTimestamp = null;
+
+  async function handlePhotoSelect(input) {
     if (input.files && input.files[0]) {
       const file = input.files[0];
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        // Show preview in circular area
-        const previewImg = document.getElementById('photo-preview-img');
-        const placeholder = document.getElementById('photo-placeholder');
-        const retakeBtn = document.getElementById('retake-photo-btn');
-        const circleText = document.getElementById('photo-circle-text');
+      const captureTime = new Date().toISOString();
+      if (!activePunchUuid) {
+        activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+      }
+      activeCaptureTimestamp = captureTime;
 
-        if (previewImg) {
-          previewImg.src = e.target.result;
-          previewImg.classList.remove('hidden');
-        }
-        if (placeholder) placeholder.classList.add('hidden');
-        if (retakeBtn) retakeBtn.classList.remove('hidden');
-        if (circleText) circleText.classList.add('hidden');
+      // Update Step 2 Indicator to show processing
+      const stepText = document.getElementById('step-photo-text');
+      if (stepText) stepText.textContent = 'Processing...';
 
-        // Update Step 2 Indicator
-        const stepCard = document.getElementById('step-photo-card');
-        const stepIconBox = document.getElementById('step-photo-icon-box');
-        const stepText = document.getElementById('step-photo-text');
-        if (stepCard) stepCard.className = 'bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs';
-        if (stepIconBox) stepIconBox.className = 'w-9 h-9 rounded-xl bg-[#DCFCE7] text-[#16A34A] flex items-center justify-center shrink-0';
-        if (stepText) {
-          stepText.textContent = 'Photo Ready';
-          stepText.className = 'text-xs font-bold text-[#15803D] dark:text-emerald-300 truncate mt-1';
-        }
+      // Clean up previously prepared photo instance if present
+      if (activePreparedPhoto && typeof activePreparedPhoto.destroy === 'function') {
+        activePreparedPhoto.destroy();
+      }
 
-        isPhotoReady = true;
-        checkEligibility();
-      };
-      reader.readAsDataURL(file);
+      // Process once using shared browser photo-preparation helper
+      if (window.FieldTrackPhoto && typeof window.FieldTrackPhoto.preparePhoto === 'function') {
+        activePreparedPhoto = await window.FieldTrackPhoto.preparePhoto(file, { captureTimestamp: captureTime });
+      } else {
+        // Fallback if helper is not yet loaded
+        const fallbackUrl = URL.createObjectURL(file);
+        activePreparedPhoto = {
+          blob: file,
+          file: file,
+          previewUrl: fallbackUrl,
+          captureTimestamp: captureTime,
+          getDataUrl: () => new Promise((resolve) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(fr.result);
+            fr.readAsDataURL(file);
+          }),
+          destroy: () => URL.revokeObjectURL(fallbackUrl)
+        };
+      }
+
+      // Show preview in circular area
+      const previewImg = document.getElementById('photo-preview-img');
+      const placeholder = document.getElementById('photo-placeholder');
+      const retakeBtn = document.getElementById('retake-photo-btn');
+      const circleText = document.getElementById('photo-circle-text');
+
+      if (previewImg) {
+        previewImg.src = activePreparedPhoto.previewUrl;
+        previewImg.classList.remove('hidden');
+      }
+      if (placeholder) placeholder.classList.add('hidden');
+      if (retakeBtn) retakeBtn.classList.remove('hidden');
+      if (circleText) circleText.classList.add('hidden');
+
+      // Update Step 2 Indicator
+      const stepCard = document.getElementById('step-photo-card');
+      const stepIconBox = document.getElementById('step-photo-icon-box');
+      if (stepCard) stepCard.className = 'bg-[#F0FDF4] dark:bg-emerald-950/20 border border-[#BBF7D0] dark:border-emerald-900 rounded-2xl p-3 flex items-center gap-2.5 transition-all shadow-xs';
+      if (stepIconBox) stepIconBox.className = 'w-9 h-9 rounded-xl bg-[#DCFCE7] text-[#16A34A] flex items-center justify-center shrink-0';
+      if (stepText) {
+        stepText.textContent = 'Photo Ready';
+        stepText.className = 'text-xs font-bold text-[#15803D] dark:text-emerald-300 truncate mt-1';
+      }
+
+      isPhotoReady = true;
+      checkEligibility();
     }
   }
 
   function retakePhoto() {
     const input = document.getElementById('camera-input');
     if (input) input.value = '';
+
+    if (activePreparedPhoto && typeof activePreparedPhoto.destroy === 'function') {
+      activePreparedPhoto.destroy();
+    }
+    activePreparedPhoto = null;
+    activePunchUuid = null;
+    activeCaptureTimestamp = null;
 
     const previewImg = document.getElementById('photo-preview-img');
     const placeholder = document.getElementById('photo-placeholder');
@@ -779,7 +820,7 @@
   }
 
   // 7. Form Submission
-  function submitCheckIn() {
+  async function submitCheckIn() {
     const lat = document.getElementById('id_latitude').value;
     const lng = document.getElementById('id_longitude').value;
     if (!isGpsReady || !lat || !lng || lat === '0' || lng === '0') {
@@ -796,22 +837,102 @@
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Checking in...';
 
+    // Preserve punch UUID & event timestamp across retries / offline sync
+    if (!activePunchUuid) {
+      activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+    }
+    const sync_uuid = activePunchUuid;
+    const clientEventTime = activeCaptureTimestamp || new Date().toISOString();
+
+    // ── Offline punch handling ──────────────────────────────────────
+    if (!navigator.onLine) {
+      const enqueue = (photoBase64) => {
+        if (window.queueOfflineAction) {
+          window.queueOfflineAction({
+            action: 'check_in',
+            latitude: lat,
+            longitude: lng,
+            accuracy: document.getElementById('id_accuracy').value || 0,
+            address: document.getElementById('id_address').value || 'Verified Branch Location',
+            type: document.getElementById('id_attendance_type').value || 'office',
+            sync_uuid: sync_uuid,
+            client_event_time: clientEventTime,
+            photo: photoBase64 || null
+          }).then(() => {
+            if (window.showToast) showToast('Offline check-in saved locally. Will sync when back online.', 'info');
+            setTimeout(() => { window.location.href = '/staff/home/'; }, 1000);
+          }).catch(err => {
+            if (window.showToast) showToast('Failed to save offline check-in: ' + err, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="fingerprint" class="w-5 h-5"></i> Check In Now';
+          });
+        }
+      };
+
+      if (activePreparedPhoto && typeof activePreparedPhoto.getDataUrl === 'function') {
+        try {
+          const photoBase64 = await activePreparedPhoto.getDataUrl();
+          enqueue(photoBase64);
+        } catch (e) {
+          enqueue(null);
+        }
+      } else {
+        const photoFile = document.getElementById('camera-input').files[0];
+        if (photoFile) {
+          const reader = new FileReader();
+          reader.onload = function(e) { enqueue(e.target.result); };
+          reader.readAsDataURL(photoFile);
+        } else {
+          enqueue(null);
+        }
+      }
+      return;
+    }
+
+    // ── Online submission ──────────────────────────────────────────
     const formData = new FormData();
     formData.append('latitude', lat);
     formData.append('longitude', lng);
     formData.append('accuracy', document.getElementById('id_accuracy').value || 0);
     formData.append('address', document.getElementById('id_address').value || 'Verified Branch Location');
     formData.append('type', document.getElementById('id_attendance_type').value || 'office');
+    formData.append('sync_uuid', sync_uuid);
+    formData.append('client_event_time', clientEventTime);
 
-    const photoFile = document.getElementById('camera-input').files[0];
-    if (photoFile) formData.append('photo', photoFile);
-    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    if (activePreparedPhoto && (activePreparedPhoto.file || activePreparedPhoto.blob)) {
+      formData.append('photo', activePreparedPhoto.file || activePreparedPhoto.blob, 'attendance.jpg');
+    } else {
+      const photoFile = document.getElementById('camera-input').files[0];
+      if (photoFile) formData.append('photo', photoFile);
+    }
 
-    fetch('/attendance/check-in/', {
+    const fetchFn = (window.CSRFProvider && typeof window.CSRFProvider.fetchWithCsrf === 'function')
+      ? window.CSRFProvider.fetchWithCsrf.bind(window.CSRFProvider)
+      : fetch;
+
+    return fetchFn('/attendance/check-in/', {
       method: 'POST',
-      body: formData
+      body: formData,
+      credentials: 'same-origin'
     })
-    .then(res => res.json())
+    .then(async (res) => {
+      if (res.redirected && res.url && res.url.includes('/login')) {
+        if (window.showToast) showToast('Session expired. Redirecting to login...', 'warning');
+        setTimeout(() => { window.location.href = res.url; }, 1000);
+        return { success: false, error: 'Session expired' };
+      }
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const text = await res.text();
+        if (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('login')) {
+          if (window.showToast) showToast('Session expired. Please log in again.', 'warning');
+          setTimeout(() => { window.location.href = '/login/'; }, 1000);
+          return { success: false, error: 'Session expired' };
+        }
+        throw new Error('Unexpected response format from server');
+      }
+      return res.json();
+    })
     .then(data => {
       if (data.success) {
         if (window.showToast) showToast('Check-in completed successfully!', 'success');
@@ -828,13 +949,13 @@
     })
     .catch(err => {
       console.error(err);
-      if (window.showToast) showToast('Check-in error occurred', 'error');
+      if (window.showToast) showToast('Check-in error occurred. Please try again.', 'error');
       btn.disabled = false;
       btn.innerHTML = '<i data-lucide="fingerprint" class="w-5 h-5"></i> Check In Now';
     });
   }
 
-  function submitCheckOut() {
+  async function submitCheckOut() {
     const lat = document.getElementById('id_latitude').value;
     const lng = document.getElementById('id_longitude').value;
     if (!isGpsReady || !lat || !lng || lat === '0' || lng === '0') {
@@ -847,17 +968,98 @@
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Checking out...';
 
+    if (!activePunchUuid) {
+      activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+    }
+    const sync_uuid = activePunchUuid;
+    const clientEventTime = activeCaptureTimestamp || new Date().toISOString();
+
+    // ── Offline check-out handling ─────────────────────────────────
+    if (!navigator.onLine) {
+      const enqueue = (photoBase64) => {
+        if (window.queueOfflineAction) {
+          window.queueOfflineAction({
+            action: 'check_out',
+            latitude: lat,
+            longitude: lng,
+            accuracy: document.getElementById('id_accuracy').value || 0,
+            address: document.getElementById('id_address').value || 'Verified Branch Location',
+            sync_uuid: sync_uuid,
+            client_event_time: clientEventTime,
+            photo: photoBase64 || null
+          }).then(() => {
+            if (window.showToast) showToast('Offline check-out saved locally. Will sync when back online.', 'info');
+            setTimeout(() => { window.location.href = '/staff/home/'; }, 1000);
+          }).catch(err => {
+            if (window.showToast) showToast('Failed to save offline check-out: ' + err, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="log-out" class="w-5 h-5"></i> Check Out Now';
+          });
+        }
+      };
+
+      if (activePreparedPhoto && typeof activePreparedPhoto.getDataUrl === 'function') {
+        try {
+          const photoBase64 = await activePreparedPhoto.getDataUrl();
+          enqueue(photoBase64);
+        } catch (e) {
+          enqueue(null);
+        }
+      } else {
+        const photoFile = document.getElementById('camera-input').files[0];
+        if (photoFile) {
+          const reader = new FileReader();
+          reader.onload = function(e) { enqueue(e.target.result); };
+          reader.readAsDataURL(photoFile);
+        } else {
+          enqueue(null);
+        }
+      }
+      return;
+    }
+
+    // ── Online check-out ───────────────────────────────────────────
     const formData = new FormData();
     formData.append('latitude', lat);
     formData.append('longitude', lng);
     formData.append('accuracy', document.getElementById('id_accuracy').value || 0);
-    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    formData.append('sync_uuid', sync_uuid);
+    formData.append('client_event_time', clientEventTime);
 
-    fetch('/attendance/check-out/', {
+    if (activePreparedPhoto && (activePreparedPhoto.file || activePreparedPhoto.blob)) {
+      formData.append('photo', activePreparedPhoto.file || activePreparedPhoto.blob, 'attendance.jpg');
+    } else {
+      const photoFile = document.getElementById('camera-input').files[0];
+      if (photoFile) formData.append('photo', photoFile);
+    }
+
+    const fetchFn = (window.CSRFProvider && typeof window.CSRFProvider.fetchWithCsrf === 'function')
+      ? window.CSRFProvider.fetchWithCsrf.bind(window.CSRFProvider)
+      : fetch;
+
+    return fetchFn('/attendance/check-out/', {
       method: 'POST',
-      body: formData
+      body: formData,
+      credentials: 'same-origin'
     })
-    .then(res => res.json())
+    .then(async (res) => {
+      if (res.redirected && res.url && res.url.includes('/login')) {
+        if (window.showToast) showToast('Session expired. Redirecting to login...', 'warning');
+        setTimeout(() => { window.location.href = res.url; }, 1000);
+        return { success: false, error: 'Session expired' };
+      }
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const text = await res.text();
+        if (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('login')) {
+          if (window.showToast) showToast('Session expired. Please log in again.', 'warning');
+          setTimeout(() => { window.location.href = '/login/'; }, 1000);
+          return { success: false, error: 'Session expired' };
+        }
+        throw new Error('Unexpected response format from server');
+      }
+      return res.json();
+    })
     .then(data => {
       if (data.success) {
         if (window.showToast) showToast('Checked out successfully!', 'success');
@@ -870,7 +1072,7 @@
     })
     .catch(err => {
       console.error(err);
-      if (window.showToast) showToast('Error during checkout', 'error');
+      if (window.showToast) showToast('Error during checkout. Please try again.', 'error');
       btn.disabled = false;
       btn.innerHTML = '<i data-lucide="log-out" class="w-5 h-5"></i> Check Out Now';
     });
