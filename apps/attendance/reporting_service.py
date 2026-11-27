@@ -1418,7 +1418,7 @@ def get_daily_report_data(
         'branch__schedule',
         'master_employee',
         'master_employee__department',
-    ).order_by('full_name')
+    ).order_by('full_name', 'id')
 
     if employee_queryset is not None:
         employees_qs = employees_qs.filter(id__in=employee_queryset.values_list('id', flat=True))
@@ -1603,7 +1603,18 @@ def get_daily_report_data(
         'employees': employees,
     }
 
-def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allowed_employee_ids=None, employee_queryset=None, status=None, attendance_type=None):
+def get_monthly_report_data(
+    year,
+    month,
+    employee_id=None,
+    branch_id=None,
+    allowed_employee_ids=None,
+    employee_queryset=None,
+    status=None,
+    attendance_type=None,
+    page=None,
+    page_size=30,
+):
     """
     Canonical monthly attendance statistics service (optimized for speed & database access).
     """
@@ -1638,7 +1649,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         'branch__schedule',
         'master_employee',
         'master_employee__department',
-    ).order_by('full_name')
+    ).order_by('full_name', 'id')
 
     if employee_queryset is not None:
         employees_qs = employees_qs.filter(id__in=employee_queryset.values_list('id', flat=True))
@@ -1668,13 +1679,14 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             global_holidays.add(h.date)
 
     # 3. Fetch all attendances for the month in one query (ordered deterministically; expiry classified per record)
-    attendances = list(
-        Attendance.objects.filter(
-            date__gte=month_start,
-            date__lte=month_end,
-            employee_id__in=employee_ids,
-        ).select_related('employee', 'employee__branch').prefetch_related('locations').order_by('date', 'check_in_time')
-    )
+    att_qs = Attendance.objects.filter(
+        date__gte=month_start,
+        date__lte=month_end,
+        employee_id__in=employee_ids,
+    ).select_related('employee', 'employee__branch')
+    if page is None:
+        att_qs = att_qs.prefetch_related('locations')
+    attendances = list(att_qs.order_by('date', 'check_in_time'))
 
     att_by_emp_date = defaultdict(list)
     for att in attendances:
@@ -1700,33 +1712,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             approved_leaves_map[req.employee_id][curr] = req
             curr += timedelta(days=1)
 
-    # 5. Fetch leave balances for matching employees in year
-    leave_types = list(LeaveType.objects.all())
-    from apps.employees.models import EmployeeLeaveRule
-    rules_qs = EmployeeLeaveRule.objects.filter(employee_id__in=employee_ids)
-    rules_map = {(r.employee_id, r.leave_type_id): r.days_per_year for r in rules_qs}
-
-    balances_qs = LeaveBalance.objects.filter(employee_id__in=employee_ids, year=year).select_related('leave_type')
-    balances_by_emp = defaultdict(list)
-    for bal in balances_qs:
-        balances_by_emp[bal.employee_id].append({
-            'type': bal.leave_type,
-            'remaining': bal.remaining_days,
-            'total': bal.total_days
-        })
-    for e_id in employee_ids:
-        emp_bals = balances_by_emp[e_id]
-        existing_types = {b['type'].id for b in emp_bals}
-        for lt in leave_types:
-            if lt.id not in existing_types:
-                limit = rules_map.get((e_id, lt.id), lt.default_days_per_year)
-                emp_bals.append({
-                    'type': lt,
-                    'remaining': limit,
-                    'total': limit
-                })
-
-    # Determine summary schedule for the working days KPI card
+    # 5. Determine summary schedule for the working days KPI card
     summary_schedule = None
     if employee_id and len(employees) > 0:
         summary_schedule = OptimizedSchedule(employees[0], policies_by_branch, global_policy)
@@ -1738,12 +1724,13 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
 
     working_days = _get_working_days(year, month, summary_schedule)
 
-    # 6. Calculate statistics per employee
+    # 6. Compute full-scope KPIs per employee first; materialize heavy detail dicts only for requested page
     eligibility_map = build_employment_eligibility_map(employees)
     display_att_lookup = defaultdict(dict)
     daily_status_lookup = defaultdict(dict)
     employee_stats = {}
-    rows = []
+    matching_entries = []
+    materialize_all = (page is None)
 
     for emp in employees:
         schedule = OptimizedSchedule(emp, policies_by_branch, global_policy)
@@ -1766,11 +1753,14 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         on_leave_count = 0
         field_visit_count = 0
         total_hours = 0.0
-        emp_daily_statuses = {}
-        emp_day_calcs = {}
+        emp_daily_statuses = {} if materialize_all else None
+        emp_day_calcs = {} if materialize_all else None
+        has_any_ci = False
 
         for d in all_days:
             day_atts = att_by_emp_date.get((emp.id, d), [])
+            if any(a.attendance_type == 'check_in' for a in day_atts):
+                has_any_ci = True
             is_holiday = is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
             is_on_leave = d in approved_leaves_map.get(emp.id, {})
             is_history_missing = (emp.id, d) in missing_history_ctx['activity_dates']
@@ -1785,15 +1775,15 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
                 checkout_provenance_map=checkout_provenance_map,
                 history_unavailable=is_history_missing,
             )
-            emp_day_calcs[d] = day_calc
 
-            if day_calc['check_in']:
-                display_att_lookup[emp.id][d] = day_calc['check_in']
-            elif day_atts:
-                display_att_lookup[emp.id][d] = day_atts[0]
-
-            emp_daily_statuses[d.day] = day_calc['monthly_status']
-            daily_status_lookup[emp.id][d] = day_calc['monthly_status']
+            if materialize_all:
+                emp_day_calcs[d] = day_calc
+                if day_calc['check_in']:
+                    display_att_lookup[emp.id][d] = day_calc['check_in']
+                elif day_atts:
+                    display_att_lookup[emp.id][d] = day_atts[0]
+                emp_daily_statuses[d.day] = day_calc['monthly_status']
+                daily_status_lookup[emp.id][d] = day_calc['monthly_status']
 
             present_count += day_calc['present_count']
             late_count += day_calc['late_count']
@@ -1815,10 +1805,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             ot_display = f"{ot_hours}h {ot_mins}m" if ot_mins > 0 else f"{ot_hours}h"
         else:
             ot_display = '—'
-            
-        # Canonical scheduled-working-day denominator policy:
-        # Scheduled attendance % = scheduled_present_count / emp_working_days_so_far * 100.
-        # Holiday work is reported separately (holiday_work_count) and never inflates numerator or denominator.
+
         provisional_att_pct = (
             round((scheduled_present_count / emp_working_days_so_far) * 100, 1)
             if emp_working_days_so_far > 0
@@ -1832,45 +1819,6 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             att_pct_display = "N/A"
         else:
             att_pct_display = "Unavailable (Incomplete)"
-
-        employee_stats[emp.id] = {
-            'present_count': present_count,
-            'late_count': late_count,
-            'total_ot_minutes': total_ot_minutes,
-            'overtime_display': ot_display,
-            'overtime_hours': round(total_ot_minutes / 60.0, 2),
-            'absent_count': absent_count,
-            'review_needed_count': review_needed_count,
-            'unknown_days_count': unknown_days_count,
-            'coverage_complete': is_emp_coverage_complete,
-            'holiday_work_count': holiday_work_count,
-            'is_overtime_enabled': getattr(emp, 'overtime_enabled', False)
-        }
-
-        row_item = {
-            'employee': emp,
-            'present': present_count,
-            'absent': absent_count,
-            'review_needed': review_needed_count,
-            'unknown_days': unknown_days_count,
-            'coverage_complete': is_emp_coverage_complete,
-            'eligibility_unresolved': bool(emp_elig and emp_elig.get('unresolved')),
-            'on_leave': on_leave_count,
-            'late': late_count,
-            'field_visits': field_visit_count,
-            'total_hours': round(total_hours, 2),
-            'total_ot_minutes': total_ot_minutes,
-            'overtime_hours': round(total_ot_minutes / 60.0, 2),
-            'overtime': ot_display,
-            'overtime_display': ot_display,
-            'att_pct': att_pct,
-            'att_pct_provisional': provisional_att_pct,
-            'att_pct_display': att_pct_display,
-            'leave_balances': balances_by_emp[emp.id],
-            'daily_statuses': emp_daily_statuses,
-            'day_calcs': emp_day_calcs,
-            'schedule': schedule,
-        }
 
         # Apply optional status / attendance_type filters
         if status:
@@ -1889,36 +1837,146 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             at_lower = attendance_type.lower()
             if at_lower in ('field_visit', 'field') and field_visit_count == 0:
                 continue
-            elif at_lower in ('check_in', 'office'):
-                has_any_ci = any(any(a.attendance_type == 'check_in' for a in att_by_emp_date.get((emp.id, d), [])) for d in all_days)
-                if not has_any_ci:
-                    continue
+            elif at_lower in ('check_in', 'office') and not has_any_ci:
+                continue
 
-        rows.append(row_item)
+        employee_stats[emp.id] = {
+            'present_count': present_count,
+            'late_count': late_count,
+            'total_ot_minutes': total_ot_minutes,
+            'overtime_display': ot_display,
+            'overtime_hours': round(total_ot_minutes / 60.0, 2),
+            'absent_count': absent_count,
+            'review_needed_count': review_needed_count,
+            'unknown_days_count': unknown_days_count,
+            'coverage_complete': is_emp_coverage_complete,
+            'holiday_work_count': holiday_work_count,
+            'is_overtime_enabled': getattr(emp, 'overtime_enabled', False)
+        }
 
-    total_present = sum(r['present'] for r in rows)
-    total_absent = sum(r['absent'] for r in rows)
-    total_review_needed = sum(r['review_needed'] for r in rows)
-    total_unknown_days = sum(r.get('unknown_days', 0) for r in rows)
+        matching_entries.append({
+            'employee': emp,
+            'present': present_count,
+            'absent': absent_count,
+            'review_needed': review_needed_count,
+            'unknown_days': unknown_days_count,
+            'coverage_complete': is_emp_coverage_complete,
+            'eligibility_unresolved': bool(emp_elig and emp_elig.get('unresolved')),
+            'on_leave': on_leave_count,
+            'late': late_count,
+            'field_visits': field_visit_count,
+            'total_hours': round(total_hours, 2),
+            'total_ot_minutes': total_ot_minutes,
+            'overtime_hours': round(total_ot_minutes / 60.0, 2),
+            'overtime': ot_display,
+            'overtime_display': ot_display,
+            'att_pct': att_pct,
+            'att_pct_provisional': provisional_att_pct,
+            'att_pct_display': att_pct_display,
+            'leave_balances': [],
+            'daily_statuses': emp_daily_statuses if materialize_all else {},
+            'day_calcs': emp_day_calcs if materialize_all else {},
+            'schedule': schedule,
+            '_emp_elig': emp_elig,
+        })
+
+    # Full-scope totals across all matching authorized employees (invariant to pagination)
+    total_present = sum(r['present'] for r in matching_entries)
+    total_absent = sum(r['absent'] for r in matching_entries)
+    total_review_needed = sum(r['review_needed'] for r in matching_entries)
+    total_unknown_days = sum(r.get('unknown_days', 0) for r in matching_entries)
     coverage_complete = (total_unknown_days == 0 and total_review_needed == 0)
-    total_on_leave = sum(r['on_leave'] for r in rows)
-    total_late = sum(r['late'] for r in rows)
-    total_field = sum(r['field_visits'] for r in rows)
+    total_on_leave = sum(r['on_leave'] for r in matching_entries)
+    total_late = sum(r['late'] for r in matching_entries)
+    total_field = sum(r['field_visits'] for r in matching_entries)
 
-    total_ot_all = sum(r.get('total_ot_minutes', 0) for r in rows)
+    total_ot_all = sum(r.get('total_ot_minutes', 0) for r in matching_entries)
     ot_h_all = total_ot_all // 60
     ot_m_all = total_ot_all % 60
     total_ot_str = f"{ot_h_all}h {ot_m_all}m" if ot_m_all > 0 else f"{ot_h_all}h"
     if total_ot_all == 0:
         total_ot_str = "0h"
 
-    complete_pcts = [r['att_pct'] for r in rows if r.get('att_pct') is not None]
+    complete_pcts = [r['att_pct'] for r in matching_entries if r.get('att_pct') is not None]
     avg_att_pct = (
         round(sum(complete_pcts) / len(complete_pcts), 1)
-        if (rows and total_unknown_days == 0 and len(complete_pcts) == len(rows))
+        if (matching_entries and total_unknown_days == 0 and len(complete_pcts) == len(matching_entries))
         else None
     )
     avg_att_pct_display = f"{avg_att_pct}%" if avg_att_pct is not None else "Unavailable (Incomplete)"
+
+    # 7. Paginate first (if requested), then materialize detail rows & leave balances ONLY for the active page
+    page_obj = None
+    if page is not None:
+        from django.core.paginator import Paginator
+        paginator = Paginator(matching_entries, page_size)
+        page_obj = paginator.get_page(page)
+        rows = list(page_obj.object_list)
+    else:
+        rows = matching_entries
+
+    page_emp_ids = [r['employee'].id for r in rows]
+    balances_by_emp = defaultdict(list)
+    if page_emp_ids:
+        leave_types = list(LeaveType.objects.all())
+        from apps.employees.models import EmployeeLeaveRule
+        rules_qs = EmployeeLeaveRule.objects.filter(employee_id__in=page_emp_ids)
+        rules_map = {(r.employee_id, r.leave_type_id): r.days_per_year for r in rules_qs}
+        balances_qs = LeaveBalance.objects.filter(employee_id__in=page_emp_ids, year=year).select_related('leave_type')
+        for bal in balances_qs:
+            balances_by_emp[bal.employee_id].append({
+                'type': bal.leave_type,
+                'remaining': bal.remaining_days,
+                'total': bal.total_days
+            })
+        for e_id in page_emp_ids:
+            emp_bals = balances_by_emp[e_id]
+            existing_types = {b['type'].id for b in emp_bals}
+            for lt in leave_types:
+                if lt.id not in existing_types:
+                    limit = rules_map.get((e_id, lt.id), lt.default_days_per_year)
+                    emp_bals.append({
+                        'type': lt,
+                        'remaining': limit,
+                        'total': limit
+                    })
+
+    for row_item in rows:
+        emp = row_item['employee']
+        row_item['leave_balances'] = balances_by_emp[emp.id]
+        if not materialize_all:
+            emp_daily_statuses = {}
+            emp_day_calcs = {}
+            schedule = row_item['schedule']
+            emp_elig = row_item['_emp_elig']
+            for d in all_days:
+                day_atts = att_by_emp_date.get((emp.id, d), [])
+                is_holiday = is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
+                is_on_leave = d in approved_leaves_map.get(emp.id, {})
+                is_history_missing = (emp.id, d) in missing_history_ctx['activity_dates']
+                day_calc = calculate_employee_day(
+                    emp, d, day_atts,
+                    schedule=schedule,
+                    is_holiday=is_holiday,
+                    is_on_leave=is_on_leave,
+                    today=today,
+                    eligibility=emp_elig,
+                    checkout_provenance_map=checkout_provenance_map,
+                    history_unavailable=is_history_missing,
+                )
+                emp_day_calcs[d] = day_calc
+                if day_calc['check_in']:
+                    display_att_lookup[emp.id][d] = day_calc['check_in']
+                elif day_atts:
+                    display_att_lookup[emp.id][d] = day_atts[0]
+                emp_daily_statuses[d.day] = day_calc['monthly_status']
+                daily_status_lookup[emp.id][d] = day_calc['monthly_status']
+            row_item['daily_statuses'] = emp_daily_statuses
+            row_item['day_calcs'] = emp_day_calcs
+        row_item.pop('_emp_elig', None)
+
+    if page_obj is not None:
+        page_obj.object_list = rows
 
     return {
         'year': year,
@@ -1931,6 +1989,9 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         'employee_stats': employee_stats,
         'approved_leaves': approved_leaves_map,
         'rows': rows,
+        'page_obj': page_obj,
+        'total_count': len(matching_entries),
+        'materialized_row_count': len(rows),
         'total_present': total_present,
         'total_absent': total_absent,
         'total_review_needed': total_review_needed,

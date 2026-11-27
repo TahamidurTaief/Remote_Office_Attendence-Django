@@ -1541,7 +1541,7 @@ class MonthlyReportView(AdminRequiredMixin, View):
             branches = Branch.objects.filter(id__in=auth_branch_ids).only('id', 'name').order_by('name')
 
         selector_employees = scoped_employees.only('id', 'full_name').order_by('full_name')
-        authorized_emp_ids = set(scoped_employees.values_list('id', flat=True))
+        page = request.GET.get('page', 1)
 
         from apps.attendance import reporting_service
 
@@ -1550,15 +1550,13 @@ class MonthlyReportView(AdminRequiredMixin, View):
             month=month,
             employee_id=emp_id or None,
             branch_id=branch_id or None,
-            allowed_employee_ids=authorized_emp_ids,
+            employee_queryset=scoped_employees,
             status=status_param or None,
             attendance_type=type_param or None,
+            page=page,
+            page_size=30,
         )
-
-        from django.core.paginator import Paginator
-        page = request.GET.get('page', 1)
-        paginator = Paginator(data['rows'], 30)
-        page_obj = paginator.get_page(page)
+        page_obj = data['page_obj']
 
         prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
         next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
