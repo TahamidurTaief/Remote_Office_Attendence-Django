@@ -56,10 +56,12 @@ def classify_day_attendance_evidence(day_attendances):
     }
 
 
-def _build_missing_history_context(employee_ids, start_date, end_date):
+def _build_missing_history_context(employee_ids, start_date, end_date, attendances=None):
     """
-    Bulk-loads employee-scoped AttendanceActivityLog metadata in 1 query.
-    Never infers deletion or absence from unrelated employees/branches.
+    Bulk-loads employee-scoped AttendanceActivityLog(action='check_in') metadata in 1 query,
+    excluding dates already explained by offline/overnight Attendance records synced/created
+    on that date for an earlier attendance.date.
+    Never infers completeness or deletion from unrelated employees/branches.
     """
     if not employee_ids:
         return {'activity_dates': set()}
@@ -67,15 +69,42 @@ def _build_missing_history_context(employee_ids, start_date, end_date):
     start_dt = timezone.make_aware(datetime.combine(start_date, time.min), BD_TZ)
     end_dt = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min), BD_TZ)
 
+    explained_upload_dates = set()
+    for a in (attendances or []):
+        emp_id = getattr(a, 'employee_id', None)
+        if emp_id is None:
+            continue
+        for ts_field in ('synced_at', 'created_at', 'check_out_time'):
+            ts_val = getattr(a, ts_field, None)
+            if ts_val is not None:
+                local_d = timezone.localtime(ts_val, BD_TZ).date() if timezone.is_aware(ts_val) else ts_val.date()
+                explained_upload_dates.add((emp_id, local_d))
+
     activity_dates = set()
     for emp_id, ts in AttendanceActivityLog.objects.filter(
         employee_id__in=employee_ids,
         timestamp__gte=start_dt,
         timestamp__lt=end_dt,
-        action__in=('check_in', 'check_out', 'forgot_checkout_request', 'correction_request'),
+        action='check_in',
     ).values_list('employee_id', 'timestamp'):
         local_d = timezone.localtime(ts, BD_TZ).date() if timezone.is_aware(ts) else ts.date()
-        activity_dates.add((emp_id, local_d))
+        if (emp_id, local_d) not in explained_upload_dates:
+            activity_dates.add((emp_id, local_d))
+
+    if activity_dates:
+        from django.db.models import Q
+        act_emp_ids = {emp_id for emp_id, _ in activity_dates}
+        for emp_id, synced_at, co_time, created_at in Attendance.objects.filter(
+            employee_id__in=act_emp_ids,
+        ).filter(
+            Q(synced_at__gte=start_dt, synced_at__lt=end_dt)
+            | Q(check_out_time__gte=start_dt, check_out_time__lt=end_dt)
+            | Q(created_at__gte=start_dt, created_at__lt=end_dt)
+        ).values_list('employee_id', 'synced_at', 'check_out_time', 'created_at'):
+            for ts_val in (synced_at, co_time, created_at):
+                if ts_val is not None:
+                    local_d = timezone.localtime(ts_val, BD_TZ).date() if timezone.is_aware(ts_val) else ts_val.date()
+                    activity_dates.discard((emp_id, local_d))
 
     return {'activity_dates': activity_dates}
 
@@ -652,6 +681,130 @@ def _sum_non_overlapping_hours(check_in_sessions, effective_checkouts=None):
     total_seconds = sum((end - start).total_seconds() for start, end in merged)
     return round(total_seconds / 3600.0, 2)
 
+def resolve_employee_day_evidence(
+    employee,
+    target_date,
+    day_attendances,
+    schedule=None,
+    is_holiday=False,
+    is_on_leave=False,
+    today=None,
+    now=None,
+    eligibility=None,
+    history_unavailable=False,
+    coverage=None,
+):
+    """
+    Shared employee-day evidence resolver separating:
+      - eligibility_state: 'employed' | 'not_employed' | 'unresolved'
+      - schedule_state: 'future' | 'holiday' | 'approved_leave' | 'pending_shift' | 'working_day'
+      - attendance_state: 'present_office' | 'present_field' | 'ambiguous_expired' | 'none'
+      - coverage_state: 'complete' | 'incomplete_activity' | 'unknown'
+    Returns explicit reason_code and partitioned attendance lists.
+    """
+    if today is None:
+        today = timezone.localdate()
+    if now is None:
+        now = timezone.localtime(timezone.now(), BD_TZ)
+
+    classified = classify_day_attendance_evidence(day_attendances)
+    usable = classified['usable']
+    ambiguous_expired = classified['ambiguous_expired']
+    check_in_sessions = [a for a in usable if a.attendance_type == 'check_in']
+    field_visits = [a for a in usable if a.attendance_type == 'field_visit']
+
+    is_employed, elig_unresolved = is_date_employed(target_date, employee, eligibility=eligibility)
+    emp_unresolved = bool(eligibility and eligibility.get('unresolved'))
+
+    if elig_unresolved:
+        eligibility_state = 'unresolved'
+    elif not is_employed:
+        eligibility_state = 'not_employed'
+    else:
+        eligibility_state = 'employed'
+
+    is_pending_shift = False
+    if target_date == today and schedule and getattr(schedule, 'office_end_time', None):
+        sync_grace_minutes = int(getattr(settings, 'ATTENDANCE_SYNC_GRACE_MINUTES', 0) or 0)
+        end_dt = datetime.combine(target_date, schedule.office_end_time)
+        if getattr(schedule, 'office_start_time', None) and schedule.office_end_time < schedule.office_start_time:
+            end_dt += timedelta(days=1)
+        end_dt = timezone.make_aware(end_dt, BD_TZ) + timedelta(minutes=sync_grace_minutes)
+        if now < end_dt:
+            is_pending_shift = True
+
+    if target_date > today:
+        schedule_state = 'future'
+    elif is_on_leave:
+        schedule_state = 'approved_leave'
+    elif is_holiday:
+        schedule_state = 'holiday'
+    elif is_pending_shift:
+        schedule_state = 'pending_shift'
+    else:
+        schedule_state = 'working_day'
+
+    if check_in_sessions:
+        attendance_state = 'present_office'
+    elif field_visits:
+        attendance_state = 'present_field'
+    elif ambiguous_expired:
+        attendance_state = 'ambiguous_expired'
+    else:
+        attendance_state = 'none'
+
+    cov_state = (coverage or {}).get('state') if isinstance(coverage, dict) else None
+    cov_source = (coverage or {}).get('source') if isinstance(coverage, dict) else None
+    if history_unavailable:
+        coverage_state = 'incomplete_activity'
+        coverage_source = 'activity_log_missing_attendance'
+    elif cov_state == 'complete':
+        coverage_state = 'complete'
+        coverage_source = cov_source or 'explicit_complete'
+    else:
+        coverage_state = 'unknown'
+        coverage_source = cov_source or 'no_coverage_ledger'
+
+    if schedule_state == 'future':
+        reason_code = 'future_date'
+    elif attendance_state in ('present_office', 'present_field'):
+        reason_code = 'present_with_ambiguous_expired' if ambiguous_expired else attendance_state
+    elif eligibility_state == 'not_employed':
+        reason_code = 'not_employed'
+    elif schedule_state == 'approved_leave':
+        reason_code = 'approved_leave'
+    elif schedule_state == 'holiday':
+        reason_code = 'holiday'
+    elif eligibility_state == 'unresolved':
+        reason_code = 'eligibility_unresolved'
+    elif schedule_state == 'pending_shift':
+        reason_code = 'shift_pending'
+    elif attendance_state == 'ambiguous_expired':
+        reason_code = 'expired_evidence_unavailable'
+    elif coverage_state == 'incomplete_activity':
+        reason_code = 'missing_attendance_for_activity'
+    elif coverage_state == 'complete':
+        reason_code = 'confirmed_absent'
+    else:
+        reason_code = 'coverage_unknown'
+
+    return {
+        'eligibility_state': eligibility_state,
+        'schedule_state': schedule_state,
+        'attendance_state': attendance_state,
+        'coverage_state': coverage_state,
+        'coverage_source': coverage_source,
+        'reason_code': reason_code,
+        'is_employed': is_employed,
+        'elig_unresolved': elig_unresolved,
+        'emp_unresolved': emp_unresolved,
+        'usable': usable,
+        'check_in_sessions': check_in_sessions,
+        'field_visits': field_visits,
+        'ambiguous_expired': ambiguous_expired,
+    }
+
+
 def calculate_employee_day(
     employee,
     target_date,
@@ -663,6 +816,7 @@ def calculate_employee_day(
     eligibility=None,
     checkout_provenance_map=None,
     history_unavailable=False,
+    coverage=None,
 ):
     """
     Authoritative single employee-day calculation.
@@ -671,21 +825,30 @@ def calculate_employee_day(
     if today is None:
         today = timezone.localdate()
 
-    classified = classify_day_attendance_evidence(day_attendances)
-    day_atts = classified['usable']
-    invalidated_atts = classified['invalidated']
-    ambiguous_expired_atts = classified['ambiguous_expired']
-    check_in_sessions = [a for a in day_atts if a.attendance_type == 'check_in']
-    field_visits = [a for a in day_atts if a.attendance_type == 'field_visit']
-
+    ev = resolve_employee_day_evidence(
+        employee,
+        target_date,
+        day_attendances,
+        schedule=schedule,
+        is_holiday=is_holiday,
+        is_on_leave=is_on_leave,
+        today=today,
+        eligibility=eligibility,
+        history_unavailable=history_unavailable,
+        coverage=coverage,
+    )
+    check_in_sessions = ev['check_in_sessions']
+    field_visits = ev['field_visits']
+    ambiguous_expired_atts = ev['ambiguous_expired']
     has_check_in = len(check_in_sessions) > 0
     has_field_visit = len(field_visits) > 0
     has_any_attendance = has_check_in or has_field_visit
-    is_employed, elig_unresolved = is_date_employed(target_date, employee, eligibility=eligibility)
-    emp_unresolved = bool(eligibility and eligibility.get('unresolved'))
+    is_employed = ev['is_employed']
+    elig_unresolved = ev['elig_unresolved']
+    emp_unresolved = ev['emp_unresolved']
 
     # Rule: Future dates must contribute no present, absent, leave, late, hours or field-visit totals.
-    if target_date > today:
+    if ev['schedule_state'] == 'future':
         return {
             'date': target_date,
             'is_future': True,
@@ -713,7 +876,13 @@ def calculate_employee_day(
             'has_leave_conflict': False,
             'eligibility_conflict': False,
             'eligibility_unresolved': False,
+            'history_unavailable': False,
             'needs_review': False,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -853,6 +1022,11 @@ def calculate_employee_day(
             'needs_review': day_needs_review,
             'checkout_needs_review': checkout_needs_review,
             'has_auto_closed_checkout': has_auto_closed_checkout,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
         }
 
 
@@ -886,7 +1060,13 @@ def calculate_employee_day(
             'has_leave_conflict': False,
             'eligibility_conflict': False,
             'eligibility_unresolved': False,
+            'history_unavailable': False,
             'needs_review': False,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -925,7 +1105,13 @@ def calculate_employee_day(
             'has_leave_conflict': False,
             'eligibility_conflict': False,
             'eligibility_unresolved': False,
+            'history_unavailable': False,
             'needs_review': False,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -963,6 +1149,13 @@ def calculate_employee_day(
             'is_open_session': False,
             'is_missing_checkout': False,
             'has_leave_conflict': False,
+            'history_unavailable': False,
+            'needs_review': False,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -1001,7 +1194,13 @@ def calculate_employee_day(
             'has_leave_conflict': False,
             'eligibility_conflict': False,
             'eligibility_unresolved': True,
+            'history_unavailable': False,
             'needs_review': True,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -1012,49 +1211,50 @@ def calculate_employee_day(
         }
 
     # 5. Before shift + sync grace period end: pending
-    if target_date == today and schedule and getattr(schedule, 'office_end_time', None):
-        sync_grace_minutes = int(getattr(settings, 'ATTENDANCE_SYNC_GRACE_MINUTES', 0) or 0)
-        end_dt = datetime.combine(target_date, schedule.office_end_time)
-        if getattr(schedule, 'office_start_time', None) and schedule.office_end_time < schedule.office_start_time:
-            end_dt += timedelta(days=1)
-        end_dt = timezone.make_aware(end_dt, BD_TZ) + timedelta(minutes=sync_grace_minutes)
-        if timezone.localtime(timezone.now(), BD_TZ) < end_dt:
-            return {
-                'date': target_date,
-                'is_future': False,
-                'status': 'scheduled',
-                'status_display': 'Pending',
-                'monthly_status': '—',
-                'calendar_color': 'future',
-                'is_present': False,
-                'is_absent': False,
-                'is_late': False,
-                'is_on_leave': False,
-                'is_holiday': False,
-                'is_weekend': False,
-                'present_count': 0,
-                'absent_count': 0,
-                'on_leave_count': 0,
-                'late_count': 0,
-                'field_visit_count': 0,
-                'total_hours': 0.0,
-                'overtime_minutes': 0,
-                'first_arrival': None,
-                'last_departure': None,
-                'is_open_session': False,
-                'is_missing_checkout': False,
-                'has_leave_conflict': False,
-                'check_in': None,
-                'check_in_time': None,
-                'check_out_time': None,
-                'check_in_time_str': '—',
-                'check_out_time_str': '—',
-                'check_in_sessions': [],
-                'field_visits': [],
-            }
+    if ev['schedule_state'] == 'pending_shift':
+        return {
+            'date': target_date,
+            'is_future': False,
+            'status': 'scheduled',
+            'status_display': 'Pending',
+            'monthly_status': '—',
+            'calendar_color': 'future',
+            'is_present': False,
+            'is_absent': False,
+            'is_late': False,
+            'is_on_leave': False,
+            'is_holiday': False,
+            'is_weekend': False,
+            'present_count': 0,
+            'absent_count': 0,
+            'on_leave_count': 0,
+            'late_count': 0,
+            'field_visit_count': 0,
+            'total_hours': 0.0,
+            'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
+            'history_unavailable': False,
+            'needs_review': False,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
+            'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': '—',
+            'check_out_time_str': '—',
+            'check_in_sessions': [],
+            'field_visits': [],
+        }
 
-    # 5. Unavailable / unknown-expiry / retention-deleted attendance history: never fabricate Absent
-    if ambiguous_expired_atts or invalidated_atts or history_unavailable:
+    # 6. Unavailable / unknown-expiry / unknown-coverage attendance history: never fabricate Absent
+    if ev['attendance_state'] == 'ambiguous_expired' or ev['coverage_state'] != 'complete':
         return {
             'date': target_date,
             'is_future': False,
@@ -1084,6 +1284,11 @@ def calculate_employee_day(
             'eligibility_unresolved': False,
             'history_unavailable': True,
             'needs_review': True,
+            'eligibility_state': ev['eligibility_state'],
+            'schedule_state': ev['schedule_state'],
+            'attendance_state': ev['attendance_state'],
+            'coverage_state': ev['coverage_state'],
+            'reason_code': ev['reason_code'],
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -1093,7 +1298,7 @@ def calculate_employee_day(
             'field_visits': [],
         }
 
-    # 6. Absent on regular working day
+    # 7. Absent on regular working day with explicitly complete coverage
     return {
         'date': target_date,
         'is_future': False,
@@ -1121,6 +1326,11 @@ def calculate_employee_day(
         'has_leave_conflict': False,
         'history_unavailable': False,
         'needs_review': False,
+        'eligibility_state': ev['eligibility_state'],
+        'schedule_state': ev['schedule_state'],
+        'attendance_state': ev['attendance_state'],
+        'coverage_state': ev['coverage_state'],
+        'reason_code': ev['reason_code'],
         'check_in': None,
         'check_in_time': None,
         'check_out_time': None,
@@ -1239,7 +1449,7 @@ def get_daily_report_data(
 
     eligibility_map = build_employment_eligibility_map(employees)
     checkout_provenance_map = build_checkout_provenance_map(attendances)
-    missing_history_ctx = _build_missing_history_context(target_emp_ids, start_date, end_date)
+    missing_history_ctx = _build_missing_history_context(target_emp_ids, start_date, end_date, attendances=attendances)
 
     rows = []
     for d in date_list:
@@ -1335,6 +1545,8 @@ def get_daily_report_data(
     late = sum(1 for r in rows if r['status'] == 'late')
     absent = sum(1 for r in rows if r['is_absent'])
     review_needed = sum(1 for r in rows if r.get('needs_review'))
+    unknown_days = sum(1 for r in rows if r.get('history_unavailable'))
+    coverage_complete = (unknown_days == 0 and review_needed == 0)
     field_total = sum(len(r['field_visits']) for r in rows)
     total_hours = round(sum(r['total_hours'] for r in rows), 2)
 
@@ -1346,6 +1558,8 @@ def get_daily_report_data(
         'present': present,
         'absent': absent,
         'review_needed': review_needed,
+        'unknown_days': unknown_days,
+        'coverage_complete': coverage_complete,
         'late': late,
         'field_total': field_total,
         'total_hours': total_hours,
@@ -1428,7 +1642,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         att_by_emp_date[(att.employee_id, att.date)].append(att)
 
     checkout_provenance_map = build_checkout_provenance_map(attendances)
-    missing_history_ctx = _build_missing_history_context(employee_ids, month_start, month_end)
+    missing_history_ctx = _build_missing_history_context(employee_ids, month_start, month_end, attendances=attendances)
 
     # 4. Fetch approved leave requests
     leave_requests = LeaveRequest.objects.filter(
@@ -1507,6 +1721,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         total_ot_minutes = 0
         absent_count = 0
         review_needed_count = 0
+        unknown_days_count = 0
         holiday_work_count = 0
         on_leave_count = 0
         field_visit_count = 0
@@ -1544,6 +1759,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             late_count += day_calc['late_count']
             absent_count += day_calc['absent_count']
             review_needed_count += 1 if day_calc.get('needs_review') else 0
+            unknown_days_count += 1 if day_calc.get('history_unavailable') else 0
             on_leave_count += day_calc['on_leave_count']
             field_visit_count += day_calc['field_visit_count']
             total_hours += day_calc['total_hours']
@@ -1558,7 +1774,10 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         else:
             ot_display = '—'
             
-        att_pct = round(min(100.0, (present_count / emp_working_days_so_far * 100)), 1) if emp_working_days_so_far > 0 else 0.0
+        provisional_att_pct = round(min(100.0, (present_count / emp_working_days_so_far * 100)), 1) if emp_working_days_so_far > 0 else 0.0
+        is_emp_coverage_complete = (unknown_days_count == 0 and review_needed_count == 0)
+        att_pct = provisional_att_pct if unknown_days_count == 0 else None
+        att_pct_display = f"{att_pct}%" if att_pct is not None else "Unavailable (Incomplete)"
 
         employee_stats[emp.id] = {
             'present_count': present_count,
@@ -1568,6 +1787,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'overtime_hours': round(total_ot_minutes / 60.0, 2),
             'absent_count': absent_count,
             'review_needed_count': review_needed_count,
+            'unknown_days_count': unknown_days_count,
+            'coverage_complete': is_emp_coverage_complete,
             'holiday_work_count': holiday_work_count,
             'is_overtime_enabled': getattr(emp, 'overtime_enabled', False)
         }
@@ -1577,6 +1798,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'present': present_count,
             'absent': absent_count,
             'review_needed': review_needed_count,
+            'unknown_days': unknown_days_count,
+            'coverage_complete': is_emp_coverage_complete,
             'eligibility_unresolved': bool(emp_elig and emp_elig.get('unresolved')),
             'on_leave': on_leave_count,
             'late': late_count,
@@ -1587,6 +1810,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'overtime': ot_display,
             'overtime_display': ot_display,
             'att_pct': att_pct,
+            'att_pct_provisional': provisional_att_pct,
+            'att_pct_display': att_pct_display,
             'leave_balances': balances_by_emp[emp.id],
             'daily_statuses': emp_daily_statuses,
             'day_calcs': emp_day_calcs,
@@ -1620,6 +1845,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
     total_present = sum(r['present'] for r in rows)
     total_absent = sum(r['absent'] for r in rows)
     total_review_needed = sum(r['review_needed'] for r in rows)
+    total_unknown_days = sum(r.get('unknown_days', 0) for r in rows)
+    coverage_complete = (total_unknown_days == 0 and total_review_needed == 0)
     total_on_leave = sum(r['on_leave'] for r in rows)
     total_late = sum(r['late'] for r in rows)
     total_field = sum(r['field_visits'] for r in rows)
@@ -1631,9 +1858,13 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
     if total_ot_all == 0:
         total_ot_str = "0h"
 
-    avg_att_pct = round(
-        sum(r['att_pct'] for r in rows) / len(rows) if rows else 0, 1
+    complete_pcts = [r['att_pct'] for r in rows if r.get('att_pct') is not None]
+    avg_att_pct = (
+        round(sum(complete_pcts) / len(complete_pcts), 1)
+        if (rows and total_unknown_days == 0 and len(complete_pcts) == len(rows))
+        else None
     )
+    avg_att_pct_display = f"{avg_att_pct}%" if avg_att_pct is not None else "Unavailable (Incomplete)"
 
     return {
         'year': year,
@@ -1649,11 +1880,14 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         'total_present': total_present,
         'total_absent': total_absent,
         'total_review_needed': total_review_needed,
+        'total_unknown_days': total_unknown_days,
+        'coverage_complete': coverage_complete,
         'total_on_leave': total_on_leave,
         'total_late': total_late,
         'total_field': total_field,
         'total_overtime': total_ot_str,
         'total_overtime_minutes': total_ot_all,
         'avg_att_pct': avg_att_pct,
+        'avg_att_pct_display': avg_att_pct_display,
         'working_days': working_days,
     }

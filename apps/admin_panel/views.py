@@ -3395,7 +3395,7 @@ def export_monthly_xlsx(request):
             row['field_visits'],
             f"{row['total_hours']}h",
             ot_val,
-            f"{row['att_pct']}%"
+            row.get('att_pct_display') if row.get('att_pct') is None else f"{row['att_pct']}%"
         ]
         for s_idx, val in enumerate(summary_values):
             cell = ws.cell(row=curr_row, column=start_sum_col + s_idx, value=val)
@@ -3433,7 +3433,7 @@ def export_monthly_xlsx(request):
         data['total_field'],
         f"{round(sum(r['total_hours'] for r in rows), 1)}h",
         total_ot_val,
-        f"{data['avg_att_pct']}%"
+        data.get('avg_att_pct_display') if data.get('avg_att_pct') is None else f"{data['avg_att_pct']}%"
     ]
     for s_idx, val in enumerate(footer_values):
         cell = ws.cell(row=curr_row, column=start_sum_col + s_idx, value=val)
@@ -3532,7 +3532,7 @@ def export_monthly_csv(request):
             row['field_visits'],
             f"{row['total_hours']}h",
             ot_val,
-            f"{row['att_pct']}%"
+            row.get('att_pct_display') if row.get('att_pct') is None else f"{row['att_pct']}%"
         ]
         writer.writerow(row_vals)
 
@@ -3550,7 +3550,7 @@ def export_monthly_csv(request):
         data['total_field'],
         f"{round(sum(r['total_hours'] for r in rows), 1)}h",
         total_ot_val,
-        f"{data['avg_att_pct']}%"
+        data.get('avg_att_pct_display') if data.get('avg_att_pct') is None else f"{data['avg_att_pct']}%"
     ]
     writer.writerow(footer_row)
 

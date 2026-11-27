@@ -823,7 +823,7 @@ def _build_monthly_matrix_table(rows, days_slice, avail_w, styles, include_summa
                     str(r.get('absent', 0)),
                     str(r.get('late', 0)),
                     f"{r.get('total_hours', 0.0):.1f}h",
-                    f"{r.get('att_pct', 0)}%",
+                    r.get('att_pct_display', '—') if r.get('att_pct') is None else f"{r.get('att_pct', 0)}%",
                 ])
                 m_style.append(('ALIGN', (sum_col + 3, row_idx), (sum_col + 4, row_idx), 'RIGHT'))
 
@@ -876,7 +876,7 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
                 f"<b>Total Present:</b> {monthly_data.get('total_present', 0)} &nbsp;|&nbsp; "
                 f"<b>Total Absent:</b> {monthly_data.get('total_absent', 0)} &nbsp;|&nbsp; "
                 f"<b>Total Late:</b> {monthly_data.get('total_late', 0)} &nbsp;|&nbsp; "
-                f"<b>Avg Att:</b> {monthly_data.get('avg_att_pct', 0)}%",
+                f"<b>Avg Att:</b> {monthly_data.get('avg_att_pct_display', '—') if monthly_data.get('avg_att_pct') is None else str(monthly_data.get('avg_att_pct', 0)) + '%'}",
                 styles['subtitle']
             )
         ]
@@ -963,7 +963,7 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
             fv_cnt = int(r.get('field_visits', 0))
             tot_hrs = f"{r.get('total_hours', 0.0):.2f}h"
             raw_ot = str(r.get('overtime', '—'))
-            att_pct = f"{r.get('att_pct', 0)}%"
+            att_pct = r.get('att_pct_display', '—') if r.get('att_pct') is None else f"{r.get('att_pct', 0)}%"
 
             raw_eid = emp.employee_id or '—'
             eid_cell = raw_eid if (len(raw_eid) <= 12 and raw_eid.isascii()) else Paragraph(_esc(raw_eid), styles['td_center'])
@@ -1006,7 +1006,7 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
             str(monthly_data.get('total_field', 0)),
             tot_hrs_sum,
             str(monthly_data.get('total_overtime', '0h')),
-            f"{monthly_data.get('avg_att_pct', 0)}%",
+            monthly_data.get('avg_att_pct_display', '—') if monthly_data.get('avg_att_pct') is None else f"{monthly_data.get('avg_att_pct', 0)}%",
         ])
         t_style.append(('BACKGROUND', (0, footer_idx), (-1, footer_idx), _C_SLATE_200))
         t_style.append(('FONTNAME', (0, footer_idx), (-1, footer_idx), bold_font))
@@ -1121,7 +1121,7 @@ def render_individual_attendance_pdf(employee, year, month, monthly_data, user=N
         f"<b>Late:</b> {emp_row.get('late', 0)}",
         f"<b>Field Visits:</b> {emp_row.get('field_visits', 0)}",
         f"<b>Total Hours:</b> {emp_row.get('total_hours', 0.0):.2f}h",
-        f"<b>Attendance:</b> {emp_row.get('att_pct', 0)}%",
+        f"<b>Attendance:</b> {emp_row.get('att_pct_display', '—') if emp_row.get('att_pct') is None else str(emp_row.get('att_pct', 0)) + '%'}",
     ]
     kpi_p = Paragraph(" &nbsp;&nbsp;|&nbsp;&nbsp; ".join(kpi_items), styles['meta_label'])
     kpi_table = Table([[kpi_p]], colWidths=[avail_w])

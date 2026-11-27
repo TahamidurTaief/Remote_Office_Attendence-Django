@@ -142,9 +142,15 @@
 
         <c-card padding="md" extra_class="text-center">
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Attendance Rate</p>
+            {% if att_pct is None %}
+            <p class="text-2xl font-bold mt-1 text-amber-600 dark:text-amber-400">
+                Incomplete
+            </p>
+            {% else %}
             <p class="text-2xl font-bold mt-1 {% if att_pct >= 90 %}text-emerald-600 dark:text-emerald-400{% elif att_pct >= 70 %}text-amber-600 dark:text-amber-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
                 {{ att_pct }}%
             </p>
+            {% endif %}
         </c-card>
     </div>
 

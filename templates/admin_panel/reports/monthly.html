@@ -171,7 +171,9 @@
                     <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center text-slate-700 dark:text-slate-300 text-xs font-semibold">{{ row.total_hours }}h</td>
                     <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center text-indigo-600 dark:text-indigo-400 text-xs font-semibold">{{ row.overtime|default:"—" }}</td>
                     <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-center">
-                      {% if row.att_pct >= 90 %}
+                      {% if row.att_pct is None %}
+                        <c-status-pill status="warning" label="Incomplete"></c-status-pill>
+                      {% elif row.att_pct >= 90 %}
                         <c-status-pill status="active" label="{{ row.att_pct }}%"></c-status-pill>
                       {% elif row.att_pct >= 70 %}
                         <c-status-pill status="warning" label="{{ row.att_pct }}%"></c-status-pill>
