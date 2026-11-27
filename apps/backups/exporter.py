@@ -31,7 +31,7 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.db.migrations.recorder import MigrationRecorder
-from django.db.models import Count, Max, Min
+from django.db.models import Count, FileField as DjangoFileField, Max, Min
 from django.utils import timezone
 
 
@@ -182,7 +182,7 @@ def _serialize_scalar(value: Any, field) -> Any:
         return value.isoformat() if hasattr(value, "isoformat") else str(value)
     if internal_type == "UUIDField":
         return str(value)
-    if internal_type == "FileField":
+    if isinstance(field, DjangoFileField):
         return value.name if getattr(value, "name", "") else None
     if isinstance(value, uuid.UUID):
         return str(value)
@@ -463,7 +463,7 @@ def export_portable_archive(
                                 "target_model": f.related_model._meta.label,
                                 "relation_type": ftype,
                             }
-                        if ftype == "FileField":
+                        if isinstance(f, DjangoFileField):
                             media_field_names.append(f.name)
 
                     m2m_meta: dict[str, Any] = {
@@ -543,7 +543,7 @@ def export_portable_archive(
                                             }
                                     else:
                                         val = getattr(obj, f.attname)
-                                        if f.get_internal_type() == "FileField":
+                                        if isinstance(f, DjangoFileField):
                                             storage_name = str(val) if val else ""
                                             if storage_name:
                                                 archive_media_path = _normalize_archive_media_path(storage_name)

@@ -28,7 +28,7 @@ from django.core.cache import cache
 from django.core.files.base import File
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import FileField as DjangoFileField, Q
 from django.utils import timezone
 
 from .exporter import (
@@ -662,7 +662,7 @@ def validate_and_preview_archive(
                                         f"Invalid FK reference target for {model_label}.{fname} in {rec['ref']}."
                                     )
                                 typed_fields[fname] = fval
-                        elif field.get_internal_type() == "FileField":
+                        elif isinstance(field, DjangoFileField):
                             if fval is not None:
                                 if not isinstance(fval, dict) or fval.get("archive_path") not in expected_media_paths:
                                     raise ArchiveValidationError(
@@ -766,7 +766,7 @@ def validate_and_preview_archive(
                     expected_dest_pk = resolved_ref_to_dest_pk.get(fval.get("ref"))
                     if expected_dest_pk is not None and getattr(matched_obj, field.attname) != expected_dest_pk:
                         differing_fields.append(fname)
-            elif field.get_internal_type() == "FileField":
+            elif isinstance(field, DjangoFileField):
                 arch_name = fval.get("storage_name") if isinstance(fval, dict) else None
                 db_name = str(getattr(matched_obj, fname) or "") or None
                 if arch_name != db_name:
@@ -1175,39 +1175,48 @@ def execute_additive_import(
                 list(manifest["models"].keys()), allowed_models
             )
 
-            # Parse records to create in topological order
+            # Parse records to create in topological order (streamed line-by-line)
             records_by_model: dict[str, list[dict[str, Any]]] = {}
+            needed_media_paths: set[str] = set()
             for label in model_labels:
                 model_cls = allowed_models[label]
                 concrete_map = {f.name: f for f in model_cls._meta.concrete_fields}
                 rows: list[dict[str, Any]] = []
                 for chunk_meta in manifest["models"][label].get("chunks", []):
-                    for line in zf.read(chunk_meta["path"]).decode("utf-8").splitlines():
-                        rec = json.loads(line)
-                        if rec["ref"] in create_refs:
-                            parsed_fields: dict[str, Any] = {}
-                            for fname, fval in rec["fields"].items():
-                                field = concrete_map[fname]
-                                if field.is_relation or field.get_internal_type() == "FileField":
-                                    parsed_fields[fname] = fval
-                                else:
-                                    parsed_fields[fname] = _parse_and_validate_scalar(
-                                        fval, field, label, rec["pk"]
-                                    )
-                            rows.append(
-                                {
-                                    "ref": rec["ref"],
-                                    "pk": rec["pk"],
-                                    "fields": parsed_fields,
-                                    "m2m": rec.get("m2m", {}),
-                                }
-                            )
+                    with zf.open(chunk_meta["path"], "r") as chunk_fh:
+                        for raw_line in chunk_fh:
+                            rec = json.loads(raw_line.decode("utf-8"))
+                            if rec["ref"] in create_refs:
+                                parsed_fields: dict[str, Any] = {}
+                                for fname, fval in rec["fields"].items():
+                                    field = concrete_map[fname]
+                                    if field.is_relation or isinstance(field, DjangoFileField):
+                                        parsed_fields[fname] = fval
+                                        if isinstance(field, DjangoFileField) and isinstance(fval, dict):
+                                            needed_media_paths.add(fval["archive_path"])
+                                    else:
+                                        parsed_fields[fname] = _parse_and_validate_scalar(
+                                            fval, field, label, rec["pk"]
+                                        )
+                                rows.append(
+                                    {
+                                        "ref": rec["ref"],
+                                        "pk": rec["pk"],
+                                        "fields": parsed_fields,
+                                        "m2m": rec.get("m2m", {}),
+                                    }
+                                )
                 if rows:
                     records_by_model[label] = rows
 
+            needed_media_entries = [
+                m_item for m_item in media_entries
+                if m_item.get("archive_path") in needed_media_paths
+            ]
+
             with transaction.atomic():
                 archive_to_dest_storage = _stage_and_place_media(
-                    zf, media_entries, staging_media_dir, limits, placed_media_paths
+                    zf, needed_media_entries, staging_media_dir, limits, placed_media_paths
                 )
 
                 if post_media_hook is not None:
@@ -1259,9 +1268,9 @@ def execute_additive_import(
                                     else:
                                         blocked_on_required_fk = True
                                         break
-                            elif field.get_internal_type() == "FileField":
+                            elif isinstance(field, DjangoFileField):
                                 if fval is None:
-                                    init_kwargs[fname] = ""
+                                    init_kwargs[fname] = None if field.null else ""
                                 else:
                                     init_kwargs[fname] = archive_to_dest_storage[fval["archive_path"]]
                             else:
