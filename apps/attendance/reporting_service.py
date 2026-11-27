@@ -7,7 +7,7 @@ from apps.employees.models import EmployeeProfile, EmploymentHistory
 from apps.branches.models import Branch, OfficeSchedule, Holiday
 from apps.attendance.models import Attendance, AttendancePolicy
 from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
-from apps.attendance.schedule_utils import get_branch_schedule, parse_time_from_string, parse_shift_times
+from apps.attendance.schedule_utils import get_branch_schedule, parse_time_from_string, parse_shift_times, resolve_employee_holiday
 
 _EXIT_STATUS_VALUES = {'resigned', 'terminated'}
 _ACTIVE_STATUS_VALUES = {'active', 'probation', 'on leave', 'on_leave', 'suspended'}
@@ -64,40 +64,52 @@ def build_employment_eligibility_map(employees):
         unresolved = joined_date is None
         intervals = []
         current_start = joined_date
-        has_documented_exit = False
+        uncertain_from = None
+        pre_join_conflict = False
+        last_exit_date = None
+
+        def _mark_uncertain(from_date):
+            nonlocal unresolved, uncertain_from
+            unresolved = True
+            if from_date is not None:
+                uncertain_from = from_date if uncertain_from is None else min(uncertain_from, from_date)
 
         for new_val, eff_date in transitions:
             norm = (new_val or '').strip().lower()
             if not eff_date:
-                unresolved = True
+                _mark_uncertain(joined_date)
                 continue
             if joined_date and eff_date < joined_date:
-                unresolved = True
+                pre_join_conflict = True
+                _mark_uncertain(eff_date)
                 continue
             if norm in _EXIT_STATUS_VALUES:
-                has_documented_exit = True
                 if current_start is not None:
                     if eff_date >= current_start:
                         intervals.append((current_start, eff_date))
+                        last_exit_date = eff_date
                     else:
-                        unresolved = True
+                        _mark_uncertain(eff_date)
                     current_start = None
                 else:
-                    unresolved = True
+                    _mark_uncertain(last_exit_date + timedelta(days=1) if last_exit_date else eff_date)
             elif norm in _ACTIVE_STATUS_VALUES:
                 if current_start is None:
                     current_start = eff_date
 
         if current_start is not None:
-            intervals.append((current_start, None))
-
-        if master_status in _EXIT_STATUS_VALUES and not has_documented_exit:
-            unresolved = True
+            if master_status in _EXIT_STATUS_VALUES:
+                # Resigned/terminated without documented exit: do not invent exit date.
+                _mark_uncertain(current_start)
+            else:
+                intervals.append((current_start, None))
 
         elig_map[emp.id] = {
             'joined_date': joined_date,
             'intervals': intervals,
             'unresolved': unresolved,
+            'uncertain_from': uncertain_from,
+            'pre_join_conflict': pre_join_conflict,
         }
     return elig_map
 
@@ -105,29 +117,35 @@ def build_employment_eligibility_map(employees):
 def is_date_employed(target_date, employee, eligibility=None):
     """
     Shared eligibility rule:
-    - Pre-joining (< joined_date) and post-last-working-day dates are Not Applicable (False).
+    - Pre-joining (< joined_date) and post-last-working-day dates are Not Applicable (False, False).
     - Respects documented rejoining intervals.
-    - Returns (is_employed: bool, unresolved: bool).
+    - Genuinely uncertain dates return (False, True) so they never become Absent.
+    - Returns (is_employed: bool, date_unresolved: bool).
     """
     if eligibility is not None:
         joined_date = eligibility['joined_date']
         intervals = eligibility['intervals']
         unresolved = eligibility['unresolved']
-        if joined_date and target_date < joined_date:
-            return False, unresolved
-        if intervals:
-            for start_d, end_d in intervals:
-                if target_date >= start_d and (end_d is None or target_date <= end_d):
-                    return True, unresolved
-            return False, unresolved
+        uncertain_from = eligibility.get('uncertain_from')
+        pre_join_conflict = eligibility.get('pre_join_conflict', False)
+
+        if joined_date and target_date < joined_date and not pre_join_conflict:
+            return False, False
         if joined_date is None:
-            return True, True
-        return target_date >= joined_date, unresolved
+            return False, True
+        if unresolved and (uncertain_from is None or target_date >= uncertain_from):
+            return False, True
+        for start_d, end_d in intervals:
+            if target_date >= start_d and (end_d is None or target_date <= end_d):
+                return True, False
+        return False, False
 
     joined_date = _resolve_joined_date(employee)
     if joined_date and target_date < joined_date:
         return False, False
-    return True, joined_date is None
+    if joined_date is None:
+        return False, True
+    return True, False
 
 
 def _get_working_day_set(schedule):
@@ -163,6 +181,7 @@ class OptimizedSchedule:
         self.early_checkout_before_minutes = 30
         self.overtime_after_minutes = 0
         self.working_days = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+        self.has_branch_working_days = False
         
         branch = getattr(employee, 'branch', None)
         branch_schedule = None
@@ -182,7 +201,9 @@ class OptimizedSchedule:
             self.late_after_minutes = branch_schedule.late_after_minutes
             self.early_checkout_before_minutes = branch_schedule.early_checkout_before_minutes
             self.overtime_after_minutes = branch_schedule.overtime_after_minutes
-            self.working_days = branch_schedule.working_days
+            if branch_schedule.working_days:
+                self.working_days = branch_schedule.working_days
+                self.has_branch_working_days = True
             
         master_employee = getattr(employee, 'master_employee', None)
         if master_employee and master_employee.shift:
@@ -215,55 +236,13 @@ class OptimizedSchedule:
         return (end - timedelta(minutes=self.early_checkout_before_minutes)).time()
 
 def is_employee_holiday_optimized(employee, target_date, schedule, branch_holidays=None, global_holidays=None):
-    day_name = target_date.strftime('%A').lower()
-    
-    # 1. Employee weekly holiday policy
-    master_employee = getattr(employee, 'master_employee', None)
-    if master_employee and master_employee.weekly_holiday_policy:
-        employee_holidays = [d.strip().lower() for d in master_employee.weekly_holiday_policy.split(',') if d.strip()]
-        if day_name in employee_holidays:
-            return True
-            
-    # 2. Branch weekly holiday policy
-    if schedule and hasattr(schedule, 'working_days') and schedule.working_days:
-        if day_name not in [w.lower() for w in schedule.working_days]:
-            return True
-            
-    # 3. Company weekly holiday policy
-    working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
-    if target_date.weekday() not in working_days:
-        return True
-        
-    # 4. Public / Branch Holidays
-    if global_holidays is not None:
-        if target_date in global_holidays:
-            return True
-    else:
-        try:
-            from apps.branches.models import Holiday
-            if Holiday.objects.filter(date=target_date, branch__isnull=True).exists():
-                return True
-        except Exception:
-            pass
-
-    branch_id = getattr(employee, 'branch_id', None)
-    if branch_id:
-        if branch_holidays is not None:
-            if isinstance(branch_holidays, dict):
-                if target_date in branch_holidays.get(branch_id, set()):
-                    return True
-            elif isinstance(branch_holidays, (set, list, tuple)):
-                if target_date in branch_holidays:
-                    return True
-        else:
-            try:
-                from apps.branches.models import Holiday
-                if Holiday.objects.filter(date=target_date, branch_id=branch_id).exists():
-                    return True
-            except Exception:
-                pass
-        
-    return False
+    return resolve_employee_holiday(
+        employee,
+        target_date,
+        schedule=schedule,
+        branch_holidays=branch_holidays,
+        global_holidays=global_holidays,
+    )
 
 from zoneinfo import ZoneInfo
 from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_employee_or_404
@@ -372,6 +351,7 @@ def calculate_employee_day(
     has_field_visit = len(field_visits) > 0
     has_any_attendance = has_check_in or has_field_visit
     is_employed, elig_unresolved = is_date_employed(target_date, employee, eligibility=eligibility)
+    emp_unresolved = bool(eligibility and eligibility.get('unresolved'))
 
     # Rule: Future dates must contribute no present, absent, leave, late, hours or field-visit totals.
     if target_date > today:
@@ -400,6 +380,9 @@ def calculate_employee_day(
             'is_open_session': False,
             'is_missing_checkout': False,
             'has_leave_conflict': False,
+            'eligibility_conflict': False,
+            'eligibility_unresolved': False,
+            'needs_review': False,
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -516,13 +499,14 @@ def calculate_employee_day(
             'check_in_sessions': check_in_sessions,
             'field_visits': field_visits,
             'eligibility_conflict': not is_employed,
-            'eligibility_unresolved': elig_unresolved,
+            'eligibility_unresolved': elig_unresolved or emp_unresolved,
+            'needs_review': False,
         }
 
 
     # 2. Not employed (pre-joining, post-exit, or employment gap): Not Applicable
     # Checked before leave/absent so dates outside employment contribute no absence or denominator.
-    if not is_employed:
+    if not is_employed and not elig_unresolved:
         return {
             'date': target_date,
             'is_future': False,
@@ -549,7 +533,8 @@ def calculate_employee_day(
             'is_missing_checkout': False,
             'has_leave_conflict': False,
             'eligibility_conflict': False,
-            'eligibility_unresolved': elig_unresolved,
+            'eligibility_unresolved': False,
+            'needs_review': False,
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -632,7 +617,46 @@ def calculate_employee_day(
             'field_visits': [],
         }
 
-    # 4. Before shift + sync grace period end: pending
+    # 4. Unresolved employment boundary: explicit review-needed state, never Absent
+    if elig_unresolved:
+        return {
+            'date': target_date,
+            'is_future': False,
+            'status': 'eligibility_unresolved',
+            'status_display': 'Review Needed',
+            'monthly_status': 'Review',
+            'calendar_color': 'amber',
+            'is_present': False,
+            'is_absent': False,
+            'is_late': False,
+            'is_on_leave': False,
+            'is_holiday': False,
+            'is_weekend': False,
+            'present_count': 0,
+            'absent_count': 0,
+            'on_leave_count': 0,
+            'late_count': 0,
+            'field_visit_count': 0,
+            'total_hours': 0.0,
+            'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
+            'eligibility_conflict': False,
+            'eligibility_unresolved': True,
+            'needs_review': True,
+            'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': 'Review Needed',
+            'check_out_time_str': 'Review Needed',
+            'check_in_sessions': [],
+            'field_visits': [],
+        }
+
+    # 5. Before shift + sync grace period end: pending
     if target_date == today and schedule and getattr(schedule, 'office_end_time', None):
         sync_grace_minutes = int(getattr(settings, 'ATTENDANCE_SYNC_GRACE_MINUTES', 0) or 0)
         end_dt = datetime.combine(target_date, schedule.office_end_time)
@@ -873,6 +897,8 @@ def get_daily_report_data(
                 'is_present': day_calc['is_present'],
                 'is_absent': day_calc['is_absent'],
                 'is_late': day_calc['is_late'],
+                'eligibility_unresolved': day_calc.get('eligibility_unresolved', False),
+                'needs_review': day_calc.get('needs_review', False),
                 'notes': notes,
                 'day_calc': day_calc,
             }
@@ -904,6 +930,7 @@ def get_daily_report_data(
     present = sum(1 for r in rows if r['is_present'])
     late = sum(1 for r in rows if r['status'] == 'late')
     absent = sum(1 for r in rows if r['is_absent'])
+    review_needed = sum(1 for r in rows if r.get('needs_review'))
     field_total = sum(len(r['field_visits']) for r in rows)
     total_hours = round(sum(r['total_hours'] for r in rows), 2)
 
@@ -914,6 +941,7 @@ def get_daily_report_data(
         'rows': rows,
         'present': present,
         'absent': absent,
+        'review_needed': review_needed,
         'late': late,
         'field_total': field_total,
         'total_hours': total_hours,
@@ -1070,6 +1098,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         late_count = 0
         total_ot_minutes = 0
         absent_count = 0
+        review_needed_count = 0
         holiday_work_count = 0
         on_leave_count = 0
         field_visit_count = 0
@@ -1103,6 +1132,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             present_count += day_calc['present_count']
             late_count += day_calc['late_count']
             absent_count += day_calc['absent_count']
+            review_needed_count += 1 if day_calc.get('needs_review') else 0
             on_leave_count += day_calc['on_leave_count']
             field_visit_count += day_calc['field_visit_count']
             total_hours += day_calc['total_hours']
@@ -1126,6 +1156,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'overtime_display': ot_display,
             'overtime_hours': round(total_ot_minutes / 60.0, 2),
             'absent_count': absent_count,
+            'review_needed_count': review_needed_count,
             'holiday_work_count': holiday_work_count,
             'is_overtime_enabled': getattr(emp, 'overtime_enabled', False)
         }
@@ -1134,6 +1165,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             'employee': emp,
             'present': present_count,
             'absent': absent_count,
+            'review_needed': review_needed_count,
+            'eligibility_unresolved': bool(emp_elig and emp_elig.get('unresolved')),
             'on_leave': on_leave_count,
             'late': late_count,
             'field_visits': field_visit_count,
@@ -1175,6 +1208,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
 
     total_present = sum(r['present'] for r in rows)
     total_absent = sum(r['absent'] for r in rows)
+    total_review_needed = sum(r['review_needed'] for r in rows)
     total_on_leave = sum(r['on_leave'] for r in rows)
     total_late = sum(r['late'] for r in rows)
     total_field = sum(r['field_visits'] for r in rows)
@@ -1203,6 +1237,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         'rows': rows,
         'total_present': total_present,
         'total_absent': total_absent,
+        'total_review_needed': total_review_needed,
         'total_on_leave': total_on_leave,
         'total_late': total_late,
         'total_field': total_field,

@@ -384,21 +384,9 @@ class PayrollService:
         if not profile_ids:
             return []
 
-        # Bulk-load approved OT minutes in [p_start, p_end]
-        ot_by_emp = {
-            row['employee_id']: (row['total'] or 0)
-            for row in OvertimeRequest.objects.filter(
-                employee_id__in=profile_ids,
-                status='approved',
-                date__gte=p_start,
-                date__lte=p_end,
-            )
-            .values('employee_id')
-            .annotate(total=models.Sum('ot_minutes'))
-        }
-
         # Bulk-load approved leaves overlapping [p_start, p_end]
         leave_by_emp_date = {}
+        overlapping_leave_keys = set()
         leave_qs = (
             LeaveRequest.objects.filter(
                 employee_id__in=profile_ids,
@@ -414,16 +402,57 @@ class PayrollService:
             e_d = min(lr.end_date, p_end)
             day_weight = (
                 Decimal(str(lr.number_of_days))
-                if (lr.start_date == lr.end_date and lr.number_of_days is not None and Decimal(str(lr.number_of_days)) < Decimal('1.0'))
+                if (lr.start_date == lr.end_date and lr.number_of_days is not None and Decimal('0.0') <= Decimal(str(lr.number_of_days)) < Decimal('1.0'))
                 else Decimal('1.0')
             )
             ded_pct = lr.leave_type.deduction_percent or Decimal('0.00')
             curr_d = s_d
             while curr_d <= e_d:
                 key = (lr.employee_id, curr_d)
-                if key not in leave_by_emp_date:
+                if key in leave_by_emp_date:
+                    overlapping_leave_keys.add(key)
+                else:
                     leave_by_emp_date[key] = (day_weight, ded_pct)
                 curr_d += timedelta(days=1)
+
+        # Preflight before any persistence: reject runs with unresolved employment dates or overlapping approved leaves
+        unresolved_employees = []
+        overlap_employees = []
+        for profile in report['employees']:
+            if not profile.master_employee:
+                continue
+            emp_rows = rows_by_emp.get(profile.id, [])
+            if any(r.get('needs_review') or r.get('status') == 'eligibility_unresolved' for r in emp_rows):
+                unresolved_employees.append(f"{profile.full_name} ({profile.employee_id})")
+            if any(r['status'] == 'on_leave' and (profile.id, r['date']) in overlapping_leave_keys for r in emp_rows):
+                overlap_employees.append(f"{profile.full_name} ({profile.employee_id})")
+        if unresolved_employees:
+            sample = ", ".join(unresolved_employees[:5])
+            extra = f" (+{len(unresolved_employees) - 5} more)" if len(unresolved_employees) > 5 else ""
+            raise ValidationError(
+                f"Cannot sync payroll: unresolved employment dates require review for {sample}{extra}. "
+                "Update the missing joining or exit date in Employment History before running payroll."
+            )
+        if overlap_employees:
+            sample = ", ".join(overlap_employees[:5])
+            extra = f" (+{len(overlap_employees) - 5} more)" if len(overlap_employees) > 5 else ""
+            raise ValidationError(
+                f"Cannot sync payroll: overlapping approved leave requests found for {sample}{extra}. "
+                "Resolve duplicate approved leave requests before running payroll."
+            )
+
+        # Bulk-load approved OT minutes in [p_start, p_end]
+        ot_by_emp = {
+            row['employee_id']: (row['total'] or 0)
+            for row in OvertimeRequest.objects.filter(
+                employee_id__in=profile_ids,
+                status='approved',
+                date__gte=p_start,
+                date__lte=p_end,
+            )
+            .values('employee_id')
+            .annotate(total=models.Sum('ot_minutes'))
+        }
 
         # Bulk-load policies, attendance policies & holidays for working_days divisor
         all_payroll_policies = list(PayrollPolicy.objects.all())
@@ -474,19 +503,20 @@ class PayrollService:
 
             present_days = Decimal(str(sum(1 for r in emp_rows if r['is_present'])))
             absent_count = Decimal(str(sum(1 for r in emp_rows if r['is_absent'])))
-            approved_leave_days = Decimal(str(sum(1 for r in emp_rows if r['status'] == 'on_leave')))
 
             approved_ot_minutes = ot_by_emp.get(profile.id, 0)
             approved_ot_hours = Decimal(str(approved_ot_minutes)) / Decimal('60.00')
 
+            approved_leave_days = Decimal('0.00')
             leave_deduction_days = Decimal('0.00')
             for r in emp_rows:
                 if r['status'] == 'on_leave':
                     info = leave_by_emp_date.get((profile.id, r['date']))
-                    if info:
-                        day_weight, ded_pct = info
-                        leave_deduction_days += (day_weight * ded_pct) / Decimal('100.00')
+                    day_weight, ded_pct = info if info else (Decimal('1.0'), Decimal('0.00'))
+                    approved_leave_days += day_weight
+                    leave_deduction_days += (day_weight * ded_pct) / Decimal('100.00')
 
+            approved_leave_days = approved_leave_days.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             deduction_days = (absent_count + leave_deduction_days).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
             branch = master_employee.branch if master_employee else profile.branch

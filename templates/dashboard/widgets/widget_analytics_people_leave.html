@@ -11,7 +11,7 @@
       <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
         <span class="text-3xs uppercase font-bold text-emerald-700 block">Approved Leaves</span>
         <span class="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{{ pl_approved_count }}</span>
-        <span class="block text-[10px] text-emerald-700/80">{{ pl_approved_days }} days</span>
+        <span class="block text-[10px] text-emerald-700/80">{{ pl_approved_days }} in-range days</span>
       </div>
       <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
         <span class="text-3xs uppercase font-bold text-amber-700 block">Pending Leaves</span>
@@ -46,7 +46,8 @@
                 <th class="py-2 px-3">Employee</th>
                 <th class="py-2 px-3">Type</th>
                 <th class="py-2 px-3">Dates</th>
-                <th class="py-2 px-3">Days</th>
+                <th class="py-2 px-3">Request Days</th>
+                <th class="py-2 px-3">In-Range Days</th>
                 <th class="py-2 px-3">Status</th>
               </tr>
             </thead>
@@ -57,10 +58,11 @@
                   <td class="py-2 px-3">{{ row.leave_type__name }}</td>
                   <td class="py-2 px-3 font-mono text-[11px]">{{ row.start_date|date:"Y-m-d" }} – {{ row.end_date|date:"Y-m-d" }}</td>
                   <td class="py-2 px-3 font-mono">{{ row.number_of_days }}</td>
+                  <td class="py-2 px-3 font-mono">{% if row.in_range_unresolved %}Unresolved{% elif row.in_range_days is not None %}{{ row.in_range_days }}{% else %}—{% endif %}</td>
                   <td class="py-2 px-3 uppercase text-[10px] font-bold">{{ row.status }}</td>
                 </tr>
               {% empty %}
-                <tr><td colspan="5" class="py-4 text-center text-slate-400">No leave requests in this period.</td></tr>
+                <tr><td colspan="6" class="py-4 text-center text-slate-400">No leave requests in this period.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -69,7 +71,7 @@
 
       <div x-show="showPlTable" x-cloak class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
         <table class="w-full text-left text-xs">
-          <thead><tr class="border-b text-slate-500"><th class="py-1 px-2">Leave Type</th><th class="py-1 px-2">Count</th><th class="py-1 px-2">Days</th></tr></thead>
+          <thead><tr class="border-b text-slate-500"><th class="py-1 px-2">Leave Type</th><th class="py-1 px-2">Overlapping Requests</th><th class="py-1 px-2">In-Range Days</th></tr></thead>
           <tbody>
             {% for t in pl_type_items %}
               <tr class="border-b border-slate-100"><td class="py-1 px-2">{{ t.name }}</td><td class="py-1 px-2">{{ t.count }}</td><td class="py-1 px-2">{{ t.days }}</td></tr>

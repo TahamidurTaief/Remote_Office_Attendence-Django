@@ -141,12 +141,26 @@ class EmploymentEligibilityTests(TestCase):
         daily_after = get_daily_report_data(report_date=after_day, employee_id=prof.id)
         self.assertEqual(daily_after["absent"], 1)
 
+        # Conflicting second exit transition without rejoin -> uncertain from conflict, pre-joining still not_employed
+        EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Active", new_value="Resigned", effective_date=today - timedelta(days=2))
+        EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Resigned", new_value="Terminated", effective_date=today - timedelta(days=1))
+        conflict_day = today - timedelta(days=1)
+        if conflict_day.weekday() == 4:
+            conflict_day -= timedelta(days=1)
+        daily_conflict = get_daily_report_data(report_date=conflict_day, employee_id=prof.id)
+        self.assertEqual(daily_conflict["absent"], 0)
+        self.assertEqual(daily_conflict["review_needed"], 1)
+        self.assertEqual(daily_conflict["rows"][0]["status"], "eligibility_unresolved")
+
     def test_4_missing_exit_date_unresolved_and_historical_attendance_preserved(self):
         today = timezone.localdate()
         joined = today - timedelta(days=10)
         pre_day = today - timedelta(days=12)
         if pre_day.weekday() == 4:
             pre_day -= timedelta(days=1)
+        post_join_workday = today - timedelta(days=3)
+        while post_join_workday.weekday() == 4:
+            post_join_workday -= timedelta(days=1)
 
         # Resigned employee with NO EmploymentHistory exit date -> unresolved, do not invent exit date
         _, prof = self._make_emp("ELIG-UNRES", joined_date=joined, status=EmployeeStatus.RESIGNED, is_active=False)
@@ -158,6 +172,24 @@ class EmploymentEligibilityTests(TestCase):
         self.assertEqual(daily_pre["present"], 1)
         self.assertTrue(daily_pre["rows"][0]["day_calc"]["eligibility_conflict"])
         self.assertTrue(daily_pre["rows"][0]["day_calc"]["eligibility_unresolved"])
+
+        # Working day after joined_date without attendance -> review_needed, never Absent/deduction
+        daily_uncertain = get_daily_report_data(report_date=post_join_workday, employee_id=prof.id)
+        self.assertEqual(daily_uncertain["absent"], 0)
+        self.assertEqual(daily_uncertain["review_needed"], 1)
+        self.assertEqual(daily_uncertain["rows"][0]["status"], "eligibility_unresolved")
+        self.assertEqual(get_absent_records(date_from=post_join_workday, date_to=post_join_workday, employee_id=prof.id), [])
+
+        monthly = get_monthly_report_data(post_join_workday.year, post_join_workday.month, employee_id=prof.id)
+        self.assertEqual(monthly["total_absent"], 0)
+        self.assertGreater(monthly["total_review_needed"], 0)
+
+        analytics = get_attendance_analytics(
+            self.admin,
+            {"range": "custom", "start_date": post_join_workday.isoformat(), "end_date": post_join_workday.isoformat()},
+        )
+        # Even when scoped via attendance/active, unresolved employee is never counted absent
+        self.assertEqual(analytics["analytics_summary"]["total_absent"], 0)
 
     def test_5_downstream_payroll_and_bulk_query_bound(self):
         today = timezone.localdate()
@@ -184,6 +216,18 @@ class EmploymentEligibilityTests(TestCase):
         calcs = PayrollService.sync_payroll_inputs(run_draft)
         my_calc = next(c for c in calcs if c.employee_id == master.id)
         self.assertEqual(my_calc.unpaid_absent_days, Decimal(str(monthly["rows"][0]["absent"])))
+        existing_count = EmployeePayrollCalculation.objects.filter(payroll_run=run_draft).count()
+        existing_absent = my_calc.unpaid_absent_days
+
+        # Mixed resolved + unresolved employee in same payroll run: reject atomically with no partial writes
+        unres_master, _ = self._make_emp("ELIG-MIX", joined_date=month_start, status=EmployeeStatus.RESIGNED, is_active=True)
+        EmployeeSalaryAssignment.objects.create(employee=unres_master, salary_structure=struct, gross_salary=Decimal("30000.00"), payment_mode=PaymentMode.BANK, effective_from=month_start)
+        with self.assertRaises(ValidationError) as cm:
+            PayrollService.sync_payroll_inputs(run_draft)
+        self.assertIn("ELIG-MIX", str(cm.exception))
+        self.assertEqual(EmployeePayrollCalculation.objects.filter(payroll_run=run_draft).count(), existing_count)
+        my_calc.refresh_from_db()
+        self.assertEqual(my_calc.unpaid_absent_days, existing_absent)
 
         # Locked payroll run must not be modified
         run_draft.status = PayrollRunStatus.APPROVED_LOCKED

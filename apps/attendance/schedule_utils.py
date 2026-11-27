@@ -95,6 +95,7 @@ class DynamicSchedule:
         self.early_checkout_before_minutes = 30
         self.overtime_after_minutes = 0
         self.working_days = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday']
+        self.has_branch_working_days = False
         
         branch_schedule = None
         if employee and employee.branch:
@@ -113,7 +114,9 @@ class DynamicSchedule:
             self.late_after_minutes = branch_schedule.late_after_minutes
             self.early_checkout_before_minutes = branch_schedule.early_checkout_before_minutes
             self.overtime_after_minutes = branch_schedule.overtime_after_minutes
-            self.working_days = branch_schedule.working_days
+            if branch_schedule.working_days:
+                self.working_days = branch_schedule.working_days
+                self.has_branch_working_days = True
             
         master_employee = getattr(employee, 'master_employee', None)
         if master_employee and master_employee.shift:
@@ -151,40 +154,89 @@ def get_branch_schedule(employee):
         return None
     return DynamicSchedule(employee)
 
+def resolve_employee_holiday(
+    employee,
+    target_date,
+    schedule=None,
+    branch_holidays=None,
+    global_holidays=None,
+):
+    """
+    Authoritative holiday resolver shared across attendance, reports, analytics, leave, and payroll.
+    Weekly schedule precedence:
+      1. Explicit employee weekly_holiday_policy (if non-empty)
+      2. Configured branch OfficeSchedule.working_days (if configured)
+      3. Company fallback (settings.WORKING_DAYS)
+    Public/branch date holidays apply separately on top of the resolved weekly schedule.
+    """
+    day_name = target_date.strftime('%A').lower()
+
+    # 1. Explicit employee weekly holiday policy
+    master_employee = getattr(employee, 'master_employee', None)
+    raw_policy = getattr(master_employee, 'weekly_holiday_policy', None) if master_employee else None
+    employee_holidays = [d.strip().lower() for d in raw_policy.split(',') if d.strip()] if raw_policy else []
+
+    if employee_holidays:
+        is_weekly_holiday = day_name in employee_holidays
+    else:
+        # 2. Configured branch schedule working_days
+        has_branch_cfg = getattr(schedule, 'has_branch_working_days', None)
+        if has_branch_cfg is None:
+            has_branch_cfg = bool(schedule and getattr(schedule, 'working_days', None))
+
+        if has_branch_cfg and getattr(schedule, 'working_days', None):
+            branch_working = {w.lower() for w in schedule.working_days}
+            is_weekly_holiday = day_name not in branch_working
+        else:
+            # 3. Company weekly holiday fallback
+            working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
+            is_weekly_holiday = target_date.weekday() not in working_days
+
+    if is_weekly_holiday:
+        return True
+
+    # 4. Public / Branch date holidays (independent of weekly fallback)
+    if global_holidays is not None:
+        if target_date in global_holidays:
+            return True
+    else:
+        try:
+            from apps.branches.models import Holiday
+            if Holiday.objects.filter(date=target_date, branch__isnull=True).exists():
+                return True
+        except Exception:
+            pass
+
+    branch_id = getattr(employee, 'branch_id', None)
+    if branch_id is None:
+        branch = getattr(employee, 'branch', None)
+        branch_id = getattr(branch, 'id', None)
+
+    if branch_id:
+        if branch_holidays is not None:
+            if isinstance(branch_holidays, dict):
+                if target_date in branch_holidays.get(branch_id, set()):
+                    return True
+            elif isinstance(branch_holidays, (set, list, tuple)):
+                if target_date in branch_holidays:
+                    return True
+        else:
+            try:
+                from apps.branches.models import Holiday
+                if Holiday.objects.filter(date=target_date, branch_id=branch_id).exists():
+                    return True
+            except Exception:
+                pass
+
+    return False
+
+
 def is_employee_holiday(employee, target_date):
     """
     Returns True if target_date is a weekly or public holiday for the employee.
-    WeeklyHolidayPolicy is resolved hierarchically:
-      1. Employee-specific weekly holiday policy
-      2. Branch level weekly holiday policy
-      3. Company level weekly holiday policy
-      4. Public/Branch Holidays
     """
-    day_name = target_date.strftime('%A').lower()
-    
-    # 1. Employee-specific weekly holiday policy
-    master_employee = getattr(employee, 'master_employee', None)
-    if master_employee and master_employee.weekly_holiday_policy:
-        employee_holidays = [d.strip().lower() for d in master_employee.weekly_holiday_policy.split(',') if d.strip()]
-        if day_name in employee_holidays:
-            return True
-    elif (schedule := get_branch_schedule(employee)) and schedule.working_days:
-        # 2. Branch level weekly holiday policy
-        if day_name not in schedule.working_days:
-            return True
-    else:
-        # 3. Company level weekly holiday policy
-        working_days = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
-        if target_date.weekday() not in working_days:
-            return True
-        
-    # 4. Public / Branch Holidays
-    from apps.branches.models import Holiday
-    branch = getattr(employee, 'branch', None)
-    if Holiday.objects.filter(date=target_date).filter(Q(branch=branch) | Q(branch__isnull=True)).exists():
-        return True
-        
-    return False
+    schedule = get_branch_schedule(employee)
+    return resolve_employee_holiday(employee, target_date, schedule=schedule)
 
 def calculate_attendance_status(check_in_time, schedule):
     """

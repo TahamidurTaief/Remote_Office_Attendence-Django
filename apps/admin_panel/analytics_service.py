@@ -18,6 +18,21 @@ from apps.leave.models import LeaveRequest
 
 MAX_CUSTOM_RANGE_DAYS = 90
 DEFAULT_PAGE_SIZE = 10
+
+
+def _paginate_queryset_rows(detail_qs, page_num, enrich_row=None, page_size=DEFAULT_PAGE_SIZE):
+    """
+    Paginate a deterministically ordered QuerySet so only the requested page's rows
+    are materialized in memory, then enrich only those page rows.
+    """
+    paginator = Paginator(detail_qs, page_size)
+    page_obj = paginator.get_page(page_num)
+    rows = list(page_obj.object_list)
+    if enrich_row is not None:
+        for row in rows:
+            enrich_row(row)
+    page_obj.object_list = rows
+    return page_obj
 _EMPTY_SET = frozenset()
 _EMPTY_LIST = ()
 
@@ -230,6 +245,7 @@ def _compute_period_metrics(
     total_absent = 0
     total_on_leave = 0
     total_pending = 0
+    total_review_needed = 0
     total_missing_checkout = 0
     total_leave_conflicts = 0
     eligible_working_days = 0
@@ -262,6 +278,7 @@ def _compute_period_metrics(
                 "absent": 0,
                 "on_leave": 0,
                 "pending": 0,
+                "review_needed": 0,
                 "eligible": 0,
                 "office_only": 0,
                 "field_only": 0,
@@ -282,7 +299,7 @@ def _compute_period_metrics(
         master = emp.master_employee
         wh_policy = master.weekly_holiday_policy if master else ""
         wd_tuple = tuple(schedule.working_days) if getattr(schedule, "working_days", None) else ()
-        h_key = (wh_policy, emp.branch_id, wd_tuple)
+        h_key = (wh_policy, emp.branch_id, wd_tuple, getattr(schedule, "has_branch_working_days", False))
         emp_records.append((
             emp,
             eid,
@@ -323,6 +340,12 @@ def _compute_period_metrics(
 
             status = day_calc["status"]
             if day_calc["is_future"] or status == "not_employed":
+                continue
+
+            if status == "eligibility_unresolved" or day_calc.get("needs_review"):
+                total_review_needed += 1
+                if include_breakdowns:
+                    es["review_needed"] += 1
                 continue
 
             if status == "scheduled" and day_calc["status_display"] == "Pending":
@@ -415,6 +438,7 @@ def _compute_period_metrics(
         "total_absent": total_absent,
         "total_on_leave": total_on_leave,
         "total_pending": total_pending,
+        "total_review_needed": total_review_needed,
         "total_missing_checkout": total_missing_checkout,
         "total_leave_conflicts": total_leave_conflicts,
         "eligible_working_days": eligible_working_days,
@@ -859,6 +883,8 @@ def _has_report_permission(user):
 
 
 def has_finance_analytics_permission(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
     if getattr(user, "is_superuser", False):
         return True
     try:
@@ -871,19 +897,7 @@ def has_finance_analytics_permission(user):
         return False
 
 
-def _filter_scoped_profiles(user, params, role_variant=None):
-    """Shared date-bound + RBAC-scoped EmployeeProfile filter for lazy panels."""
-    params = params or {}
-    today = timezone.localdate()
-    dr = _resolve_date_range(params, today)
-    selected_branch = (params.get("branch") or "").strip()
-    selected_dept = (params.get("department") or "").strip()
-    page_num = params.get("page") or 1
-
-    if dr["range_rejected"]:
-        return dr, selected_branch, selected_dept, page_num, []
-
-    qs = _get_authorized_employees(user, role_variant=role_variant)
+def _apply_employee_filters(qs, selected_branch, selected_dept):
     if selected_branch:
         try:
             b_pk = int(selected_branch)
@@ -907,6 +921,37 @@ def _filter_scoped_profiles(user, params, role_variant=None):
             qs = qs.filter(
                 Q(department__iexact=selected_dept) | Q(master_employee__department__name__iexact=selected_dept)
             )
+    return qs
+
+
+def _get_finance_scoped_employees(user, permission_code, selected_branch, selected_dept, role_variant=None):
+    """
+    Resolves EmployeeProfile rows independently for a single financial permission
+    (expense.view or payroll.view). Filters only narrow the authorized scope.
+    """
+    base_qs = EmployeeProfile.objects.filter(is_active=True)
+    qs = get_scoped_employee_queryset(user, permission_code=permission_code, action="view", base_qs=base_qs)
+    if getattr(user, "is_superuser", False) and role_variant == "employee":
+        emp_profile = getattr(user, "employee_profile", None)
+        qs = qs.filter(pk=emp_profile.pk) if emp_profile else qs.none()
+    qs = _apply_employee_filters(qs, selected_branch, selected_dept)
+    return list(qs.order_by("full_name", "id").values("id", "full_name", "master_employee_id"))
+
+
+def _filter_scoped_profiles(user, params, role_variant=None):
+    """Shared date-bound + RBAC-scoped EmployeeProfile filter for lazy panels."""
+    params = params or {}
+    today = timezone.localdate()
+    dr = _resolve_date_range(params, today)
+    selected_branch = (params.get("branch") or "").strip()
+    selected_dept = (params.get("department") or "").strip()
+    page_num = params.get("page") or 1
+
+    if dr["range_rejected"]:
+        return dr, selected_branch, selected_dept, page_num, []
+
+    qs = _get_authorized_employees(user, role_variant=role_variant)
+    qs = _apply_employee_filters(qs, selected_branch, selected_dept)
 
     rows = list(
         qs.order_by("full_name", "id").values(
@@ -947,7 +992,9 @@ def get_people_leave_analytics(user, params=None, role_variant=None):
             "pl_approved_count": 0,
             "pl_pending_count": 0,
             "pl_rejected_count": 0,
-            "pl_approved_days": Decimal("0.0"),
+            "pl_approved_days": Decimal("0.00"),
+            "pl_unresolved_count": 0,
+            "pl_overlap_count": 0,
             "pl_type_items": [],
             "pl_page_obj": Paginator([], DEFAULT_PAGE_SIZE).get_page(1),
             "pl_chart_payload": {"leaveTypes": {"labels": [], "counts": []}},
@@ -971,30 +1018,135 @@ def get_people_leave_analytics(user, params=None, role_variant=None):
     pending_count = status_counts.get("pending", 0) + status_counts.get("manager_approved", 0)
     rejected_count = status_counts.get("rejected", 0) + status_counts.get("returned", 0) + status_counts.get("cancelled", 0)
 
-    approved_days = (
-        leave_qs.filter(status="approved").aggregate(total=Sum("number_of_days"))["total"]
-        or Decimal("0.0")
+    approved_days = Decimal("0.00")
+    unresolved_count = 0
+    overlap_count = 0
+    type_agg = defaultdict(lambda: {"count": 0, "days": Decimal("0.00")})
+    approved_meta_by_id = {}
+
+    if approved_count > 0:
+        from apps.attendance.schedule_utils import resolve_employee_holiday
+        approved_rows = list(
+            leave_qs.filter(status="approved")
+            .values("id", "employee_id", "leave_type__name", "start_date", "end_date", "number_of_days")
+            .order_by("-start_date", "-id")
+        )
+        approved_emp_ids = {r["employee_id"] for r in approved_rows}
+        profiles_by_id = {
+            p.id: p
+            for p in EmployeeProfile.objects.filter(id__in=approved_emp_ids).select_related(
+                "branch", "branch__schedule", "master_employee"
+            )
+        }
+        policies = list(AttendancePolicy.objects.all())
+        policies_by_branch = {p.branch_id: p for p in policies if p.branch_id is not None}
+        global_policy = next((p for p in policies if p.branch_id is None), None)
+        schedules_by_emp = {
+            eid: OptimizedSchedule(prof, policies_by_branch, global_policy)
+            for eid, prof in profiles_by_id.items()
+        }
+        holidays = list(Holiday.objects.filter(date__gte=dr["start_date"], date__lte=dr["end_date"]))
+        branch_holidays = defaultdict(set)
+        global_holidays = set()
+        for h in holidays:
+            if h.branch_id:
+                branch_holidays[h.branch_id].add(h.date)
+            else:
+                global_holidays.add(h.date)
+
+        seen_approved_dates = set()
+        for row in approved_rows:
+            lt_name = row["leave_type__name"] or "Leave"
+            type_agg[lt_name]["count"] += 1
+
+            s_d = max(row["start_date"], dr["start_date"])
+            e_d = min(row["end_date"], dr["end_date"])
+            req_days = Decimal(str(row["number_of_days"])) if row["number_of_days"] is not None else None
+            prof = profiles_by_id.get(row["employee_id"])
+            sched = schedules_by_emp.get(row["employee_id"])
+
+            if s_d > e_d:
+                approved_meta_by_id[row["id"]] = (Decimal("0.00"), False, False)
+                continue
+
+            if req_days is None or req_days < Decimal("0.0") or row["start_date"] > row["end_date"]:
+                unresolved_count += 1
+                approved_meta_by_id[row["id"]] = (None, True, False)
+                continue
+
+            if req_days == Decimal("0.0"):
+                approved_meta_by_id[row["id"]] = (Decimal("0.00"), False, False)
+                continue
+
+            has_overlap = False
+            if row["start_date"] == row["end_date"] and Decimal("0.0") < req_days < Decimal("1.0"):
+                if prof and not resolve_employee_holiday(
+                    prof, s_d, schedule=sched, branch_holidays=branch_holidays, global_holidays=global_holidays
+                ):
+                    key = (row["employee_id"], s_d)
+                    if key in seen_approved_dates:
+                        has_overlap = True
+                        overlap_count += 1
+                        in_range = Decimal("0.00")
+                    else:
+                        seen_approved_dates.add(key)
+                        in_range = req_days.quantize(Decimal("0.01"))
+                else:
+                    in_range = Decimal("0.00")
+            elif (row["start_date"] < dr["start_date"] or row["end_date"] > dr["end_date"]) and req_days != req_days.to_integral_value():
+                unresolved_count += 1
+                approved_meta_by_id[row["id"]] = (None, True, False)
+                continue
+            else:
+                in_range = Decimal("0.00")
+                curr_d = s_d
+                while curr_d <= e_d:
+                    if prof and not resolve_employee_holiday(
+                        prof, curr_d, schedule=sched, branch_holidays=branch_holidays, global_holidays=global_holidays
+                    ):
+                        key = (row["employee_id"], curr_d)
+                        if key in seen_approved_dates:
+                            has_overlap = True
+                        else:
+                            seen_approved_dates.add(key)
+                            in_range += Decimal("1.00")
+                    curr_d += timedelta(days=1)
+                if has_overlap:
+                    overlap_count += 1
+                if (
+                    not has_overlap
+                    and row["start_date"] >= dr["start_date"]
+                    and row["end_date"] <= dr["end_date"]
+                    and req_days < in_range
+                ):
+                    in_range = req_days.quantize(Decimal("0.01"))
+
+            in_range_q = in_range.quantize(Decimal("0.01"))
+            approved_days += in_range_q
+            type_agg[lt_name]["days"] += in_range_q
+            approved_meta_by_id[row["id"]] = (in_range_q, False, has_overlap)
+
+    type_items = sorted(
+        [{"name": name, "count": data["count"], "days": data["days"]} for name, data in type_agg.items()],
+        key=lambda x: x["count"],
+        reverse=True,
     )
 
-    type_rows = list(
-        leave_qs.filter(status="approved")
-        .values("leave_type__name")
-        .annotate(cnt=Count("id"), days=Sum("number_of_days"))
-        .order_by("-cnt")
-    )
-    type_items = [
-        {"name": r["leave_type__name"] or "Leave", "count": r["cnt"], "days": r["days"] or Decimal("0.0")}
-        for r in type_rows
-    ]
+    detail_qs = leave_qs.values(
+        "id", "employee_id", "leave_type__name", "start_date", "end_date", "number_of_days", "status"
+    ).order_by("-start_date", "-id")
 
-    emp_leave_rows = list(
-        leave_qs.values("employee_id", "leave_type__name", "start_date", "end_date", "number_of_days", "status")
-        .order_by("-start_date", "-id")
-    )
-    paginator = Paginator(emp_leave_rows, DEFAULT_PAGE_SIZE)
-    page_obj = paginator.get_page(page_num)
-    for row in page_obj.object_list:
+    def _enrich_leave_row(row):
         row["employee_name"] = emp_name_map.get(row["employee_id"], "Employee")
+        meta = approved_meta_by_id.get(row["id"])
+        if meta is not None:
+            row["in_range_days"], row["in_range_unresolved"], row["has_overlap"] = meta
+        else:
+            row["in_range_days"] = None
+            row["in_range_unresolved"] = False
+            row["has_overlap"] = False
+
+    page_obj = _paginate_queryset_rows(detail_qs, page_num, enrich_row=_enrich_leave_row)
 
     base_ctx.update({
         "pl_joined_in_period": joined_in_period,
@@ -1002,6 +1154,8 @@ def get_people_leave_analytics(user, params=None, role_variant=None):
         "pl_pending_count": pending_count,
         "pl_rejected_count": rejected_count,
         "pl_approved_days": approved_days,
+        "pl_unresolved_count": unresolved_count,
+        "pl_overlap_count": overlap_count,
         "pl_type_items": type_items,
         "pl_page_obj": page_obj,
         "pl_chart_payload": {
@@ -1069,14 +1223,16 @@ def get_work_analytics(user, params=None, role_variant=None):
         is_expired=False,
     ).count()
 
-    task_list = list(
-        tasks_qs.values("id", "activity", "project__name", "responsible_person_id", "status", "progress_percent", "completed_at")
-        .order_by("status", "-id")
+    task_qs = tasks_qs.values(
+        "id", "activity", "project__name", "responsible_person_id", "status", "progress_percent", "completed_at"
+    ).order_by("status", "-id")
+    page_obj = _paginate_queryset_rows(
+        task_qs,
+        page_num,
+        enrich_row=lambda row: row.__setitem__(
+            "employee_name", emp_name_map.get(row["responsible_person_id"], "Unassigned")
+        ),
     )
-    paginator = Paginator(task_list, DEFAULT_PAGE_SIZE)
-    page_obj = paginator.get_page(page_num)
-    for row in page_obj.object_list:
-        row["employee_name"] = emp_name_map.get(row["responsible_person_id"], "Unassigned")
 
     base_ctx.update({
         "work_total_tasks": total_tasks,
@@ -1100,24 +1256,55 @@ def get_work_analytics(user, params=None, role_variant=None):
 def get_finance_analytics(user, params=None, role_variant=None):
     """
     Scoped Finance analytics panel (read-only, Decimal, separate currencies).
-    Keeps approved expenses, pending claims, payroll liabilities and disbursed cash strictly separate.
+    Authorizes and scopes expense and payroll sections independently.
     """
     from decimal import Decimal
     from django.db.models import Count, Sum
+    from apps.accounts.engine import PermissionEngine
+    from apps.accounts.models import DataScope
     from apps.expense.models import Expense
     from apps.payroll.models import EmployeePayrollCalculation, PayrollConfiguration, PayrollRunStatus
 
-    if not has_finance_analytics_permission(user):
+    if not user or not getattr(user, "is_authenticated", False):
         return {"panel_name": "finance", "fin_authorized": False}
 
-    dr, selected_branch, selected_dept, page_num, emp_rows = _filter_scoped_profiles(
-        user, params, role_variant=role_variant
-    )
+    is_super = getattr(user, "is_superuser", False)
+    if is_super:
+        can_view_expense = True
+        can_view_payroll = True
+        exp_scope = DataScope.GLOBAL
+        pay_scope = DataScope.GLOBAL
+    else:
+        try:
+            exp_eval = PermissionEngine.evaluate(user, "expense.view", action_type="view")
+            pay_eval = PermissionEngine.evaluate(user, "payroll.view", action_type="view")
+            can_view_expense = bool(exp_eval.allowed)
+            can_view_payroll = bool(pay_eval.allowed)
+            exp_scope = exp_eval.data_scope
+            pay_scope = pay_eval.data_scope
+        except Exception:
+            can_view_expense = False
+            can_view_payroll = False
+            exp_scope = None
+            pay_scope = None
+
+    if not (can_view_expense or can_view_payroll):
+        return {"panel_name": "finance", "fin_authorized": False}
+
+    params = params or {}
+    today = timezone.localdate()
+    dr = _resolve_date_range(params, today)
+    selected_branch = (params.get("branch") or "").strip()
+    selected_dept = (params.get("department") or "").strip()
+    page_num = params.get("page") or 1
+
     currency = PayrollConfiguration.objects.values_list("currency", flat=True).first() or "BDT"
 
     base_ctx = {
         "panel_name": "finance",
         "fin_authorized": True,
+        "fin_can_view_expense": can_view_expense,
+        "fin_can_view_payroll": can_view_payroll,
         "fin_currency": currency,
         "analytics_range": dr["range_key"],
         "analytics_start_date": dr["start_date"],
@@ -1125,89 +1312,125 @@ def get_finance_analytics(user, params=None, role_variant=None):
         "analytics_range_error": dr["range_error"],
         "analytics_selected_branch": selected_branch,
         "analytics_selected_dept": selected_dept,
-        "analytics_employee_count": len(emp_rows),
     }
-    if dr["range_rejected"] or not emp_rows:
-        zero = Decimal("0.00")
-        base_ctx.update({
-            "fin_approved_expenses": zero,
-            "fin_approved_expense_count": 0,
-            "fin_pending_claims": zero,
-            "fin_pending_claim_count": 0,
-            "fin_payroll_liability": zero,
-            "fin_payroll_disbursed": zero,
-            "fin_page_obj": Paginator([], DEFAULT_PAGE_SIZE).get_page(1),
-            "fin_chart_payload": {"financeBreakdown": {"labels": [], "values": [], "currency": currency}},
-        })
+
+    if dr["range_rejected"]:
+        base_ctx["analytics_employee_count"] = 0
+        base_ctx["fin_chart_payload"] = {"financeBreakdown": {"labels": [], "values": [], "currency": currency}}
         return base_ctx
 
-    emp_ids = [r["id"] for r in emp_rows]
-    emp_name_map = {r["id"]: r["full_name"] for r in emp_rows}
-    master_ids = [r["master_employee_id"] for r in emp_rows if r["master_employee_id"] is not None]
-
-    exp_qs = Expense.objects.filter(
-        employee_id__in=emp_ids,
-        requested_at__date__gte=dr["start_date"],
-        requested_at__date__lte=dr["end_date"],
-    )
-    exp_aggs = exp_qs.aggregate(
-        approved_sum=Sum("amount", filter=Q(status="approved")),
-        approved_cnt=Count("id", filter=Q(status="approved")),
-        pending_sum=Sum("amount", filter=Q(status__in=["pending_manager", "pending_finance", "pending_accounts"])),
-        pending_cnt=Count("id", filter=Q(status__in=["pending_manager", "pending_finance", "pending_accounts"])),
-    )
-    approved_expenses = exp_aggs["approved_sum"] or Decimal("0.00")
-    pending_claims = exp_aggs["pending_sum"] or Decimal("0.00")
-
-    payroll_liability = Decimal("0.00")
-    payroll_disbursed = Decimal("0.00")
-    if master_ids:
-        pay_qs = EmployeePayrollCalculation.objects.filter(
-            employee_id__in=master_ids,
-            payroll_run__period_start__lte=dr["end_date"],
-            payroll_run__period_end__gte=dr["start_date"],
+    exp_rows = []
+    pay_rows = []
+    if can_view_expense:
+        exp_rows = _get_finance_scoped_employees(
+            user, "expense.view", selected_branch, selected_dept, role_variant=role_variant
         )
-        pay_aggs = pay_qs.aggregate(
-            liability_sum=Sum(
-                "net_payable",
-                filter=Q(payroll_run__status__in=[PayrollRunStatus.DRAFT, PayrollRunStatus.REVIEW, PayrollRunStatus.APPROVED_LOCKED]),
-            ),
-            disbursed_sum=Sum(
-                "net_payable",
-                filter=Q(payroll_run__status=PayrollRunStatus.DISBURSED),
-            ),
-        )
-        payroll_liability = pay_aggs["liability_sum"] or Decimal("0.00")
-        payroll_disbursed = pay_aggs["disbursed_sum"] or Decimal("0.00")
+    if can_view_payroll:
+        if can_view_expense and exp_scope == pay_scope:
+            pay_rows = exp_rows
+        else:
+            pay_rows = _get_finance_scoped_employees(
+                user, "payroll.view", selected_branch, selected_dept, role_variant=role_variant
+            )
 
-    exp_list = list(
-        exp_qs.values("id", "employee_id", "category__name", "amount", "status", "requested_at")
-        .order_by("-requested_at", "-id")
-    )
-    paginator = Paginator(exp_list, DEFAULT_PAGE_SIZE)
-    page_obj = paginator.get_page(page_num)
-    for row in page_obj.object_list:
-        row["employee_name"] = emp_name_map.get(row["employee_id"], "Employee")
+    scoped_emp_ids = {r["id"] for r in exp_rows} | {r["id"] for r in pay_rows}
+    base_ctx["analytics_employee_count"] = len(scoped_emp_ids)
 
-    base_ctx.update({
-        "fin_approved_expenses": approved_expenses,
-        "fin_approved_expense_count": exp_aggs["approved_cnt"] or 0,
-        "fin_pending_claims": pending_claims,
-        "fin_pending_claim_count": exp_aggs["pending_cnt"] or 0,
-        "fin_payroll_liability": payroll_liability,
-        "fin_payroll_disbursed": payroll_disbursed,
-        "fin_page_obj": page_obj,
-        "fin_chart_payload": {
-            "financeBreakdown": {
-                "currency": currency,
-                "labels": ["Approved Expenses", "Pending Claims", "Payroll Liabilities", "Actual Payments"],
-                "values": [
-                    float(approved_expenses),
-                    float(pending_claims),
-                    float(payroll_liability),
-                    float(payroll_disbursed),
-                ],
-            }
-        },
-    })
+    chart_labels = []
+    chart_values = []
+    zero = Decimal("0.00")
+
+    if can_view_expense:
+        if exp_rows:
+            emp_ids = [r["id"] for r in exp_rows]
+            emp_name_map = {r["id"]: r["full_name"] for r in exp_rows}
+            exp_qs = Expense.objects.filter(
+                employee_id__in=emp_ids,
+                requested_at__date__gte=dr["start_date"],
+                requested_at__date__lte=dr["end_date"],
+            )
+            exp_aggs = exp_qs.aggregate(
+                approved_sum=Sum("amount", filter=Q(status="approved")),
+                approved_cnt=Count("id", filter=Q(status="approved")),
+                pending_sum=Sum("amount", filter=Q(status__in=["pending_manager", "pending_finance", "pending_accounts"])),
+                pending_cnt=Count("id", filter=Q(status__in=["pending_manager", "pending_finance", "pending_accounts"])),
+            )
+            approved_expenses = exp_aggs["approved_sum"] or zero
+            pending_claims = exp_aggs["pending_sum"] or zero
+            approved_count = exp_aggs["approved_cnt"] or 0
+            pending_count = exp_aggs["pending_cnt"] or 0
+
+            exp_detail_qs = exp_qs.values(
+                "id", "employee_id", "category__name", "amount", "status", "requested_at"
+            ).order_by("-requested_at", "-id")
+            page_obj = _paginate_queryset_rows(
+                exp_detail_qs,
+                page_num,
+                enrich_row=lambda row: row.__setitem__(
+                    "employee_name", emp_name_map.get(row["employee_id"], "Employee")
+                ),
+            )
+        else:
+            approved_expenses = zero
+            pending_claims = zero
+            approved_count = 0
+            pending_count = 0
+            page_obj = Paginator([], DEFAULT_PAGE_SIZE).get_page(1)
+
+        base_ctx.update({
+            "fin_approved_expenses": approved_expenses,
+            "fin_approved_expense_count": approved_count,
+            "fin_pending_claims": pending_claims,
+            "fin_pending_claim_count": pending_count,
+            "fin_page_obj": page_obj,
+        })
+        if scoped_emp_ids:
+            chart_labels.extend(["Approved Expenses", "Pending Claims"])
+            chart_values.extend([float(approved_expenses), float(pending_claims)])
+
+    if can_view_payroll:
+        master_ids = [r["master_employee_id"] for r in pay_rows if r["master_employee_id"] is not None]
+        payroll_liability = zero
+        payroll_draft_estimate = zero
+        payroll_disbursed = zero
+        if master_ids:
+            pay_qs = EmployeePayrollCalculation.objects.filter(
+                employee_id__in=master_ids,
+                payroll_run__period_start__lte=dr["end_date"],
+                payroll_run__period_end__gte=dr["start_date"],
+            )
+            pay_aggs = pay_qs.aggregate(
+                liability_sum=Sum(
+                    "net_payable",
+                    filter=Q(payroll_run__status=PayrollRunStatus.APPROVED_LOCKED),
+                ),
+                draft_estimate_sum=Sum(
+                    "net_payable",
+                    filter=Q(payroll_run__status__in=[PayrollRunStatus.DRAFT, PayrollRunStatus.REVIEW]),
+                ),
+                disbursed_sum=Sum(
+                    "net_payable",
+                    filter=Q(payroll_run__status=PayrollRunStatus.DISBURSED),
+                ),
+            )
+            payroll_liability = pay_aggs["liability_sum"] or zero
+            payroll_draft_estimate = pay_aggs["draft_estimate_sum"] or zero
+            payroll_disbursed = pay_aggs["disbursed_sum"] or zero
+
+        base_ctx.update({
+            "fin_payroll_liability": payroll_liability,
+            "fin_payroll_draft_estimate": payroll_draft_estimate,
+            "fin_payroll_disbursed": payroll_disbursed,
+        })
+        if scoped_emp_ids:
+            chart_labels.extend(["Approved Payroll Liabilities", "Draft/Review Estimates", "Disbursed Payroll"])
+            chart_values.extend([float(payroll_liability), float(payroll_draft_estimate), float(payroll_disbursed)])
+
+    base_ctx["fin_chart_payload"] = {
+        "financeBreakdown": {
+            "currency": currency,
+            "labels": chart_labels,
+            "values": chart_values,
+        }
+    }
     return base_ctx

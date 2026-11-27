@@ -64,6 +64,7 @@ class PayrollPeriodSyncTests(TestCase):
             branch=self.branch,
             status=EmployeeStatus.ACTIVE,
             joined_date=joined_date,
+            weekly_holiday_policy="",
         )
         p = EmployeeProfile.objects.create(
             user=u,
@@ -113,27 +114,20 @@ class PayrollPeriodSyncTests(TestCase):
         self.assertEqual(c.source_total_present_days, Decimal("1.00"))
         self.assertEqual(c.source_total_approved_ot_hours, Decimal("0.00"))
 
-    def test_2_cross_month_and_half_day_leave_boundary(self):
-        # Cross-month period: Oct 29 to Nov 2 of a past month
-        today = timezone.localdate()
-        first_of_this_month = today.replace(day=1)
-        p_start = first_of_this_month - timedelta(days=3)
-        p_end = first_of_this_month + timedelta(days=1)
-        if p_end >= today:
-            prev_first = (first_of_this_month - timedelta(days=1)).replace(day=1)
-            p_start = prev_first - timedelta(days=3)
-            p_end = prev_first + timedelta(days=1)
+    def test_2_cross_month_leave_boundary(self):
+        # Fixed cross-month period: 2026-10-29 (Thu) to 2026-11-02 (Mon)
+        p_start = date(2026, 10, 29)
+        p_end = date(2026, 11, 2)
 
-        master, prof = self._make_emp("PAY-2", joined_date=p_start - timedelta(days=10))
+        master, prof = self._make_emp("PAY-2", joined_date=date(2026, 10, 1))
         lt = LeaveType.objects.create(name="Unpaid", deduction_percent=Decimal("100.00"))
-        # Leave overlaps period boundary (starts before p_start, ends on p_start)
-        LeaveRequest.objects.create(employee=prof, leave_type=lt, start_date=p_start - timedelta(days=2), end_date=p_start, number_of_days=Decimal("3.0"), reason="Trip", status="approved")
+        # 3-day leave (Oct 27..Oct 29): only Oct 29 (Thu) overlaps [p_start, p_end]
+        LeaveRequest.objects.create(employee=prof, leave_type=lt, start_date=date(2026, 10, 27), end_date=date(2026, 10, 29), number_of_days=Decimal("3.0"), reason="Trip", status="approved")
 
         run = PayrollRun.objects.create(name="CrossMonth", period_start=p_start, period_end=p_end, status=PayrollRunStatus.DRAFT)
         calcs = PayrollService.sync_payroll_inputs(run)
         c = next(x for x in calcs if x.employee_id == master.id)
-        expected_leave_days = Decimal("0.00") if p_start.weekday() == 4 else Decimal("1.00")
-        self.assertEqual(c.source_total_approved_leave_days, expected_leave_days)
+        self.assertEqual(c.source_total_approved_leave_days, Decimal("1.00"))
 
     def test_3_eligibility_and_invalid_period_rejection(self):
         today = timezone.localdate()
@@ -182,7 +176,146 @@ class PayrollPeriodSyncTests(TestCase):
             PayrollService.sync_payroll_inputs(run)
         self.assertLessEqual(len(ctx), 35)
 
+        before_count = EmployeePayrollCalculation.objects.filter(payroll_run=run).count()
         run.status = PayrollRunStatus.APPROVED_LOCKED
         run.save()
         with self.assertRaises(ValidationError):
             PayrollService.sync_payroll_inputs(run)
+        self.assertEqual(EmployeePayrollCalculation.objects.filter(payroll_run=run).count(), before_count)
+
+
+class PayrollLeaveWeightingTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.branch = Branch.objects.create(name="LeaveWt Branch", latitude=23.81, longitude=90.41, radius_meters=200)
+        OfficeSchedule.objects.update_or_create(
+            branch=cls.branch,
+            defaults={
+                "office_start_time": datetime.strptime("09:00", "%H:%M").time(),
+                "office_end_time": datetime.strptime("18:00", "%H:%M").time(),
+                "late_after_minutes": 15,
+                "working_days": ["saturday", "sunday", "monday", "tuesday", "wednesday", "thursday"],
+            },
+        )
+        cls.dept = Department.objects.create(name="LeaveWtDept")
+        cls.desig = Designation.objects.create(name="LeaveWtDesig")
+        cls.comp = SalaryComponent.objects.create(
+            name="Basic", code="LW_BASIC", type=SalaryComponentType.EARNING, value_type=SalaryComponentValueType.FIXED, value=Decimal("30000.00")
+        )
+        cls.struct = SalaryStructure.objects.create(name="LeaveWtStd")
+        SalaryStructureComponent.objects.create(
+            salary_structure=cls.struct, salary_component=cls.comp, value_type=SalaryComponentValueType.FIXED, value=Decimal("30000.00")
+        )
+
+    def _make_emp(self, code, joined_date):
+        u = User.objects.create_user(email=f"{code.lower()}@example.com", password="pass", role="staff")
+        m = Employee.objects.create(
+            user=u,
+            employee_number=code,
+            first_name="Leave",
+            last_name=code,
+            department=self.dept,
+            designation=self.desig,
+            branch=self.branch,
+            status=EmployeeStatus.ACTIVE,
+            joined_date=joined_date,
+            weekly_holiday_policy="",
+        )
+        p = EmployeeProfile.objects.create(
+            user=u,
+            master_employee=m,
+            employee_id=code,
+            full_name=f"Leave {code}",
+            department="LeaveWtDept",
+            phone=f"014{abs(hash(code)) % 100000000:08d}",
+            branch=self.branch,
+            is_active=True,
+            joined_date=joined_date,
+        )
+        EmployeeSalaryAssignment.objects.create(
+            employee=m,
+            salary_structure=self.struct,
+            gross_salary=Decimal("30000.00"),
+            payment_mode=PaymentMode.BANK,
+            effective_from=joined_date,
+        )
+        return m, p
+
+    def _two_past_workdays(self):
+        # Fixed past working days: Mon 2026-11-16 and Tue 2026-11-17
+        return date(2026, 11, 16), date(2026, 11, 17)
+
+    def test_1_half_day_and_full_plus_half_day_leave_weights_and_deduction(self):
+        d1, d2 = self._two_past_workdays()
+        m1, p1 = self._make_emp("LW-1", joined_date=d1 - timedelta(days=5))
+        m2, p2 = self._make_emp("LW-2", joined_date=d1 - timedelta(days=5))
+        lt_unpaid = LeaveType.objects.create(name="UnpaidHalf", deduction_percent=Decimal("100.00"))
+
+        lr1 = LeaveRequest.objects.create(employee=p1, leave_type=lt_unpaid, start_date=d1, end_date=d1, number_of_days=Decimal("0.5"), reason="Half", status="approved")
+        LeaveRequest.objects.filter(pk=lr1.pk).update(number_of_days=Decimal("0.5"))
+        ci2 = timezone.make_aware(datetime.combine(d2, datetime.strptime("09:00", "%H:%M").time()))
+        Attendance.objects.create(employee=p1, date=d2, attendance_type="check_in", type="office", status="on_time", check_in_time=ci2, check_out_time=ci2 + timedelta(hours=8), total_hours=8.0)
+
+        LeaveRequest.objects.create(employee=p2, leave_type=lt_unpaid, start_date=d1, end_date=d1, number_of_days=Decimal("1.0"), reason="Full", status="approved")
+        lr2_half = LeaveRequest.objects.create(employee=p2, leave_type=lt_unpaid, start_date=d2, end_date=d2, number_of_days=Decimal("0.5"), reason="Half", status="approved")
+        LeaveRequest.objects.filter(pk=lr2_half.pk).update(number_of_days=Decimal("0.5"))
+
+        run = PayrollRun.objects.create(name="HalfWtRun", period_start=d1, period_end=d2, status=PayrollRunStatus.DRAFT)
+        calcs = PayrollService.sync_payroll_inputs(run)
+        c1 = next(c for c in calcs if c.employee_id == m1.id)
+        c2 = next(c for c in calcs if c.employee_id == m2.id)
+
+        self.assertEqual(c1.source_total_approved_leave_days, Decimal("0.50"))
+        self.assertEqual(c1.unpaid_absent_days, Decimal("0.50"))
+        self.assertEqual(c1.absence_deduction, Decimal("500.00"))
+
+        self.assertEqual(c2.source_total_approved_leave_days, Decimal("1.50"))
+        self.assertEqual(c2.unpaid_absent_days, Decimal("1.50"))
+        self.assertEqual(c2.absence_deduction, Decimal("1500.00"))
+
+    def test_2_half_day_outside_period_excluded(self):
+        d1, d2 = self._two_past_workdays()
+        outside = d1 - timedelta(days=2)
+        if outside.weekday() == 4:
+            outside -= timedelta(days=1)
+        master, prof = self._make_emp("LW-3", joined_date=outside - timedelta(days=5))
+        lt = LeaveType.objects.create(name="PaidHalf", deduction_percent=Decimal("100.00"))
+        lr_out = LeaveRequest.objects.create(employee=prof, leave_type=lt, start_date=outside, end_date=outside, number_of_days=Decimal("0.5"), reason="Out", status="approved")
+        LeaveRequest.objects.filter(pk=lr_out.pk).update(number_of_days=Decimal("0.5"))
+
+        run = PayrollRun.objects.create(name="OutHalfRun", period_start=d2, period_end=d2, status=PayrollRunStatus.DRAFT)
+        calcs = PayrollService.sync_payroll_inputs(run)
+        c = next(x for x in calcs if x.employee_id == master.id)
+        self.assertEqual(c.source_total_approved_leave_days, Decimal("0.00"))
+        self.assertEqual(c.absence_deduction, Decimal("1000.00"))  # Only d2 absent (30000/30), 0 from outside half-day
+
+    def test_3_attendance_conflict_excludes_half_day_leave_weight(self):
+        _, d2 = self._two_past_workdays()
+        master, prof = self._make_emp("LW-4", joined_date=d2 - timedelta(days=5))
+        lt_unpaid = LeaveType.objects.create(name="ConflictHalf", deduction_percent=Decimal("100.00"))
+        LeaveRequest.objects.create(employee=prof, leave_type=lt_unpaid, start_date=d2, end_date=d2, number_of_days=Decimal("0.5"), reason="Half", status="approved")
+        ci = timezone.make_aware(datetime.combine(d2, datetime.strptime("09:00", "%H:%M").time()))
+        Attendance.objects.create(employee=prof, date=d2, attendance_type="check_in", type="office", status="on_time", check_in_time=ci, check_out_time=ci + timedelta(hours=8), total_hours=8.0)
+
+        run = PayrollRun.objects.create(name="ConflictHalfRun", period_start=d2, period_end=d2, status=PayrollRunStatus.DRAFT)
+        calcs = PayrollService.sync_payroll_inputs(run)
+        c = next(x for x in calcs if x.employee_id == master.id)
+        self.assertEqual(c.source_total_present_days, Decimal("1.00"))
+        self.assertEqual(c.source_total_approved_leave_days, Decimal("0.00"))
+        self.assertEqual(c.unpaid_absent_days, Decimal("0.00"))
+
+    def test_4_overlapping_approved_leaves_rejected_atomically(self):
+        _, d2 = self._two_past_workdays()
+        master, prof = self._make_emp("LW-5", joined_date=d2 - timedelta(days=5))
+        lt = LeaveType.objects.create(name="OverlapLt", deduction_percent=Decimal("0.00"))
+        LeaveRequest.objects.create(employee=prof, leave_type=lt, start_date=d2, end_date=d2, number_of_days=Decimal("0.5"), reason="First", status="approved")
+
+        run = PayrollRun.objects.create(name="OverlapRun", period_start=d2, period_end=d2, status=PayrollRunStatus.DRAFT)
+        PayrollService.sync_payroll_inputs(run)
+        existing_count = EmployeePayrollCalculation.objects.filter(payroll_run=run).count()
+
+        LeaveRequest.objects.create(employee=prof, leave_type=lt, start_date=d2, end_date=d2, number_of_days=Decimal("0.5"), reason="Second", status="approved")
+        with self.assertRaises(ValidationError) as cm:
+            PayrollService.sync_payroll_inputs(run)
+        self.assertIn("LW-5", str(cm.exception))
+        self.assertEqual(EmployeePayrollCalculation.objects.filter(payroll_run=run).count(), existing_count)
