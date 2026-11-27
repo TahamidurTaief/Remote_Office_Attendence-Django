@@ -1,5 +1,7 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -78,119 +80,113 @@ class EmploymentEligibilityTests(TestCase):
 
     def test_1_pre_joining_zero_absent_and_excluded_from_denominator(self):
         # Joined 5 days ago; 10 days ago through 6 days ago must be not_employed
-        today = timezone.localdate()
-        joined = today - timedelta(days=5)
-        pre_day = today - timedelta(days=8)
-        while pre_day.weekday() == 4:
-            pre_day -= timedelta(days=1)
+        frozen_now = datetime(2026, 11, 25, 14, 0, 0, tzinfo=ZoneInfo("Asia/Dhaka"))
+        with patch("django.utils.timezone.now", return_value=frozen_now):
+            joined = date(2026, 11, 20)
+            pre_day = date(2026, 11, 17)
 
-        _, prof = self._make_emp("ELIG-PRE", joined_date=joined)
-        daily = get_daily_report_data(report_date=pre_day, employee_id=prof.id)
-        self.assertEqual(daily["absent"], 0)
-        self.assertEqual(daily["rows"][0]["status"], "not_employed")
-        self.assertEqual(get_absent_records(date_from=pre_day, date_to=pre_day, employee_id=prof.id), [])
+            _, prof = self._make_emp("ELIG-PRE", joined_date=joined)
+            daily = get_daily_report_data(report_date=pre_day, employee_id=prof.id)
+            self.assertEqual(daily["absent"], 0)
+            self.assertEqual(daily["rows"][0]["status"], "not_employed")
+            self.assertEqual(get_absent_records(date_from=pre_day, date_to=pre_day, employee_id=prof.id), [])
 
-        analytics = get_attendance_analytics(
-            self.admin,
-            {"range": "custom", "start_date": pre_day.isoformat(), "end_date": pre_day.isoformat(), "branch": str(self.branch.id)},
-        )
-        self.assertEqual(analytics["analytics_summary"]["total_absent"], 0)
-        self.assertEqual(analytics["analytics_summary"]["eligible_working_days"], 0)
+            analytics = get_attendance_analytics(
+                self.admin,
+                {"range": "custom", "start_date": pre_day.isoformat(), "end_date": pre_day.isoformat(), "branch": str(self.branch.id)},
+            )
+            self.assertEqual(analytics["analytics_summary"]["total_absent"], 0)
+            self.assertEqual(analytics["analytics_summary"]["eligible_working_days"], 0)
 
     def test_2_post_last_working_day_not_applicable(self):
-        today = timezone.localdate()
-        joined = today - timedelta(days=20)
-        exit_day = today - timedelta(days=6)
-        post_day = today - timedelta(days=2)
-        if post_day.weekday() == 4:
-            post_day -= timedelta(days=1)
+        frozen_now = datetime(2026, 11, 25, 14, 0, 0, tzinfo=ZoneInfo("Asia/Dhaka"))
+        with patch("django.utils.timezone.now", return_value=frozen_now):
+            joined = date(2026, 11, 5)
+            exit_day = date(2026, 11, 19)
+            post_day = date(2026, 11, 23)
 
-        master, prof = self._make_emp("ELIG-EXIT", joined_date=joined)
-        EmploymentHistory.objects.create(
-            employee=master,
-            field_changed="status",
-            old_value="Active",
-            new_value="Resigned",
-            effective_date=exit_day,
-        )
+            master, prof = self._make_emp("ELIG-EXIT", joined_date=joined)
+            EmploymentHistory.objects.create(
+                employee=master,
+                field_changed="status",
+                old_value="Active",
+                new_value="Resigned",
+                effective_date=exit_day,
+            )
 
-        daily_post = get_daily_report_data(report_date=post_day, employee_id=prof.id)
-        self.assertEqual(daily_post["absent"], 0)
-        self.assertEqual(daily_post["rows"][0]["status"], "not_employed")
-        self.assertEqual(get_absent_records(date_from=post_day, date_to=post_day, employee_id=prof.id), [])
+            daily_post = get_daily_report_data(report_date=post_day, employee_id=prof.id)
+            self.assertEqual(daily_post["absent"], 0)
+            self.assertEqual(daily_post["rows"][0]["status"], "not_employed")
+            self.assertEqual(get_absent_records(date_from=post_day, date_to=post_day, employee_id=prof.id), [])
 
     def test_3_rejoining_after_employment_gap(self):
-        today = timezone.localdate()
-        joined = today - timedelta(days=25)
-        exit_day = today - timedelta(days=15)
-        rejoin_day = today - timedelta(days=5)
-        gap_day = today - timedelta(days=10)
-        if gap_day.weekday() == 4:
-            gap_day -= timedelta(days=1)
+        # Fixed Wednesday clock so weekly holiday (Friday) and gap boundaries are deterministic
+        frozen_now = datetime(2026, 11, 25, 14, 0, 0, tzinfo=ZoneInfo("Asia/Dhaka"))
+        with patch("django.utils.timezone.now", return_value=frozen_now):
+            today = date(2026, 11, 25)
+            joined = date(2026, 10, 31)
+            exit_day = date(2026, 11, 10)
+            rejoin_day = date(2026, 11, 20)  # Friday (weekly holiday)
+            gap_holiday = date(2026, 11, 13)  # Friday inside employment gap
+            gap_workday = date(2026, 11, 15)  # Sunday inside employment gap
 
-        master, prof = self._make_emp("ELIG-REJOIN", joined_date=joined)
-        EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Active", new_value="Resigned", effective_date=exit_day)
-        EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Resigned", new_value="Active", effective_date=rejoin_day)
+            master, prof = self._make_emp("ELIG-REJOIN", joined_date=joined)
+            EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Active", new_value="Resigned", effective_date=exit_day)
+            EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Resigned", new_value="Active", effective_date=rejoin_day)
 
-        daily_gap = get_daily_report_data(report_date=gap_day, employee_id=prof.id)
-        self.assertEqual(daily_gap["rows"][0]["status"], "not_employed")
-        self.assertEqual(daily_gap["absent"], 0)
+            for g_day in (gap_holiday, gap_workday):
+                daily_gap = get_daily_report_data(report_date=g_day, employee_id=prof.id)
+                self.assertEqual(daily_gap["rows"][0]["status"], "not_employed")
+                self.assertEqual(daily_gap["absent"], 0)
 
-        after_day = today - timedelta(days=2)
-        if after_day.weekday() == 4:
-            after_day -= timedelta(days=1)
-        daily_after = get_daily_report_data(report_date=after_day, employee_id=prof.id)
-        self.assertEqual(daily_after["absent"], 1)
+            after_day = date(2026, 11, 23)  # Monday after Friday rejoin
+            daily_after = get_daily_report_data(report_date=after_day, employee_id=prof.id)
+            self.assertEqual(daily_after["absent"], 1)
 
-        # Conflicting second exit transition without rejoin -> uncertain from conflict, pre-joining still not_employed
-        EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Active", new_value="Resigned", effective_date=today - timedelta(days=2))
-        EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Resigned", new_value="Terminated", effective_date=today - timedelta(days=1))
-        conflict_day = today - timedelta(days=1)
-        if conflict_day.weekday() == 4:
-            conflict_day -= timedelta(days=1)
-        daily_conflict = get_daily_report_data(report_date=conflict_day, employee_id=prof.id)
-        self.assertEqual(daily_conflict["absent"], 0)
-        self.assertEqual(daily_conflict["review_needed"], 1)
-        self.assertEqual(daily_conflict["rows"][0]["status"], "eligibility_unresolved")
+            # Conflicting second exit transition without rejoin -> uncertain from conflict, pre-joining still not_employed
+            EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Active", new_value="Resigned", effective_date=date(2026, 11, 23))
+            EmploymentHistory.objects.create(employee=master, field_changed="status", old_value="Resigned", new_value="Terminated", effective_date=date(2026, 11, 24))
+            conflict_day = date(2026, 11, 24)
+            daily_conflict = get_daily_report_data(report_date=conflict_day, employee_id=prof.id)
+            self.assertEqual(daily_conflict["absent"], 0)
+            self.assertEqual(daily_conflict["review_needed"], 1)
+            self.assertEqual(daily_conflict["rows"][0]["status"], "eligibility_unresolved")
 
     def test_4_missing_exit_date_unresolved_and_historical_attendance_preserved(self):
-        today = timezone.localdate()
-        joined = today - timedelta(days=10)
-        pre_day = today - timedelta(days=12)
-        if pre_day.weekday() == 4:
-            pre_day -= timedelta(days=1)
-        post_join_workday = today - timedelta(days=3)
-        while post_join_workday.weekday() == 4:
-            post_join_workday -= timedelta(days=1)
+        frozen_now = datetime(2026, 11, 25, 14, 0, 0, tzinfo=ZoneInfo("Asia/Dhaka"))
+        with patch("django.utils.timezone.now", return_value=frozen_now):
+            joined = date(2026, 11, 15)
+            pre_day = date(2026, 11, 12)
+            post_join_workday = date(2026, 11, 22)
 
-        # Resigned employee with NO EmploymentHistory exit date -> unresolved, do not invent exit date
-        _, prof = self._make_emp("ELIG-UNRES", joined_date=joined, status=EmployeeStatus.RESIGNED, is_active=False)
-        # Historical attendance on pre-joining date preserved & flagged
-        ci = timezone.make_aware(datetime.combine(pre_day, datetime.strptime("09:00", "%H:%M").time()))
-        Attendance.objects.create(employee=prof, date=pre_day, attendance_type="check_in", type="office", status="on_time", check_in_time=ci, check_out_time=ci + timedelta(hours=8), total_hours=8.0)
+            # Resigned employee with NO EmploymentHistory exit date -> unresolved, do not invent exit date
+            _, prof = self._make_emp("ELIG-UNRES", joined_date=joined, status=EmployeeStatus.RESIGNED, is_active=False)
+            # Historical attendance on pre-joining date preserved & flagged
+            ci = timezone.make_aware(datetime.combine(pre_day, datetime.strptime("09:00", "%H:%M").time()))
+            Attendance.objects.create(employee=prof, date=pre_day, attendance_type="check_in", type="office", status="on_time", check_in_time=ci, check_out_time=ci + timedelta(hours=8), total_hours=8.0)
 
-        daily_pre = get_daily_report_data(report_date=pre_day, employee_id=prof.id)
-        self.assertEqual(daily_pre["present"], 1)
-        self.assertTrue(daily_pre["rows"][0]["day_calc"]["eligibility_conflict"])
-        self.assertTrue(daily_pre["rows"][0]["day_calc"]["eligibility_unresolved"])
+            daily_pre = get_daily_report_data(report_date=pre_day, employee_id=prof.id)
+            self.assertEqual(daily_pre["present"], 1)
+            self.assertTrue(daily_pre["rows"][0]["day_calc"]["eligibility_conflict"])
+            self.assertTrue(daily_pre["rows"][0]["day_calc"]["eligibility_unresolved"])
 
-        # Working day after joined_date without attendance -> review_needed, never Absent/deduction
-        daily_uncertain = get_daily_report_data(report_date=post_join_workday, employee_id=prof.id)
-        self.assertEqual(daily_uncertain["absent"], 0)
-        self.assertEqual(daily_uncertain["review_needed"], 1)
-        self.assertEqual(daily_uncertain["rows"][0]["status"], "eligibility_unresolved")
-        self.assertEqual(get_absent_records(date_from=post_join_workday, date_to=post_join_workday, employee_id=prof.id), [])
+            # Working day after joined_date without attendance -> review_needed, never Absent/deduction
+            daily_uncertain = get_daily_report_data(report_date=post_join_workday, employee_id=prof.id)
+            self.assertEqual(daily_uncertain["absent"], 0)
+            self.assertEqual(daily_uncertain["review_needed"], 1)
+            self.assertEqual(daily_uncertain["rows"][0]["status"], "eligibility_unresolved")
+            self.assertEqual(get_absent_records(date_from=post_join_workday, date_to=post_join_workday, employee_id=prof.id), [])
 
-        monthly = get_monthly_report_data(post_join_workday.year, post_join_workday.month, employee_id=prof.id)
-        self.assertEqual(monthly["total_absent"], 0)
-        self.assertGreater(monthly["total_review_needed"], 0)
+            monthly = get_monthly_report_data(post_join_workday.year, post_join_workday.month, employee_id=prof.id)
+            self.assertEqual(monthly["total_absent"], 0)
+            self.assertGreater(monthly["total_review_needed"], 0)
 
-        analytics = get_attendance_analytics(
-            self.admin,
-            {"range": "custom", "start_date": post_join_workday.isoformat(), "end_date": post_join_workday.isoformat()},
-        )
-        # Even when scoped via attendance/active, unresolved employee is never counted absent
-        self.assertEqual(analytics["analytics_summary"]["total_absent"], 0)
+            analytics = get_attendance_analytics(
+                self.admin,
+                {"range": "custom", "start_date": post_join_workday.isoformat(), "end_date": post_join_workday.isoformat()},
+            )
+            # Even when scoped via attendance/active, unresolved employee is never counted absent
+            self.assertEqual(analytics["analytics_summary"]["total_absent"], 0)
 
     def test_5_downstream_payroll_and_bulk_query_bound(self):
         today = timezone.localdate()

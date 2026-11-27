@@ -141,131 +141,136 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
     def _bd_dt(self, d, h, m=0, s=0):
         return datetime(d.year, d.month, d.day, h, m, s, tzinfo=BD_TZ)
 
+    FROZEN_NOW = datetime(2026, 11, 25, 14, 0, 0, tzinfo=BD_TZ)
+
     def test_1_missing_checkout_no_fabrication_and_consistent_exports(self):
         """Scenario 1: Yesterday open check-in stays NULL after today check-in; Present + Missing Checkout."""
-        today = timezone.localdate()
-        yesterday = today - timedelta(days=1)
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
+            today = timezone.localdate()
+            yesterday = today - timedelta(days=1)
 
-        att_y = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=yesterday,
-            check_in_time=self._bd_dt(yesterday, 9, 0),
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-            check_out_time=None,
-        )
-
-        with patch("apps.attendance.transaction_service.notify_admins"):
-            # auto_close_past_sessions must be a no-op
-            self.assertEqual(auto_close_past_sessions(self.staff_emp, today), 0)
-
-            res_t = AttendanceTransactionService.check_in(
-                self.staff_user,
-                {
-                    "latitude": 23.8103,
-                    "longitude": 90.4125,
-                    "type": "office",
-                },
-                validate_photo=False,
+            att_y = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=yesterday,
+                check_in_time=self._bd_dt(yesterday, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+                check_out_time=None,
             )
-            self.assertTrue(res_t["success"])
 
-        att_y.refresh_from_db()
-        self.assertIsNone(att_y.check_out_time)
-        self.assertIsNone(att_y.total_hours)
+            with patch("apps.attendance.transaction_service.notify_admins"):
+                # auto_close_past_sessions must be a no-op
+                self.assertEqual(auto_close_past_sessions(self.staff_emp, today), 0)
 
-        daily = get_daily_report_data(report_date=yesterday, employee_id=self.staff_emp.id)
-        row = daily["rows"][0]
-        self.assertTrue(row["is_present"])
-        self.assertFalse(row["is_absent"])
-        self.assertTrue(row["is_open_session"])
-        self.assertTrue(row["is_missing_checkout"])
-        self.assertIsNone(row["check_out_time"])
-        self.assertEqual(row["check_out_time_str"], "")
-        self.assertIn("Missing Checkout", row["status_display"])
+                res_t = AttendanceTransactionService.check_in(
+                    self.staff_user,
+                    {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "type": "office",
+                    },
+                    validate_photo=False,
+                )
+                self.assertTrue(res_t["success"])
 
-        # CSV export consistency
-        req = self.factory.get(f"/admin-panel/reports/export/csv/?date={yesterday.isoformat()}&employee={self.staff_emp.id}")
-        req.user = self.admin_user
-        csv_resp = ExportReportCSVView.as_view()(req)
-        self.assertEqual(csv_resp.status_code, 200)
-        rows = list(csv.reader(io.StringIO(csv_resp.content.decode("utf-8-sig"))))
-        self.assertEqual(rows[1][5], "")  # Check-out column empty
+            att_y.refresh_from_db()
+            self.assertIsNone(att_y.check_out_time)
+            self.assertIsNone(att_y.total_hours)
 
-        # Excel & PDF export consistency
-        req_xl = self.factory.get(f"/admin-panel/reports/export/excel/?date={yesterday.isoformat()}&employee={self.staff_emp.id}")
-        req_xl.user = self.admin_user
-        xl_resp = ExportReportExcelView.as_view()(req_xl)
-        self.assertEqual(xl_resp.status_code, 200)
-        import openpyxl
-        wb = openpyxl.load_workbook(io.BytesIO(xl_resp.content))
-        ws = wb.active
-        self.assertEqual(ws.cell(row=5, column=6).value, "—")  # Out column empty ('—')
+            daily = get_daily_report_data(report_date=yesterday, employee_id=self.staff_emp.id)
+            row = daily["rows"][0]
+            self.assertTrue(row["is_present"])
+            self.assertFalse(row["is_absent"])
+            self.assertTrue(row["is_open_session"])
+            self.assertTrue(row["is_missing_checkout"])
+            self.assertIsNone(row["check_out_time"])
+            self.assertEqual(row["check_out_time_str"], "")
+            self.assertIn("Missing Checkout", row["status_display"])
 
-        req_pdf = self.factory.get(f"/admin-panel/reports/export/pdf/?date={yesterday.isoformat()}&employee={self.staff_emp.id}")
-        req_pdf.user = self.admin_user
-        self.assertEqual(ExportReportPDFView.as_view()(req_pdf).status_code, 200)
+            # CSV export consistency
+            req = self.factory.get(f"/admin-panel/reports/export/csv/?date={yesterday.isoformat()}&employee={self.staff_emp.id}")
+            req.user = self.admin_user
+            csv_resp = ExportReportCSVView.as_view()(req)
+            self.assertEqual(csv_resp.status_code, 200)
+            rows = list(csv.reader(io.StringIO(csv_resp.content.decode("utf-8-sig"))))
+            self.assertEqual(rows[1][5], "")  # Check-out column empty
+
+            # Excel & PDF export consistency
+            req_xl = self.factory.get(f"/admin-panel/reports/export/excel/?date={yesterday.isoformat()}&employee={self.staff_emp.id}")
+            req_xl.user = self.admin_user
+            xl_resp = ExportReportExcelView.as_view()(req_xl)
+            self.assertEqual(xl_resp.status_code, 200)
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(xl_resp.content))
+            ws = wb.active
+            self.assertEqual(ws.cell(row=5, column=6).value, "—")  # Out column empty ('—')
+
+            req_pdf = self.factory.get(f"/admin-panel/reports/export/pdf/?date={yesterday.isoformat()}&employee={self.staff_emp.id}")
+            req_pdf.user = self.admin_user
+            self.assertEqual(ExportReportPDFView.as_view()(req_pdf).status_code, 200)
 
     def test_2_mixed_sessions_overlapping_and_field_visits(self):
         """Scenario 2: Closed + overlapping + open office sessions + field visits."""
-        d = timezone.localdate() - timedelta(days=2)
-        s1 = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=d,
-            check_in_time=self._bd_dt(d, 9, 0),
-            check_out_time=self._bd_dt(d, 13, 0),
-            total_hours=decimal.Decimal("4.00"),
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-        )
-        # Overlapping session (11:00-15:00 -> merged [09:00, 15:00] = 6.00h, not 8.00h)
-        s2 = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=d,
-            check_in_time=self._bd_dt(d, 11, 0),
-            check_out_time=self._bd_dt(d, 15, 0),
-            total_hours=decimal.Decimal("4.00"),
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-        )
-        # Open session on same day
-        s3 = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=d,
-            check_in_time=self._bd_dt(d, 16, 0),
-            check_out_time=None,
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-        )
-        fv = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=d,
-            check_in_time=self._bd_dt(d, 17, 30),
-            attendance_type="field_visit",
-            type="field",
-            status="on_time",
-            visit_title="Client Site",
-        )
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
+            d = timezone.localdate() - timedelta(days=2)
+            s1 = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=d,
+                check_in_time=self._bd_dt(d, 9, 0),
+                check_out_time=self._bd_dt(d, 13, 0),
+                total_hours=decimal.Decimal("4.00"),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+            )
+            # Overlapping session (11:00-15:00 -> merged [09:00, 15:00] = 6.00h, not 8.00h)
+            s2 = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=d,
+                check_in_time=self._bd_dt(d, 11, 0),
+                check_out_time=self._bd_dt(d, 15, 0),
+                total_hours=decimal.Decimal("4.00"),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+            )
+            # Open session on same day
+            s3 = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=d,
+                check_in_time=self._bd_dt(d, 16, 0),
+                check_out_time=None,
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+            )
+            fv = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=d,
+                check_in_time=self._bd_dt(d, 17, 30),
+                attendance_type="field_visit",
+                type="field",
+                status="on_time",
+                visit_title="Client Site",
+            )
 
-        day_calc = calculate_employee_day(self.staff_emp, d, [s1, s2, s3, fv], today=timezone.localdate())
-        self.assertTrue(day_calc["is_present"])
-        self.assertEqual(day_calc["present_count"], 1)
-        self.assertTrue(day_calc["is_open_session"])
-        self.assertIsNone(day_calc["check_out_time"])
-        self.assertIsNone(day_calc["last_departure"])
-        self.assertEqual(day_calc["check_out_time_str"], "")
-        self.assertEqual(day_calc["total_hours"], 6.0)
-        self.assertEqual(day_calc["field_visit_count"], 1)
+            day_calc = calculate_employee_day(self.staff_emp, d, [s1, s2, s3, fv], today=timezone.localdate())
+            self.assertTrue(day_calc["is_present"])
+            self.assertEqual(day_calc["present_count"], 1)
+            self.assertTrue(day_calc["is_open_session"])
+            self.assertIsNone(day_calc["check_out_time"])
+            self.assertIsNone(day_calc["last_departure"])
+            self.assertEqual(day_calc["check_out_time_str"], "")
+            self.assertEqual(day_calc["total_hours"], 6.0)
+            self.assertEqual(day_calc["field_visit_count"], 1)
 
     def test_3_field_only_attendance_no_office_checkout_or_invented_duration(self):
         """Scenario 3: Standalone field visits count Present once, office checkout empty, 0.0h."""
-        visit_dt = timezone.localtime(timezone.now() - timedelta(hours=2), BD_TZ)
-        d = visit_dt.date()
-        with patch("apps.attendance.transaction_service.notify_admins"):
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            visit_dt = timezone.localtime(timezone.now() - timedelta(hours=2), BD_TZ)
+            d = visit_dt.date()
             res = AttendanceTransactionService.field_visit(
                 self.staff_user,
                 {
@@ -277,24 +282,25 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 },
                 validate_photo=False,
             )
-        self.assertTrue(res["success"])
+            self.assertTrue(res["success"])
 
-        daily = get_daily_report_data(report_date=d, employee_id=self.staff_emp.id)
-        row = daily["rows"][0]
-        self.assertTrue(row["is_present"])
-        self.assertFalse(row["is_open_session"])
-        self.assertFalse(row["is_missing_checkout"])
-        self.assertIsNone(row["check_out_time"])
-        self.assertEqual(row["check_out_time_str"], "")
-        self.assertEqual(row["total_hours"], 0.0)
-        self.assertEqual(len(row["field_visits"]), 1)
+            daily = get_daily_report_data(report_date=d, employee_id=self.staff_emp.id)
+            row = daily["rows"][0]
+            self.assertTrue(row["is_present"])
+            self.assertFalse(row["is_open_session"])
+            self.assertFalse(row["is_missing_checkout"])
+            self.assertIsNone(row["check_out_time"])
+            self.assertEqual(row["check_out_time_str"], "")
+            self.assertEqual(row["total_hours"], 0.0)
+            self.assertEqual(len(row["field_visits"]), 1)
 
     def test_4_overnight_and_offline_retry_session_matching_and_idempotency(self):
         """Scenario 4: Overnight & offline retry match yesterday's session even after today's check-in."""
-        today = timezone.localdate()
-        yesterday = today - timedelta(days=1)
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            today = timezone.localdate()
+            yesterday = today - timedelta(days=1)
 
-        with patch("apps.attendance.transaction_service.notify_admins"):
             y_in = AttendanceTransactionService.check_in(
                 self.staff_user,
                 {
@@ -351,171 +357,177 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 )
             self.assertEqual(cm.exception.status_code, 400)
 
-        y_att = Attendance.objects.get(pk=y_in["session_id"])
-        t_att = Attendance.objects.get(pk=t_in["session_id"])
-        self.assertEqual(y_att.check_out_time, self._bd_dt(today, 2, 0))
-        self.assertIsNone(t_att.check_out_time)
+            y_att = Attendance.objects.get(pk=y_in["session_id"])
+            t_att = Attendance.objects.get(pk=t_in["session_id"])
+            self.assertEqual(y_att.check_out_time, self._bd_dt(today, 2, 0))
+            self.assertIsNone(t_att.check_out_time)
 
     def test_5_authorized_forgot_checkout_and_audit_trail(self):
         """Scenario 5: Unauthorized approval blocked (403); manager+HR approval updates session & audit."""
-        yesterday = timezone.localdate() - timedelta(days=1)
-        att = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=yesterday,
-            check_in_time=self._bd_dt(yesterday, 9, 0),
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-        )
-        sub = AttendanceLifecycleService.submit_forgot_checkout(
-            self.staff_user,
-            {
-                "attendance_id": att.id,
-                "reason": "Forgot to punch out",
-                "check_out_time": self._bd_dt(yesterday, 17, 30).isoformat(),
-            },
-        )
-        self.assertTrue(sub["success"])
-        req_obj = ForgotCheckoutRequest.objects.get(attendance=att)
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
+            yesterday = timezone.localdate() - timedelta(days=1)
+            att = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=yesterday,
+                check_in_time=self._bd_dt(yesterday, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+            )
+            sub = AttendanceLifecycleService.submit_forgot_checkout(
+                self.staff_user,
+                {
+                    "attendance_id": att.id,
+                    "reason": "Forgot to punch out",
+                    "check_out_time": self._bd_dt(yesterday, 17, 30).isoformat(),
+                },
+            )
+            self.assertTrue(sub["success"])
+            req_obj = ForgotCheckoutRequest.objects.get(attendance=att)
 
-        # Unauthorized user blocked
-        with self.assertRaises(AttendanceLifecycleError) as cm:
-            AttendanceLifecycleService.process_forgot_checkout(self.other_user, req_obj.id, "approve")
-        self.assertEqual(cm.exception.status_code, 403)
+            # Unauthorized user blocked
+            with self.assertRaises(AttendanceLifecycleError) as cm:
+                AttendanceLifecycleService.process_forgot_checkout(self.other_user, req_obj.id, "approve")
+            self.assertEqual(cm.exception.status_code, 403)
 
-        # Manager approves -> pending_hr
-        r1 = AttendanceLifecycleService.process_forgot_checkout(self.mgr_user, req_obj.id, "approve")
-        self.assertEqual(r1["status"], "pending_hr")
+            # Manager approves -> pending_hr
+            r1 = AttendanceLifecycleService.process_forgot_checkout(self.mgr_user, req_obj.id, "approve")
+            self.assertEqual(r1["status"], "pending_hr")
 
-        # HR approves -> approved + audit log
-        r2 = AttendanceLifecycleService.process_forgot_checkout(self.hr_user, req_obj.id, "approve")
-        self.assertEqual(r2["status"], "approved")
+            # HR approves -> approved + audit log
+            r2 = AttendanceLifecycleService.process_forgot_checkout(self.hr_user, req_obj.id, "approve")
+            self.assertEqual(r2["status"], "approved")
 
-        att.refresh_from_db()
-        self.assertEqual(att.check_out_time, self._bd_dt(yesterday, 17, 30))
-        self.assertEqual(float(att.total_hours), 8.5)
-        self.assertTrue(AttendanceAuditLog.objects.filter(attendance=att, action="forgot_checkout").exists())
+            att.refresh_from_db()
+            self.assertEqual(att.check_out_time, self._bd_dt(yesterday, 17, 30))
+            self.assertEqual(float(att.total_hours), 8.5)
+            self.assertTrue(AttendanceAuditLog.objects.filter(attendance=att, action="forgot_checkout").exists())
 
     def test_6_leave_conflict_and_pre_joining_boundaries(self):
         """Leave + attendance conflict flagged for HR; pre-joining date not marked Absent."""
-        pre_join = date(2024, 12, 1)
-        dc_pre = calculate_employee_day(self.staff_emp, pre_join, [], today=timezone.localdate())
-        self.assertFalse(dc_pre["is_absent"])
-        self.assertEqual(dc_pre["absent_count"], 0)
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
+            pre_join = date(2024, 12, 1)
+            dc_pre = calculate_employee_day(self.staff_emp, pre_join, [], today=timezone.localdate())
+            self.assertFalse(dc_pre["is_absent"])
+            self.assertEqual(dc_pre["absent_count"], 0)
 
-        d = timezone.localdate() - timedelta(days=4)
-        att = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=d,
-            check_in_time=self._bd_dt(d, 9, 0),
-            check_out_time=self._bd_dt(d, 17, 0),
-            total_hours=decimal.Decimal("8.00"),
-            attendance_type="check_in",
-            status="on_time",
-        )
-        dc_conflict = calculate_employee_day(self.staff_emp, d, [att], is_on_leave=True, today=timezone.localdate())
-        self.assertTrue(dc_conflict["has_leave_conflict"])
-        self.assertEqual(dc_conflict["present_count"], 1)
-        self.assertEqual(dc_conflict["on_leave_count"], 0)
+            d = timezone.localdate() - timedelta(days=4)
+            att = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=d,
+                check_in_time=self._bd_dt(d, 9, 0),
+                check_out_time=self._bd_dt(d, 17, 0),
+                total_hours=decimal.Decimal("8.00"),
+                attendance_type="check_in",
+                status="on_time",
+            )
+            dc_conflict = calculate_employee_day(self.staff_emp, d, [att], is_on_leave=True, today=timezone.localdate())
+            self.assertTrue(dc_conflict["has_leave_conflict"])
+            self.assertEqual(dc_conflict["present_count"], 1)
+            self.assertEqual(dc_conflict["on_leave_count"], 0)
 
     def test_7_reporting_query_count_and_latency_no_n_plus_one(self):
         """Verify bulk reporting query counts remain bounded (no per-row queries)."""
-        d = timezone.localdate() - timedelta(days=5)
-        with CaptureQueriesContext(connection) as ctx_daily:
-            t0 = time.perf_counter()
-            get_daily_report_data(report_date=d)
-            daily_ms = (time.perf_counter() - t0) * 1000.0
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
+            d = timezone.localdate() - timedelta(days=5)
+            with CaptureQueriesContext(connection) as ctx_daily:
+                t0 = time.perf_counter()
+                get_daily_report_data(report_date=d)
+                daily_ms = (time.perf_counter() - t0) * 1000.0
 
-        with CaptureQueriesContext(connection) as ctx_monthly:
-            t1 = time.perf_counter()
-            get_monthly_report_data(d.year, d.month)
-            monthly_ms = (time.perf_counter() - t1) * 1000.0
+            with CaptureQueriesContext(connection) as ctx_monthly:
+                t1 = time.perf_counter()
+                get_monthly_report_data(d.year, d.month)
+                monthly_ms = (time.perf_counter() - t1) * 1000.0
 
-        # Both must execute in small bounded query counts regardless of employee count
-        self.assertLessEqual(len(ctx_daily), 15)
-        self.assertLessEqual(len(ctx_monthly), 15)
-        print(f"\n[BENCHMARK] Daily: {len(ctx_daily)} queries, {daily_ms:.2f}ms | Monthly: {len(ctx_monthly)} queries, {monthly_ms:.2f}ms")
+            # Both must execute in small bounded query counts regardless of employee count
+            self.assertLessEqual(len(ctx_daily), 15)
+            self.assertLessEqual(len(ctx_monthly), 15)
+            print(f"\n[BENCHMARK] Daily: {len(ctx_daily)} queries, {daily_ms:.2f}ms | Monthly: {len(ctx_monthly)} queries, {monthly_ms:.2f}ms")
 
     def test_8_cross_employee_session_id_and_ambiguous_offline_checkout_rejected(self):
         """Another employee's session_id and ambiguous multiple open sessions fail explicitly without mutation."""
-        today = timezone.localdate()
-        d1 = today - timedelta(days=2)
-        d2 = today - timedelta(days=1)
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
+            today = timezone.localdate()
+            d1 = today - timedelta(days=2)
+            d2 = today - timedelta(days=1)
 
-        s1 = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=d1,
-            check_in_time=self._bd_dt(d1, 9, 0),
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-        )
-        s2 = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=d2,
-            check_in_time=self._bd_dt(d2, 9, 0),
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-        )
-
-        # Foreign employee attempting checkout with staff_emp's session_id
-        with self.assertRaises(AttendanceTransactionError) as cm_foreign:
-            AttendanceTransactionService.check_out(
-                self.other_user,
-                {"latitude": 23.8103, "longitude": 90.4125, "session_id": s1.id},
-                validate_photo=False,
+            s1 = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=d1,
+                check_in_time=self._bd_dt(d1, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
             )
-        self.assertEqual(cm_foreign.exception.status_code, 400)
-        s1.refresh_from_db()
-        self.assertIsNone(s1.check_out_time)
-
-        # Ambiguous offline checkout (2 older open sessions, no session_id)
-        offline_dt = timezone.localtime(timezone.now() - timedelta(hours=2), BD_TZ)
-        with self.assertRaises(AttendanceTransactionError) as cm_ambig:
-            AttendanceTransactionService.check_out(
-                self.staff_user,
-                {
-                    "latitude": 23.8103,
-                    "longitude": 90.4125,
-                    "client_event_time": offline_dt.isoformat(),
-                },
-                validate_photo=False,
+            s2 = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=d2,
+                check_in_time=self._bd_dt(d2, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
             )
-        self.assertEqual(cm_ambig.exception.status_code, 400)
-        s1.refresh_from_db()
-        s2.refresh_from_db()
-        self.assertIsNone(s1.check_out_time)
-        self.assertIsNone(s2.check_out_time)
+
+            # Foreign employee attempting checkout with staff_emp's session_id
+            with self.assertRaises(AttendanceTransactionError) as cm_foreign:
+                AttendanceTransactionService.check_out(
+                    self.other_user,
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": s1.id},
+                    validate_photo=False,
+                )
+            self.assertEqual(cm_foreign.exception.status_code, 400)
+            s1.refresh_from_db()
+            self.assertIsNone(s1.check_out_time)
+
+            # Ambiguous offline checkout (2 older open sessions, no session_id)
+            offline_dt = timezone.localtime(timezone.now() - timedelta(hours=2), BD_TZ)
+            with self.assertRaises(AttendanceTransactionError) as cm_ambig:
+                AttendanceTransactionService.check_out(
+                    self.staff_user,
+                    {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "client_event_time": offline_dt.isoformat(),
+                    },
+                    validate_photo=False,
+                )
+            self.assertEqual(cm_ambig.exception.status_code, 400)
+            s1.refresh_from_db()
+            s2.refresh_from_db()
+            self.assertIsNone(s1.check_out_time)
+            self.assertIsNone(s2.check_out_time)
 
     def test_9_checkout_notification_failure_after_commit_does_not_fail_punch(self):
         """Notification failure in on_commit during check_out does not fail or roll back committed punch."""
-        att = Attendance.objects.create(
-            employee=self.staff_emp,
-            date=timezone.localdate(),
-            check_in_time=timezone.now() - timedelta(hours=2),
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-        )
-        with patch("apps.attendance.transaction_service.notify_admins", side_effect=RuntimeError("Push down")):
-            res = AttendanceTransactionService.check_out(
-                self.staff_user,
-                {"latitude": 23.8103, "longitude": 90.4125, "session_id": att.id},
-                validate_photo=False,
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW):
+            att = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=timezone.localdate(),
+                check_in_time=timezone.now() - timedelta(hours=2),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
             )
-        self.assertTrue(res["success"])
-        att.refresh_from_db()
-        self.assertIsNotNone(att.check_out_time)
+            with patch("apps.attendance.transaction_service.notify_admins", side_effect=RuntimeError("Push down")):
+                res = AttendanceTransactionService.check_out(
+                    self.staff_user,
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": att.id},
+                    validate_photo=False,
+                )
+            self.assertTrue(res["success"])
+            att.refresh_from_db()
+            self.assertIsNotNone(att.check_out_time)
 
     def test_10_explicit_session_id_yesterday_retry_and_cross_employee_isolation(self):
         """Explicit session_id closes targeted yesterday session, preserves today's, rejects foreign/malformed IDs, and avoids duplicate writes."""
         from apps.attendance.models import AttendanceLocation
 
-        today = timezone.localdate()
-        yesterday = today - timedelta(days=1)
+        with patch("django.utils.timezone.now", return_value=self.FROZEN_NOW), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            today = timezone.localdate()
+            yesterday = today - timedelta(days=1)
 
-        with patch("apps.attendance.transaction_service.notify_admins"):
             y_in = AttendanceTransactionService.check_in(
                 self.staff_user,
                 {
@@ -598,10 +610,10 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 1,
             )
 
-        y_att = Attendance.objects.get(pk=y_in["session_id"])
-        t_att = Attendance.objects.get(pk=t_in["session_id"])
-        self.assertEqual(y_att.check_out_time, self._bd_dt(today, 10, 0))
-        self.assertIsNone(t_att.check_out_time)
+            y_att = Attendance.objects.get(pk=y_in["session_id"])
+            t_att = Attendance.objects.get(pk=t_in["session_id"])
+            self.assertEqual(y_att.check_out_time, self._bd_dt(today, 10, 0))
+            self.assertIsNone(t_att.check_out_time)
 
 
 class OfflineTimestampValidationTests(TestCase):
@@ -807,3 +819,37 @@ class OfflineTimestampValidationTests(TestCase):
         self.assertTrue(body["results"][0]["permanent"])
         self.assertIn("72-hour", body["results"][0]["error"])
         self.assertEqual(Attendance.objects.filter(employee=self.emp).count(), 0)
+
+    def test_6_overnight_fixture_identical_at_0015_and_2330_bd_time(self):
+        """Same overnight fixture executed at 00:15+06:00 (previous UTC date) and 23:30+06:00 gives identical result."""
+        y_in_dt = datetime(2026, 11, 24, 22, 0, 0, tzinfo=BD_TZ)
+        y_out_dt = datetime(2026, 11, 25, 0, 10, 0, tzinfo=BD_TZ)
+
+        results = []
+        for clock in (
+            datetime(2026, 11, 25, 0, 15, 0, tzinfo=BD_TZ),   # UTC: 2026-11-24 18:15Z
+            datetime(2026, 11, 25, 23, 30, 0, tzinfo=BD_TZ),  # UTC: 2026-11-25 17:30Z
+        ):
+            Attendance.objects.filter(employee=self.emp).delete()
+            with patch("django.utils.timezone.now", return_value=clock), \
+                 patch("apps.attendance.transaction_service.notify_admins"):
+                ci = AttendanceTransactionService.check_in(
+                    self.user,
+                    {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_in_dt.isoformat()},
+                    validate_photo=False,
+                )
+                co = AttendanceTransactionService.check_out(
+                    self.user,
+                    {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "session_id": ci["session_id"],
+                        "client_event_time": y_out_dt.isoformat(),
+                    },
+                    validate_photo=False,
+                )
+                att = Attendance.objects.get(pk=ci["session_id"])
+                results.append((att.date, att.check_in_time, att.check_out_time, co["total_hours"]))
+
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0][0], date(2026, 11, 24))
