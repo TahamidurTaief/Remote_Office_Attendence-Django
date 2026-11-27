@@ -141,6 +141,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                 data={
                     "latitude": "23.8103",
                     "longitude": "90.4125",
+                    "accuracy": "15",
                     "session_id": str(session.id),
                 },
             )
@@ -155,6 +156,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                 data={
                     "latitude": "23.8103",
                     "longitude": "90.4125",
+                    "accuracy": "15",
                     "session_id": str(session.id),
                     "sync_uuid": str(uuid.uuid4()),
                 },
@@ -284,6 +286,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                     "session_id": session_a.id,
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(yesterday, 18, 0).isoformat(),
                                 },
                             }
@@ -324,6 +327,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "sync_uuid": ci_uuid,
                     "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
                 },
@@ -340,6 +344,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                         "payload": {
                             "latitude": 23.8103,
                             "longitude": 90.4125,
+                            "accuracy": 15,
                             "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
                         },
                     },
@@ -350,6 +355,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                         "payload": {
                             "latitude": 23.8103,
                             "longitude": 90.4125,
+                            "accuracy": 15,
                             "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
                             "depends_on_sync_uuid": ci_uuid,
                         },
@@ -418,6 +424,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(today, 10, 0).isoformat(),
                                 },
                             },
@@ -428,6 +435,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
                                     "depends_on_sync_uuid": bad_ci_uuid,
                                 },
@@ -454,7 +462,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
             with self.assertRaises(AttendanceTransactionError) as cm_online_ambig:
                 AttendanceTransactionService.check_out(
                     self.staff_user,
-                    {"latitude": 23.8103, "longitude": 90.4125},
+                    {"latitude": 23.8103, "longitude": 90.4125, "accuracy": 15},
                     validate_photo=False,
                 )
             self.assertEqual(cm_online_ambig.exception.status_code, 400)
@@ -464,7 +472,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                 with self.assertRaises(AttendanceTransactionError):
                     AttendanceTransactionService.check_out(
                         self.staff_user,
-                        {"latitude": 23.8103, "longitude": 90.4125, "session_id": bad_sid},
+                        {"latitude": 23.8103, "longitude": 90.4125, "accuracy": 15, "session_id": bad_sid},
                         validate_photo=False,
                     )
 
@@ -479,7 +487,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
             )
             legacy_ok = AttendanceTransactionService.check_out(
                 self.other_user,
-                {"latitude": 23.8103, "longitude": 90.4125},
+                {"latitude": 23.8103, "longitude": 90.4125, "accuracy": 15},
                 validate_photo=False,
             )
             self.assertTrue(legacy_ok["success"])
@@ -504,6 +512,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "type": "office",
                         "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
                     },
@@ -515,6 +524,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "depends_on_sync_uuid": in_a,
                         "client_event_time": self._bd_dt(today, 12, 0).isoformat(),
                     },
@@ -525,6 +535,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "type": "office",
                         "client_event_time": self._bd_dt(today, 13, 0).isoformat(),
                     },
@@ -536,6 +547,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "depends_on_sync_uuid": in_b,
                         "client_event_time": self._bd_dt(today, 18, 0).isoformat(),
                     },
@@ -580,6 +592,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "depends_on_sync_uuid": in_b2,
                         "client_event_time": self._bd_dt(today, 18, 0).isoformat(),
                     },
@@ -590,6 +603,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "type": "office",
                         "client_event_time": self._bd_dt(today, 13, 0).isoformat(),
                     },
@@ -601,6 +615,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "depends_on_sync_uuid": in_a2,
                         "client_event_time": self._bd_dt(today, 12, 0).isoformat(),
                     },
@@ -611,6 +626,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                     "payload": {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "type": "office",
                         "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
                     },
@@ -653,6 +669,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "depends_on_sync_uuid": ci_uuid,
                                     "client_event_time": same_ts,
                                 },
@@ -663,6 +680,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "type": "office",
                                     "client_event_time": same_ts,
                                 },
@@ -705,6 +723,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
                                 },
                             },
@@ -715,6 +734,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(today, 9, 30).isoformat(),
                                 },
                             },
@@ -725,6 +745,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(today, 9, 45).isoformat(),
                                 },
                             },
@@ -735,6 +756,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(today, 10, 0).isoformat(),
                                 },
                             },
@@ -744,6 +766,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "type": "office",
                                     "client_event_time": self._bd_dt(today, 10, 15).isoformat(),
                                 },
@@ -788,6 +811,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "type": "office",
                                     # Invalid future timestamp -> parent fails permanently
                                     "client_event_time": (FIXED_NOW + timedelta(hours=2)).isoformat(),
@@ -800,6 +824,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "depends_on_sync_uuid": bad_ci,
                                     "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
                                 },
@@ -810,6 +835,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                 "payload": {
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "visit_title": "Client Site",
                                     "client_name": "Acme",
                                     "client_event_time": self._bd_dt(today, 14, 0).isoformat(),
@@ -878,6 +904,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                     "depends_on_sync_uuid": str(uuid_b),
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
                                 },
                             }
@@ -912,6 +939,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                     "depends_on_sync_uuid": str(uuid_a),
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(yesterday, 18, 0).isoformat(),
                                 },
                             }
@@ -956,6 +984,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                         "session_id": bad_sid,
                                         "latitude": 23.8103,
                                         "longitude": 90.4125,
+                                        "accuracy": 15,
                                         "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
                                     },
                                 }
@@ -1011,6 +1040,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                     "session_id": sess_a.id,
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(yesterday, 18, 0).isoformat(),
                                 },
                             }
@@ -1035,6 +1065,7 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
                                     "session_id": sess_b.id,
                                     "latitude": 23.8103,
                                     "longitude": 90.4125,
+                                    "accuracy": 15,
                                     "client_event_time": self._bd_dt(yesterday, 18, 0).isoformat(),
                                 },
                             }

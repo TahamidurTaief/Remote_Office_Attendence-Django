@@ -168,6 +168,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                     {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "type": "office",
                     },
                     validate_photo=False,
@@ -276,6 +277,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.75,
                     "longitude": 90.39,
+                    "accuracy": 15,
                     "visit_title": "Site Survey",
                     "client_name": "Acme",
                     "client_event_time": visit_dt.isoformat(),
@@ -306,6 +308,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "client_event_time": self._bd_dt(yesterday, 22, 0).isoformat(),
                 },
                 validate_photo=False,
@@ -315,6 +318,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
                 },
                 validate_photo=False,
@@ -327,6 +331,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "client_event_time": self._bd_dt(today, 2, 0).isoformat(),
                     "sync_uuid": retry_uuid,
                 },
@@ -341,6 +346,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "client_event_time": self._bd_dt(today, 2, 0).isoformat(),
                     "sync_uuid": retry_uuid,
                 },
@@ -352,7 +358,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
             with self.assertRaises(AttendanceTransactionError) as cm:
                 AttendanceTransactionService.check_out(
                     self.other_user,
-                    {"latitude": 23.8103, "longitude": 90.4125, "sync_uuid": retry_uuid},
+                    {"latitude": 23.8103, "longitude": 90.4125, "sync_uuid": retry_uuid, "accuracy": 15},
                     validate_photo=False,
                 )
             self.assertEqual(cm.exception.status_code, 400)
@@ -473,7 +479,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
             with self.assertRaises(AttendanceTransactionError) as cm_foreign:
                 AttendanceTransactionService.check_out(
                     self.other_user,
-                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": s1.id},
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": s1.id, "accuracy": 15},
                     validate_photo=False,
                 )
             self.assertEqual(cm_foreign.exception.status_code, 400)
@@ -488,6 +494,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                     {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "client_event_time": offline_dt.isoformat(),
                     },
                     validate_photo=False,
@@ -512,7 +519,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
             with patch("apps.attendance.transaction_service.notify_admins", side_effect=RuntimeError("Push down")):
                 res = AttendanceTransactionService.check_out(
                     self.staff_user,
-                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": att.id},
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": att.id, "accuracy": 15},
                     validate_photo=False,
                 )
             self.assertTrue(res["success"])
@@ -533,6 +540,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "client_event_time": self._bd_dt(yesterday, 20, 0).isoformat(),
                 },
                 validate_photo=False,
@@ -542,6 +550,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
                 },
                 validate_photo=False,
@@ -551,7 +560,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
             with self.assertRaises(AttendanceTransactionError) as cm_foreign:
                 AttendanceTransactionService.check_out(
                     self.other_user,
-                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": y_in["session_id"]},
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": y_in["session_id"], "accuracy": 15},
                     validate_photo=False,
                 )
             self.assertEqual(cm_foreign.exception.status_code, 400)
@@ -560,7 +569,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
             with self.assertRaises(AttendanceTransactionError) as cm_bad:
                 AttendanceTransactionService.check_out(
                     self.staff_user,
-                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": "not-an-int"},
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": "not-an-int", "accuracy": 15},
                     validate_photo=False,
                 )
             self.assertEqual(cm_bad.exception.status_code, 400)
@@ -571,6 +580,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "session_id": y_in["session_id"],
                     "client_event_time": self._bd_dt(today, 10, 0).isoformat(),
                     "sync_uuid": checkout_uuid,
@@ -589,6 +599,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "session_id": y_in["session_id"],
                     "sync_uuid": checkout_uuid,
                 },
@@ -599,6 +610,7 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
                 {
                     "latitude": 23.8103,
                     "longitude": 90.4125,
+                    "accuracy": 15,
                     "session_id": y_in["session_id"],
                 },
                 validate_photo=False,
@@ -670,7 +682,7 @@ class OfflineTimestampValidationTests(TestCase):
                 with self.assertRaises(AttendanceTransactionError) as cm:
                     fn(
                         self.user,
-                        {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": "not-an-iso-time"},
+                        {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": "not-an-iso-time", "accuracy": 15},
                         validate_photo=False,
                     )
                 self.assertEqual(cm.exception.status_code, 400)
@@ -680,7 +692,7 @@ class OfflineTimestampValidationTests(TestCase):
             # Live check-in without client_event_time succeeds using server time
             res = AttendanceTransactionService.check_in(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125},
+                {"latitude": 23.8103, "longitude": 90.4125, "accuracy": 15},
                 validate_photo=False,
             )
             self.assertTrue(res["success"])
@@ -702,7 +714,7 @@ class OfflineTimestampValidationTests(TestCase):
                 with self.assertRaises(AttendanceTransactionError) as cm:
                     AttendanceTransactionService.check_in(
                         self.user,
-                        {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": bad_dt.isoformat()},
+                        {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": bad_dt.isoformat(), "accuracy": 15},
                         validate_photo=False,
                     )
                 self.assertEqual(cm.exception.status_code, 400)
@@ -711,7 +723,7 @@ class OfflineTimestampValidationTests(TestCase):
 
             res = AttendanceTransactionService.check_in(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": exact_72h.isoformat()},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": exact_72h.isoformat(), "accuracy": 15},
                 validate_photo=False,
             )
             self.assertTrue(res["success"])
@@ -729,17 +741,17 @@ class OfflineTimestampValidationTests(TestCase):
              patch("apps.attendance.transaction_service.notify_admins"):
             y_in = AttendanceTransactionService.check_in(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_in_dt.isoformat()},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_in_dt.isoformat(), "accuracy": 15},
                 validate_photo=False,
             )
             t_in = AttendanceTransactionService.check_in(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_in_dt.isoformat()},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_in_dt.isoformat(), "accuracy": 15},
                 validate_photo=False,
             )
             y_out = AttendanceTransactionService.check_out(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_out_dt.isoformat()},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_out_dt.isoformat(), "accuracy": 15},
                 validate_photo=False,
             )
             self.assertEqual(y_out["total_hours"], 4.0)
@@ -760,12 +772,12 @@ class OfflineTimestampValidationTests(TestCase):
              patch("apps.attendance.transaction_service.notify_admins"):
             in_res = AttendanceTransactionService.check_in(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t0.isoformat(), "sync_uuid": cin_uuid},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t0.isoformat(), "sync_uuid": cin_uuid, "accuracy": 15},
                 validate_photo=False,
             )
             out_res = AttendanceTransactionService.check_out(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_out.isoformat(), "sync_uuid": cout_uuid},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_out.isoformat(), "sync_uuid": cout_uuid, "accuracy": 15},
                 validate_photo=False,
             )
             self.assertEqual(out_res["total_hours"], 8.0)
@@ -774,12 +786,12 @@ class OfflineTimestampValidationTests(TestCase):
              patch("apps.attendance.transaction_service.notify_admins"):
             in_retry = AttendanceTransactionService.check_in(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t0.isoformat(), "sync_uuid": cin_uuid},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t0.isoformat(), "sync_uuid": cin_uuid, "accuracy": 15},
                 validate_photo=False,
             )
             out_retry = AttendanceTransactionService.check_out(
                 self.user,
-                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_out.isoformat(), "sync_uuid": cout_uuid},
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_out.isoformat(), "sync_uuid": cout_uuid, "accuracy": 15},
                 validate_photo=False,
             )
             self.assertEqual(in_retry["session_id"], in_res["session_id"])
@@ -806,6 +818,7 @@ class OfflineTimestampValidationTests(TestCase):
                         "payload": {
                             "latitude": 23.8103,
                             "longitude": 90.4125,
+                            "accuracy": 15,
                             "client_event_time": stale_dt.isoformat(),
                         },
                     }]
@@ -835,7 +848,7 @@ class OfflineTimestampValidationTests(TestCase):
                  patch("apps.attendance.transaction_service.notify_admins"):
                 ci = AttendanceTransactionService.check_in(
                     self.user,
-                    {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_in_dt.isoformat()},
+                    {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_in_dt.isoformat(), "accuracy": 15},
                     validate_photo=False,
                 )
                 co = AttendanceTransactionService.check_out(
@@ -843,6 +856,7 @@ class OfflineTimestampValidationTests(TestCase):
                     {
                         "latitude": 23.8103,
                         "longitude": 90.4125,
+                        "accuracy": 15,
                         "session_id": ci["session_id"],
                         "client_event_time": y_out_dt.isoformat(),
                     },

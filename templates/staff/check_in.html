@@ -503,30 +503,41 @@
     });
   }
 
+  let locationCapturedAt = null;
+
   async function startGPS() {
     const retryBtn = document.getElementById('gps-retry-btn');
     const loadingTitle = document.getElementById('gps-loading-title');
     const loadingSubtitle = document.getElementById('gps-loading-subtitle');
     if (retryBtn) retryBtn.classList.add('hidden');
     if (loadingTitle) {
-      loadingTitle.textContent = 'Acquiring GPS satellite fix...';
+      loadingTitle.textContent = 'Acquiring fresh GPS fix...';
       loadingTitle.className = 'text-xs font-bold text-amber-600';
     }
-    if (loadingSubtitle) loadingSubtitle.textContent = 'Connecting to high-accuracy sensors...';
+    if (loadingSubtitle) loadingSubtitle.textContent = 'Aiming for 20-50m accuracy (up to 15s)...';
 
-    // Fast-path: Check if LocationGuard already has cached/verified coordinates
-    if (window.LocationGuard && window.LocationGuard.currentPosition) {
-      handleLocationSuccess({ coords: window.LocationGuard.currentPosition });
-      return;
-    }
-    const cachedPos = localStorage.getItem('ft_last_position');
-    if (cachedPos) {
-      try {
-        const parsed = JSON.parse(cachedPos);
-        if (parsed && parsed.latitude && parsed.longitude) {
-          handleLocationSuccess({ coords: parsed });
+    if (window.LocationGuard && typeof window.LocationGuard.acquireFreshFix === 'function') {
+      const fixRes = await window.LocationGuard.acquireFreshFix({
+        maxAccuracyMeters: 100,
+        targetAccuracyMeters: 50,
+        maxDurationMs: 15000
+      });
+      if (fixRes && fixRes.ok && fixRes.coords) {
+        locationCapturedAt = fixRes.coords.capturedAt || new Date().toISOString();
+        handleLocationSuccess({ coords: fixRes.coords });
+      } else {
+        isGpsReady = false;
+        locationCapturedAt = null;
+        if (loadingTitle) {
+          loadingTitle.textContent = (fixRes && fixRes.reason === 'poor_accuracy') ? 'GPS accuracy too low' : 'GPS fix unavailable';
+          loadingTitle.className = 'text-xs font-bold text-red-600';
         }
-      } catch(e) {}
+        if (loadingSubtitle && fixRes && fixRes.message) {
+          loadingSubtitle.textContent = fixRes.message;
+        }
+        if (retryBtn) retryBtn.classList.remove('hidden');
+      }
+      return;
     }
 
     if (!navigator.geolocation) {
@@ -539,47 +550,33 @@
     }
 
     try {
-      // Step 1: Try high accuracy GPS (satellite / hardware) with 5s timeout
       const pos = await requestPosition({
         enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 5000
+        timeout: 15000,
+        maximumAge: 0
       });
-      handleLocationSuccess(pos);
-    } catch (errHigh) {
-      console.warn('High accuracy timed out or failed, falling back to network geolocation:', errHigh);
-      try {
-        // Step 2: Fallback to standard network geolocation with cached positions allowed
-        const pos = await requestPosition({
-          enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 60000
-        });
-        handleLocationSuccess(pos);
-      } catch (errLow) {
-        // Step 3: Check LocationGuard fallback if available
-        if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
-          handleLocationSuccess({ coords: window.LocationGuard.DEFAULT_FALLBACK });
-        } else {
-          handleLocationError(errLow);
-        }
+      if (!pos || !pos.coords || !Number.isFinite(pos.coords.accuracy) || pos.coords.accuracy <= 0 || pos.coords.accuracy > 100) {
+        throw new Error('GPS accuracy out of bounds');
       }
-    }
-
-    // Also start continuous watcher to refine position precision
-    if (!watchId) {
-      watchId = navigator.geolocation.watchPosition(
-        handleLocationSuccess,
-        null,
-        { enableHighAccuracy: true, maximumAge: 10000 }
-      );
+      locationCapturedAt = new Date().toISOString();
+      handleLocationSuccess(pos);
+    } catch (err) {
+      isGpsReady = false;
+      locationCapturedAt = null;
+      handleLocationError(err);
     }
   }
 
   function handleLocationSuccess(position) {
-    const lat = position.coords.latitude;
-    const lng = position.coords.longitude;
-    const acc = position.coords.accuracy || 20;
+    const lat = Number(position.coords.latitude);
+    const lng = Number(position.coords.longitude);
+    const acc = Number(position.coords.accuracy);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(acc) || acc <= 0) {
+      return;
+    }
+    if (!locationCapturedAt) {
+      locationCapturedAt = position.coords.capturedAt || new Date().toISOString();
+    }
 
     document.getElementById('id_latitude').value = lat;
     document.getElementById('id_longitude').value = lng;

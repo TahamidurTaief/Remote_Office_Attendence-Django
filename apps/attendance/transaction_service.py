@@ -30,16 +30,24 @@ def auto_close_past_sessions(employee=None, today=None):
     return 0
 
 
-def parse_and_validate_coordinates(lat_val, lng_val, accuracy_val=0):
+def parse_and_validate_coordinates(lat_val, lng_val, accuracy_val=None):
     """
-    Parses and validates coordinates and accuracy.
-    Rejects malformed, non-finite (NaN, Inf), or out-of-range coordinates with 400 error.
-    Returns (lat: float, lng: float, accuracy: float, is_missing: bool).
+    Parses and validates coordinates and positive GPS accuracy.
+    - Both lat and lng absent/blank -> returns (None, None, None, True) (missing).
+    - Zero coordinates (0.0, 0.0) are valid when explicitly supplied.
+    - Rejects booleans, non-finite (NaN, Inf), out-of-range coordinates,
+      and missing, zero, negative, or non-finite accuracy with 400 error.
+    Returns (lat: float | None, lng: float | None, accuracy: float | None, is_missing: bool).
     """
-    if lat_val is None or lat_val == '':
-        lat_val = 0.0
-    if lng_val is None or lng_val == '':
-        lng_val = 0.0
+    lat_missing = lat_val is None or (isinstance(lat_val, str) and lat_val.strip() == '')
+    lng_missing = lng_val is None or (isinstance(lng_val, str) and lng_val.strip() == '')
+    if lat_missing and lng_missing:
+        return 0.0, 0.0, 0.0, True
+    if lat_missing or lng_missing:
+        raise AttendanceTransactionError('Both latitude and longitude are required.', 400)
+
+    if isinstance(lat_val, bool) or isinstance(lng_val, bool):
+        raise AttendanceTransactionError('Invalid coordinates format.', 400)
 
     try:
         lat = float(lat_val)
@@ -53,16 +61,60 @@ def parse_and_validate_coordinates(lat_val, lng_val, accuracy_val=0):
     if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
         raise AttendanceTransactionError('Coordinates out of valid geographic range.', 400)
 
+    if accuracy_val is None or (isinstance(accuracy_val, str) and accuracy_val.strip() == '') or isinstance(accuracy_val, bool):
+        raise AttendanceTransactionError('Valid positive GPS accuracy is required.', 400)
+
     try:
-        acc = float(accuracy_val) if accuracy_val else 0.0
+        acc = float(accuracy_val)
     except (TypeError, ValueError):
-        acc = 0.0
+        raise AttendanceTransactionError('Valid positive GPS accuracy is required.', 400)
 
-    if not math.isfinite(acc) or acc < 0:
-        acc = 0.0
+    if not math.isfinite(acc) or acc <= 0:
+        raise AttendanceTransactionError('Valid positive GPS accuracy is required.', 400)
 
-    is_missing = (lat == 0.0 and lng == 0.0)
-    return lat, lng, acc, is_missing
+    return lat, lng, acc, False
+
+
+def validate_location_capture_time(captured_at_raw, event_time, max_age_seconds=60):
+    """
+    Validates optional location_captured_at ISO8601 timestamp against the punch event_time
+    (preserving offline capture-to-event comparison rather than upload time).
+    - Absent / blank -> returns None (legacy compatibility).
+    - Supplied but malformed, after event_time, or older than max_age_seconds -> raises 400.
+    """
+    if captured_at_raw is None:
+        return None
+    if isinstance(captured_at_raw, str) and not captured_at_raw.strip():
+        return None
+    if not isinstance(captured_at_raw, str):
+        raise AttendanceTransactionError('Invalid location_captured_at format.', 400)
+
+    raw = captured_at_raw.strip()
+    if raw.endswith('Z'):
+        raw = raw[:-1] + '+00:00'
+
+    try:
+        captured_dt = datetime.datetime.fromisoformat(raw)
+    except ValueError:
+        raise AttendanceTransactionError('Invalid location_captured_at format.', 400)
+
+    if timezone.is_naive(captured_dt):
+        captured_dt = timezone.make_aware(captured_dt, timezone.get_current_timezone())
+
+    ref_event = event_time
+    if timezone.is_naive(ref_event):
+        ref_event = timezone.make_aware(ref_event, timezone.get_current_timezone())
+
+    if captured_dt > ref_event:
+        raise AttendanceTransactionError('Location capture time cannot be after event time.', 400)
+
+    if (ref_event - captured_dt).total_seconds() > max_age_seconds:
+        raise AttendanceTransactionError(
+            f'Location fix is stale (captured more than {max_age_seconds}s before event).',
+            400
+        )
+
+    return captured_dt
 
 
 def _safe_notify_admins(employee, notif_type, location=''):
@@ -263,8 +315,10 @@ class AttendanceTransactionService:
             lat, lng, acc_val, is_gps_missing = parse_and_validate_coordinates(
                 data.get('latitude'),
                 data.get('longitude'),
-                data.get('accuracy', 0)
+                data.get('accuracy')
             )
+            if not is_gps_missing:
+                validate_location_capture_time(data.get('location_captured_at'), event_time)
             note = data.get('note', '')
             address = data.get('address', '')
 
@@ -306,14 +360,14 @@ class AttendanceTransactionService:
             if attendance_type not in ('office', 'field'):
                 attendance_type = 'field'
                 branch = emp_locked.branch
-                if branch and branch.latitude and branch.longitude:
+                if not is_gps_missing and branch and branch.latitude and branch.longitude:
                     within_geofence, _ = is_within_geofence(float(lat), float(lng), branch)
                     if within_geofence:
                         attendance_type = 'office'
 
             is_outside_geofence = False
             enforce_geofence = not policy.allow_outside_geofence or policy.geofencing_policy != 'disabled'
-            if enforce_geofence:
+            if not is_gps_missing and enforce_geofence:
                 branch = emp_locked.branch
                 if branch and branch.latitude and branch.longitude:
                     within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
@@ -601,8 +655,10 @@ class AttendanceTransactionService:
             lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
                 data.get('latitude'),
                 data.get('longitude'),
-                data.get('accuracy', 0)
+                data.get('accuracy')
             )
+            if not is_gps_missing:
+                validate_location_capture_time(data.get('location_captured_at'), event_time)
             address = data.get('address', '') or 'Location unavailable at check-out'
 
             if is_gps_missing and require_gps:
@@ -611,7 +667,13 @@ class AttendanceTransactionService:
             from apps.accounts.engine import PermissionEngine
             is_admin_or_hr = user.is_superuser or PermissionEngine.evaluate(user, 'attendance.override').allowed or PermissionEngine.evaluate(user, 'attendance.edit').allowed
 
-            is_gps_missing = (lat == 0.0 and lng == 0.0)
+            if not is_gps_missing and policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters:
+                if policy.gps_required == 'required' and not is_admin_or_hr:
+                    raise AttendanceTransactionError(
+                        f'GPS accuracy ({int(accuracy)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).',
+                        400
+                    )
+
             if is_gps_missing and policy.gps_required == 'required' and not is_admin_or_hr:
                 address = address or 'GPS unavailable at check-out'
 
@@ -739,8 +801,10 @@ class AttendanceTransactionService:
             lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
                 data.get('latitude'),
                 data.get('longitude'),
-                data.get('accuracy', 0)
+                data.get('accuracy')
             )
+            if not is_gps_missing:
+                validate_location_capture_time(data.get('location_captured_at'), event_time)
             address      = data.get('address', '')
             visit_title  = data.get('visit_title', '')
             client_name  = data.get('client_name', '')
@@ -753,6 +817,13 @@ class AttendanceTransactionService:
 
             if is_gps_missing and require_gps:
                 raise AttendanceTransactionError('Location is required.', 400)
+
+            if not is_gps_missing and policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters:
+                if policy.gps_required == 'required':
+                    raise AttendanceTransactionError(
+                        f'GPS accuracy ({int(accuracy)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).',
+                        400
+                    )
 
             if validate_photo and policy.photo_required and not photo:
                 raise AttendanceTransactionError('Photo is required.', 400)

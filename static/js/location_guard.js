@@ -10,12 +10,110 @@
         watchId: null,
         isAcquiring: false,
 
-        // Default branch/headquarters coordinates (Dhaka, Bangladesh) for local network/fallback
-        DEFAULT_FALLBACK: {
-            latitude: 23.8103,
-            longitude: 90.4125,
-            accuracy: 50,
-            is_fallback: true
+        /**
+         * Bounded fresh GPS acquisition:
+         * - Aims for targetAccuracyMeters (default 50m, within 20-50m ideal)
+         * - Accepts up to maxAccuracyMeters (default 100m)
+         * - Collects best fresh sample for at most maxDurationMs (default 15000ms) and finishes early when sufficient
+         * - Rejects non-finite, out-of-range, or missing/zero/negative accuracy
+         * - Never silently injects default coordinates or leaves watchPosition running
+         */
+        acquireFreshFix(options = {}) {
+            const maxAccuracy = Number.isFinite(options.maxAccuracyMeters) ? options.maxAccuracyMeters : 100;
+            const targetAccuracy = Number.isFinite(options.targetAccuracyMeters) ? options.targetAccuracyMeters : 50;
+            const maxDurationMs = Number.isFinite(options.maxDurationMs) ? options.maxDurationMs : 15000;
+
+            if (!navigator.geolocation) {
+                return Promise.resolve({
+                    ok: false,
+                    reason: 'unavailable',
+                    bestFix: null,
+                    message: 'Geolocation is not supported by this browser.'
+                });
+            }
+
+            return new Promise((resolve) => {
+                let bestFix = null;
+                let watchId = null;
+                let timerId = null;
+                let settled = false;
+
+                const finish = (result) => {
+                    if (settled) return;
+                    settled = true;
+                    if (watchId !== null) {
+                        try { navigator.geolocation.clearWatch(watchId); } catch (e) {}
+                    }
+                    if (timerId !== null) {
+                        clearTimeout(timerId);
+                    }
+                    resolve(result);
+                };
+
+                const isValidSample = (coords) => {
+                    if (!coords) return false;
+                    const lat = Number(coords.latitude);
+                    const lng = Number(coords.longitude);
+                    const acc = Number(coords.accuracy);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(acc)) return false;
+                    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return false;
+                    if (acc <= 0) return false;
+                    return true;
+                };
+
+                const onSample = (position) => {
+                    if (!position || !isValidSample(position.coords)) return;
+                    const sample = {
+                        latitude: Number(position.coords.latitude),
+                        longitude: Number(position.coords.longitude),
+                        accuracy: Number(position.coords.accuracy),
+                        capturedAt: new Date().toISOString()
+                    };
+                    if (!bestFix || sample.accuracy < bestFix.accuracy) {
+                        bestFix = sample;
+                    }
+                    if (sample.accuracy <= targetAccuracy) {
+                        finish({ ok: true, coords: bestFix });
+                    }
+                };
+
+                const onError = (err) => {
+                    if (err && err.code === 1) {
+                        finish({
+                            ok: false,
+                            reason: 'denied',
+                            bestFix,
+                            message: 'Location permission denied. Please enable precise location and retry.'
+                        });
+                    }
+                };
+
+                timerId = setTimeout(() => {
+                    if (bestFix && bestFix.accuracy <= maxAccuracy) {
+                        finish({ ok: true, coords: bestFix });
+                    } else if (bestFix) {
+                        finish({
+                            ok: false,
+                            reason: 'poor_accuracy',
+                            bestFix,
+                            message: `GPS accuracy (±${Math.round(bestFix.accuracy)}m) exceeds ${maxAccuracy}m limit. Please retry outdoors or submit for review.`
+                        });
+                    } else {
+                        finish({
+                            ok: false,
+                            reason: 'unavailable',
+                            bestFix: null,
+                            message: 'Unable to acquire a fresh GPS fix within 15 seconds. Please retry.'
+                        });
+                    }
+                }, maxDurationMs);
+
+                watchId = navigator.geolocation.watchPosition(
+                    onSample,
+                    onError,
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: maxDurationMs }
+                );
+            });
         },
 
         init() {
@@ -39,16 +137,12 @@
                 } catch (e) {}
             }
 
-            // 2. Check if user already dismissed / verified in this session
-            if (sessionStorage.getItem('ft_location_verified') === 'true') {
+            // 2. Check if user already verified in this session (never inject fake coordinates)
+            if (sessionStorage.getItem('ft_location_verified') === 'true' && this.currentPosition) {
                 this.isReady = true;
                 this.state = 'granted';
                 this.updateUI('granted');
                 this.hideModal();
-                // If we didn't have coordinates, set default fallback
-                if (!this.currentPosition) {
-                    this.currentPosition = { ...this.DEFAULT_FALLBACK, timestamp: Date.now() };
-                }
             }
 
             // 3. Only actively check for staff users or attendance flows

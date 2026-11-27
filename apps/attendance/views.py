@@ -349,22 +349,31 @@ def location_sync(request):
         if not active:
             return JsonResponse({'success': False, 'error': 'No active session. Location not synced.'})
 
-        lat      = data.get('latitude')
-        lng      = data.get('longitude')
-        address  = data.get('address', '')
+        from apps.attendance.transaction_service import (
+            AttendanceTransactionError,
+            parse_and_validate_coordinates,
+            validate_location_capture_time,
+        )
         try:
-            accuracy = float(data.get('accuracy', 0))
-        except (TypeError, ValueError):
-            accuracy = 0.0
+            lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('accuracy')
+            )
+            if is_gps_missing:
+                return JsonResponse({'success': False, 'error': 'Coordinates required.'}, status=400)
+            event_ref = client_time or timezone.localtime()
+            validate_location_capture_time(data.get('location_captured_at'), event_ref)
+            policy = get_attendance_policy(employee)
+            if policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters and policy.gps_required == 'required':
+                return JsonResponse({
+                    'success': False,
+                    'error': f'GPS accuracy ({int(accuracy)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).'
+                }, status=400)
+        except AttendanceTransactionError as exc:
+            return JsonResponse({'success': False, 'error': str(exc)}, status=exc.status_code)
 
-        if not lat or not lng:
-            return JsonResponse({'success': False, 'error': 'Coordinates required.'}, status=400)
-
-        try:
-            lat = float(lat)
-            lng = float(lng)
-        except (TypeError, ValueError):
-            return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
+        address = data.get('address', '')
 
         sync_record = EmployeeLocationSync.objects.create(
             employee=employee,

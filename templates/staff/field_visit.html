@@ -442,13 +442,27 @@
 
     if (!navigator.geolocation) {
       if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
-        applyGpsCoords(
-          window.LocationGuard.DEFAULT_FALLBACK.latitude,
-          window.LocationGuard.DEFAULT_FALLBACK.longitude,
-          window.LocationGuard.DEFAULT_FALLBACK.accuracy
-        );
-        return;
-      }
+    if (window.LocationGuard && typeof window.LocationGuard.acquireFreshFix === 'function') {
+      window.LocationGuard.acquireFreshFix({
+        maxAccuracyMeters: 100,
+        targetAccuracyMeters: 50,
+        maxDurationMs: 15000
+      }).then((fixRes) => {
+        if (fixRes && fixRes.ok && fixRes.coords) {
+          applyGpsCoords(fixRes.coords.latitude, fixRes.coords.longitude, fixRes.coords.accuracy);
+        } else {
+          const loadTitle = document.getElementById('gps-loading-title');
+          if (loadTitle) loadTitle.textContent = (fixRes && fixRes.message) ? fixRes.message : 'Location failed';
+          if (retryBtn) retryBtn.classList.remove('hidden');
+        }
+      });
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      const loadTitle = document.getElementById('gps-loading-title');
+      if (loadTitle) loadTitle.textContent = 'Geolocation not supported';
+      if (retryBtn) retryBtn.classList.remove('hidden');
       return;
     }
 
@@ -457,19 +471,11 @@
         applyGpsCoords(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
       },
       function(error) {
-        if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
-          applyGpsCoords(
-            window.LocationGuard.DEFAULT_FALLBACK.latitude,
-            window.LocationGuard.DEFAULT_FALLBACK.longitude,
-            window.LocationGuard.DEFAULT_FALLBACK.accuracy
-          );
-          return;
-        }
         const loadTitle = document.getElementById('gps-loading-title');
-        if (loadTitle) loadTitle.textContent = 'Location failed';
+        if (loadTitle) loadTitle.textContent = 'Location failed. Please retry.';
         if (retryBtn) retryBtn.classList.remove('hidden');
       },
-      { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   }
 
