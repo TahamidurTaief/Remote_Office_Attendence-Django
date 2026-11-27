@@ -86,14 +86,14 @@ def _extract_user_department_identity(user):
     return dept_ids, dept_names
 
 
-def get_scoped_employee_queryset(user, permission_code='reports.view', action='view', base_qs=None):
+def get_scoped_employee_queryset(user, permission_code='reports.view', action='view', base_qs=None, include_inactive=False):
     """
     Authoritative database-scoped employee queryset supporting:
     'OWN', 'TEAM', 'DEPARTMENT', 'BRANCH', 'COMPANY', and 'GLOBAL'.
     Missing canonical identity under restricted scopes fails closed.
     """
     if base_qs is None:
-        base_qs = EmployeeProfile.objects.filter(is_active=True)
+        base_qs = EmployeeProfile.objects.all() if include_inactive else EmployeeProfile.objects.filter(is_active=True)
 
     if not user or not getattr(user, 'is_authenticated', False):
         return base_qs.none()
@@ -191,6 +191,39 @@ def get_scoped_employee_queryset(user, permission_code='reports.view', action='v
             return base_qs.none()
 
     return base_qs.none()
+
+
+def get_historical_scoped_employee_queryset(
+    user,
+    start_date=None,
+    end_date=None,
+    permission_code='reports.view',
+    action='view',
+):
+    """
+    Authorized candidate queryset for historical reports, selectors, and exports.
+    Separates RBAC scope from today's is_active flag while never broadening
+    BRANCH/TEAM/DEPARTMENT/OWN permissions.
+    """
+    scoped_qs = get_scoped_employee_queryset(
+        user,
+        permission_code=permission_code,
+        action=action,
+        include_inactive=True,
+    )
+    if start_date is None or end_date is None:
+        return scoped_qs
+
+    return scoped_qs.filter(
+        Q(is_active=True)
+        | Q(attendances__date__gte=start_date, attendances__date__lte=end_date)
+        | Q(
+            master_employee__employment_history__field_changed='status',
+            master_employee__employment_history__effective_date__gte=start_date,
+        )
+        | Q(master_employee__joined_date__lte=end_date)
+        | Q(joined_date__lte=end_date)
+    ).distinct()
 
 
 def get_scoped_employee_or_404(user, pk, permission_code='reports.view', action='view', base_qs=None):

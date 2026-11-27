@@ -178,12 +178,12 @@ def _resolve_date_range(params, today):
     }
 
 
-def _get_authorized_employees(user, role_variant=None):
+def _get_authorized_employees(user, role_variant=None, include_inactive=False):
     """
     Returns authorized EmployeeProfile queryset using authoritative scoping.
     View-as (role_variant) never expands actual permissions.
     """
-    base_qs = EmployeeProfile.objects.filter(is_active=True)
+    base_qs = EmployeeProfile.objects.all() if include_inactive else EmployeeProfile.objects.filter(is_active=True)
 
     # Try reports.view first, then attendance.view, then dashboard.view
     # Superusers get all via get_scoped_employee_queryset.
@@ -566,7 +566,7 @@ def get_attendance_analytics(user, params=None, role_variant=None):
             "analytics_can_view_reports": can_view_reports,
         }
 
-    scoped_qs = _get_authorized_employees(user, role_variant=role_variant)
+    scoped_qs = _get_authorized_employees(user, role_variant=role_variant, include_inactive=True)
 
     branch_options_map = {}
     dept_options_map = {}

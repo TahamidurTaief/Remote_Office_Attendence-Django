@@ -29,7 +29,7 @@ from apps.employees.models import EmployeeProfile, EmployeeLocationSync
 from apps.branches.models import Branch, OfficeSchedule
 from apps.leave.models import LeaveType, LeaveBalance, LeaveRequest, get_cached_leave_types
 from .forms import ManualAttendanceForm
-from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_employee_or_404
+from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_employee_or_404, get_historical_scoped_employee_queryset
 
 def admin_required(view_func):
     from functools import wraps
@@ -1461,7 +1461,9 @@ class DailyReportView(AdminRequiredMixin, View):
         status_param = request.GET.get('status', '')
         type_param   = request.GET.get('type', '') or request.GET.get('attendance_type', '')
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.view', action='view')
+        scoped_employees = get_historical_scoped_employee_queryset(
+            request.user, start_date=report_date, end_date=report_date, permission_code='reports.view', action='view'
+        )
 
         eval_res = PermissionEngine.evaluate(request.user, 'reports.view', action_type='view')
         if eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY):
@@ -1521,7 +1523,13 @@ class MonthlyReportView(AdminRequiredMixin, View):
         status_param = request.GET.get('status', '')
         type_param = request.GET.get('type', '') or request.GET.get('attendance_type', '')
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.view', action='view')
+        from datetime import date
+        import calendar as cal_mod
+        month_start = date(year, month, 1)
+        month_end = date(year, month, cal_mod.monthrange(year, month)[1])
+        scoped_employees = get_historical_scoped_employee_queryset(
+            request.user, start_date=month_start, end_date=month_end, permission_code='reports.view', action='view'
+        )
 
         eval_res = PermissionEngine.evaluate(request.user, 'reports.view', action_type='view')
         if eval_res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY):
@@ -1534,8 +1542,6 @@ class MonthlyReportView(AdminRequiredMixin, View):
         authorized_emp_ids = set(scoped_employees.values_list('id', flat=True))
 
         from apps.attendance import reporting_service
-        from datetime import date
-        import calendar as cal_mod
 
         data = reporting_service.get_monthly_report_data(
             year=year,
@@ -2405,7 +2411,9 @@ class ExportReportCSVView(AdminRequiredMixin, View):
         except (ValueError, TypeError):
             date_to_obj = date_from_obj
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+        scoped_employees = get_historical_scoped_employee_queryset(
+            request.user, start_date=date_from_obj, end_date=date_to_obj, permission_code='reports.export', action='export'
+        )
 
         from apps.attendance import reporting_service
         data = reporting_service.get_daily_report_data(
@@ -2498,7 +2506,9 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         except (ValueError, TypeError):
             date_to_obj = date_from_obj
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+        scoped_employees = get_historical_scoped_employee_queryset(
+            request.user, start_date=date_from_obj, end_date=date_to_obj, permission_code='reports.export', action='export'
+        )
 
         from apps.attendance import reporting_service
         data = reporting_service.get_daily_report_data(
@@ -2556,7 +2566,9 @@ class ExportReportExcelView(AdminRequiredMixin, View):
         except (ValueError, TypeError):
             date_to_obj = date_from_obj
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+        scoped_employees = get_historical_scoped_employee_queryset(
+            request.user, start_date=date_from_obj, end_date=date_to_obj, permission_code='reports.export', action='export'
+        )
 
         from apps.attendance import reporting_service
         from apps.attendance.pdf_export import format_time_with_seconds, get_employee_department_name, BD_TZ
@@ -3754,7 +3766,9 @@ class ExportAbsentReportExcelView(AdminRequiredMixin, View):
         branch_id = request.GET.get('branch')
         lt_id = request.GET.get('leave_type')
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+        scoped_employees = get_historical_scoped_employee_queryset(
+            request.user, start_date=date_from_obj, end_date=date_to_obj, permission_code='reports.export', action='export'
+        )
 
         deductions = get_unified_deductions(
             date_from=date_from,
@@ -3871,7 +3885,9 @@ class ExportAbsentReportPDFView(AdminRequiredMixin, View):
         branch_id = request.GET.get('branch')
         lt_id = request.GET.get('leave_type')
 
-        scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+        scoped_employees = get_historical_scoped_employee_queryset(
+            request.user, start_date=date_from_obj, end_date=date_to_obj, permission_code='reports.export', action='export'
+        )
 
         deductions = get_unified_deductions(
             date_from=date_from,

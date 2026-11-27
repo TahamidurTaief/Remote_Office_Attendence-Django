@@ -1368,12 +1368,14 @@ def get_daily_report_data(
 
     # Query employees
     from django.db.models import Q
-    if employee_id:
+    if employee_queryset is not None:
+        employees_qs = employee_queryset
+    elif employee_id:
         employees_qs = EmployeeProfile.objects.filter(id=employee_id)
     else:
         employees_qs = EmployeeProfile.objects.filter(
             Q(is_active=True) |
-            Q(attendances__date__gte=start_date, attendances__date__lte=end_date, attendances__is_expired=False)
+            Q(attendances__date__gte=start_date, attendances__date__lte=end_date)
         ).distinct()
 
     employees_qs = employees_qs.select_related(
@@ -1585,13 +1587,15 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
 
     # 1. Fetch active employees and employees active during reporting period
     from django.db.models import Q
-    if employee_id:
+    if employee_queryset is not None:
+        employees_qs = employee_queryset
+    elif employee_id:
         employees_qs = EmployeeProfile.objects.filter(id=employee_id)
     else:
         employees_qs = EmployeeProfile.objects.filter(
             Q(is_active=True) |
             Q(master_employee__employment_history__field_changed='status', master_employee__employment_history__effective_date__gte=month_start) |
-            Q(attendances__date__gte=month_start, attendances__date__lte=month_end, attendances__is_expired=False)
+            Q(attendances__date__gte=month_start, attendances__date__lte=month_end)
         ).distinct()
 
     employees_qs = employees_qs.select_related(
