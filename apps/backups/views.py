@@ -42,34 +42,54 @@ def backup_list(request):
     })
 
 
+def _apply_private_no_store_headers(response, filename=None):
+    response["Cache-Control"] = "private, no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    response["Expires"] = "0"
+    response["X-Content-Type-Options"] = "nosniff"
+    if filename is not None:
+        safe_name = os.path.basename(filename).replace('"', "").replace("\r", "").replace("\n", "")
+        response["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+    return response
+
+
 @_admin_required
 @require_POST
 def create_manual_backup(request):
+    from .exporter import create_portable_backup
+
+    backup_format = request.POST.get("format", "legacy")
     try:
-        backup = create_backup(
-            backup_type="manual",
-            created_by=request.user,
-        )
+        if backup_format == "portable":
+            backup = create_portable_backup(
+                backup_type="manual",
+                created_by=request.user,
+            )
+        else:
+            backup = create_backup(
+                backup_type="manual",
+                created_by=request.user,
+            )
         if backup.status == "completed" and backup.file_path:
             if os.path.exists(backup.file_path):
-                # Decrypt on-the-fly if encrypted; serve plaintext JSON to the browser.
+                content_type = (
+                    "application/zip"
+                    if backup.file_name.endswith(".zip")
+                    else "application/json"
+                )
                 if backup.is_encrypted:
                     config = GoogleDriveConfig.get_config()
                     plaintext = decrypt_file_to_bytes(backup.file_path, config.master_key_wrapped)
-                    response = HttpResponse(plaintext, content_type="application/json")
-                    response["Content-Disposition"] = (
-                        f'attachment; filename="{backup.file_name}"'
-                    )
-                    return response
+                    response = HttpResponse(plaintext, content_type=content_type)
+                    return _apply_private_no_store_headers(response, filename=backup.file_name)
                 else:
                     response = FileResponse(
                         open(backup.file_path, "rb"),
-                        content_type="application/json",
+                        as_attachment=True,
+                        filename=os.path.basename(backup.file_name),
+                        content_type=content_type,
                     )
-                    response["Content-Disposition"] = (
-                        f'attachment; filename="{backup.file_name}"'
-                    )
-                    return response
+                    return _apply_private_no_store_headers(response, filename=backup.file_name)
             messages.error(request, "Backup file not found on disk.")
     except Exception as e:
         messages.error(request, f"Backup failed: {str(e)}")
@@ -155,6 +175,11 @@ def download_backup(request, pk):
         messages.error(request, "Backup file not found.")
         return redirect("backups:backup_list")
 
+    content_type = (
+        "application/zip"
+        if backup.file_name.endswith(".zip")
+        else "application/json"
+    )
     if backup.is_encrypted:
         config = GoogleDriveConfig.get_config()
         try:
@@ -162,20 +187,16 @@ def download_backup(request, pk):
         except Exception as e:
             messages.error(request, f"Decryption failed: {e}")
             return redirect("backups:backup_list")
-        response = HttpResponse(plaintext, content_type="application/octet-stream")
-        response["Content-Disposition"] = (
-            f'attachment; filename="{backup.file_name}"'
-        )
-        return response
+        response = HttpResponse(plaintext, content_type=content_type)
+        return _apply_private_no_store_headers(response, filename=backup.file_name)
 
     response = FileResponse(
         open(backup.file_path, "rb"),
-        content_type="application/json",
+        as_attachment=True,
+        filename=os.path.basename(backup.file_name),
+        content_type=content_type,
     )
-    response["Content-Disposition"] = (
-        f'attachment; filename="{backup.file_name}"'
-    )
-    return response
+    return _apply_private_no_store_headers(response, filename=backup.file_name)
 
 
 # ── Encryption management ─────────────────────────────────────────────────────
@@ -261,3 +282,134 @@ def manage_encryption(request):
         )
 
     return redirect("backups:backup_list")
+
+
+# ── Portable archive validation & dry-run preview (no import execution) ───────
+
+@_admin_required
+@require_POST
+def preview_portable_import(request):
+    """
+    Validate an uploaded Trackme portable ZIP archive and return a dry-run
+    additive import preview bound to the requesting user and archive digest.
+    """
+    import uuid
+    from .importer import (
+        ArchiveLimitError,
+        ArchiveLimits,
+        ArchiveValidationError,
+        STAGING_DIR,
+        bind_preview_to_user,
+        cleanup_expired_staging,
+        validate_and_preview_archive,
+    )
+
+    cleanup_expired_staging()
+    uploaded = request.FILES.get("archive")
+    if not uploaded:
+        return JsonResponse({"error": "No archive file uploaded."}, status=400)
+
+    limits = ArchiveLimits()
+    if uploaded.size is not None and uploaded.size > limits.max_compressed_bytes:
+        return JsonResponse(
+            {"error": f"Compressed archive exceeds limit ({limits.max_compressed_bytes} bytes)."},
+            status=413,
+        )
+
+    os.makedirs(STAGING_DIR, exist_ok=True)
+    staged_path = os.path.join(STAGING_DIR, f"stage_{request.user.pk}_{uuid.uuid4().hex}.zip")
+
+    try:
+        written = 0
+        with open(staged_path, "wb") as dst:
+            for chunk in uploaded.chunks():
+                written += len(chunk)
+                if written > limits.max_compressed_bytes:
+                    raise ArchiveLimitError(
+                        f"Compressed archive exceeds limit ({limits.max_compressed_bytes} bytes)."
+                    )
+                dst.write(chunk)
+
+        preview = validate_and_preview_archive(staged_path, limits=limits)
+        preview_id = bind_preview_to_user(request.user.pk, preview, staged_path)
+        return _apply_private_no_store_headers(JsonResponse(
+            {
+                "preview_id": preview_id,
+                "archive_sha256": preview["archive_sha256"],
+                "preview": preview,
+            },
+            status=200,
+        ))
+    except ArchiveLimitError as exc:
+        if os.path.exists(staged_path):
+            os.remove(staged_path)
+        return JsonResponse({"error": str(exc)}, status=413)
+    except ArchiveValidationError as exc:
+        if os.path.exists(staged_path):
+            os.remove(staged_path)
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        if os.path.exists(staged_path):
+            os.remove(staged_path)
+        return JsonResponse({"error": f"Preview failed: {exc}"}, status=400)
+
+
+@_admin_required
+def get_import_preview_status(request, preview_id):
+    """Return a cached preview only if bound to the requesting user and digest."""
+    from .importer import get_bound_preview
+
+    expected_sha256 = request.GET.get("sha256")
+    bound = get_bound_preview(preview_id, request.user.pk, expected_sha256=expected_sha256)
+    if not bound:
+        return JsonResponse({"error": "Preview not found, expired, or unauthorized."}, status=404)
+    return JsonResponse(
+        {
+            "preview_id": bound["preview_id"],
+            "archive_sha256": bound["archive_sha256"],
+            "preview": bound["preview"],
+        },
+        status=200,
+    )
+
+
+@_admin_required
+@require_POST
+def execute_portable_import(request):
+    """
+    Execute an additive import for a previously validated, user-and-digest-bound
+    preview. Revalidates digest and destination conflicts at execution time.
+    """
+    from django.core.cache import cache
+    from .importer import (
+        ArchiveLimitError,
+        ArchiveValidationError,
+        ImportConflictError,
+        execute_additive_import,
+        get_bound_preview,
+    )
+
+    preview_id = (request.POST.get("preview_id") or "").strip()
+    archive_sha256 = (request.POST.get("archive_sha256") or "").strip()
+    if not preview_id or not archive_sha256:
+        return JsonResponse({"error": "preview_id and archive_sha256 are required."}, status=400)
+
+    bound = get_bound_preview(preview_id, request.user.pk, expected_sha256=archive_sha256)
+    if not bound:
+        return JsonResponse({"error": "Preview not found, expired, or unauthorized."}, status=404)
+
+    staged_path = bound.get("staged_path", "")
+    try:
+        result = execute_additive_import(staged_path, expected_sha256=archive_sha256)
+        cache.delete(f"trackme_import_preview:{preview_id}")
+        if staged_path and os.path.exists(staged_path):
+            os.remove(staged_path)
+        return _apply_private_no_store_headers(JsonResponse(result, status=200))
+    except ImportConflictError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
+    except ArchiveLimitError as exc:
+        return JsonResponse({"error": str(exc)}, status=413)
+    except ArchiveValidationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": f"Import failed: {exc}"}, status=500)

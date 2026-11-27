@@ -2,6 +2,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from apps.backups.utils import create_backup
+from apps.backups.exporter import create_portable_backup
 from apps.backups.models import GoogleDriveConfig
 
 
@@ -15,6 +16,13 @@ class Command(BaseCommand):
             default="auto_daily",
             choices=["manual", "auto_daily", "auto_3day"],
             help="Backup type",
+        )
+        parser.add_argument(
+            "--format",
+            type=str,
+            default="legacy",
+            choices=["legacy", "portable"],
+            help="Backup format (legacy JSON+DB or portable ZIP archive)",
         )
 
     def handle(self, *args, **options):
@@ -38,7 +46,10 @@ class Command(BaseCommand):
         self.stdout.write(f"Running {backup_type} backup...")
 
         try:
-            backup = create_backup(backup_type=backup_type)
+            if options.get("format") == "portable":
+                backup = create_portable_backup(backup_type=backup_type)
+            else:
+                backup = create_backup(backup_type=backup_type)
 
             config.last_backup_at = timezone.now()
             config.save(update_fields=["last_backup_at", "updated_at"])

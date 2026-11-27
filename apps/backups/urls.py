@@ -8,6 +8,9 @@ from .views import (
     test_drive_connection_view,
     download_backup,
     manage_encryption,
+    preview_portable_import,
+    get_import_preview_status,
+    execute_portable_import,
 )
 
 app_name = "backups"
@@ -21,5 +24,8 @@ urlpatterns = [
     path("settings/", save_drive_config, name="save_drive_config"),
     path("test-drive/", test_drive_connection_view, name="test_drive"),
     path("encryption/", manage_encryption, name="manage_encryption"),
+    path("import/preview/", preview_portable_import, name="preview_import"),
+    path("import/preview/<str:preview_id>/", get_import_preview_status, name="preview_status"),
+    path("import/execute/", execute_portable_import, name="execute_import"),
 ]
 
