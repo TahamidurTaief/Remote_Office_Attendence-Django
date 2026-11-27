@@ -180,8 +180,6 @@ class PortableArchiveAdditiveImportTests(TestCase):
         with override_settings(MEDIA_ROOT=self.media_dir.name):
             csrf_client = Client(enforce_csrf_checks=True)
             csrf_client.force_login(self.admin)
-            csrf_client.get(reverse("backups:backup_list"))
-            csrf_token = csrf_client.cookies["csrftoken"].value
 
             zip_path = os.path.join(self.tmp_dir.name, "roundtrip.zip")
             src = self._create_source_fixture_and_export(zip_path)
@@ -190,6 +188,9 @@ class PortableArchiveAdditiveImportTests(TestCase):
             if default_storage.exists(src["doc_name"]):
                 default_storage.delete(src["doc_name"])
             self._clear_business_fixture()
+
+            csrf_client.get(reverse("backups:backup_list"))
+            csrf_token = csrf_client.cookies["csrftoken"].value
 
             local_branch = Branch.objects.create(name="Local Colliding Branch", latitude=23.7, longitude=90.3)
             colliding_emp = Employee(

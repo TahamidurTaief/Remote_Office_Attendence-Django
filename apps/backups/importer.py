@@ -28,6 +28,7 @@ from django.core.cache import cache
 from django.core.files.base import File
 from django.core.files.storage import default_storage
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from .exporter import (
@@ -86,7 +87,7 @@ STABLE_IDENTITY_RULES: dict[str, list[tuple[str, ...]]] = {
     "employees.EmployeeDocument": [("employee", "title", "document_type")],
     "employees.EmployeeBankAccount": [("employee", "bank", "account_number")],
     "attendance.AttendancePolicy": [("branch",)],
-    "attendance.Attendance": [("sync_uuid",), ("employee", "date")],
+    "attendance.Attendance": [("sync_uuid",)],
     "attendance.AttendanceLocation": [("sync_uuid",)],
     "attendance.AttendanceAbsentLog": [("employee", "date")],
     "attendance.OvertimeRequest": [("employee", "date")],
@@ -123,6 +124,40 @@ STABLE_IDENTITY_RULES: dict[str, list[tuple[str, ...]]] = {
     "audit.PinnedMenuItem": [("user", "menu_key")],
 }
 
+# Exported models that currently lack a durable unique natural identity in the schema.
+# Additive import must fail closed when an archive contains records for these models.
+UNSUPPORTED_IDENTITY_MODELS: dict[str, str] = {
+    "accounts.ApprovalPolicy": "No durable unique natural identity field (requires unique uuid/code).",
+    "accounts.UserLoginActivity": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "attendance.AttendanceActivityLog": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "attendance.AttendanceAuditLog": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "attendance.AttendanceCorrectionRequest": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "attendance.ForgotCheckoutRequest": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "audit.AuditAccessLog": "No durable unique natural identity field (requires unique uuid).",
+    "audit.MediaAsset": "No durable unique natural identity field (requires unique uuid).",
+    "audit.TrashEntry": "No durable unique natural identity field (requires unique uuid).",
+    "employees.AssetAssignment": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "employees.DocumentDownloadLog": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "employees.EmployeeActivityLog": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "employees.EmployeeAuditLog": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "employees.EmployeeSuspension": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "employees.EmploymentHistory": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "employees.LifecycleTransitionRequest": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "employees.ManagerDelegation": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "expense.ExpenseHistory": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "expense.ExpenseReturnEvent": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "notifications.ActivityLog": "No durable unique natural identity field (requires unique uuid).",
+    "notifications.AuditLog": "No durable unique natural identity field (requires unique uuid).",
+    "notifications.Notification": "No durable unique natural identity field (requires unique uuid).",
+    "payroll.PayrollWorkflowAudit": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "projects.ProjectTaskReply": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "projects.TaskAttachment": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "schedule.ScheduleEvent": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "workflow.WorkflowAction": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "workflow.WorkflowDelegation": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+    "workflow.WorkflowInstance": "No durable unique natural identity field (requires unique sync_uuid/uuid).",
+}
+
 
 class ArchiveValidationError(ValueError):
     """Base error for rejected or invalid Trackme archives."""
@@ -151,6 +186,23 @@ class PreviewBucket:
     exact_duplicates: list[dict[str, Any]] = field(default_factory=list)
     conflicts: list[dict[str, Any]] = field(default_factory=list)
     unresolved_references: list[dict[str, Any]] = field(default_factory=list)
+    ambiguous_identities: list[dict[str, Any]] = field(default_factory=list)
+    missing_identities: list[dict[str, Any]] = field(default_factory=list)
+    unsupported_identities: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _storage_file_sha256(storage_name: str) -> str | None:
+    """Return SHA-256 hex digest of an existing default_storage file, or None if missing."""
+    if not storage_name or not default_storage.exists(storage_name):
+        return None
+    digest = hashlib.sha256()
+    with default_storage.open(storage_name, "rb") as fh:
+        while True:
+            buf = fh.read(STREAM_READ_CHUNK_BYTES)
+            if not buf:
+                break
+            digest.update(buf)
+    return digest.hexdigest()
 
 
 def cleanup_expired_staging(ttl_seconds: int = PREVIEW_TTL_SECONDS) -> None:
@@ -513,6 +565,7 @@ def validate_and_preview_archive(
         # Verify media entries match manifest and checksums
         media_entries = manifest.get("media", {}).get("files", [])
         expected_media_paths: set[str] = set()
+        media_sha_by_archive_path: dict[str, str] = {}
         for m_item in media_entries:
             m_path = m_item.get("archive_path", "")
             if m_path not in info_by_path:
@@ -523,6 +576,7 @@ def validate_and_preview_archive(
             )
             if actual_size != m_item.get("size") or actual_sha != m_item.get("sha256"):
                 raise ArchiveValidationError(f"Media checksum or size mismatch for {m_path!r}.")
+            media_sha_by_archive_path[m_path] = actual_sha
 
         actual_media_paths = {p for p in seen_paths if p.startswith("media/")}
         if actual_media_paths != expected_media_paths:
@@ -641,14 +695,130 @@ def validate_and_preview_archive(
         if total_parsed_records != manifest.get("totals", {}).get("record_count"):
             raise ArchiveValidationError("Manifest total record_count mismatch.")
 
-    # Compute read-only dry-run preview (creates, exact_duplicates, conflicts, unresolved_references)
+    # Compute read-only dry-run preview (creates, exact_duplicates, conflicts, unresolved_references,
+    # ambiguous_identities, missing_identities, unsupported_identities)
     bucket = PreviewBucket()
     resolved_ref_to_dest_pk: dict[str, Any] = {}
     per_model_summary: dict[str, dict[str, int]] = {}
 
+    def _model_summary(lbl: str) -> dict[str, int]:
+        return per_model_summary.setdefault(
+            lbl,
+            {
+                "creates": 0,
+                "exact_duplicates": 0,
+                "conflicts": 0,
+                "unresolved_references": 0,
+                "ambiguous_identities": 0,
+                "missing_identities": 0,
+                "unsupported_identities": 0,
+            },
+        )
+
+    def _build_evaluable_lookups(model_label: str, row: dict[str, Any], concrete_map: dict[str, Any]):
+        rules = STABLE_IDENTITY_RULES.get(model_label, [])
+        evaluable_lookups: list[dict[str, Any]] = []
+        blocked_by_parent = False
+        for rule in rules:
+            lookup_kwargs: dict[str, Any] = {}
+            can_evaluate = True
+            for attr in rule:
+                val = row["fields"].get(attr)
+                field = concrete_map[attr]
+                if val is None:
+                    if field.is_relation and field.null and len(rule) == 1:
+                        lookup_kwargs[f"{field.attname}__isnull"] = True
+                    else:
+                        can_evaluate = False
+                        break
+                elif field.is_relation:
+                    parent_ref = val.get("ref")
+                    if parent_ref in resolved_ref_to_dest_pk:
+                        lookup_kwargs[field.attname] = resolved_ref_to_dest_pk[parent_ref]
+                    else:
+                        can_evaluate = False
+                        blocked_by_parent = True
+                        break
+                else:
+                    if model_label == "accounts.CustomUser" and attr == "email":
+                        lookup_kwargs["email__iexact"] = val
+                    else:
+                        lookup_kwargs[attr] = val
+            if can_evaluate and lookup_kwargs:
+                evaluable_lookups.append(lookup_kwargs)
+        return evaluable_lookups, blocked_by_parent
+
+    def _classify_matched_row(model_label: str, row: dict[str, Any], matched_obj, concrete_map: dict[str, Any]) -> None:
+        resolved_ref_to_dest_pk[row["ref"]] = matched_obj.pk
+        differing_fields: list[str] = []
+        pk_name = allowed_models[model_label]._meta.pk.name
+        for fname, fval in row["fields"].items():
+            if fname == pk_name:
+                continue
+            field = concrete_map[fname]
+            if getattr(field, "auto_now", False) or getattr(field, "auto_now_add", False):
+                continue
+            if field.is_relation:
+                if fval is None:
+                    if getattr(matched_obj, field.attname) is not None:
+                        differing_fields.append(fname)
+                elif field.related_model._meta.label != "contenttypes.ContentType":
+                    expected_dest_pk = resolved_ref_to_dest_pk.get(fval.get("ref"))
+                    if expected_dest_pk is not None and getattr(matched_obj, field.attname) != expected_dest_pk:
+                        differing_fields.append(fname)
+            elif field.get_internal_type() == "FileField":
+                arch_name = fval.get("storage_name") if isinstance(fval, dict) else None
+                db_name = str(getattr(matched_obj, fname) or "") or None
+                if arch_name != db_name:
+                    is_remapped_match = False
+                    if arch_name and db_name and isinstance(fval, dict):
+                        arch_sha = media_sha_by_archive_path.get(fval.get("archive_path", ""))
+                        if arch_sha and _storage_file_sha256(db_name) == arch_sha:
+                            is_remapped_match = True
+                    if not is_remapped_match:
+                        differing_fields.append(fname)
+            else:
+                if not _values_equal(fval, getattr(matched_obj, fname), field):
+                    differing_fields.append(fname)
+
+        summary = _model_summary(model_label)
+        if differing_fields:
+            bucket.conflicts.append(
+                {
+                    "ref": row["ref"],
+                    "model": model_label,
+                    "destination_pk": matched_obj.pk,
+                    "differing_fields": differing_fields,
+                }
+            )
+            summary["conflicts"] += 1
+        else:
+            bucket.exact_duplicates.append(
+                {
+                    "ref": row["ref"],
+                    "model": model_label,
+                    "destination_pk": matched_obj.pk,
+                }
+            )
+            summary["exact_duplicates"] += 1
+
     # Multi-pass identity resolution so parent records resolve before children when possible.
     unresolved_queue: list[tuple[str, dict[str, Any]]] = []
     for model_label, rows in parsed_records.items():
+        if not rows:
+            continue
+        if model_label not in STABLE_IDENTITY_RULES or not STABLE_IDENTITY_RULES[model_label]:
+            reason = UNSUPPORTED_IDENTITY_MODELS.get(
+                model_label,
+                f"Model {model_label!r} has no configured stable natural identity rule.",
+            )
+            summary = _model_summary(model_label)
+            for row in rows:
+                bucket.unsupported_identities.append(
+                    {"ref": row["ref"], "model": model_label, "reason": reason}
+                )
+                summary["unsupported_identities"] += 1
+            continue
         for row in rows:
             unresolved_queue.append((model_label, row))
 
@@ -659,7 +829,6 @@ def validate_and_preview_archive(
         for model_label, row in unresolved_queue:
             model_cls = allowed_models[model_label]
             concrete_map = {f.name: f for f in model_cls._meta.concrete_fields}
-            rules = STABLE_IDENTITY_RULES.get(model_label, [])
 
             # Check broken FKs (not in archive at all)
             broken_fk = False
@@ -676,98 +845,46 @@ def validate_and_preview_archive(
                 next_queue.append((model_label, row))
                 continue
 
-            # Try matching destination record by stable identity rules
-            matched_obj = None
-            rule_blocked_by_unresolved_parent = False
+            evaluable_lookups, blocked_by_parent = _build_evaluable_lookups(
+                model_label, row, concrete_map
+            )
+            if blocked_by_parent and _pass < max_passes - 1:
+                next_queue.append((model_label, row))
+                continue
 
-            for rule in rules:
-                lookup_kwargs: dict[str, Any] = {}
-                can_evaluate_rule = True
-                for attr in rule:
-                    val = row["fields"].get(attr)
-                    field = concrete_map[attr]
-                    if val is None:
-                        can_evaluate_rule = False
-                        break
-                    if field.is_relation:
-                        parent_ref = val.get("ref")
-                        if parent_ref in resolved_ref_to_dest_pk:
-                            lookup_kwargs[field.attname] = resolved_ref_to_dest_pk[parent_ref]
-                        else:
-                            can_evaluate_rule = False
-                            rule_blocked_by_unresolved_parent = True
-                            break
-                    else:
-                        if model_label == "accounts.CustomUser" and attr == "email":
-                            lookup_kwargs["email__iexact"] = val
-                        else:
-                            lookup_kwargs[attr] = val
-                if can_evaluate_rule and lookup_kwargs:
-                    matched_obj = model_cls._default_manager.filter(**lookup_kwargs).first()
-                    if matched_obj is not None:
-                        break
+            if not evaluable_lookups:
+                next_queue.append((model_label, row))
+                continue
 
-            if matched_obj is not None:
-                resolved_ref_to_dest_pk[row["ref"]] = matched_obj.pk
-                progress = True
+            combined_q = Q()
+            for lk in evaluable_lookups:
+                combined_q |= Q(**lk)
+            matches = list(model_cls._default_manager.filter(combined_q)[:2])
 
-                # Compare fields to classify exact_duplicate vs conflict
-                differing_fields: list[str] = []
-                pk_name = model_cls._meta.pk.name
-                for fname, fval in row["fields"].items():
-                    if fname == pk_name:
-                        continue
-                    field = concrete_map[fname]
-                    if field.is_relation:
-                        if fval is None:
-                            if getattr(matched_obj, field.attname) is not None:
-                                differing_fields.append(fname)
-                        elif field.related_model._meta.label != "contenttypes.ContentType":
-                            expected_dest_pk = resolved_ref_to_dest_pk.get(fval.get("ref"))
-                            if expected_dest_pk is not None and getattr(matched_obj, field.attname) != expected_dest_pk:
-                                differing_fields.append(fname)
-                    elif field.get_internal_type() == "FileField":
-                        arch_name = fval.get("storage_name") if isinstance(fval, dict) else None
-                        db_name = str(getattr(matched_obj, fname) or "") or None
-                        if arch_name != db_name:
-                            differing_fields.append(fname)
-                    else:
-                        if not _values_equal(fval, getattr(matched_obj, fname), field):
-                            differing_fields.append(fname)
-
-                summary = per_model_summary.setdefault(
-                    model_label, {"creates": 0, "exact_duplicates": 0, "conflicts": 0, "unresolved_references": 0}
+            if len(matches) > 1:
+                summary = _model_summary(model_label)
+                bucket.ambiguous_identities.append(
+                    {
+                        "ref": row["ref"],
+                        "model": model_label,
+                        "matched_pks": [m.pk for m in matches],
+                        "reason": "Identity rules matched multiple destination records.",
+                    }
                 )
-                if differing_fields:
-                    bucket.conflicts.append(
-                        {
-                            "ref": row["ref"],
-                            "model": model_label,
-                            "destination_pk": matched_obj.pk,
-                            "differing_fields": differing_fields,
-                        }
-                    )
-                    summary["conflicts"] += 1
-                else:
-                    bucket.exact_duplicates.append(
-                        {
-                            "ref": row["ref"],
-                            "model": model_label,
-                            "destination_pk": matched_obj.pk,
-                        }
-                    )
-                    summary["exact_duplicates"] += 1
+                summary["ambiguous_identities"] += 1
+                continue
+
+            if len(matches) == 1:
+                _classify_matched_row(model_label, row, matches[0], concrete_map)
+                progress = True
             else:
-                if rule_blocked_by_unresolved_parent and _pass < max_passes - 1:
-                    next_queue.append((model_label, row))
-                else:
-                    next_queue.append((model_label, row))
+                next_queue.append((model_label, row))
 
         unresolved_queue = next_queue
         if not progress:
             break
 
-    # Remaining records: either creates or unresolved_references (if any FK is broken)
+    # Finalize remaining records: unresolved_references, ambiguous/missing identity, or creates
     for model_label, row in unresolved_queue:
         model_cls = allowed_models[model_label]
         concrete_map = {f.name: f for f in model_cls._meta.concrete_fields}
@@ -780,9 +897,7 @@ def validate_and_preview_archive(
                     if target_ref not in all_archive_refs:
                         missing_refs.append({"field": fname, "target_ref": target_ref})
 
-        summary = per_model_summary.setdefault(
-            model_label, {"creates": 0, "exact_duplicates": 0, "conflicts": 0, "unresolved_references": 0}
-        )
+        summary = _model_summary(model_label)
         if missing_refs:
             bucket.unresolved_references.append(
                 {
@@ -792,13 +907,54 @@ def validate_and_preview_archive(
                 }
             )
             summary["unresolved_references"] += 1
-        else:
-            bucket.creates.append({"ref": row["ref"], "model": model_label})
-            summary["creates"] += 1
+            continue
 
+        evaluable_lookups, blocked_by_parent = _build_evaluable_lookups(
+            model_label, row, concrete_map
+        )
+        if evaluable_lookups:
+            combined_q = Q()
+            for lk in evaluable_lookups:
+                combined_q |= Q(**lk)
+            matches = list(model_cls._default_manager.filter(combined_q)[:2])
+            if len(matches) > 1:
+                bucket.ambiguous_identities.append(
+                    {
+                        "ref": row["ref"],
+                        "model": model_label,
+                        "matched_pks": [m.pk for m in matches],
+                        "reason": "Identity rules matched multiple destination records.",
+                    }
+                )
+                summary["ambiguous_identities"] += 1
+                continue
+            if len(matches) == 1:
+                _classify_matched_row(model_label, row, matches[0], concrete_map)
+                continue
+
+        if not evaluable_lookups and not blocked_by_parent:
+            bucket.missing_identities.append(
+                {
+                    "ref": row["ref"],
+                    "model": model_label,
+                    "reason": "Required stable identity field(s) are missing or null.",
+                }
+            )
+            summary["missing_identities"] += 1
+            continue
+
+        bucket.creates.append({"ref": row["ref"], "model": model_label})
+        summary["creates"] += 1
+
+    is_valid = (
+        len(bucket.unresolved_references) == 0
+        and len(bucket.unsupported_identities) == 0
+        and len(bucket.ambiguous_identities) == 0
+        and len(bucket.missing_identities) == 0
+    )
     return {
-        "valid": len(bucket.unresolved_references) == 0,
-        "ready_for_additive_import": len(bucket.unresolved_references) == 0 and len(bucket.conflicts) == 0,
+        "valid": is_valid,
+        "ready_for_additive_import": is_valid and len(bucket.conflicts) == 0,
         "archive_sha256": archive_sha256,
         "format": manifest["format"],
         "format_version": manifest["format_version"],
@@ -809,12 +965,18 @@ def validate_and_preview_archive(
             "exact_duplicates": len(bucket.exact_duplicates),
             "conflicts": len(bucket.conflicts),
             "unresolved_references": len(bucket.unresolved_references),
+            "ambiguous_identities": len(bucket.ambiguous_identities),
+            "missing_identities": len(bucket.missing_identities),
+            "unsupported_identities": len(bucket.unsupported_identities),
         },
         "per_model": per_model_summary,
         "creates": bucket.creates,
         "exact_duplicates": bucket.exact_duplicates,
         "conflicts": bucket.conflicts,
         "unresolved_references": bucket.unresolved_references,
+        "ambiguous_identities": bucket.ambiguous_identities,
+        "missing_identities": bucket.missing_identities,
+        "unsupported_identities": bucket.unsupported_identities,
     }
 
 
@@ -932,19 +1094,15 @@ def _stage_and_place_media(
         # Never overwrite existing media in default_storage
         dest_name = desired_storage_name
         if default_storage.exists(dest_name):
-            existing_sha = hashlib.sha256()
-            with default_storage.open(dest_name, "rb") as existing_fh:
-                while True:
-                    buf = existing_fh.read(STREAM_READ_CHUNK_BYTES)
-                    if not buf:
-                        break
-                    existing_sha.update(buf)
-            if existing_sha.hexdigest() == expected_sha:
+            if _storage_file_sha256(dest_name) == expected_sha:
                 archive_to_dest_storage[arch_path] = dest_name
                 continue
             stem, ext = posixpath.splitext(desired_storage_name)
             dest_name = f"{stem}_{expected_sha[:8]}{ext}"
             if default_storage.exists(dest_name):
+                if _storage_file_sha256(dest_name) == expected_sha:
+                    archive_to_dest_storage[arch_path] = dest_name
+                    continue
                 dest_name = default_storage.get_available_name(dest_name)
 
         with open(staged_file, "rb") as fh:
@@ -975,6 +1133,18 @@ def execute_additive_import(
 
     if preview["archive_sha256"] != expected_sha256:
         raise ArchiveValidationError("Archive digest mismatch at execution time.")
+    if preview["totals"].get("unsupported_identities", 0) > 0:
+        raise ImportConflictError(
+            f"Unsupported identity for {preview['totals']['unsupported_identities']} record(s); aborting without changes."
+        )
+    if preview["totals"].get("ambiguous_identities", 0) > 0:
+        raise ImportConflictError(
+            f"Ambiguous identity detected for {preview['totals']['ambiguous_identities']} record(s); aborting without changes."
+        )
+    if preview["totals"].get("missing_identities", 0) > 0:
+        raise ImportConflictError(
+            f"Missing required identity for {preview['totals']['missing_identities']} record(s); aborting without changes."
+        )
     if not preview["valid"]:
         raise ImportConflictError(
             f"Archive has {preview['totals']['unresolved_references']} unresolved references."
