@@ -507,3 +507,98 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
         self.assertTrue(res["success"])
         att.refresh_from_db()
         self.assertIsNotNone(att.check_out_time)
+
+    def test_10_explicit_session_id_yesterday_retry_and_cross_employee_isolation(self):
+        """Explicit session_id closes targeted yesterday session, preserves today's, rejects foreign/malformed IDs, and avoids duplicate writes."""
+        from apps.attendance.models import AttendanceLocation
+
+        today = timezone.localdate()
+        yesterday = today - timedelta(days=1)
+
+        with patch("apps.attendance.transaction_service.notify_admins"):
+            y_in = AttendanceTransactionService.check_in(
+                self.staff_user,
+                {
+                    "latitude": 23.8103,
+                    "longitude": 90.4125,
+                    "client_event_time": self._bd_dt(yesterday, 20, 0).isoformat(),
+                },
+                validate_photo=False,
+            )
+            t_in = AttendanceTransactionService.check_in(
+                self.staff_user,
+                {
+                    "latitude": 23.8103,
+                    "longitude": 90.4125,
+                    "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
+                },
+                validate_photo=False,
+            )
+
+            # Foreign employee targeting staff_user's session_id is rejected
+            with self.assertRaises(AttendanceTransactionError) as cm_foreign:
+                AttendanceTransactionService.check_out(
+                    self.other_user,
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": y_in["session_id"]},
+                    validate_photo=False,
+                )
+            self.assertEqual(cm_foreign.exception.status_code, 400)
+
+            # Malformed session_id is rejected with 400
+            with self.assertRaises(AttendanceTransactionError) as cm_bad:
+                AttendanceTransactionService.check_out(
+                    self.staff_user,
+                    {"latitude": 23.8103, "longitude": 90.4125, "session_id": "not-an-int"},
+                    validate_photo=False,
+                )
+            self.assertEqual(cm_bad.exception.status_code, 400)
+
+            checkout_uuid = uuid.uuid4()
+            out_res = AttendanceTransactionService.check_out(
+                self.staff_user,
+                {
+                    "latitude": 23.8103,
+                    "longitude": 90.4125,
+                    "session_id": y_in["session_id"],
+                    "client_event_time": self._bd_dt(today, 10, 0).isoformat(),
+                    "sync_uuid": checkout_uuid,
+                },
+                validate_photo=False,
+            )
+            self.assertTrue(out_res["success"])
+            self.assertEqual(out_res["total_hours"], 14.0)
+
+            loc_count_before = AttendanceLocation.objects.filter(attendance_id=y_in["session_id"], event="check_out").count()
+            self.assertEqual(loc_count_before, 1)
+
+            # Repeated identical retry (with sync_uuid and with session_id only) produces no extra writes
+            retry_uuid_res = AttendanceTransactionService.check_out(
+                self.staff_user,
+                {
+                    "latitude": 23.8103,
+                    "longitude": 90.4125,
+                    "session_id": y_in["session_id"],
+                    "sync_uuid": checkout_uuid,
+                },
+                validate_photo=False,
+            )
+            retry_sid_res = AttendanceTransactionService.check_out(
+                self.staff_user,
+                {
+                    "latitude": 23.8103,
+                    "longitude": 90.4125,
+                    "session_id": y_in["session_id"],
+                },
+                validate_photo=False,
+            )
+            self.assertEqual(retry_uuid_res["total_hours"], 14.0)
+            self.assertEqual(retry_sid_res["total_hours"], 14.0)
+            self.assertEqual(
+                AttendanceLocation.objects.filter(attendance_id=y_in["session_id"], event="check_out").count(),
+                1,
+            )
+
+        y_att = Attendance.objects.get(pk=y_in["session_id"])
+        t_att = Attendance.objects.get(pk=t_in["session_id"])
+        self.assertEqual(y_att.check_out_time, self._bd_dt(today, 10, 0))
+        self.assertIsNone(t_att.check_out_time)

@@ -1,11 +1,11 @@
 import datetime
 from django.utils import timezone
 
-def parse_and_validate_client_time(client_time_str):
+def parse_and_validate_client_time(client_time_str, max_age_seconds=259200):
     """
     Parses an ISO8601 datetime string and validates it against the trust rules:
     1. client_time <= server_now (no future timestamps)
-    2. abs(client_time - server_now) <= 24 hours (covers realistic offline gap)
+    2. abs(client_time - server_now) <= max_age_seconds (default 72 hours, covers overnight & offline sync)
     """
     if not client_time_str:
         return None
@@ -24,8 +24,8 @@ def parse_and_validate_client_time(client_time_str):
         if dt > now:
             return None
         
-        # Difference must be <= 24 hours
-        if (now - dt).total_seconds() > 86400:
+        # Difference must be <= max_age_seconds (default 72 hours)
+        if (now - dt).total_seconds() > max_age_seconds:
             return None
             
         return dt

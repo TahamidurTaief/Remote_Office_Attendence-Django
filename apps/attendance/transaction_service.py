@@ -455,8 +455,12 @@ class AttendanceTransactionService:
 
             target_session_id = data.get('session_id') or data.get('attendance_id')
             if target_session_id:
+                try:
+                    target_session_pk = int(target_session_id)
+                except (TypeError, ValueError):
+                    raise AttendanceTransactionError('Invalid attendance session target.', 400)
                 attendance = Attendance.objects.filter(
-                    pk=target_session_id,
+                    pk=target_session_pk,
                     employee=emp_locked,
                     attendance_type='check_in',
                     is_expired=False
