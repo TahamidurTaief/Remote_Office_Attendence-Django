@@ -320,3 +320,146 @@ def calculate_early_checkout(check_out_time, schedule, session_date=None):
         threshold = timezone.make_aware(threshold, timezone.get_current_timezone())
         
     return check_out_time < threshold
+
+
+def resolve_shift_schedule_times(employee, snapshot=None):
+    """
+    Resolve (start_time, end_time, source, error) without guessing defaults.
+    Precedence:
+      1. Immutable session snapshot (if provided)
+      2. Explicit master_employee.shift string
+      3. Branch OfficeSchedule
+    Returns (None, None, 'unresolved', reason) when no valid schedule exists.
+    """
+    if snapshot is not None:
+        s_time = snapshot.get('shift_start_time') if isinstance(snapshot, dict) else getattr(snapshot, 'shift_start_time', None)
+        e_time = snapshot.get('shift_end_time') if isinstance(snapshot, dict) else getattr(snapshot, 'shift_end_time', None)
+        if s_time is not None and e_time is not None:
+            return s_time, e_time, 'snapshot', None
+        return None, None, 'unresolved', 'Incomplete schedule snapshot.'
+
+    if not employee:
+        return None, None, 'unresolved', 'Employee is required to resolve schedule.'
+
+    master_employee = getattr(employee, 'master_employee', None)
+    raw_shift = getattr(master_employee, 'shift', None) if master_employee else None
+    if raw_shift and str(raw_shift).strip():
+        s_time, e_time = parse_shift_times(str(raw_shift))
+        if s_time is not None and e_time is not None:
+            return s_time, e_time, 'employee_shift', None
+        return None, None, 'unresolved', f'Unparseable employee shift: {raw_shift}'
+
+    branch = getattr(employee, 'branch', None)
+    branch_schedule = None
+    if branch:
+        try:
+            branch_schedule = branch.schedule
+        except Exception:
+            branch_schedule = None
+
+    if branch_schedule:
+        s_time = branch_schedule.office_start_time
+        e_time = branch_schedule.office_end_time
+        if isinstance(s_time, str):
+            s_time = parse_time_from_string(s_time)
+        if isinstance(e_time, str):
+            e_time = parse_time_from_string(e_time)
+        if s_time is not None and e_time is not None:
+            return s_time, e_time, 'branch_schedule', None
+
+    return None, None, 'unresolved', 'No branch schedule or employee shift configured.'
+
+
+def _localize_dt(dt, tz):
+    if timezone.is_aware(dt):
+        return timezone.localtime(dt, tz)
+    return timezone.make_aware(dt, tz)
+
+
+def resolve_checkout_window(check_in_time, employee=None, schedule_times=None, snapshot=None, tz=None):
+    """
+    Pure resolver for a concrete shift instance and its next daily shift-start boundary.
+    Holidays never extend the deadline.
+    """
+    active_tz = tz or timezone.get_current_timezone()
+
+    if schedule_times is not None:
+        start_time, end_time = schedule_times
+        source = 'explicit'
+        err = None if (start_time is not None and end_time is not None) else 'Incomplete schedule times.'
+    else:
+        start_time, end_time, source, err = resolve_shift_schedule_times(employee, snapshot=snapshot)
+
+    if err or start_time is None or end_time is None:
+        return {
+            'resolved': False,
+            'source': source,
+            'reason': err or 'unresolved_schedule',
+            'shift_date': None,
+            'shift_start_at': None,
+            'shift_end_at': None,
+            'checkout_deadline_at': None,
+            'is_overnight': None,
+        }
+
+    local_in = _localize_dt(check_in_time, active_tz)
+    is_overnight = end_time <= start_time
+
+    # Early arrival / overnight shift-date assignment:
+    # For overnight shifts (e.g. 22:00-06:00), arrivals strictly before end_time (00:00-05:59)
+    # belong to the shift that started on the previous calendar day; arrivals >= end_time
+    # (including early arrivals before 22:00) belong to the shift starting on local_in.date().
+    if is_overnight and local_in.time() < end_time:
+        shift_date = local_in.date() - timedelta(days=1)
+    else:
+        shift_date = local_in.date()
+
+    shift_start_at = timezone.make_aware(datetime.combine(shift_date, start_time), active_tz)
+    end_date = shift_date + timedelta(days=1) if is_overnight else shift_date
+    shift_end_at = timezone.make_aware(datetime.combine(end_date, end_time), active_tz)
+    checkout_deadline_at = timezone.make_aware(
+        datetime.combine(shift_date + timedelta(days=1), start_time),
+        active_tz,
+    )
+
+    return {
+        'resolved': True,
+        'source': source,
+        'reason': None,
+        'shift_date': shift_date,
+        'shift_start_at': shift_start_at,
+        'shift_end_at': shift_end_at,
+        'checkout_deadline_at': checkout_deadline_at,
+        'is_overnight': is_overnight,
+    }
+
+
+def evaluate_checkout_eligibility(check_in_time, checkout_time, employee=None, schedule_times=None, snapshot=None, tz=None):
+    """
+    Pure evaluator: permits checkout strictly before checkout_deadline_at;
+    at or after checkout_deadline_at requires the missing-checkout correction workflow.
+    """
+    window = resolve_checkout_window(
+        check_in_time=check_in_time,
+        employee=employee,
+        schedule_times=schedule_times,
+        snapshot=snapshot,
+        tz=tz,
+    )
+    if not window['resolved']:
+        return {
+            **window,
+            'allowed': False,
+            'requires_correction_workflow': False,
+        }
+
+    active_tz = tz or timezone.get_current_timezone()
+    local_out = _localize_dt(checkout_time, active_tz)
+    deadline = window['checkout_deadline_at']
+    allowed = local_out < deadline
+    return {
+        **window,
+        'allowed': allowed,
+        'requires_correction_workflow': not allowed,
+        'reason': None if allowed else 'checkout_window_expired',
+    }
