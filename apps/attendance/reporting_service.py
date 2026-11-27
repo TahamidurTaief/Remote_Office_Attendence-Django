@@ -2,12 +2,16 @@ import calendar as cal_mod
 import re
 from datetime import date, datetime, time, timedelta
 from collections import defaultdict
+from dateutil.relativedelta import relativedelta
+from django.db.models import Min
 from django.utils import timezone
 from django.conf import settings
 from apps.employees.models import EmployeeProfile, EmploymentHistory
 from apps.branches.models import Branch, OfficeSchedule, Holiday
 from apps.attendance.models import (
     Attendance,
+    AttendanceAbsentLog,
+    AttendanceActivityLog,
     AttendanceAuditLog,
     AttendanceCorrectionRequest,
     AttendancePolicy,
@@ -19,8 +23,104 @@ from apps.attendance.schedule_utils import get_branch_schedule, parse_time_from_
 _EXIT_STATUS_VALUES = {'resigned', 'terminated'}
 _ACTIVE_STATUS_VALUES = {'active', 'probation', 'on leave', 'on_leave', 'suspended'}
 _AUTO_CLOSE_MARKER_RE = re.compile(r'\[?\bauto[- ]closed\b', re.IGNORECASE)
+_INVALIDATION_MARKER_RE = re.compile(r'\b(invalid|invalidated|void|voided|cancelled|rejected)\b', re.IGNORECASE)
 _CHECKOUT_AUDIT_ACTIONS = {'correction', 'forgot_checkout', 'update', 'override', 'admin_edit'}
 _NON_CHECKOUT_AUDIT_ACTIONS = {'ot_approve', 'ot_reject'}
+
+
+def classify_attendance_expiry(att):
+    """
+    Classifies an Attendance record's expiry state using writer semantics:
+    - 'active': is_expired is False
+    - 'invalidated': is_expired is True with explicit invalidation marker in note
+    - 'retention_archived': is_expired is True, expired_at is set, no invalidation marker,
+      and att.date <= (expired_at_local_date - 3 months) matching retention.py
+    - 'ambiguous_expired': is_expired is True without retention-only proof
+    """
+    if not getattr(att, 'is_expired', False):
+        return 'active'
+    note_text = getattr(att, 'note', None) or ''
+    if _INVALIDATION_MARKER_RE.search(note_text):
+        return 'invalidated'
+    expired_at = getattr(att, 'expired_at', None)
+    att_date = getattr(att, 'date', None)
+    if expired_at is None or att_date is None:
+        return 'ambiguous_expired'
+    exp_date = timezone.localtime(expired_at, BD_TZ).date() if timezone.is_aware(expired_at) else expired_at.date()
+    if att_date <= (exp_date - relativedelta(months=3)):
+        return 'retention_archived'
+    return 'ambiguous_expired'
+
+
+def classify_day_attendance_evidence(day_attendances):
+    """
+    Partitions a day's Attendance records into usable historical evidence
+    (active + retention-only archived), invalidated, and ambiguous-expired lists.
+    """
+    usable = []
+    invalidated = []
+    ambiguous_expired = []
+    for att in (day_attendances or []):
+        kind = classify_attendance_expiry(att)
+        if kind in ('active', 'retention_archived'):
+            usable.append(att)
+        elif kind == 'invalidated':
+            invalidated.append(att)
+        else:
+            ambiguous_expired.append(att)
+    return {
+        'usable': usable,
+        'invalidated': invalidated,
+        'ambiguous_expired': ambiguous_expired,
+    }
+
+
+def _build_missing_history_context(employee_ids, start_date, end_date):
+    """
+    Bulk-loads retained metadata (AttendanceActivityLog, SyncLog, AttendanceAbsentLog,
+    and retention archive boundary) in bounded queries to distinguish genuine absences
+    from retention-deleted or missing historical attendance.
+    """
+    if not employee_ids:
+        return {
+            'activity_dates': set(),
+            'absent_log_dates': set(),
+            'retention_cutoff_date': None,
+        }
+
+    start_dt = timezone.make_aware(datetime.combine(start_date, time.min), BD_TZ)
+    end_dt = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min), BD_TZ)
+
+    activity_dates = set()
+    for emp_id, ts in AttendanceActivityLog.objects.filter(
+        employee_id__in=employee_ids,
+        timestamp__gte=start_dt,
+        timestamp__lt=end_dt,
+        action__in=('check_in', 'check_out', 'forgot_checkout_request', 'correction_request'),
+    ).values_list('employee_id', 'timestamp'):
+        local_d = timezone.localtime(ts, BD_TZ).date() if timezone.is_aware(ts) else ts.date()
+        activity_dates.add((emp_id, local_d))
+
+    retention_cutoff_date = Attendance.objects.filter(
+        is_expired=True,
+        expired_at__isnull=False,
+    ).aggregate(min_d=Min('date'))['min_d']
+
+    absent_log_dates = set()
+    if retention_cutoff_date is not None and start_date < retention_cutoff_date:
+        absent_log_dates = set(
+            AttendanceAbsentLog.objects.filter(
+                employee_id__in=employee_ids,
+                date__gte=start_date,
+                date__lte=end_date,
+            ).values_list('employee_id', 'date')
+        )
+
+    return {
+        'activity_dates': activity_dates,
+        'absent_log_dates': absent_log_dates,
+        'retention_cutoff_date': retention_cutoff_date,
+    }
 
 
 def _resolve_joined_date(employee):
@@ -605,6 +705,7 @@ def calculate_employee_day(
     today=None,
     eligibility=None,
     checkout_provenance_map=None,
+    history_unavailable=False,
 ):
     """
     Authoritative single employee-day calculation.
@@ -613,8 +714,10 @@ def calculate_employee_day(
     if today is None:
         today = timezone.localdate()
 
-    # Non-expired attendances only
-    day_atts = [a for a in (day_attendances or []) if not getattr(a, 'is_expired', False)]
+    classified = classify_day_attendance_evidence(day_attendances)
+    day_atts = classified['usable']
+    invalidated_atts = classified['invalidated']
+    ambiguous_expired_atts = classified['ambiguous_expired']
     check_in_sessions = [a for a in day_atts if a.attendance_type == 'check_in']
     field_visits = [a for a in day_atts if a.attendance_type == 'field_visit']
 
@@ -691,6 +794,7 @@ def calculate_employee_day(
         ]
         effective_checkouts = [res['effective_check_out_time'] for res in session_resolutions]
         checkout_needs_review = any(res['needs_review'] for res in session_resolutions)
+        day_needs_review = checkout_needs_review or bool(ambiguous_expired_atts)
         has_auto_closed_checkout = any(res['is_auto_closed'] for res in session_resolutions)
 
         has_open_office = any(eff_co is None for eff_co in effective_checkouts)
@@ -788,7 +892,8 @@ def calculate_employee_day(
             'field_visits': field_visits,
             'eligibility_conflict': not is_employed,
             'eligibility_unresolved': elig_unresolved or emp_unresolved,
-            'needs_review': checkout_needs_review,
+            'history_unavailable': False,
+            'needs_review': day_needs_review,
             'checkout_needs_review': checkout_needs_review,
             'has_auto_closed_checkout': has_auto_closed_checkout,
         }
@@ -991,7 +1096,47 @@ def calculate_employee_day(
                 'field_visits': [],
             }
 
-    # 5. Absent on regular working day
+    # 5. Unavailable / unknown-expiry / retention-deleted attendance history: never fabricate Absent
+    if ambiguous_expired_atts or invalidated_atts or history_unavailable:
+        return {
+            'date': target_date,
+            'is_future': False,
+            'status': 'history_unavailable',
+            'status_display': 'History Unavailable',
+            'monthly_status': 'Review',
+            'calendar_color': 'amber',
+            'is_present': False,
+            'is_absent': False,
+            'is_late': False,
+            'is_on_leave': False,
+            'is_holiday': False,
+            'is_weekend': False,
+            'present_count': 0,
+            'absent_count': 0,
+            'on_leave_count': 0,
+            'late_count': 0,
+            'field_visit_count': 0,
+            'total_hours': 0.0,
+            'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
+            'eligibility_conflict': False,
+            'eligibility_unresolved': False,
+            'history_unavailable': True,
+            'needs_review': True,
+            'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': 'History Unavailable',
+            'check_out_time_str': 'History Unavailable',
+            'check_in_sessions': [],
+            'field_visits': [],
+        }
+
+    # 6. Absent on regular working day
     return {
         'date': target_date,
         'is_future': False,
@@ -1017,6 +1162,8 @@ def calculate_employee_day(
         'is_open_session': False,
         'is_missing_checkout': False,
         'has_leave_conflict': False,
+        'history_unavailable': False,
+        'needs_review': False,
         'check_in': None,
         'check_in_time': None,
         'check_out_time': None,
@@ -1117,7 +1264,6 @@ def get_daily_report_data(
             employee_id__in=target_emp_ids,
             date__gte=start_date,
             date__lte=end_date,
-            is_expired=False
         )
         .select_related('employee', 'employee__branch')
         .prefetch_related('locations')
@@ -1136,6 +1282,7 @@ def get_daily_report_data(
 
     eligibility_map = build_employment_eligibility_map(employees)
     checkout_provenance_map = build_checkout_provenance_map(attendances)
+    missing_history_ctx = _build_missing_history_context(target_emp_ids, start_date, end_date)
 
     rows = []
     for d in date_list:
@@ -1145,6 +1292,15 @@ def get_daily_report_data(
             is_on_leave = d in approved_leaves.get(emp.id, set())
 
             emp_day_atts = att_map.get((emp.id, d), [])
+            emp_key = (emp.id, d)
+            is_history_missing = (
+                (emp_key in missing_history_ctx['activity_dates'])
+                or (
+                    missing_history_ctx['retention_cutoff_date'] is not None
+                    and d < missing_history_ctx['retention_cutoff_date']
+                    and emp_key not in missing_history_ctx['absent_log_dates']
+                )
+            )
             day_calc = calculate_employee_day(
                 emp, d, emp_day_atts,
                 schedule=schedule,
@@ -1153,6 +1309,7 @@ def get_daily_report_data(
                 today=today,
                 eligibility=eligibility_map.get(emp.id),
                 checkout_provenance_map=checkout_provenance_map,
+                history_unavailable=is_history_missing,
             )
 
             ci = day_calc['check_in']
@@ -1193,6 +1350,7 @@ def get_daily_report_data(
                 'is_absent': day_calc['is_absent'],
                 'is_late': day_calc['is_late'],
                 'eligibility_unresolved': day_calc.get('eligibility_unresolved', False),
+                'history_unavailable': day_calc.get('history_unavailable', False),
                 'needs_review': day_calc.get('needs_review', False),
                 'checkout_needs_review': day_calc.get('checkout_needs_review', False),
                 'has_auto_closed_checkout': day_calc.get('has_auto_closed_checkout', False),
@@ -1307,13 +1465,12 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         else:
             global_holidays.add(h.date)
 
-    # 3. Fetch all attendances for the month in one query (ordered deterministically, non-expired only)
+    # 3. Fetch all attendances for the month in one query (ordered deterministically; expiry classified per record)
     attendances = list(
         Attendance.objects.filter(
             date__gte=month_start,
             date__lte=month_end,
             employee_id__in=employee_ids,
-            is_expired=False
         ).select_related('employee', 'employee__branch').prefetch_related('locations').order_by('date', 'check_in_time')
     )
 
@@ -1322,6 +1479,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         att_by_emp_date[(att.employee_id, att.date)].append(att)
 
     checkout_provenance_map = build_checkout_provenance_map(attendances)
+    missing_history_ctx = _build_missing_history_context(employee_ids, month_start, month_end)
 
     # 4. Fetch approved leave requests
     leave_requests = LeaveRequest.objects.filter(
@@ -1411,6 +1569,15 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             day_atts = att_by_emp_date.get((emp.id, d), [])
             is_holiday = is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
             is_on_leave = d in approved_leaves_map.get(emp.id, {})
+            emp_key = (emp.id, d)
+            is_history_missing = (
+                (emp_key in missing_history_ctx['activity_dates'])
+                or (
+                    missing_history_ctx['retention_cutoff_date'] is not None
+                    and d < missing_history_ctx['retention_cutoff_date']
+                    and emp_key not in missing_history_ctx['absent_log_dates']
+                )
+            )
 
             day_calc = calculate_employee_day(
                 emp, d, day_atts,
@@ -1420,6 +1587,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
                 today=today,
                 eligibility=emp_elig,
                 checkout_provenance_map=checkout_provenance_map,
+                history_unavailable=is_history_missing,
             )
             emp_day_calcs[d] = day_calc
 

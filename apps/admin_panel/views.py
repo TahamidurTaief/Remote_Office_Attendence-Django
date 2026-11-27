@@ -1809,24 +1809,27 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
         except ValueError:
             return HttpResponse('Invalid date', status=400)
 
-        day_atts = list(
-            Attendance.objects.filter(employee=employee, date=day, is_expired=False)
+        from apps.attendance.reporting_service import (
+            _sum_non_overlapping_hours,
+            build_checkout_provenance_map,
+            classify_day_attendance_evidence,
+            resolve_session_checkout,
+        )
+        raw_day_atts = list(
+            Attendance.objects.filter(employee=employee, date=day)
             .prefetch_related('locations').order_by('check_in_time')
         )
+        classified = classify_day_attendance_evidence(raw_day_atts)
+        day_atts = classified['usable']
         ci_sessions = [a for a in day_atts if a.attendance_type == 'check_in']
         ci      = ci_sessions[0] if ci_sessions else None
         fv_list = [a for a in day_atts if a.attendance_type == 'field_visit']
         ci_loc  = next((l for l in ci.locations.all() if l.event == 'check_in'), None) if ci else None
         co_loc  = next((l for l in ci.locations.all() if l.event == 'check_out'), None) if ci else None
 
-        from apps.attendance.reporting_service import (
-            _sum_non_overlapping_hours,
-            build_checkout_provenance_map,
-            resolve_session_checkout,
-        )
         prov_map = build_checkout_provenance_map(ci_sessions)
         is_open_session = False
-        needs_review = False
+        needs_review = bool(classified['ambiguous_expired']) or (not day_atts and bool(classified['invalidated']))
         effective_checkouts = []
         for s in ci_sessions:
             res = resolve_session_checkout(s, prov_map.get(s.id))
