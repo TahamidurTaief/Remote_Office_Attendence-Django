@@ -489,15 +489,18 @@ class PayrollService:
                     leave_by_emp_date[key] = (day_weight, ded_pct)
                 curr_d += timedelta(days=1)
 
-        # Preflight before any persistence: reject runs with unresolved employment dates or overlapping approved leaves
+        # Preflight before any persistence: reject runs with unresolved employment dates, ambiguous checkouts, or overlapping approved leaves
         unresolved_employees = []
+        checkout_review_employees = []
         overlap_employees = []
         for profile in report['employees']:
             if not profile.master_employee:
                 continue
             emp_rows = rows_by_emp.get(profile.id, [])
-            if any(r.get('needs_review') or r.get('status') == 'eligibility_unresolved' for r in emp_rows):
+            if any(r.get('eligibility_unresolved') or r.get('status') == 'eligibility_unresolved' for r in emp_rows):
                 unresolved_employees.append(f"{profile.full_name} ({profile.employee_id})")
+            if any(r.get('checkout_needs_review') or (r.get('needs_review') and not r.get('eligibility_unresolved') and r.get('status') != 'eligibility_unresolved') for r in emp_rows):
+                checkout_review_employees.append(f"{profile.full_name} ({profile.employee_id})")
             if any(r['status'] == 'on_leave' and (profile.id, r['date']) in overlapping_leave_keys for r in emp_rows):
                 overlap_employees.append(f"{profile.full_name} ({profile.employee_id})")
         if unresolved_employees:
@@ -506,6 +509,13 @@ class PayrollService:
             raise ValidationError(
                 f"Cannot sync payroll: unresolved employment dates require review for {sample}{extra}. "
                 "Update the missing joining or exit date in Employment History before running payroll."
+            )
+        if checkout_review_employees:
+            sample = ", ".join(checkout_review_employees[:5])
+            extra = f" (+{len(checkout_review_employees) - 5} more)" if len(checkout_review_employees) > 5 else ""
+            raise ValidationError(
+                f"Cannot sync payroll: ambiguous checkout provenance requires review for {sample}{extra}. "
+                "Resolve the flagged attendance checkout records before running payroll."
             )
         if overlap_employees:
             sample = ", ".join(overlap_employees[:5])

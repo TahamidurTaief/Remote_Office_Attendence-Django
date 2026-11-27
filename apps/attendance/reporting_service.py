@@ -1,16 +1,26 @@
 import calendar as cal_mod
+import re
 from datetime import date, datetime, time, timedelta
 from collections import defaultdict
 from django.utils import timezone
 from django.conf import settings
 from apps.employees.models import EmployeeProfile, EmploymentHistory
 from apps.branches.models import Branch, OfficeSchedule, Holiday
-from apps.attendance.models import Attendance, AttendancePolicy
+from apps.attendance.models import (
+    Attendance,
+    AttendanceAuditLog,
+    AttendanceCorrectionRequest,
+    AttendancePolicy,
+    ForgotCheckoutRequest,
+)
 from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
 from apps.attendance.schedule_utils import get_branch_schedule, parse_time_from_string, parse_shift_times, resolve_employee_holiday
 
 _EXIT_STATUS_VALUES = {'resigned', 'terminated'}
 _ACTIVE_STATUS_VALUES = {'active', 'probation', 'on leave', 'on_leave', 'suspended'}
+_AUTO_CLOSE_MARKER_RE = re.compile(r'\[?\bauto[- ]closed\b', re.IGNORECASE)
+_CHECKOUT_AUDIT_ACTIONS = {'correction', 'forgot_checkout', 'update', 'override', 'admin_edit'}
+_NON_CHECKOUT_AUDIT_ACTIONS = {'ot_approve', 'ot_reject'}
 
 
 def _resolve_joined_date(employee):
@@ -287,41 +297,220 @@ def format_bd_time_12h(dt, with_seconds=False):
     return f"{hour}:{minute}{ampm}"
 
 
-def _sum_non_overlapping_hours(check_in_sessions):
+def _times_match(t1, t2, tolerance_seconds=60):
+    """Returns True when two datetimes represent the same instant within tolerance."""
+    if t1 is None or t2 is None:
+        return False
+    return abs((t1 - t2).total_seconds()) <= tolerance_seconds
+
+
+def build_checkout_provenance_map(attendances):
+    """
+    Bulk-loads authorized correction, forgot-checkout, and audit evidence in at most
+    3 bounded queries for check-in sessions that carry an Auto-closed marker.
+    """
+    target_ids = [
+        a.id
+        for a in (attendances or [])
+        if getattr(a, 'id', None)
+        and getattr(a, 'attendance_type', None) == 'check_in'
+        and getattr(a, 'check_out_time', None) is not None
+        and _AUTO_CLOSE_MARKER_RE.search(getattr(a, 'note', None) or '')
+    ]
+    if not target_ids:
+        return {}
+
+    provenance_map = defaultdict(lambda: {
+        'corrections': [],
+        'forgot_checkouts': [],
+        'audit_logs': [],
+    })
+
+    # Chunk in batches of 500 for portable SQLite/Postgres IN-clause bounds
+    unique_ids = list(dict.fromkeys(target_ids))
+    for i in range(0, len(unique_ids), 500):
+        chunk = unique_ids[i:i + 500]
+        for row in (
+            AttendanceCorrectionRequest.objects.filter(
+                attendance_id__in=chunk,
+                status='approved',
+            )
+            .values('attendance_id', 'check_out_time', 'note', 'reviewed_at', 'requested_at')
+            .order_by('reviewed_at', 'requested_at', 'id')
+        ):
+            provenance_map[row['attendance_id']]['corrections'].append(row)
+
+        for row in (
+            ForgotCheckoutRequest.objects.filter(
+                attendance_id__in=chunk,
+                status='approved',
+            )
+            .values('attendance_id', 'check_out_time', 'requested_at')
+            .order_by('requested_at', 'id')
+        ):
+            provenance_map[row['attendance_id']]['forgot_checkouts'].append(row)
+
+        for row in (
+            AttendanceAuditLog.objects.filter(attendance_id__in=chunk)
+            .values('attendance_id', 'action', 'old_check_out_time', 'new_check_out_time', 'reason', 'changed_by_id', 'timestamp')
+            .order_by('timestamp', 'id')
+        ):
+            provenance_map[row['attendance_id']]['audit_logs'].append(row)
+
+    return dict(provenance_map)
+
+
+def resolve_session_checkout(session, evidence=None):
+    """
+    Shared effective-checkout decision for a single check-in Attendance session.
+    Returns:
+      - effective_check_out_time: datetime or None
+      - is_open: bool (True if genuinely open, proven auto-closed only, or ambiguous)
+      - is_auto_closed: bool (True only for proven auto-closed without genuine evidence)
+      - needs_review: bool (True when provenance is conflicting/ambiguous)
+      - provenance: 'open' | 'genuine' | 'corrected' | 'auto_closed_only' | 'ambiguous'
+    """
+    raw_co = getattr(session, 'check_out_time', None)
+    if raw_co is None:
+        return {
+            'effective_check_out_time': None,
+            'is_open': True,
+            'is_auto_closed': False,
+            'needs_review': False,
+            'provenance': 'open',
+        }
+
+    note_text = getattr(session, 'note', None) or ''
+    has_auto_close_marker = bool(_AUTO_CLOSE_MARKER_RE.search(note_text))
+    if not has_auto_close_marker:
+        return {
+            'effective_check_out_time': raw_co,
+            'is_open': False,
+            'is_auto_closed': False,
+            'needs_review': False,
+            'provenance': 'genuine',
+        }
+
+    co_locs = []
+    if getattr(session, 'pk', None) is not None and hasattr(session, 'locations'):
+        co_locs = [l for l in session.locations.all() if getattr(l, 'event', None) == 'check_out']
+
+    if evidence is None and getattr(session, 'pk', None) is not None:
+        evidence = build_checkout_provenance_map([session]).get(session.id, {})
+
+    ev = evidence or {}
+    corrections = [c for c in ev.get('corrections', []) if c.get('check_out_time') is not None]
+    forgot_checkouts = [f for f in ev.get('forgot_checkouts', []) if f.get('check_out_time') is not None]
+    co_audit_logs = [
+        a for a in ev.get('audit_logs', [])
+        if a.get('new_check_out_time') is not None
+        and (
+            a.get('action') in _CHECKOUT_AUDIT_ACTIONS
+            or (
+                a.get('action') not in _NON_CHECKOUT_AUDIT_ACTIONS
+                and a.get('old_check_out_time') != a.get('new_check_out_time')
+            )
+        )
+    ]
+
+    latest_corr = corrections[-1]['check_out_time'] if corrections else None
+    latest_forgot = forgot_checkouts[-1]['check_out_time'] if forgot_checkouts else None
+    latest_audit = co_audit_logs[-1]['new_check_out_time'] if co_audit_logs else None
+    latest_loc = max((l.timestamp for l in co_locs if getattr(l, 'timestamp', None)), default=None)
+
+    auth_times = [t for t in (latest_corr, latest_forgot, latest_audit) if t is not None]
+    all_evidence_times = auth_times + ([latest_loc] if latest_loc is not None else [])
+
+    if not all_evidence_times:
+        if 'admin override:' in note_text.lower():
+            return {
+                'effective_check_out_time': raw_co,
+                'is_open': False,
+                'is_auto_closed': False,
+                'needs_review': False,
+                'provenance': 'corrected',
+            }
+        return {
+            'effective_check_out_time': None,
+            'is_open': True,
+            'is_auto_closed': True,
+            'needs_review': False,
+            'provenance': 'auto_closed_only',
+        }
+
+    # Authoritative correction/forgot-checkout/audit overrides older auto-close or location
+    if auth_times:
+        if any(_times_match(raw_co, t) for t in auth_times):
+            return {
+                'effective_check_out_time': raw_co,
+                'is_open': False,
+                'is_auto_closed': False,
+                'needs_review': False,
+                'provenance': 'corrected',
+            }
+        return {
+            'effective_check_out_time': None,
+            'is_open': True,
+            'is_auto_closed': False,
+            'needs_review': True,
+            'provenance': 'ambiguous',
+        }
+
+    # Only checkout location evidence exists alongside auto-close marker
+    if _times_match(raw_co, latest_loc):
+        return {
+            'effective_check_out_time': raw_co,
+            'is_open': False,
+            'is_auto_closed': False,
+            'needs_review': False,
+            'provenance': 'corrected',
+        }
+
+    return {
+        'effective_check_out_time': None,
+        'is_open': True,
+        'is_auto_closed': False,
+        'needs_review': True,
+        'provenance': 'ambiguous',
+    }
+
+
+def _sum_non_overlapping_hours(check_in_sessions, effective_checkouts=None):
     """
     Sums completed office/check-in session durations in hours, merging overlapping
-    intervals so overlapping sessions are not double-counted. Open sessions
-    (check_out_time is None) contribute 0 (unknown duration excluded).
+    intervals so overlapping sessions are not double-counted. Open or unverified
+    auto-closed sessions (effective check_out_time is None) contribute 0.
     """
-    completed = [
-        s for s in check_in_sessions
-        if s.check_in_time and s.check_out_time and s.check_out_time > s.check_in_time
-    ]
+    completed = []
+    for idx, s in enumerate(check_in_sessions):
+        eff_co = effective_checkouts[idx] if effective_checkouts is not None else s.check_out_time
+        if s.check_in_time and eff_co and eff_co > s.check_in_time:
+            completed.append((s, eff_co))
     if not completed:
         return 0.0
 
-    completed.sort(key=lambda s: s.check_in_time)
+    completed.sort(key=lambda item: item[0].check_in_time)
     has_overlap = any(
-        completed[i].check_in_time < completed[i - 1].check_out_time
+        completed[i][0].check_in_time < completed[i - 1][1]
         for i in range(1, len(completed))
     )
     if not has_overlap:
         total = 0.0
-        for s in completed:
-            if s.total_hours is not None:
+        for s, eff_co in completed:
+            if s.total_hours is not None and eff_co == s.check_out_time:
                 total += float(s.total_hours)
             else:
-                total += round((s.check_out_time - s.check_in_time).total_seconds() / 3600.0, 2)
+                total += round((eff_co - s.check_in_time).total_seconds() / 3600.0, 2)
         return round(total, 2)
 
-    merged = [(completed[0].check_in_time, completed[0].check_out_time)]
-    for s in completed[1:]:
+    merged = [(completed[0][0].check_in_time, completed[0][1])]
+    for s, eff_co in completed[1:]:
         prev_start, prev_end = merged[-1]
         if s.check_in_time <= prev_end:
-            if s.check_out_time > prev_end:
-                merged[-1] = (prev_start, s.check_out_time)
+            if eff_co > prev_end:
+                merged[-1] = (prev_start, eff_co)
         else:
-            merged.append((s.check_in_time, s.check_out_time))
+            merged.append((s.check_in_time, eff_co))
     total_seconds = sum((end - start).total_seconds() for start, end in merged)
     return round(total_seconds / 3600.0, 2)
 
@@ -334,6 +523,7 @@ def calculate_employee_day(
     is_on_leave=False,
     today=None,
     eligibility=None,
+    checkout_provenance_map=None,
 ):
     """
     Authoritative single employee-day calculation.
@@ -409,7 +599,20 @@ def calculate_employee_day(
                 if ci_local > late_time:
                     day_has_late = True
 
-        has_open_office = any(s.check_out_time is None for s in check_in_sessions)
+        if checkout_provenance_map is None:
+            provenance_map = build_checkout_provenance_map(check_in_sessions)
+        else:
+            provenance_map = checkout_provenance_map
+
+        session_resolutions = [
+            resolve_session_checkout(s, provenance_map.get(getattr(s, 'id', None), {}))
+            for s in check_in_sessions
+        ]
+        effective_checkouts = [res['effective_check_out_time'] for res in session_resolutions]
+        checkout_needs_review = any(res['needs_review'] for res in session_resolutions)
+        has_auto_closed_checkout = any(res['is_auto_closed'] for res in session_resolutions)
+
+        has_open_office = any(eff_co is None for eff_co in effective_checkouts)
         is_missing_checkout = bool(has_open_office and target_date < today)
         has_leave_conflict = bool(is_on_leave)
 
@@ -433,24 +636,28 @@ def calculate_employee_day(
             monthly_status = 'Field Visit'
             calendar_color = 'purple'
 
-        # Sum non-overlapping completed office session hours (exclude open/unknown & field visits)
-        total_hours = _sum_non_overlapping_hours(check_in_sessions)
-        ot_minutes = sum(int(getattr(a, 'overtime_minutes', 0) or 0) for a in check_in_sessions if a.check_out_time)
+        # Sum non-overlapping completed office session hours (exclude open/auto-closed/ambiguous & field visits)
+        total_hours = _sum_non_overlapping_hours(check_in_sessions, effective_checkouts=effective_checkouts)
+        ot_minutes = sum(
+            int(getattr(a, 'overtime_minutes', 0) or 0)
+            for idx, a in enumerate(check_in_sessions)
+            if effective_checkouts[idx] is not None
+        )
         if ot_minutes == 0 and check_in_sessions and schedule:
             from apps.attendance.schedule_utils import calculate_overtime
             ot_minutes = sum(
-                calculate_overtime(a.check_out_time, schedule, employee, session_date=target_date)
-                if a.check_out_time else 0
-                for a in check_in_sessions
+                calculate_overtime(effective_checkouts[idx], schedule, employee, session_date=target_date)
+                if effective_checkouts[idx] is not None else 0
+                for idx, a in enumerate(check_in_sessions)
             )
 
         all_sessions = check_in_sessions + field_visits
         ci_times = [s.check_in_time for s in all_sessions if s and s.check_in_time]
         earliest_ci = min(ci_times) if ci_times else None
 
-        # Final office checkout stays empty while any office session remains open,
+        # Final office checkout stays empty while any office session remains open/unverified,
         # and field visit timestamps never become office checkout.
-        office_co_times = [s.check_out_time for s in check_in_sessions if s and s.check_out_time]
+        office_co_times = [eff_co for eff_co in effective_checkouts if eff_co is not None]
         if has_open_office:
             last_completed_co = None
         else:
@@ -500,7 +707,9 @@ def calculate_employee_day(
             'field_visits': field_visits,
             'eligibility_conflict': not is_employed,
             'eligibility_unresolved': elig_unresolved or emp_unresolved,
-            'needs_review': False,
+            'needs_review': checkout_needs_review,
+            'checkout_needs_review': checkout_needs_review,
+            'has_auto_closed_checkout': has_auto_closed_checkout,
         }
 
 
@@ -845,6 +1054,7 @@ def get_daily_report_data(
         curr += timedelta(days=1)
 
     eligibility_map = build_employment_eligibility_map(employees)
+    checkout_provenance_map = build_checkout_provenance_map(attendances)
 
     rows = []
     for d in date_list:
@@ -861,6 +1071,7 @@ def get_daily_report_data(
                 is_on_leave=is_on_leave,
                 today=today,
                 eligibility=eligibility_map.get(emp.id),
+                checkout_provenance_map=checkout_provenance_map,
             )
 
             ci = day_calc['check_in']
@@ -902,6 +1113,8 @@ def get_daily_report_data(
                 'is_late': day_calc['is_late'],
                 'eligibility_unresolved': day_calc.get('eligibility_unresolved', False),
                 'needs_review': day_calc.get('needs_review', False),
+                'checkout_needs_review': day_calc.get('checkout_needs_review', False),
+                'has_auto_closed_checkout': day_calc.get('has_auto_closed_checkout', False),
                 'notes': notes,
                 'day_calc': day_calc,
             }
@@ -1014,16 +1227,20 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             global_holidays.add(h.date)
 
     # 3. Fetch all attendances for the month in one query (ordered deterministically, non-expired only)
-    attendances_qs = Attendance.objects.filter(
-        date__gte=month_start,
-        date__lte=month_end,
-        employee_id__in=employee_ids,
-        is_expired=False
-    ).select_related('employee', 'employee__branch').prefetch_related('locations').order_by('date', 'check_in_time')
+    attendances = list(
+        Attendance.objects.filter(
+            date__gte=month_start,
+            date__lte=month_end,
+            employee_id__in=employee_ids,
+            is_expired=False
+        ).select_related('employee', 'employee__branch').prefetch_related('locations').order_by('date', 'check_in_time')
+    )
 
     att_by_emp_date = defaultdict(list)
-    for att in attendances_qs:
+    for att in attendances:
         att_by_emp_date[(att.employee_id, att.date)].append(att)
+
+    checkout_provenance_map = build_checkout_provenance_map(attendances)
 
     # 4. Fetch approved leave requests
     leave_requests = LeaveRequest.objects.filter(
@@ -1121,6 +1338,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
                 is_on_leave=is_on_leave,
                 today=today,
                 eligibility=emp_elig,
+                checkout_provenance_map=checkout_provenance_map,
             )
             emp_day_calcs[d] = day_calc
 

@@ -82,14 +82,14 @@
                 <div>
                     <span class="font-medium text-slate-700 dark:text-slate-300">In: {{ s.check_in_time|time:"H:i:s" }}</span>
                     <span class="mx-1 text-slate-300">|</span>
-                    {% if s.check_out_time %}
-                    <span class="font-medium text-slate-700 dark:text-slate-300">Out: {{ s.check_out_time|time:"H:i:s" }}</span>
+                    {% if s.effective_check_out_time %}
+                    <span class="font-medium text-slate-700 dark:text-slate-300">Out: {{ s.effective_check_out_time|time:"H:i:s" }}</span>
                     {% else %}
                     <span class="font-semibold text-amber-600 dark:text-amber-400">Open</span>
                     {% endif %}
                 </div>
                 <div>
-                    {% if s.total_hours %}
+                    {% if s.effective_check_out_time and s.total_hours %}
                     <span class="font-bold text-slate-900 dark:text-slate-100">{{ s.total_hours }}h</span>
                     {% endif %}
                 </div>
