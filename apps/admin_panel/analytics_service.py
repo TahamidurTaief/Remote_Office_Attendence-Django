@@ -249,6 +249,7 @@ def _compute_period_metrics(
         curr += timedelta(days=1)
 
     total_present = 0
+    total_holiday_work = 0
     total_late = 0
     total_absent = 0
     total_on_leave = 0
@@ -375,7 +376,11 @@ def _compute_period_metrics(
             if status == "holiday":
                 continue
 
-            # Eligible working day (Present, Absent, or On Leave; or Holiday Attendance)
+            if status == "holiday_attendance" or (day_calc["is_present"] and day_calc["is_holiday"]):
+                total_holiday_work += 1
+                continue
+
+            # Eligible scheduled working day (Present, Absent, or On Leave)
             eligible_working_days += 1
             if include_breakdowns:
                 b_key_str, b_name, d_key, d_name = meta
@@ -467,6 +472,7 @@ def _compute_period_metrics(
 
     return {
         "total_present": total_present,
+        "total_holiday_work": total_holiday_work,
         "total_late": total_late,
         "total_absent": total_absent,
         "total_on_leave": total_on_leave,

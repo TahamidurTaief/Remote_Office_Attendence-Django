@@ -1756,6 +1756,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         )
 
         present_count = 0
+        scheduled_present_count = 0
         late_count = 0
         total_ot_minutes = 0
         absent_count = 0
@@ -1805,6 +1806,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
             total_ot_minutes += day_calc['overtime_minutes']
             if day_calc['is_present'] and is_holiday:
                 holiday_work_count += 1
+            elif day_calc['is_present']:
+                scheduled_present_count += day_calc['present_count']
 
         if total_ot_minutes > 0:
             ot_hours = total_ot_minutes // 60
@@ -1813,10 +1816,22 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
         else:
             ot_display = '—'
             
-        provisional_att_pct = round(min(100.0, (present_count / emp_working_days_so_far * 100)), 1) if emp_working_days_so_far > 0 else 0.0
+        # Canonical scheduled-working-day denominator policy:
+        # Scheduled attendance % = scheduled_present_count / emp_working_days_so_far * 100.
+        # Holiday work is reported separately (holiday_work_count) and never inflates numerator or denominator.
+        provisional_att_pct = (
+            round((scheduled_present_count / emp_working_days_so_far) * 100, 1)
+            if emp_working_days_so_far > 0
+            else None
+        )
         is_emp_coverage_complete = (unknown_days_count == 0 and review_needed_count == 0)
-        att_pct = provisional_att_pct if unknown_days_count == 0 else None
-        att_pct_display = f"{att_pct}%" if att_pct is not None else "Unavailable (Incomplete)"
+        att_pct = provisional_att_pct if (is_emp_coverage_complete and provisional_att_pct is not None) else None
+        if att_pct is not None:
+            att_pct_display = f"{att_pct}%"
+        elif emp_working_days_so_far == 0:
+            att_pct_display = "N/A"
+        else:
+            att_pct_display = "Unavailable (Incomplete)"
 
         employee_stats[emp.id] = {
             'present_count': present_count,

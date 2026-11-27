@@ -113,7 +113,7 @@ class LeaveRequest(models.Model):
         if start > end:
             return Decimal('0.0')
 
-        deductible_days = Decimal('0.0')
+        deductible_days = Decimal('0.00')
         curr = start
         while curr <= end:
             if is_employee_holiday(self.employee, curr):
@@ -136,8 +136,14 @@ class LeaveRequest(models.Model):
                 curr += timedelta(days=1)
                 continue
 
-            deductible_days += Decimal('1.0')
+            deductible_days += Decimal('1.00')
             curr += timedelta(days=1)
+
+        if deductible_days > Decimal('0.00') and self.number_of_days is not None:
+            requested_weight = Decimal(str(self.number_of_days))
+            if requested_weight < deductible_days:
+                return requested_weight.quantize(Decimal('0.01'))
+        return deductible_days.quantize(Decimal('0.01'))
 
         return deductible_days
 
@@ -145,7 +151,7 @@ class LeaveRequest(models.Model):
         base_days = self.overlapping_days_in(self.start_date, self.end_date)
         if self.start_date and self.end_date and self.start_date == self.end_date:
             if self.number_of_days is not None and Decimal(str(self.number_of_days)) == Decimal('0.5'):
-                return Decimal('0.5') if base_days >= Decimal('1.0') else Decimal('0.0')
+                return Decimal('0.5') if base_days > Decimal('0.0') else Decimal('0.0')
         return base_days
 
     @staticmethod
