@@ -769,12 +769,22 @@ class AttendanceConcurrencyIntegrityTests(TransactionTestCase):
         Both sessions are valid business operations on the same calendar date, each with distinct
         session IDs and sync_uuids.
         """
-        now = timezone.now()
-        today = timezone.localdate(now)
+        local_now = timezone.localtime(timezone.now(), BD_TZ)
+        if local_now.hour < 8:
+            today = (local_now - timedelta(days=1)).date()
+            t_in_1 = datetime.combine(today, time(9, 0), tzinfo=BD_TZ)
+            t_out_1 = datetime.combine(today, time(11, 0), tzinfo=BD_TZ)
+            t_in_2 = datetime.combine(today, time(13, 0), tzinfo=BD_TZ)
+            t_out_2 = datetime.combine(today, time(15, 0), tzinfo=BD_TZ)
+        else:
+            now = timezone.now()
+            today = timezone.localdate(now)
+            t_in_1 = now - timedelta(hours=6)
+            t_out_1 = now - timedelta(hours=4)
+            t_in_2 = now - timedelta(hours=3)
+            t_out_2 = now - timedelta(hours=1)
 
-        # Morning Session (Shift 1: 6 hours ago to 4 hours ago = 2.0 hours)
-        t_in_1 = now - timedelta(hours=6)
-        t_out_1 = now - timedelta(hours=4)
+        # Morning Session (Shift 1: 2.0 hours)
         uuid_ci_1 = str(uuid.uuid4())
         uuid_co_1 = str(uuid.uuid4())
 
@@ -797,9 +807,7 @@ class AttendanceConcurrencyIntegrityTests(TransactionTestCase):
         self.assertIsNotNone(sess_1.check_out_time)
         self.assertEqual(float(sess_1.total_hours), 2.0)
 
-        # Afternoon Session (Shift 2: 3 hours ago to 1 hour ago = 2.0 hours) on the SAME day
-        t_in_2 = now - timedelta(hours=3)
-        t_out_2 = now - timedelta(hours=1)
+        # Afternoon Session (Shift 2: 2.0 hours) on the SAME day
         uuid_ci_2 = str(uuid.uuid4())
         uuid_co_2 = str(uuid.uuid4())
 

@@ -256,6 +256,7 @@ class CSRFRemediationTestSuite(TestCase):
             {
                 'latitude': 23.8103,
                 'longitude': 90.4125,
+                'accuracy': 10,
                 'csrfmiddlewaretoken': fresh_token
             },
             HTTP_X_CSRFTOKEN=fresh_token,

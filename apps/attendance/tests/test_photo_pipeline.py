@@ -1,10 +1,12 @@
 import io
 import tempfile
 import uuid
+from datetime import timedelta
 from PIL import Image
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from apps.employees.models import EmployeeProfile
 from apps.branches.models import Branch
 from apps.attendance.models import Attendance, AttendancePolicy
@@ -107,6 +109,7 @@ class PhotoPipelineServerValidationTests(TestCase):
         data = {
             'latitude': 23.8103,
             'longitude': 90.4125,
+            'accuracy': 10,
             'sync_uuid': str(uuid.uuid4())
         }
         with self.assertRaises(AttendanceTransactionError) as ctx:
@@ -117,11 +120,13 @@ class PhotoPipelineServerValidationTests(TestCase):
         """Uploaded 1280x960 JPEG photo is processed by Django ImageKit and saved to disk."""
         photo = make_test_image(1280, 960, 'JPEG', color='blue')
         sync_uuid = str(uuid.uuid4())
+        recent_time = (timezone.now() - timedelta(hours=1)).isoformat()
         data = {
             'latitude': 23.8103,
             'longitude': 90.4125,
+            'accuracy': 10,
             'sync_uuid': sync_uuid,
-            'client_event_time': '2026-10-26T08:00:00Z'
+            'client_event_time': recent_time
         }
         res = AttendanceTransactionService.check_in(self.user, data, photo=photo, validate_photo=True)
         self.assertTrue(res['success'])
@@ -155,7 +160,7 @@ class PhotoPipelineServerValidationTests(TestCase):
                     'accuracy': 10,
                     'address': 'Dhaka Office',
                     'sync_uuid': sync_uuid,
-                    'client_event_time': '2026-10-26T08:30:00Z',
+                    'client_event_time': (timezone.now() - timedelta(hours=1)).isoformat(),
                     'photo': photo_b64
                 }
             }]

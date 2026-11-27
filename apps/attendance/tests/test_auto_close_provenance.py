@@ -292,6 +292,8 @@ class AutoCloseProvenanceTests(TestCase):
 
     def test_4_mixed_fabricated_and_verified_sessions_same_day(self):
         """Earlier fabricated session + later genuinely completed session on same day."""
+        self.emp_profile.overtime_enabled = True
+        self.emp_profile.save(update_fields=["overtime_enabled"])
         d = date(2026, 10, 15)
         # Session 1: Fabricated auto-close at 18:00 (no checkout evidence)
         Attendance.objects.create(
@@ -306,8 +308,8 @@ class AutoCloseProvenanceTests(TestCase):
             overtime_minutes=60,
             note=f"[Auto-closed: unclosed session from {d.strftime('%d/%m/%Y')}]",
         )
-        # Session 2: Independently verified completed session (14:00 - 17:00 = 3.00h)
-        s2_out = self._bd_dt(d, 17, 0, 0)
+        # Session 2: Independently verified completed session (14:00 - 18:15 = 4.25h, 15m OT after 18:00)
+        s2_out = self._bd_dt(d, 18, 15, 0)
         s2 = Attendance.objects.create(
             employee=self.emp_profile,
             date=d,
@@ -316,7 +318,7 @@ class AutoCloseProvenanceTests(TestCase):
             status="on_time",
             check_in_time=self._bd_dt(d, 14, 0, 0),
             check_out_time=s2_out,
-            total_hours=decimal.Decimal("3.00"),
+            total_hours=decimal.Decimal("4.25"),
             overtime_minutes=15,
         )
         AttendanceLocation.objects.create(
@@ -335,7 +337,7 @@ class AutoCloseProvenanceTests(TestCase):
         self.assertTrue(row["is_missing_checkout"])
         self.assertIsNone(row["check_out_time"])
         self.assertEqual(row["check_out_time_str"], "")
-        self.assertEqual(row["total_hours"], 3.0)
+        self.assertEqual(row["total_hours"], 4.25)
         self.assertEqual(row["day_calc"]["overtime_minutes"], 15)
 
     def test_5_html_csv_xlsx_pdf_consistency_and_bounded_queries(self):
