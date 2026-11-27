@@ -602,3 +602,208 @@ class EvidenceBasedCheckoutRegressionTests(TestCase):
         t_att = Attendance.objects.get(pk=t_in["session_id"])
         self.assertEqual(y_att.check_out_time, self._bd_dt(today, 10, 0))
         self.assertIsNone(t_att.check_out_time)
+
+
+class OfflineTimestampValidationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.branch = Branch.objects.create(
+            name="Dhaka Sync Branch",
+            latitude=decimal.Decimal("23.810300"),
+            longitude=decimal.Decimal("90.412500"),
+            radius_meters=200,
+        )
+        OfficeSchedule.objects.update_or_create(
+            branch=cls.branch,
+            defaults={
+                "office_start_time": datetime.strptime("09:00", "%H:%M").time(),
+                "office_end_time": datetime.strptime("18:00", "%H:%M").time(),
+                "late_after_minutes": 15,
+            },
+        )
+        AttendancePolicy.objects.create(
+            branch=cls.branch,
+            geofencing_policy="warn",
+            allow_outside_geofence=True,
+            photo_required=False,
+        )
+        cls.user = User.objects.create_user(
+            email="sync_ts@example.com",
+            password="password123",
+            role="staff",
+        )
+        cls.emp = EmployeeProfile.objects.create(
+            user=cls.user,
+            employee_id="EMP-TS-01",
+            full_name="Sync Tester",
+            phone="01700000099",
+            branch=cls.branch,
+            is_active=True,
+            joined_date=date(2025, 1, 1),
+        )
+
+    def test_1_live_without_timestamp_uses_server_time_and_malformed_rejected(self):
+        """Absent/blank client_event_time uses server time; malformed timestamp fails before writes."""
+        from apps.attendance.models import AttendanceLocation
+
+        frozen_now = datetime(2026, 11, 27, 16, 50, 0, tzinfo=ZoneInfo("UTC"))
+        with patch("django.utils.timezone.now", return_value=frozen_now), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            # Malformed check_in, check_out, field_visit must all reject with 0 writes
+            for fn in (
+                AttendanceTransactionService.check_in,
+                AttendanceTransactionService.check_out,
+                AttendanceTransactionService.field_visit,
+            ):
+                with self.assertRaises(AttendanceTransactionError) as cm:
+                    fn(
+                        self.user,
+                        {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": "not-an-iso-time"},
+                        validate_photo=False,
+                    )
+                self.assertEqual(cm.exception.status_code, 400)
+            self.assertEqual(Attendance.objects.filter(employee=self.emp).count(), 0)
+            self.assertEqual(AttendanceLocation.objects.count(), 0)
+
+            # Live check-in without client_event_time succeeds using server time
+            res = AttendanceTransactionService.check_in(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125},
+                validate_photo=False,
+            )
+            self.assertTrue(res["success"])
+            att = Attendance.objects.get(pk=res["session_id"])
+            self.assertIsNone(att.client_event_time)
+
+    def test_2_72h_stale_and_future_boundaries(self):
+        """Exactly 72h old succeeds; 72h+1s old or 1s in future fails with zero writes."""
+        from apps.attendance.models import AttendanceLocation
+
+        frozen_now = datetime(2026, 11, 27, 16, 50, 0, tzinfo=ZoneInfo("UTC"))
+        exact_72h = frozen_now - timedelta(hours=72)
+        stale_72h_1s = frozen_now - timedelta(hours=72, seconds=1)
+        future_1s = frozen_now + timedelta(seconds=1)
+
+        with patch("django.utils.timezone.now", return_value=frozen_now), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            for bad_dt in (stale_72h_1s, future_1s):
+                with self.assertRaises(AttendanceTransactionError) as cm:
+                    AttendanceTransactionService.check_in(
+                        self.user,
+                        {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": bad_dt.isoformat()},
+                        validate_photo=False,
+                    )
+                self.assertEqual(cm.exception.status_code, 400)
+            self.assertEqual(Attendance.objects.filter(employee=self.emp).count(), 0)
+            self.assertEqual(AttendanceLocation.objects.count(), 0)
+
+            res = AttendanceTransactionService.check_in(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": exact_72h.isoformat()},
+                validate_photo=False,
+            )
+            self.assertTrue(res["success"])
+            att = Attendance.objects.get(pk=res["session_id"])
+            self.assertEqual(att.client_event_time, exact_72h)
+
+    def test_3_overnight_dates_preserved_under_frozen_late_night_clock(self):
+        """Frozen 22:50+06:00 clock still preserves yesterday 22:00 check-in and 02:00 overnight checkout."""
+        frozen_now = datetime(2026, 11, 27, 22, 50, 0, tzinfo=BD_TZ)
+        y_in_dt = datetime(2026, 11, 26, 22, 0, 0, tzinfo=BD_TZ)
+        t_in_dt = datetime(2026, 11, 27, 9, 0, 0, tzinfo=BD_TZ)
+        y_out_dt = datetime(2026, 11, 27, 2, 0, 0, tzinfo=BD_TZ)
+
+        with patch("django.utils.timezone.now", return_value=frozen_now), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            y_in = AttendanceTransactionService.check_in(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_in_dt.isoformat()},
+                validate_photo=False,
+            )
+            t_in = AttendanceTransactionService.check_in(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_in_dt.isoformat()},
+                validate_photo=False,
+            )
+            y_out = AttendanceTransactionService.check_out(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": y_out_dt.isoformat()},
+                validate_photo=False,
+            )
+            self.assertEqual(y_out["total_hours"], 4.0)
+            self.assertEqual(Attendance.objects.get(pk=y_in["session_id"]).check_out_time, y_out_dt)
+            self.assertIsNone(Attendance.objects.get(pk=t_in["session_id"]).check_out_time)
+
+    def test_4_accepted_event_retried_after_expiry_returns_existing_without_writes(self):
+        """An already accepted sync_uuid retried after 72h expiry returns original result with zero new writes."""
+        from apps.attendance.models import AttendanceLocation
+
+        t0 = datetime(2026, 11, 24, 9, 0, 0, tzinfo=BD_TZ)
+        t_out = datetime(2026, 11, 24, 17, 0, 0, tzinfo=BD_TZ)
+        t_expired = t0 + timedelta(hours=80)
+        cin_uuid = uuid.uuid4()
+        cout_uuid = uuid.uuid4()
+
+        with patch("django.utils.timezone.now", return_value=t_out), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            in_res = AttendanceTransactionService.check_in(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t0.isoformat(), "sync_uuid": cin_uuid},
+                validate_photo=False,
+            )
+            out_res = AttendanceTransactionService.check_out(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_out.isoformat(), "sync_uuid": cout_uuid},
+                validate_photo=False,
+            )
+            self.assertEqual(out_res["total_hours"], 8.0)
+
+        with patch("django.utils.timezone.now", return_value=t_expired), \
+             patch("apps.attendance.transaction_service.notify_admins"):
+            in_retry = AttendanceTransactionService.check_in(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t0.isoformat(), "sync_uuid": cin_uuid},
+                validate_photo=False,
+            )
+            out_retry = AttendanceTransactionService.check_out(
+                self.user,
+                {"latitude": 23.8103, "longitude": 90.4125, "client_event_time": t_out.isoformat(), "sync_uuid": cout_uuid},
+                validate_photo=False,
+            )
+            self.assertEqual(in_retry["session_id"], in_res["session_id"])
+            self.assertEqual(out_retry["total_hours"], 8.0)
+            self.assertEqual(Attendance.objects.filter(employee=self.emp).count(), 1)
+            self.assertEqual(AttendanceLocation.objects.filter(attendance_id=in_res["session_id"]).count(), 2)
+
+    def test_5_bulk_sync_marks_stale_timestamp_permanently_failed_for_client(self):
+        """bulk_sync returns permanent=True failed status for stale/malformed timestamps and zero writes."""
+        import json
+        from django.urls import reverse
+
+        frozen_now = datetime(2026, 11, 27, 16, 50, 0, tzinfo=ZoneInfo("UTC"))
+        stale_dt = frozen_now - timedelta(hours=80)
+        self.client.force_login(self.user)
+
+        with patch("django.utils.timezone.now", return_value=frozen_now):
+            res = self.client.post(
+                reverse("attendance:bulk_sync"),
+                json.dumps({
+                    "items": [{
+                        "uuid": str(uuid.uuid4()),
+                        "action": "check_in",
+                        "payload": {
+                            "latitude": 23.8103,
+                            "longitude": 90.4125,
+                            "client_event_time": stale_dt.isoformat(),
+                        },
+                    }]
+                }),
+                content_type="application/json",
+            )
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["synced"], 0)
+        self.assertEqual(body["results"][0]["status"], "failed")
+        self.assertTrue(body["results"][0]["permanent"])
+        self.assertIn("72-hour", body["results"][0]["error"])
+        self.assertEqual(Attendance.objects.filter(employee=self.emp).count(), 0)

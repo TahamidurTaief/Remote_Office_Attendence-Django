@@ -191,9 +191,12 @@
           return;
         }
 
-        // Filter items whose exponential backoff timer has elapsed
+        // Filter items whose exponential backoff timer has elapsed, excluding permanently failed items
         const now = Date.now();
         const readyItems = pendingItems.filter((item) => {
+          if (item.permanent || item.status === 'failed' || (item.retry_count || 0) >= MAX_RETRIES) {
+            return false;
+          }
           if (!item.last_attempt_time) return true;
           const nextAttemptTime = new Date(item.last_attempt_time).getTime() + getRetryDelayMs(item.retry_count);
           return now >= nextAttemptTime;
@@ -237,11 +240,12 @@
               const handler = moduleHandlers[item.module];
               if (handler) await handler(item);
             } else {
-              const permanent = res && res.permanent;
+              const permanent = Boolean(res && res.permanent);
               const isMissingPhoto = res && res.error && res.error.toLowerCase().includes('photo is required');
               const newRetryCount = permanent ? MAX_RETRIES : (isMissingPhoto ? (item.retry_count || 0) : (item.retry_count || 0) + 1);
               await window.FieldTrackDB.updateSyncItem(item.uuid, {
-                status: isMissingPhoto ? 'pending' : (newRetryCount >= MAX_RETRIES ? 'failed' : 'pending'),
+                status: isMissingPhoto ? 'pending' : (permanent || newRetryCount >= MAX_RETRIES ? 'failed' : 'pending'),
+                permanent: permanent,
                 retry_count: newRetryCount,
                 last_attempt_time: new Date().toISOString(),
                 last_error: res ? res.error : 'Sync failed'

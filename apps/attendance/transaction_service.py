@@ -5,7 +5,11 @@ import decimal
 from django.utils import timezone
 from django.db import transaction
 from apps.attendance.models import Attendance, AttendanceLocation
-from apps.attendance.sync_utils import parse_and_validate_client_time
+from apps.attendance.sync_utils import (
+    ClientTimeValidationError,
+    parse_and_validate_client_time,
+    validate_client_time,
+)
 from apps.branches.utils import is_within_geofence
 from apps.notifications.utils import notify_admins
 from apps.employees.models import EmployeeProfile
@@ -198,7 +202,10 @@ class AttendanceTransactionService:
                     }
 
             client_event_time_str = data.get('client_event_time')
-            client_time = parse_and_validate_client_time(client_event_time_str)
+            try:
+                client_time = validate_client_time(client_event_time_str)
+            except ClientTimeValidationError as exc:
+                raise AttendanceTransactionError(str(exc), 400)
 
             if client_time:
                 event_time = client_time
@@ -442,7 +449,10 @@ class AttendanceTransactionService:
                     }
 
             client_event_time_str = data.get('client_event_time')
-            client_time = parse_and_validate_client_time(client_event_time_str)
+            try:
+                client_time = validate_client_time(client_event_time_str)
+            except ClientTimeValidationError as exc:
+                raise AttendanceTransactionError(str(exc), 400)
 
             if client_time:
                 event_time = client_time
@@ -633,7 +643,10 @@ class AttendanceTransactionService:
                     return {'success': True, 'session_id': existing.id}
 
             client_event_time_str = data.get('client_event_time')
-            client_time = parse_and_validate_client_time(client_event_time_str)
+            try:
+                client_time = validate_client_time(client_event_time_str)
+            except ClientTimeValidationError as exc:
+                raise AttendanceTransactionError(str(exc), 400)
 
             if client_time:
                 event_time = client_time
