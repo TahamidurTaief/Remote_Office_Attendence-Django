@@ -616,9 +616,19 @@ class EmployeeMasterForm(forms.ModelForm):
         department = cleaned_data.get('department')
         designation = cleaned_data.get('designation')
 
-        if department and branch:
-            if not department.is_global and not department.branches.filter(pk=branch.pk).exists():
+        if department and not department.is_global:
+            if not branch:
+                self.add_error('branch', f'Branch is required for branch-specific department "{department.name}".')
+            elif not department.branches.filter(pk=branch.pk).exists():
                 self.add_error('department', f'Department "{department.name}" is not available for branch "{branch.name}".')
+
+        phone = (cleaned_data.get('phone') or '').strip()
+        from apps.employees.models import EmployeeProfile
+        qs_prof = EmployeeProfile.objects.filter(phone=phone)
+        if self.instance and self.instance.pk:
+            qs_prof = qs_prof.exclude(master_employee_id=self.instance.pk)
+        if qs_prof.exists():
+            self.add_error('phone', "Another employee profile already uses this phone value.")
 
         if designation and department:
             if designation.department_id and designation.department_id != department.pk:

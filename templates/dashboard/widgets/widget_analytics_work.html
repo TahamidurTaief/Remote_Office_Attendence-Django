@@ -1,0 +1,99 @@
+<div id="analytics-panel-work" class="space-y-4" x-data="{ showWorkTable: false }">
+  {% if analytics_range_error %}
+    <div class="p-2.5 rounded-lg bg-amber-50 text-amber-800 text-xs border border-amber-200">{{ analytics_range_error }}</div>
+  {% else %}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+        <span class="text-3xs uppercase font-bold text-slate-500 block">Scoped Tasks</span>
+        <span class="text-lg font-extrabold text-slate-800 dark:text-white">{{ work_total_tasks }}</span>
+        <span class="block text-[10px] text-slate-500">
+          Completion: {% if work_completion_rate is not None %}{{ work_completion_rate }}%{% else %}Unavailable{% endif %}
+        </span>
+      </div>
+      <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+        <span class="text-3xs uppercase font-bold text-emerald-700 block">Completed Tasks</span>
+        <span class="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{{ work_completed_tasks }}</span>
+        <span class="block text-[10px] text-emerald-700/80">Missing timestamp: {{ work_missing_timestamps }}</span>
+      </div>
+      <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
+        <span class="text-3xs uppercase font-bold text-rose-700 block">Delayed Tasks</span>
+        <span class="text-lg font-extrabold text-rose-700 dark:text-rose-400">{{ work_delayed_tasks }}</span>
+      </div>
+      <div class="p-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
+        <span class="text-3xs uppercase font-bold text-violet-700 block">Field Visits</span>
+        <span class="text-lg font-extrabold text-violet-700 dark:text-violet-400">{{ work_field_visits }}</span>
+      </div>
+    </div>
+
+    {% if analytics_employee_count == 0 %}
+      <div class="p-6 text-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-500">
+        No scoped employees match the selected filters.
+      </div>
+    {% else %}
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200">Task Status Breakdown</h4>
+            <button type="button" @click="showWorkTable = !showWorkTable" class="ft-btn ft-btn-ghost ft-btn-xs text-[10px]">Table</button>
+          </div>
+          <div class="relative h-52 w-full">
+            <canvas id="analyticsWorkStatusChart" aria-label="Task Status Chart"></canvas>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2 overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 uppercase text-3xs font-bold">
+                <th class="py-2 px-3">Task</th>
+                <th class="py-2 px-3">Project</th>
+                <th class="py-2 px-3">Assignee</th>
+                <th class="py-2 px-3">Progress</th>
+                <th class="py-2 px-3">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              {% for row in work_page_obj %}
+                <tr>
+                  <td class="py-2 px-3 font-medium">{{ row.activity }}</td>
+                  <td class="py-2 px-3 text-slate-500">{{ row.project__name|default:"—" }}</td>
+                  <td class="py-2 px-3">{{ row.employee_name }}</td>
+                  <td class="py-2 px-3 font-mono">{{ row.progress_percent }}%</td>
+                  <td class="py-2 px-3 text-[10px] font-bold">{{ row.status }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="5" class="py-4 text-center text-slate-400">No tasks in this period.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div x-show="showWorkTable" x-cloak class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
+        <table class="w-full text-left text-xs">
+          <thead><tr class="border-b text-slate-500"><th class="py-1 px-2">Status</th><th class="py-1 px-2">Count</th></tr></thead>
+          <tbody>
+            {% for s in work_status_items %}
+              <tr class="border-b border-slate-100"><td class="py-1 px-2">{{ s.status }}</td><td class="py-1 px-2">{{ s.cnt }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if work_page_obj.paginator.num_pages > 1 %}
+        <div class="flex items-center justify-between pt-2 text-xs text-slate-500">
+          <span>Page {{ work_page_obj.number }} of {{ work_page_obj.paginator.num_pages }}</span>
+          <div class="flex gap-1.5">
+            {% if work_page_obj.has_previous %}
+              <button type="button" hx-get="{% url 'dashboard' %}?widget=analytics_work&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}&page={{ work_page_obj.previous_page_number }}" hx-target="#analytics-panel-work" hx-swap="outerHTML" class="ft-btn ft-btn-ghost ft-btn-xs">Previous</button>
+            {% endif %}
+            {% if work_page_obj.has_next %}
+              <button type="button" hx-get="{% url 'dashboard' %}?widget=analytics_work&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}&page={{ work_page_obj.next_page_number }}" hx-target="#analytics-panel-work" hx-swap="outerHTML" class="ft-btn ft-btn-ghost ft-btn-xs">Next</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {{ work_chart_payload|json_script:"work-analytics-chart-data" }}
+</div>

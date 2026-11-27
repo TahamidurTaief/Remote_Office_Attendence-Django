@@ -600,43 +600,40 @@ class AdminAttendanceListView(AdminRequiredMixin, ListView):
 class ExportAttendanceCSVView(AdminRequiredMixin, View):
     required_permission = 'attendance.export'
     action_type = 'export'
+
     def get(self, request, *args, **kwargs):
-        date_from = request.GET.get('date_from')
-        date_to = request.GET.get('date_to')
+        date_single = request.GET.get('date')
+        date_from = request.GET.get('date_from') or date_single
+        date_to = request.GET.get('date_to') or date_single
         emp_id = request.GET.get('employee')
         branch_id = request.GET.get('branch')
-        att_type = request.GET.get('type')
+        att_type = request.GET.get('type') or request.GET.get('attendance_type')
         status = request.GET.get('status')
 
-        if status == 'absent':
-            records = get_absent_records(
-                date_from=date_from,
-                date_to=date_to,
-                employee_id=emp_id,
-                branch_id=branch_id
-            )
-        else:
-            queryset = Attendance.objects.select_related(
-                'employee', 'employee__branch'
-            ).filter(is_expired=False)
+        today = timezone.localdate()
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date() if date_from else today
+        except (ValueError, TypeError):
+            date_from_obj = today
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date() if date_to else date_from_obj
+        except (ValueError, TypeError):
+            date_to_obj = date_from_obj
 
-            if date_from:
-                queryset = queryset.filter(date__gte=date_from)
-            if date_to:
-                queryset = queryset.filter(date__lte=date_to)
-            if emp_id:
-                queryset = queryset.filter(employee_id=emp_id)
-            if branch_id:
-                queryset = queryset.filter(employee__branch_id=branch_id)
-            if att_type:
-                queryset = queryset.filter(type=att_type)
-            if status:
-                if status == 'present':
-                    queryset = queryset.filter(status__in=['on_time', 'late'])
-                else:
-                    queryset = queryset.filter(status=status)
-
-            records = queryset.order_by('-date', '-check_in_time')
+        scoped_employees = get_scoped_employee_queryset(
+            request.user, permission_code='attendance.export', action='export'
+        )
+        from apps.attendance import reporting_service
+        data = reporting_service.get_daily_report_data(
+            start_date=date_from_obj,
+            end_date=date_to_obj,
+            employee_id=emp_id or None,
+            branch_id=branch_id or None,
+            employee_queryset=scoped_employees,
+            status=status or None,
+            attendance_type=att_type or None,
+        )
+        records = data['rows']
 
         export_format = request.GET.get('format', 'excel')
 
@@ -656,7 +653,6 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
             title_font = Font(name="Calibri", size=16, bold=True, color="1E293B")
             subtitle_font = Font(name="Calibri", size=10, italic=True, color="64748B")
             regular_font = Font(name="Calibri", size=10, color="0F172A")
-            bold_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
             center_align = Alignment(horizontal="center", vertical="center")
             left_align = Alignment(horizontal="left", vertical="center")
             right_align = Alignment(horizontal="right", vertical="center")
@@ -674,7 +670,7 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
             ws['A1'].alignment = left_align
 
             ws.merge_cells('A2:K2')
-            ws['A2'] = f"Generated on: {timezone.localtime().strftime('%d %B %Y, %I:%M %p')} | Filter: {date_from or 'All Start'} to {date_to or 'All End'}"
+            ws['A2'] = f"Generated on: {timezone.localtime().strftime('%d %B %Y, %I:%M %p')} | Filter: {date_from_obj} to {date_to_obj}"
             ws['A2'].font = subtitle_font
             ws['A2'].alignment = left_align
 
@@ -688,43 +684,52 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
                 cell.alignment = center_align
                 cell.border = thin_border
 
-            # Data rows
+            # Data rows (authoritative employee-day rows)
             row_idx = 5
-            for idx, att in enumerate(records, 1):
-                check_in = timezone.localtime(att.check_in_time).strftime('%I:%M:%S %p') if getattr(att, 'check_in_time', None) else '—'
-                check_out = timezone.localtime(att.check_out_time).strftime('%I:%M:%S %p') if getattr(att, 'check_out_time', None) else '—'
-                branch_name = att.employee.branch.name if (hasattr(att, 'employee') and att.employee and att.employee.branch) else 'Unassigned'
-                emp_id = getattr(att.employee, 'employee_id', '') if hasattr(att, 'employee') else ''
-                emp_name = getattr(att.employee, 'full_name', '') if hasattr(att, 'employee') else ''
-                hours_val = float(att.total_hours) if getattr(att, 'total_hours', None) else 0.0
-                type_display = att.get_type_display() if hasattr(att, 'get_type_display') else 'Office'
-                status_display = att.get_status_display() if hasattr(att, 'get_status_display') else 'Absent'
-                note_str = str(getattr(att, 'note', '')) or ''
+            for idx, r in enumerate(records, 1):
+                emp = r['employee']
+                ci = r['check_in']
+                cis = r['check_in_sessions'] or []
+                fvs = r['field_visits'] or []
+                in_val = r['check_in_time_str'] if r['check_in_time_str'] not in ('—', 'Absent', 'Holiday', 'On Leave') else '—'
+                out_val = '—' if r.get('is_open_session') else (
+                    r['check_out_time_str'] if r.get('check_out_time_str') not in ('', '—', 'Absent', 'Holiday', 'On Leave') else '—'
+                )
+                branch_name = emp.branch.name if getattr(emp, 'branch', None) else 'Unassigned'
+                hours_val = float(r.get('total_hours') or 0.0)
+                if cis and fvs:
+                    type_display = 'Check In / Field Visit'
+                elif cis:
+                    type_display = ci.get_type_display() if hasattr(ci, 'get_type_display') else 'Office'
+                elif fvs:
+                    type_display = 'Field Visit'
+                else:
+                    type_display = r['status_display']
+
+                loc_str = r['location'].address if r.get('location') and hasattr(r['location'], 'address') else ''
+                note_str = r.get('notes') or loc_str or ''
 
                 ws.row_dimensions[row_idx].height = 20
                 row_data = [
                     (idx, center_align),
-                    (str(att.date), center_align),
-                    (emp_id, center_align),
-                    (emp_name, left_align),
+                    (str(r['date']), center_align),
+                    (emp.employee_id or '', center_align),
+                    (emp.full_name or '', left_align),
                     (branch_name, left_align),
-                    (check_in, center_align),
-                    (check_out, center_align),
+                    (in_val, center_align),
+                    (out_val, center_align),
                     (hours_val, right_align),
                     (type_display, center_align),
-                    (status_display, center_align),
+                    (r['status_display'], center_align),
                     (note_str, left_align),
                 ]
-
                 for col_idx, (val, align) in enumerate(row_data, 1):
                     c = ws.cell(row=row_idx, column=col_idx, value=val)
                     c.font = regular_font
                     c.alignment = align
                     c.border = thin_border
-
                 row_idx += 1
 
-            # Auto-fit column widths
             for col in ws.columns:
                 max_len = 0
                 col_letter = get_column_letter(col[0].column)
@@ -750,22 +755,37 @@ class ExportAttendanceCSVView(AdminRequiredMixin, View):
         writer = csv.writer(response)
         writer.writerow(['SN', 'Date', 'Employee ID', 'Employee Name', 'Branch', 'Check In', 'Check Out', 'Hours', 'Type', 'Status', 'Note'])
 
-        for idx, att in enumerate(records, 1):
-            check_in = timezone.localtime(att.check_in_time).strftime('%H:%M:%S') if getattr(att, 'check_in_time', None) else ''
-            check_out = timezone.localtime(att.check_out_time).strftime('%H:%M:%S') if getattr(att, 'check_out_time', None) else ''
-            branch_name = att.employee.branch.name if (hasattr(att, 'employee') and att.employee and att.employee.branch) else 'Unassigned'
+        for idx, r in enumerate(records, 1):
+            emp = r['employee']
+            ci = r['check_in']
+            cis = r['check_in_sessions'] or []
+            fvs = r['field_visits'] or []
+            in_val = r['check_in_time_str'] if r['check_in_time_str'] not in ('—', 'Absent', 'Holiday', 'On Leave') else ''
+            out_val = '' if r.get('is_open_session') else (
+                r['check_out_time_str'] if r.get('check_out_time_str') not in ('', '—', 'Absent', 'Holiday', 'On Leave') else ''
+            )
+            branch_name = emp.branch.name if getattr(emp, 'branch', None) else 'Unassigned'
+            if cis and fvs:
+                type_display = 'Check In / Field Visit'
+            elif cis:
+                type_display = ci.get_type_display() if hasattr(ci, 'get_type_display') else 'Office'
+            elif fvs:
+                type_display = 'Field Visit'
+            else:
+                type_display = r['status_display']
+
             writer.writerow([
                 idx,
-                att.date,
-                getattr(att.employee, 'employee_id', ''),
-                getattr(att.employee, 'full_name', ''),
+                r['date'],
+                emp.employee_id or '',
+                emp.full_name or '',
                 branch_name,
-                check_in,
-                check_out,
-                getattr(att, 'total_hours', '') or '',
-                att.get_type_display() if hasattr(att, 'get_type_display') else '',
-                att.get_status_display() if hasattr(att, 'get_status_display') else '',
-                getattr(att, 'note', '')
+                in_val,
+                out_val,
+                f"{r['total_hours']:.2f}" if r['total_hours'] > 0 else '',
+                type_display,
+                r['status_display'],
+                r.get('notes') or ''
             ])
 
         return response
@@ -971,7 +991,12 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
             curr += timedelta(days=1)
 
     # Fetch policies and holidays in bulk
-    from apps.attendance.reporting_service import OptimizedSchedule, is_employee_holiday_optimized
+    from apps.attendance.reporting_service import (
+        OptimizedSchedule,
+        build_employment_eligibility_map,
+        is_date_employed,
+        is_employee_holiday_optimized,
+    )
     from apps.attendance.models import AttendancePolicy
     from apps.branches.models import Holiday
 
@@ -991,12 +1016,18 @@ def get_absent_records(date_from=None, date_to=None, employee_id=None, branch_id
     synthetic_records = []
     curr_date = start_date
     schedule_cache = {}
-    for emp in employees:
+    employees_list = list(employees)
+    eligibility_map = build_employment_eligibility_map(employees_list)
+    for emp in employees_list:
         schedule_cache[emp.id] = OptimizedSchedule(emp, policies_by_branch, global_policy)
 
     while curr_date <= end_date:
-        for emp in employees:
+        for emp in employees_list:
             schedule = schedule_cache[emp.id]
+
+            # Skip dates outside documented employment period
+            if not is_date_employed(curr_date, emp, eligibility=eligibility_map.get(emp.id))[0]:
+                continue
 
             # Skip holidays (weekly offs, branch schedule, and public holidays)
             if is_employee_holiday_optimized(emp, curr_date, schedule, branch_holidays, global_holidays):
@@ -4201,12 +4232,33 @@ from apps.admin_panel.dashboard_services import (
 class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
     required_permission = 'dashboard.view'
     action_type = 'view'
+    ALLOWED_WIDGETS = {
+        'attendance_analytics',
+        'analytics_people_leave',
+        'analytics_work',
+        'analytics_finance',
+        'admin_security',
+        'hr_org_analytics',
+        'hr_headcount',
+        'hr_lifecycle',
+        'hr_incomplete_profiles',
+        'hr_doc_expiry',
+        'manager_attendance',
+        'manager_approvals',
+        'employee_attendance',
+        'employee_leaves',
+        'employee_expenses',
+        'employee_tasks',
+    }
+
+    def _resolve_variant(self, request):
+        role_override = request.GET.get('role_view')
+        if role_override in ('admin', 'hr', 'manager', 'employee') and request.user.is_superuser:
+            return role_override
+        return determine_user_role_variant(request.user)
+
     def get_template_names(self):
-        role_override = self.request.GET.get('role_view')
-        if role_override and self.request.user.is_superuser:
-            variant = role_override
-        else:
-            variant = determine_user_role_variant(self.request.user)
+        variant = self._resolve_variant(self.request)
 
         if self.request.headers.get('HX-Request') and self.request.GET.get('partial') == 'true':
             if variant == 'admin':
@@ -4229,26 +4281,65 @@ class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
 
     def get(self, request, *args, **kwargs):
         widget = request.GET.get('widget')
-        role_override = request.GET.get('role_view')
-        if role_override and request.user.is_superuser:
-            variant = role_override
-        else:
-            variant = determine_user_role_variant(request.user)
+        variant = self._resolve_variant(request)
 
-        if widget and request.headers.get('HX-Request'):
-            template_path = f"dashboard/widgets/widget_{widget}.html"
-            context = self.get_context_data(**kwargs)
-            return render(request, template_path, context)
+        if widget:
+            if widget not in self.ALLOWED_WIDGETS:
+                return HttpResponse("Invalid widget", status=400)
+            if request.headers.get('HX-Request'):
+                template_path = f"dashboard/widgets/widget_{widget}.html"
+                if widget == 'attendance_analytics':
+                    from .analytics_service import get_attendance_analytics
+                    context = {
+                        'role_variant': variant,
+                        'user_employee': getattr(request.user, 'employee_master', None),
+                    }
+                    context.update(get_attendance_analytics(request.user, request.GET, role_variant=variant))
+                    return render(request, template_path, context)
+                if widget == 'analytics_people_leave':
+                    from .analytics_service import get_people_leave_analytics
+                    context = {
+                        'role_variant': variant,
+                        'user_employee': getattr(request.user, 'employee_master', None),
+                    }
+                    context.update(get_people_leave_analytics(request.user, request.GET, role_variant=variant))
+                    return render(request, template_path, context)
+                if widget == 'analytics_work':
+                    from .analytics_service import get_work_analytics
+                    context = {
+                        'role_variant': variant,
+                        'user_employee': getattr(request.user, 'employee_master', None),
+                    }
+                    context.update(get_work_analytics(request.user, request.GET, role_variant=variant))
+                    return render(request, template_path, context)
+                if widget == 'analytics_finance':
+                    from .analytics_service import get_finance_analytics, has_finance_analytics_permission
+                    if not has_finance_analytics_permission(request.user):
+                        return HttpResponse("Forbidden", status=403)
+                    context = {
+                        'role_variant': variant,
+                        'user_employee': getattr(request.user, 'employee_master', None),
+                    }
+                    context.update(get_finance_analytics(request.user, request.GET, role_variant=variant))
+                    return render(request, template_path, context)
+                if widget == 'admin_security':
+                    from apps.accounts.models import TrustedDevice, UserSession
+                    context = {
+                        'role_variant': variant,
+                        'user_employee': getattr(request.user, 'employee_master', None),
+                        'active_sessions_count': UserSession.objects.filter(is_active=True).count(),
+                        'trusted_devices_count': TrustedDevice.objects.count(),
+                    }
+                    return render(request, template_path, context)
+                context = self.get_context_data(skip_analytics=True, **kwargs)
+                return render(request, template_path, context)
 
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
+        skip_analytics = kwargs.pop('skip_analytics', False)
         context = super().get_context_data(**kwargs)
-        role_override = self.request.GET.get('role_view')
-        if role_override and self.request.user.is_superuser:
-            variant = role_override
-        else:
-            variant = determine_user_role_variant(self.request.user)
+        variant = self._resolve_variant(self.request)
 
         context['role_variant'] = variant
         context['user_employee'] = getattr(self.request.user, 'employee_master', None)
@@ -4261,6 +4352,10 @@ class RoleBasedDashboardView(LoginRequiredMixin, TemplateView):
             context.update(get_manager_dashboard_data(self.request.user))
         else:
             context.update(get_employee_dashboard_data(self.request.user))
+
+        if not skip_analytics and variant in ('admin', 'hr', 'manager'):
+            from .analytics_service import get_attendance_analytics
+            context.update(get_attendance_analytics(self.request.user, self.request.GET, role_variant=variant))
 
         return context
 

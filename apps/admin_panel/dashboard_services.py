@@ -470,12 +470,12 @@ def get_admin_dashboard_data(user, request=None):
     from apps.attendance.models import SyncLog, AttendanceLocation, AttendanceCorrectionRequest
     from django.db.models import Sum, Q
     data['sync_failed_count'] = SyncLog.objects.aggregate(total_failed=Sum('records_failed'))['total_failed'] or 0
-    # Attendance offline queue & pending OT
+    # Attendance pending OT (synced_at IS NULL is normal online attendance, not an offline queue)
     att_aggs = Attendance.objects.aggregate(
-        offline_queue=Count('id', filter=Q(synced_at__isnull=True)),
         pending_ot=Count('id', filter=Q(ot_status='pending', is_expired=False))
     )
-    data['offline_queue_size'] = att_aggs['offline_queue']
+    data['offline_queue_size'] = None
+    data['offline_queue_unavailable'] = True
     pending_ot = att_aggs['pending_ot']
     data['gps_issues_count'] = Attendance.objects.filter(
         Q(gps_quality__in=['poor', 'missing']) |
@@ -545,82 +545,5 @@ def get_admin_dashboard_data(user, request=None):
         category_values.append(float(ec['total']))
     data['expense_category_labels'] = category_labels
     data['expense_category_values'] = category_values
-
-    # 3. Predict/Forecast Tomorrow's Attendance
-    seven_days_ago = today - timedelta(days=7)
-    past_7_days_atts = [item for item in data.get('attendance_trend', []) if item['date'] >= seven_days_ago]
-    
-    n = len(past_7_days_atts)
-    if n >= 3:
-        xs = list(range(1, n + 1))
-        ys = [item['count'] for item in past_7_days_atts]
-        sum_x = sum(xs)
-        sum_y = sum(ys)
-        sum_xy = sum(x * y for x, y in zip(xs, ys))
-        sum_x_squared = sum(x**2 for x in xs)
-        
-        denominator = (n * sum_x_squared - sum_x**2)
-        if denominator != 0:
-            m = (n * sum_xy - sum_x * sum_y) / denominator
-            c = (sum_y - m * sum_x) / n
-            forecasted_count = max(0, m * (n + 1) + c)
-        else:
-            forecasted_count = sum_y / n
-    else:
-        five_days_ago = today - timedelta(days=5)
-        recent_counts = [item['count'] for item in data.get('attendance_trend', []) if item['date'] >= five_days_ago]
-        forecasted_count = (sum(recent_counts) / len(recent_counts)) if recent_counts else 0
-
-    total_emp_count = data.get('total_employees') or 1
-    data['forecasted_attendance_count'] = round(forecasted_count)
-    data['forecasted_attendance_rate'] = min(100.0, round((float(forecasted_count) / total_emp_count) * 100, 1))
-
-    # 4. Correlation between Daily Approved Expenses and Daily Check-ins (over last 10 days)
-    ten_days_ago = today - timedelta(days=10)
-    daily_expenses_qs = Expense.objects.filter(
-        requested_at__date__range=(ten_days_ago, today),
-        status='approved'
-    ).values('requested_at__date').annotate(total_amount=Sum('amount'))
-    expense_map = {item['requested_at__date']: float(item['total_amount']) for item in daily_expenses_qs}
-
-    checkin_map = {item['date']: item['count'] for item in data.get('attendance_trend', []) if item['date'] >= ten_days_ago}
-
-    x_vals = []
-    y_vals = []
-    for offset in range(11):
-        d_date = ten_days_ago + timedelta(days=offset)
-        if d_date in checkin_map:
-            x_vals.append(float(checkin_map[d_date]))
-            y_vals.append(expense_map.get(d_date, 0.0))
-
-    n_corr = len(x_vals)
-    correlation_coefficient = 0.0
-    correlation_strength = "No Data"
-    if n_corr >= 3:
-        sum_x = sum(x_vals)
-        sum_y = sum(y_vals)
-        sum_x_sq = sum(x**2 for x in x_vals)
-        sum_y_sq = sum(y**2 for y in y_vals)
-        sum_xy = sum(x * y for x, y in zip(x_vals, y_vals))
-        
-        num = (n_corr * sum_xy) - (sum_x * sum_y)
-        den_val = ((n_corr * sum_x_sq) - (sum_x**2)) * ((n_corr * sum_y_sq) - (sum_y**2))
-        if den_val > 0:
-            den = math.sqrt(den_val)
-            correlation_coefficient = round(num / den, 3)
-            
-        if correlation_coefficient > 0.6:
-            correlation_strength = "Strong Positive Correlation"
-        elif correlation_coefficient > 0.2:
-            correlation_strength = "Moderate Positive Correlation"
-        elif correlation_coefficient < -0.6:
-            correlation_strength = "Strong Negative Correlation"
-        elif correlation_coefficient < -0.2:
-            correlation_strength = "Moderate Negative Correlation"
-        else:
-            correlation_strength = "Weak / No Correlation"
-            
-    data['expense_attendance_correlation'] = correlation_coefficient
-    data['correlation_strength'] = correlation_strength
 
     return data

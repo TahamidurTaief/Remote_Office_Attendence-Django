@@ -1,0 +1,104 @@
+<div id="analytics-panel-finance" class="space-y-4" x-data="{ showFinTable: false }">
+  {% if not fin_authorized %}
+    <div class="p-4 rounded-xl bg-rose-50 text-rose-700 text-xs border border-rose-200">
+      You are not authorized to view finance analytics.
+    </div>
+  {% elif analytics_range_error %}
+    <div class="p-2.5 rounded-lg bg-amber-50 text-amber-800 text-xs border border-amber-200">{{ analytics_range_error }}</div>
+  {% else %}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20">
+        <span class="text-3xs uppercase font-bold text-sky-700 block">Approved Expenses</span>
+        <span class="text-lg font-extrabold text-sky-700 dark:text-sky-400">{{ fin_currency }} {{ fin_approved_expenses|floatformat:2 }}</span>
+        <span class="block text-[10px] text-sky-700/80">{{ fin_approved_expense_count }} claims (unpaid/separate)</span>
+      </div>
+      <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+        <span class="text-3xs uppercase font-bold text-amber-700 block">Pending Claims</span>
+        <span class="text-lg font-extrabold text-amber-700 dark:text-amber-400">{{ fin_currency }} {{ fin_pending_claims|floatformat:2 }}</span>
+        <span class="block text-[10px] text-amber-700/80">{{ fin_pending_claim_count }} pending</span>
+      </div>
+      <div class="p-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
+        <span class="text-3xs uppercase font-bold text-violet-700 block">Payroll Liabilities</span>
+        <span class="text-lg font-extrabold text-violet-700 dark:text-violet-400">{{ fin_currency }} {{ fin_payroll_liability|floatformat:2 }}</span>
+        <span class="block text-[10px] text-violet-700/80">Un-disbursed runs</span>
+      </div>
+      <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+        <span class="text-3xs uppercase font-bold text-emerald-700 block">Actual Payments</span>
+        <span class="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{{ fin_currency }} {{ fin_payroll_disbursed|floatformat:2 }}</span>
+        <span class="block text-[10px] text-emerald-700/80">Disbursed payroll cash</span>
+      </div>
+    </div>
+
+    {% if analytics_employee_count == 0 %}
+      <div class="p-6 text-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-500">
+        No scoped employees match the selected filters.
+      </div>
+    {% else %}
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200">Finance Breakdown ({{ fin_currency }})</h4>
+            <button type="button" @click="showFinTable = !showFinTable" class="ft-btn ft-btn-ghost ft-btn-xs text-[10px]">Table</button>
+          </div>
+          <div class="relative h-52 w-full">
+            <canvas id="analyticsFinanceChart" aria-label="Finance Breakdown Chart"></canvas>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2 overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 uppercase text-3xs font-bold">
+                <th class="py-2 px-3">Employee</th>
+                <th class="py-2 px-3">Category</th>
+                <th class="py-2 px-3">Amount ({{ fin_currency }})</th>
+                <th class="py-2 px-3">Status</th>
+                <th class="py-2 px-3">Requested</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              {% for row in fin_page_obj %}
+                <tr>
+                  <td class="py-2 px-3 font-medium">{{ row.employee_name }}</td>
+                  <td class="py-2 px-3">{{ row.category__name|default:"Uncategorized" }}</td>
+                  <td class="py-2 px-3 font-mono">{{ row.amount|floatformat:2 }}</td>
+                  <td class="py-2 px-3 uppercase text-[10px] font-bold">{{ row.status }}</td>
+                  <td class="py-2 px-3 font-mono text-[11px]">{{ row.requested_at|date:"Y-m-d" }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="5" class="py-4 text-center text-slate-400">No expense claims in this period.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div x-show="showFinTable" x-cloak class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
+        <table class="w-full text-left text-xs">
+          <thead><tr class="border-b text-slate-500"><th class="py-1 px-2">Bucket</th><th class="py-1 px-2">Amount ({{ fin_currency }})</th></tr></thead>
+          <tbody>
+            <tr class="border-b border-slate-100"><td class="py-1 px-2">Approved Expenses</td><td class="py-1 px-2">{{ fin_approved_expenses|floatformat:2 }}</td></tr>
+            <tr class="border-b border-slate-100"><td class="py-1 px-2">Pending Claims</td><td class="py-1 px-2">{{ fin_pending_claims|floatformat:2 }}</td></tr>
+            <tr class="border-b border-slate-100"><td class="py-1 px-2">Payroll Liabilities</td><td class="py-1 px-2">{{ fin_payroll_liability|floatformat:2 }}</td></tr>
+            <tr class="border-b border-slate-100"><td class="py-1 px-2">Actual Payments</td><td class="py-1 px-2">{{ fin_payroll_disbursed|floatformat:2 }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      {% if fin_page_obj.paginator.num_pages > 1 %}
+        <div class="flex items-center justify-between pt-2 text-xs text-slate-500">
+          <span>Page {{ fin_page_obj.number }} of {{ fin_page_obj.paginator.num_pages }}</span>
+          <div class="flex gap-1.5">
+            {% if fin_page_obj.has_previous %}
+              <button type="button" hx-get="{% url 'dashboard' %}?widget=analytics_finance&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}&page={{ fin_page_obj.previous_page_number }}" hx-target="#analytics-panel-finance" hx-swap="outerHTML" class="ft-btn ft-btn-ghost ft-btn-xs">Previous</button>
+            {% endif %}
+            {% if fin_page_obj.has_next %}
+              <button type="button" hx-get="{% url 'dashboard' %}?widget=analytics_finance&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}&page={{ fin_page_obj.next_page_number }}" hx-target="#analytics-panel-finance" hx-swap="outerHTML" class="ft-btn ft-btn-ghost ft-btn-xs">Next</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {{ fin_chart_payload|json_script:"finance-analytics-chart-data" }}
+</div>

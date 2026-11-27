@@ -346,137 +346,165 @@ class PayrollService:
     @transaction.atomic
     def sync_payroll_inputs(cls, payroll_run: PayrollRun) -> list:
         """
-        Pulls a deterministic snapshot of monthly Attendance, Leave and approved OT,
-        and saves them for all eligible employees.
+        Pulls a deterministic snapshot of Attendance, Leave and approved OT
+        for the exact inclusive [payroll_run.period_start, payroll_run.period_end] period,
+        using bulk queries and authoritative employee-day calculations.
         """
         if payroll_run.status in [PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]:
             raise ValidationError("Cannot run or modify payroll calculations for locked or disbursed payroll runs.")
 
-        from apps.attendance.reporting_service import get_monthly_report_data
-        from apps.employees.models import Employee, EmployeeProfile
-        from apps.branches.models import OfficeSchedule, Holiday
+        if not payroll_run.period_start or not payroll_run.period_end or payroll_run.period_end < payroll_run.period_start:
+            raise ValidationError("Invalid payroll run period: period_start and period_end must form a valid inclusive range.")
 
-        year = payroll_run.period_start.year
-        month = payroll_run.period_start.month
+        from collections import defaultdict
+        from datetime import timedelta
+        from apps.attendance.models import AttendancePolicy, OvertimeRequest
+        from apps.attendance.reporting_service import (
+            OptimizedSchedule,
+            get_daily_report_data,
+            is_employee_holiday_optimized,
+        )
+        from apps.branches.models import Holiday
+        from apps.leave.models import LeaveRequest
+        from apps.payroll.models import PayrollPolicy
+        from apps.payroll.configuration_service import PayrollConfigurationService
+        from apps.tenants.context import get_current_tenant
 
-        # Fetch canonical monthly report data
-        report = get_monthly_report_data(year, month)
-        
-        # We need a mapping from EmployeeProfile ID to Employee master object
-        profiles = {p.id: p for p in report['employees']}
+        p_start = payroll_run.period_start
+        p_end = payroll_run.period_end
 
-        # Loop through rows from canonical report data
+        # Single authoritative period-scoped attendance/eligibility calculation
+        report = get_daily_report_data(start_date=p_start, end_date=p_end)
+
+        rows_by_emp = defaultdict(list)
+        for r in report['rows']:
+            rows_by_emp[r['employee'].id].append(r)
+
+        profile_ids = [p.id for p in report['employees']]
+        if not profile_ids:
+            return []
+
+        # Bulk-load approved OT minutes in [p_start, p_end]
+        ot_by_emp = {
+            row['employee_id']: (row['total'] or 0)
+            for row in OvertimeRequest.objects.filter(
+                employee_id__in=profile_ids,
+                status='approved',
+                date__gte=p_start,
+                date__lte=p_end,
+            )
+            .values('employee_id')
+            .annotate(total=models.Sum('ot_minutes'))
+        }
+
+        # Bulk-load approved leaves overlapping [p_start, p_end]
+        leave_by_emp_date = {}
+        leave_qs = (
+            LeaveRequest.objects.filter(
+                employee_id__in=profile_ids,
+                status='approved',
+                start_date__lte=p_end,
+                end_date__gte=p_start,
+            )
+            .select_related('leave_type')
+            .order_by('id')
+        )
+        for lr in leave_qs:
+            s_d = max(lr.start_date, p_start)
+            e_d = min(lr.end_date, p_end)
+            day_weight = (
+                Decimal(str(lr.number_of_days))
+                if (lr.start_date == lr.end_date and lr.number_of_days is not None and Decimal(str(lr.number_of_days)) < Decimal('1.0'))
+                else Decimal('1.0')
+            )
+            ded_pct = lr.leave_type.deduction_percent or Decimal('0.00')
+            curr_d = s_d
+            while curr_d <= e_d:
+                key = (lr.employee_id, curr_d)
+                if key not in leave_by_emp_date:
+                    leave_by_emp_date[key] = (day_weight, ded_pct)
+                curr_d += timedelta(days=1)
+
+        # Bulk-load policies, attendance policies & holidays for working_days divisor
+        all_payroll_policies = list(PayrollPolicy.objects.all())
+        payroll_policy_by_branch = {p.branch_id: p for p in all_payroll_policies if p.branch_id is not None}
+        global_payroll_policy = next((p for p in all_payroll_policies if p.branch_id is None), None)
+
+        att_policies = list(AttendancePolicy.objects.all())
+        att_policies_by_branch = {p.branch_id: p for p in att_policies if p.branch_id is not None}
+        global_att_policy = next((p for p in att_policies if p.branch_id is None), None)
+
+        holidays = list(Holiday.objects.filter(date__gte=p_start, date__lte=p_end))
+        branch_holidays = defaultdict(set)
+        global_holidays = set()
+        for h in holidays:
+            if h.branch_id:
+                branch_holidays[h.branch_id].add(h.date)
+            else:
+                global_holidays.add(h.date)
+
+        # Resolve PayrollConfiguration once for run/tenant
+        default_tenant = getattr(payroll_run, 'tenant', None) or get_current_tenant()
+        cfg = payroll_run.configuration
+        if not cfg and default_tenant:
+            try:
+                cfg = PayrollConfigurationService.get_active_config(default_tenant, create_if_missing=False)
+                if cfg and not payroll_run.configuration_id:
+                    PayrollConfigurationService.attach_to_payroll_run(payroll_run, config=cfg)
+            except Exception:
+                cfg = None
+
         calculations = []
         synced_at_now = timezone.now()
+        period_dates = []
+        curr_d = p_start
+        while curr_d <= p_end:
+            period_dates.append(curr_d)
+            curr_d += timedelta(days=1)
 
-        for row in report['rows']:
-            profile = row['employee']
+        for profile in report['employees']:
             master_employee = profile.master_employee
             if not master_employee:
                 continue
 
-            # Eligibility checks: employee joins or resigns mid-month
-            # Exclude if employee joined after the payroll run period ends
-            if master_employee.joined_date and master_employee.joined_date > payroll_run.period_end:
+            emp_rows = rows_by_emp.get(profile.id, [])
+            eligible_days = sum(1 for r in emp_rows if r['status'] != 'not_employed')
+            if eligible_days == 0:
                 continue
-            # Exclude if employee resigned before the period starts (checking EmployeeStatus and any metadata if applicable, otherwise active status check is handled)
 
-            # Present days
-            present_days = Decimal(str(row['present']))
-            # Approved leave days
-            approved_leave_days = Decimal(str(row['on_leave']))
+            present_days = Decimal(str(sum(1 for r in emp_rows if r['is_present'])))
+            absent_count = Decimal(str(sum(1 for r in emp_rows if r['is_absent'])))
+            approved_leave_days = Decimal(str(sum(1 for r in emp_rows if r['status'] == 'on_leave')))
 
-            # Approved OT hours derived strictly from approved OvertimeRequest records
-            from apps.attendance.models import OvertimeRequest
-            approved_ot_minutes = OvertimeRequest.objects.filter(
-                employee=profile,
-                status='approved',
-                date__gte=payroll_run.period_start,
-                date__lte=payroll_run.period_end
-            ).aggregate(total=models.Sum('ot_minutes'))['total'] or 0
+            approved_ot_minutes = ot_by_emp.get(profile.id, 0)
             approved_ot_hours = Decimal(str(approved_ot_minutes)) / Decimal('60.00')
 
-            # Unpaid absence days derivation with dynamic leave deductions
-            absent_count = Decimal(str(row['absent']))
-
-            from apps.leave.models import LeaveRequest
-            overlapping_leaves = LeaveRequest.objects.filter(
-                employee=profile,
-                status='approved',
-                start_date__lte=payroll_run.period_end,
-                end_date__gte=payroll_run.period_start
-            ).select_related('leave_type')
-
             leave_deduction_days = Decimal('0.00')
-            for lr in overlapping_leaves:
-                days_in_period = lr.overlapping_days_in(payroll_run.period_start, payroll_run.period_end)
-                ded_pct = lr.leave_type.deduction_percent or Decimal('0.00')
-                leave_deduction_days += (days_in_period * ded_pct) / Decimal('100.00')
+            for r in emp_rows:
+                if r['status'] == 'on_leave':
+                    info = leave_by_emp_date.get((profile.id, r['date']))
+                    if info:
+                        day_weight, ded_pct = info
+                        leave_deduction_days += (day_weight * ded_pct) / Decimal('100.00')
 
             deduction_days = (absent_count + leave_deduction_days).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-            # Resolve canonical PayrollConfiguration or fallback to branch PayrollPolicy
-            from apps.payroll.models import PayrollPolicy
-            from apps.payroll.configuration_service import PayrollConfigurationService
-            from apps.tenants.context import get_current_tenant
-
-            tenant = getattr(master_employee, 'tenant', None) or getattr(payroll_run, 'tenant', None) or get_current_tenant()
-            cfg = None
-            if tenant:
-                try:
-                    cfg = PayrollConfigurationService.get_active_config(tenant, create_if_missing=False)
-                    if cfg and not payroll_run.configuration_id:
-                        PayrollConfigurationService.attach_to_payroll_run(payroll_run, config=cfg)
-                except Exception:
-                    cfg = None
-
             branch = master_employee.branch if master_employee else profile.branch
-            policy = None
-            if branch:
-                policy = PayrollPolicy.objects.filter(branch=branch).first()
-            if not policy:
-                policy = PayrollPolicy.objects.filter(branch__isnull=True).first()
+            policy = payroll_policy_by_branch.get(branch.id if branch else None, global_payroll_policy)
 
             if cfg:
                 divisor_mode = cfg.working_day_basis
             else:
                 divisor_mode = policy.absence_divisor_mode if policy else 'fixed_30'
+
             if divisor_mode == 'calendar_days':
-                absence_divisor = (payroll_run.period_end - payroll_run.period_start).days + 1
+                absence_divisor = (p_end - p_start).days + 1
             elif divisor_mode == 'working_days':
-                from apps.attendance.schedule_utils import get_branch_schedule
-                from apps.branches.models import Holiday
-                from datetime import timedelta
-                from django.conf import settings
-                schedule = get_branch_schedule(profile)
-                working_days_set = getattr(settings, 'WORKING_DAYS', [0, 1, 2, 3, 5, 6])
-                policy_str = master_employee.weekly_holiday_policy if master_employee.weekly_holiday_policy else ''
-                w_policy = [day.strip().lower() for day in policy_str.split(',') if day.strip()]
-
-                w_days = 0
-                curr = payroll_run.period_start
-                while curr <= payroll_run.period_end:
-                    day_name = curr.strftime('%A').lower()
-                    is_off = False
-                    if w_policy:
-                        if day_name in w_policy:
-                            is_off = True
-                    elif schedule:
-                        if day_name not in schedule.working_days:
-                            is_off = True
-                    else:
-                        if curr.weekday() not in working_days_set:
-                            is_off = True
-
-                    if not is_off:
-                        h_qs = Holiday.objects.filter(date=curr)
-                        if branch:
-                            h_qs = h_qs.filter(models.Q(branch=branch) | models.Q(branch__isnull=True))
-                        else:
-                            h_qs = h_qs.filter(branch__isnull=True)
-                        if not h_qs.exists():
-                            w_days += 1
-                    curr += timedelta(days=1)
+                schedule = OptimizedSchedule(profile, att_policies_by_branch, global_att_policy)
+                w_days = sum(
+                    1 for d in period_dates
+                    if not is_employee_holiday_optimized(profile, d, schedule, branch_holidays, global_holidays)
+                )
                 absence_divisor = max(w_days, 1)
             else:
                 absence_divisor = 30
@@ -486,7 +514,6 @@ class PayrollService:
             else:
                 ot_multiplier = policy.default_ot_multiplier if policy else Decimal('1.50')
 
-            # Standard Overtime Policy callback if employee has one configured
             ot_policy_name = master_employee.overtime_policy
             ot_policy_callback = None
             if ot_policy_name and ot_policy_name.strip() and ot_policy_name.lower() != 'none':
@@ -497,7 +524,6 @@ class PayrollService:
                         return (gross / (Decimal(str(div)) * Decimal('8.00'))) * mult * hours
                     ot_policy_callback = default_ot_callback
 
-            # Run payroll calculation and persistence
             calc = cls.run_payroll_for_employee(
                 payroll_run=payroll_run,
                 employee=master_employee,

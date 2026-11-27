@@ -3,11 +3,132 @@ from datetime import date, datetime, time, timedelta
 from collections import defaultdict
 from django.utils import timezone
 from django.conf import settings
-from apps.employees.models import EmployeeProfile
+from apps.employees.models import EmployeeProfile, EmploymentHistory
 from apps.branches.models import Branch, OfficeSchedule, Holiday
 from apps.attendance.models import Attendance, AttendancePolicy
 from apps.leave.models import LeaveRequest, LeaveType, LeaveBalance
 from apps.attendance.schedule_utils import get_branch_schedule, parse_time_from_string, parse_shift_times
+
+_EXIT_STATUS_VALUES = {'resigned', 'terminated'}
+_ACTIVE_STATUS_VALUES = {'active', 'probation', 'on leave', 'on_leave', 'suspended'}
+
+
+def _resolve_joined_date(employee):
+    joined_date = getattr(employee, 'joined_date', None)
+    if not joined_date and getattr(employee, 'master_employee', None):
+        joined_date = getattr(employee.master_employee, 'joined_date', None)
+    return joined_date
+
+
+def _resolve_master_id(employee):
+    mid = getattr(employee, 'master_employee_id', None)
+    if mid is not None:
+        return mid
+    master = getattr(employee, 'master_employee', None)
+    return getattr(master, 'id', None)
+
+
+def build_employment_eligibility_map(employees):
+    """
+    Bulk-loads EmploymentHistory status transitions in 1 query and builds
+    per-employee employment intervals [(start_date, end_date_or_None), ...].
+    Never invents missing exit dates or reconstructs history from today's is_active.
+    """
+    master_ids = []
+    for emp in employees:
+        mid = _resolve_master_id(emp)
+        if mid is not None:
+            master_ids.append(mid)
+
+    history_by_master = defaultdict(list)
+    if master_ids:
+        rows = (
+            EmploymentHistory.objects.filter(
+                employee_id__in=set(master_ids),
+                field_changed='status',
+            )
+            .values_list('employee_id', 'new_value', 'effective_date')
+            .order_by('effective_date', 'created_at', 'id')
+        )
+        for emp_id, new_val, eff_date in rows:
+            history_by_master[emp_id].append((new_val, eff_date))
+
+    elig_map = {}
+    for emp in employees:
+        joined_date = _resolve_joined_date(emp)
+        mid = _resolve_master_id(emp)
+        master = getattr(emp, 'master_employee', None)
+        master_status = (getattr(master, 'status', None) or '').strip().lower() if master else ''
+        transitions = history_by_master.get(mid, []) if mid is not None else []
+
+        unresolved = joined_date is None
+        intervals = []
+        current_start = joined_date
+        has_documented_exit = False
+
+        for new_val, eff_date in transitions:
+            norm = (new_val or '').strip().lower()
+            if not eff_date:
+                unresolved = True
+                continue
+            if joined_date and eff_date < joined_date:
+                unresolved = True
+                continue
+            if norm in _EXIT_STATUS_VALUES:
+                has_documented_exit = True
+                if current_start is not None:
+                    if eff_date >= current_start:
+                        intervals.append((current_start, eff_date))
+                    else:
+                        unresolved = True
+                    current_start = None
+                else:
+                    unresolved = True
+            elif norm in _ACTIVE_STATUS_VALUES:
+                if current_start is None:
+                    current_start = eff_date
+
+        if current_start is not None:
+            intervals.append((current_start, None))
+
+        if master_status in _EXIT_STATUS_VALUES and not has_documented_exit:
+            unresolved = True
+
+        elig_map[emp.id] = {
+            'joined_date': joined_date,
+            'intervals': intervals,
+            'unresolved': unresolved,
+        }
+    return elig_map
+
+
+def is_date_employed(target_date, employee, eligibility=None):
+    """
+    Shared eligibility rule:
+    - Pre-joining (< joined_date) and post-last-working-day dates are Not Applicable (False).
+    - Respects documented rejoining intervals.
+    - Returns (is_employed: bool, unresolved: bool).
+    """
+    if eligibility is not None:
+        joined_date = eligibility['joined_date']
+        intervals = eligibility['intervals']
+        unresolved = eligibility['unresolved']
+        if joined_date and target_date < joined_date:
+            return False, unresolved
+        if intervals:
+            for start_d, end_d in intervals:
+                if target_date >= start_d and (end_d is None or target_date <= end_d):
+                    return True, unresolved
+            return False, unresolved
+        if joined_date is None:
+            return True, True
+        return target_date >= joined_date, unresolved
+
+    joined_date = _resolve_joined_date(employee)
+    if joined_date and target_date < joined_date:
+        return False, False
+    return True, joined_date is None
+
 
 def _get_working_day_set(schedule):
     if schedule is not None:
@@ -232,7 +353,8 @@ def calculate_employee_day(
     schedule=None,
     is_holiday=False,
     is_on_leave=False,
-    today=None
+    today=None,
+    eligibility=None,
 ):
     """
     Authoritative single employee-day calculation.
@@ -249,6 +371,7 @@ def calculate_employee_day(
     has_check_in = len(check_in_sessions) > 0
     has_field_visit = len(field_visits) > 0
     has_any_attendance = has_check_in or has_field_visit
+    is_employed, elig_unresolved = is_date_employed(target_date, employee, eligibility=eligibility)
 
     # Rule: Future dates must contribute no present, absent, leave, late, hours or field-visit totals.
     if target_date > today:
@@ -392,10 +515,51 @@ def calculate_employee_day(
             'check_out_time_str': out_time_str,
             'check_in_sessions': check_in_sessions,
             'field_visits': field_visits,
+            'eligibility_conflict': not is_employed,
+            'eligibility_unresolved': elig_unresolved,
         }
 
 
-    # 2. No attendance: Check approved leave
+    # 2. Not employed (pre-joining, post-exit, or employment gap): Not Applicable
+    # Checked before leave/absent so dates outside employment contribute no absence or denominator.
+    if not is_employed:
+        return {
+            'date': target_date,
+            'is_future': False,
+            'status': 'not_employed',
+            'status_display': '—',
+            'monthly_status': '—',
+            'calendar_color': 'gray',
+            'is_present': False,
+            'is_absent': False,
+            'is_late': False,
+            'is_on_leave': False,
+            'is_holiday': is_holiday,
+            'is_weekend': is_holiday,
+            'present_count': 0,
+            'absent_count': 0,
+            'on_leave_count': 0,
+            'late_count': 0,
+            'field_visit_count': 0,
+            'total_hours': 0.0,
+            'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
+            'eligibility_conflict': False,
+            'eligibility_unresolved': elig_unresolved,
+            'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': '—',
+            'check_out_time_str': '—',
+            'check_in_sessions': [],
+            'field_visits': [],
+        }
+
+    # 3. No attendance: Check approved leave
     if is_on_leave:
         return {
             'date': target_date,
@@ -468,45 +632,7 @@ def calculate_employee_day(
             'field_visits': [],
         }
 
-    # 4. Pre-joining or before shift + sync grace period end: not absent
-    joined_date = getattr(employee, 'joined_date', None)
-    if not joined_date and getattr(employee, 'master_employee', None):
-        joined_date = getattr(employee.master_employee, 'joined_date', None)
-    if joined_date and target_date < joined_date:
-        return {
-            'date': target_date,
-            'is_future': False,
-            'status': 'not_employed',
-            'status_display': '—',
-            'monthly_status': '—',
-            'calendar_color': 'gray',
-            'is_present': False,
-            'is_absent': False,
-            'is_late': False,
-            'is_on_leave': False,
-            'is_holiday': is_holiday,
-            'is_weekend': is_holiday,
-            'present_count': 0,
-            'absent_count': 0,
-            'on_leave_count': 0,
-            'late_count': 0,
-            'field_visit_count': 0,
-            'total_hours': 0.0,
-            'overtime_minutes': 0,
-            'first_arrival': None,
-            'last_departure': None,
-            'is_open_session': False,
-            'is_missing_checkout': False,
-            'has_leave_conflict': False,
-            'check_in': None,
-            'check_in_time': None,
-            'check_out_time': None,
-            'check_in_time_str': '—',
-            'check_out_time_str': '—',
-            'check_in_sessions': [],
-            'field_visits': [],
-        }
-
+    # 4. Before shift + sync grace period end: pending
     if target_date == today and schedule and getattr(schedule, 'office_end_time', None):
         sync_grace_minutes = int(getattr(settings, 'ATTENDANCE_SYNC_GRACE_MINUTES', 0) or 0)
         end_dt = datetime.combine(target_date, schedule.office_end_time)
@@ -691,6 +817,8 @@ def get_daily_report_data(
         date_list.append(curr)
         curr += timedelta(days=1)
 
+    eligibility_map = build_employment_eligibility_map(employees)
+
     rows = []
     for d in date_list:
         for emp in employees:
@@ -704,7 +832,8 @@ def get_daily_report_data(
                 schedule=schedule,
                 is_holiday=is_holiday,
                 is_on_leave=is_on_leave,
-                today=today
+                today=today,
+                eligibility=eligibility_map.get(emp.id),
             )
 
             ci = day_calc['check_in']
@@ -921,6 +1050,7 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
     working_days = _get_working_days(year, month, summary_schedule)
 
     # 6. Calculate statistics per employee
+    eligibility_map = build_employment_eligibility_map(employees)
     display_att_lookup = defaultdict(dict)
     daily_status_lookup = defaultdict(dict)
     employee_stats = {}
@@ -928,9 +1058,12 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
 
     for emp in employees:
         schedule = OptimizedSchedule(emp, policies_by_branch, global_policy)
+        emp_elig = eligibility_map.get(emp.id)
         emp_working_days_so_far = sum(
-            1 for d in all_days 
-            if d <= max_date and not is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
+            1 for d in all_days
+            if d <= max_date
+            and is_date_employed(d, emp, eligibility=emp_elig)[0]
+            and not is_employee_holiday_optimized(emp, d, schedule, branch_holidays, global_holidays)
         )
 
         present_count = 0
@@ -954,7 +1087,8 @@ def get_monthly_report_data(year, month, employee_id=None, branch_id=None, allow
                 schedule=schedule,
                 is_holiday=is_holiday,
                 is_on_leave=is_on_leave,
-                today=today
+                today=today,
+                eligibility=emp_elig,
             )
             emp_day_calcs[d] = day_calc
 

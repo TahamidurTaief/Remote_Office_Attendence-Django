@@ -1,0 +1,379 @@
+{% load static %}
+<div id="attendance-analytics-section"
+     class="space-y-4"
+     x-data="{
+       range: '{{ analytics_range|default:"7" }}',
+       showTables: false,
+       activeTab: 'attendance'
+     }">
+  <c-card>
+    <!-- Header & Unified Panel Tabs -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+      <div class="flex items-center gap-2">
+        <div class="p-2 rounded-lg bg-sky-500/10 text-sky-600">
+          <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-sm text-slate-800 dark:text-white">Unified Analytics</h3>
+          <p class="text-2xs text-slate-500">
+            {{ analytics_start_date|date:"d M Y" }} – {{ analytics_end_date|date:"d M Y" }}
+            ({{ analytics_num_days }} day{{ analytics_num_days|pluralize }}, {{ analytics_employee_count }} scoped employee{{ analytics_employee_count|pluralize }})
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Analytics Panels">
+        <button type="button" role="tab" :aria-selected="activeTab === 'attendance'"
+                @click="activeTab = 'attendance'"
+                :class="activeTab === 'attendance' ? 'ft-btn-primary' : 'ft-btn-ghost'"
+                class="ft-btn ft-btn-xs text-xs">Attendance</button>
+        <button type="button" role="tab" :aria-selected="activeTab === 'people_leave'"
+                @click="activeTab = 'people_leave'"
+                hx-get="{% url 'dashboard' %}?widget=analytics_people_leave&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}{% if request.GET.role_view %}&role_view={{ request.GET.role_view|urlencode }}{% endif %}"
+                hx-target="#analytics-panel-people-leave-host"
+                hx-swap="innerHTML"
+                hx-trigger="click once"
+                :class="activeTab === 'people_leave' ? 'ft-btn-primary' : 'ft-btn-ghost'"
+                class="ft-btn ft-btn-xs text-xs">People &amp; Leave</button>
+        <button type="button" role="tab" :aria-selected="activeTab === 'work'"
+                @click="activeTab = 'work'"
+                hx-get="{% url 'dashboard' %}?widget=analytics_work&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}{% if request.GET.role_view %}&role_view={{ request.GET.role_view|urlencode }}{% endif %}"
+                hx-target="#analytics-panel-work-host"
+                hx-swap="innerHTML"
+                hx-trigger="click once"
+                :class="activeTab === 'work' ? 'ft-btn-primary' : 'ft-btn-ghost'"
+                class="ft-btn ft-btn-xs text-xs">Work</button>
+        {% if analytics_can_view_finance %}
+          <button type="button" role="tab" :aria-selected="activeTab === 'finance'"
+                  @click="activeTab = 'finance'"
+                  hx-get="{% url 'dashboard' %}?widget=analytics_finance&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}{% if request.GET.role_view %}&role_view={{ request.GET.role_view|urlencode }}{% endif %}"
+                  hx-target="#analytics-panel-finance-host"
+                  hx-swap="innerHTML"
+                  hx-trigger="click once"
+                  :class="activeTab === 'finance' ? 'ft-btn-primary' : 'ft-btn-ghost'"
+                  class="ft-btn ft-btn-xs text-xs">Finance</button>
+        {% endif %}
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        {% if analytics_can_view_reports %}
+          <a href="{% url 'admin_panel:reports_daily' %}?start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}{% if analytics_selected_branch %}&branch={{ analytics_selected_branch }}{% endif %}"
+             class="ft-btn ft-btn-ghost ft-btn-xs text-xs">
+            Daily Report
+          </a>
+          <a href="{% url 'admin_panel:reports_monthly' %}?year={{ analytics_end_date|date:'Y' }}&month={{ analytics_end_date|date:'n' }}{% if analytics_selected_branch %}&branch={{ analytics_selected_branch }}{% endif %}"
+             class="ft-btn ft-btn-ghost ft-btn-xs text-xs">
+            Monthly Report
+          </a>
+        {% endif %}
+        <button type="button"
+                @click="showTables = !showTables"
+                class="ft-btn ft-btn-ghost ft-btn-xs text-xs">
+          <span x-text="showTables ? 'Hide Chart Tables' : 'Accessible Data Tables'">Accessible Data Tables</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters Form (HTMX) -->
+    <form id="analytics-filter-form"
+          hx-get="{% url 'dashboard' %}"
+          hx-target="#attendance-analytics-section"
+          hx-swap="outerHTML"
+          hx-indicator="#analytics-loading-indicator"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 mb-4 items-end">
+      <input type="hidden" name="widget" value="attendance_analytics">
+      {% if request.GET.role_view %}
+        <input type="hidden" name="role_view" value="{{ request.GET.role_view }}">
+      {% endif %}
+
+      <div>
+        <label for="analytics-range" class="block text-3xs font-bold uppercase text-slate-500 mb-1">Period</label>
+        <select id="analytics-range"
+                name="range"
+                x-model="range"
+                class="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5">
+          <option value="7" {% if analytics_range == '7' %}selected{% endif %}>Last 7 Days</option>
+          <option value="30" {% if analytics_range == '30' %}selected{% endif %}>Last 30 Days</option>
+          <option value="90" {% if analytics_range == '90' %}selected{% endif %}>Last 90 Days</option>
+          <option value="custom" {% if analytics_range == 'custom' %}selected{% endif %}>Custom (Max 90d)</option>
+        </select>
+      </div>
+
+      <div x-show="range === 'custom'" x-cloak>
+        <label for="analytics-start-date" class="block text-3xs font-bold uppercase text-slate-500 mb-1">From</label>
+        <input id="analytics-start-date"
+               type="date"
+               name="start_date"
+               value="{{ analytics_start_date|date:'Y-m-d' }}"
+               class="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5">
+      </div>
+
+      <div x-show="range === 'custom'" x-cloak>
+        <label for="analytics-end-date" class="block text-3xs font-bold uppercase text-slate-500 mb-1">To</label>
+        <input id="analytics-end-date"
+               type="date"
+               name="end_date"
+               value="{{ analytics_end_date|date:'Y-m-d' }}"
+               class="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5">
+      </div>
+
+      <div>
+        <label for="analytics-branch" class="block text-3xs font-bold uppercase text-slate-500 mb-1">Branch</label>
+        <select id="analytics-branch"
+                name="branch"
+                class="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5">
+          <option value="">All Scoped Branches</option>
+          {% for b_id, b_name in analytics_branch_options %}
+            <option value="{{ b_id }}" {% if analytics_selected_branch == b_id %}selected{% endif %}>{{ b_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="analytics-department" class="block text-3xs font-bold uppercase text-slate-500 mb-1">Department</label>
+        <select id="analytics-department"
+                name="department"
+                class="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5">
+          <option value="">All Scoped Depts</option>
+          {% for d_key, d_name in analytics_dept_options %}
+            <option value="{{ d_key }}" {% if analytics_selected_dept == d_key %}selected{% endif %}>{{ d_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div class="flex-1">
+          <label for="analytics-group-by" class="block text-3xs font-bold uppercase text-slate-500 mb-1">Rate By</label>
+          <select id="analytics-group-by"
+                  name="group_by"
+                  class="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5">
+            <option value="department" {% if analytics_group_by == 'department' %}selected{% endif %}>Department</option>
+            <option value="branch" {% if analytics_group_by == 'branch' %}selected{% endif %}>Branch</option>
+          </select>
+        </div>
+        <button type="submit" class="ft-btn ft-btn-primary ft-btn-sm text-xs mt-4">
+          Apply
+        </button>
+      </div>
+    </form>
+
+    <!-- Loading & Error States -->
+    <div id="analytics-loading-indicator" class="htmx-indicator text-xs text-sky-600 font-medium mb-3">
+      Updating attendance analytics...
+    </div>
+    <div id="analytics-error-banner" class="hidden p-2.5 mb-3 rounded-lg bg-rose-50 text-rose-700 text-xs border border-rose-200">
+      Failed to refresh analytics. Please retry.
+    </div>
+    {% if analytics_range_error %}
+      <div class="p-2.5 mb-3 rounded-lg bg-amber-50 text-amber-800 text-xs border border-amber-200">
+        {{ analytics_range_error }}
+      </div>
+    {% endif %}
+    {% if analytics_range_clamped %}
+      <div class="p-2.5 mb-3 rounded-lg bg-sky-50 text-sky-800 text-xs border border-sky-200">
+        Custom range was bounded to the maximum 90 days.
+      </div>
+    {% endif %}
+
+    <div x-show="activeTab === 'attendance'">
+      <!-- Summary KPI Strip with Clear Denominators -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+      <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+        <span class="text-3xs uppercase font-bold text-slate-500 block">Attendance Rate</span>
+        {% if analytics_summary.attendance_rate is not None %}
+          <span class="text-lg font-extrabold text-slate-800 dark:text-white">{{ analytics_summary.attendance_rate }}%</span>
+          <span class="block text-[10px] text-slate-500">
+            {{ analytics_summary.total_present }} / {{ analytics_summary.eligible_working_days }} eligible days
+          </span>
+        {% else %}
+          <span class="text-sm font-bold text-slate-500 block mt-1">Unavailable</span>
+          <span class="block text-[10px] text-slate-400">0 eligible working days</span>
+        {% endif %}
+        <span class="block text-[10px] mt-1 {% if analytics_rate_delta is None %}text-slate-400{% elif analytics_rate_delta >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">
+          {% if analytics_rate_delta is not None %}
+            Prev period: {% if analytics_rate_delta >= 0 %}+{% endif %}{{ analytics_rate_delta }} pts
+          {% else %}
+            Prev period: Unavailable
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+        <span class="text-3xs uppercase font-bold text-emerald-700 block">Present Days</span>
+        <span class="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{{ analytics_summary.total_present }}</span>
+        <span class="block text-[10px] text-emerald-700/80">1 per employee-day</span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+        <span class="text-3xs uppercase font-bold text-amber-700 block">Late (Subset)</span>
+        <span class="text-lg font-extrabold text-amber-700 dark:text-amber-400">{{ analytics_summary.total_late }}</span>
+        <span class="block text-[10px] text-amber-700/80">Included in Present</span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
+        <span class="text-3xs uppercase font-bold text-rose-700 block">Absent (Finalized)</span>
+        <span class="text-lg font-extrabold text-rose-700 dark:text-rose-400">{{ analytics_summary.total_absent }}</span>
+        <span class="block text-[10px] text-rose-700/80">Pending today: {{ analytics_summary.total_pending }}</span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+        <span class="text-3xs uppercase font-bold text-blue-700 block">On Leave</span>
+        <span class="text-lg font-extrabold text-blue-700 dark:text-blue-400">{{ analytics_summary.total_on_leave }}</span>
+        <span class="block text-[10px] text-blue-700/80">Conflicts: {{ analytics_summary.total_leave_conflicts }}</span>
+      </div>
+
+      <div class="p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
+        <span class="text-3xs uppercase font-bold text-orange-700 block">Missing Checkout</span>
+        <span class="text-lg font-extrabold text-orange-700 dark:text-orange-400">{{ analytics_summary.total_missing_checkout }}</span>
+        <span class="block text-[10px] text-orange-700/80">Overlaps Present (past)</span>
+      </div>
+    </div>
+
+    {% if analytics_employee_count == 0 %}
+      <div class="p-6 text-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-500">
+        No scoped employees match the selected filters.
+      </div>
+    {% else %}
+      <!-- 3 Charts Grid with Reserved Dimensions -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+        <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Daily Attendance Trend</h4>
+          <p class="text-[10px] text-slate-400 mb-2">Unique employee-days (Late is subset of Present)</p>
+          <div class="relative h-60 w-full">
+            <canvas id="analyticsTrendChart" aria-label="Daily Attendance Trend Chart"></canvas>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+            {% if analytics_group_by == 'branch' %}Branch{% else %}Department{% endif %} Attendance Rate (%)
+          </h4>
+          <p class="text-[10px] text-slate-400 mb-2">Present / Eligible Working Days</p>
+          <div class="relative h-60 w-full">
+            <canvas id="analyticsGroupBarChart" aria-label="Group Attendance Rate Bar Chart"></canvas>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Work Mode Distribution</h4>
+          <p class="text-[10px] text-slate-400 mb-2">Office-only vs Field-only vs Mixed (once per day)</p>
+          <div class="relative h-60 w-full">
+            <canvas id="analyticsWorkModeChart" aria-label="Work Mode Doughnut Chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accessible Table Fallback for Charts -->
+      <div x-show="showTables" x-cloak class="mb-5 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2">Trend Data Table</h4>
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-700 text-slate-500">
+              <th class="py-1.5 px-2">Date</th>
+              <th class="py-1.5 px-2">Present (incl. Late)</th>
+              <th class="py-1.5 px-2">Late (subset)</th>
+              <th class="py-1.5 px-2">Absent</th>
+              <th class="py-1.5 px-2">On Leave</th>
+              <th class="py-1.5 px-2">Pending</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in analytics_summary.daily_series %}
+              <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="py-1 px-2">{{ d.date|date:"Y-m-d" }}</td>
+                <td class="py-1 px-2">{{ d.present }}</td>
+                <td class="py-1 px-2">{{ d.late }}</td>
+                <td class="py-1 px-2">{{ d.absent }}</td>
+                <td class="py-1 px-2">{{ d.on_leave }}</td>
+                <td class="py-1 px-2">{{ d.pending }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Paginated Employee Detail Table -->
+      <div class="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 uppercase text-3xs font-bold">
+              <th class="py-2.5 px-3">Employee</th>
+              <th class="py-2.5 px-3">Branch / Dept</th>
+              <th class="py-2.5 px-3">Present / Eligible</th>
+              <th class="py-2.5 px-3">Late (Subset)</th>
+              <th class="py-2.5 px-3">Absent</th>
+              <th class="py-2.5 px-3">On Leave</th>
+              <th class="py-2.5 px-3">Mode (O / F / M)</th>
+              <th class="py-2.5 px-3">Missing CO</th>
+              <th class="py-2.5 px-3">Rate</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for row in analytics_page_obj %}
+              <tr class="text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                <td class="py-2 px-3 font-semibold">
+                  {% if analytics_can_view_reports %}
+                    <a href="{% url 'admin_panel:reports_employee_month' row.employee.id analytics_end_date.year analytics_end_date.month %}"
+                       class="text-sky-600 hover:underline">
+                      {{ row.employee.full_name }}
+                    </a>
+                  {% else %}
+                    {{ row.employee.full_name }}
+                  {% endif %}
+                </td>
+                <td class="py-2 px-3 text-slate-500">{{ row.branch_name }} · {{ row.dept_name }}</td>
+                <td class="py-2 px-3 font-mono">{{ row.present }} / {{ row.eligible }}</td>
+                <td class="py-2 px-3 font-mono text-amber-600">{{ row.late }}</td>
+                <td class="py-2 px-3 font-mono text-rose-600">{{ row.absent }}</td>
+                <td class="py-2 px-3 font-mono text-blue-600">{{ row.on_leave }}</td>
+                <td class="py-2 px-3 font-mono">{{ row.office_only }} / {{ row.field_only }} / {{ row.mixed }}</td>
+                <td class="py-2 px-3 font-mono text-orange-600">{{ row.missing_checkout }}</td>
+                <td class="py-2 px-3 font-bold">
+                  {% if row.rate is not None %}{{ row.rate }}%{% else %}Unavailable{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      {% if analytics_page_obj.paginator.num_pages > 1 %}
+        <div class="flex items-center justify-between pt-3 text-xs text-slate-500">
+          <span>Page {{ analytics_page_obj.number }} of {{ analytics_page_obj.paginator.num_pages }}</span>
+          <div class="flex items-center gap-1.5">
+            {% if analytics_page_obj.has_previous %}
+              <button type="button"
+                      hx-get="{% url 'dashboard' %}?widget=attendance_analytics&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}&group_by={{ analytics_group_by }}&page={{ analytics_page_obj.previous_page_number }}{% if request.GET.role_view %}&role_view={{ request.GET.role_view|urlencode }}{% endif %}"
+                      hx-target="#attendance-analytics-section"
+                      hx-swap="outerHTML"
+                      class="ft-btn ft-btn-ghost ft-btn-xs">Previous</button>
+            {% endif %}
+            {% if analytics_page_obj.has_next %}
+              <button type="button"
+                      hx-get="{% url 'dashboard' %}?widget=attendance_analytics&range={{ analytics_range }}&start_date={{ analytics_start_date|date:'Y-m-d' }}&end_date={{ analytics_end_date|date:'Y-m-d' }}&branch={{ analytics_selected_branch|urlencode }}&department={{ analytics_selected_dept|urlencode }}&group_by={{ analytics_group_by }}&page={{ analytics_page_obj.next_page_number }}{% if request.GET.role_view %}&role_view={{ request.GET.role_view|urlencode }}{% endif %}"
+                      hx-target="#attendance-analytics-section"
+                      hx-swap="outerHTML"
+                      class="ft-btn ft-btn-ghost ft-btn-xs">Next</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+    </div>
+
+    <div x-show="activeTab === 'people_leave'" x-cloak id="analytics-panel-people-leave-host">
+      <div class="py-6 text-center text-xs text-slate-400">Loading People &amp; Leave analytics...</div>
+    </div>
+    <div x-show="activeTab === 'work'" x-cloak id="analytics-panel-work-host">
+      <div class="py-6 text-center text-xs text-slate-400">Loading Work analytics...</div>
+    </div>
+    {% if analytics_can_view_finance %}
+      <div x-show="activeTab === 'finance'" x-cloak id="analytics-panel-finance-host">
+        <div class="py-6 text-center text-xs text-slate-400">Loading Finance analytics...</div>
+      </div>
+    {% endif %}
+  </c-card>
+
+  {{ analytics_chart_payload|json_script:"attendance-analytics-chart-data" }}
+</div>
