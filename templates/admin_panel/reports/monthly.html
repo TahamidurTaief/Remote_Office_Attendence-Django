@@ -35,19 +35,19 @@
                x-transition:leave-end="opacity-0 scale-95"
                class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 overflow-hidden">
             
-            <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&year={{ year }}&month={{ month }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+            <a href="{% url 'admin_panel:export_attendance' %}?format=xlsx&year={{ year }}&month={{ month }}&employee={{ selected_employee }}&branch={{ selected_branch }}&status={{ selected_status }}&type={{ selected_type }}"
                class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
               <i data-lucide="table" class="w-4 h-4 text-emerald-600"></i>
               <span>Excel (.xlsx)</span>
             </a>
 
-            <a href="{% url 'admin_panel:export_attendance' %}?format=csv&year={{ year }}&month={{ month }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+            <a href="{% url 'admin_panel:export_attendance' %}?format=csv&year={{ year }}&month={{ month }}&employee={{ selected_employee }}&branch={{ selected_branch }}&status={{ selected_status }}&type={{ selected_type }}"
                class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
               <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
               <span>CSV File</span>
             </a>
 
-            <a href="{% url 'admin_panel:export_attendance' %}?format=pdf&year={{ year }}&month={{ month }}&employee={{ selected_employee }}&branch={{ selected_branch }}"
+            <a href="{% url 'admin_panel:export_attendance' %}?format=pdf&year={{ year }}&month={{ month }}&employee={{ selected_employee }}&branch={{ selected_branch }}&status={{ selected_status }}&type={{ selected_type }}"
                class="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
               <i data-lucide="file" class="w-4 h-4 text-rose-600"></i>
               <span>PDF Document</span>

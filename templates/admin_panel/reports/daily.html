@@ -23,7 +23,7 @@
                 <span x-text="excelView ? 'Excel View Active' : 'Excel Grid View'"></span>
             </button>
 
-            <a href="{% url 'admin_panel:reports_export_csv' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
+            <a href="{% url 'admin_panel:reports_export_csv' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}"
                download
                target="_blank"
                onclick="triggerDailyDownload(event, this.href)"
@@ -33,7 +33,7 @@
                 <span>CSV</span>
             </a>
 
-            <a href="{% url 'admin_panel:reports_export_excel' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
+            <a href="{% url 'admin_panel:reports_export_excel' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}"
                download
                target="_blank"
                onclick="triggerDailyDownload(event, this.href)"
@@ -43,7 +43,7 @@
                 <span>Excel</span>
             </a>
 
-            <a href="{% url 'admin_panel:reports_export_pdf' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}"
+            <a href="{% url 'admin_panel:reports_export_pdf' %}?date={{ report_date|date:'Y-m-d' }}{% if selected_employee %}&employee={{ selected_employee }}{% endif %}{% if selected_branch %}&branch={{ selected_branch }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}"
                download
                target="_blank"
                onclick="triggerDailyDownload(event, this.href)"

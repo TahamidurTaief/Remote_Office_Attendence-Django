@@ -1501,6 +1501,8 @@ class DailyReportView(AdminRequiredMixin, View):
             'branches':          branches,
             'selected_employee': emp_id,
             'selected_branch':   branch_id,
+            'selected_status':   status_param,
+            'selected_type':     type_param,
         })
 
 
@@ -1581,6 +1583,8 @@ class MonthlyReportView(AdminRequiredMixin, View):
             'branches':          branches,
             'selected_employee': emp_id,
             'selected_branch':   branch_id,
+            'selected_status':   status_param,
+            'selected_type':     type_param,
             'prev_m': prev_m, 'prev_y': prev_y,
             'next_m': next_m, 'next_y': next_y,
         })
@@ -2866,42 +2870,111 @@ from openpyxl.styles import (
 )
 from openpyxl.utils import get_column_letter
 
+def _validate_export_params(request):
+    """
+    Validate export query parameters before running expensive queries or PDF rendering.
+    Returns (validated_dict, error_response_or_none).
+    """
+    raw_format = (request.GET.get('format') or 'xlsx').strip().lower()
+    if raw_format not in ('xlsx', 'excel', 'csv', 'pdf'):
+        return None, HttpResponse('Invalid export format.', status=400)
+
+    raw_year = (request.GET.get('year') or '').strip()
+    raw_month = (request.GET.get('month') or '').strip()
+    year_int = None
+    month_int = None
+    if raw_year or raw_month:
+        if not (raw_year and raw_month):
+            return None, HttpResponse('Both year and month are required together.', status=400)
+        try:
+            year_int = int(raw_year)
+            month_int = int(raw_month)
+        except (TypeError, ValueError):
+            return None, HttpResponse('Invalid year or month.', status=400)
+        if not (1900 <= year_int <= 2100) or not (1 <= month_int <= 12):
+            return None, HttpResponse('Year or month out of valid range.', status=400)
+
+    raw_date = (request.GET.get('date') or '').strip()
+    raw_from = (request.GET.get('date_from') or '').strip()
+    raw_to = (request.GET.get('date_to') or '').strip()
+    date_from_obj = None
+    date_to_obj = None
+    for label, val in (('date', raw_date), ('date_from', raw_from), ('date_to', raw_to)):
+        if val:
+            try:
+                parsed = datetime.strptime(val, '%Y-%m-%d').date()
+            except ValueError:
+                return None, HttpResponse(f'Invalid {label} format. Use YYYY-MM-DD.', status=400)
+            if label == 'date' and not raw_from:
+                date_from_obj = parsed
+                if not raw_to:
+                    date_to_obj = parsed
+            elif label == 'date_from':
+                date_from_obj = parsed
+            elif label == 'date_to':
+                date_to_obj = parsed
+    if date_from_obj and not date_to_obj:
+        date_to_obj = date_from_obj
+    if date_from_obj and date_to_obj and date_from_obj > date_to_obj:
+        return None, HttpResponse('date_from cannot be after date_to.', status=400)
+
+    raw_emp = (request.GET.get('employee') or '').strip()
+    emp_id = None
+    if raw_emp:
+        if not raw_emp.isdigit() or int(raw_emp) <= 0:
+            return None, HttpResponse('Invalid employee filter.', status=400)
+        emp_id = int(raw_emp)
+
+    raw_branch = (request.GET.get('branch') or request.GET.get('branch_id') or '').strip()
+    branch_id = None
+    if raw_branch:
+        if not raw_branch.isdigit() or int(raw_branch) <= 0:
+            return None, HttpResponse('Invalid branch filter.', status=400)
+        branch_id = int(raw_branch)
+
+    return {
+        'format': raw_format,
+        'year': year_int,
+        'month': month_int,
+        'date_from': date_from_obj,
+        'date_to': date_to_obj,
+        'employee_id': emp_id,
+        'branch_id': branch_id,
+        'status': (request.GET.get('status') or '').strip() or None,
+        'attendance_type': (request.GET.get('type') or request.GET.get('attendance_type') or '').strip() or None,
+    }, None
+
+
 @admin_required
 def export_attendance(request):
     eval_export = PermissionEngine.evaluate(request.user, 'reports.export', action_type='export')
     if not (request.user.is_superuser or eval_export.allowed):
         raise PermissionDenied("You do not have permission to export reports.")
 
-    format_type = request.GET.get('format', 'xlsx')
-    year = request.GET.get('year')
-    month = request.GET.get('month')
-    emp_id = request.GET.get('employee')
+    validated, err_resp = _validate_export_params(request)
+    if err_resp is not None:
+        return err_resp
+
+    format_type = validated['format']
+    year = validated['year']
+    month = validated['month']
+    emp_id = validated['employee_id']
 
     if emp_id and (year and month):
-        try:
-            y_int, m_int = int(year), int(month)
-        except (ValueError, TypeError):
-            today = timezone.localdate()
-            y_int, m_int = today.year, today.month
-
         if format_type == 'pdf':
-            return export_individual_pdf(request, emp_id, y_int, m_int)
+            return export_individual_pdf(request, emp_id, year, month)
         elif format_type in ('xlsx', 'excel'):
-            return export_individual_xlsx(request, emp_id, y_int, m_int)
+            return export_individual_xlsx(request, emp_id, year, month)
         elif format_type == 'csv':
             return export_monthly_csv(request)
-        else:
-            return export_individual_pdf(request, emp_id, y_int, m_int)
 
     if year and month:
-        if format_type == 'xlsx':
+        if format_type in ('xlsx', 'excel'):
             return export_monthly_xlsx(request)
         elif format_type == 'csv':
             return export_monthly_csv(request)
         elif format_type == 'pdf':
             return export_monthly_pdf(request)
-        else:
-            return export_monthly_xlsx(request)
     else:
         if format_type in ('xlsx', 'excel'):
             return ExportReportExcelView.as_view()(request)
@@ -2909,8 +2982,6 @@ def export_attendance(request):
             return ExportReportCSVView.as_view()(request)
         elif format_type == 'pdf':
             return ExportReportPDFView.as_view()(request)
-        else:
-            return ExportReportExcelView.as_view()(request)
 
 
 @admin_required
@@ -3137,7 +3208,14 @@ def get_monthly_grid_data(request):
     status_param = request.GET.get('status')
     type_param = request.GET.get('type') or request.GET.get('attendance_type')
 
-    scoped_employees = get_scoped_employee_queryset(request.user, permission_code='reports.export', action='export')
+    import calendar as cal_mod
+    scoped_employees = get_historical_scoped_employee_queryset(
+        request.user,
+        start_date=date(year, month, 1),
+        end_date=date(year, month, cal_mod.monthrange(year, month)[1]),
+        permission_code='reports.export',
+        action='export',
+    )
     if employee_id:
         scoped_employees = scoped_employees.filter(id=employee_id)
     if branch_id:
@@ -3535,11 +3613,15 @@ def export_monthly_csv(request):
 
 @admin_required
 def export_monthly_pdf(request):
+    validated, err_resp = _validate_export_params(request)
+    if err_resp is not None:
+        return err_resp
+
     data = get_monthly_grid_data(request)
     year = data['year']
     month = data['month']
 
-    branch_id = request.GET.get('branch') or request.GET.get('branch_id')
+    branch_id = validated['branch_id']
     branch_name = 'All Branches'
     if branch_id:
         b = Branch.objects.filter(id=branch_id).first()
@@ -3549,11 +3631,17 @@ def export_monthly_pdf(request):
     filters = {
         'branch_name': branch_name,
         'department_name': 'All Departments',
-        'status': request.GET.get('status', 'All Statuses'),
+        'status': validated['status'] or 'All Statuses',
+        'attendance_type': validated['attendance_type'] or 'All Types',
     }
 
     from apps.attendance.pdf_export import render_monthly_attendance_pdf
-    pdf_bytes = render_monthly_attendance_pdf(data, filters=filters, user=request.user)
+    try:
+        pdf_bytes = render_monthly_attendance_pdf(data, filters=filters, user=request.user)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Monthly PDF export rendering failed for user %s", getattr(request.user, 'id', None))
+        return HttpResponse('Export rendering failed. Please try again later.', status=500)
 
     month_name = _date(year, month, 1).strftime('%B-%y')
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
