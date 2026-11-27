@@ -92,6 +92,7 @@
           module: moduleName,
           action: action,
           payload: safePayload,
+          depends_on_sync_uuid: safePayload.depends_on_sync_uuid || null,
           priority: priority,
           status: 'pending',
           retry_count: 0,
@@ -118,7 +119,7 @@
         req.onsuccess = () => {
           const all = req.result || [];
           const pending = all.filter(
-            (item) => item.status === 'pending' || item.status === 'failed'
+            (item) => item.status === 'pending' || item.status === 'failed' || item.status === 'blocked'
           );
           // Sort by priority asc (1 is highest), then created_time asc
           pending.sort((a, b) => {
@@ -169,6 +170,36 @@
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = (e) => reject(e.target.error);
       });
+    },
+
+    /**
+     * Get blocked items from sync_queue
+     */
+    getBlockedSyncItems: async function () {
+      const pending = await this.getPendingSyncItems();
+      return pending.filter((item) => item.status === 'blocked' || item.blocked === true);
+    },
+
+    /**
+     * Get the latest unresolved offline check_in item that has no dependent check_out queued yet
+     */
+    getActiveOfflineCheckIn: async function () {
+      const pending = await this.getPendingSyncItems();
+      const dependentCheckInUuids = new Set();
+      pending.forEach((item) => {
+        if (item.action === 'check_out') {
+          const dep = item.depends_on_sync_uuid || (item.payload && item.payload.depends_on_sync_uuid);
+          if (dep) dependentCheckInUuids.add(dep);
+        }
+      });
+      const openCheckIns = pending.filter(
+        (item) =>
+          item.action === 'check_in' &&
+          item.status === 'pending' &&
+          !item.permanent &&
+          !dependentCheckInUuids.has(item.uuid)
+      );
+      return openCheckIns.length ? openCheckIns[openCheckIns.length - 1] : null;
     },
 
     /**
@@ -252,6 +283,12 @@
     delete payload.csrfmiddlewaretoken;
     delete payload.csrf_token;
     delete payload.csrftoken;
+    if (action === 'check_out' && !payload.session_id && !payload.depends_on_sync_uuid) {
+      const activeOfflineCi = await FieldTrackDB.getActiveOfflineCheckIn();
+      if (activeOfflineCi) {
+        payload.depends_on_sync_uuid = activeOfflineCi.uuid;
+      }
+    }
     return FieldTrackDB.enqueueSyncItem('attendance', action, payload, priority, uuid);
   };
 

@@ -444,6 +444,8 @@
   const photoRequired = {% if policy.photo_required %}true{% else %}false{% endif %};
   const officeLat = {{ branch.latitude|default:"23.8103" }};
   const officeLng = {{ branch.longitude|default:"90.4125" }};
+  const ACTIVE_SESSION_ID = {% if active_session %}{{ active_session.id }}{% else %}null{% endif %};
+  let pendingOfflineCheckInUuid = null;
   let watchId = null;
 
   // 1. Live Clock
@@ -973,12 +975,14 @@
     }
     const sync_uuid = activePunchUuid;
     const clientEventTime = activeCaptureTimestamp || new Date().toISOString();
+    const targetSessionId = ACTIVE_SESSION_ID;
+    const targetDependsOnSyncUuid = (!targetSessionId && pendingOfflineCheckInUuid) ? pendingOfflineCheckInUuid : null;
 
     // ── Offline check-out handling ─────────────────────────────────
     if (!navigator.onLine) {
       const enqueue = (photoBase64) => {
         if (window.queueOfflineAction) {
-          window.queueOfflineAction({
+          const offlinePayload = {
             action: 'check_out',
             latitude: lat,
             longitude: lng,
@@ -987,7 +991,14 @@
             sync_uuid: sync_uuid,
             client_event_time: clientEventTime,
             photo: photoBase64 || null
-          }).then(() => {
+          };
+          if (targetSessionId !== null) {
+            offlinePayload.session_id = targetSessionId;
+          }
+          if (targetDependsOnSyncUuid) {
+            offlinePayload.depends_on_sync_uuid = targetDependsOnSyncUuid;
+          }
+          window.queueOfflineAction(offlinePayload).then(() => {
             if (window.showToast) showToast('Offline check-out saved locally. Will sync when back online.', 'info');
             setTimeout(() => { window.location.href = '/staff/home/'; }, 1000);
           }).catch(err => {
@@ -1025,6 +1036,9 @@
     formData.append('accuracy', document.getElementById('id_accuracy').value || 0);
     formData.append('sync_uuid', sync_uuid);
     formData.append('client_event_time', clientEventTime);
+    if (targetSessionId !== null) {
+      formData.append('session_id', targetSessionId);
+    }
 
     if (activePreparedPhoto && (activePreparedPhoto.file || activePreparedPhoto.blob)) {
       formData.append('photo', activePreparedPhoto.file || activePreparedPhoto.blob, 'attendance.jpg');
@@ -1079,10 +1093,32 @@
   }
 
   // 8. Lifecycle Initialization
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     updateCheckinClock();
     setInterval(updateCheckinClock, 1000);
     startGPS();
+
+    if (!ACTIVE_SESSION_ID && window.FieldTrackDB && typeof window.FieldTrackDB.getActiveOfflineCheckIn === 'function') {
+      try {
+        const pendingCi = await window.FieldTrackDB.getActiveOfflineCheckIn();
+        if (pendingCi && pendingCi.uuid) {
+          pendingOfflineCheckInUuid = pendingCi.uuid;
+          const btn = document.getElementById('submit-action-btn');
+          if (btn) {
+            btn.setAttribute('onclick', 'submitCheckOut()');
+            btn.classList.remove('bg-[#1877F2]');
+            btn.classList.add('bg-red-600');
+            btn.innerHTML = '<i data-lucide="log-out" class="w-5 h-5"></i><span>Check Out Now</span>';
+          }
+          const statusLabel = document.getElementById('attendance-status-label');
+          if (statusLabel) {
+            statusLabel.textContent = 'Checked in offline (pending sync)';
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to inspect offline check-in state:', e);
+      }
+    }
 
     // Listen for LocationGuard success sync
     window.addEventListener('location:ready', (e) => {

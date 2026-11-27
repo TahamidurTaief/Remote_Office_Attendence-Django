@@ -258,11 +258,13 @@
                 async function doCheckout(lat, lng, acc, address) {
                     const sync_uuid = punchUuid;
                     const clientEventTime = captureTimestamp;
+                    const activeSessionId = {{ active_session.id }};
 
                     if (!navigator.onLine) {
                         const enqueue = (photoBase64) => {
                             queueOfflineAction({
                                 action: 'check_out',
+                                session_id: activeSessionId,
                                 latitude: lat || 0,
                                 longitude: lng || 0,
                                 accuracy: acc || 0,
@@ -303,6 +305,7 @@
                     }
 
                     const fd = new FormData();
+                    fd.append('session_id', activeSessionId);
                     fd.append('latitude',  lat  || '0');
                     fd.append('longitude', lng  || '0');
                     fd.append('accuracy',  acc  || '0');

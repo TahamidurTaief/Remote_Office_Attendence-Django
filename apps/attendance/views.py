@@ -902,6 +902,7 @@ def bulk_sync(request):
             return 2
 
         items = sorted(raw_items, key=get_action_order)
+        batch_check_ins = {}
 
         for item in items:
             action_type = item.get('action') or item.get('action_type')
@@ -909,9 +910,36 @@ def bulk_sync(request):
             payload = item.get('payload')
             if not isinstance(payload, dict):
                 payload = dict(item)
+            else:
+                payload = dict(payload)
 
             if item_uuid and 'sync_uuid' not in payload:
                 payload['sync_uuid'] = item_uuid
+
+            dep_uuid = (
+                item.get('depends_on_sync_uuid')
+                or payload.get('depends_on_sync_uuid')
+                or payload.get('check_in_sync_uuid')
+                or payload.get('parent_sync_uuid')
+            )
+            if dep_uuid and not payload.get('depends_on_sync_uuid'):
+                payload['depends_on_sync_uuid'] = dep_uuid
+
+            if action_type == 'check_out' and dep_uuid and not (payload.get('session_id') or payload.get('attendance_id')):
+                dep_key = str(dep_uuid)
+                if dep_key in batch_check_ins:
+                    dep_state = batch_check_ins[dep_key]
+                    if dep_state['status'] == 'success':
+                        payload['session_id'] = dep_state['session_id']
+                    else:
+                        results.append({
+                            'uuid': item_uuid,
+                            'status': 'failed',
+                            'blocked': True,
+                            'permanent': dep_state['permanent'],
+                            'error': f"Blocked: dependent check-in failed ({dep_state['error']})"
+                        })
+                        continue
 
             # Extract and decode offline photo if present
             raw_photo = payload.get('photo') or item.get('photo') or payload.get('event_photo') or item.get('event_photo')
@@ -923,6 +951,11 @@ def bulk_sync(request):
                 if action_type == 'check_in':
                     res = AttendanceTransactionService.check_in(request.user, payload, photo=photo_file, validate_photo=True)
                     synced_count += 1
+                    if item_uuid:
+                        batch_check_ins[str(item_uuid)] = {
+                            'status': 'success',
+                            'session_id': res.get('session_id')
+                        }
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 elif action_type == 'check_out':
                     res = AttendanceTransactionService.check_out(request.user, payload, photo=photo_file, validate_photo=True)
@@ -937,13 +970,32 @@ def bulk_sync(request):
             except AttendanceTransactionError as e:
                 err_str = str(e)
                 is_missing_photo = 'photo is required' in err_str.lower()
+                is_permanent = False if is_missing_photo else (e.status_code != 500)
+                if action_type == 'check_in' and item_uuid:
+                    batch_check_ins[str(item_uuid)] = {
+                        'status': 'failed',
+                        'permanent': is_permanent,
+                        'error': err_str
+                    }
+                is_blocked_dep = (
+                    action_type == 'check_out'
+                    and ('dependent check-in session is unresolved' in err_str.lower()
+                         or 'invalid check-in dependency reference' in err_str.lower())
+                )
                 results.append({
                     'uuid': item_uuid,
                     'status': 'failed',
-                    'permanent': False if is_missing_photo else (e.status_code != 500),
+                    'blocked': is_blocked_dep,
+                    'permanent': is_permanent,
                     'error': 'Photo is required by policy. Offline punch remains pending until photo is attached.' if is_missing_photo else err_str
                 })
             except Exception as e:
+                if action_type == 'check_in' and item_uuid:
+                    batch_check_ins[str(item_uuid)] = {
+                        'status': 'failed',
+                        'permanent': False,
+                        'error': str(e)
+                    }
                 results.append({
                     'uuid': item_uuid,
                     'status': 'failed',

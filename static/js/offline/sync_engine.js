@@ -191,16 +191,49 @@
           return;
         }
 
-        // Filter items whose exponential backoff timer has elapsed, excluding permanently failed items
+        // Filter items whose exponential backoff timer has elapsed, excluding permanently failed/blocked items
         const now = Date.now();
-        const readyItems = pendingItems.filter((item) => {
-          if (item.permanent || item.status === 'failed' || (item.retry_count || 0) >= MAX_RETRIES) {
+        const itemsByUuid = new Map(pendingItems.map((item) => [item.uuid, item]));
+        const isItemRunnable = (item) => {
+          if (item.permanent || item.status === 'failed' || item.status === 'blocked' || (item.retry_count || 0) >= MAX_RETRIES) {
             return false;
           }
           if (!item.last_attempt_time) return true;
           const nextAttemptTime = new Date(item.last_attempt_time).getTime() + getRetryDelayMs(item.retry_count);
           return now >= nextAttemptTime;
-        });
+        };
+
+        const runnableSet = new Set(pendingItems.filter(isItemRunnable).map((i) => i.uuid));
+        const readyItems = [];
+
+        for (const item of pendingItems) {
+          if (!runnableSet.has(item.uuid)) continue;
+
+          const depUuid = item.depends_on_sync_uuid || (item.payload && item.payload.depends_on_sync_uuid);
+          const hasExplicitSession = Boolean(item.payload && (item.payload.session_id || item.payload.attendance_id));
+
+          if (item.action === 'check_out' && depUuid && !hasExplicitSession) {
+            const parent = itemsByUuid.get(depUuid);
+            if (parent) {
+              if (parent.permanent || parent.status === 'failed' || parent.status === 'blocked' || (parent.retry_count || 0) >= MAX_RETRIES) {
+                await window.FieldTrackDB.updateSyncItem(item.uuid, {
+                  status: 'blocked',
+                  blocked: true,
+                  permanent: true,
+                  last_attempt_time: new Date().toISOString(),
+                  last_error: 'Blocked: dependent check-in failed permanently.'
+                });
+                continue;
+              }
+              if (!runnableSet.has(parent.uuid)) {
+                // Parent check-in is waiting for backoff; hold dependent checkout until parent succeeds
+                continue;
+              }
+            }
+          }
+
+          readyItems.push(item);
+        }
 
         if (readyItems.length === 0) {
           isSyncing = false;
@@ -227,10 +260,14 @@
         if (response.ok) {
           const result = await response.json();
           const itemResults = result.results || [];
+          const resolvedSessions = new Map();
 
           for (const item of readyItems) {
             const res = itemResults.find((r) => r.uuid === item.uuid);
             if (res && res.status === 'success') {
+              if (item.action === 'check_in' && res.data && res.data.session_id) {
+                resolvedSessions.set(item.uuid, res.data.session_id);
+              }
               await window.FieldTrackDB.updateSyncItem(item.uuid, {
                 status: 'synced',
                 synced_time: new Date().toISOString()
@@ -240,16 +277,51 @@
               const handler = moduleHandlers[item.module];
               if (handler) await handler(item);
             } else {
+              const blocked = Boolean(res && res.blocked);
               const permanent = Boolean(res && res.permanent);
               const isMissingPhoto = res && res.error && res.error.toLowerCase().includes('photo is required');
-              const newRetryCount = permanent ? MAX_RETRIES : (isMissingPhoto ? (item.retry_count || 0) : (item.retry_count || 0) + 1);
-              await window.FieldTrackDB.updateSyncItem(item.uuid, {
-                status: isMissingPhoto ? 'pending' : (permanent || newRetryCount >= MAX_RETRIES ? 'failed' : 'pending'),
-                permanent: permanent,
-                retry_count: newRetryCount,
-                last_attempt_time: new Date().toISOString(),
-                last_error: res ? res.error : 'Sync failed'
-              });
+              if (blocked && !permanent) {
+                // Parent check-in had a transient failure; keep dependent checkout pending without burning retries
+                await window.FieldTrackDB.updateSyncItem(item.uuid, {
+                  status: 'pending',
+                  last_attempt_time: new Date().toISOString(),
+                  last_error: res ? res.error : 'Waiting for dependent check-in'
+                });
+              } else if (blocked && permanent) {
+                await window.FieldTrackDB.updateSyncItem(item.uuid, {
+                  status: 'blocked',
+                  blocked: true,
+                  permanent: true,
+                  last_attempt_time: new Date().toISOString(),
+                  last_error: res ? res.error : 'Blocked by failed check-in'
+                });
+              } else {
+                const newRetryCount = permanent ? MAX_RETRIES : (isMissingPhoto ? (item.retry_count || 0) : (item.retry_count || 0) + 1);
+                await window.FieldTrackDB.updateSyncItem(item.uuid, {
+                  status: isMissingPhoto ? 'pending' : (permanent || newRetryCount >= MAX_RETRIES ? 'failed' : 'pending'),
+                  permanent: permanent,
+                  retry_count: newRetryCount,
+                  last_attempt_time: new Date().toISOString(),
+                  last_error: res ? res.error : 'Sync failed'
+                });
+              }
+            }
+          }
+
+          // Persist resolved server session_id onto any remaining dependent checkout items
+          if (resolvedSessions.size > 0) {
+            for (const otherItem of pendingItems) {
+              if (otherItem.action === 'check_out' && otherItem.status !== 'synced') {
+                const depUuid = otherItem.depends_on_sync_uuid || (otherItem.payload && otherItem.payload.depends_on_sync_uuid);
+                if (depUuid && resolvedSessions.has(depUuid)) {
+                  const updatedPayload = Object.assign({}, otherItem.payload || {}, {
+                    session_id: resolvedSessions.get(depUuid)
+                  });
+                  await window.FieldTrackDB.updateSyncItem(otherItem.uuid, {
+                    payload: updatedPayload
+                  }).catch(() => {});
+                }
+              }
             }
           }
 

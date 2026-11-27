@@ -445,6 +445,7 @@ class AttendanceTransactionService:
                         raise AttendanceTransactionError('Invalid idempotency key for this operation.', 400)
                     return {
                         'success': True,
+                        'session_id': existing_loc.attendance_id,
                         'total_hours': float(existing_loc.attendance.total_hours or 0.0)
                     }
 
@@ -463,11 +464,24 @@ class AttendanceTransactionService:
                 synced_at = None
                 today = timezone.localdate()
 
-            target_session_id = data.get('session_id') or data.get('attendance_id')
-            if target_session_id:
+            target_session_id = data.get('session_id')
+            if target_session_id is None or target_session_id == '':
+                target_session_id = data.get('attendance_id')
+
+            dep_sync_uuid = (
+                data.get('depends_on_sync_uuid')
+                or data.get('check_in_sync_uuid')
+                or data.get('parent_sync_uuid')
+            )
+
+            if target_session_id is not None and target_session_id != '':
+                if isinstance(target_session_id, bool):
+                    raise AttendanceTransactionError('Invalid attendance session target.', 400)
                 try:
                     target_session_pk = int(target_session_id)
                 except (TypeError, ValueError):
+                    raise AttendanceTransactionError('Invalid attendance session target.', 400)
+                if target_session_pk <= 0:
                     raise AttendanceTransactionError('Invalid attendance session target.', 400)
                 attendance = Attendance.objects.filter(
                     pk=target_session_pk,
@@ -480,6 +494,29 @@ class AttendanceTransactionService:
                 if attendance.check_out_time is not None:
                     return {
                         'success': True,
+                        'session_id': attendance.id,
+                        'total_hours': float(attendance.total_hours or 0.0)
+                    }
+            elif dep_sync_uuid is not None and str(dep_sync_uuid).strip() != '':
+                try:
+                    dep_uuid_obj = uuid.UUID(str(dep_sync_uuid).strip())
+                except (TypeError, ValueError):
+                    raise AttendanceTransactionError('Invalid check-in dependency reference.', 400)
+                attendance = Attendance.objects.filter(
+                    sync_uuid=dep_uuid_obj,
+                    employee=emp_locked,
+                    attendance_type='check_in',
+                    is_expired=False
+                ).select_for_update().first()
+                if not attendance:
+                    raise AttendanceTransactionError(
+                        'Dependent check-in session is unresolved or unauthorized.',
+                        400
+                    )
+                if attendance.check_out_time is not None:
+                    return {
+                        'success': True,
+                        'session_id': attendance.id,
                         'total_hours': float(attendance.total_hours or 0.0)
                     }
             else:
@@ -496,19 +533,14 @@ class AttendanceTransactionService:
                     attendance = open_candidates[0]
                 elif len(open_candidates) > 1:
                     if client_time is None:
-                        today_candidates = [s for s in open_candidates if s.date == today]
-                        if len(today_candidates) == 1:
-                            attendance = today_candidates[0]
-                        else:
-                            raise AttendanceTransactionError(
-                                'Multiple open check-in sessions found. Please specify session_id.',
-                                400
-                            )
-                    else:
                         raise AttendanceTransactionError(
-                            'Ambiguous open check-in sessions for offline checkout. Please specify session_id.',
+                            'Multiple open check-in sessions found. Please specify session_id.',
                             400
                         )
+                    raise AttendanceTransactionError(
+                        'Ambiguous open check-in sessions for offline checkout. Please specify session_id.',
+                        400
+                    )
                 else:
                     attendance = None
 
@@ -606,6 +638,7 @@ class AttendanceTransactionService:
 
             return {
                 'success': True,
+                'session_id': attendance.id,
                 'total_hours': float(attendance.total_hours)
             }
 
