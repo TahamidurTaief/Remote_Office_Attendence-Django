@@ -45,10 +45,10 @@
                             <c-status-pill :status="check_in.attendance_type" :label="check_in.get_type_display" ></c-status-pill>
                         </div>
                     </div>
-                    {% if check_in.total_hours %}
+                    {% if effective_total_hours %}
                     <div>
                         <span class="text-slate-500 dark:text-slate-400 text-xs block">Total Hours</span>
-                        <span class="font-bold text-slate-900 dark:text-slate-100 font-mono">{{ check_in.total_hours }}h</span>
+                        <span class="font-bold text-slate-900 dark:text-slate-100 font-mono">{{ effective_total_hours }}h</span>
                     </div>
                     {% endif %}
                 </div>
@@ -67,8 +67,8 @@
     <c-card padding="md" extra_class="mb-4 bg-amber-50/50 dark:bg-amber-950/30 !border-amber-200 dark:!border-amber-800/50">
         <p class="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">Open / Missing Checkout</p>
         <div class="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Open</span>
-            <span>Office checkout pending (no fabricated checkout assigned)</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{% if needs_review %}Needs Review{% else %}Open{% endif %}</span>
+            <span>{% if needs_review %}Checkout provenance is ambiguous and requires review{% else %}Office checkout pending (no fabricated checkout assigned){% endif %}</span>
         </div>
     </c-card>
     {% endif %}

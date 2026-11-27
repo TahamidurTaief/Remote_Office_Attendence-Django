@@ -54,6 +54,7 @@ jobs:
           python manage.py test \
             apps.attendance.tests.test_pg_concurrency \
             apps.attendance.tests.test_evidence_checkout \
+            apps.attendance.tests.test_auto_close_provenance \
             apps.attendance.tests.test_pdf_export \
             apps.attendance.tests.test_csrf_remediation \
             --verbosity=2

@@ -335,7 +335,7 @@ def build_checkout_provenance_map(attendances):
                 attendance_id__in=chunk,
                 status='approved',
             )
-            .values('attendance_id', 'check_out_time', 'note', 'reviewed_at', 'requested_at')
+            .values('id', 'attendance_id', 'status', 'check_out_time', 'note', 'reviewed_by_id', 'reviewed_at', 'requested_at')
             .order_by('reviewed_at', 'requested_at', 'id')
         ):
             provenance_map[row['attendance_id']]['corrections'].append(row)
@@ -345,14 +345,14 @@ def build_checkout_provenance_map(attendances):
                 attendance_id__in=chunk,
                 status='approved',
             )
-            .values('attendance_id', 'check_out_time', 'requested_at')
+            .values('id', 'attendance_id', 'status', 'check_out_time', 'reviewed_by_manager_id', 'reviewed_by_hr_id', 'requested_at')
             .order_by('requested_at', 'id')
         ):
             provenance_map[row['attendance_id']]['forgot_checkouts'].append(row)
 
         for row in (
             AttendanceAuditLog.objects.filter(attendance_id__in=chunk)
-            .values('attendance_id', 'action', 'old_check_out_time', 'new_check_out_time', 'reason', 'changed_by_id', 'timestamp')
+            .values('id', 'attendance_id', 'action', 'old_check_out_time', 'new_check_out_time', 'reason', 'changed_by_id', 'timestamp')
             .order_by('timestamp', 'id')
         ):
             provenance_map[row['attendance_id']]['audit_logs'].append(row)
@@ -360,15 +360,125 @@ def build_checkout_provenance_map(attendances):
     return dict(provenance_map)
 
 
+def _normalize_checkout_evidence(session, evidence, co_locs):
+    """
+    Normalizes correction, forgot-checkout, audit, and location evidence into
+    canonical records with attendance_id, approval_state, actor_id, event_time,
+    decision_timestamp, and recorded_at.
+    """
+    ev = evidence or {}
+    session_id = getattr(session, 'id', None)
+    auth_items = []
+    audit_items = []
+
+    for a in ev.get('audit_logs', []):
+        new_co = a.get('new_check_out_time')
+        if new_co is None:
+            continue
+        action = a.get('action')
+        is_co_action = action in _CHECKOUT_AUDIT_ACTIONS or (
+            action not in _NON_CHECKOUT_AUDIT_ACTIONS
+            and a.get('old_check_out_time') != new_co
+        )
+        if not is_co_action:
+            continue
+        item = {
+            'attendance_id': a.get('attendance_id', session_id),
+            'source': 'audit',
+            'action': action,
+            'approval_state': 'approved',
+            'actor_id': a.get('changed_by_id'),
+            'event_time': new_co,
+            'decision_timestamp': a.get('timestamp'),
+            'recorded_at': a.get('timestamp'),
+        }
+        auth_items.append(item)
+        audit_items.append(item)
+
+    for c in ev.get('corrections', []):
+        if c.get('status', 'approved') != 'approved' or c.get('check_out_time') is None:
+            continue
+        auth_items.append({
+            'attendance_id': c.get('attendance_id', session_id),
+            'source': 'correction',
+            'action': 'correction',
+            'approval_state': 'approved',
+            'actor_id': c.get('reviewed_by_id'),
+            'event_time': c.get('check_out_time'),
+            'decision_timestamp': c.get('reviewed_at'),
+            'recorded_at': c.get('requested_at'),
+        })
+
+    for f in ev.get('forgot_checkouts', []):
+        if f.get('status', 'approved') != 'approved' or f.get('check_out_time') is None:
+            continue
+        co_time = f.get('check_out_time')
+        paired_ts = next(
+            (
+                a['decision_timestamp']
+                for a in audit_items
+                if a.get('action') == 'forgot_checkout'
+                and a['decision_timestamp'] is not None
+                and _times_match(co_time, a['event_time'])
+            ),
+            None,
+        )
+        auth_items.append({
+            'attendance_id': f.get('attendance_id', session_id),
+            'source': 'forgot_checkout',
+            'action': 'forgot_checkout',
+            'approval_state': 'approved',
+            'actor_id': f.get('reviewed_by_hr_id') or f.get('reviewed_by_manager_id'),
+            'event_time': co_time,
+            'decision_timestamp': paired_ts,
+            'recorded_at': f.get('requested_at'),
+        })
+
+    loc_items = []
+    for l in co_locs:
+        ev_time = getattr(l, 'client_event_time', None) or getattr(l, 'timestamp', None)
+        rec_time = getattr(l, 'synced_at', None) or getattr(l, 'timestamp', None)
+        if ev_time is None and rec_time is None:
+            continue
+        loc_items.append({
+            'attendance_id': getattr(l, 'attendance_id', session_id),
+            'source': 'location',
+            'action': 'check_out',
+            'approval_state': 'recorded',
+            'actor_id': None,
+            'event_time': ev_time or rec_time,
+            'decision_timestamp': None,
+            'recorded_at': rec_time or ev_time,
+        })
+
+    return auth_items, loc_items
+
+
+def _ambiguous_result():
+    return {
+        'effective_check_out_time': None,
+        'is_open': True,
+        'is_auto_closed': False,
+        'needs_review': True,
+        'provenance': 'ambiguous',
+    }
+
+
+def _corrected_result(raw_co):
+    return {
+        'effective_check_out_time': raw_co,
+        'is_open': False,
+        'is_auto_closed': False,
+        'needs_review': False,
+        'provenance': 'corrected',
+    }
+
+
 def resolve_session_checkout(session, evidence=None):
     """
     Shared effective-checkout decision for a single check-in Attendance session.
-    Returns:
-      - effective_check_out_time: datetime or None
-      - is_open: bool (True if genuinely open, proven auto-closed only, or ambiguous)
-      - is_auto_closed: bool (True only for proven auto-closed without genuine evidence)
-      - needs_review: bool (True when provenance is conflicting/ambiguous)
-      - provenance: 'open' | 'genuine' | 'corrected' | 'auto_closed_only' | 'ambiguous'
+    Fails closed (empty effective checkout + needs_review=True) when authorization
+    or chronological ordering is missing, tied, or contradicted.
     """
     raw_co = getattr(session, 'check_out_time', None)
     if raw_co is None:
@@ -398,38 +508,11 @@ def resolve_session_checkout(session, evidence=None):
     if evidence is None and getattr(session, 'pk', None) is not None:
         evidence = build_checkout_provenance_map([session]).get(session.id, {})
 
-    ev = evidence or {}
-    corrections = [c for c in ev.get('corrections', []) if c.get('check_out_time') is not None]
-    forgot_checkouts = [f for f in ev.get('forgot_checkouts', []) if f.get('check_out_time') is not None]
-    co_audit_logs = [
-        a for a in ev.get('audit_logs', [])
-        if a.get('new_check_out_time') is not None
-        and (
-            a.get('action') in _CHECKOUT_AUDIT_ACTIONS
-            or (
-                a.get('action') not in _NON_CHECKOUT_AUDIT_ACTIONS
-                and a.get('old_check_out_time') != a.get('new_check_out_time')
-            )
-        )
-    ]
+    auth_items, loc_items = _normalize_checkout_evidence(session, evidence, co_locs)
 
-    latest_corr = corrections[-1]['check_out_time'] if corrections else None
-    latest_forgot = forgot_checkouts[-1]['check_out_time'] if forgot_checkouts else None
-    latest_audit = co_audit_logs[-1]['new_check_out_time'] if co_audit_logs else None
-    latest_loc = max((l.timestamp for l in co_locs if getattr(l, 'timestamp', None)), default=None)
-
-    auth_times = [t for t in (latest_corr, latest_forgot, latest_audit) if t is not None]
-    all_evidence_times = auth_times + ([latest_loc] if latest_loc is not None else [])
-
-    if not all_evidence_times:
+    if not auth_items and not loc_items:
         if 'admin override:' in note_text.lower():
-            return {
-                'effective_check_out_time': raw_co,
-                'is_open': False,
-                'is_auto_closed': False,
-                'needs_review': False,
-                'provenance': 'corrected',
-            }
+            return _ambiguous_result()
         return {
             'effective_check_out_time': None,
             'is_open': True,
@@ -438,41 +521,39 @@ def resolve_session_checkout(session, evidence=None):
             'provenance': 'auto_closed_only',
         }
 
-    # Authoritative correction/forgot-checkout/audit overrides older auto-close or location
-    if auth_times:
-        if any(_times_match(raw_co, t) for t in auth_times):
-            return {
-                'effective_check_out_time': raw_co,
-                'is_open': False,
-                'is_auto_closed': False,
-                'needs_review': False,
-                'provenance': 'corrected',
-            }
-        return {
-            'effective_check_out_time': None,
-            'is_open': True,
-            'is_auto_closed': False,
-            'needs_review': True,
-            'provenance': 'ambiguous',
-        }
+    if auth_items:
+        base_time = auth_items[0]['event_time']
+        all_auth_agree = all(_times_match(base_time, item['event_time']) for item in auth_items)
+
+        if all_auth_agree:
+            target_time = base_time
+            dated_ts = [item['decision_timestamp'] for item in auth_items if item['decision_timestamp'] is not None]
+            max_auth_ts = max(dated_ts) if dated_ts else None
+        else:
+            if any(item['decision_timestamp'] is None for item in auth_items):
+                return _ambiguous_result()
+            max_auth_ts = max(item['decision_timestamp'] for item in auth_items)
+            latest_items = [item for item in auth_items if item['decision_timestamp'] == max_auth_ts]
+            target_time = latest_items[0]['event_time']
+            if not all(_times_match(target_time, item['event_time']) for item in latest_items):
+                return _ambiguous_result()
+
+        for loc in loc_items:
+            if not _times_match(loc['event_time'], target_time):
+                loc_latest = max(t for t in (loc['event_time'], loc['recorded_at']) if t is not None)
+                if max_auth_ts is None or max_auth_ts <= loc_latest:
+                    return _ambiguous_result()
+
+        if _times_match(raw_co, target_time):
+            return _corrected_result(raw_co)
+        return _ambiguous_result()
 
     # Only checkout location evidence exists alongside auto-close marker
-    if _times_match(raw_co, latest_loc):
-        return {
-            'effective_check_out_time': raw_co,
-            'is_open': False,
-            'is_auto_closed': False,
-            'needs_review': False,
-            'provenance': 'corrected',
-        }
+    first_loc_time = loc_items[0]['event_time']
+    if all(_times_match(first_loc_time, loc['event_time']) for loc in loc_items) and _times_match(raw_co, first_loc_time):
+        return _corrected_result(raw_co)
 
-    return {
-        'effective_check_out_time': None,
-        'is_open': True,
-        'is_auto_closed': False,
-        'needs_review': True,
-        'provenance': 'ambiguous',
-    }
+    return _ambiguous_result()
 
 
 def _sum_non_overlapping_hours(check_in_sessions, effective_checkouts=None):

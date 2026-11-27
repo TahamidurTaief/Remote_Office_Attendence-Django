@@ -1819,29 +1819,41 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
         ci_loc  = next((l for l in ci.locations.all() if l.event == 'check_in'), None) if ci else None
         co_loc  = next((l for l in ci.locations.all() if l.event == 'check_out'), None) if ci else None
 
-        from apps.attendance.reporting_service import build_checkout_provenance_map, resolve_session_checkout
+        from apps.attendance.reporting_service import (
+            _sum_non_overlapping_hours,
+            build_checkout_provenance_map,
+            resolve_session_checkout,
+        )
         prov_map = build_checkout_provenance_map(ci_sessions)
         is_open_session = False
+        needs_review = False
+        effective_checkouts = []
         for s in ci_sessions:
             res = resolve_session_checkout(s, prov_map.get(s.id))
             s.effective_check_out_time = res['effective_check_out_time']
+            effective_checkouts.append(res['effective_check_out_time'])
             if res['is_open']:
                 is_open_session = True
+            if res['needs_review']:
+                needs_review = True
+        effective_total_hours = _sum_non_overlapping_hours(ci_sessions, effective_checkouts=effective_checkouts)
 
-        if ci and getattr(ci, 'overtime_minutes', 0) > 0:
+        if ci and getattr(ci, 'overtime_minutes', 0) > 0 and not is_open_session:
             ci.overtime_str = f"{ci.overtime_minutes // 60}h {ci.overtime_minutes % 60}m"
         else:
             if ci: ci.overtime_str = ""
 
         return render(request, 'admin_panel/reports/partials/day_detail.html', {
-            'employee':          employee,
-            'day':               day,
-            'check_in':          ci,
-            'check_in_sessions': ci_sessions,
-            'is_open_session':   is_open_session,
-            'ci_loc':            ci_loc,
-            'co_loc':            co_loc,
-            'field_visits':      fv_list,
+            'employee':              employee,
+            'day':                   day,
+            'check_in':              ci,
+            'check_in_sessions':     ci_sessions,
+            'is_open_session':       is_open_session,
+            'needs_review':          needs_review,
+            'effective_total_hours': effective_total_hours,
+            'ci_loc':                ci_loc,
+            'co_loc':                co_loc,
+            'field_visits':          fv_list,
         })
 
 

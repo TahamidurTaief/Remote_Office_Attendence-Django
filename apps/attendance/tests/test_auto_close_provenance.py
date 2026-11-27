@@ -450,3 +450,429 @@ class AutoCloseProvenanceTests(TestCase):
             get_daily_report_data(report_date=d)
 
         self.assertEqual(len(ctx_small), len(ctx_large))
+
+
+class FailClosedProvenanceRegressionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.branch = Branch.objects.create(
+            name="HQ FailClosed",
+            latitude=decimal.Decimal("23.810300"),
+            longitude=decimal.Decimal("90.412500"),
+            radius_meters=200,
+        )
+        OfficeSchedule.objects.update_or_create(
+            branch=cls.branch,
+            defaults={
+                "office_start_time": datetime.strptime("09:00", "%H:%M").time(),
+                "office_end_time": datetime.strptime("18:00", "%H:%M").time(),
+                "late_after_minutes": 15,
+            },
+        )
+        AttendancePolicy.objects.create(
+            branch=cls.branch,
+            geofencing_policy="warning",
+            allow_outside_geofence=True,
+            photo_required=False,
+        )
+        cls.admin_user = User.objects.create_superuser(
+            email="admin_fc@example.com",
+            password="password123",
+        )
+        cls.hr_user = User.objects.create_user(
+            email="hr_fc@example.com",
+            password="password123",
+            role="hr",
+        )
+        cls.emp_user = User.objects.create_user(
+            email="emp_fc@example.com",
+            password="password123",
+            role="staff",
+        )
+        cls.emp_master = Employee.objects.create(
+            user=cls.emp_user,
+            employee_number="EMP-FC-01",
+            first_name="FailClosed",
+            last_name="Staff",
+            joined_date=date(2025, 1, 1),
+        )
+        cls.emp_profile = EmployeeProfile.objects.create(
+            user=cls.emp_user,
+            master_employee=cls.emp_master,
+            employee_id="EMP-FC-01",
+            full_name="FailClosed Staff",
+            phone="01700002001",
+            branch=cls.branch,
+            is_active=True,
+            joined_date=date(2025, 1, 1),
+        )
+        cls.genuine_user = User.objects.create_user(
+            email="gen_fc@example.com",
+            password="password123",
+            role="staff",
+        )
+        cls.genuine_master = Employee.objects.create(
+            user=cls.genuine_user,
+            employee_number="EMP-FC-02",
+            first_name="Genuine",
+            last_name="FC",
+            joined_date=date(2025, 1, 1),
+        )
+        cls.genuine_profile = EmployeeProfile.objects.create(
+            user=cls.genuine_user,
+            master_employee=cls.genuine_master,
+            employee_id="EMP-FC-02",
+            full_name="Genuine FC",
+            phone="01700002002",
+            branch=cls.branch,
+            is_active=True,
+            joined_date=date(2025, 1, 1),
+        )
+        cls.factory = RequestFactory()
+
+    def _bd_dt(self, d, h, m=0, s=0):
+        return datetime(d.year, d.month, d.day, h, m, s, tzinfo=BD_TZ)
+
+    def test_1_text_only_admin_override_note_rejected(self):
+        """Auto-closed 18:00 with text-only 'Admin override:' note and no structured evidence fails closed."""
+        d = date(2026, 10, 20)
+        fabricated_out = self._bd_dt(d, 18, 0, 0)
+        att = Attendance.objects.create(
+            employee=self.emp_profile,
+            date=d,
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d, 9, 0, 0),
+            check_out_time=fabricated_out,
+            total_hours=decimal.Decimal("9.00"),
+            overtime_minutes=30,
+            note="[Auto-closed: unclosed session from 20/10/2026] Admin override: confirmed by HR",
+        )
+
+        res = resolve_session_checkout(att)
+        self.assertIsNone(res["effective_check_out_time"])
+        self.assertTrue(res["is_open"])
+        self.assertFalse(res["is_auto_closed"])
+        self.assertTrue(res["needs_review"])
+        self.assertEqual(res["provenance"], "ambiguous")
+
+        daily = get_daily_report_data(report_date=d, employee_id=self.emp_profile.id)
+        row = daily["rows"][0]
+        self.assertTrue(row["is_present"])
+        self.assertIsNone(row["check_out_time"])
+        self.assertEqual(row["check_out_time_str"], "")
+        self.assertEqual(row["total_hours"], 0.0)
+        self.assertEqual(row["day_calc"]["overtime_minutes"], 0)
+        self.assertTrue(row["needs_review"])
+        self.assertTrue(row["checkout_needs_review"])
+
+    def test_2_earlier_match_later_conflict_rejected(self):
+        """Stored 18:00 + earlier approved 18:00 correction + later 20:00 audit -> ambiguous + needs_review=True."""
+        d = date(2026, 10, 21)
+        stored_out = self._bd_dt(d, 18, 0, 0)
+        later_audit_out = self._bd_dt(d, 20, 0, 0)
+        att = Attendance.objects.create(
+            employee=self.emp_profile,
+            date=d,
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d, 9, 0, 0),
+            check_out_time=stored_out,
+            total_hours=decimal.Decimal("9.00"),
+            note="[Auto-closed: unclosed session from 21/10/2026]",
+        )
+        AttendanceCorrectionRequest.objects.create(
+            attendance=att,
+            reason="Earlier correction",
+            status="approved",
+            check_out_time=stored_out,
+            reviewed_by=self.hr_user,
+            reviewed_at=self._bd_dt(d + timedelta(days=1), 10, 0, 0),
+        )
+        audit = AttendanceAuditLog.objects.create(
+            attendance=att,
+            action="admin_edit",
+            old_check_out_time=stored_out,
+            new_check_out_time=later_audit_out,
+            reason="Later authoritative edit",
+            changed_by=self.admin_user,
+        )
+        AttendanceAuditLog.objects.filter(pk=audit.pk).update(
+            timestamp=self._bd_dt(d + timedelta(days=1), 12, 0, 0)
+        )
+
+        res = resolve_session_checkout(att)
+        self.assertIsNone(res["effective_check_out_time"])
+        self.assertTrue(res["is_open"])
+        self.assertTrue(res["needs_review"])
+        self.assertEqual(res["provenance"], "ambiguous")
+
+    def test_3_legitimate_later_correction_preserved(self):
+        """Earlier 18:00 audit + later approved 19:30 correction matching stored 19:30 -> preserved."""
+        d = date(2026, 10, 22)
+        earlier_out = self._bd_dt(d, 18, 0, 0)
+        corrected_out = self._bd_dt(d, 19, 30, 0)
+        att = Attendance.objects.create(
+            employee=self.emp_profile,
+            date=d,
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d, 9, 0, 0),
+            check_out_time=corrected_out,
+            total_hours=decimal.Decimal("10.50"),
+            note="[Auto-closed: unclosed session from 22/10/2026]",
+        )
+        early_audit = AttendanceAuditLog.objects.create(
+            attendance=att,
+            action="update",
+            old_check_out_time=None,
+            new_check_out_time=earlier_out,
+            reason="Initial close",
+            changed_by=self.admin_user,
+        )
+        AttendanceAuditLog.objects.filter(pk=early_audit.pk).update(
+            timestamp=self._bd_dt(d + timedelta(days=1), 9, 0, 0)
+        )
+        AttendanceCorrectionRequest.objects.create(
+            attendance=att,
+            reason="Verified late checkout",
+            status="approved",
+            check_out_time=corrected_out,
+            reviewed_by=self.hr_user,
+            reviewed_at=self._bd_dt(d + timedelta(days=1), 11, 0, 0),
+        )
+
+        res = resolve_session_checkout(att)
+        self.assertEqual(res["effective_check_out_time"], corrected_out)
+        self.assertFalse(res["is_open"])
+        self.assertFalse(res["needs_review"])
+        self.assertEqual(res["provenance"], "corrected")
+
+    def test_4_ambiguous_ordering_and_offline_event_upload_distinction(self):
+        """Missing/equal decision timestamps fail closed; offline event vs upload time ordering is enforced."""
+        d = date(2026, 10, 23)
+        t_offline = self._bd_dt(d, 17, 30, 0)
+        t_corr = self._bd_dt(d, 19, 15, 0)
+
+        # 4a. Missing reviewed_at on conflicting correction -> ambiguous
+        att_missing_ts = Attendance.objects.create(
+            employee=self.emp_profile,
+            date=d,
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d, 9, 0, 0),
+            check_out_time=t_corr,
+            total_hours=decimal.Decimal("10.25"),
+            note="[Auto-closed: unclosed session from 23/10/2026]",
+        )
+        AttendanceCorrectionRequest.objects.create(
+            attendance=att_missing_ts,
+            reason="Undated correction",
+            status="approved",
+            check_out_time=t_corr,
+            reviewed_by=self.hr_user,
+            reviewed_at=None,
+        )
+        a_other = AttendanceAuditLog.objects.create(
+            attendance=att_missing_ts,
+            action="admin_edit",
+            old_check_out_time=None,
+            new_check_out_time=t_offline,
+            reason="Conflicting audit",
+            changed_by=self.admin_user,
+        )
+        AttendanceAuditLog.objects.filter(pk=a_other.pk).update(
+            timestamp=self._bd_dt(d, 20, 0, 0)
+        )
+        res_missing = resolve_session_checkout(att_missing_ts)
+        self.assertIsNone(res_missing["effective_check_out_time"])
+        self.assertTrue(res_missing["needs_review"])
+        self.assertEqual(res_missing["provenance"], "ambiguous")
+
+        # 4b. Offline event at 17:30 uploaded at 18:00, superseded by 19:00 correction -> preserved
+        att_offline_ok = Attendance.objects.create(
+            employee=self.genuine_profile,
+            date=d,
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d, 9, 0, 0),
+            check_out_time=t_corr,
+            total_hours=decimal.Decimal("10.25"),
+            note="[Auto-closed: unclosed session from 23/10/2026]",
+        )
+        AttendanceLocation.objects.create(
+            attendance=att_offline_ok,
+            event="check_out",
+            latitude=23.8103,
+            longitude=90.4125,
+            accuracy=10.0,
+            timestamp=t_offline,
+            client_event_time=t_offline,
+            synced_at=self._bd_dt(d, 18, 0, 0),
+        )
+        AttendanceCorrectionRequest.objects.create(
+            attendance=att_offline_ok,
+            reason="Post-sync correction",
+            status="approved",
+            check_out_time=t_corr,
+            reviewed_by=self.hr_user,
+            reviewed_at=self._bd_dt(d, 19, 0, 0),
+        )
+        res_ok = resolve_session_checkout(att_offline_ok)
+        self.assertEqual(res_ok["effective_check_out_time"], t_corr)
+        self.assertFalse(res_ok["needs_review"])
+        self.assertEqual(res_ok["provenance"], "corrected")
+
+        # 4c. Offline event at 17:30 uploaded at 20:00 (after 19:00 correction) -> ambiguous
+        att_offline_late = Attendance.objects.create(
+            employee=self.emp_profile,
+            date=d + timedelta(days=1),
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d + timedelta(days=1), 9, 0, 0),
+            check_out_time=t_corr + timedelta(days=1),
+            total_hours=decimal.Decimal("10.25"),
+            note="[Auto-closed: unclosed session from 24/10/2026]",
+        )
+        AttendanceLocation.objects.create(
+            attendance=att_offline_late,
+            event="check_out",
+            latitude=23.8103,
+            longitude=90.4125,
+            accuracy=10.0,
+            timestamp=t_offline + timedelta(days=1),
+            client_event_time=t_offline + timedelta(days=1),
+            synced_at=self._bd_dt(d + timedelta(days=1), 20, 0, 0),
+        )
+        AttendanceCorrectionRequest.objects.create(
+            attendance=att_offline_late,
+            reason="Correction before late upload",
+            status="approved",
+            check_out_time=t_corr + timedelta(days=1),
+            reviewed_by=self.hr_user,
+            reviewed_at=self._bd_dt(d + timedelta(days=1), 19, 0, 0),
+        )
+        res_late = resolve_session_checkout(att_offline_late)
+        self.assertIsNone(res_late["effective_check_out_time"])
+        self.assertTrue(res_late["needs_review"])
+        self.assertEqual(res_late["provenance"], "ambiguous")
+
+    def test_5_export_payroll_parity_zero_writes_and_bounded_queries(self):
+        """Ambiguous override propagates across HTML, popup, CSV, XLSX, PDF, payroll preflight with 0 DB writes and bounded queries."""
+        d = date(2026, 10, 25)
+        fabricated_out = self._bd_dt(d, 18, 0, 0)
+        original_note = "[Auto-closed: unclosed session from 25/10/2026] Admin override: text only"
+
+        att_amb = Attendance.objects.create(
+            employee=self.emp_profile,
+            date=d,
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d, 9, 0, 0),
+            check_out_time=fabricated_out,
+            total_hours=decimal.Decimal("9.00"),
+            overtime_minutes=30,
+            note=original_note,
+        )
+        att_gen = Attendance.objects.create(
+            employee=self.genuine_profile,
+            date=d,
+            attendance_type="check_in",
+            type="office",
+            status="on_time",
+            check_in_time=self._bd_dt(d, 9, 0, 0),
+            check_out_time=fabricated_out,
+            total_hours=decimal.Decimal("9.00"),
+        )
+        AttendanceLocation.objects.create(
+            attendance=att_gen,
+            event="check_out",
+            latitude=23.8103,
+            longitude=90.4125,
+            accuracy=10.0,
+            timestamp=fabricated_out,
+        )
+
+        # Detail popup hides fabricated 18:00:00 and 9.00h, shows Needs Review
+        req_detail = self.factory.get(f"/admin-panel/reports/day-detail/{self.emp_profile.id}/{d.isoformat()}/")
+        req_detail.user = self.admin_user
+        detail_resp = EmployeeDayDetailView.as_view()(req_detail, pk=self.emp_profile.id, date_str=d.isoformat())
+        detail_html = detail_resp.content.decode("utf-8")
+        self.assertEqual(detail_resp.status_code, 200)
+        self.assertIn("Needs Review", detail_html)
+        self.assertNotIn("18:00:00", detail_html)
+        self.assertNotIn("9.00h", detail_html)
+
+        # CSV, XLSX, PDF parity
+        req_csv = self.factory.get(f"/admin-panel/reports/export/csv/?date={d.isoformat()}")
+        req_csv.user = self.admin_user
+        csv_rows = list(csv.reader(io.StringIO(ExportReportCSVView.as_view()(req_csv).content.decode("utf-8-sig"))))
+        by_id_csv = {r[2]: r for r in csv_rows[1:]}
+        self.assertEqual(by_id_csv["EMP-FC-01"][5], "")
+        self.assertEqual(by_id_csv["EMP-FC-01"][6], "")
+        self.assertEqual(by_id_csv["EMP-FC-02"][5], "18:00:00")
+        self.assertEqual(by_id_csv["EMP-FC-02"][6], "9.00")
+
+        req_xl = self.factory.get(f"/admin-panel/reports/export/excel/?date={d.isoformat()}")
+        req_xl.user = self.admin_user
+        wb = openpyxl.load_workbook(io.BytesIO(ExportReportExcelView.as_view()(req_xl).content))
+        ws = wb.active
+        xl_by_id = {ws.cell(row=r_idx, column=3).value: r_idx for r_idx in range(5, ws.max_row + 1)}
+        self.assertEqual(ws.cell(row=xl_by_id["EMP-FC-01"], column=6).value, "—")
+        self.assertEqual(ws.cell(row=xl_by_id["EMP-FC-01"], column=7).value, "0.00h")
+        self.assertEqual(ws.cell(row=xl_by_id["EMP-FC-02"], column=6).value, "18:00:00")
+
+        req_pdf = self.factory.get(f"/admin-panel/reports/export/pdf/?date={d.isoformat()}&employee={self.emp_profile.id}")
+        req_pdf.user = self.admin_user
+        pdf_text = " ".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(ExportReportPDFView.as_view()(req_pdf).content)).pages)
+        self.assertNotIn("18:00:00", pdf_text)
+
+        # Payroll preflight blocks ambiguous employee
+        pr = PayrollRun.objects.create(
+            name="Oct 2026 FailClosed",
+            period_start=d,
+            period_end=d,
+            status=PayrollRunStatus.DRAFT,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            PayrollService.sync_payroll_inputs(pr)
+        self.assertIn("ambiguous checkout", str(ctx.exception).lower())
+
+        # Zero historical DB writes
+        att_amb.refresh_from_db()
+        self.assertEqual(att_amb.check_out_time, fabricated_out)
+        self.assertEqual(att_amb.total_hours, decimal.Decimal("9.00"))
+        self.assertEqual(att_amb.overtime_minutes, 30)
+        self.assertEqual(att_amb.note, original_note)
+
+        # Bounded queries across 2 vs 20 employees
+        with CaptureQueriesContext(connection) as ctx_small:
+            get_daily_report_data(report_date=d)
+
+        for i in range(18):
+            u = User.objects.create_user(email=f"fc_bulk_{i}@example.com", password="password123", role="staff")
+            m = Employee.objects.create(
+                user=u, employee_number=f"EMP-FC-B{i:02d}", first_name="Bulk", last_name=f"FC{i}", joined_date=date(2025, 1, 1)
+            )
+            ep = EmployeeProfile.objects.create(
+                user=u, master_employee=m, employee_id=f"EMP-FC-B{i:02d}", full_name=f"Bulk FC{i}",
+                phone=f"0172000{i:04d}", branch=self.branch, is_active=True, joined_date=date(2025, 1, 1),
+            )
+            Attendance.objects.create(
+                employee=ep, date=d, attendance_type="check_in", type="office", status="on_time",
+                check_in_time=self._bd_dt(d, 9, 0, 0), check_out_time=fabricated_out,
+                total_hours=decimal.Decimal("9.00"),
+                note=original_note,
+            )
+
+        with CaptureQueriesContext(connection) as ctx_large:
+            get_daily_report_data(report_date=d)
+
+        self.assertEqual(len(ctx_small), len(ctx_large))
