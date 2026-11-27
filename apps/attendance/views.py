@@ -878,6 +878,126 @@ class AdminAttendanceRequestsView(RoleRequiredMixin, ListView):
         return context
 
 
+MAX_BULK_SYNC_ITEMS = 200
+
+
+def _bulk_action_tie_rank(action_type):
+    if action_type == 'check_in':
+        return 0
+    if action_type == 'field_visit':
+        return 1
+    if action_type == 'check_out':
+        return 2
+    return 3
+
+
+def _order_bulk_sync_items(raw_items):
+    """
+    Deterministically order offline sync items using dependency edges and validated
+    event timestamps, preserving original index order on ties.
+    Returns (ordered_entries, cycle_entries) where each entry is a dict with:
+      index, item, action_type, item_uuid, dep_uuid, payload, time_error
+    """
+    import heapq
+    from apps.attendance.sync_utils import ClientTimeValidationError, validate_client_time
+
+    fallback_now = timezone.now()
+    entries = []
+    uuid_to_idx = {}
+
+    for idx, item in enumerate(raw_items):
+        if not isinstance(item, dict):
+            item = {}
+        action_type = item.get('action') or item.get('action_type')
+        raw_uuid = item.get('uuid') or item.get('sync_uuid')
+        item_uuid = str(raw_uuid).strip() if raw_uuid is not None and str(raw_uuid).strip() else None
+
+        payload = item.get('payload')
+        if not isinstance(payload, dict):
+            payload = dict(item)
+        else:
+            payload = dict(payload)
+
+        if item_uuid and 'sync_uuid' not in payload:
+            payload['sync_uuid'] = item_uuid
+
+        raw_dep = (
+            item.get('depends_on_sync_uuid')
+            or payload.get('depends_on_sync_uuid')
+            or payload.get('check_in_sync_uuid')
+            or payload.get('parent_sync_uuid')
+        )
+        dep_uuid = str(raw_dep).strip() if raw_dep is not None and str(raw_dep).strip() else None
+        if dep_uuid and not payload.get('depends_on_sync_uuid'):
+            payload['depends_on_sync_uuid'] = dep_uuid
+
+        client_time_str = payload.get('client_event_time')
+        if client_time_str is None:
+            client_time_str = item.get('client_event_time')
+
+        time_error = None
+        event_dt = fallback_now
+        try:
+            parsed_dt = validate_client_time(client_time_str)
+            if parsed_dt is not None:
+                event_dt = parsed_dt
+        except ClientTimeValidationError as exc:
+            time_error = str(exc)
+
+        entry = {
+            'index': idx,
+            'item': item,
+            'action_type': action_type,
+            'item_uuid': item_uuid,
+            'dep_uuid': dep_uuid,
+            'payload': payload,
+            'event_dt': event_dt,
+            'tie_rank': _bulk_action_tie_rank(action_type),
+            'time_error': time_error,
+        }
+        entries.append(entry)
+        if item_uuid and item_uuid not in uuid_to_idx:
+            uuid_to_idx[item_uuid] = idx
+
+    n = len(entries)
+    children = [[] for _ in range(n)]
+    in_degree = [0] * n
+    self_cycle_indices = set()
+
+    for idx, entry in enumerate(entries):
+        dep_uuid = entry['dep_uuid']
+        if not dep_uuid:
+            continue
+        if entry['item_uuid'] and dep_uuid == entry['item_uuid']:
+            self_cycle_indices.add(idx)
+            in_degree[idx] += 1
+            continue
+        parent_idx = uuid_to_idx.get(dep_uuid)
+        if parent_idx is not None:
+            children[parent_idx].append(idx)
+            in_degree[idx] += 1
+
+    ready_heap = []
+    for idx, entry in enumerate(entries):
+        if in_degree[idx] == 0:
+            heapq.heappush(ready_heap, (entry['event_dt'], entry['tie_rank'], idx))
+
+    ordered_entries = []
+    visited = set()
+    while ready_heap:
+        _, _, idx = heapq.heappop(ready_heap)
+        visited.add(idx)
+        ordered_entries.append(entries[idx])
+        for child_idx in children[idx]:
+            in_degree[child_idx] -= 1
+            if in_degree[child_idx] == 0:
+                c_entry = entries[child_idx]
+                heapq.heappush(ready_heap, (c_entry['event_dt'], c_entry['tie_rank'], child_idx))
+
+    cycle_entries = [entries[idx] for idx in range(n) if idx not in visited]
+    return ordered_entries, cycle_entries
+
+
 @login_required
 @require_POST
 def bulk_sync(request):
@@ -888,58 +1008,84 @@ def bulk_sync(request):
 
     try:
         raw_items = data.get('items') or data.get('actions') or []
+        if not isinstance(raw_items, list):
+            return JsonResponse({'success': False, 'status': 'failed', 'error': 'Items must be a list.'}, status=400)
+        if len(raw_items) > MAX_BULK_SYNC_ITEMS:
+            return JsonResponse(
+                {'success': False, 'status': 'failed', 'error': f'Batch size exceeds maximum of {MAX_BULK_SYNC_ITEMS} items.'},
+                status=400,
+            )
+
         results = []
         synced_count = 0
 
         from apps.attendance.transaction_service import AttendanceTransactionService, AttendanceTransactionError
 
-        def get_action_order(item):
-            action = item.get('action') or item.get('action_type')
-            if action == 'check_in':
-                return 0
-            if action == 'field_visit':
-                return 1
-            return 2
+        ordered_entries, cycle_entries = _order_bulk_sync_items(raw_items)
+        batch_item_states = {}
 
-        items = sorted(raw_items, key=get_action_order)
-        batch_check_ins = {}
+        for entry in cycle_entries:
+            item_uuid = entry['item_uuid']
+            err_msg = 'Blocked: dependency cycle detected.'
+            if item_uuid:
+                batch_item_states[item_uuid] = {
+                    'status': 'failed',
+                    'permanent': True,
+                    'error': err_msg,
+                }
+            results.append({
+                'uuid': item_uuid,
+                'status': 'failed',
+                'blocked': True,
+                'permanent': True,
+                'error': err_msg,
+            })
 
-        for item in items:
-            action_type = item.get('action') or item.get('action_type')
-            item_uuid = item.get('uuid') or item.get('sync_uuid')
-            payload = item.get('payload')
-            if not isinstance(payload, dict):
-                payload = dict(item)
-            else:
-                payload = dict(payload)
+        for entry in ordered_entries:
+            item = entry['item']
+            action_type = entry['action_type']
+            item_uuid = entry['item_uuid']
+            payload = entry['payload']
+            dep_uuid = entry['dep_uuid']
 
-            if item_uuid and 'sync_uuid' not in payload:
-                payload['sync_uuid'] = item_uuid
-
-            dep_uuid = (
-                item.get('depends_on_sync_uuid')
-                or payload.get('depends_on_sync_uuid')
-                or payload.get('check_in_sync_uuid')
-                or payload.get('parent_sync_uuid')
-            )
-            if dep_uuid and not payload.get('depends_on_sync_uuid'):
-                payload['depends_on_sync_uuid'] = dep_uuid
-
-            if action_type == 'check_out' and dep_uuid and not (payload.get('session_id') or payload.get('attendance_id')):
-                dep_key = str(dep_uuid)
-                if dep_key in batch_check_ins:
-                    dep_state = batch_check_ins[dep_key]
-                    if dep_state['status'] == 'success':
-                        payload['session_id'] = dep_state['session_id']
-                    else:
-                        results.append({
-                            'uuid': item_uuid,
+            if dep_uuid and dep_uuid in batch_item_states:
+                dep_state = batch_item_states[dep_uuid]
+                if dep_state['status'] != 'success':
+                    err_msg = f"Blocked: dependent event failed ({dep_state['error']})"
+                    if item_uuid:
+                        batch_item_states[item_uuid] = {
                             'status': 'failed',
-                            'blocked': True,
                             'permanent': dep_state['permanent'],
-                            'error': f"Blocked: dependent check-in failed ({dep_state['error']})"
-                        })
-                        continue
+                            'error': err_msg,
+                        }
+                    results.append({
+                        'uuid': item_uuid,
+                        'status': 'failed',
+                        'blocked': True,
+                        'permanent': dep_state['permanent'],
+                        'error': err_msg,
+                    })
+                    continue
+                if action_type == 'check_out' and not (payload.get('session_id') or payload.get('attendance_id')):
+                    if dep_state.get('session_id'):
+                        payload['session_id'] = dep_state['session_id']
+
+            if entry['time_error']:
+                err_msg = entry['time_error']
+                if item_uuid:
+                    batch_item_states[item_uuid] = {
+                        'status': 'failed',
+                        'permanent': True,
+                        'error': err_msg,
+                    }
+                results.append({
+                    'uuid': item_uuid,
+                    'status': 'failed',
+                    'blocked': False,
+                    'permanent': True,
+                    'error': err_msg,
+                })
+                continue
 
             # Extract and decode offline photo if present
             raw_photo = payload.get('photo') or item.get('photo') or payload.get('event_photo') or item.get('event_photo')
@@ -952,7 +1098,7 @@ def bulk_sync(request):
                     res = AttendanceTransactionService.check_in(request.user, payload, photo=photo_file, validate_photo=True)
                     synced_count += 1
                     if item_uuid:
-                        batch_check_ins[str(item_uuid)] = {
+                        batch_item_states[item_uuid] = {
                             'status': 'success',
                             'session_id': res.get('session_id')
                         }
@@ -960,19 +1106,35 @@ def bulk_sync(request):
                 elif action_type == 'check_out':
                     res = AttendanceTransactionService.check_out(request.user, payload, photo=photo_file, validate_photo=True)
                     synced_count += 1
+                    if item_uuid:
+                        batch_item_states[item_uuid] = {
+                            'status': 'success',
+                            'session_id': res.get('session_id')
+                        }
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 elif action_type == 'field_visit':
                     res = AttendanceTransactionService.field_visit(request.user, payload, photo=photo_file, validate_photo=True)
                     synced_count += 1
+                    if item_uuid:
+                        batch_item_states[item_uuid] = {
+                            'status': 'success',
+                            'session_id': res.get('session_id')
+                        }
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 else:
+                    if item_uuid:
+                        batch_item_states[item_uuid] = {
+                            'status': 'failed',
+                            'permanent': True,
+                            'error': 'Unknown action',
+                        }
                     results.append({'uuid': item_uuid, 'status': 'skipped', 'error': 'Unknown action'})
             except AttendanceTransactionError as e:
                 err_str = str(e)
                 is_missing_photo = 'photo is required' in err_str.lower()
                 is_permanent = False if is_missing_photo else (e.status_code != 500)
-                if action_type == 'check_in' and item_uuid:
-                    batch_check_ins[str(item_uuid)] = {
+                if item_uuid:
+                    batch_item_states[item_uuid] = {
                         'status': 'failed',
                         'permanent': is_permanent,
                         'error': err_str
@@ -990,8 +1152,8 @@ def bulk_sync(request):
                     'error': 'Photo is required by policy. Offline punch remains pending until photo is attached.' if is_missing_photo else err_str
                 })
             except Exception as e:
-                if action_type == 'check_in' and item_uuid:
-                    batch_check_ins[str(item_uuid)] = {
+                if item_uuid:
+                    batch_item_states[item_uuid] = {
                         'status': 'failed',
                         'permanent': False,
                         'error': str(e)

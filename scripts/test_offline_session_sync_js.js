@@ -286,7 +286,67 @@ function loadOfflineEnv(idbMock, fetchHandler, fixedNowMs) {
     assert.strictEqual((await env.window.FieldTrackDB.getBlockedSyncItems()).length, 1);
   }
 
-  console.log("Offline session-targeting & dependency JS tests passed: 3/3 groups ok.");
+  // 4. Multi-session In-A -> Out-A -> In-B -> Out-B preserves event/dependency order (no global check-in grouping)
+  {
+    const idb = createPersistentIndexedDB();
+    let capturedRequests = [];
+    const env = loadOfflineEnv(
+      idb,
+      async (url, opts) => {
+        const body = JSON.parse(opts.body);
+        capturedRequests.push(body.items.map((it) => it.uuid));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            results: body.items.map((it) => ({
+              uuid: it.uuid,
+              status: "success",
+              data: { session_id: it.uuid.includes("-a") ? 801 : 802 },
+            })),
+          }),
+        };
+      },
+      fixedNow
+    );
+
+    await env.window.queueOfflineAction({
+      action: "check_in",
+      sync_uuid: "in-a",
+      latitude: 23.81,
+      longitude: 90.41,
+      client_event_time: "2026-11-28T03:00:00Z",
+    });
+    await env.window.queueOfflineAction({
+      action: "check_out",
+      sync_uuid: "out-a",
+      latitude: 23.81,
+      longitude: 90.41,
+      client_event_time: "2026-11-28T06:00:00Z",
+    });
+    await env.window.queueOfflineAction({
+      action: "check_in",
+      sync_uuid: "in-b",
+      latitude: 23.81,
+      longitude: 90.41,
+      client_event_time: "2026-11-28T07:00:00Z",
+    });
+    await env.window.queueOfflineAction({
+      action: "check_out",
+      sync_uuid: "out-b",
+      latitude: 23.81,
+      longitude: 90.41,
+      client_event_time: "2026-11-28T11:30:00Z",
+    });
+
+    await env.window.SyncEngine.processQueue();
+    assert.strictEqual(capturedRequests.length, 1);
+    assert.deepStrictEqual(capturedRequests[0], ["in-a", "out-a", "in-b", "out-b"]);
+    assert.strictEqual((await env.window.FieldTrackDB.getPendingSyncItems()).length, 0);
+  }
+
+  console.log("Offline session-targeting & dependency JS tests passed: 4/4 groups ok.");
 })().catch((err) => {
   console.error(err);
   process.exit(1);

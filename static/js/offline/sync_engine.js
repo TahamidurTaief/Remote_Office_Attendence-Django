@@ -204,29 +204,51 @@
         };
 
         const runnableSet = new Set(pendingItems.filter(isItemRunnable).map((i) => i.uuid));
+        const { ordered: orderedRunnable, cycleItems: cycleRunnable } =
+          typeof window.FieldTrackDB.sortSyncItemsByDependencyAndTime === 'function'
+            ? window.FieldTrackDB.sortSyncItemsByDependencyAndTime(pendingItems.filter((i) => runnableSet.has(i.uuid)))
+            : { ordered: pendingItems.filter((i) => runnableSet.has(i.uuid)), cycleItems: [] };
+
+        for (const cycItem of cycleRunnable) {
+          await window.FieldTrackDB.updateSyncItem(cycItem.uuid, {
+            status: 'blocked',
+            blocked: true,
+            permanent: true,
+            last_attempt_time: new Date().toISOString(),
+            last_error: 'Blocked: dependency cycle detected.'
+          });
+        }
+
         const readyItems = [];
+        const blockedInPass = new Set();
 
-        for (const item of pendingItems) {
-          if (!runnableSet.has(item.uuid)) continue;
-
-          const depUuid = item.depends_on_sync_uuid || (item.payload && item.payload.depends_on_sync_uuid);
+        for (const item of orderedRunnable) {
+          const depUuid =
+            item.depends_on_sync_uuid ||
+            (item.payload && (item.payload.depends_on_sync_uuid || item.payload.check_in_sync_uuid || item.payload.parent_sync_uuid));
           const hasExplicitSession = Boolean(item.payload && (item.payload.session_id || item.payload.attendance_id));
 
-          if (item.action === 'check_out' && depUuid && !hasExplicitSession) {
+          if (depUuid && !hasExplicitSession) {
+            if (blockedInPass.has(depUuid)) {
+              blockedInPass.add(item.uuid);
+              continue;
+            }
             const parent = itemsByUuid.get(depUuid);
             if (parent) {
               if (parent.permanent || parent.status === 'failed' || parent.status === 'blocked' || (parent.retry_count || 0) >= MAX_RETRIES) {
+                blockedInPass.add(item.uuid);
                 await window.FieldTrackDB.updateSyncItem(item.uuid, {
                   status: 'blocked',
                   blocked: true,
                   permanent: true,
                   last_attempt_time: new Date().toISOString(),
-                  last_error: 'Blocked: dependent check-in failed permanently.'
+                  last_error: 'Blocked: dependent event failed permanently.'
                 });
                 continue;
               }
               if (!runnableSet.has(parent.uuid)) {
-                // Parent check-in is waiting for backoff; hold dependent checkout until parent succeeds
+                // Parent event is waiting for backoff; hold dependent item until parent succeeds
+                blockedInPass.add(item.uuid);
                 continue;
               }
             }

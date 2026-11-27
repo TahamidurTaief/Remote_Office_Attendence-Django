@@ -484,3 +484,351 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
             )
             self.assertTrue(legacy_ok["success"])
             self.assertEqual(legacy_ok["session_id"], other_open.id)
+
+    # Group 6: Multi-session In-A -> Out-A -> In-B -> Out-B (chronological & shuffled)
+    def test_group_6_multi_session_chronological_and_shuffled_bulk_sync(self):
+        with patch("django.utils.timezone.now", return_value=FIXED_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            today = FIXED_NOW.date()
+            in_a = str(uuid.uuid4())
+            out_a = str(uuid.uuid4())
+            in_b = str(uuid.uuid4())
+            out_b = str(uuid.uuid4())
+
+            self.client.force_login(self.staff_user)
+            ordered_items = [
+                {
+                    "uuid": in_a,
+                    "action": "check_in",
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "type": "office",
+                        "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
+                    },
+                },
+                {
+                    "uuid": out_a,
+                    "action": "check_out",
+                    "depends_on_sync_uuid": in_a,
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "depends_on_sync_uuid": in_a,
+                        "client_event_time": self._bd_dt(today, 12, 0).isoformat(),
+                    },
+                },
+                {
+                    "uuid": in_b,
+                    "action": "check_in",
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "type": "office",
+                        "client_event_time": self._bd_dt(today, 13, 0).isoformat(),
+                    },
+                },
+                {
+                    "uuid": out_b,
+                    "action": "check_out",
+                    "depends_on_sync_uuid": in_b,
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "depends_on_sync_uuid": in_b,
+                        "client_event_time": self._bd_dt(today, 18, 0).isoformat(),
+                    },
+                },
+            ]
+
+            with CaptureQueriesContext(connection) as ctx:
+                resp = self.client.post(
+                    reverse("attendance:bulk_sync"),
+                    data=json.dumps({"items": ordered_items}),
+                    content_type="application/json",
+                )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["synced"], 4)
+            self.assertLess(len(ctx), 110)
+
+            res_by_uuid = {r["uuid"]: r for r in data["results"]}
+            sess_a_id = res_by_uuid[in_a]["data"]["session_id"]
+            sess_b_id = res_by_uuid[in_b]["data"]["session_id"]
+            self.assertNotEqual(sess_a_id, sess_b_id)
+            self.assertEqual(res_by_uuid[out_a]["data"]["session_id"], sess_a_id)
+            self.assertEqual(res_by_uuid[out_b]["data"]["session_id"], sess_b_id)
+
+            sess_a = Attendance.objects.get(pk=sess_a_id)
+            sess_b = Attendance.objects.get(pk=sess_b_id)
+            self.assertEqual(sess_a.check_in_time, self._bd_dt(today, 9, 0))
+            self.assertEqual(sess_a.check_out_time, self._bd_dt(today, 12, 0))
+            self.assertEqual(sess_b.check_in_time, self._bd_dt(today, 13, 0))
+            self.assertEqual(sess_b.check_out_time, self._bd_dt(today, 18, 0))
+
+            # Shuffled permutation on other_user produces identical session relationships
+            in_a2 = str(uuid.uuid4())
+            out_a2 = str(uuid.uuid4())
+            in_b2 = str(uuid.uuid4())
+            out_b2 = str(uuid.uuid4())
+            shuffled_items = [
+                {
+                    "uuid": out_b2,
+                    "action": "check_out",
+                    "depends_on_sync_uuid": in_b2,
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "depends_on_sync_uuid": in_b2,
+                        "client_event_time": self._bd_dt(today, 18, 0).isoformat(),
+                    },
+                },
+                {
+                    "uuid": in_b2,
+                    "action": "check_in",
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "type": "office",
+                        "client_event_time": self._bd_dt(today, 13, 0).isoformat(),
+                    },
+                },
+                {
+                    "uuid": out_a2,
+                    "action": "check_out",
+                    "depends_on_sync_uuid": in_a2,
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "depends_on_sync_uuid": in_a2,
+                        "client_event_time": self._bd_dt(today, 12, 0).isoformat(),
+                    },
+                },
+                {
+                    "uuid": in_a2,
+                    "action": "check_in",
+                    "payload": {
+                        "latitude": 23.8103,
+                        "longitude": 90.4125,
+                        "type": "office",
+                        "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
+                    },
+                },
+            ]
+            self.client.force_login(self.other_user)
+            resp2 = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps({"items": shuffled_items}),
+                content_type="application/json",
+            )
+            self.assertEqual(resp2.status_code, 200)
+            data2 = resp2.json()
+            self.assertEqual(data2["synced"], 4)
+            res2 = {r["uuid"]: r for r in data2["results"]}
+            self.assertEqual(res2[out_a2]["data"]["session_id"], res2[in_a2]["data"]["session_id"])
+            self.assertEqual(res2[out_b2]["data"]["session_id"], res2[in_b2]["data"]["session_id"])
+            self.assertNotEqual(res2[in_a2]["data"]["session_id"], res2[in_b2]["data"]["session_id"])
+
+    # Group 7: Equal timestamps with explicit dependencies
+    def test_group_7_equal_timestamps_with_explicit_dependencies(self):
+        with patch("django.utils.timezone.now", return_value=FIXED_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            today = FIXED_NOW.date()
+            same_ts = self._bd_dt(today, 9, 0).isoformat()
+            ci_uuid = str(uuid.uuid4())
+            co_uuid = str(uuid.uuid4())
+
+            self.client.force_login(self.staff_user)
+            resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "uuid": co_uuid,
+                                "action": "check_out",
+                                "depends_on_sync_uuid": ci_uuid,
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "depends_on_sync_uuid": ci_uuid,
+                                    "client_event_time": same_ts,
+                                },
+                            },
+                            {
+                                "uuid": ci_uuid,
+                                "action": "check_in",
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "type": "office",
+                                    "client_event_time": same_ts,
+                                },
+                            },
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["synced"], 2)
+            res = {r["uuid"]: r for r in data["results"]}
+            self.assertEqual(res[ci_uuid]["status"], "success")
+            self.assertEqual(res[co_uuid]["status"], "success")
+            self.assertEqual(res[co_uuid]["data"]["session_id"], res[ci_uuid]["data"]["session_id"])
+
+    # Group 8: Dependency cycles and missing dependencies fail closed without blocking independent events
+    def test_group_8_cycle_and_missing_dependency_fail_closed(self):
+        with patch("django.utils.timezone.now", return_value=FIXED_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            today = FIXED_NOW.date()
+            cyc_a = str(uuid.uuid4())
+            cyc_b = str(uuid.uuid4())
+            self_cyc = str(uuid.uuid4())
+            missing_dep_co = str(uuid.uuid4())
+            valid_ci = str(uuid.uuid4())
+
+            self.client.force_login(self.staff_user)
+            resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "uuid": cyc_a,
+                                "action": "check_in",
+                                "depends_on_sync_uuid": cyc_b,
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(today, 9, 0).isoformat(),
+                                },
+                            },
+                            {
+                                "uuid": cyc_b,
+                                "action": "check_out",
+                                "depends_on_sync_uuid": cyc_a,
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(today, 9, 30).isoformat(),
+                                },
+                            },
+                            {
+                                "uuid": self_cyc,
+                                "action": "check_out",
+                                "depends_on_sync_uuid": self_cyc,
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(today, 9, 45).isoformat(),
+                                },
+                            },
+                            {
+                                "uuid": missing_dep_co,
+                                "action": "check_out",
+                                "depends_on_sync_uuid": str(uuid.uuid4()),
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(today, 10, 0).isoformat(),
+                                },
+                            },
+                            {
+                                "uuid": valid_ci,
+                                "action": "check_in",
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "type": "office",
+                                    "client_event_time": self._bd_dt(today, 10, 15).isoformat(),
+                                },
+                            },
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["synced"], 1)
+            res = {r["uuid"]: r for r in data["results"]}
+
+            for bad_id in (cyc_a, cyc_b, self_cyc, missing_dep_co):
+                self.assertEqual(res[bad_id]["status"], "failed")
+                self.assertTrue(res[bad_id]["blocked"])
+                self.assertTrue(res[bad_id]["permanent"])
+
+            self.assertEqual(res[valid_ci]["status"], "success")
+            self.assertEqual(Attendance.objects.filter(employee=self.staff_emp).count(), 1)
+
+    # Group 9: Failed parent blocks dependent checkout while independent valid event succeeds
+    def test_group_9_failed_parent_blocks_dependent_checkout_allows_independent(self):
+        with patch("django.utils.timezone.now", return_value=FIXED_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            today = FIXED_NOW.date()
+            bad_ci = str(uuid.uuid4())
+            dep_co = str(uuid.uuid4())
+            indep_fv = str(uuid.uuid4())
+
+            self.client.force_login(self.staff_user)
+            resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "uuid": bad_ci,
+                                "action": "check_in",
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "type": "office",
+                                    # Invalid future timestamp -> parent fails permanently
+                                    "client_event_time": (FIXED_NOW + timedelta(hours=2)).isoformat(),
+                                },
+                            },
+                            {
+                                "uuid": dep_co,
+                                "action": "check_out",
+                                "depends_on_sync_uuid": bad_ci,
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "depends_on_sync_uuid": bad_ci,
+                                    "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
+                                },
+                            },
+                            {
+                                "uuid": indep_fv,
+                                "action": "field_visit",
+                                "payload": {
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "visit_title": "Client Site",
+                                    "client_name": "Acme",
+                                    "client_event_time": self._bd_dt(today, 14, 0).isoformat(),
+                                },
+                            },
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["synced"], 1)
+            res = {r["uuid"]: r for r in data["results"]}
+
+            self.assertEqual(res[bad_ci]["status"], "failed")
+            self.assertTrue(res[bad_ci]["permanent"])
+            self.assertEqual(res[dep_co]["status"], "failed")
+            self.assertTrue(res[dep_co]["blocked"])
+            self.assertTrue(res[dep_co]["permanent"])
+            self.assertEqual(res[indep_fv]["status"], "success")
+            self.assertEqual(Attendance.objects.filter(employee=self.staff_emp, attendance_type="field_visit").count(), 1)

@@ -70,8 +70,103 @@
     });
   }
 
+  function getItemEventTimeMs(item) {
+    const rawTime =
+      (item.payload && item.payload.client_event_time) ||
+      item.client_event_time ||
+      item.created_time;
+    const parsed = rawTime ? Date.parse(rawTime) : NaN;
+    if (!Number.isNaN(parsed)) return parsed;
+    const createdParsed = item.created_time ? Date.parse(item.created_time) : NaN;
+    return Number.isNaN(createdParsed) ? 0 : createdParsed;
+  }
+
+  function getItemTieRank(item) {
+    const action = item.action || item.action_type;
+    if (action === 'check_in') return 0;
+    if (action === 'field_visit') return 1;
+    if (action === 'check_out') return 2;
+    return typeof item.priority === 'number' ? item.priority + 3 : 8;
+  }
+
+  function sortSyncItemsByDependencyAndTime(items) {
+    const n = items.length;
+    const uuidToIdx = new Map();
+    items.forEach((item, idx) => {
+      if (item && item.uuid) {
+        uuidToIdx.set(String(item.uuid), idx);
+      }
+    });
+
+    const children = Array.from({ length: n }, () => []);
+    const inDegree = new Array(n).fill(0);
+    const meta = items.map((item, idx) => ({
+      idx,
+      timeMs: getItemEventTimeMs(item),
+      tieRank: getItemTieRank(item),
+      createdMs: item.created_time ? (Date.parse(item.created_time) || 0) : 0
+    }));
+
+    items.forEach((item, idx) => {
+      const dep =
+        item.depends_on_sync_uuid ||
+        (item.payload && (item.payload.depends_on_sync_uuid || item.payload.check_in_sync_uuid || item.payload.parent_sync_uuid));
+      if (!dep) return;
+      const depStr = String(dep);
+      if (item.uuid && depStr === String(item.uuid)) {
+        inDegree[idx] += 1; // Self-cycle
+        return;
+      }
+      if (uuidToIdx.has(depStr)) {
+        const parentIdx = uuidToIdx.get(depStr);
+        children[parentIdx].push(idx);
+        inDegree[idx] += 1;
+      }
+    });
+
+    const compareIdx = (aIdx, bIdx) => {
+      const a = meta[aIdx];
+      const b = meta[bIdx];
+      if (a.timeMs !== b.timeMs) return a.timeMs - b.timeMs;
+      if (a.tieRank !== b.tieRank) return a.tieRank - b.tieRank;
+      if (a.createdMs !== b.createdMs) return a.createdMs - b.createdMs;
+      return a.idx - b.idx;
+    };
+
+    const ready = [];
+    for (let i = 0; i < n; i++) {
+      if (inDegree[i] === 0) ready.push(i);
+    }
+    ready.sort(compareIdx);
+
+    const ordered = [];
+    const visited = new Set();
+    while (ready.length > 0) {
+      const idx = ready.shift();
+      visited.add(idx);
+      ordered.push(items[idx]);
+      let added = false;
+      for (const childIdx of children[idx]) {
+        inDegree[childIdx] -= 1;
+        if (inDegree[childIdx] === 0) {
+          ready.push(childIdx);
+          added = true;
+        }
+      }
+      if (added) ready.sort(compareIdx);
+    }
+
+    const cycleItems = [];
+    for (let i = 0; i < n; i++) {
+      if (!visited.has(i)) cycleItems.push(items[i]);
+    }
+
+    return { ordered, cycleItems };
+  }
+
   const FieldTrackDB = {
     open: openDB,
+    sortSyncItemsByDependencyAndTime: sortSyncItemsByDependencyAndTime,
 
     /**
      * Add a record to sync_queue
@@ -121,12 +216,8 @@
           const pending = all.filter(
             (item) => item.status === 'pending' || item.status === 'failed' || item.status === 'blocked'
           );
-          // Sort by priority asc (1 is highest), then created_time asc
-          pending.sort((a, b) => {
-            if (a.priority !== b.priority) return a.priority - b.priority;
-            return new Date(a.created_time) - new Date(b.created_time);
-          });
-          resolve(pending);
+          const { ordered, cycleItems } = sortSyncItemsByDependencyAndTime(pending);
+          resolve(ordered.concat(cycleItems));
         };
 
         req.onerror = (e) => reject(e.target.error);
