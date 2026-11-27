@@ -1,7 +1,7 @@
 import csv
 import decimal
 import io
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from io import StringIO
 
 from django.contrib.auth import get_user_model
@@ -10,7 +10,6 @@ from django.core.management import call_command
 from django.db import connection
 from django.test import RequestFactory, TestCase
 from django.test.utils import CaptureQueriesContext
-from django.utils import timezone
 import openpyxl
 from pypdf import PdfReader
 
@@ -25,11 +24,11 @@ from apps.attendance.models import (
     Attendance,
     AttendanceAbsentLog,
     AttendanceActivityLog,
-    AttendanceLocation,
     AttendancePolicy,
 )
 from apps.attendance.reporting_service import (
     BD_TZ,
+    classify_attendance_expiry,
     get_daily_report_data,
     get_monthly_report_data,
 )
@@ -51,21 +50,29 @@ class RetentionHistoryTests(TestCase):
             longitude=decimal.Decimal("90.412500"),
             radius_meters=200,
         )
-        OfficeSchedule.objects.update_or_create(
-            branch=cls.branch,
-            defaults={
-                "office_start_time": datetime.strptime("09:00", "%H:%M").time(),
-                "office_end_time": datetime.strptime("18:00", "%H:%M").time(),
-                "late_after_minutes": 15,
-                "working_days": ["saturday", "sunday", "monday", "tuesday", "wednesday", "thursday"],
-            },
+        cls.other_branch = Branch.objects.create(
+            name="Other Branch",
+            latitude=decimal.Decimal("22.356900"),
+            longitude=decimal.Decimal("91.783200"),
+            radius_meters=200,
         )
-        AttendancePolicy.objects.create(
-            branch=cls.branch,
-            geofencing_policy="warning",
-            allow_outside_geofence=True,
-            photo_required=False,
-        )
+        for br in (cls.branch, cls.other_branch):
+            OfficeSchedule.objects.update_or_create(
+                branch=br,
+                defaults={
+                    "office_start_time": datetime.strptime("09:00", "%H:%M").time(),
+                    "office_end_time": datetime.strptime("18:00", "%H:%M").time(),
+                    "late_after_minutes": 15,
+                    "working_days": ["saturday", "sunday", "monday", "tuesday", "wednesday", "thursday"],
+                },
+            )
+            AttendancePolicy.objects.create(
+                branch=br,
+                geofencing_policy="warning",
+                allow_outside_geofence=True,
+                photo_required=False,
+            )
+
         cls.admin_user = User.objects.create_superuser(
             email="admin_ret@example.com",
             password="password123",
@@ -92,25 +99,26 @@ class RetentionHistoryTests(TestCase):
             is_active=True,
             joined_date=date(2025, 1, 1),
         )
-        cls.emp2_user = User.objects.create_user(
+
+        cls.other_user = User.objects.create_user(
             email="emp2_ret@example.com",
             password="password123",
             role="staff",
         )
-        cls.emp2_master = Employee.objects.create(
-            user=cls.emp2_user,
+        cls.other_master = Employee.objects.create(
+            user=cls.other_user,
             employee_number="EMP-RET-02",
-            first_name="Second",
-            last_name="Staff",
+            first_name="Other",
+            last_name="BranchStaff",
             joined_date=date(2025, 1, 1),
         )
-        cls.emp2_profile = EmployeeProfile.objects.create(
-            user=cls.emp2_user,
-            master_employee=cls.emp2_master,
+        cls.other_profile = EmployeeProfile.objects.create(
+            user=cls.other_user,
+            master_employee=cls.other_master,
             employee_id="EMP-RET-02",
-            full_name="Second Staff",
+            full_name="Other BranchStaff",
             phone="01700003002",
-            branch=cls.branch,
+            branch=cls.other_branch,
             is_active=True,
             joined_date=date(2025, 1, 1),
         )
@@ -119,65 +127,14 @@ class RetentionHistoryTests(TestCase):
     def _bd_dt(self, d, h, m=0, s=0):
         return datetime(d.year, d.month, d.day, h, m, s, tzinfo=BD_TZ)
 
-    def test_1_retention_only_archived_attendance_preserved(self):
-        """Retention-only archived completed attendance retains verified values with zero historical writes."""
-        d = date(2026, 6, 15)  # Monday, >3 months before expired_at
-        ci = self._bd_dt(d, 9, 0, 0)
-        co = self._bd_dt(d, 18, 30, 0)
-        exp_at = self._bd_dt(date(2026, 10, 1), 2, 0, 0)
+    def test_1_misleading_notes_do_not_prove_invalidation_or_retention(self):
+        """Free-text note keywords never prove invalidation or retention; valid independent session is preserved."""
+        d = date(2026, 9, 14)  # Monday
+        exp_at = self._bd_dt(date(2026, 12, 20), 0, 0, 0)
 
-        att = Attendance.objects.create(
-            employee=self.emp_profile,
-            date=d,
-            attendance_type="check_in",
-            type="office",
-            status="on_time",
-            check_in_time=ci,
-            check_out_time=co,
-            total_hours=decimal.Decimal("9.50"),
-            overtime_minutes=30,
-            is_expired=True,
-            expired_at=exp_at,
-        )
-        AttendanceLocation.objects.create(
-            attendance=att,
-            event="check_out",
-            latitude=23.8103,
-            longitude=90.4125,
-            accuracy=10.0,
-            timestamp=co,
-            is_expired=True,
-        )
-
-        daily = get_daily_report_data(report_date=d, employee_id=self.emp_profile.id)
-        row = daily["rows"][0]
-        self.assertTrue(row["is_present"])
-        self.assertFalse(row["is_absent"])
-        self.assertFalse(row["needs_review"])
-        self.assertEqual(row["check_out_time"], co)
-        self.assertEqual(row["check_out_time_str"], "18:30:00")
-        self.assertEqual(row["total_hours"], 9.5)
-        self.assertEqual(row["day_calc"]["overtime_minutes"], 30)
-
-        monthly = get_monthly_report_data(year=2026, month=6, employee_id=self.emp_profile.id)
-        m_row = monthly["rows"][0]
-        dc = m_row["day_calcs"][d]
-        self.assertTrue(dc["is_present"])
-        self.assertFalse(dc["is_absent"])
-        self.assertEqual(dc["total_hours"], 9.5)
-        self.assertEqual(m_row["present"], 1)
-
-        att.refresh_from_db()
-        self.assertTrue(att.is_expired)
-        self.assertEqual(att.expired_at, exp_at)
-        self.assertEqual(att.total_hours, decimal.Decimal("9.50"))
-
-    def test_2_ambiguous_expiry_fails_closed_no_absent_or_deduction(self):
-        """Expired attendance with unknown expiry reason becomes history_unavailable/needs_review, never Absent or deducted."""
-        LeaveType.objects.create(name="Default Casual", category="casual", is_default=True, default_days_per_year=10)
-        d = date(2026, 8, 10)  # Monday
-        att = Attendance.objects.create(
-            employee=self.emp_profile,
+        # Standalone expired record with misleading note text -> must fail closed to ambiguous_expired / History Unavailable
+        att_only = Attendance.objects.create(
+            employee=self.other_profile,
             date=d,
             attendance_type="check_in",
             type="office",
@@ -186,50 +143,27 @@ class RetentionHistoryTests(TestCase):
             check_out_time=self._bd_dt(d, 18, 0, 0),
             total_hours=decimal.Decimal("9.00"),
             is_expired=True,
-            expired_at=None,  # Missing retention timestamp -> unknown expiry reason
+            expired_at=exp_at,
+            note="Invalid card reader at gate; retention archived",
         )
+        self.assertEqual(classify_attendance_expiry(att_only), "ambiguous_expired")
 
-        daily = get_daily_report_data(report_date=d, employee_id=self.emp_profile.id)
-        row = daily["rows"][0]
-        self.assertEqual(row["status"], "history_unavailable")
-        self.assertEqual(row["status_display"], "History Unavailable")
-        self.assertFalse(row["is_present"])
-        self.assertFalse(row["is_absent"])
-        self.assertTrue(row["needs_review"])
-        self.assertTrue(row["history_unavailable"])
-        self.assertEqual(row["total_hours"], 0.0)
+        other_daily = get_daily_report_data(report_date=d, employee_id=self.other_profile.id)
+        other_row = other_daily["rows"][0]
+        self.assertEqual(other_row["status"], "history_unavailable")
+        self.assertFalse(other_row["is_present"])
+        self.assertFalse(other_row["is_absent"])
+        self.assertTrue(other_row["needs_review"])
 
-        out = StringIO()
-        call_command("mark_daily_absences", date=d.isoformat(), stdout=out)
-        self.assertEqual(AttendanceAbsentLog.objects.filter(employee=self.emp_profile, date=d).count(), 0)
-        self.assertEqual(LeaveBalance.objects.filter(employee=self.emp_profile).count(), 0)
-
-        pr = PayrollRun.objects.create(
-            name="Aug 2026 History Check",
-            period_start=d,
-            period_end=d,
-            status=PayrollRunStatus.DRAFT,
-        )
-        with self.assertRaises(ValidationError) as ctx:
-            PayrollService.sync_payroll_inputs(pr)
-        self.assertIn("unavailable or expired attendance history", str(ctx.exception).lower())
-
-        att.refresh_from_db()
-        self.assertIsNone(att.expired_at)
-
-    def test_3_explicitly_invalidated_alongside_valid_session(self):
-        """Explicitly invalidated attendance alongside a separate valid session preserves valid session only."""
-        d = date(2026, 9, 14)  # Monday
-        valid_ci = self._bd_dt(d, 9, 10, 0)
+        # Valid independent session alongside expired session with misleading note -> valid session preserved, expired flagged
         valid_co = self._bd_dt(d, 13, 10, 0)
-
         Attendance.objects.create(
             employee=self.emp_profile,
             date=d,
             attendance_type="check_in",
             type="office",
             status="on_time",
-            check_in_time=valid_ci,
+            check_in_time=self._bd_dt(d, 9, 10, 0),
             check_out_time=valid_co,
             total_hours=decimal.Decimal("4.00"),
             is_expired=False,
@@ -244,7 +178,7 @@ class RetentionHistoryTests(TestCase):
             check_out_time=self._bd_dt(d, 19, 0, 0),
             total_hours=decimal.Decimal("5.00"),
             is_expired=True,
-            note="Invalidated duplicate punch by admin",
+            note="Invalidated duplicate punch",
         )
 
         daily = get_daily_report_data(report_date=d, employee_id=self.emp_profile.id)
@@ -252,18 +186,68 @@ class RetentionHistoryTests(TestCase):
         self.assertTrue(row["is_present"])
         self.assertFalse(row["is_absent"])
         self.assertFalse(row["is_late"])
-        self.assertFalse(row["needs_review"])
+        self.assertTrue(row["needs_review"])
         self.assertEqual(row["check_out_time"], valid_co)
         self.assertEqual(row["total_hours"], 4.0)
 
-    def test_4_retention_deleted_missing_history_handling(self):
-        """Deleted historical records with activity/retention metadata expose history_unavailable unless confirmed by AbsentLog."""
-        d_deleted_activity = date(2026, 5, 11)  # Monday, deleted after retention
-        d_confirmed_absent = date(2026, 5, 12)  # Tuesday, confirmed absent log
+    def test_2_ambiguous_expiry_and_exact_cutoff_boundary_fail_closed(self):
+        """Record age + expired_at (including exact 3-month cutoff) is not sufficient retention proof -> History Unavailable."""
+        LeaveType.objects.create(name="Default Casual", category="casual", is_default=True, default_days_per_year=10)
+        d_exact_cutoff = date(2026, 7, 1)   # Exactly 3 months before 2026-10-01
+        d_older = date(2026, 6, 15)         # >3 months before 2026-10-01
+        exp_at = self._bd_dt(date(2026, 10, 1), 2, 0, 0)
 
-        # Newer retention-archived record establishes retention cutoff on 2026-06-01
+        for d in (d_exact_cutoff, d_older):
+            att = Attendance.objects.create(
+                employee=self.emp_profile,
+                date=d,
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+                check_in_time=self._bd_dt(d, 9, 0, 0),
+                check_out_time=self._bd_dt(d, 18, 0, 0),
+                total_hours=decimal.Decimal("9.00"),
+                overtime_minutes=45,
+                is_expired=True,
+                expired_at=exp_at,
+            )
+            self.assertEqual(classify_attendance_expiry(att), "ambiguous_expired")
+
+            daily = get_daily_report_data(report_date=d, employee_id=self.emp_profile.id)
+            row = daily["rows"][0]
+            self.assertEqual(row["status"], "history_unavailable")
+            self.assertEqual(row["status_display"], "History Unavailable")
+            self.assertFalse(row["is_present"])
+            self.assertFalse(row["is_absent"])
+            self.assertTrue(row["needs_review"])
+            self.assertEqual(row["total_hours"], 0.0)
+            self.assertEqual(row["day_calc"]["overtime_minutes"], 0)
+
+            call_command("mark_daily_absences", date=d.isoformat(), stdout=StringIO())
+            self.assertEqual(AttendanceAbsentLog.objects.filter(employee=self.emp_profile, date=d).count(), 0)
+            self.assertEqual(LeaveBalance.objects.filter(employee=self.emp_profile).count(), 0)
+
+            att.refresh_from_db()
+            self.assertEqual(att.total_hours, decimal.Decimal("9.00"))
+            self.assertEqual(att.overtime_minutes, 45)
+
+        pr = PayrollRun.objects.create(
+            name="Jul 2026 History Check",
+            period_start=d_exact_cutoff,
+            period_end=d_exact_cutoff,
+            status=PayrollRunStatus.DRAFT,
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            PayrollService.sync_payroll_inputs(pr)
+        self.assertIn("unavailable or expired attendance history", str(ctx.exception).lower())
+
+    def test_3_cross_branch_isolation_no_global_min_date_leakage(self):
+        """Unrelated employee/branch expired records never alter another employee's historical day result."""
+        d_target = date(2026, 5, 11)  # Monday
+
+        # Unrelated employee in other_branch has expired record on a later date (2026-06-01)
         Attendance.objects.create(
-            employee=self.emp2_profile,
+            employee=self.other_profile,
             date=date(2026, 6, 1),
             attendance_type="check_in",
             type="office",
@@ -275,42 +259,47 @@ class RetentionHistoryTests(TestCase):
             expired_at=self._bd_dt(date(2026, 10, 1), 0, 0, 0),
         )
 
-        # Retained activity log for emp_profile on 2026-05-11 (Attendance row was purged)
+        # emp_profile has no attendance and no activity log on 2026-05-11 -> unaffected by other_branch
+        daily_before = get_daily_report_data(report_date=d_target, employee_id=self.emp_profile.id)
+        r_before = daily_before["rows"][0]
+        self.assertEqual(r_before["status"], "absent")
+        self.assertTrue(r_before["is_absent"])
+        self.assertFalse(r_before["needs_review"])
+
+    def test_4_fully_purged_history_vs_employee_scoped_activity(self):
+        """Missing rows alone do not prove deletion; employee-scoped AttendanceActivityLog triggers History Unavailable."""
+        d_purged_no_meta = date(2026, 4, 6)   # Monday, fully purged with zero surviving metadata
+        d_purged_with_act = date(2026, 4, 7)  # Tuesday, Attendance purged but AttendanceActivityLog survives
+
         act = AttendanceActivityLog.objects.create(
             employee=self.emp_profile,
             action="check_in",
             description="Checked In at 09:05 AM",
         )
         AttendanceActivityLog.objects.filter(pk=act.pk).update(
-            timestamp=self._bd_dt(d_deleted_activity, 9, 5, 0)
+            timestamp=self._bd_dt(d_purged_with_act, 9, 5, 0)
         )
 
-        # Confirmed absence log for emp_profile on 2026-05-12
-        AttendanceAbsentLog.objects.create(
-            employee=self.emp_profile,
-            date=d_confirmed_absent,
-        )
+        # Employee-scoped activity log with missing Attendance -> History Unavailable + needs_review=True
+        rep_act = get_daily_report_data(report_date=d_purged_with_act, employee_id=self.emp_profile.id)
+        row_act = rep_act["rows"][0]
+        self.assertEqual(row_act["status"], "history_unavailable")
+        self.assertFalse(row_act["is_absent"])
+        self.assertFalse(row_act["is_present"])
+        self.assertTrue(row_act["needs_review"])
 
-        d1_report = get_daily_report_data(report_date=d_deleted_activity, employee_id=self.emp_profile.id)
-        r1 = d1_report["rows"][0]
-        self.assertEqual(r1["status"], "history_unavailable")
-        self.assertFalse(r1["is_absent"])
-        self.assertTrue(r1["needs_review"])
-        self.assertTrue(r1["history_unavailable"])
-
-        d2_report = get_daily_report_data(report_date=d_confirmed_absent, employee_id=self.emp_profile.id)
-        r2 = d2_report["rows"][0]
-        self.assertEqual(r2["status"], "absent")
-        self.assertTrue(r2["is_absent"])
-        self.assertFalse(r2["needs_review"])
+        # Fully purged day with zero surviving metadata -> does not invent Present or infer global deletion
+        rep_none = get_daily_report_data(report_date=d_purged_no_meta, employee_id=self.emp_profile.id)
+        row_none = rep_none["rows"][0]
+        self.assertEqual(row_none["status"], "absent")
+        self.assertFalse(row_none["is_present"])
 
     def test_5_report_export_payroll_parity_and_bounded_queries(self):
-        """Daily/Monthly/HTML/CSV/XLSX/PDF/Payroll agree on retention_archived vs history_unavailable with bounded queries."""
+        """HTML/popup/CSV/XLSX/PDF/Monthly/Payroll agree on History Unavailable vs active, with bounded queries."""
         d = date(2026, 6, 16)  # Tuesday
-        exp_at = self._bd_dt(date(2026, 10, 1), 2, 0, 0)
         co = self._bd_dt(d, 18, 0, 0)
 
-        # emp_profile: retention-archived completed attendance -> Present 9.00h
+        # emp_profile: active completed attendance -> Present 9.00h
         Attendance.objects.create(
             employee=self.emp_profile,
             date=d,
@@ -320,12 +309,11 @@ class RetentionHistoryTests(TestCase):
             check_in_time=self._bd_dt(d, 9, 0, 0),
             check_out_time=co,
             total_hours=decimal.Decimal("9.00"),
-            is_expired=True,
-            expired_at=exp_at,
+            is_expired=False,
         )
-        # emp2_profile: unknown-reason expired attendance -> History Unavailable
+        # other_profile: expired attendance -> History Unavailable
         Attendance.objects.create(
-            employee=self.emp2_profile,
+            employee=self.other_profile,
             date=d,
             attendance_type="check_in",
             type="office",
@@ -334,8 +322,15 @@ class RetentionHistoryTests(TestCase):
             check_out_time=co,
             total_hours=decimal.Decimal("9.00"),
             is_expired=True,
-            expired_at=None,
+            expired_at=self._bd_dt(date(2026, 10, 1), 2, 0, 0),
         )
+
+        # Monthly parity
+        monthly = get_monthly_report_data(year=2026, month=6, employee_id=self.other_profile.id)
+        dc = monthly["rows"][0]["day_calcs"][d]
+        self.assertEqual(dc["status"], "history_unavailable")
+        self.assertFalse(dc["is_absent"])
+        self.assertTrue(dc["needs_review"])
 
         # HTML Daily & Day Detail
         req_html = self.factory.get(f"/admin-panel/reports/daily/?date={d.isoformat()}")
@@ -344,9 +339,9 @@ class RetentionHistoryTests(TestCase):
         self.assertEqual(html_resp.status_code, 200)
         self.assertIn("History Unavailable", html_resp.content.decode("utf-8"))
 
-        req_detail = self.factory.get(f"/admin-panel/reports/day-detail/{self.emp2_profile.id}/{d.isoformat()}/")
+        req_detail = self.factory.get(f"/admin-panel/reports/day-detail/{self.other_profile.id}/{d.isoformat()}/")
         req_detail.user = self.admin_user
-        detail_resp = EmployeeDayDetailView.as_view()(req_detail, pk=self.emp2_profile.id, date_str=d.isoformat())
+        detail_resp = EmployeeDayDetailView.as_view()(req_detail, pk=self.other_profile.id, date_str=d.isoformat())
         self.assertEqual(detail_resp.status_code, 200)
         self.assertNotIn("18:00:00", detail_resp.content.decode("utf-8"))
 
@@ -391,7 +386,8 @@ class RetentionHistoryTests(TestCase):
             Attendance.objects.create(
                 employee=ep, date=d, attendance_type="check_in", type="office", status="on_time",
                 check_in_time=self._bd_dt(d, 9, 0, 0), check_out_time=co,
-                total_hours=decimal.Decimal("9.00"), is_expired=True, expired_at=exp_at,
+                total_hours=decimal.Decimal("9.00"), is_expired=True,
+                expired_at=self._bd_dt(date(2026, 10, 1), 2, 0, 0),
             )
 
         with CaptureQueriesContext(connection) as ctx_large:
