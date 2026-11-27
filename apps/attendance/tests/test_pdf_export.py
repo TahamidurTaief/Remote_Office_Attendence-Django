@@ -252,7 +252,7 @@ class AttendancePDFExportTests(TestCase):
         # 4. Verify Emp 3: Missing Checkout (final office checkout stays empty '—')
         # In: 09:25:15, Out: —, Status: Late (Missing Checkout)
         self.assertIn("09:25:15", pdf_text)
-        self.assertIn("Missing Checkout", pdf_text)
+        self.assertIn("Missing Checkout", " ".join(pdf_text.split()))
 
         emp3_row = next(r for r in range(5, ws.max_row + 1) if ws.cell(row=r, column=3).value == 'EMP-103')
         self.assertEqual(ws.cell(row=emp3_row, column=5).value, "09:25:15")
@@ -434,8 +434,9 @@ class AttendancePDFExportTests(TestCase):
         daily_data['rows'][0]['notes'] = "যুক্তাক্ষর: ক্ষ জ্ঞ ক্ত ন্ত ম্প শ্র হৃ <font color='red'>raw</font> & more"
         daily_pdf = render_daily_attendance_pdf(daily_data)
         daily_text = "".join(p.extract_text() for p in PdfReader(io.BytesIO(daily_pdf)).pages)
-        self.assertIn("<script>alert(1)</script>", daily_text)
-        self.assertIn("<font color='red'>raw</font>", daily_text)
+        normalized_text = " ".join(daily_text.split())
+        self.assertIn("<script>alert(1)</script>", normalized_text)
+        self.assertIn("<font color='red'>raw</font>", normalized_text)
 
         monthly_data = get_monthly_report_data(
             year=2026, month=10, allowed_employee_ids={self.emp1.id}

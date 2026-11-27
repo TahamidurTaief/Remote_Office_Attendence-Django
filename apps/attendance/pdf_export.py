@@ -48,6 +48,23 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 BD_TZ = ZoneInfo('Asia/Dhaka')
 
+# Pre-computed palette constants (avoids repeated HexColor parsing in 500-row loops)
+_C_WHITE = colors.HexColor('#FFFFFF')
+_C_SLATE_50 = colors.HexColor('#F8FAFC')
+_C_SLATE_100 = colors.HexColor('#F1F5F9')
+_C_SLATE_200 = colors.HexColor('#E2E8F0')
+_C_SLATE_300 = colors.HexColor('#CBD5E1')
+_C_SLATE_400 = colors.HexColor('#94A3B8')
+_C_SLATE_500 = colors.HexColor('#64748B')
+_C_SLATE_700 = colors.HexColor('#334155')
+_C_SLATE_800 = colors.HexColor('#1E293B')
+_C_SLATE_900 = colors.HexColor('#0F172A')
+_C_GREEN = colors.HexColor('#16A34A')
+_C_AMBER = colors.HexColor('#B45309')
+_C_RED = colors.HexColor('#DC2626')
+_C_BLUE = colors.HexColor('#2563EB')
+_C_TEAL = colors.HexColor('#0D9488')
+
 # ── 1. FONT REGISTRATION ─────────────────────────────────────────────────────
 
 FONT_REGULAR = 'Helvetica'
@@ -178,6 +195,13 @@ def _esc(val):
     if val is None:
         return ''
     return html.escape(str(val), quote=True)
+
+
+def _style_for_text(text, shaped_style, ascii_style):
+    """Uses HarfBuzz-shaped style for any non-ASCII (e.g. Bengali/mixed) text, and fast unshaped style for pure ASCII."""
+    if text and not text.isascii():
+        return shaped_style
+    return ascii_style
 
 
 def _create_pdf_doc(buffer):
@@ -320,9 +344,14 @@ def get_report_styles():
         fontSize=7,
         leading=9,
         alignment=0,
-        textColor=colors.HexColor('#0F172A'),
+        textColor=_C_SLATE_900,
         shaping=shaping,
         splitLongWords=1,
+    )
+    td_left_ascii = ParagraphStyle(
+        'RepTDLeftAscii',
+        parent=td_left,
+        shaping=0,
     )
     td_center = ParagraphStyle(
         'RepTDCenter',
@@ -376,6 +405,7 @@ def get_report_styles():
         'th': th_style,
         'th_left': th_left_style,
         'td_left': td_left,
+        'td_left_ascii': td_left_ascii,
         'td_center': td_center,
         'td_right': td_right,
         'badge': badge_style,
@@ -404,10 +434,10 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
     avail_w = doc.width
 
     # Assert and allocate strictly bounded column widths (10 columns):
-    # SN (28) | Emp+Dept (150) | ID (64) | Date (62) | In (54) | Out (54) | Hours (46) | Type (68) | Status (64) | Remarks (Remainder)
-    fixed_sum = 28 + 150 + 64 + 62 + 54 + 54 + 46 + 68 + 64  # 590 pt
-    remarks_w = math.floor((avail_w - fixed_sum) * 100) / 100.0  # ~195.88 pt
-    col_widths = [28, 150, 64, 62, 54, 54, 46, 68, 64, remarks_w]
+    # SN (28) | Emp+Dept (150) | ID (64) | Date (62) | In (54) | Out (54) | Hours (46) | Type (68) | Status (70) | Remarks (Remainder)
+    fixed_sum = 28 + 150 + 64 + 62 + 54 + 54 + 46 + 68 + 70  # 596 pt
+    remarks_w = math.floor((avail_w - fixed_sum) * 100) / 100.0  # ~189.88 pt
+    col_widths = [28, 150, 64, 62, 54, 54, 46, 68, 70, remarks_w]
 
     assert sum(col_widths) <= avail_w + 1e-3, f"Total column width {sum(col_widths)} exceeds available width {avail_w}"
 
@@ -468,23 +498,36 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
     ]
     table_data = [table_headers]
 
+    reg_font = styles['font_regular']
+    bold_font = styles['font_bold']
+    td_left_shaped = styles['td_left']
+    td_left_ascii = styles['td_left_ascii']
+    td_center_style = styles['td_center']
+
     t_style = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
-        ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#94A3B8')),
+        ('BACKGROUND', (0, 0), (-1, 0), _C_SLATE_100),
+        ('GRID', (0, 0), (-1, -1), 0.4, _C_SLATE_300),
+        ('BOX', (0, 0), (-1, -1), 0.6, _C_SLATE_400),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('FONTNAME', (0, 1), (-1, -1), reg_font),
+        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('TEXTCOLOR', (0, 1), (-1, -1), _C_SLATE_900),
+        ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 1), (5, -1), 'CENTER'),
+        ('ALIGN', (6, 1), (6, -1), 'RIGHT'),
+        ('ALIGN', (7, 1), (8, -1), 'CENTER'),
     ]
 
     if not records:
         empty_cell = Paragraph(
             "<font color='#64748B'><i>No attendance records found for the selected criteria.</i></font>",
-            styles['td_center']
+            td_center_style
         )
-        empty_row = [empty_cell] + [Paragraph("", styles['td_center'])] * 9
+        empty_row = [empty_cell] + [""] * 9
         table_data.append(empty_row)
         t_style.append(('SPAN', (0, 1), (-1, 1)))
         t_style.append(('TOPPADDING', (0, 1), (-1, 1), 16))
@@ -527,9 +570,9 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
 
             # Type
             if len(cis) > 0 and len(fvs) > 0:
-                type_str = f"Check In / Field ({len(cis)}+{len(fvs)})"
+                type_str = f"Check In / Field\n({len(cis)}+{len(fvs)})"
             elif len(cis) > 1:
-                type_str = f"Check In ({len(cis)} Sessions)"
+                type_str = f"Check In\n({len(cis)} Sessions)"
             elif len(cis) == 1:
                 type_str = ci.get_type_display() if (ci and hasattr(ci, 'get_type_display')) else 'Check In'
             elif len(fvs) > 0:
@@ -541,27 +584,60 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
             else:
                 type_str = '—'
 
-            # Status Badge color formatting
+            # Status Badge color formatting (plain string + TableStyle avoids Paragraph XML overhead)
             status_text = r.get('status_display', 'Present')
             st_lower = r.get('status', '').lower()
+            status_bold = True
             if 'late' in st_lower:
-                status_html = f"<font color='#B45309'><b>{html.escape(status_text)}</b></font>"
+                status_color = _C_AMBER
             elif 'absent' in st_lower or r.get('is_absent'):
-                status_html = f"<font color='#DC2626'><b>{html.escape(status_text)}</b></font>"
+                status_color = _C_RED
             elif 'leave' in st_lower:
-                status_html = f"<font color='#2563EB'><b>{html.escape(status_text)}</b></font>"
+                status_color = _C_BLUE
             elif 'holiday' in st_lower:
-                status_html = f"<font color='#64748B'>{html.escape(status_text)}</font>"
+                status_color = _C_SLATE_500
+                status_bold = False
             elif has_open_session:
-                status_html = f"<font color='#0D9488'><b>{html.escape(status_text)}</b></font>"
+                status_color = _C_TEAL
             else:
-                status_html = f"<font color='#16A34A'><b>{html.escape(status_text)}</b></font>"
+                status_color = _C_GREEN
+
+            if len(status_text) <= 16 and status_text.isascii():
+                status_cell = status_text
+            else:
+                color_hex = '#64748B' if not status_bold else (
+                    '#B45309' if status_color == _C_AMBER else
+                    '#DC2626' if status_color == _C_RED else
+                    '#2563EB' if status_color == _C_BLUE else
+                    '#0D9488' if status_color == _C_TEAL else '#16A34A'
+                )
+                status_cell = Paragraph(
+                    f"<font color='{color_hex}'><b>{_esc(status_text)}</b></font>",
+                    td_center_style
+                )
+
+            if isinstance(status_cell, str):
+                t_style.append(('TEXTCOLOR', (8, idx), (8, idx), status_color))
+                if status_bold:
+                    t_style.append(('FONTNAME', (8, idx), (8, idx), bold_font))
 
             # Employee + Department
             dept_name = get_employee_department_name(emp)
-            emp_display = f"<b>{html.escape(emp.full_name)}</b>"
+            emp_name_str = emp.full_name or ''
+            emp_display = f"<b>{_esc(emp_name_str)}</b>"
             if dept_name:
-                emp_display += f"<br/><font color='#64748B' size='6.5'>{html.escape(dept_name)}</font>"
+                emp_display += f"<br/><font color='#64748B' size='6.5'>{_esc(dept_name)}</font>"
+            emp_style = _style_for_text(f"{emp_name_str}{dept_name}", td_left_shaped, td_left_ascii)
+
+            # Employee ID: plain string when short ASCII, Paragraph when long/non-ASCII so it wraps
+            raw_emp_id = emp.employee_id or '—'
+            if len(raw_emp_id) <= 12 and raw_emp_id.isascii():
+                emp_id_cell = raw_emp_id
+            else:
+                emp_id_cell = Paragraph(
+                    _esc(raw_emp_id),
+                    _style_for_text(raw_emp_id, td_center_style, td_left_ascii)
+                )
 
             # Remarks & Appendix Management
             raw_notes = (r.get('notes') or '').strip()
@@ -574,7 +650,8 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
                 full_remarks = f"{full_remarks} ({loc_str})" if full_remarks else loc_str
 
             if not full_remarks:
-                remarks_html = "<font color='#94A3B8'>—</font>"
+                remarks_cell = '—'
+                t_style.append(('TEXTCOLOR', (9, idx), (9, idx), _C_SLATE_400))
             elif len(full_remarks) > 75:
                 note_num = len(appendix_notes) + 1
                 appendix_notes.append({
@@ -584,26 +661,29 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
                     'text': full_remarks
                 })
                 snippet = full_remarks[:65].rstrip() + "..."
-                remarks_html = f"{html.escape(snippet)} <font color='#2563EB'><b>[Note {note_num}]</b></font>"
+                remarks_html = f"{_esc(snippet)} <font color='#2563EB'><b>[Note {note_num}]</b></font>"
+                remarks_cell = Paragraph(remarks_html, _style_for_text(snippet, td_left_shaped, td_left_ascii))
+            elif len(full_remarks) <= 34 and full_remarks.isascii() and '\n' not in full_remarks:
+                remarks_cell = full_remarks
             else:
-                remarks_html = html.escape(full_remarks)
+                remarks_cell = Paragraph(_esc(full_remarks), _style_for_text(full_remarks, td_left_shaped, td_left_ascii))
 
             row_cells = [
-                Paragraph(str(idx), styles['td_center']),
-                Paragraph(emp_display, styles['td_left']),
-                Paragraph(html.escape(emp.employee_id or '—'), styles['td_center']),
-                Paragraph(str(r.get('date', '')), styles['td_center']),
-                Paragraph(in_str, styles['td_center']),
-                Paragraph(out_str, styles['td_center']),
-                Paragraph(hrs_str, styles['td_right']),
-                Paragraph(html.escape(type_str), styles['td_center']),
-                Paragraph(status_html, styles['td_center']),
-                Paragraph(remarks_html, styles['td_left']),
+                str(idx),
+                Paragraph(emp_display, emp_style),
+                emp_id_cell,
+                str(r.get('date', '')),
+                in_str,
+                out_str,
+                hrs_str,
+                type_str if (len(type_str) <= 18 and type_str.isascii()) else Paragraph(_esc(type_str), td_center_style),
+                status_cell,
+                remarks_cell,
             ]
             table_data.append(row_cells)
 
             # Alternating soft zebra rows
-            row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
+            row_bg = _C_WHITE if idx % 2 != 0 else _C_SLATE_50
             t_style.append(('BACKGROUND', (0, idx), (-1, idx), row_bg))
 
     register_table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -620,19 +700,19 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
 # ── 6. MONTHLY ATTENDANCE SUMMARY & SPLIT MATRIX PDF EXPORT ──────────────────
 
 def _monthly_day_cell_style(dc):
-    """Returns (code_str, hex_color, is_bold) for a monthly matrix day cell."""
+    """Returns (code_str, Color, is_bold) for a monthly matrix day cell."""
     st = (dc.get('status') or '').lower()
     if dc.get('is_late'):
-        return 'L', '#B45309', True
+        return 'L', _C_AMBER, True
     if dc.get('is_present'):
-        return 'P', '#16A34A', True
+        return 'P', _C_GREEN, True
     if dc.get('is_absent'):
-        return 'A', '#DC2626', True
+        return 'A', _C_RED, True
     if 'leave' in st or dc.get('is_on_leave'):
-        return 'LV', '#2563EB', True
+        return 'LV', _C_BLUE, True
     if 'holiday' in st or 'weekend' in st or dc.get('is_holiday'):
-        return 'H', '#64748B', False
-    return '—', '#94A3B8', False
+        return 'H', _C_SLATE_500, False
+    return '—', _C_SLATE_400, False
 
 
 def _build_monthly_matrix_table(rows, days_slice, avail_w, styles, include_summary=False):
@@ -706,25 +786,29 @@ def _build_monthly_matrix_table(rows, days_slice, avail_w, styles, include_summa
         m_style.append(('BOTTOMPADDING', (0, 2), (-1, 2), 12))
     else:
         day_start_col = 2
+        td_left_shaped = styles['td_left']
+        td_left_ascii = styles['td_left_ascii']
         for idx, r in enumerate(rows, 1):
             row_idx = idx + 1  # account for legend (0) and header (1)
             emp = r['employee']
-            emp_id_str = _esc(getattr(emp, 'employee_id', '') or '—')
+            raw_name = emp.full_name or ''
+            raw_eid = getattr(emp, 'employee_id', '') or '—'
             emp_html = (
-                f"<b>{_esc(emp.full_name)}</b><br/>"
-                f"<font color='#64748B' size='6'>{emp_id_str}</font>"
+                f"<b>{_esc(raw_name)}</b><br/>"
+                f"<font color='#64748B' size='6'>{_esc(raw_eid)}</font>"
             )
+            emp_style = _style_for_text(f"{raw_name}{raw_eid}", td_left_shaped, td_left_ascii)
             row_c = [
                 str(idx),
-                Paragraph(emp_html, styles['td_left']),
+                Paragraph(emp_html, emp_style),
             ]
             day_calcs = r.get('day_calcs', {})
             for d_offset, d in enumerate(days_slice):
                 dc = day_calcs.get(d, {})
-                code, hex_c, is_bold = _monthly_day_cell_style(dc)
+                code, cell_color, is_bold = _monthly_day_cell_style(dc)
                 row_c.append(code)
                 col_i = day_start_col + d_offset
-                m_style.append(('TEXTCOLOR', (col_i, row_idx), (col_i, row_idx), colors.HexColor(hex_c)))
+                m_style.append(('TEXTCOLOR', (col_i, row_idx), (col_i, row_idx), cell_color))
                 if is_bold:
                     m_style.append(('FONTNAME', (col_i, row_idx), (col_i, row_idx), bold_font))
 
@@ -740,7 +824,7 @@ def _build_monthly_matrix_table(rows, days_slice, avail_w, styles, include_summa
                 m_style.append(('ALIGN', (sum_col + 3, row_idx), (sum_col + 4, row_idx), 'RIGHT'))
 
             m_data.append(row_c)
-            row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
+            row_bg = _C_WHITE if idx % 2 != 0 else _C_SLATE_50
             m_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), row_bg))
 
     matrix_table = Table(m_data, colWidths=col_widths, repeatRows=2)
@@ -827,15 +911,26 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
     ]
     sum_table_data = [sum_headers]
 
+    reg_font = styles['font_regular']
+    bold_font = styles['font_bold']
+    td_left_shaped = styles['td_left']
+    td_left_ascii = styles['td_left_ascii']
+
     t_style = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
-        ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#94A3B8')),
+        ('BACKGROUND', (0, 0), (-1, 0), _C_SLATE_100),
+        ('GRID', (0, 0), (-1, -1), 0.4, _C_SLATE_300),
+        ('BOX', (0, 0), (-1, -1), 0.6, _C_SLATE_400),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 3),
         ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('FONTNAME', (0, 1), (-1, -1), reg_font),
+        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('TEXTCOLOR', (0, 1), (-1, -1), _C_SLATE_900),
+        ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 1), (7, -1), 'CENTER'),
+        ('ALIGN', (8, 1), (10, -1), 'RIGHT'),
     ]
 
     if not rows:
@@ -843,7 +938,7 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
             "<font color='#64748B'><i>No attendance records found for the selected criteria.</i></font>",
             styles['td_center']
         )
-        sum_table_data.append([empty_cell] + [Paragraph("", styles['td_center'])] * (len(sum_widths) - 1))
+        sum_table_data.append([empty_cell] + [""] * (len(sum_widths) - 1))
         t_style.append(('SPAN', (0, 1), (-1, 1)))
         t_style.append(('TOPPADDING', (0, 1), (-1, 1), 14))
         t_style.append(('BOTTOMPADDING', (0, 1), (-1, 1), 14))
@@ -851,53 +946,68 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
         for idx, r in enumerate(rows, 1):
             emp = r['employee']
             dept = get_employee_department_name(emp)
-            emp_display = f"<b>{_esc(emp.full_name)}</b>"
+            raw_name = emp.full_name or ''
+            emp_display = f"<b>{_esc(raw_name)}</b>"
             if dept:
                 emp_display += f"<br/><font color='#64748B' size='6.5'>{_esc(dept)}</font>"
+            emp_style = _style_for_text(f"{raw_name}{dept}", td_left_shaped, td_left_ascii)
 
-            p_cnt = str(r.get('present', 0))
-            a_cnt = str(r.get('absent', 0))
-            l_cnt = str(r.get('late', 0))
-            ol_cnt = str(r.get('on_leave', 0))
-            fv_cnt = str(r.get('field_visits', 0))
+            p_cnt = int(r.get('present', 0))
+            a_cnt = int(r.get('absent', 0))
+            l_cnt = int(r.get('late', 0))
+            ol_cnt = int(r.get('on_leave', 0))
+            fv_cnt = int(r.get('field_visits', 0))
             tot_hrs = f"{r.get('total_hours', 0.0):.2f}h"
-            ot_val = _esc(r.get('overtime', '—'))
+            raw_ot = str(r.get('overtime', '—'))
             att_pct = f"{r.get('att_pct', 0)}%"
 
+            raw_eid = emp.employee_id or '—'
+            eid_cell = raw_eid if (len(raw_eid) <= 12 and raw_eid.isascii()) else Paragraph(_esc(raw_eid), styles['td_center'])
+            ot_cell = raw_ot if (len(raw_ot) <= 12 and raw_ot.isascii()) else Paragraph(_esc(raw_ot), styles['td_right'])
+
+            if a_cnt > 0:
+                t_style.append(('TEXTCOLOR', (4, idx), (4, idx), _C_RED))
+                t_style.append(('FONTNAME', (4, idx), (4, idx), bold_font))
+            if l_cnt > 0:
+                t_style.append(('TEXTCOLOR', (6, idx), (6, idx), _C_AMBER))
+                t_style.append(('FONTNAME', (6, idx), (6, idx), bold_font))
+
             sum_table_data.append([
-                Paragraph(str(idx), styles['td_center']),
-                Paragraph(emp_display, styles['td_left']),
-                Paragraph(_esc(emp.employee_id or '—'), styles['td_center']),
-                Paragraph(p_cnt, styles['td_center']),
-                Paragraph(f"<font color='#DC2626'><b>{a_cnt}</b></font>" if int(a_cnt) > 0 else a_cnt, styles['td_center']),
-                Paragraph(ol_cnt, styles['td_center']),
-                Paragraph(f"<font color='#B45309'><b>{l_cnt}</b></font>" if int(l_cnt) > 0 else l_cnt, styles['td_center']),
-                Paragraph(fv_cnt, styles['td_center']),
-                Paragraph(tot_hrs, styles['td_right']),
-                Paragraph(ot_val, styles['td_right']),
-                Paragraph(att_pct, styles['td_right']),
+                str(idx),
+                Paragraph(emp_display, emp_style),
+                eid_cell,
+                str(p_cnt),
+                str(a_cnt),
+                str(ol_cnt),
+                str(l_cnt),
+                str(fv_cnt),
+                tot_hrs,
+                ot_cell,
+                att_pct,
             ])
-            row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
+            row_bg = _C_WHITE if idx % 2 != 0 else _C_SLATE_50
             t_style.append(('BACKGROUND', (0, idx), (-1, idx), row_bg))
 
         # Summary Footer Row
         tot_hrs_sum = f"{sum(r.get('total_hours', 0.0) for r in rows):.2f}h"
         footer_idx = len(sum_table_data)
         sum_table_data.append([
-            Paragraph("", styles['td_center']),
-            Paragraph("<b>Monthly Totals</b>", styles['td_left']),
-            Paragraph("", styles['td_center']),
-            Paragraph(f"<b>{monthly_data.get('total_present', 0)}</b>", styles['td_center']),
-            Paragraph(f"<b>{monthly_data.get('total_absent', 0)}</b>", styles['td_center']),
-            Paragraph(f"<b>{monthly_data.get('total_on_leave', 0)}</b>", styles['td_center']),
-            Paragraph(f"<b>{monthly_data.get('total_late', 0)}</b>", styles['td_center']),
-            Paragraph(f"<b>{monthly_data.get('total_field', 0)}</b>", styles['td_center']),
-            Paragraph(f"<b>{tot_hrs_sum}</b>", styles['td_right']),
-            Paragraph(f"<b>{_esc(monthly_data.get('total_overtime', '0h'))}</b>", styles['td_right']),
-            Paragraph(f"<b>{monthly_data.get('avg_att_pct', 0)}%</b>", styles['td_right']),
+            "",
+            "Monthly Totals",
+            "",
+            str(monthly_data.get('total_present', 0)),
+            str(monthly_data.get('total_absent', 0)),
+            str(monthly_data.get('total_on_leave', 0)),
+            str(monthly_data.get('total_late', 0)),
+            str(monthly_data.get('total_field', 0)),
+            tot_hrs_sum,
+            str(monthly_data.get('total_overtime', '0h')),
+            f"{monthly_data.get('avg_att_pct', 0)}%",
         ])
-        t_style.append(('BACKGROUND', (0, footer_idx), (-1, footer_idx), colors.HexColor('#E2E8F0')))
-        t_style.append(('LINEABOVE', (0, footer_idx), (-1, footer_idx), 1, colors.HexColor('#94A3B8')))
+        t_style.append(('BACKGROUND', (0, footer_idx), (-1, footer_idx), _C_SLATE_200))
+        t_style.append(('FONTNAME', (0, footer_idx), (-1, footer_idx), bold_font))
+        t_style.append(('ALIGN', (1, footer_idx), (1, footer_idx), 'LEFT'))
+        t_style.append(('LINEABOVE', (0, footer_idx), (-1, footer_idx), 1, _C_SLATE_400))
 
     sum_table = Table(sum_table_data, colWidths=sum_widths, repeatRows=1)
     sum_table.setStyle(TableStyle(t_style))
