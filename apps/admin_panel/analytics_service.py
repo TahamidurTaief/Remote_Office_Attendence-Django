@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.attendance.models import Attendance, AttendancePolicy
 from apps.attendance.reporting_service import (
     OptimizedSchedule,
+    build_checkout_provenance_map,
     build_employment_eligibility_map,
     calculate_employee_day,
     is_employee_holiday_optimized,
@@ -88,6 +89,8 @@ class _AttLite:
         "total_hours",
         "overtime_minutes",
         "is_expired",
+        "note",
+        "expired_at",
     )
 
     def __init__(
@@ -103,6 +106,8 @@ class _AttLite:
         total_hours,
         overtime_minutes,
         is_expired,
+        note="",
+        expired_at=None,
     ):
         self.id = id
         self.employee_id = employee_id
@@ -115,6 +120,8 @@ class _AttLite:
         self.total_hours = total_hours
         self.overtime_minutes = overtime_minutes
         self.is_expired = is_expired
+        self.note = note or ""
+        self.expired_at = expired_at
 
 
 def _parse_date(val):
@@ -229,6 +236,7 @@ def _compute_period_metrics(
     emp_meta=None,
     include_breakdowns=True,
     eligibility_map=None,
+    checkout_provenance_map=None,
 ):
     """
     Computes authoritative employee-day metrics over [start_date, end_date].
@@ -246,9 +254,13 @@ def _compute_period_metrics(
     total_on_leave = 0
     total_pending = 0
     total_review_needed = 0
+    total_history_unavailable = 0
+    total_checkout_needs_review = 0
     total_missing_checkout = 0
     total_leave_conflicts = 0
     eligible_working_days = 0
+    total_hours_sum = 0.0
+    completed_hour_days = 0
 
     office_only_days = 0
     field_only_days = 0
@@ -265,8 +277,8 @@ def _compute_period_metrics(
             emp_meta[emp.id] = (b_key_str, b_name, d_key, d_name)
 
     daily_series = [] if include_breakdowns else None
-    dept_stats = defaultdict(lambda: {"name": "", "present": 0, "eligible": 0}) if include_breakdowns else None
-    branch_stats = defaultdict(lambda: {"name": "", "present": 0, "eligible": 0}) if include_breakdowns else None
+    dept_stats = defaultdict(lambda: {"name": "", "present": 0, "late": 0, "eligible": 0}) if include_breakdowns else None
+    branch_stats = defaultdict(lambda: {"name": "", "present": 0, "late": 0, "eligible": 0}) if include_breakdowns else None
     emp_stats = (
         {
             emp.id: {
@@ -336,6 +348,7 @@ def _compute_period_metrics(
                 is_on_leave=is_on_leave,
                 today=today,
                 eligibility=eligibility_map.get(eid) if eligibility_map else None,
+                checkout_provenance_map=checkout_provenance_map,
             )
 
             status = day_calc["status"]
@@ -344,6 +357,10 @@ def _compute_period_metrics(
 
             if status == "eligibility_unresolved" or day_calc.get("needs_review"):
                 total_review_needed += 1
+                if day_calc.get("history_unavailable") or status == "history_unavailable":
+                    total_history_unavailable += 1
+                if day_calc.get("checkout_needs_review"):
+                    total_checkout_needs_review += 1
                 if include_breakdowns:
                     es["review_needed"] += 1
                 continue
@@ -372,6 +389,10 @@ def _compute_period_metrics(
 
             if day_calc["is_present"]:
                 total_present += 1
+                day_hours = float(day_calc.get("total_hours") or 0.0)
+                if day_hours > 0 and not day_calc["is_missing_checkout"]:
+                    total_hours_sum += day_hours
+                    completed_hour_days += 1
                 if include_breakdowns:
                     day_present += 1
                     es["present"] += 1
@@ -383,6 +404,8 @@ def _compute_period_metrics(
                     if include_breakdowns:
                         day_late += 1
                         es["late"] += 1
+                        dept_stats[d_key]["late"] += 1
+                        branch_stats[b_key_str]["late"] += 1
 
                 if day_calc["is_missing_checkout"]:
                     total_missing_checkout += 1
@@ -431,6 +454,16 @@ def _compute_period_metrics(
         if eligible_working_days > 0
         else None
     )
+    avg_work_hours = (
+        round(total_hours_sum / completed_hour_days, 1)
+        if completed_hour_days > 0
+        else None
+    )
+    on_time_rate = (
+        round(((total_present - total_late) / total_present) * 100, 1)
+        if total_present > 0
+        else None
+    )
 
     return {
         "total_present": total_present,
@@ -439,10 +472,14 @@ def _compute_period_metrics(
         "total_on_leave": total_on_leave,
         "total_pending": total_pending,
         "total_review_needed": total_review_needed,
+        "total_history_unavailable": total_history_unavailable,
+        "total_checkout_needs_review": total_checkout_needs_review,
         "total_missing_checkout": total_missing_checkout,
         "total_leave_conflicts": total_leave_conflicts,
         "eligible_working_days": eligible_working_days,
         "attendance_rate": attendance_rate,
+        "avg_work_hours": avg_work_hours,
+        "on_time_rate": on_time_rate,
         "office_only_days": office_only_days,
         "field_only_days": field_only_days,
         "mixed_days": mixed_days,
@@ -460,10 +497,15 @@ def _empty_summary():
         "total_absent": 0,
         "total_on_leave": 0,
         "total_pending": 0,
+        "total_review_needed": 0,
+        "total_history_unavailable": 0,
+        "total_checkout_needs_review": 0,
         "total_missing_checkout": 0,
         "total_leave_conflicts": 0,
         "eligible_working_days": 0,
         "attendance_rate": None,
+        "avg_work_hours": None,
+        "on_time_rate": None,
         "office_only_days": 0,
         "field_only_days": 0,
         "mixed_days": 0,
@@ -734,7 +776,6 @@ def get_attendance_analytics(user, params=None, role_variant=None):
             employee_id__in=emp_ids,
             date__gte=dr["prev_start_date"],
             date__lte=dr["end_date"],
-            is_expired=False,
         )
         .values_list(
             "id",
@@ -748,12 +789,19 @@ def get_attendance_analytics(user, params=None, role_variant=None):
             "total_hours",
             "overtime_minutes",
             "is_expired",
+            "note",
+            "expired_at",
         )
         .order_by("date", "check_in_time")
     )
+    auto_closed_lites = []
     for row in att_rows:
-        att_map[(row[1], row[2])].append(_AttLite(*row))
+        att_lite = _AttLite(*row)
+        att_map[(row[1], row[2])].append(att_lite)
+        if att_lite.note and "auto-closed" in att_lite.note.lower():
+            auto_closed_lites.append(att_lite)
 
+    checkout_provenance_map = build_checkout_provenance_map(auto_closed_lites) if auto_closed_lites else {}
     eligibility_map = build_employment_eligibility_map(employees)
     holiday_cache = {}
     curr_metrics = _compute_period_metrics(
@@ -770,6 +818,7 @@ def get_attendance_analytics(user, params=None, role_variant=None):
         emp_meta=emp_meta,
         include_breakdowns=True,
         eligibility_map=eligibility_map,
+        checkout_provenance_map=checkout_provenance_map,
     )
 
     prev_metrics = _compute_period_metrics(
@@ -786,6 +835,7 @@ def get_attendance_analytics(user, params=None, role_variant=None):
         emp_meta=emp_meta,
         include_breakdowns=False,
         eligibility_map=eligibility_map,
+        checkout_provenance_map=checkout_provenance_map,
     )
 
     # Previous period comparison (never fabricate when either denominator is 0)

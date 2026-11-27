@@ -1304,8 +1304,10 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from django.db.models import Avg, Count, Q, F
+        from django.db.models import Count
         from django.db.models.functions import ExtractHour
+        from apps.admin_panel.analytics_service import get_attendance_analytics
+        from apps.attendance import reporting_service
 
         today = timezone.localdate()
         thirty_days_ago = today - timedelta(days=30)
@@ -1318,54 +1320,38 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
         ctx['employees'] = employees
         total_employees = len(authorized_emp_ids)
 
-        # 2. Query 30-day check-in records
+        # 2. Canonical employee-day analytics (shared with attendance dashboard & reports)
+        analytics = get_attendance_analytics(
+            self.request.user,
+            {'range': 'custom', 'start_date': thirty_days_ago.isoformat(), 'end_date': today.isoformat()},
+        )
+        summary = analytics['analytics_summary']
+
+        ctx['avg_attendance_rate'] = summary['attendance_rate']
+        ctx['avg_work_hours'] = summary['avg_work_hours']
+        ctx['on_time_rate'] = summary['on_time_rate']
+        ctx['total_employees_count'] = total_employees
+        ctx['review_needed_count'] = summary.get('total_review_needed', 0)
+        ctx['history_unavailable_count'] = summary.get('total_history_unavailable', 0)
+
+        # 3. Daily Attendance Trend for Chart (Last 15 days from canonical daily_series)
+        daily_series = summary.get('daily_series', [])
+        ctx['attendance_trend'] = [
+            {
+                'date': entry['date'],
+                'present': entry['present'],
+                'late': entry['late'],
+            }
+            for entry in daily_series[-15:]
+        ]
+
+        # 4. Peak check-in hours breakdown
         checkins_30d = Attendance.objects.filter(
             employee_id__in=authorized_emp_ids,
             date__range=(thirty_days_ago, today),
             attendance_type='check_in',
             is_expired=False
         )
-
-        # 3. Overall rate calculations
-        aggs = checkins_30d.aggregate(
-            total=Count('id'),
-            on_time=Count('id', filter=Q(status__in=['on_time', 'present'])),
-            avg_h=Avg('total_hours')
-        )
-        total_checkins_count = aggs['total'] or 0
-        on_time_count = aggs['on_time'] or 0
-        avg_hours_formatted = round(float(aggs['avg_h'] or 0.0), 1)
-        on_time_rate = int((on_time_count / total_checkins_count * 100)) if total_checkins_count > 0 else 0
-
-        # 4. Average Attendance Rate (days present / working days)
-        daily_presence_counts = checkins_30d.values('date').annotate(count=Count('id'))
-        if daily_presence_counts and total_employees > 0:
-            avg_daily_present = sum(d['count'] for d in daily_presence_counts) / len(daily_presence_counts)
-            avg_attendance_rate = int((avg_daily_present / total_employees) * 100)
-            avg_attendance_rate = min(avg_attendance_rate, 100)
-        else:
-            avg_attendance_rate = 0
-
-        ctx['avg_attendance_rate'] = avg_attendance_rate
-        ctx['avg_work_hours'] = avg_hours_formatted
-        ctx['on_time_rate'] = on_time_rate
-        ctx['total_employees_count'] = total_employees
-
-        # 5. Daily Attendance Trend for Chart (Last 15 days)
-        fifteen_days_ago = today - timedelta(days=15)
-        trend_qs = Attendance.objects.filter(
-            employee_id__in=authorized_emp_ids,
-            date__range=(fifteen_days_ago, today),
-            attendance_type='check_in',
-            is_expired=False
-        ).values('date').annotate(
-            present=Count('id', filter=Q(status__in=['on_time', 'present'])),
-            late=Count('id', filter=Q(status='late'))
-        ).order_by('date')
-
-        ctx['attendance_trend'] = list(trend_qs)
-
-        # 6. Peak check-in hours breakdown
         hour_qs = checkins_30d.annotate(
             hour=ExtractHour('check_in_time')
         ).values('hour').annotate(count=Count('id')).order_by('hour')
@@ -1378,49 +1364,27 @@ class ReportsMainView(AdminRequiredMixin, TemplateView):
 
         ctx['hour_breakdown'] = [{'hour': f"{h:02d}:00", 'count': count} for h, count in hour_breakdown.items()]
 
-        # 7. Department comparison
-        dept_qs = checkins_30d.filter(
-            employee__master_employee__department__isnull=False
-        ).values(
-            dept_name=F('employee__master_employee__department__name')
-        ).annotate(
-            total=Count('id'),
-            late=Count('id', filter=Q(status='late'))
-        ).order_by('-total')[:5]
-
+        # 5. Department comparison (canonical employee-day present & late)
         dept_stats = []
-        for d in dept_qs:
-            tot = d['total']
-            late_c = d['late']
-            ot_rate = int(((tot - late_c) / tot * 100)) if tot > 0 else 0
+        for _, d_info in (summary.get('dept_stats') or {}).items():
+            tot = d_info['present']
+            late_c = d_info.get('late', 0)
+            ot_rate = round(((tot - late_c) / tot * 100), 1) if tot > 0 else None
             dept_stats.append({
-                'name': d['dept_name'],
+                'name': d_info['name'],
                 'on_time_pct': ot_rate,
-                'total': tot
+                'total': tot,
             })
-        ctx['dept_stats'] = dept_stats
+        dept_stats.sort(key=lambda x: x['total'], reverse=True)
+        ctx['dept_stats'] = dept_stats[:5]
 
-        # 8. Today Summary & Recent Log Preview for Direct Excel Table View
-        today_attendances = list(Attendance.objects.filter(
-            employee_id__in=authorized_emp_ids,
-            date=today,
-            is_expired=False
-        ))
-        today_att_map = defaultdict(list)
-        for a in today_attendances:
-            today_att_map[a.employee_id].append(a)
-
-        today_present_count = 0
-        today_late_count = 0
-        for emp_id in authorized_emp_ids:
-            e_atts = today_att_map.get(emp_id, [])
-            if any(a.attendance_type in ('check_in', 'field_visit') for a in e_atts):
-                today_present_count += 1
-            if any(a.attendance_type == 'check_in' and a.status == 'late' for a in e_atts):
-                today_late_count += 1
-
-        ctx['today_present_count'] = today_present_count
-        ctx['today_late_count'] = today_late_count
+        # 6. Today Summary using canonical get_daily_report_data
+        daily_today = reporting_service.get_daily_report_data(
+            report_date=today,
+            employee_queryset=scoped_employees,
+        )
+        ctx['today_present_count'] = daily_today['present']
+        ctx['today_late_count'] = daily_today['late']
 
         recent_logs = Attendance.objects.filter(
             employee_id__in=authorized_emp_ids,
