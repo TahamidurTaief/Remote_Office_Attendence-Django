@@ -202,6 +202,70 @@ class PayrollService:
         return assignment
 
     @classmethod
+    def resolve_policy_from_snapshot(cls, payroll_run: PayrollRun, calc: EmployeePayrollCalculation):
+        """
+        Resolve (absence_divisor, ot_multiplier) strictly from stored calculation/run snapshots.
+        Never reads current live configuration when a historical snapshot is expected.
+        Raises ValidationError if required policy evidence is unavailable.
+        """
+        calc_snap = calc.structure_snapshot if isinstance(calc.structure_snapshot, dict) else {}
+        policy_snap = calc_snap.get('policy_snapshot') if isinstance(calc_snap.get('policy_snapshot'), dict) else None
+        run_snap = payroll_run.configuration_snapshot if isinstance(payroll_run.configuration_snapshot, dict) else {}
+
+        absence_divisor = None
+        ot_multiplier = None
+
+        if policy_snap:
+            if policy_snap.get('absence_divisor') is not None:
+                absence_divisor = int(policy_snap['absence_divisor'])
+            if policy_snap.get('ot_multiplier') is not None:
+                ot_multiplier = Decimal(str(policy_snap['ot_multiplier']))
+
+        if absence_divisor is None and run_snap:
+            basis = run_snap.get('working_day_basis')
+            if basis == 'fixed_30':
+                absence_divisor = 30
+            elif basis == 'calendar_days' and payroll_run.period_start and payroll_run.period_end:
+                absence_divisor = (payroll_run.period_end - payroll_run.period_start).days + 1
+
+        if ot_multiplier is None and run_snap and run_snap.get('overtime_multiplier') is not None:
+            ot_multiplier = Decimal(str(run_snap['overtime_multiplier']))
+
+        if absence_divisor is None or ot_multiplier is None:
+            raise ValidationError(
+                "Original payroll policy snapshot is unavailable; cannot safely recalculate adjustment."
+            )
+
+        return absence_divisor, ot_multiplier
+
+    @classmethod
+    @transaction.atomic
+    def recalculate_employee_for_adjustment(
+        cls,
+        payroll_run: PayrollRun,
+        employee: Employee,
+        calc: EmployeePayrollCalculation,
+    ) -> EmployeePayrollCalculation:
+        """
+        Recalculate a single employee's payroll snapshot after an adjustment change,
+        preserving the original policy snapshot and synced inputs.
+        """
+        absence_divisor, ot_multiplier = cls.resolve_policy_from_snapshot(payroll_run, calc)
+        return cls.run_payroll_for_employee(
+            payroll_run=payroll_run,
+            employee=employee,
+            unpaid_absent_days=calc.unpaid_absent_days,
+            other_deduction=calc.other_deduction,
+            ot_hours=calc.ot_hours,
+            absence_divisor=absence_divisor,
+            ot_multiplier=ot_multiplier,
+            synced_at=calc.synced_at,
+            source_total_present_days=calc.source_total_present_days,
+            source_total_approved_leave_days=calc.source_total_approved_leave_days,
+            source_total_approved_ot_hours=calc.source_total_approved_ot_hours,
+        )
+
+    @classmethod
     @transaction.atomic
     def run_payroll_for_employee(
         cls,
@@ -212,6 +276,7 @@ class PayrollService:
         ot_hours: Decimal = Decimal('0.00'),
         ot_policy_callback=None,
         absence_divisor: int = 30,
+        ot_multiplier: Decimal = None,
         synced_at=None,
         source_total_present_days=Decimal('0.00'),
         source_total_approved_leave_days=Decimal('0.00'),
@@ -230,8 +295,8 @@ class PayrollService:
         if not assignment:
             raise ValidationError(f"No active salary assignment found for employee {employee.employee_number} on {payroll_run.period_end}")
 
-        # Ensure canonical tenant configuration is snapshot onto payroll run
-        if not payroll_run.configuration_id:
+        # Ensure canonical tenant configuration is snapshot onto payroll run (only if no snapshot exists)
+        if not payroll_run.configuration_id and not payroll_run.configuration_snapshot:
             try:
                 from apps.payroll.configuration_service import PayrollConfigurationService
                 from apps.tenants.context import get_current_tenant
@@ -273,13 +338,17 @@ class PayrollService:
             })
 
         # Resolve OT policy callback if None and employee has a configured policy
+        effective_ot_multiplier = Decimal(str(ot_multiplier)) if ot_multiplier is not None else Decimal('1.50')
         if ot_policy_callback is None:
             ot_policy_name = employee.overtime_policy
             if ot_policy_name and ot_policy_name.strip() and ot_policy_name.lower() != 'none':
                 if ot_policy_name == 'fixed_300':
                     ot_policy_callback = lambda gross, hours: Decimal('300.00') * hours
                 else:
-                    ot_policy_callback = lambda gross, hours: (gross / (Decimal(str(absence_divisor)) * Decimal('8.00'))) * Decimal('1.50') * hours
+                    ot_policy_callback = (
+                        lambda gross, hours, div=absence_divisor, mult=effective_ot_multiplier:
+                        (gross / (Decimal(str(div)) * Decimal('8.00'))) * mult * hours
+                    )
 
         # Calculate using engine
         calc_result = PayrollCalculationEngine.calculate_employee_payroll(
@@ -308,6 +377,11 @@ class PayrollService:
             return obj
 
         serialized_snapshot = serialize_decimals(calc_result)
+        serialized_snapshot['policy_snapshot'] = {
+            'absence_divisor': int(absence_divisor),
+            'ot_multiplier': str(effective_ot_multiplier),
+            'ot_policy_name': employee.overtime_policy or '',
+        }
 
         # Snapshot employee payment destination
         from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
@@ -562,6 +636,7 @@ class PayrollService:
                 ot_hours=approved_ot_hours,
                 ot_policy_callback=ot_policy_callback,
                 absence_divisor=absence_divisor,
+                ot_multiplier=ot_multiplier,
                 synced_at=synced_at_now,
                 source_total_present_days=present_days,
                 source_total_approved_leave_days=approved_leave_days,
@@ -639,7 +714,7 @@ class PayrollService:
         Requires authorized admin action.
         """
         from apps.accounts.engine import PermissionEngine
-        if not (user.is_superuser or user.is_staff or getattr(user, 'role', '') in ['admin', 'manager', 'system_owner'] or (hasattr(user, 'id') and PermissionEngine.evaluate(user, 'payroll.approve').allowed)):
+        if not (user.is_superuser or (hasattr(user, 'id') and PermissionEngine.evaluate(user, 'payroll.approve', action_type='approve').allowed)):
             raise ValidationError("Only authorized administrators can reverse payroll runs.")
 
         old_status = payroll_run.status

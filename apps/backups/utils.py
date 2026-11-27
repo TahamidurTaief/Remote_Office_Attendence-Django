@@ -182,6 +182,120 @@ def serialize_expenses(qs):
 
 
 
+def _backup_sqlite(db_filepath):
+    import sqlite3
+    import tempfile
+    from django.db import connection
+
+    connection.ensure_connection()
+    src_conn = connection.connection
+    if not isinstance(src_conn, sqlite3.Connection):
+        raise RuntimeError("SQLite backup adapter requires an active sqlite3 connection.")
+
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(db_filepath), suffix=".sqlite3.tmp")
+    os.close(tmp_fd)
+    dst_conn = None
+    try:
+        dst_conn = sqlite3.connect(tmp_path)
+        with dst_conn:
+            src_conn.backup(dst_conn)
+        dst_conn.close()
+        dst_conn = None
+
+        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+            raise RuntimeError("SQLite backup produced an empty file.")
+        os.replace(tmp_path, db_filepath)
+    except Exception:
+        if dst_conn is not None:
+            dst_conn.close()
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+
+def _backup_postgresql(db_filepath, timeout=300):
+    import shutil
+    import subprocess
+    import tempfile
+    from django.db import connection
+
+    pg_dump_bin = shutil.which("pg_dump")
+    if not pg_dump_bin:
+        raise RuntimeError("pg_dump utility not found on PATH; cannot create PostgreSQL backup.")
+
+    settings_dict = connection.settings_dict
+    db_name = settings_dict.get("NAME")
+    if not db_name:
+        raise RuntimeError("PostgreSQL database NAME is not configured.")
+
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(db_filepath), suffix=".sql.tmp")
+    os.close(tmp_fd)
+
+    cmd = [pg_dump_bin, "--no-owner", "--no-privileges", "--file", tmp_path]
+    if settings_dict.get("HOST"):
+        cmd.extend(["--host", str(settings_dict["HOST"])])
+    if settings_dict.get("PORT"):
+        cmd.extend(["--port", str(settings_dict["PORT"])])
+    if settings_dict.get("USER"):
+        cmd.extend(["--username", str(settings_dict["USER"])])
+    cmd.append(str(db_name))
+
+    proc_env = {"PATH": os.environ.get("PATH", "")}
+    if settings_dict.get("PASSWORD"):
+        proc_env["PGPASSWORD"] = str(settings_dict["PASSWORD"])
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            env=proc_env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            shell=False,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise RuntimeError(f"pg_dump timed out after {timeout}s.") from exc
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+    if proc.returncode != 0:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        err_detail = (proc.stderr or "").strip()[:300]
+        raise RuntimeError(f"pg_dump failed (exit {proc.returncode}): {err_detail}")
+
+    if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise RuntimeError("pg_dump produced an empty backup file.")
+
+    os.replace(tmp_path, db_filepath)
+
+
+def _create_vendor_db_backup(filename, filepath):
+    from django.db import connection
+
+    vendor = connection.vendor
+    if vendor == "sqlite":
+        db_filename = filename.replace(".json", ".sqlite3")
+        db_filepath = filepath.replace(".json", ".sqlite3")
+        _backup_sqlite(db_filepath)
+        return db_filename, db_filepath, "application/x-sqlite3"
+
+    if vendor == "postgresql":
+        db_filename = filename.replace(".json", ".sql")
+        db_filepath = filepath.replace(".json", ".sql")
+        _backup_postgresql(db_filepath)
+        return db_filename, db_filepath, "application/sql"
+
+    raise RuntimeError(f"Unsupported database vendor for backup: {vendor}")
+
+
 def create_backup(backup_type="manual", created_by=None):
     from .models import BackupRecord, GoogleDriveConfig
 
@@ -256,28 +370,8 @@ def create_backup(backup_type="manual", created_by=None):
                 default=str,
             )
 
-        # Create raw SQLite database backup safely via sqlite3 backup API
-        db_filename = filename.replace(".json", ".sqlite3")
-        db_filepath = filepath.replace(".json", ".sqlite3")
-        
-        import sqlite3
-        from django.db import connection
-        connection.ensure_connection()
-        src_conn = connection.connection
-        db_name = connection.settings_dict.get('NAME', '')
-        if src_conn and not (db_name.startswith('file:memorydb') or db_name == ':memory:' or 'mode=memory' in db_name):
-            dst_conn = sqlite3.connect(db_filepath)
-            try:
-                with dst_conn:
-                    src_conn.backup(dst_conn)
-            finally:
-                dst_conn.close()
-        else:
-            dst_conn = sqlite3.connect(db_filepath)
-            dst_conn.execute("CREATE TABLE django_migrations (id integer);")
-            dst_conn.execute("CREATE TABLE attendance_attendance (id integer);")
-            dst_conn.execute("CREATE TABLE expense_expense (id integer);")
-            dst_conn.close()
+        # Create vendor-aware raw database backup
+        db_filename, db_filepath, db_mimetype = _create_vendor_db_backup(filename, filepath)
 
         file_size = os.path.getsize(filepath)
         record_count = (
@@ -292,7 +386,6 @@ def create_backup(backup_type="manual", created_by=None):
             len(backup_data["expenses"])
         )
 
-        backup.status = "completed"
         backup.file_size = file_size
         backup.record_count = record_count
 
@@ -311,13 +404,14 @@ def create_backup(backup_type="manual", created_by=None):
                 backup.save(update_fields=["status", "error_message", "is_encrypted"])
                 raise RuntimeError(f"Encryption failed: {enc_err}") from enc_err
 
+        backup.status = "completed"
         backup.save()
         if config.is_enabled and config.auto_upload_to_drive:
             try:
                 # Upload JSON backup (primary)
                 upload_to_drive(backup, filepath, config, mimetype="application/json", is_primary=True)
-                # Upload SQLite db backup
-                upload_to_drive(backup, db_filepath, config, filename=db_filename, mimetype="application/x-sqlite3", is_primary=False)
+                # Upload vendor database backup
+                upload_to_drive(backup, db_filepath, config, filename=db_filename, mimetype=db_mimetype, is_primary=False)
             except Exception as e:
                 backup.error_message = f"Drive upload failed: {str(e)}"
                 backup.save(update_fields=["error_message"])

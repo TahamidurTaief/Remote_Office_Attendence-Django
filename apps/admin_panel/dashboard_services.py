@@ -323,15 +323,37 @@ def get_manager_dashboard_data(user):
 
 def get_hr_dashboard_data(user):
     """
-    Org-wide HR analytical metrics and alerts.
+    Scoped HR analytical metrics and alerts aligned with canonical employee-day reporting.
     """
     today = timezone.localdate()
     data = {}
-    from apps.employees.hierarchy_services import OrgHierarchyService
-    data['org_analytics'] = OrgHierarchyService.get_org_analytics()
 
-    # Headcount & status breakdown
-    counts = Employee.objects.aggregate(
+    from apps.admin_panel.analytics_service import _get_authorized_employees
+    from apps.attendance.reporting_service import get_daily_report_data
+    from apps.attendance.scoping import get_scoped_employee_queryset
+    from apps.accounts.engine import PermissionEngine
+    from apps.accounts.models import DataScope
+    from apps.employees.hierarchy_services import OrgHierarchyService
+
+    authorized_profiles = _get_authorized_employees(user)
+    is_global_scope = user.is_superuser
+    if not is_global_scope:
+        for perm_code in ('reports.view', 'attendance.view', 'dashboard.view'):
+            res = PermissionEngine.evaluate(user, perm_code, action_type='view')
+            if res.allowed and res.data_scope in (DataScope.GLOBAL, DataScope.COMPANY):
+                is_global_scope = True
+                break
+
+    if is_global_scope:
+        scoped_master_qs = Employee.objects.all()
+        data['org_analytics'] = OrgHierarchyService.get_org_analytics()
+    else:
+        master_ids = authorized_profiles.filter(master_employee_id__isnull=False).values('master_employee_id')
+        scoped_master_qs = Employee.objects.filter(id__in=master_ids)
+        data['org_analytics'] = {}
+
+    # Headcount & status breakdown (scoped)
+    counts = scoped_master_qs.aggregate(
         total=Count('id'),
         active=Count('id', filter=Q(status=EmployeeStatus.ACTIVE)),
         probation=Count('id', filter=Q(status=EmployeeStatus.PROBATION)),
@@ -350,8 +372,8 @@ def get_hr_dashboard_data(user):
     data['terminated_employees_count'] = counts['terminated']
     data['archived_employees_count'] = counts['archived']
 
-    # Incomplete profiles
-    all_employees = list(Employee.objects.select_related('department', 'designation', 'branch').all())
+    # Incomplete profiles (scoped)
+    all_employees = list(scoped_master_qs.select_related('department', 'designation', 'branch'))
     emp_ids = [e.pk for e in all_employees]
     if emp_ids:
         from apps.employees.models import AssetAssignment
@@ -375,75 +397,100 @@ def get_hr_dashboard_data(user):
     data['incomplete_profiles_count'] = len(incomplete_employees)
     data['incomplete_profiles'] = incomplete_employees[:5]
 
-    # Department breakdown
-    data['dept_breakdown'] = Employee.objects.values(
+    # Department breakdown (scoped)
+    data['dept_breakdown'] = scoped_master_qs.values(
         'department__name'
     ).annotate(count=Count('id')).order_by('-count')[:5]
 
-    # Org-wide Attendance Today & HR Breakdown
-    today_attendances = list(Attendance.objects.filter(date=today).values(
-        'employee_id', 'status', 'attendance_type', 'type', 'overtime_minutes', 'is_expired'
-    ))
-    data['_today_attendances'] = today_attendances
+    # Canonical employee-day attendance summary for today (single bulk-loaded call)
+    daily_report = get_daily_report_data(
+        report_date=today,
+        employee_queryset=authorized_profiles,
+    )
+    rows = daily_report['rows']
 
-    data['today_attendance_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] in ('on_time', 'present', 'late', 'holiday_attendance')})
-    data['today_late_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] == 'late'})
+    present_count = sum(1 for r in rows if r['is_present'])
+    late_count = sum(1 for r in rows if r['is_late'])
+    absent_count = sum(1 for r in rows if r['is_absent'])
+    on_leave_count = sum(1 for r in rows if r['status'] == 'on_leave')
+    pending_count = sum(1 for r in rows if r['status'] == 'scheduled' and r['status_display'] == 'Pending')
+    review_needed_count = sum(1 for r in rows if r.get('needs_review') or r.get('eligibility_unresolved'))
+    missing_checkout_count = sum(1 for r in rows if r['is_present'] and r.get('is_missing_checkout'))
+    leave_conflict_count = sum(1 for r in rows if r['is_present'] and r.get('has_leave_conflict'))
+    holiday_work_count = sum(1 for r in rows if r['is_present'] and r['day_calc'].get('is_holiday'))
+    remote_count = sum(1 for r in rows if r['is_present'] and r['field_visits'])
+    ot_count = sum(1 for r in rows if (r['day_calc'].get('overtime_minutes') or 0) > 0)
 
-    # HR Breakdown
-    active_profiles_qs = EmployeeProfile.objects.filter(master_employee__status=EmployeeStatus.ACTIVE)
-    data['hr_present_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] in ('on_time', 'present', 'late', 'holiday_attendance')})
-    data['hr_late_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in' and a['status'] == 'late'})
-    data['hr_remote_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['type'] == 'field'})
-    data['hr_holiday_count'] = len({a['employee_id'] for a in today_attendances if not a['is_expired'] and a['status'] == 'holiday_attendance'})
-    data['hr_ot_count'] = sum(1 for a in today_attendances if not a['is_expired'] and (a['overtime_minutes'] or 0) > 0)
+    data['today_attendance_count'] = present_count
+    data['today_late_count'] = late_count
 
-    checked_in_ids = {a['employee_id'] for a in today_attendances if not a['is_expired'] and a['attendance_type'] == 'check_in'}
+    data['hr_present_count'] = present_count
+    data['hr_late_count'] = late_count
+    data['hr_remote_count'] = remote_count
+    data['hr_holiday_count'] = holiday_work_count
+    data['hr_ot_count'] = ot_count
+    data['hr_leave_count'] = on_leave_count
+    data['hr_absent_count'] = absent_count
+    data['hr_pending_count'] = pending_count
+    data['hr_review_needed_count'] = review_needed_count
+    data['hr_missing_checkout_count'] = missing_checkout_count
+    data['hr_leave_conflict_count'] = leave_conflict_count
 
-    # On Leave Today
+    # On Leave Today (scoped to leave.view if available, else authorized_profiles)
+    leave_scoped_profiles = get_scoped_employee_queryset(
+        user, permission_code='leave.view', action='view', base_qs=authorized_profiles
+    )
     today_leaves = list(LeaveRequest.objects.select_related('employee', 'leave_type').filter(
-        start_date__lte=today, end_date__gte=today, status='approved'
+        employee__in=leave_scoped_profiles,
+        start_date__lte=today,
+        end_date__gte=today,
+        status='approved',
     ))
-    on_leave_ids = {l.employee_id for l in today_leaves}
-    data['hr_leave_count'] = len(on_leave_ids)
     data['on_leave_today'] = today_leaves[:5]
 
     from apps.attendance.models import AttendanceCorrectionRequest, ForgotCheckoutRequest
-    data['hr_correction_count'] = AttendanceCorrectionRequest.objects.filter(requested_at__date=today).count()
-    data['hr_forgot_checkout_count'] = ForgotCheckoutRequest.objects.filter(requested_at__date=today).count()
-
-    data['hr_absent_count'] = active_profiles_qs.exclude(id__in=checked_in_ids | on_leave_ids).count()
-
-    # Pending Lifecycle Requests Count
-    data['pending_lifecycle_requests_count'] = LifecycleTransitionRequest.objects.filter(
-        review_status='pending'
+    data['hr_correction_count'] = AttendanceCorrectionRequest.objects.filter(
+        attendance__employee__in=authorized_profiles,
+        requested_at__date=today,
+    ).count()
+    data['hr_forgot_checkout_count'] = ForgotCheckoutRequest.objects.filter(
+        attendance__employee__in=authorized_profiles,
+        requested_at__date=today,
     ).count()
 
-    # Expiring Documents
+    # Pending Lifecycle Requests Count (scoped)
+    data['pending_lifecycle_requests_count'] = LifecycleTransitionRequest.objects.filter(
+        employee__in=scoped_master_qs,
+        review_status='pending',
+    ).count()
+
+    # Expiring Documents (scoped)
     soon_threshold = today + timedelta(days=30)
     data['expiring_documents'] = EmployeeDocument.objects.select_related(
         'employee_master', 'employee'
     ).filter(
+        employee_master__in=scoped_master_qs,
         expiry_date__isnull=False,
         expiry_date__gte=today,
         expiry_date__lte=soon_threshold,
         is_active=True
     ).order_by('expiry_date')[:5]
 
-    # Probation ending soon
-    data['probation_list'] = Employee.objects.select_related(
+    # Probation ending soon (scoped)
+    data['probation_list'] = scoped_master_qs.select_related(
         'department', 'designation', 'branch'
     ).filter(
         status=EmployeeStatus.PROBATION
     ).order_by('joined_date')[:5]
 
-    # Upcoming birthdays this month
-    data['upcoming_birthdays'] = Employee.objects.filter(
+    # Upcoming birthdays this month (scoped)
+    data['upcoming_birthdays'] = scoped_master_qs.filter(
         dob__month=today.month
     ).order_by('dob__day')[:5]
 
-    # Recent joiners (joined last 30 days)
+    # Recent joiners (joined last 30 days, scoped)
     thirty_days_ago = today - timedelta(days=30)
-    data['recent_joiners'] = Employee.objects.select_related(
+    data['recent_joiners'] = scoped_master_qs.select_related(
         'department', 'designation', 'branch'
     ).filter(
         joined_date__gte=thirty_days_ago

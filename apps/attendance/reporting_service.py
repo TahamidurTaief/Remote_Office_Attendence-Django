@@ -129,15 +129,15 @@ def is_date_employed(target_date, employee, eligibility=None):
         uncertain_from = eligibility.get('uncertain_from')
         pre_join_conflict = eligibility.get('pre_join_conflict', False)
 
-        if joined_date and target_date < joined_date and not pre_join_conflict:
-            return False, False
         if joined_date is None:
             return False, True
-        if unresolved and (uncertain_from is None or target_date >= uncertain_from):
-            return False, True
+        if joined_date and target_date < joined_date and not pre_join_conflict:
+            return False, False
         for start_d, end_d in intervals:
             if target_date >= start_d and (end_d is None or target_date <= end_d):
                 return True, False
+        if unresolved and (uncertain_from is None or target_date >= uncertain_from):
+            return False, True
         return False, False
 
     joined_date = _resolve_joined_date(employee)
@@ -544,8 +544,8 @@ def calculate_employee_day(
             'field_visits': [],
         }
 
-    # 3. No attendance: Check approved leave
-    if is_on_leave:
+    # 3. No attendance: Check approved leave (only when employment is resolved)
+    if is_on_leave and not elig_unresolved:
         return {
             'date': target_date,
             'is_future': False,
@@ -571,6 +571,9 @@ def calculate_employee_day(
             'is_open_session': False,
             'is_missing_checkout': False,
             'has_leave_conflict': False,
+            'eligibility_conflict': False,
+            'eligibility_unresolved': False,
+            'needs_review': False,
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,

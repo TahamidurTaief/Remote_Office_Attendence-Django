@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F
 from django.conf import settings
@@ -141,7 +142,20 @@ class LeaveRequest(models.Model):
         return deductible_days
 
     def calculate_deductible_days(self):
-        return self.overlapping_days_in(self.start_date, self.end_date)
+        base_days = self.overlapping_days_in(self.start_date, self.end_date)
+        if self.start_date and self.end_date and self.start_date == self.end_date:
+            if self.number_of_days is not None and Decimal(str(self.number_of_days)) == Decimal('0.5'):
+                return Decimal('0.5') if base_days >= Decimal('1.0') else Decimal('0.0')
+        return base_days
+
+    @staticmethod
+    def _assert_fractional_balance_supported(days):
+        if days is not None and (Decimal(str(days)) % Decimal('1')) != Decimal('0'):
+            used_field = LeaveBalance._meta.get_field('used_days')
+            if not isinstance(used_field, models.DecimalField):
+                raise ValidationError(
+                    "Cannot approve fractional leave: LeaveBalance.used_days does not support fractional days."
+                )
 
     def _deduct_retroactive_unexcused_absences(self):
         import datetime
@@ -200,6 +214,7 @@ class LeaveRequest(models.Model):
 
         # Case 1: Status transitioned to approved from a non-approved status
         if self.status == 'approved' and old_status != 'approved':
+            self._assert_fractional_balance_supported(self.number_of_days)
             rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
             limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
             balance, _ = LeaveBalance.objects.get_or_create(
@@ -229,6 +244,7 @@ class LeaveRequest(models.Model):
 
         # Case 2: Status transitioned from approved to something else (e.g. pending/rejected/cancelled/returned)
         elif old_status == 'approved' and self.status != 'approved':
+            self._assert_fractional_balance_supported(old_days)
             LeaveBalance.objects.filter(
                 employee=self.employee,
                 leave_type=old_type,
@@ -248,6 +264,8 @@ class LeaveRequest(models.Model):
                 old_end_date != self.end_date
             )
             if details_changed:
+                self._assert_fractional_balance_supported(old_days)
+                self._assert_fractional_balance_supported(self.number_of_days)
                 # Revert old balance
                 LeaveBalance.objects.filter(
                     employee=self.employee,

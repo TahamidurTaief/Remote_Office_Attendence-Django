@@ -14,6 +14,7 @@ from apps.attendance.models import Attendance
 from apps.attendance.reporting_service import get_daily_report_data, get_monthly_report_data
 from apps.branches.models import Branch, OfficeSchedule
 from apps.employees.models import Department, Designation, Employee, EmployeeProfile, EmployeeStatus, EmploymentHistory
+from apps.leave.models import LeaveRequest, LeaveType
 from apps.payroll.models import (
     EmployeePayrollCalculation,
     EmployeeSalaryAssignment,
@@ -234,3 +235,127 @@ class EmploymentEligibilityTests(TestCase):
         run_draft.save()
         with self.assertRaises(ValidationError):
             PayrollService.sync_payroll_inputs(run_draft)
+
+    def test_6_unresolved_employment_with_approved_unpaid_leave_rejected_without_writes(self):
+        p_start = date(2026, 10, 25)
+        p_end = date(2026, 10, 27)  # Sun-Tue (all working days)
+        comp = SalaryComponent.objects.create(
+            name="Basic", code="ELIG_LV_BASIC", type=SalaryComponentType.EARNING,
+            value_type=SalaryComponentValueType.FIXED, value=Decimal("30000.00"),
+        )
+        struct = SalaryStructure.objects.create(name="EligLvStd")
+        SalaryStructureComponent.objects.create(
+            salary_structure=struct, salary_component=comp,
+            value_type=SalaryComponentValueType.FIXED, value=Decimal("30000.00"),
+        )
+
+        # Resolved employee synced first so stored calculation exists
+        res_master, _ = self._make_emp("ELIG-LV-OK", joined_date=p_start - timedelta(days=10))
+        EmployeeSalaryAssignment.objects.create(
+            employee=res_master, salary_structure=struct, gross_salary=Decimal("30000.00"),
+            payment_mode=PaymentMode.BANK, effective_from=p_start - timedelta(days=10),
+        )
+        run = PayrollRun.objects.create(name="LvUnres", period_start=p_start, period_end=p_end, status=PayrollRunStatus.DRAFT)
+        calcs = PayrollService.sync_payroll_inputs(run)
+        res_calc = next(c for c in calcs if c.employee_id == res_master.id)
+        stored_absent = res_calc.unpaid_absent_days
+        stored_count = EmployeePayrollCalculation.objects.filter(payroll_run=run).count()
+
+        # Unresolved employee (resigned without exit date) + approved unpaid leave covering entire period
+        unres_master, unres_prof = self._make_emp(
+            "ELIG-LV-BAD", joined_date=p_start - timedelta(days=10), status=EmployeeStatus.RESIGNED, is_active=True
+        )
+        EmployeeSalaryAssignment.objects.create(
+            employee=unres_master, salary_structure=struct, gross_salary=Decimal("30000.00"),
+            payment_mode=PaymentMode.BANK, effective_from=p_start - timedelta(days=10),
+        )
+        unpaid_lt = LeaveType.objects.create(name="UnpaidElig", deduction_percent=Decimal("100.00"))
+        LeaveRequest.objects.create(
+            employee=unres_prof, leave_type=unpaid_lt,
+            start_date=p_start, end_date=p_end, number_of_days=Decimal("3.0"),
+            reason="Unpaid", status="approved",
+        )
+
+        daily = get_daily_report_data(report_date=p_start, employee_id=unres_prof.id)
+        row = daily["rows"][0]
+        self.assertEqual(row["status"], "eligibility_unresolved")
+        self.assertEqual(row["status_display"], "Review Needed")
+        self.assertTrue(row["eligibility_unresolved"])
+        self.assertTrue(row["needs_review"])
+        self.assertFalse(row["day_calc"]["is_on_leave"])
+
+        with self.assertRaises(ValidationError) as cm:
+            PayrollService.sync_payroll_inputs(run)
+        self.assertIn("ELIG-LV-BAD", str(cm.exception))
+        self.assertEqual(EmployeePayrollCalculation.objects.filter(payroll_run=run).count(), stored_count)
+        res_calc.refresh_from_db()
+        self.assertEqual(res_calc.unpaid_absent_days, stored_absent)
+
+    def test_7_known_employed_approved_leave_unchanged_and_query_bounded(self):
+        p_start = date(2026, 10, 25)
+        p_end = date(2026, 10, 26)
+        comp = SalaryComponent.objects.create(
+            name="Basic", code="ELIG_LV2_BASIC", type=SalaryComponentType.EARNING,
+            value_type=SalaryComponentValueType.FIXED, value=Decimal("30000.00"),
+        )
+        struct = SalaryStructure.objects.create(name="EligLv2Std")
+        SalaryStructureComponent.objects.create(
+            salary_structure=struct, salary_component=comp,
+            value_type=SalaryComponentValueType.FIXED, value=Decimal("30000.00"),
+        )
+        master, prof = self._make_emp("ELIG-LV-VALID", joined_date=p_start - timedelta(days=10))
+        EmployeeSalaryAssignment.objects.create(
+            employee=master, salary_structure=struct, gross_salary=Decimal("30000.00"),
+            payment_mode=PaymentMode.BANK, effective_from=p_start - timedelta(days=10),
+        )
+        unpaid_lt = LeaveType.objects.create(name="UnpaidValid", deduction_percent=Decimal("100.00"))
+        LeaveRequest.objects.create(
+            employee=prof, leave_type=unpaid_lt,
+            start_date=p_start, end_date=p_start, number_of_days=Decimal("1.0"),
+            reason="Valid", status="approved",
+        )
+
+        with CaptureQueriesContext(connection) as ctx:
+            daily = get_daily_report_data(start_date=p_start, end_date=p_end, employee_id=prof.id)
+        self.assertLessEqual(len(ctx), 10)
+        leave_row = next(r for r in daily["rows"] if r["date"] == p_start)
+        self.assertEqual(leave_row["status"], "on_leave")
+        self.assertFalse(leave_row["eligibility_unresolved"])
+        self.assertFalse(leave_row["needs_review"])
+        self.assertFalse(leave_row["day_calc"]["eligibility_conflict"])
+
+        run = PayrollRun.objects.create(name="LvValid", period_start=p_start, period_end=p_end, status=PayrollRunStatus.DRAFT)
+        calcs = PayrollService.sync_payroll_inputs(run)
+        c = next(x for x in calcs if x.employee_id == master.id)
+        self.assertEqual(c.source_total_approved_leave_days, Decimal("1.00"))
+        self.assertEqual(c.unpaid_absent_days, Decimal("2.00"))
+
+    def test_8_rejoining_interval_valid_despite_historical_uncertainty(self):
+        p_start = date(2026, 10, 25)
+        p_end = date(2026, 10, 26)
+        master, prof = self._make_emp("ELIG-REJOIN-HIST", joined_date=p_start - timedelta(days=30))
+        # Historical uncertainty: duplicate exit before documented rejoining
+        EmploymentHistory.objects.create(
+            employee=master, field_changed="status", old_value="Active", new_value="Resigned",
+            effective_date=p_start - timedelta(days=20),
+        )
+        EmploymentHistory.objects.create(
+            employee=master, field_changed="status", old_value="Resigned", new_value="Terminated",
+            effective_date=p_start - timedelta(days=18),
+        )
+        EmploymentHistory.objects.create(
+            employee=master, field_changed="status", old_value="Terminated", new_value="Active",
+            effective_date=p_start - timedelta(days=5),
+        )
+        lt = LeaveType.objects.create(name="PaidRejoin", deduction_percent=Decimal("0.00"))
+        LeaveRequest.objects.create(
+            employee=prof, leave_type=lt,
+            start_date=p_start, end_date=p_end, number_of_days=Decimal("2.0"),
+            reason="Rejoined", status="approved",
+        )
+
+        daily = get_daily_report_data(start_date=p_start, end_date=p_end, employee_id=prof.id)
+        for r in daily["rows"]:
+            self.assertEqual(r["status"], "on_leave")
+            self.assertFalse(r["eligibility_unresolved"])
+            self.assertFalse(r["needs_review"])

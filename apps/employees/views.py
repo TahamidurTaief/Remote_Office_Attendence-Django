@@ -1769,45 +1769,44 @@ class EmployeeDocumentDownloadView(LoginRequiredMixin, View):
     action_type = 'view'
     """
     Unified, PermissionEngine-gated document download view.
-    - Sensitive documents: checks ownership first, then falls through PermissionEngine.evaluate().
+    - Sensitive documents: checks ownership first, then falls through PermissionEngine.evaluate() + canonical scope.
     - Logs every download via DocumentDownloadLog + audit trail.
     - Returns 404 with message if file is physically missing.
     """
     def get(self, request, pk):
+        from fieldtrack.media_access import (
+            sanitize_download_filename,
+            stream_private_file,
+            user_can_download_document,
+        )
+
         doc = get_object_or_404(
-            EmployeeDocument.objects.select_related('employee_master', 'employee'),
+            EmployeeDocument.objects.select_related(
+                'employee_master',
+                'employee_master__branch',
+                'employee_master__department',
+                'employee',
+                'employee__master_employee',
+                'employee__branch',
+            ),
             pk=pk
         )
 
-        is_owner = (
-            (doc.employee_master and doc.employee_master.user == request.user) or
-            (doc.employee and doc.employee.user == request.user)
-        )
-
-        if not is_owner and not request.user.is_superuser:
-            if not PermissionEngine.evaluate(request.user, 'employees.view').allowed:
-                log_audit(
-                    actor=request.user,
-                    action='document_access_denied',
-                    target=doc,
-                    summary=f"Unauthorized download attempt for document pk={doc.pk}"
-                )
-                return HttpResponseForbidden(
-                    "Permission Denied: You do not have permission to download this document."
-                )
-
-            if doc.is_sensitive():
-                res = PermissionEngine.evaluate(request.user, 'employees.download_sensitive_document')
-                if not res.allowed:
-                    log_audit(
-                        actor=request.user,
-                        action='document_access_denied',
-                        target=doc,
-                        summary=f"Unauthorized download attempt for sensitive document pk={doc.pk}"
-                    )
-                    return HttpResponseForbidden(
-                        "Permission Denied: You do not have permission to download sensitive documents."
-                    )
+        if not user_can_download_document(request.user, doc):
+            action_summary = (
+                f"Unauthorized download attempt for sensitive document pk={doc.pk}"
+                if doc.is_sensitive()
+                else f"Unauthorized download attempt for document pk={doc.pk}"
+            )
+            log_audit(
+                actor=request.user,
+                action='document_access_denied',
+                target=doc,
+                summary=action_summary
+            )
+            return HttpResponseForbidden(
+                "Permission Denied: You do not have permission to download this document."
+            )
 
         # Verify file physically exists before streaming
         if not doc.file or not doc.file.storage.exists(doc.file.name):
@@ -1826,10 +1825,14 @@ class EmployeeDocumentDownloadView(LoginRequiredMixin, View):
             target=doc,
             summary=f"Downloaded document '{doc.title or doc.get_document_type_display()}' (pk={doc.pk})"
         )
-        return FileResponse(
+        safe_filename = sanitize_download_filename(
+            f"{doc.title or doc.get_document_type_display()}_{doc.pk}",
+            file_path=doc.file.name,
+        )
+        return stream_private_file(
             doc.file.open('rb'),
+            filename=safe_filename,
             as_attachment=True,
-            filename=f"{doc.title or doc.get_document_type_display()}_{doc.pk}"
         )
 
 

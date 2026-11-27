@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django import forms
 from .models import LeaveRequest, LeaveType, LeaveBalance
 
@@ -37,7 +38,49 @@ def validate_leave_overlap(employee, start_date, end_date, instance=None, error_
                 raise forms.ValidationError(error_msg)
 
 
-class LeaveRequestForm(forms.ModelForm):
+DURATION_CHOICES = (
+    ('full', 'Full Day'),
+    ('half', 'Half Day (0.5)'),
+)
+
+
+class _LeaveDurationFormMixin:
+    def _init_duration_field(self):
+        self.fields['duration_type'] = forms.ChoiceField(
+            choices=DURATION_CHOICES,
+            initial='full',
+            required=False,
+            widget=forms.Select(attrs={'class': SELECT_INPUT}),
+            label='Duration',
+        )
+        if (
+            self.instance
+            and self.instance.pk
+            and self.instance.start_date == self.instance.end_date
+            and self.instance.number_of_days == Decimal('0.5')
+        ):
+            self.fields['duration_type'].initial = 'half'
+
+    def _validate_duration_type(self, cleaned_data):
+        duration_type = cleaned_data.get('duration_type') or 'full'
+        if duration_type not in ('full', 'half'):
+            raise forms.ValidationError("Invalid leave duration.")
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        if duration_type == 'half' and start_date and end_date and start_date != end_date:
+            raise forms.ValidationError("Half-day leave is only allowed for a single date.")
+        return duration_type
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        duration_type = self.cleaned_data.get('duration_type') or 'full'
+        instance.number_of_days = Decimal('0.5') if duration_type == 'half' else Decimal('1.0')
+        if commit:
+            instance.save()
+        return instance
+
+
+class LeaveRequestForm(_LeaveDurationFormMixin, forms.ModelForm):
     class Meta:
         model = LeaveRequest
         fields = ['leave_type', 'start_date', 'end_date', 'reason']
@@ -51,6 +94,7 @@ class LeaveRequestForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.employee = kwargs.pop('employee', None)
         super().__init__(*args, **kwargs)
+        self._init_duration_field()
         self.projected_remaining = None
         if self.instance and self.instance.pk and self.instance.leave_type_id:
             from django.db.models import Q
@@ -63,6 +107,7 @@ class LeaveRequestForm(forms.ModelForm):
         start_date = cleaned_data.get('start_date')
         end_date = cleaned_data.get('end_date')
         leave_type = cleaned_data.get('leave_type')
+        duration_type = self._validate_duration_type(cleaned_data)
 
         validate_leave_overlap(
             employee=self.employee,
@@ -100,6 +145,7 @@ class LeaveRequestForm(forms.ModelForm):
                     leave_type=leave_type,
                     start_date=start_date,
                     end_date=end_date,
+                    number_of_days=Decimal('0.5') if duration_type == 'half' else None,
                     pk=self.instance.pk if self.instance else None
                 )
                 deductible_days = temp_req.calculate_deductible_days()
@@ -120,7 +166,7 @@ class LeaveTypeForm(forms.ModelForm):
         }
 
 
-class AdminAddLeaveForm(forms.ModelForm):
+class AdminAddLeaveForm(_LeaveDurationFormMixin, forms.ModelForm):
     employee = forms.ModelChoiceField(
         queryset=EmployeeProfile.objects.filter(is_active=True).order_by('full_name'),
         widget=forms.Select(attrs={'class': SELECT_INPUT}),
@@ -140,6 +186,7 @@ class AdminAddLeaveForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._init_duration_field()
         if self.instance and self.instance.pk and self.instance.leave_type_id:
             from django.db.models import Q
             self.fields['leave_type'].queryset = LeaveType.objects.filter(Q(is_active=True) | Q(pk=self.instance.leave_type_id))
@@ -151,6 +198,7 @@ class AdminAddLeaveForm(forms.ModelForm):
         start_date = cleaned_data.get('start_date')
         end_date = cleaned_data.get('end_date')
         employee = cleaned_data.get('employee')
+        self._validate_duration_type(cleaned_data)
 
         validate_leave_overlap(
             employee=employee,
@@ -162,7 +210,7 @@ class AdminAddLeaveForm(forms.ModelForm):
         return cleaned_data
 
 
-class AdminLeaveRequestRescheduleForm(forms.ModelForm):
+class AdminLeaveRequestRescheduleForm(_LeaveDurationFormMixin, forms.ModelForm):
     class Meta:
         model = LeaveRequest
         fields = ['leave_type', 'start_date', 'end_date', 'reason']
@@ -175,6 +223,7 @@ class AdminLeaveRequestRescheduleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._init_duration_field()
         if self.instance and self.instance.pk and self.instance.leave_type_id:
             from django.db.models import Q
             self.fields['leave_type'].queryset = LeaveType.objects.filter(Q(is_active=True) | Q(pk=self.instance.leave_type_id))
@@ -186,6 +235,7 @@ class AdminLeaveRequestRescheduleForm(forms.ModelForm):
         start_date = cleaned_data.get('start_date')
         end_date = cleaned_data.get('end_date')
         employee = getattr(self.instance, 'employee', None) if self.instance else None
+        self._validate_duration_type(cleaned_data)
 
         validate_leave_overlap(
             employee=employee,

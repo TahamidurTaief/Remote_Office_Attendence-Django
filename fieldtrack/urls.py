@@ -143,16 +143,16 @@ urlpatterns = [
 
 from django.conf.urls.static import static
 from django.urls import re_path
-from django.views.static import serve
+import re
+from fieldtrack.media_access import protected_media_view
+
+media_prefix = settings.MEDIA_URL.lstrip('/')
+urlpatterns += [
+    re_path(rf'^{re.escape(media_prefix)}(?P<path>.*)$', protected_media_view, name='protected_media'),
+]
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
     urlpatterns += [path('__reload__/', include('django_browser_reload.urls'))]
     if getattr(settings, 'ENABLE_DEBUG_TOOLBAR', False):
         urlpatterns.insert(0, path('__debug__/', include('debug_toolbar.urls')))
-else:
-    # Serve media files in standalone container deployments (e.g., Coolify)
-    urlpatterns += [
-        re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
-    ]

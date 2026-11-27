@@ -392,63 +392,150 @@ def location_sync(request):
 @require_GET
 def live_locations(request):
     """
-    Returns the latest location ping for every employee who is currently checked in.
-    Used by the admin live-map.
+    Returns one relevant latest location per authorized active employee.
+    Enforces attendance.view with canonical employee scope and bounded SQL subqueries.
+    Preserves overnight active sessions without arbitrary freshness cutoffs.
     """
+    from django.db.models import OuterRef, Q, Subquery
     from apps.accounts.engine import PermissionEngine
-    if not (request.user.is_authenticated and (request.user.is_superuser or PermissionEngine.evaluate(request.user, 'attendance.view').allowed)):
-        return JsonResponse({'success': False, 'error': 'Unauthorized.'}, status=403)
+    from apps.attendance.scoping import get_scoped_employee_queryset
 
-    today = timezone.localdate()
-    active_sessions = Attendance.objects.filter(
-        date=today,
+    if not request.user.is_superuser:
+        eval_res = PermissionEngine.evaluate(request.user, 'attendance.view', action_type='view')
+        if not eval_res.allowed:
+            resp = JsonResponse({'success': False, 'error': 'Unauthorized.'}, status=403)
+            resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+            resp['Pragma'] = 'no-cache'
+            return resp
+
+    scoped_employees = get_scoped_employee_queryset(
+        request.user, permission_code='attendance.view', action='view'
+    )
+
+    # Narrowing-only optional filters
+    branch_id = request.GET.get('branch_id')
+    if branch_id and branch_id.isdigit():
+        bid = int(branch_id)
+        scoped_employees = scoped_employees.filter(
+            Q(branch_id=bid) | Q(master_employee__branch_id=bid)
+        )
+    dept = (request.GET.get('department') or '').strip()
+    if dept:
+        scoped_employees = scoped_employees.filter(
+            Q(department__iexact=dept) | Q(master_employee__department__name__iexact=dept)
+        )
+    emp_code = (request.GET.get('employee_id') or '').strip()
+    if emp_code:
+        scoped_employees = scoped_employees.filter(employee_id=emp_code)
+
+    active_session_qs = Attendance.objects.filter(
+        employee_id=OuterRef('pk'),
         attendance_type='check_in',
         check_out_time__isnull=True,
-        is_expired=False
-    ).select_related('employee').prefetch_related('locations')
+        is_expired=False,
+    ).order_by('-check_in_time', '-id')
 
-    active_employee_ids = [s.employee_id for s in active_sessions]
-    
-    # Fetch all syncs for active employees, ordered by timestamp descending
-    latest_syncs_qs = EmployeeLocationSync.objects.filter(
-        employee_id__in=active_employee_ids
-    ).order_by('employee_id', '-timestamp')
-    
-    # Group by employee_id to keep only the latest sync
-    latest_sync_by_emp = {}
-    for sync in latest_syncs_qs:
-        if sync.employee_id not in latest_sync_by_emp:
-            latest_sync_by_emp[sync.employee_id] = sync
+    latest_sync_sq = Subquery(
+        EmployeeLocationSync.objects.filter(
+            employee_id=OuterRef('pk'),
+        ).order_by('-timestamp', '-id').values('id')[:1]
+    )
+    latest_ci_loc_sq = Subquery(
+        AttendanceLocation.objects.filter(
+            attendance_id=OuterRef('latest_session_id'),
+            event='check_in',
+            is_expired=False,
+        ).order_by('-timestamp', '-id').values('id')[:1]
+    )
 
+    active_emp_rows = list(
+        scoped_employees.annotate(
+            latest_session_id=Subquery(active_session_qs.values('id')[:1]),
+        )
+        .filter(latest_session_id__isnull=False)
+        .annotate(
+            latest_sync_id=latest_sync_sq,
+            latest_ci_loc_id=latest_ci_loc_sq,
+        )
+        .values(
+            'id',
+            'employee_id',
+            'full_name',
+            'latest_session_id',
+            'latest_sync_id',
+            'latest_ci_loc_id',
+        )
+    )
+
+    if not active_emp_rows:
+        resp = JsonResponse({'success': True, 'employees': []})
+        resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+        resp['Pragma'] = 'no-cache'
+        return resp
+
+    session_ids = [r['latest_session_id'] for r in active_emp_rows]
+    sync_ids = [r['latest_sync_id'] for r in active_emp_rows if r['latest_sync_id']]
+    ci_loc_ids = [r['latest_ci_loc_id'] for r in active_emp_rows if r['latest_ci_loc_id']]
+
+    sessions_by_id = {
+        s['id']: s
+        for s in Attendance.objects.filter(id__in=session_ids).values('id', 'date', 'check_in_time')
+    }
+    syncs_by_id = (
+        EmployeeLocationSync.objects.in_bulk(sync_ids) if sync_ids else {}
+    )
+    ci_locs_by_id = (
+        AttendanceLocation.objects.in_bulk(ci_loc_ids) if ci_loc_ids else {}
+    )
+
+    today = timezone.localdate()
     result = []
-    for session in active_sessions:
-        emp = session.employee
-        latest_sync = latest_sync_by_emp.get(emp.id)
-        # Fall back to check-in location if no sync yet
-        if not latest_sync:
-            ci_loc = next((loc for loc in session.locations.all() if loc.event == 'check_in'), None)
-            if ci_loc:
-                result.append({
-                    'employee_id': emp.employee_id,
-                    'full_name': emp.full_name,
-                    'lat': float(ci_loc.latitude),
-                    'lng': float(ci_loc.longitude),
-                    'address': ci_loc.address,
-                    'timestamp': ci_loc.timestamp.isoformat(),
-                    'source': 'check_in',
-                })
-        else:
-            result.append({
-                'employee_id': emp.employee_id,
-                'full_name': emp.full_name,
-                'lat': float(latest_sync.latitude),
-                'lng': float(latest_sync.longitude),
-                'address': latest_sync.address,
-                'timestamp': latest_sync.timestamp.isoformat(),
-                'source': 'sync',
-            })
+    for row in active_emp_rows:
+        session_info = sessions_by_id.get(row['latest_session_id'])
+        if not session_info:
+            continue
+        check_in_dt = session_info['check_in_time']
+        is_overnight = bool(session_info['date'] and session_info['date'] < today)
+        latest_sync = syncs_by_id.get(row['latest_sync_id'])
+        ci_loc = ci_locs_by_id.get(row['latest_ci_loc_id'])
 
-    return JsonResponse({'success': True, 'employees': result})
+        chosen = None
+        source = None
+        location_state = 'unknown'
+
+        if latest_sync and (not check_in_dt or latest_sync.timestamp >= check_in_dt):
+            chosen = latest_sync
+            source = 'sync'
+            location_state = 'live'
+        elif ci_loc:
+            chosen = ci_loc
+            source = 'check_in'
+            location_state = 'live'
+        elif latest_sync:
+            chosen = latest_sync
+            source = 'sync'
+            location_state = 'stale'
+
+        if not chosen:
+            continue
+
+        result.append({
+            'employee_id': row['employee_id'],
+            'full_name': row['full_name'],
+            'lat': float(chosen.latitude),
+            'lng': float(chosen.longitude),
+            'address': chosen.address,
+            'timestamp': chosen.timestamp.isoformat(),
+            'source': source,
+            'location_state': location_state,
+            'is_overnight': is_overnight,
+            'check_in_time': check_in_dt.isoformat() if check_in_dt else None,
+        })
+
+    resp = JsonResponse({'success': True, 'employees': result})
+    resp['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+    resp['Pragma'] = 'no-cache'
+    return resp
 
 
 # ─────────────────────────────────────────────────────────────────

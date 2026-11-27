@@ -64,7 +64,7 @@
                                         Expires: {{ doc.expiry_date }}
                                     </p>
                                     {% if doc.file %}
-                                    <a href="{{ doc.file.url }}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-medium hover:underline mt-1 text-primary">
+                                    <a href="{% url 'employees:document_download' doc.pk %}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-medium hover:underline mt-1 text-primary">
                                         <i data-lucide="download" class="w-3 h-3"></i> Download
                                     </a>
                                     {% endif %}

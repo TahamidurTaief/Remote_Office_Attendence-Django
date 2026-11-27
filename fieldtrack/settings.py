@@ -318,14 +318,32 @@ WORKING_DAYS = [0, 1, 2, 3, 5, 6]
 
 # ── EMAIL CONFIGURATION ──────────────────────────────────────────────────────
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
-EMAIL_HOST_USER = ''
-EMAIL_HOST_PASSWORD = ''
-DEFAULT_FROM_EMAIL = 'noreply@fieldtrack.com'
+def _parse_env_bool(name, default=False):
+    val = os.getenv(name)
+    if val is None:
+        return default
+    norm = val.strip().lower()
+    if norm in ('true', '1', 'yes', 'on'):
+        return True
+    if norm in ('false', '0', 'no', 'off', ''):
+        return False
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(f"Invalid boolean value for {name}: {val!r}")
+
+
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = _parse_env_bool('EMAIL_USE_TLS', default=True)
+EMAIL_USE_SSL = _parse_env_bool('EMAIL_USE_SSL', default=False)
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be True.")
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@fieldtrack.com')
+TAIEFLAB_LOGO_PATH = os.getenv('TAIEFLAB_LOGO_PATH', '')
 
 
 # ── DJANGO COTTON & MULTI-TENANCY ────────────────────────────────────────────

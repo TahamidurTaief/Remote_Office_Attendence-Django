@@ -347,8 +347,14 @@ class SecureMediaView(LoginRequiredMixin, View):
             return HttpResponse("Unauthorized.", status=403)
             
         if asset.provider == "local":
-            if default_storage.exists(asset.provider_file_id):
-                return FileResponse(default_storage.open(asset.provider_file_id), content_type=asset.mime_type)
+            from fieldtrack.media_access import sanitize_download_filename, stream_private_file, validate_media_relpath
+            safe_rel = validate_media_relpath(asset.provider_file_id)
+            if safe_rel and default_storage.exists(safe_rel):
+                return stream_private_file(
+                    default_storage.open(safe_rel),
+                    filename=sanitize_download_filename(asset.original_name or safe_rel),
+                    content_type=asset.mime_type,
+                )
         raise Http404("File not found.")
 
 

@@ -387,60 +387,52 @@ class ForgotPasswordView(View):
 
 class ForgotPasswordRequestView(View):
     def post(self, request):
-        identifier = (request.POST.get('identifier') or '').strip()
+        from apps.accounts.password_reset_service import PasswordResetService, SchemaMigrationRequiredError
 
+        identifier = (request.POST.get('identifier') or '').strip()
         if not identifier:
             return render(request, 'accounts/partials/forgot_step1.html', {
                 'error': 'Please enter your email address or phone number.'
             })
 
-        user = CustomUser.objects.filter(get_identifier_query(identifier)).first()
+        try:
+            res = PasswordResetService.request_reset(request, identifier)
+        except SchemaMigrationRequiredError:
+            return render(request, 'accounts/partials/forgot_step1.html', {
+                'error': 'Password reset service is temporarily unavailable pending schema update.'
+            }, status=503)
 
-        if not user:
-            return render(request, 'accounts/partials/forgot_step2.html', {
-                'identifier': identifier,
-                'reset_token': 'dummy_token',
-                'debug_otp': '123456'
-            })
-
-        otp_code = f"{random.randint(100000, 999999)}"
-        reset_token = secrets.token_urlsafe(32)
-        expires_at = timezone.now() + timedelta(minutes=10)
-
-        PasswordResetOTP.objects.create(
-            user=user,
-            otp_code=otp_code,
-            reset_token=reset_token,
-            expires_at=expires_at
-        )
-
-        logger.info(f"[ForgotPassword] Generated OTP {otp_code} for user {user.email or user.phone}")
+        if not res['ok']:
+            return render(request, 'accounts/partials/forgot_step1.html', {
+                'error': res['error']
+            }, status=429 if res.get('throttled') else 503)
 
         return render(request, 'accounts/partials/forgot_step2.html', {
             'identifier': identifier,
-            'reset_token': reset_token,
-            'debug_otp': otp_code
+            'reset_token': res['reset_token'],
         })
 
 
 class ForgotPasswordVerifyView(View):
     def post(self, request):
+        from apps.accounts.password_reset_service import PasswordResetService, SchemaMigrationRequiredError
+
         reset_token = request.POST.get('reset_token')
         otp_code = (request.POST.get('otp_code') or '').strip()
 
-        otp_obj = PasswordResetOTP.objects.filter(
-            reset_token=reset_token,
-            otp_code=otp_code
-        ).first()
-
-        if not otp_obj or not otp_obj.is_valid():
+        try:
+            ok, err = PasswordResetService.verify_challenge(request, reset_token, otp_code)
+        except SchemaMigrationRequiredError:
             return render(request, 'accounts/partials/forgot_step2.html', {
                 'reset_token': reset_token,
-                'error': 'Invalid or expired OTP code. Please try again.'
-            })
+                'error': 'Password reset service is temporarily unavailable pending schema update.'
+            }, status=503)
 
-        otp_obj.is_used = True
-        otp_obj.save(update_fields=['is_used'])
+        if not ok:
+            return render(request, 'accounts/partials/forgot_step2.html', {
+                'reset_token': reset_token,
+                'error': err
+            })
 
         return render(request, 'accounts/partials/forgot_step3.html', {
             'reset_token': reset_token
@@ -449,6 +441,8 @@ class ForgotPasswordVerifyView(View):
 
 class ForgotPasswordResetView(View):
     def post(self, request):
+        from apps.accounts.password_reset_service import PasswordResetService, SchemaMigrationRequiredError
+
         reset_token = request.POST.get('reset_token')
         new_password = request.POST.get('new_password')
         confirm_password = request.POST.get('confirm_password')
@@ -465,37 +459,19 @@ class ForgotPasswordResetView(View):
                 'error': 'Passwords do not match.'
             })
 
-        otp_obj = PasswordResetOTP.objects.filter(reset_token=reset_token).first()
-        if not otp_obj:
-            return render(request, 'accounts/partials/forgot_step3.html', {
-                'reset_token': reset_token,
-                'error': 'Invalid reset session. Please request a new OTP.'
-            })
-
-        user = otp_obj.user
-        from django.contrib.auth.password_validation import validate_password
-        from django.core.exceptions import ValidationError
         try:
-            validate_password(new_password, user=user)
-        except ValidationError as e:
+            ok, err = PasswordResetService.consume_grant_and_reset_password(request, reset_token, new_password)
+        except SchemaMigrationRequiredError:
             return render(request, 'accounts/partials/forgot_step3.html', {
                 'reset_token': reset_token,
-                'error': ' '.join(e.messages)
+                'error': 'Password reset service is temporarily unavailable pending schema update.'
+            }, status=503)
+
+        if not ok:
+            return render(request, 'accounts/partials/forgot_step3.html', {
+                'reset_token': reset_token,
+                'error': err
             })
-
-        user.set_password(new_password)
-        user.save()
-        log_audit(user, 'password_reset', summary="Password reset via OTP", ip=get_client_ip(request))
-
-        now = timezone.now()
-        active_sessions = UserSession.objects.filter(user=user, is_active=True)
-        for sess in active_sessions:
-            sess.is_active = False
-            sess.logout_time = now
-            sess.save(update_fields=['is_active', 'logout_time'])
-
-            if sess.session_key:
-                Session.objects.filter(session_key=sess.session_key).delete()
 
         return render(request, 'accounts/partials/forgot_step4.html')
 

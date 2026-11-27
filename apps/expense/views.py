@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 
+from django.db.models import Count, Q
 from apps.accounts.mixins import AdminRequiredMixin, StaffRequiredMixin, RoleRequiredMixin
 from apps.employees.models import EmployeeProfile
 from apps.attendance.sync_utils import parse_and_validate_client_time
@@ -29,6 +30,34 @@ def _get_profile(user):
         if isinstance(canonical_emp, EmployeeProfile):
             return canonical_emp
     return None
+
+def get_scoped_expense_queryset(user, permission_code='expense.view', action='view', include_owner=False):
+    """
+    Single database-side scope for expense reads.
+    Uses canonical get_scoped_employee_queryset(user, permission_code, action).
+    When include_owner=True, also preserves access to the user's own expenses.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return Expense.objects.none()
+
+    if user.is_superuser:
+        return Expense.objects.all()
+
+    from apps.attendance.scoping import get_scoped_employee_queryset
+    scoped_employees = get_scoped_employee_queryset(
+        user,
+        permission_code=permission_code,
+        action=action,
+        base_qs=EmployeeProfile.objects.all(),
+    )
+    if include_owner:
+        owner_profile = _get_profile(user)
+        if owner_profile is not None:
+            return Expense.objects.filter(
+                Q(employee__in=scoped_employees) | Q(employee=owner_profile)
+            )
+    return Expense.objects.filter(employee__in=scoped_employees)
+
 
 class StaffOrManagerMixin(RoleRequiredMixin):
     required_permission = 'expense.view'
@@ -52,10 +81,9 @@ class ExpenseDetailView(StaffOrManagerMixin, DetailView):
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
-        employee = _get_profile(self.request.user)
-        from apps.accounts.engine import PermissionEngine
-        can_manage = self.request.user.is_superuser or PermissionEngine.evaluate(self.request.user, 'expense.approve').allowed
-        if not can_manage and obj.employee != employee:
+        if not get_scoped_expense_queryset(
+            self.request.user, 'expense.view', 'view', include_owner=True
+        ).filter(pk=obj.pk).exists():
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to view this expense.")
         return obj
@@ -159,15 +187,18 @@ class AdminExpenseListView(AdminRequiredMixin, ListView):
     context_object_name = 'expenses'
 
     def get_queryset(self):
-        qs = Expense.objects.all().select_related('employee', 'project', 'reviewed_by')
+        self._authorized_base_qs = get_scoped_expense_queryset(
+            self.request.user, 'expense.view', 'view'
+        )
+        qs = self._authorized_base_qs.select_related(
+            'employee', 'employee__branch', 'employee__master_employee',
+            'project', 'category', 'reviewed_by',
+        )
         status = self.request.GET.get('status')
         if status in ['pending_manager', 'pending_finance', 'pending_accounts', 'approved', 'rejected']:
             qs = qs.filter(status=status)
         elif status == 'pending':
             qs = qs.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts'])
-        elif not status:
-            # By default, show all
-            pass
         return qs
 
     def get_context_data(self, **kwargs):
@@ -176,11 +207,24 @@ class AdminExpenseListView(AdminRequiredMixin, ListView):
         from apps.projects.models import Project
         context['categories'] = ExpenseCategory.objects.filter(is_active=True)
         context['projects'] = Project.objects.all()
-        base_qs = Expense.objects.all()
-        context['all_count'] = base_qs.count()
-        context['pending_count'] = base_qs.filter(status__in=['pending_manager', 'pending_finance', 'pending_accounts']).count()
-        context['approved_count'] = base_qs.filter(status='approved').count()
-        context['rejected_count'] = base_qs.filter(status='rejected').count()
+        base_qs = getattr(
+            self,
+            '_authorized_base_qs',
+            get_scoped_expense_queryset(self.request.user, 'expense.view', 'view'),
+        )
+        counts = base_qs.aggregate(
+            all_count=Count('id'),
+            pending_count=Count(
+                'id',
+                filter=Q(status__in=['pending_manager', 'pending_finance', 'pending_accounts']),
+            ),
+            approved_count=Count('id', filter=Q(status='approved')),
+            rejected_count=Count('id', filter=Q(status='rejected')),
+        )
+        context['all_count'] = counts['all_count'] or 0
+        context['pending_count'] = counts['pending_count'] or 0
+        context['approved_count'] = counts['approved_count'] or 0
+        context['rejected_count'] = counts['rejected_count'] or 0
         return context
 
 
@@ -191,13 +235,9 @@ def expense_detail_api(request, pk):
         Expense.objects.select_related('employee', 'project', 'category', 'reviewed_by'),
         pk=pk
     )
-    from apps.accounts.engine import PermissionEngine
-    can_manage = (
-        request.user.is_superuser
-        or PermissionEngine.evaluate(request.user, 'expense.approve').allowed
-    )
-    employee = _get_profile(request.user)
-    if not can_manage and expense.employee != employee:
+    if not get_scoped_expense_queryset(
+        request.user, 'expense.view', 'view', include_owner=True
+    ).filter(pk=expense.pk).exists():
         return JsonResponse({'error': 'Permission denied'}, status=403)
 
     return_events_data = []

@@ -46,6 +46,7 @@ WORKDIR /app
 # Install runtime libraries & tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    postgresql-client \
     libjpeg62-turbo \
     zlib1g \
     curl \

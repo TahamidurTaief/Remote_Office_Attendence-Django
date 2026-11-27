@@ -10,7 +10,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import models, transaction
 from django.db.models import Sum, Count, Q
-from django.http import HttpResponse, JsonResponse, HttpResponseBadRequest
+from django.http import HttpResponse, JsonResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.contrib import messages
 
 from apps.accounts.mixins import RoleRequiredMixin, AdminRequiredMixin, RBACPermissionRequiredMixin
@@ -44,24 +44,95 @@ from apps.payroll.reports import (
 from apps.employees.models import Employee, Department
 from apps.branches.models import Branch
 
-PAYROLL_MANAGER_ROLES = ['admin', 'system_owner', 'hr', 'finance', 'accounts']
-
-
 class PayrollManagerMixin(RBACPermissionRequiredMixin):
     required_permission = 'payroll.view'
+    action_type = 'view'
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        if request.user.is_superuser or getattr(request.user, 'role', '') in PAYROLL_MANAGER_ROLES:
-            return super(RBACPermissionRequiredMixin, self).dispatch(request, *args, **kwargs)
         return super().dispatch(request, *args, **kwargs)
 
     def handle_no_permission(self):
-        if self.request.user.is_authenticated and not self.request.headers.get('HX-Request'):
+        if (
+            self.request.user.is_authenticated
+            and self.request.method == 'GET'
+            and self.action_type == 'view'
+            and not self.request.headers.get('HX-Request')
+        ):
             from django.shortcuts import redirect
             return redirect('payroll:my_payslips')
         return super().handle_no_permission()
+
+
+def _get_payroll_scope_eval(user, permission_code='payroll.view', action_type='view'):
+    from apps.accounts.engine import PermissionEngine
+    from apps.accounts.models import DataScope
+    if not user or not user.is_authenticated:
+        return False, DataScope.OWN
+    if user.is_superuser:
+        return True, DataScope.GLOBAL
+    res = PermissionEngine.evaluate(user, permission_code, action_type=action_type)
+    return res.allowed, res.data_scope
+
+
+def get_scoped_master_employee_queryset(user, permission_code='payroll.view', action_type='view'):
+    from apps.accounts.models import DataScope
+    from apps.employees.models import Employee
+
+    allowed, scope = _get_payroll_scope_eval(user, permission_code, action_type)
+    if not allowed:
+        return Employee.objects.none()
+
+    if scope in (DataScope.GLOBAL, DataScope.COMPANY):
+        return Employee.objects.all()
+
+    emp_master = getattr(user, 'employee_master', None)
+    emp_profile = getattr(user, 'employee_profile', None)
+
+    if scope == DataScope.BRANCH:
+        branch = None
+        if emp_profile and getattr(emp_profile, 'canonical_branch', None):
+            branch = emp_profile.canonical_branch
+        elif emp_master and getattr(emp_master, 'branch', None):
+            branch = emp_master.branch
+        elif emp_profile and getattr(emp_profile, 'branch', None):
+            branch = emp_profile.branch
+        if not branch:
+            return Employee.objects.none()
+        return Employee.objects.filter(branch_id=getattr(branch, 'id', branch))
+
+    if scope == DataScope.DEPARTMENT:
+        from apps.attendance.scoping import _extract_user_department_identity
+        dept_ids, dept_names = _extract_user_department_identity(user)
+        if not dept_ids and not dept_names:
+            return Employee.objects.none()
+        dept_q = Q()
+        if dept_ids:
+            dept_q |= Q(department_id__in=dept_ids)
+        for name in dept_names:
+            dept_q |= Q(department__name__iexact=name)
+        return Employee.objects.filter(dept_q).distinct()
+
+    if scope == DataScope.TEAM:
+        actor_master = emp_master or getattr(emp_profile, 'master_employee', None)
+        if not actor_master:
+            return Employee.objects.none()
+        from apps.employees.hierarchy_services import OrgHierarchyService
+        sub_ids = list(OrgHierarchyService.get_all_subordinates(actor_master).values_list('id', flat=True))
+        sub_ids.append(actor_master.id)
+        return Employee.objects.filter(id__in=sub_ids)
+
+    # OWN
+    if emp_master:
+        return Employee.objects.filter(pk=emp_master.pk)
+    return Employee.objects.filter(user_id=user.id)
+
+
+def has_full_run_authority(user, permission_code, action_type='edit'):
+    from apps.accounts.models import DataScope
+    allowed, scope = _get_payroll_scope_eval(user, permission_code, action_type)
+    return allowed and scope in (DataScope.GLOBAL, DataScope.COMPANY)
 
 
 def is_payroll_manager(user):
@@ -79,12 +150,22 @@ class PayrollRunListView(PayrollManagerMixin, ListView):
     context_object_name = 'runs'
 
     def get_queryset(self):
+        from apps.accounts.models import DataScope
+        allowed, scope = _get_payroll_scope_eval(self.request.user, 'payroll.view', 'view')
+        if not allowed:
+            return PayrollRun.objects.none()
+
+        calc_filter = Q()
+        if scope not in (DataScope.GLOBAL, DataScope.COMPANY):
+            scoped_emps = get_scoped_master_employee_queryset(self.request.user, 'payroll.view', 'view')
+            calc_filter = Q(calculations__employee__in=scoped_emps)
+
         qs = PayrollRun.objects.annotate(
-            total_calc_count=Count('calculations'),
-            agg_gross=Sum('calculations__gross_salary'),
-            agg_net=Sum('calculations__net_payable'),
-            agg_bank=Sum('calculations__bank_payable'),
-            agg_cash=Sum('calculations__cash_payable'),
+            total_calc_count=Count('calculations', filter=calc_filter) if calc_filter else Count('calculations'),
+            agg_gross=Sum('calculations__gross_salary', filter=calc_filter) if calc_filter else Sum('calculations__gross_salary'),
+            agg_net=Sum('calculations__net_payable', filter=calc_filter) if calc_filter else Sum('calculations__net_payable'),
+            agg_bank=Sum('calculations__bank_payable', filter=calc_filter) if calc_filter else Sum('calculations__bank_payable'),
+            agg_cash=Sum('calculations__cash_payable', filter=calc_filter) if calc_filter else Sum('calculations__cash_payable'),
         ).order_by('-period_start')
 
         year = self.request.GET.get('year')
@@ -109,7 +190,12 @@ class PayrollRunListView(PayrollManagerMixin, ListView):
 
 
 class PayrollRunCreateView(PayrollManagerMixin, View):
+    required_permission = 'payroll.add'
+    action_type = 'add'
+
     def post(self, request):
+        if not has_full_run_authority(request.user, 'payroll.add', 'add'):
+            return HttpResponseForbidden("Permission Denied: Full-run authority required to create payroll runs.")
         month = request.POST.get('month')
         year = request.POST.get('year')
         name = request.POST.get('name', '').strip()
@@ -157,8 +243,12 @@ class PayrollRunDetailView(PayrollManagerMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         run = self.object
 
-        # Aggregate stats
-        calcs = EmployeePayrollCalculation.objects.filter(payroll_run=run).select_related(
+        # Aggregate stats (scoped to authorized employees)
+        scoped_emps = get_scoped_master_employee_queryset(self.request.user, 'payroll.view', 'view')
+        calcs = EmployeePayrollCalculation.objects.filter(
+            payroll_run=run,
+            employee__in=scoped_emps,
+        ).select_related(
             'employee', 'employee__department', 'employee__designation', 'employee__branch'
         )
 
@@ -186,9 +276,8 @@ class PayrollRunDetailView(PayrollManagerMixin, DetailView):
             'ot_amount': totals['total_ot_amount'] or Decimal('0.00'),
         }
 
-        # Unassigned employee warning check
-        from apps.employees.models import Employee
-        active_emps = Employee.objects.filter(status='active')
+        # Unassigned employee warning check (scoped)
+        active_emps = scoped_emps.filter(status='active').prefetch_related('salary_assignments')
         unassigned_emps = []
         for emp in active_emps:
             has_assign = False
@@ -241,7 +330,11 @@ class PayrollRunDetailView(PayrollManagerMixin, DetailView):
 class PayrollRunGridPartialView(PayrollManagerMixin, View):
     def get(self, request, pk):
         run = get_object_or_404(PayrollRun, pk=pk)
-        calcs = EmployeePayrollCalculation.objects.filter(payroll_run=run).select_related(
+        scoped_emps = get_scoped_master_employee_queryset(request.user, 'payroll.view', 'view')
+        calcs = EmployeePayrollCalculation.objects.filter(
+            payroll_run=run,
+            employee__in=scoped_emps,
+        ).select_related(
             'employee', 'employee__department', 'employee__designation', 'employee__branch', 'employee__legacy_profile'
         )
 
@@ -279,7 +372,12 @@ class PayrollRunGridPartialView(PayrollManagerMixin, View):
 
 
 class PayrollRunSyncView(PayrollManagerMixin, View):
+    required_permission = 'payroll.edit'
+    action_type = 'edit'
+
     def post(self, request, pk):
+        if not has_full_run_authority(request.user, 'payroll.edit', 'edit'):
+            return HttpResponseForbidden("Permission Denied: Full-run authority required to synchronize payroll runs.")
         run = get_object_or_404(PayrollRun, pk=pk)
         if run.status in [PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]:
             messages.error(request, "Cannot synchronize an Approved/Locked or Disbursed payroll run.")
@@ -297,7 +395,21 @@ class PayrollRunSyncView(PayrollManagerMixin, View):
 
 
 class PayrollRunTransitionView(PayrollManagerMixin, View):
+    required_permission = 'payroll.approve'
+    action_type = 'approve'
+
+    def get_required_permission(self):
+        target_status = self.request.POST.get('target_status')
+        if target_status in (PayrollRunStatus.REVIEW,):
+            self.action_type = 'edit'
+            return 'payroll.edit'
+        self.action_type = 'approve'
+        return 'payroll.approve'
+
     def post(self, request, pk):
+        req_perm = self.get_required_permission()
+        if not has_full_run_authority(request.user, req_perm, self.action_type):
+            return HttpResponseForbidden("Permission Denied: Full-run authority required to transition payroll runs.")
         run = get_object_or_404(PayrollRun, pk=pk)
         target_status = request.POST.get('target_status')
         note = request.POST.get('note', '').strip()
@@ -320,11 +432,13 @@ class PayrollRunTransitionView(PayrollManagerMixin, View):
         return redirect('payroll:payroll_run_detail', pk=run.pk)
 
 
-class PayrollRunReverseView(AdminRequiredMixin, View):
-    required_permission = 'payroll.edit'
-    action_type = 'edit'
+class PayrollRunReverseView(PayrollManagerMixin, View):
+    required_permission = 'payroll.approve'
+    action_type = 'approve'
 
     def post(self, request, pk):
+        if not has_full_run_authority(request.user, 'payroll.approve', 'approve'):
+            return HttpResponseForbidden("Permission Denied: Full-run authority required to reverse payroll runs.")
         run = get_object_or_404(PayrollRun, pk=pk)
         note = request.POST.get('note', '').strip()
 
@@ -346,6 +460,8 @@ class PayrollAdjustmentModalView(PayrollManagerMixin, View):
         run = get_object_or_404(PayrollRun, pk=pk)
         employee_id = request.GET.get('employee_id')
         employee = get_object_or_404(Employee, pk=employee_id)
+        if not get_scoped_master_employee_queryset(request.user, 'payroll.view', 'view').filter(pk=employee.pk).exists():
+            raise PermissionDenied("You are not authorized to view adjustments for this employee.")
 
         adjustments = PayrollAdjustment.objects.filter(
             payroll_run=run,
@@ -366,6 +482,9 @@ class PayrollAdjustmentModalView(PayrollManagerMixin, View):
 
 
 class PayrollAdjustmentAddView(PayrollManagerMixin, View):
+    required_permission = 'payroll.edit'
+    action_type = 'edit'
+
     def post(self, request, pk):
         run = get_object_or_404(PayrollRun, pk=pk)
         if run.status in [PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]:
@@ -381,6 +500,8 @@ class PayrollAdjustmentAddView(PayrollManagerMixin, View):
             return HttpResponseBadRequest("Missing required fields.")
 
         employee = get_object_or_404(Employee, pk=employee_id)
+        if not get_scoped_master_employee_queryset(request.user, 'payroll.edit', 'edit').filter(pk=employee.pk).exists():
+            return HttpResponseForbidden("Permission Denied: Employee is outside your authorized scope.")
         component = get_object_or_404(SalaryComponent, pk=component_id)
 
         try:
@@ -390,59 +511,59 @@ class PayrollAdjustmentAddView(PayrollManagerMixin, View):
         except Exception:
             return HttpResponseBadRequest("Invalid amount.")
 
-        # Create Adjustment
-        PayrollAdjustment.objects.create(
-            payroll_run=run,
-            employee=employee,
-            component=component,
-            amount=amount,
-            type=adj_type,
-            reason=reason or f"Manual adjustment for {component.name}",
-            created_by=request.user
-        )
+        try:
+            with transaction.atomic():
+                calc = EmployeePayrollCalculation.objects.select_for_update().filter(
+                    payroll_run=run, employee=employee
+                ).first()
+                if calc:
+                    PayrollService.resolve_policy_from_snapshot(run, calc)
 
-        # Recalculate employee payroll calculation snapshot
-        calc = EmployeePayrollCalculation.objects.filter(payroll_run=run, employee=employee).first()
-        if calc:
-            PayrollService.run_payroll_for_employee(
-                payroll_run=run,
-                employee=employee,
-                unpaid_absent_days=calc.unpaid_absent_days,
-                other_deduction=calc.other_deduction,
-                ot_hours=calc.ot_hours,
-                synced_at=calc.synced_at,
-                source_total_present_days=calc.source_total_present_days,
-                source_total_approved_leave_days=calc.source_total_approved_leave_days,
-                source_total_approved_ot_hours=calc.source_total_approved_ot_hours
-            )
+                PayrollAdjustment.objects.create(
+                    payroll_run=run,
+                    employee=employee,
+                    component=component,
+                    amount=amount,
+                    type=adj_type,
+                    reason=reason or f"Manual adjustment for {component.name}",
+                    created_by=request.user
+                )
+
+                if calc:
+                    PayrollService.recalculate_employee_for_adjustment(run, employee, calc)
+        except ValidationError as e:
+            return HttpResponseBadRequest(str(e.message if hasattr(e, 'message') else e))
 
         return redirect(f"{request.path.replace('/add/', '/')}?employee_id={employee.pk}")
 
 
 class PayrollAdjustmentDeleteView(PayrollManagerMixin, View):
+    required_permission = 'payroll.edit'
+    action_type = 'edit'
+
     def post(self, request, pk, adj_pk):
         run = get_object_or_404(PayrollRun, pk=pk)
         if run.status in [PayrollRunStatus.APPROVED_LOCKED, PayrollRunStatus.DISBURSED]:
             return HttpResponseBadRequest("Cannot delete adjustments from locked or disbursed payroll runs.")
 
-        adjustment = get_object_or_404(PayrollAdjustment, pk=adj_pk, payroll_run=run)
+        adjustment = get_object_or_404(PayrollAdjustment.objects.select_related('employee'), pk=adj_pk, payroll_run=run)
+        if not get_scoped_master_employee_queryset(request.user, 'payroll.edit', 'edit').filter(pk=adjustment.employee_id).exists():
+            return HttpResponseForbidden("Permission Denied: Employee is outside your authorized scope.")
         employee = adjustment.employee
-        adjustment.delete()
+        try:
+            with transaction.atomic():
+                calc = EmployeePayrollCalculation.objects.select_for_update().filter(
+                    payroll_run=run, employee=employee
+                ).first()
+                if calc:
+                    PayrollService.resolve_policy_from_snapshot(run, calc)
 
-        # Live recalculation
-        calc = EmployeePayrollCalculation.objects.filter(payroll_run=run, employee=employee).first()
-        if calc:
-            PayrollService.run_payroll_for_employee(
-                payroll_run=run,
-                employee=employee,
-                unpaid_absent_days=calc.unpaid_absent_days,
-                other_deduction=calc.other_deduction,
-                ot_hours=calc.ot_hours,
-                synced_at=calc.synced_at,
-                source_total_present_days=calc.source_total_present_days,
-                source_total_approved_leave_days=calc.source_total_approved_leave_days,
-                source_total_approved_ot_hours=calc.source_total_approved_ot_hours
-            )
+                adjustment.delete()
+
+                if calc:
+                    PayrollService.recalculate_employee_for_adjustment(run, employee, calc)
+        except ValidationError as e:
+            return HttpResponseBadRequest(str(e.message if hasattr(e, 'message') else e))
 
         return redirect(f"/payroll/runs/{run.pk}/adjustments/?employee_id={employee.pk}")
 
@@ -457,18 +578,14 @@ class EmployeePayslipDetailView(LoginRequiredMixin, View):
             pk=pk
         )
 
-        # Check authorization
-        if not is_payroll_manager(request.user):
-            # Must own the calculation
-            user_owns = False
-            if calc.employee.user == request.user:
-                user_owns = True
-            elif getattr(calc.employee, 'legacy_profile', None) and calc.employee.legacy_profile.user == request.user:
-                user_owns = True
-            elif getattr(request.user, 'employee_master', None) and request.user.employee_master == calc.employee:
-                user_owns = True
-
-            if not user_owns:
+        # Check authorization: owner first, then scoped payroll.view
+        user_owns = (
+            calc.employee.user == request.user
+            or (getattr(calc.employee, 'legacy_profile', None) and calc.employee.legacy_profile.user == request.user)
+            or (getattr(request.user, 'employee_master', None) and request.user.employee_master == calc.employee)
+        )
+        if not user_owns:
+            if not get_scoped_master_employee_queryset(request.user, 'payroll.view', 'view').filter(pk=calc.employee_id).exists():
                 raise PermissionDenied("You are not authorized to view this payslip.")
 
         # Breakdown parse
@@ -497,17 +614,14 @@ class EmployeePayslipPDFView(LoginRequiredMixin, View):
             pk=pk
         )
 
-        # Authorization check
-        if not is_payroll_manager(request.user):
-            user_owns = False
-            if calc.employee.user == request.user:
-                user_owns = True
-            elif getattr(calc.employee, 'legacy_profile', None) and calc.employee.legacy_profile.user == request.user:
-                user_owns = True
-            elif getattr(request.user, 'employee_master', None) and request.user.employee_master == calc.employee:
-                user_owns = True
-
-            if not user_owns:
+        # Authorization check: owner first, then scoped payroll.view
+        user_owns = (
+            calc.employee.user == request.user
+            or (getattr(calc.employee, 'legacy_profile', None) and calc.employee.legacy_profile.user == request.user)
+            or (getattr(request.user, 'employee_master', None) and request.user.employee_master == calc.employee)
+        )
+        if not user_owns:
+            if not get_scoped_master_employee_queryset(request.user, 'payroll.view', 'view').filter(pk=calc.employee_id).exists():
                 raise PermissionDenied("You are not authorized to download this payslip.")
 
         pdf_bytes = generate_payslip_pdf(calc)
@@ -548,7 +662,11 @@ class PayrollRegisterView(PayrollManagerMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         run = self.object
-        calcs = EmployeePayrollCalculation.objects.filter(payroll_run=run).select_related(
+        scoped_emps = get_scoped_master_employee_queryset(self.request.user, 'payroll.view', 'view')
+        calcs = EmployeePayrollCalculation.objects.filter(
+            payroll_run=run,
+            employee__in=scoped_emps,
+        ).select_related(
             'employee', 'employee__department', 'employee__designation'
         ).order_by('employee__employee_number')
 
@@ -570,9 +688,16 @@ class PayrollRegisterView(PayrollManagerMixin, DetailView):
 
 
 class PayrollRegisterExportView(PayrollManagerMixin, View):
+    required_permission = 'payroll.export'
+    action_type = 'export'
+
     def get(self, request, pk, format):
         run = get_object_or_404(PayrollRun, pk=pk)
-        calcs = EmployeePayrollCalculation.objects.filter(payroll_run=run).select_related(
+        scoped_emps = get_scoped_master_employee_queryset(request.user, 'payroll.export', 'export')
+        calcs = EmployeePayrollCalculation.objects.filter(
+            payroll_run=run,
+            employee__in=scoped_emps,
+        ).select_related(
             'employee', 'employee__department', 'employee__designation'
         ).order_by('employee__employee_number')
 
@@ -605,8 +730,10 @@ class BankReportView(PayrollManagerMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         run = self.object
+        scoped_emps = get_scoped_master_employee_queryset(self.request.user, 'payroll.view', 'view')
         calcs = EmployeePayrollCalculation.objects.filter(
             payroll_run=run,
+            employee__in=scoped_emps,
             bank_payable__gt=Decimal('0.00')
         ).select_related('employee', 'employee__department').order_by('employee__employee_number')
 
@@ -620,10 +747,15 @@ class BankReportView(PayrollManagerMixin, DetailView):
 
 
 class BankReportExportView(PayrollManagerMixin, View):
+    required_permission = 'payroll.export'
+    action_type = 'export'
+
     def get(self, request, pk, format):
         run = get_object_or_404(PayrollRun, pk=pk)
+        scoped_emps = get_scoped_master_employee_queryset(request.user, 'payroll.export', 'export')
         calcs = EmployeePayrollCalculation.objects.filter(
             payroll_run=run,
+            employee__in=scoped_emps,
             bank_payable__gt=Decimal('0.00')
         ).select_related('employee', 'employee__department').order_by('employee__employee_number')
 
@@ -656,8 +788,10 @@ class CashReportView(PayrollManagerMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         run = self.object
+        scoped_emps = get_scoped_master_employee_queryset(self.request.user, 'payroll.view', 'view')
         calcs = EmployeePayrollCalculation.objects.filter(
             payroll_run=run,
+            employee__in=scoped_emps,
             cash_payable__gt=Decimal('0.00')
         ).select_related('employee', 'employee__department').order_by('employee__employee_number')
 
@@ -671,10 +805,15 @@ class CashReportView(PayrollManagerMixin, DetailView):
 
 
 class CashReportExportView(PayrollManagerMixin, View):
+    required_permission = 'payroll.export'
+    action_type = 'export'
+
     def get(self, request, pk, format):
         run = get_object_or_404(PayrollRun, pk=pk)
+        scoped_emps = get_scoped_master_employee_queryset(request.user, 'payroll.export', 'export')
         calcs = EmployeePayrollCalculation.objects.filter(
             payroll_run=run,
+            employee__in=scoped_emps,
             cash_payable__gt=Decimal('0.00')
         ).select_related('employee', 'employee__department').order_by('employee__employee_number')
 
@@ -716,6 +855,9 @@ class SalaryComponentListView(PayrollManagerMixin, ListView):
 
 
 class SalaryComponentCreateView(PayrollManagerMixin, View):
+    required_permission = 'payroll.add'
+    action_type = 'add'
+
     def post(self, request):
         name = request.POST.get('name', '').strip()
         code = request.POST.get('code', '').strip().upper()
@@ -753,6 +895,9 @@ class SalaryComponentCreateView(PayrollManagerMixin, View):
 
 
 class SalaryComponentUpdateView(PayrollManagerMixin, View):
+    required_permission = 'payroll.edit'
+    action_type = 'edit'
+
     def post(self, request, pk):
         comp = get_object_or_404(SalaryComponent, pk=pk)
         
@@ -800,6 +945,9 @@ class SalaryComponentUpdateView(PayrollManagerMixin, View):
 
 
 class SalaryComponentDeleteView(PayrollManagerMixin, View):
+    required_permission = 'payroll.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
         comp = get_object_or_404(SalaryComponent, pk=pk)
         
@@ -838,6 +986,9 @@ class SalaryStructureListView(PayrollManagerMixin, ListView):
 
 
 class SalaryStructureCreateView(PayrollManagerMixin, View):
+    required_permission = 'payroll.add'
+    action_type = 'add'
+
     def get(self, request):
         components = SalaryComponent.objects.filter(is_active=True).order_by('type', 'name')
         components_data = [
@@ -916,6 +1067,9 @@ class SalaryStructureCreateView(PayrollManagerMixin, View):
 
 
 class SalaryStructureUpdateView(PayrollManagerMixin, View):
+    required_permission = 'payroll.edit'
+    action_type = 'edit'
+
     def get(self, request, pk):
         struct = get_object_or_404(
             SalaryStructure.objects.prefetch_related('structure_components__salary_component'),
@@ -1013,6 +1167,9 @@ class SalaryStructureUpdateView(PayrollManagerMixin, View):
 
 
 class SalaryStructureDeleteView(PayrollManagerMixin, View):
+    required_permission = 'payroll.delete'
+    action_type = 'delete'
+
     def post(self, request, pk):
         struct = get_object_or_404(SalaryStructure, pk=pk)
         
@@ -1033,7 +1190,9 @@ class EmployeeSalarySetupView(PayrollManagerMixin, ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        qs = Employee.objects.select_related('department', 'branch').prefetch_related('salary_assignments', 'salary_assignments__salary_structure')
+        qs = get_scoped_master_employee_queryset(self.request.user, 'payroll.view', 'view').select_related(
+            'department', 'branch'
+        ).prefetch_related('salary_assignments', 'salary_assignments__salary_structure')
         search = self.request.GET.get('search', '').strip()
         dept_id = self.request.GET.get('department')
         branch_id = self.request.GET.get('branch')
@@ -1080,6 +1239,9 @@ class EmployeeSalarySetupView(PayrollManagerMixin, ListView):
 
 
 class EmployeeSalaryAssignmentCreateView(PayrollManagerMixin, View):
+    required_permission = 'payroll.add'
+    action_type = 'add'
+
     def post(self, request):
         employee_id = request.POST.get('employee_id')
         structure_id = request.POST.get('salary_structure_id')
@@ -1090,6 +1252,8 @@ class EmployeeSalaryAssignmentCreateView(PayrollManagerMixin, View):
         bank_limit_str = request.POST.get('bank_limit', '0')
 
         employee = get_object_or_404(Employee, pk=employee_id)
+        if not get_scoped_master_employee_queryset(request.user, 'payroll.add', 'add').filter(pk=employee.pk).exists():
+            return HttpResponseForbidden("Permission Denied: Employee is outside your authorized scope.")
         structure = get_object_or_404(SalaryStructure, pk=structure_id)
 
         try:
@@ -1124,8 +1288,13 @@ class EmployeeSalaryAssignmentCreateView(PayrollManagerMixin, View):
 
 
 class EmployeeSalaryAssignmentUpdateView(PayrollManagerMixin, View):
+    required_permission = 'payroll.edit'
+    action_type = 'edit'
+
     def post(self, request, pk):
         assign = get_object_or_404(EmployeeSalaryAssignment, pk=pk)
+        if not get_scoped_master_employee_queryset(request.user, 'payroll.edit', 'edit').filter(pk=assign.employee_id).exists():
+            return HttpResponseForbidden("Permission Denied: Employee is outside your authorized scope.")
         structure_id = request.POST.get('salary_structure_id')
         gross_salary_str = request.POST.get('gross_salary')
         effective_from_str = request.POST.get('effective_from')
@@ -1183,6 +1352,13 @@ class PayrollConfigurationView(PayrollManagerMixin, View):
     Canonical administrative portal for payroll calculation parameters,
     schedule cutoff dates, proration, and working-day divisors.
     """
+    def get_required_permission(self):
+        if self.request.method == 'POST':
+            self.action_type = 'edit'
+            return 'payroll.edit'
+        self.action_type = 'view'
+        return 'payroll.view'
+
     def get(self, request, *args, **kwargs):
         from apps.tenants.context import get_user_tenant
         from apps.payroll.configuration_service import PayrollConfigurationService
@@ -1211,12 +1387,11 @@ class PayrollConfigurationView(PayrollManagerMixin, View):
         if not tenant:
             raise PermissionDenied("Active tenant context is required.")
 
-        # Verify edit permission
+        # Verify edit permission (strictly via RBAC, no role-string bypass)
         can_edit = (
             request.user.is_superuser or
-            getattr(request.user, 'role', '') in PAYROLL_MANAGER_ROLES or
-            PermissionEngine.evaluate(request.user, 'payroll.edit').allowed or
-            PermissionEngine.evaluate(request.user, 'payroll.update').allowed
+            PermissionEngine.evaluate(request.user, 'payroll.edit', action_type='edit').allowed or
+            PermissionEngine.evaluate(request.user, 'payroll.update', action_type='edit').allowed
         )
         if not can_edit:
             raise PermissionDenied("You do not have permission to modify payroll configuration.")
@@ -1336,7 +1511,9 @@ class PayrollPaymentDestinationListView(PayrollManagerMixin, View):
         from apps.employees.models import Employee
         from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
 
-        employees = Employee.objects.select_related('branch', 'department', 'designation', 'payment_destination').filter(
+        employees = get_scoped_master_employee_queryset(request.user, 'payroll.view', 'view').select_related(
+            'branch', 'department', 'designation', 'payment_destination'
+        ).filter(
             status='active'
         ).order_by('employee_number')
 
@@ -1371,11 +1548,20 @@ class PayrollPaymentDestinationUpdateView(PayrollManagerMixin, View):
     """
     Update employee payroll payment destination with conditional Bank, Cash, or MFS validation.
     """
+    def get_required_permission(self):
+        if self.request.method == 'POST':
+            self.action_type = 'edit'
+            return 'payroll.edit'
+        self.action_type = 'view'
+        return 'payroll.view'
+
     def get(self, request, employee_id, *args, **kwargs):
         from apps.employees.models import Employee
         from apps.payroll.forms import PayrollPaymentDestinationForm
 
         employee = get_object_or_404(Employee, pk=employee_id)
+        if not get_scoped_master_employee_queryset(request.user, 'payroll.view', 'view').filter(pk=employee.pk).exists():
+            raise PermissionDenied("You are not authorized to view this employee's payment destination.")
         form = PayrollPaymentDestinationForm(employee=employee)
         return render(request, 'payroll/payment_destination_edit.html', {
             'employee': employee,
@@ -1388,6 +1574,8 @@ class PayrollPaymentDestinationUpdateView(PayrollManagerMixin, View):
         from apps.payroll.payment_destination_service import PayrollPaymentDestinationService
 
         employee = get_object_or_404(Employee, pk=employee_id)
+        if not get_scoped_master_employee_queryset(request.user, 'payroll.edit', 'edit').filter(pk=employee.pk).exists():
+            return HttpResponseForbidden("Permission Denied: Employee is outside your authorized scope.")
         form = PayrollPaymentDestinationForm(request.POST, employee=employee)
 
         if form.is_valid():

@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 from .models import BackupRecord, GoogleDriveConfig
 from .utils import create_backup
 from .gdrive import upload_to_drive, test_drive_connection
-from .encryption import generate_wrapped_key, decrypt_file_to_bytes
+from .encryption import generate_wrapped_key, decrypt_file_to_bytes, unwrap_key
 
 
 def _admin_required(view_func):
@@ -185,32 +185,73 @@ def download_backup(request, pk):
 def manage_encryption(request):
     """
     Handles three actions via POST field `action`:
-      generate  – create a new MEK and enable encryption
-      rotate    – replace the MEK (old encrypted backups become unreadable)
+      generate  – create an initial MEK and enable encryption (never replaces an existing key)
+      rotate    – blocked when encrypted backups depend on the current key (no versioned-key schema)
       toggle    – flip encryption_enabled without touching the key
     """
-    config = GoogleDriveConfig.get_config()
+    from django.db import transaction
+
     action = request.POST.get("action", "")
 
-    if action in ("generate", "rotate"):
-        config.master_key_wrapped = generate_wrapped_key()
-        config.encryption_enabled = True
-        config.save(update_fields=["master_key_wrapped", "encryption_enabled", "updated_at"])
-        label = "generated" if action == "generate" else "rotated"
-        messages.success(
-            request,
-            f"Encryption key {label}. New backups will be encrypted. "
-            f"{'Note: previously encrypted backups are now unreadable without the old key.' if action == 'rotate' else ''}",
-        )
+    with transaction.atomic():
+        GoogleDriveConfig.get_config()
+        config = GoogleDriveConfig.objects.select_for_update().get(pk=1)
+        has_existing_key = bool((config.master_key_wrapped or "").strip())
+        has_encrypted_backups = BackupRecord.objects.filter(is_encrypted=True).exists()
 
-    elif action == "toggle":
-        config.encryption_enabled = not config.encryption_enabled
-        config.save(update_fields=["encryption_enabled", "updated_at"])
-        state = "enabled" if config.encryption_enabled else "disabled"
-        messages.success(request, f"Backup encryption {state}.")
+        key_is_valid = False
+        if has_existing_key:
+            try:
+                unwrap_key(config.master_key_wrapped)
+                key_is_valid = True
+            except ValueError:
+                key_is_valid = False
 
-    else:
-        messages.error(request, "Unknown encryption action.")
+        if action in ("generate", "rotate"):
+            if has_encrypted_backups:
+                msg = (
+                    "Key rotation/replacement blocked: existing encrypted backups depend on the current key "
+                    "and key-version retention is not yet implemented."
+                )
+                messages.error(request, msg)
+                return HttpResponse(msg, status=409)
+
+            if has_existing_key and not key_is_valid:
+                msg = "Existing encryption key is corrupt or unreadable; refusing destructive replacement."
+                messages.error(request, msg)
+                return HttpResponse(msg, status=409)
+
+            if action == "generate" and has_existing_key:
+                msg = "An encryption key already exists; repeated generate cannot replace it."
+                messages.error(request, msg)
+                return HttpResponse(msg, status=409)
+
+            if action == "rotate" and not has_existing_key:
+                msg = "No existing encryption key to rotate. Generate an initial key first."
+                messages.error(request, msg)
+                return HttpResponse(msg, status=409)
+
+            config.master_key_wrapped = generate_wrapped_key()
+            config.encryption_enabled = True
+            config.save(update_fields=["master_key_wrapped", "encryption_enabled", "updated_at"])
+            label = "generated" if action == "generate" else "rotated"
+            messages.success(
+                request,
+                f"Encryption key {label}. New backups will be encrypted.",
+            )
+
+        elif action == "toggle":
+            if not config.encryption_enabled and (not has_existing_key or not key_is_valid):
+                msg = "Cannot enable encryption without a valid encryption key."
+                messages.error(request, msg)
+                return HttpResponse(msg, status=409)
+            config.encryption_enabled = not config.encryption_enabled
+            config.save(update_fields=["encryption_enabled", "updated_at"])
+            state = "enabled" if config.encryption_enabled else "disabled"
+            messages.success(request, f"Backup encryption {state}.")
+
+        else:
+            messages.error(request, "Unknown encryption action.")
 
     if request.headers.get("HX-Request"):
         # Return a small status snippet for htmx swap
