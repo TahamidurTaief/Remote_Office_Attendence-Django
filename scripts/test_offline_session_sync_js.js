@@ -346,7 +346,56 @@ function loadOfflineEnv(idbMock, fetchHandler, fixedNowMs) {
     assert.strictEqual((await env.window.FieldTrackDB.getPendingSyncItems()).length, 0);
   }
 
-  console.log("Offline session-targeting & dependency JS tests passed: 4/4 groups ok.");
+  // 5. Parent success after queue reload never overwrites an existing explicit session_id on a child
+  {
+    const idb = createPersistentIndexedDB();
+    let env = loadOfflineEnv(
+      idb,
+      async (url, opts) => {
+        const body = JSON.parse(opts.body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            results: body.items.map((it) =>
+              it.uuid === "ci-parent-5"
+                ? { uuid: it.uuid, status: "success", data: { session_id: 999 } }
+                : { uuid: it.uuid, status: "failed", permanent: false, error: "Transient error" }
+            ),
+          }),
+        };
+      },
+      fixedNow
+    );
+
+    await env.window.queueOfflineAction({
+      action: "check_in",
+      sync_uuid: "ci-parent-5",
+      latitude: 23.81,
+      longitude: 90.41,
+      client_event_time: "2026-11-28T03:00:00Z",
+    });
+    await env.window.queueOfflineAction({
+      action: "check_out",
+      sync_uuid: "co-child-5",
+      session_id: 123,
+      depends_on_sync_uuid: "ci-parent-5",
+      latitude: 23.81,
+      longitude: 90.41,
+      client_event_time: "2026-11-28T11:00:00Z",
+    });
+
+    // Simulate queue reload before processing
+    env = loadOfflineEnv(idb, env.fetch, fixedNow + 1000);
+    await env.window.SyncEngine.processQueue();
+
+    const child = await env.window.FieldTrackDB.getSyncItem("co-child-5");
+    assert.ok(child);
+    assert.strictEqual(child.payload.session_id, 123, "Explicit session_id must remain immutable");
+  }
+
+  console.log("Offline session-targeting & dependency JS tests passed: 5/5 groups ok.");
 })().catch((err) => {
   console.error(err);
   process.exit(1);

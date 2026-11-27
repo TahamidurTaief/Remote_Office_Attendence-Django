@@ -153,6 +153,25 @@ def validate_uploaded_photo(photo):
         raise AttendanceTransactionError('Invalid or corrupted image file.', 400)
 
 
+def _parse_positive_int_id(raw_value, error_message='Invalid attendance session target.'):
+    """Parse strict positive integer IDs or digit strings; reject bools, floats, <= 0, and non-digits."""
+    if isinstance(raw_value, bool):
+        raise AttendanceTransactionError(error_message, 400)
+    if isinstance(raw_value, int):
+        if raw_value <= 0:
+            raise AttendanceTransactionError(error_message, 400)
+        return raw_value
+    if isinstance(raw_value, str):
+        stripped = raw_value.strip()
+        if not stripped or not stripped.isdigit():
+            raise AttendanceTransactionError(error_message, 400)
+        parsed = int(stripped)
+        if parsed <= 0:
+            raise AttendanceTransactionError(error_message, 400)
+        return parsed
+    raise AttendanceTransactionError(error_message, 400)
+
+
 class AttendanceTransactionService:
     @staticmethod
     def check_in(user, data, photo=None, validate_photo=True):
@@ -433,6 +452,32 @@ class AttendanceTransactionService:
 
         sync_uuid = data.get('sync_uuid')
 
+        raw_session_id = data.get('session_id')
+        raw_attendance_id = data.get('attendance_id')
+        has_session_id = raw_session_id is not None and raw_session_id != ''
+        has_attendance_id = raw_attendance_id is not None and raw_attendance_id != ''
+
+        target_session_pk = None
+        if has_session_id:
+            target_session_pk = _parse_positive_int_id(raw_session_id)
+        if has_attendance_id:
+            att_pk = _parse_positive_int_id(raw_attendance_id)
+            if target_session_pk is not None and target_session_pk != att_pk:
+                raise AttendanceTransactionError('Conflicting attendance session targets.', 400)
+            target_session_pk = att_pk
+
+        raw_dep_sync_uuid = (
+            data.get('depends_on_sync_uuid')
+            or data.get('check_in_sync_uuid')
+            or data.get('parent_sync_uuid')
+        )
+        dep_uuid_obj = None
+        if raw_dep_sync_uuid is not None and str(raw_dep_sync_uuid).strip() != '':
+            try:
+                dep_uuid_obj = uuid.UUID(str(raw_dep_sync_uuid).strip())
+            except (TypeError, ValueError):
+                raise AttendanceTransactionError('Invalid check-in dependency reference.', 400)
+
         with transaction.atomic():
             emp_locked = EmployeeProfile.objects.select_for_update().get(pk=employee.pk)
             if not emp_locked.is_active:
@@ -443,6 +488,17 @@ class AttendanceTransactionService:
                 if existing_loc:
                     if existing_loc.attendance.employee_id != emp_locked.pk or existing_loc.event != 'check_out':
                         raise AttendanceTransactionError('Invalid idempotency key for this operation.', 400)
+                    if target_session_pk is not None and target_session_pk != existing_loc.attendance_id:
+                        raise AttendanceTransactionError('Conflicting retry target for existing checkout.', 400)
+                    if dep_uuid_obj is not None:
+                        dep_att = Attendance.objects.filter(
+                            sync_uuid=dep_uuid_obj,
+                            employee=emp_locked,
+                            attendance_type='check_in',
+                            is_expired=False
+                        ).first()
+                        if not dep_att or dep_att.id != existing_loc.attendance_id:
+                            raise AttendanceTransactionError('Conflicting retry dependency for existing checkout.', 400)
                     return {
                         'success': True,
                         'session_id': existing_loc.attendance_id,
@@ -464,25 +520,7 @@ class AttendanceTransactionService:
                 synced_at = None
                 today = timezone.localdate()
 
-            target_session_id = data.get('session_id')
-            if target_session_id is None or target_session_id == '':
-                target_session_id = data.get('attendance_id')
-
-            dep_sync_uuid = (
-                data.get('depends_on_sync_uuid')
-                or data.get('check_in_sync_uuid')
-                or data.get('parent_sync_uuid')
-            )
-
-            if target_session_id is not None and target_session_id != '':
-                if isinstance(target_session_id, bool):
-                    raise AttendanceTransactionError('Invalid attendance session target.', 400)
-                try:
-                    target_session_pk = int(target_session_id)
-                except (TypeError, ValueError):
-                    raise AttendanceTransactionError('Invalid attendance session target.', 400)
-                if target_session_pk <= 0:
-                    raise AttendanceTransactionError('Invalid attendance session target.', 400)
+            if target_session_pk is not None:
                 attendance = Attendance.objects.filter(
                     pk=target_session_pk,
                     employee=emp_locked,
@@ -491,17 +529,25 @@ class AttendanceTransactionService:
                 ).select_for_update().first()
                 if not attendance:
                     raise AttendanceTransactionError('Invalid attendance session target.', 400)
+                if dep_uuid_obj is not None:
+                    dep_attendance = Attendance.objects.filter(
+                        sync_uuid=dep_uuid_obj,
+                        employee=emp_locked,
+                        attendance_type='check_in',
+                        is_expired=False
+                    ).select_for_update().first()
+                    if not dep_attendance or dep_attendance.id != attendance.id:
+                        raise AttendanceTransactionError(
+                            'Conflicting checkout session target and dependency reference.',
+                            400
+                        )
                 if attendance.check_out_time is not None:
                     return {
                         'success': True,
                         'session_id': attendance.id,
                         'total_hours': float(attendance.total_hours or 0.0)
                     }
-            elif dep_sync_uuid is not None and str(dep_sync_uuid).strip() != '':
-                try:
-                    dep_uuid_obj = uuid.UUID(str(dep_sync_uuid).strip())
-                except (TypeError, ValueError):
-                    raise AttendanceTransactionError('Invalid check-in dependency reference.', 400)
+            elif dep_uuid_obj is not None:
                 attendance = Attendance.objects.filter(
                     sync_uuid=dep_uuid_obj,
                     employee=emp_locked,

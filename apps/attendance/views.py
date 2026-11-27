@@ -1066,7 +1066,11 @@ def bulk_sync(request):
                         'error': err_msg,
                     })
                     continue
-                if action_type == 'check_out' and not (payload.get('session_id') or payload.get('attendance_id')):
+                has_explicit_target = (
+                    (payload.get('session_id') is not None and payload.get('session_id') != '')
+                    or (payload.get('attendance_id') is not None and payload.get('attendance_id') != '')
+                )
+                if action_type == 'check_out' and not has_explicit_target:
                     if dep_state.get('session_id'):
                         payload['session_id'] = dep_state['session_id']
 

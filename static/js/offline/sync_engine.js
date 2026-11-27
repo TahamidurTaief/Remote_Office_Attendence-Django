@@ -283,10 +283,12 @@
           const result = await response.json();
           const itemResults = result.results || [];
           const resolvedSessions = new Map();
+          const syncedUuids = new Set();
 
           for (const item of readyItems) {
             const res = itemResults.find((r) => r.uuid === item.uuid);
             if (res && res.status === 'success') {
+              syncedUuids.add(item.uuid);
               if (item.action === 'check_in' && res.data && res.data.session_id) {
                 resolvedSessions.set(item.uuid, res.data.session_id);
               }
@@ -330,13 +332,23 @@
             }
           }
 
-          // Persist resolved server session_id onto any remaining dependent checkout items
+          // Persist resolved server session_id onto any remaining dependent checkout items without overwriting explicit targets
           if (resolvedSessions.size > 0) {
             for (const otherItem of pendingItems) {
-              if (otherItem.action === 'check_out' && otherItem.status !== 'synced') {
-                const depUuid = otherItem.depends_on_sync_uuid || (otherItem.payload && otherItem.payload.depends_on_sync_uuid);
+              if (otherItem.action === 'check_out' && !syncedUuids.has(otherItem.uuid) && otherItem.status !== 'synced') {
+                const existingPayload = otherItem.payload || {};
+                const hasExplicitTarget =
+                  (existingPayload.session_id !== undefined && existingPayload.session_id !== null && existingPayload.session_id !== '') ||
+                  (existingPayload.attendance_id !== undefined && existingPayload.attendance_id !== null && existingPayload.attendance_id !== '');
+                if (hasExplicitTarget) continue;
+
+                const depUuid =
+                  otherItem.depends_on_sync_uuid ||
+                  existingPayload.depends_on_sync_uuid ||
+                  existingPayload.check_in_sync_uuid ||
+                  existingPayload.parent_sync_uuid;
                 if (depUuid && resolvedSessions.has(depUuid)) {
-                  const updatedPayload = Object.assign({}, otherItem.payload || {}, {
+                  const updatedPayload = Object.assign({}, existingPayload, {
                     session_id: resolvedSessions.get(depUuid)
                   });
                   await window.FieldTrackDB.updateSyncItem(otherItem.uuid, {

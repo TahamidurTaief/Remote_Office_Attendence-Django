@@ -832,3 +832,218 @@ class SessionTargetingAndOfflineSyncTests(TestCase):
             self.assertTrue(res[dep_co]["permanent"])
             self.assertEqual(res[indep_fv]["status"], "success")
             self.assertEqual(Attendance.objects.filter(employee=self.staff_emp, attendance_type="field_visit").count(), 1)
+
+    # Group 10: Conflicting session_id and dependency UUID rejected before writes; matching accepted
+    def test_group_10_conflicting_vs_matching_session_id_and_dependency(self):
+        with patch("django.utils.timezone.now", return_value=FIXED_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            today = FIXED_NOW.date()
+            yesterday = today - timedelta(days=1)
+            uuid_a = uuid.uuid4()
+            uuid_b = uuid.uuid4()
+
+            sess_a = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=yesterday,
+                check_in_time=self._bd_dt(yesterday, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+                sync_uuid=uuid_a,
+            )
+            sess_b = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=today,
+                check_in_time=self._bd_dt(today, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+                sync_uuid=uuid_b,
+            )
+
+            self.client.force_login(self.staff_user)
+            # Conflict: session_id=A + depends_on_sync_uuid=B -> rejected, zero writes
+            conflict_resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "uuid": str(uuid.uuid4()),
+                                "action": "check_out",
+                                "depends_on_sync_uuid": str(uuid_b),
+                                "payload": {
+                                    "session_id": sess_a.id,
+                                    "depends_on_sync_uuid": str(uuid_b),
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
+                                },
+                            }
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(conflict_resp.status_code, 200)
+            conflict_res = conflict_resp.json()["results"][0]
+            self.assertEqual(conflict_res["status"], "failed")
+            self.assertTrue(conflict_res["permanent"])
+
+            sess_a.refresh_from_db()
+            sess_b.refresh_from_db()
+            self.assertIsNone(sess_a.check_out_time)
+            self.assertIsNone(sess_b.check_out_time)
+            self.assertEqual(AttendanceLocation.objects.filter(attendance__in=[sess_a, sess_b]).count(), 0)
+
+            # Matching: session_id=A + depends_on_sync_uuid=A -> accepted
+            ok_resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "uuid": str(uuid.uuid4()),
+                                "action": "check_out",
+                                "depends_on_sync_uuid": str(uuid_a),
+                                "payload": {
+                                    "session_id": str(sess_a.id),
+                                    "depends_on_sync_uuid": str(uuid_a),
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(yesterday, 18, 0).isoformat(),
+                                },
+                            }
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(ok_resp.status_code, 200)
+            self.assertEqual(ok_resp.json()["synced"], 1)
+            sess_a.refresh_from_db()
+            sess_b.refresh_from_db()
+            self.assertEqual(sess_a.check_out_time, self._bd_dt(yesterday, 18, 0))
+            self.assertIsNone(sess_b.check_out_time)
+
+    # Group 11: Strict positive integer ID parsing (reject floats, bools, zero, negative)
+    def test_group_11_strict_session_id_parsing_rejects_floats_bools_zero(self):
+        with patch("django.utils.timezone.now", return_value=FIXED_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            today = FIXED_NOW.date()
+            sess = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=today,
+                check_in_time=self._bd_dt(today, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+            )
+
+            self.client.force_login(self.staff_user)
+            for bad_sid in [1.9, "1.9", True, False, 0, -5, "0", "-1"]:
+                resp = self.client.post(
+                    reverse("attendance:bulk_sync"),
+                    data=json.dumps(
+                        {
+                            "items": [
+                                {
+                                    "uuid": str(uuid.uuid4()),
+                                    "action": "check_out",
+                                    "payload": {
+                                        "session_id": bad_sid,
+                                        "latitude": 23.8103,
+                                        "longitude": 90.4125,
+                                        "client_event_time": self._bd_dt(today, 17, 0).isoformat(),
+                                    },
+                                }
+                            ]
+                        }
+                    ),
+                    content_type="application/json",
+                )
+                self.assertEqual(resp.status_code, 200)
+                res = resp.json()["results"][0]
+                self.assertEqual(res["status"], "failed", f"Expected failure for session_id={bad_sid!r}")
+
+            sess.refresh_from_db()
+            self.assertIsNone(sess.check_out_time)
+
+    # Group 12: Changed retry target never affects another session
+    def test_group_12_changed_retry_target_rejected_and_preserves_other_session(self):
+        with patch("django.utils.timezone.now", return_value=FIXED_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            today = FIXED_NOW.date()
+            yesterday = today - timedelta(days=1)
+            sess_a = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=yesterday,
+                check_in_time=self._bd_dt(yesterday, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+            )
+            sess_b = Attendance.objects.create(
+                employee=self.staff_emp,
+                date=today,
+                check_in_time=self._bd_dt(today, 9, 0),
+                attendance_type="check_in",
+                type="office",
+                status="on_time",
+            )
+
+            co_uuid = str(uuid.uuid4())
+            self.client.force_login(self.staff_user)
+
+            # Initial checkout closes sess_a
+            first_resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "uuid": co_uuid,
+                                "action": "check_out",
+                                "payload": {
+                                    "session_id": sess_a.id,
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(yesterday, 18, 0).isoformat(),
+                                },
+                            }
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(first_resp.status_code, 200)
+            self.assertEqual(first_resp.json()["synced"], 1)
+
+            # Retry with same sync_uuid but changed target sess_b -> rejected, sess_b untouched
+            changed_resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "uuid": co_uuid,
+                                "action": "check_out",
+                                "payload": {
+                                    "session_id": sess_b.id,
+                                    "latitude": 23.8103,
+                                    "longitude": 90.4125,
+                                    "client_event_time": self._bd_dt(yesterday, 18, 0).isoformat(),
+                                },
+                            }
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(changed_resp.status_code, 200)
+            self.assertEqual(changed_resp.json()["results"][0]["status"], "failed")
+            sess_b.refresh_from_db()
+            self.assertIsNone(sess_b.check_out_time)
