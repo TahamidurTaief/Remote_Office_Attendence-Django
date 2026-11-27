@@ -24,12 +24,9 @@ def home(request):
         return redirect('accounts:login')
 
     from apps.attendance.views import get_employee
-    from apps.attendance.transaction_service import auto_close_past_sessions
 
     employee = get_employee(request.user) or getattr(request.user, 'employee_profile', None)
     today = timezone.localdate()
-    if employee:
-        auto_close_past_sessions(employee, today)
 
     field_visits = Attendance.objects.filter(
         employee=employee,
@@ -127,12 +124,9 @@ def attendance_card(request):
         return redirect('accounts:login')
 
     from apps.attendance.views import get_employee
-    from apps.attendance.transaction_service import auto_close_past_sessions
 
     employee = get_employee(request.user) or getattr(request.user, 'employee_profile', None)
     today = timezone.localdate()
-    if employee:
-        auto_close_past_sessions(employee, today)
 
     # Active (unclosed) session
     active_session = Attendance.objects.filter(
@@ -210,12 +204,9 @@ def check_in_page(request):
         return redirect('accounts:login')
 
     from apps.attendance.views import get_employee
-    from apps.attendance.transaction_service import auto_close_past_sessions
 
     employee = get_employee(request.user) or getattr(request.user, 'employee_profile', None)
     today = timezone.localdate()
-    if employee:
-        auto_close_past_sessions(employee, today)
 
     active = Attendance.objects.filter(
         employee=employee,

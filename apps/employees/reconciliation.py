@@ -17,8 +17,8 @@ def reconcile_single_profile(profile):
             if ' ' in full_name:
                 first_name, last_name = full_name.split(' ', 1)
             else:
-                first_name = full_name or (profile.user.first_name if profile.user else 'Employee')
-                last_name = (profile.user.last_name if (profile.user and profile.user.last_name) else 'Staff')
+                first_name = full_name or (getattr(profile.user, 'first_name', 'Employee') if profile.user else 'Employee')
+                last_name = (getattr(profile.user, 'last_name', 'Staff') or 'Staff') if profile.user else 'Staff'
 
             dept_obj = None
             if profile.department and profile.department.strip():

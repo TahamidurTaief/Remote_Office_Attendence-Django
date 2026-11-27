@@ -62,14 +62,50 @@
         </div>
     </c-card>
 
-    <!-- Check-out Section -->
-    {% if check_in.check_out_time %}
+    <!-- Check-out / Active Session Section -->
+    {% if is_open_session %}
+    <c-card padding="md" extra_class="mb-4 bg-amber-50/50 dark:bg-amber-950/30 !border-amber-200 dark:!border-amber-800/50">
+        <p class="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">Open / Missing Checkout</p>
+        <div class="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Open</span>
+            <span>Office checkout pending (no fabricated checkout assigned)</span>
+        </div>
+    </c-card>
+    {% endif %}
+
+    {% if check_in_sessions and check_in_sessions|length > 1 %}
+    <c-card padding="md" extra_class="mb-4 bg-slate-50/50 dark:bg-slate-900/30 !border-slate-200 dark:!border-slate-800">
+        <p class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Sessions ({{ check_in_sessions|length }})</p>
+        <div class="space-y-2 text-xs">
+            {% for s in check_in_sessions %}
+            <div class="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                <div>
+                    <span class="font-medium text-slate-700 dark:text-slate-300">In: {{ s.check_in_time|time:"H:i:s" }}</span>
+                    <span class="mx-1 text-slate-300">|</span>
+                    {% if s.check_out_time %}
+                    <span class="font-medium text-slate-700 dark:text-slate-300">Out: {{ s.check_out_time|time:"H:i:s" }}</span>
+                    {% else %}
+                    <span class="font-semibold text-amber-600 dark:text-amber-400">Open</span>
+                    {% endif %}
+                </div>
+                <div>
+                    {% if s.total_hours %}
+                    <span class="font-bold text-slate-900 dark:text-slate-100">{{ s.total_hours }}h</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </c-card>
+    {% endif %}
+
+    {% if check_in.check_out_time and not is_open_session %}
     <c-card padding="md" extra_class="mb-4 bg-blue-50/50 dark:bg-blue-950/30 !border-blue-200 dark:!border-blue-800/50">
         <p class="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider mb-3">Check-out Details</p>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             <div>
                 <span class="text-slate-500 dark:text-slate-400 text-xs block">Time</span>
-                <span class="font-bold text-slate-900 dark:text-slate-100">{{ check_in.check_out_time|time:"H:i" }}</span>
+                <span class="font-bold text-slate-900 dark:text-slate-100">{{ check_in.check_out_time|time:"H:i:s" }}</span>
             </div>
             {% if check_in.is_early_checkout %}
             <div>

@@ -1676,13 +1676,23 @@ class EmployeeReportView(AdminRequiredMixin, View):
                 continue
             ci = dc['check_in']
             fv = dc['field_visits']
-            is_early_co = bool(ci and ci.check_out_time and calculate_early_checkout(ci.check_out_time, schedule))
+            latest_co = dc.get('last_departure')
+            is_early_co = bool(latest_co and calculate_early_checkout(latest_co, schedule, session_date=d))
             ot_min = dc['overtime_minutes']
 
             table_rows.append({
                 'date': d,
                 'check_in': ci,
+                'check_in_sessions': dc.get('check_in_sessions', []),
                 'field_visits': fv,
+                'first_arrival': dc.get('first_arrival'),
+                'last_departure': dc.get('last_departure'),
+                'is_open_session': dc.get('is_open_session', False),
+                'is_missing_checkout': dc.get('is_missing_checkout', False),
+                'has_leave_conflict': dc.get('has_leave_conflict', False),
+                'check_in_time_str': dc.get('check_in_time_str', '—'),
+                'check_out_time_str': dc.get('check_out_time_str', ''),
+                'total_hours': dc.get('total_hours', 0.0),
                 'is_weekend': dc['is_holiday'],
                 'is_late': dc['is_late'],
                 'is_early_checkout': is_early_co,
@@ -1772,10 +1782,13 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
             Attendance.objects.filter(employee=employee, date=day, is_expired=False)
             .prefetch_related('locations').order_by('check_in_time')
         )
-        ci      = next((a for a in day_atts if a.attendance_type == 'check_in'), None)
+        ci_sessions = [a for a in day_atts if a.attendance_type == 'check_in']
+        ci      = ci_sessions[0] if ci_sessions else None
         fv_list = [a for a in day_atts if a.attendance_type == 'field_visit']
         ci_loc  = next((l for l in ci.locations.all() if l.event == 'check_in'), None) if ci else None
         co_loc  = next((l for l in ci.locations.all() if l.event == 'check_out'), None) if ci else None
+
+        is_open_session = any(s.check_out_time is None for s in ci_sessions)
 
         if ci and getattr(ci, 'overtime_minutes', 0) > 0:
             ci.overtime_str = f"{ci.overtime_minutes // 60}h {ci.overtime_minutes % 60}m"
@@ -1783,12 +1796,14 @@ class EmployeeDayDetailView(AdminRequiredMixin, View):
             if ci: ci.overtime_str = ""
 
         return render(request, 'admin_panel/reports/partials/day_detail.html', {
-            'employee':     employee,
-            'day':          day,
-            'check_in':     ci,
-            'ci_loc':       ci_loc,
-            'co_loc':       co_loc,
-            'field_visits': fv_list,
+            'employee':          employee,
+            'day':               day,
+            'check_in':          ci,
+            'check_in_sessions': ci_sessions,
+            'is_open_session':   is_open_session,
+            'ci_loc':            ci_loc,
+            'co_loc':            co_loc,
+            'field_visits':      fv_list,
         })
 
 
@@ -2401,7 +2416,6 @@ class ExportReportCSVView(AdminRequiredMixin, View):
             ci = r['check_in']
             cis = r['check_in_sessions']
             fvs = r['field_visits']
-            latest_co = max((s.check_out_time for s in cis if s.check_out_time), default=None)
 
             if cis and fvs:
                 type_display = 'Check In / Field Visit'
@@ -2419,14 +2433,19 @@ class ExportReportCSVView(AdminRequiredMixin, View):
             loc_str = r['location'].address if r['location'] and hasattr(r['location'], 'address') else ''
             notes = r['notes'] or ''
 
+            in_val = r['check_in_time_str'] if r['check_in_time_str'] not in ('—', 'Absent', 'Holiday', 'On Leave') else ''
+            out_val = '' if r.get('is_open_session') else (
+                r['check_out_time_str'] if r.get('check_out_time_str') not in ('', '—', 'Absent', 'Holiday', 'On Leave') else ''
+            )
+
             writer.writerow([
                 idx,
                 r['employee'].full_name,
                 r['employee'].employee_id,
                 r['date'],
-                timezone.localtime(ci.check_in_time).strftime('%H:%M') if ci and ci.check_in_time else '',
-                timezone.localtime(latest_co).strftime('%H:%M') if latest_co else '',
-                str(r['total_hours']) if r['total_hours'] > 0 else '',
+                in_val,
+                out_val,
+                f"{r['total_hours']:.2f}" if r['total_hours'] > 0 else '',
                 type_display,
                 r['status_display'],
                 loc_str,
@@ -2588,10 +2607,10 @@ class ExportReportExcelView(AdminRequiredMixin, View):
             all_s = cis + fvs
 
             ci_times = [s.check_in_time for s in all_s if s and s.check_in_time]
-            co_times = [s.check_out_time for s in all_s if s and s.check_out_time]
+            co_times = [s.check_out_time for s in cis if s and s.check_out_time]
             earliest_ci = min(ci_times) if ci_times else None
-            latest_co = max(co_times) if co_times else None
-            has_open_session = any(s and s.check_in_time and not s.check_out_time for s in all_s)
+            has_open_session = any(s and s.check_in_time and not s.check_out_time for s in cis)
+            latest_co = None if has_open_session else (max(co_times) if co_times else None)
 
             if cis and fvs:
                 type_display = 'Check In / Field Visit'
@@ -2620,13 +2639,9 @@ class ExportReportExcelView(AdminRequiredMixin, View):
             else:
                 in_str = '—'
 
-            # Out time string (with seconds / explicit Open)
-            if latest_co:
+            # Out time string: empty ('—') while any office session remains open or for field-only days
+            if latest_co and not has_open_session:
                 out_str = format_time_with_seconds(latest_co)
-                if has_open_session:
-                    out_str += ' (Open)'
-            elif has_open_session:
-                out_str = 'Open'
             else:
                 out_str = '—'
 
@@ -2965,10 +2980,10 @@ def export_individual_xlsx(request, emp_id, year, month):
         all_s = cis + fvs
 
         ci_times = [s.check_in_time for s in all_s if s and s.check_in_time]
-        co_times = [s.check_out_time for s in all_s if s and s.check_out_time]
+        co_times = [s.check_out_time for s in cis if s and s.check_out_time]
         earliest_ci = min(ci_times) if ci_times else None
-        latest_co = max(co_times) if co_times else None
-        has_open = any(s and s.check_in_time and not s.check_out_time for s in all_s)
+        has_open = any(s and s.check_in_time and not s.check_out_time for s in cis)
+        latest_co = None if has_open else (max(co_times) if co_times else None)
 
         if earliest_ci:
             in_str = format_time_with_seconds(earliest_ci)
@@ -2981,12 +2996,8 @@ def export_individual_xlsx(request, emp_id, year, month):
         else:
             in_str = '—'
 
-        if latest_co:
+        if latest_co and not has_open:
             out_str = format_time_with_seconds(latest_co)
-            if has_open:
-                out_str += ' (Open)'
-        elif has_open:
-            out_str = 'Open'
         else:
             out_str = '—'
 
@@ -3259,12 +3270,12 @@ def export_monthly_xlsx(request):
 
             if is_present:
                 in_time_str = calc.get('check_in_time_str')
-                out_time_str = calc.get('check_out_time_str')
+                out_time_str = '' if calc.get('is_open_session') else calc.get('check_out_time_str')
 
                 if not in_time_str and calc.get('check_in'):
                     in_time_str = format_bd_time_12h(calc['check_in'].check_in_time)
-                if not out_time_str and calc.get('check_in') and calc['check_in'].check_out_time:
-                    out_time_str = format_bd_time_12h(calc['check_in'].check_out_time)
+                if not out_time_str and not calc.get('is_open_session') and calc.get('check_in_sessions') and calc.get('check_out_time'):
+                    out_time_str = format_bd_time_12h(calc['check_out_time'])
 
                 if not in_time_str:
                     in_time_str = 'Field' if calc.get('field_visits') else 'Present'
@@ -3433,11 +3444,11 @@ def export_monthly_csv(request):
 
             if is_present:
                 in_t = calc.get('check_in_time_str')
-                out_t = calc.get('check_out_time_str')
+                out_t = '' if calc.get('is_open_session') else calc.get('check_out_time_str')
                 if not in_t and calc.get('check_in'):
                     in_t = format_bd_time_12h(calc['check_in'].check_in_time)
-                if not out_t and calc.get('check_in') and calc['check_in'].check_out_time:
-                    out_t = format_bd_time_12h(calc['check_in'].check_out_time)
+                if not out_t and not calc.get('is_open_session') and calc.get('check_in_sessions') and calc.get('check_out_time'):
+                    out_t = format_bd_time_12h(calc['check_out_time'])
                 daily_vals.extend([in_t or 'Present', out_t or '—'])
             else:
                 daily_vals.extend([monthly_status, monthly_status])

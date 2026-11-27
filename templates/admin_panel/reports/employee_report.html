@@ -296,22 +296,32 @@
                     {{ row.date|date:"D" }}
                 </td>
                 <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                    {% if row.check_in and row.check_in.check_in_time %}
-                        {{ row.check_in.check_in_time|time:"H:i" }}
+                    {% if row.check_in_time_str and row.check_in_time_str != '—' and row.check_in_time_str != '-' and row.check_in_time_str != 'Absent' and row.check_in_time_str != 'Holiday' and row.check_in_time_str != 'On Leave' %}
+                        {{ row.check_in_time_str }}
+                    {% elif row.check_in and row.check_in.check_in_time %}
+                        {{ row.check_in.check_in_time|time:"H:i:s" }}
                     {% else %}
                         <span class="text-slate-300 dark:text-slate-600">-</span>
                     {% endif %}
                 </td>
                 <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                    {% if row.check_in and row.check_in.check_out_time %}
-                        {{ row.check_in.check_out_time|time:"H:i" }}
+                    {% if row.is_missing_checkout %}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Missing Checkout</span>
+                    {% elif row.is_open_session %}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Open</span>
+                    {% elif row.check_out_time_str and row.check_out_time_str != '—' and row.check_out_time_str != '-' and row.check_out_time_str != 'Absent' and row.check_out_time_str != 'Holiday' and row.check_out_time_str != 'On Leave' %}
+                        {{ row.check_out_time_str }}
+                    {% elif row.check_out_time %}
+                        {{ row.check_out_time|time:"H:i:s" }}
                     {% else %}
                         <span class="text-slate-300 dark:text-slate-600">-</span>
                     {% endif %}
                 </td>
                 <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300 font-mono text-xs">
-                    {% if row.check_in and row.total_hours_str %}
+                    {% if row.total_hours_str %}
                         {{ row.total_hours_str }}
+                    {% elif row.total_hours %}
+                        {{ row.total_hours }}h
                     {% else %}
                         <span class="text-slate-300 dark:text-slate-600">-</span>
                     {% endif %}

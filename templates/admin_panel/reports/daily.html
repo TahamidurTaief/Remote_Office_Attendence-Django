@@ -148,24 +148,32 @@
                         </td>
                         <!-- Check-in -->
                         <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
-                            {% if row.check_in and row.check_in.check_in_time %}
-                                {{ row.check_in.check_in_time|time:"H:i" }}
+                            {% if row.check_in_time_str and row.check_in_time_str != '—' and row.check_in_time_str != 'Absent' and row.check_in_time_str != 'Holiday' and row.check_in_time_str != 'On Leave' %}
+                                {{ row.check_in_time_str }}
+                            {% elif row.check_in and row.check_in.check_in_time %}
+                                {{ row.check_in.check_in_time|time:"H:i:s" }}
                             {% else %}
                                 <span class="text-slate-400">—</span>
                             {% endif %}
                         </td>
                         <!-- Check-out -->
                         <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
-                            {% if row.check_in and row.check_in.check_out_time %}
-                                {{ row.check_in.check_out_time|time:"H:i" }}
+                            {% if row.is_missing_checkout %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Missing Checkout</span>
+                            {% elif row.is_open_session %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Open</span>
+                            {% elif row.check_out_time_str and row.check_out_time_str != '—' and row.check_out_time_str != 'Absent' and row.check_out_time_str != 'Holiday' and row.check_out_time_str != 'On Leave' %}
+                                {{ row.check_out_time_str }}
+                            {% elif row.check_out_time %}
+                                {{ row.check_out_time|time:"H:i:s" }}
                             {% else %}
                                 <span class="text-slate-400">—</span>
                             {% endif %}
                         </td>
                         <!-- Hours -->
                         <td class="px-4 py-3 border-r border-slate-200 dark:border-slate-800 text-right font-semibold text-slate-800 dark:text-slate-200">
-                            {% if row.check_in and row.check_in.total_hours %}
-                                {{ row.check_in.total_hours }}h
+                            {% if row.total_hours %}
+                                {{ row.total_hours }}h
                             {% elif row.field_visits %}
                                 <span class="text-purple-600 text-xs font-normal">{{ row.field_visits|length }} visit{{ row.field_visits|length|pluralize }}</span>
                             {% else %}

@@ -428,12 +428,10 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
             all_sessions = cis + fvs
 
             ci_times = [s.check_in_time for s in all_sessions if s and s.check_in_time]
-            co_times = [s.check_out_time for s in all_sessions if s and s.check_out_time]
+            co_times = [s.check_out_time for s in cis if s and s.check_out_time]
             earliest_ci = min(ci_times) if ci_times else None
-            latest_co = max(co_times) if co_times else None
-
-            # Detect explicit open session (checked in without checkout)
-            has_open_session = any(s and s.check_in_time and not s.check_out_time for s in all_sessions)
+            has_open_session = any(s and s.check_in_time and not s.check_out_time for s in cis)
+            latest_co = None if has_open_session else (max(co_times) if co_times else None)
 
             # In string (with seconds)
             if earliest_ci:
@@ -447,13 +445,9 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
             else:
                 in_str = '—'
 
-            # Out string (with seconds or explicit Open)
-            if latest_co:
+            # Out string: empty ('—') while any office session remains open or for field-only days
+            if latest_co and not has_open_session:
                 out_str = format_time_with_seconds(latest_co)
-                if has_open_session:
-                    out_str += ' (Open)'
-            elif has_open_session:
-                out_str = 'Open'
             else:
                 out_str = '—'
 
@@ -1000,11 +994,10 @@ def render_individual_attendance_pdf(employee, year, month, monthly_data, user=N
         all_s = cis + fvs
 
         ci_times = [s.check_in_time for s in all_s if s and s.check_in_time]
-        co_times = [s.check_out_time for s in all_s if s and s.check_out_time]
+        co_times = [s.check_out_time for s in cis if s and s.check_out_time]
         earliest_ci = min(ci_times) if ci_times else None
-        latest_co = max(co_times) if co_times else None
-
-        has_open = any(s and s.check_in_time and not s.check_out_time for s in all_s)
+        has_open = any(s and s.check_in_time and not s.check_out_time for s in cis)
+        latest_co = None if has_open else (max(co_times) if co_times else None)
 
         # In string
         if earliest_ci:
@@ -1018,13 +1011,9 @@ def render_individual_attendance_pdf(employee, year, month, monthly_data, user=N
         else:
             in_str = '—'
 
-        # Out string
-        if latest_co:
+        # Out string: empty ('—') while any office session remains open or for field-only days
+        if latest_co and not has_open:
             out_str = format_time_with_seconds(latest_co)
-            if has_open:
-                out_str += ' (Open)'
-        elif has_open:
-            out_str = 'Open'
         else:
             out_str = '—'
 

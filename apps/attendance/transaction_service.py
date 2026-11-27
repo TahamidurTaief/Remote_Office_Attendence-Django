@@ -11,48 +11,67 @@ from apps.notifications.utils import notify_admins
 from apps.employees.models import EmployeeProfile
 
 
+import math
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def auto_close_past_sessions(employee=None, today=None):
     """
-    Closes any dangling unclosed check-in sessions from dates before `today`.
-    If employee is provided, closes past unclosed sessions for that employee.
-    If employee is None, closes past unclosed sessions across all employees.
+    Deprecated no-op: fabricated auto-closure is disabled.
+    Past unclosed sessions remain open (check_out_time=NULL) for overnight
+    checkout, offline retry, or authorized forgot-checkout/correction workflows.
     """
-    if today is None:
-        today = timezone.localdate()
+    return 0
 
-    qs = Attendance.objects.filter(
-        date__lt=today,
-        attendance_type='check_in',
-        check_out_time__isnull=True,
-        is_expired=False
-    )
-    if employee:
-        qs = qs.filter(employee=employee)
 
-    from apps.attendance.schedule_utils import get_branch_schedule
+def parse_and_validate_coordinates(lat_val, lng_val, accuracy_val=0):
+    """
+    Parses and validates coordinates and accuracy.
+    Rejects malformed, non-finite (NaN, Inf), or out-of-range coordinates with 400 error.
+    Returns (lat: float, lng: float, accuracy: float, is_missing: bool).
+    """
+    if lat_val is None or lat_val == '':
+        lat_val = 0.0
+    if lng_val is None or lng_val == '':
+        lng_val = 0.0
 
-    count = 0
-    for sess in qs:
-        sched = get_branch_schedule(sess.employee)
-        if sched and hasattr(sched, 'office_end_time') and sched.office_end_time:
-            end_t = sched.office_end_time
-            combined_dt = datetime.datetime.combine(sess.date, end_t)
-            if timezone.is_aware(sess.check_in_time):
-                auto_out = timezone.make_aware(combined_dt, timezone.get_current_timezone())
-            else:
-                auto_out = combined_dt
-            if auto_out <= sess.check_in_time:
-                auto_out = sess.check_in_time + datetime.timedelta(hours=8)
-        else:
-            auto_out = sess.check_in_time + datetime.timedelta(hours=8)
+    try:
+        lat = float(lat_val)
+        lng = float(lng_val)
+    except (TypeError, ValueError):
+        raise AttendanceTransactionError('Invalid coordinates format.', 400)
 
-        sess.check_out_time = auto_out
-        diff = (sess.check_out_time - sess.check_in_time).total_seconds() / 3600.0
-        sess.total_hours = round(decimal.Decimal(str(max(0.0, diff))), 2)
-        sess.note = f"{sess.note} [Auto-closed: unclosed session from {sess.date.strftime('%d/%m/%Y')}]".strip()
-        sess.save(update_fields=['check_out_time', 'total_hours', 'note'])
-        count += 1
-    return count
+    if not (math.isfinite(lat) and math.isfinite(lng)):
+        raise AttendanceTransactionError('Non-finite coordinates are not allowed.', 400)
+
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+        raise AttendanceTransactionError('Coordinates out of valid geographic range.', 400)
+
+    try:
+        acc = float(accuracy_val) if accuracy_val else 0.0
+    except (TypeError, ValueError):
+        acc = 0.0
+
+    if not math.isfinite(acc) or acc < 0:
+        acc = 0.0
+
+    is_missing = (lat == 0.0 and lng == 0.0)
+    return lat, lng, acc, is_missing
+
+
+def _safe_notify_admins(employee, notif_type, location=''):
+    """Guarded notification callback executed after transaction commit."""
+    try:
+        notify_admins(employee, notif_type, location=location)
+    except Exception as exc:
+        logger.warning(
+            "Guarded notification dispatch failed for employee %s (%s): %s",
+            getattr(employee, 'id', None),
+            notif_type,
+            exc
+        )
 
 class AttendanceTransactionError(Exception):
     def __init__(self, message, status_code=400):
@@ -71,7 +90,7 @@ def _sync_pg_sequence_for_model(model):
                 cursor.execute(f"""
                     SELECT setval(
                         pg_get_serial_sequence('{table}', '{pk_col}'),
-                        COALESCE((SELECT MAX({pk_col}) FROM {table}), 1),
+                        GREATEST((SELECT COALESCE(MAX({pk_col}), 1) FROM {table}), 1),
                         (SELECT MAX({pk_col}) IS NOT NULL FROM {table})
                     );
                 """)
@@ -81,8 +100,9 @@ def _sync_pg_sequence_for_model(model):
 
 def _safe_create_with_seq_retry(model, **kwargs):
     """
-    Creates a model instance inside a savepoint. If a duplicate key / unique constraint
-    error occurs due to a PostgreSQL sequence desync, synchronizes the sequence and retries.
+    Creates a model instance inside a savepoint. If a duplicate key error occurs
+    specifically on the primary key sequence, synchronizes the sequence and retries.
+    Never alters sync_uuid or resets sequences for non-pk unique conflicts.
     """
     from django.db import transaction, IntegrityError
     try:
@@ -90,10 +110,8 @@ def _safe_create_with_seq_retry(model, **kwargs):
             return model.objects.create(**kwargs)
     except IntegrityError as e:
         err_msg = str(e).lower()
-        if 'duplicate key' in err_msg or 'unique' in err_msg or '_pkey' in err_msg:
+        if '_pkey' in err_msg or ('duplicate key' in err_msg and 'sync_uuid' not in err_msg):
             _sync_pg_sequence_for_model(model)
-            if 'sync_uuid' in err_msg and 'sync_uuid' in kwargs:
-                kwargs['sync_uuid'] = uuid.uuid4()
             with transaction.atomic():
                 return model.objects.create(**kwargs)
         raise e
@@ -159,7 +177,15 @@ class AttendanceTransactionService:
                 raise AttendanceTransactionError('Employee profile is inactive.', 403)
 
             if sync_uuid:
-                existing = Attendance.objects.filter(sync_uuid=sync_uuid).first()
+                foreign_existing = Attendance.objects.filter(sync_uuid=sync_uuid).exclude(employee=emp_locked).first()
+                if foreign_existing:
+                    raise AttendanceTransactionError('Invalid idempotency key for this employee.', 400)
+
+                existing = Attendance.objects.filter(
+                    sync_uuid=sync_uuid,
+                    employee=emp_locked,
+                    attendance_type='check_in'
+                ).first()
                 if existing:
                     ci_loc = existing.locations.filter(event='check_in').first()
                     existing_address = ci_loc.address if ci_loc else (existing.site_address or '')
@@ -182,9 +208,6 @@ class AttendanceTransactionService:
                 event_time = timezone.localtime()
                 synced_at = None
                 today = timezone.localdate()
-
-            # Cleanly auto-close any unclosed past sessions from previous dates for this employee
-            auto_close_past_sessions(emp_locked, today)
 
             active_session = Attendance.objects.filter(
                 employee=emp_locked,
@@ -211,32 +234,17 @@ class AttendanceTransactionService:
             from django.conf import settings
             require_gps = getattr(settings, 'REQUIRE_GPS', True)
 
-            lat = data.get('latitude')
-            lng = data.get('longitude')
-            accuracy = data.get('accuracy', 0)
+            lat, lng, acc_val, is_gps_missing = parse_and_validate_coordinates(
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('accuracy', 0)
+            )
             note = data.get('note', '')
             address = data.get('address', '')
 
-            if lat is None or lat == '':
-                lat = 0.0
-            if lng is None or lng == '':
-                lng = 0.0
-
-            try:
-                lat = float(lat)
-                lng = float(lng)
-            except (TypeError, ValueError):
-                raise AttendanceTransactionError('Invalid coordinates.', 400)
-
             is_exception = False
             gps_quality = 'good'
-            is_gps_missing = (lat == 0.0 and lng == 0.0)
             is_gps_poor = False
-
-            try:
-                acc_val = float(accuracy) if accuracy else 0.0
-            except (TypeError, ValueError):
-                acc_val = 0.0
 
             if not is_gps_missing and policy.max_gps_accuracy_meters and acc_val > policy.max_gps_accuracy_meters:
                 is_gps_poor = True
@@ -368,7 +376,7 @@ class AttendanceTransactionService:
                 latitude=float(lat),
                 longitude=float(lng),
                 address=address,
-                accuracy=float(accuracy) if accuracy else 0.0,
+                accuracy=float(acc_val) if acc_val else 0.0,
                 timestamp=event_time,
                 sync_uuid=uuid.uuid4(),
                 client_event_time=client_time,
@@ -376,7 +384,7 @@ class AttendanceTransactionService:
             )
 
             notif_type = 'late' if status == 'late' else 'check_in'
-            notify_admins(emp_locked, notif_type, location=address)
+            transaction.on_commit(lambda: _safe_notify_admins(emp_locked, notif_type, location=address))
 
             from apps.attendance.models import AttendanceActivityLog
             try:
@@ -424,11 +432,13 @@ class AttendanceTransactionService:
                 raise AttendanceTransactionError('Employee profile is inactive.', 403)
 
             if sync_uuid:
-                existing_loc = AttendanceLocation.objects.filter(sync_uuid=sync_uuid, event='check_out').first()
+                existing_loc = AttendanceLocation.objects.filter(sync_uuid=sync_uuid).select_related('attendance__employee').first()
                 if existing_loc:
+                    if existing_loc.attendance.employee_id != emp_locked.pk or existing_loc.event != 'check_out':
+                        raise AttendanceTransactionError('Invalid idempotency key for this operation.', 400)
                     return {
                         'success': True,
-                        'total_hours': float(existing_loc.attendance.total_hours)
+                        'total_hours': float(existing_loc.attendance.total_hours or 0.0)
                     }
 
             client_event_time_str = data.get('client_event_time')
@@ -443,21 +453,52 @@ class AttendanceTransactionService:
                 synced_at = None
                 today = timezone.localdate()
 
-            attendance = Attendance.objects.filter(
-                employee=emp_locked,
-                attendance_type='check_in',
-                check_out_time__isnull=True,
-                is_expired=False
-            ).order_by('-check_in_time').select_for_update().first()
+            target_session_id = data.get('session_id') or data.get('attendance_id')
+            if target_session_id:
+                attendance = Attendance.objects.filter(
+                    pk=target_session_id,
+                    employee=emp_locked,
+                    attendance_type='check_in',
+                    is_expired=False
+                ).select_for_update().first()
+                if not attendance:
+                    raise AttendanceTransactionError('Invalid attendance session target.', 400)
+                if attendance.check_out_time is not None:
+                    return {
+                        'success': True,
+                        'total_hours': float(attendance.total_hours or 0.0)
+                    }
+            else:
+                open_candidates = list(
+                    Attendance.objects.filter(
+                        employee=emp_locked,
+                        attendance_type='check_in',
+                        check_out_time__isnull=True,
+                        check_in_time__lte=event_time,
+                        is_expired=False
+                    ).order_by('-check_in_time').select_for_update()
+                )
+                if len(open_candidates) == 1:
+                    attendance = open_candidates[0]
+                elif len(open_candidates) > 1:
+                    if client_time is None:
+                        today_candidates = [s for s in open_candidates if s.date == today]
+                        if len(today_candidates) == 1:
+                            attendance = today_candidates[0]
+                        else:
+                            raise AttendanceTransactionError(
+                                'Multiple open check-in sessions found. Please specify session_id.',
+                                400
+                            )
+                    else:
+                        raise AttendanceTransactionError(
+                            'Ambiguous open check-in sessions for offline checkout. Please specify session_id.',
+                            400
+                        )
+                else:
+                    attendance = None
 
             if not attendance:
-                if sync_uuid:
-                    completed_loc = AttendanceLocation.objects.filter(sync_uuid=sync_uuid, event='check_out').first()
-                    if completed_loc:
-                        return {
-                            'success': True,
-                            'total_hours': float(completed_loc.attendance.total_hours)
-                        }
                 raise AttendanceTransactionError('No active check-in session found.', 400)
 
             policy = get_attendance_policy(emp_locked)
@@ -465,24 +506,15 @@ class AttendanceTransactionService:
             from django.conf import settings
             require_gps = getattr(settings, 'REQUIRE_GPS', True)
 
-            lat = data.get('latitude')
-            lng = data.get('longitude')
-            accuracy = data.get('accuracy', 0)
+            lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('accuracy', 0)
+            )
             address = data.get('address', '') or 'Location unavailable at check-out'
 
-            if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
+            if is_gps_missing and require_gps:
                 raise AttendanceTransactionError('Location is required for attendance.', 400)
-
-            if lat is None or lat == '':
-                lat = 0.0
-            if lng is None or lng == '':
-                lng = 0.0
-
-            try:
-                lat = float(lat)
-                lng = float(lng)
-            except (TypeError, ValueError):
-                raise AttendanceTransactionError('Invalid coordinates.', 400)
 
             from apps.accounts.engine import PermissionEngine
             is_admin_or_hr = user.is_superuser or PermissionEngine.evaluate(user, 'attendance.override').allowed or PermissionEngine.evaluate(user, 'attendance.edit').allowed
@@ -497,9 +529,20 @@ class AttendanceTransactionService:
             if photo:
                 validate_uploaded_photo(photo)
 
-            attendance.check_out_time = event_time
+            if not attendance.check_in_time:
+                raise AttendanceTransactionError('Malformed session: missing check-in time. Please submit an attendance correction request.', 400)
+
             duration = event_time - attendance.check_in_time
-            attendance.total_hours = round(duration.total_seconds() / 3600.0, 2)
+            diff_seconds = duration.total_seconds()
+            if diff_seconds < 0:
+                raise AttendanceTransactionError('Check-out time cannot be earlier than check-in time.', 400)
+
+            diff_hours = diff_seconds / 3600.0
+            if diff_hours > 999.99:
+                raise AttendanceTransactionError('Session duration exceeds system limits (999.99 hours). Please submit an attendance correction request for manual review.', 400)
+
+            attendance.check_out_time = event_time
+            attendance.total_hours = round(decimal.Decimal(str(diff_hours)), 2)
 
             from .schedule_utils import get_branch_schedule, calculate_overtime, calculate_early_checkout
             schedule = get_branch_schedule(emp_locked)
@@ -534,7 +577,7 @@ class AttendanceTransactionService:
                 synced_at=synced_at
             )
 
-            notify_admins(emp_locked, 'check_out', location=address)
+            transaction.on_commit(lambda: _safe_notify_admins(emp_locked, 'check_out', location=address))
 
             from apps.attendance.models import AttendanceActivityLog
             try:
@@ -579,8 +622,10 @@ class AttendanceTransactionService:
                 raise AttendanceTransactionError('Employee profile is inactive.', 403)
 
             if sync_uuid:
-                existing = Attendance.objects.filter(sync_uuid=sync_uuid, attendance_type='field_visit').first()
+                existing = Attendance.objects.filter(sync_uuid=sync_uuid).first()
                 if existing:
+                    if existing.employee_id != emp_locked.pk or existing.attendance_type != 'field_visit':
+                        raise AttendanceTransactionError('Invalid idempotency key for this operation.', 400)
                     return {'success': True, 'session_id': existing.id}
 
             client_event_time_str = data.get('client_event_time')
@@ -595,9 +640,11 @@ class AttendanceTransactionService:
                 synced_at = None
                 today = timezone.localdate()
 
-            lat          = data.get('latitude')
-            lng          = data.get('longitude')
-            accuracy     = data.get('accuracy', 0)
+            lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('accuracy', 0)
+            )
             address      = data.get('address', '')
             visit_title  = data.get('visit_title', '')
             client_name  = data.get('client_name', '')
@@ -608,19 +655,8 @@ class AttendanceTransactionService:
             from django.conf import settings
             require_gps = getattr(settings, 'REQUIRE_GPS', True)
 
-            if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
+            if is_gps_missing and require_gps:
                 raise AttendanceTransactionError('Location is required.', 400)
-
-            if lat is None or lat == '':
-                lat = 0.0
-            if lng is None or lng == '':
-                lng = 0.0
-
-            try:
-                lat = float(lat)
-                lng = float(lng)
-            except (TypeError, ValueError):
-                raise AttendanceTransactionError('Invalid coordinates.', 400)
 
             if validate_photo and policy.photo_required and not photo:
                 raise AttendanceTransactionError('Photo is required.', 400)
@@ -683,7 +719,7 @@ class AttendanceTransactionService:
                 synced_at=synced_at
             )
 
-            notify_admins(emp_locked, 'field_visit', location=site_address or address)
+            transaction.on_commit(lambda: _safe_notify_admins(emp_locked, 'field_visit', location=site_address or address))
 
             from apps.attendance.models import AttendanceActivityLog
             try:

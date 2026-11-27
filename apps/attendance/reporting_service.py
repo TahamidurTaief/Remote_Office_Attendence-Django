@@ -149,21 +149,81 @@ from apps.attendance.scoping import get_scoped_employee_queryset, get_scoped_emp
 
 BD_TZ = ZoneInfo('Asia/Dhaka')
 
-def format_bd_time_12h(dt):
+def format_bd_timestamp(dt, with_seconds=True):
+    """
+    Formats datetime in Bangladesh Standard Time (UTC+6) with seconds:
+    e.g. 09:34:12. Avoids deprecated timezone.utc.
+    """
+    if not dt:
+        return ''
+    import datetime as dt_mod
+    if timezone.is_aware(dt):
+        local_dt = timezone.localtime(dt, BD_TZ)
+    else:
+        local_dt = timezone.make_aware(dt, dt_mod.timezone.utc).astimezone(BD_TZ) if timezone.is_naive(dt) else dt
+    if with_seconds:
+        return local_dt.strftime('%H:%M:%S')
+    return local_dt.strftime('%H:%M')
+
+
+def format_bd_time_12h(dt, with_seconds=False):
     """
     Formats datetime in Bangladesh Standard Time (UTC+6) 12-hour format:
     e.g. 9:34A, 3:56P, 12:05P.
     """
     if not dt:
         return ''
+    import datetime as dt_mod
     if timezone.is_aware(dt):
         local_dt = timezone.localtime(dt, BD_TZ)
     else:
-        local_dt = timezone.make_aware(dt, timezone.utc).astimezone(BD_TZ) if timezone.is_naive(dt) else dt
+        local_dt = timezone.make_aware(dt, dt_mod.timezone.utc).astimezone(BD_TZ) if timezone.is_naive(dt) else dt
     hour = str(int(local_dt.strftime('%I')))
     minute = local_dt.strftime('%M')
+    sec = local_dt.strftime('%S')
     ampm = 'A' if local_dt.strftime('%p').upper() == 'AM' else 'P'
+    if with_seconds:
+        return f"{hour}:{minute}:{sec}{ampm}"
     return f"{hour}:{minute}{ampm}"
+
+
+def _sum_non_overlapping_hours(check_in_sessions):
+    """
+    Sums completed office/check-in session durations in hours, merging overlapping
+    intervals so overlapping sessions are not double-counted. Open sessions
+    (check_out_time is None) contribute 0 (unknown duration excluded).
+    """
+    completed = [
+        s for s in check_in_sessions
+        if s.check_in_time and s.check_out_time and s.check_out_time > s.check_in_time
+    ]
+    if not completed:
+        return 0.0
+
+    completed.sort(key=lambda s: s.check_in_time)
+    has_overlap = any(
+        completed[i].check_in_time < completed[i - 1].check_out_time
+        for i in range(1, len(completed))
+    )
+    if not has_overlap:
+        total = 0.0
+        for s in completed:
+            if s.total_hours is not None:
+                total += float(s.total_hours)
+            else:
+                total += round((s.check_out_time - s.check_in_time).total_seconds() / 3600.0, 2)
+        return round(total, 2)
+
+    merged = [(completed[0].check_in_time, completed[0].check_out_time)]
+    for s in completed[1:]:
+        prev_start, prev_end = merged[-1]
+        if s.check_in_time <= prev_end:
+            if s.check_out_time > prev_end:
+                merged[-1] = (prev_start, s.check_out_time)
+        else:
+            merged.append((s.check_in_time, s.check_out_time))
+    total_seconds = sum((end - start).total_seconds() for start, end in merged)
+    return round(total_seconds / 3600.0, 2)
 
 def calculate_employee_day(
     employee,
@@ -212,6 +272,11 @@ def calculate_employee_day(
             'field_visit_count': 0,
             'total_hours': 0.0,
             'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -234,19 +299,26 @@ def calculate_employee_day(
             if first_ci.check_in_time:
                 late_time = schedule.get_late_threshold()
                 ci_time = first_ci.check_in_time
-                ci_local = timezone.localtime(ci_time).time() if timezone.is_aware(ci_time) else ci_time.time()
+                ci_local = timezone.localtime(ci_time, BD_TZ).time() if timezone.is_aware(ci_time) else ci_time.time()
                 if ci_local > late_time:
                     day_has_late = True
 
+        has_open_office = any(s.check_out_time is None for s in check_in_sessions)
+        is_missing_checkout = bool(has_open_office and target_date < today)
+        has_leave_conflict = bool(is_on_leave)
+
         if day_has_late:
             status = 'late'
-            status_display = 'Late'
+            status_display = 'Late (Missing Checkout)' if is_missing_checkout else 'Late'
             monthly_status = 'Late'
             calendar_color = 'amber'
         elif has_check_in:
             first_ci = check_in_sessions[0]
             status = first_ci.status if first_ci.status in ('on_time', 'present') else 'on_time'
-            status_display = 'On Time' if status == 'on_time' else 'Present'
+            if is_missing_checkout:
+                status_display = 'Present (Missing Checkout)'
+            else:
+                status_display = 'On Time' if status == 'on_time' else 'Present'
             monthly_status = 'Present'
             calendar_color = 'green'
         else:
@@ -255,26 +327,38 @@ def calculate_employee_day(
             monthly_status = 'Field Visit'
             calendar_color = 'purple'
 
-        total_hours = sum(float(a.total_hours or 0.0) for a in check_in_sessions)
-        ot_minutes = sum(int(getattr(a, 'overtime_minutes', 0) or 0) for a in check_in_sessions)
+        # Sum non-overlapping completed office session hours (exclude open/unknown & field visits)
+        total_hours = _sum_non_overlapping_hours(check_in_sessions)
+        ot_minutes = sum(int(getattr(a, 'overtime_minutes', 0) or 0) for a in check_in_sessions if a.check_out_time)
         if ot_minutes == 0 and check_in_sessions and schedule:
             from apps.attendance.schedule_utils import calculate_overtime
             ot_minutes = sum(
-                calculate_overtime(a.check_out_time, schedule, employee)
+                calculate_overtime(a.check_out_time, schedule, employee, session_date=target_date)
                 if a.check_out_time else 0
                 for a in check_in_sessions
             )
 
         all_sessions = check_in_sessions + field_visits
         ci_times = [s.check_in_time for s in all_sessions if s and s.check_in_time]
-        co_times = [s.check_out_time for s in all_sessions if s and s.check_out_time]
         earliest_ci = min(ci_times) if ci_times else None
-        latest_co = max(co_times) if co_times else None
+
+        # Final office checkout stays empty while any office session remains open,
+        # and field visit timestamps never become office checkout.
+        office_co_times = [s.check_out_time for s in check_in_sessions if s and s.check_out_time]
+        if has_open_office:
+            last_completed_co = None
+        else:
+            last_completed_co = max(office_co_times) if office_co_times else None
 
         primary_ci = check_in_sessions[0] if check_in_sessions else (field_visits[0] if field_visits else None)
 
-        in_time_str = format_bd_time_12h(earliest_ci) if earliest_ci else ('Field' if field_visits else 'Present')
-        out_time_str = format_bd_time_12h(latest_co) if latest_co else '—'
+        in_time_str = format_bd_timestamp(earliest_ci, with_seconds=True) if earliest_ci else ('Field' if field_visits else 'Present')
+        if has_open_office:
+            out_time_str = ''
+        elif last_completed_co:
+            out_time_str = format_bd_timestamp(last_completed_co, with_seconds=True)
+        else:
+            out_time_str = ''
 
         return {
             'date': target_date,
@@ -294,11 +378,16 @@ def calculate_employee_day(
             'on_leave_count': 0,
             'late_count': 1 if day_has_late else 0,
             'field_visit_count': len(field_visits),
-            'total_hours': round(total_hours, 2),
+            'total_hours': total_hours,
             'overtime_minutes': ot_minutes,
+            'first_arrival': earliest_ci,
+            'last_departure': last_completed_co,
+            'is_open_session': has_open_office,
+            'is_missing_checkout': is_missing_checkout,
+            'has_leave_conflict': has_leave_conflict,
             'check_in': primary_ci,
             'check_in_time': earliest_ci,
-            'check_out_time': latest_co,
+            'check_out_time': last_completed_co,
             'check_in_time_str': in_time_str,
             'check_out_time_str': out_time_str,
             'check_in_sessions': check_in_sessions,
@@ -328,6 +417,11 @@ def calculate_employee_day(
             'field_visit_count': 0,
             'total_hours': 0.0,
             'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -360,6 +454,11 @@ def calculate_employee_day(
             'field_visit_count': 0,
             'total_hours': 0.0,
             'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
             'check_in': None,
             'check_in_time': None,
             'check_out_time': None,
@@ -369,7 +468,87 @@ def calculate_employee_day(
             'field_visits': [],
         }
 
-    # 4. Absent on regular working day
+    # 4. Pre-joining or before shift + sync grace period end: not absent
+    joined_date = getattr(employee, 'joined_date', None)
+    if not joined_date and getattr(employee, 'master_employee', None):
+        joined_date = getattr(employee.master_employee, 'joined_date', None)
+    if joined_date and target_date < joined_date:
+        return {
+            'date': target_date,
+            'is_future': False,
+            'status': 'not_employed',
+            'status_display': '—',
+            'monthly_status': '—',
+            'calendar_color': 'gray',
+            'is_present': False,
+            'is_absent': False,
+            'is_late': False,
+            'is_on_leave': False,
+            'is_holiday': is_holiday,
+            'is_weekend': is_holiday,
+            'present_count': 0,
+            'absent_count': 0,
+            'on_leave_count': 0,
+            'late_count': 0,
+            'field_visit_count': 0,
+            'total_hours': 0.0,
+            'overtime_minutes': 0,
+            'first_arrival': None,
+            'last_departure': None,
+            'is_open_session': False,
+            'is_missing_checkout': False,
+            'has_leave_conflict': False,
+            'check_in': None,
+            'check_in_time': None,
+            'check_out_time': None,
+            'check_in_time_str': '—',
+            'check_out_time_str': '—',
+            'check_in_sessions': [],
+            'field_visits': [],
+        }
+
+    if target_date == today and schedule and getattr(schedule, 'office_end_time', None):
+        sync_grace_minutes = int(getattr(settings, 'ATTENDANCE_SYNC_GRACE_MINUTES', 0) or 0)
+        end_dt = datetime.combine(target_date, schedule.office_end_time)
+        if getattr(schedule, 'office_start_time', None) and schedule.office_end_time < schedule.office_start_time:
+            end_dt += timedelta(days=1)
+        end_dt = timezone.make_aware(end_dt, BD_TZ) + timedelta(minutes=sync_grace_minutes)
+        if timezone.localtime(timezone.now(), BD_TZ) < end_dt:
+            return {
+                'date': target_date,
+                'is_future': False,
+                'status': 'scheduled',
+                'status_display': 'Pending',
+                'monthly_status': '—',
+                'calendar_color': 'future',
+                'is_present': False,
+                'is_absent': False,
+                'is_late': False,
+                'is_on_leave': False,
+                'is_holiday': False,
+                'is_weekend': False,
+                'present_count': 0,
+                'absent_count': 0,
+                'on_leave_count': 0,
+                'late_count': 0,
+                'field_visit_count': 0,
+                'total_hours': 0.0,
+                'overtime_minutes': 0,
+                'first_arrival': None,
+                'last_departure': None,
+                'is_open_session': False,
+                'is_missing_checkout': False,
+                'has_leave_conflict': False,
+                'check_in': None,
+                'check_in_time': None,
+                'check_out_time': None,
+                'check_in_time_str': '—',
+                'check_out_time_str': '—',
+                'check_in_sessions': [],
+                'field_visits': [],
+            }
+
+    # 5. Absent on regular working day
     return {
         'date': target_date,
         'is_future': False,
@@ -390,6 +569,11 @@ def calculate_employee_day(
         'field_visit_count': 0,
         'total_hours': 0.0,
         'overtime_minutes': 0,
+        'first_arrival': None,
+        'last_departure': None,
+        'is_open_session': False,
+        'is_missing_checkout': False,
+        'has_leave_conflict': False,
         'check_in': None,
         'check_in_time': None,
         'check_out_time': None,
@@ -538,14 +722,20 @@ def get_daily_report_data(
             else:
                 notes = ci.note if ci and ci.note else (fvs[0].note if fvs and fvs[0].note else '')
 
-            if ci:
-                ci.total_hours = day_calc['total_hours']
-
             row_data = {
                 'employee': emp,
                 'date': d,
                 'check_in': ci,
                 'check_in_sessions': cis,
+                'first_arrival': day_calc.get('first_arrival'),
+                'last_departure': day_calc.get('last_departure'),
+                'is_open_session': day_calc.get('is_open_session', False),
+                'is_missing_checkout': day_calc.get('is_missing_checkout', False),
+                'has_leave_conflict': day_calc.get('has_leave_conflict', False),
+                'check_in_time': day_calc.get('check_in_time'),
+                'check_out_time': day_calc.get('check_out_time'),
+                'check_in_time_str': day_calc.get('check_in_time_str', '—'),
+                'check_out_time_str': day_calc.get('check_out_time_str', ''),
                 'total_hours': day_calc['total_hours'],
                 'field_visits': fvs,
                 'location': loc,

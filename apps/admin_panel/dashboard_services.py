@@ -59,14 +59,12 @@ def get_employee_dashboard_data(user):
     data = {}
 
     from apps.attendance.views import get_employee
-    from apps.attendance.transaction_service import auto_close_past_sessions
 
     emp_profile = get_employee(user) or getattr(user, 'employee_profile', None)
     emp_master = getattr(user, 'employee_master', None)
 
     # Today's attendance
     if emp_profile:
-        auto_close_past_sessions(emp_profile, today)
         data['today_attendance'] = Attendance.objects.select_related('employee', 'employee__branch').filter(
             employee=emp_profile, date=today
         ).first()

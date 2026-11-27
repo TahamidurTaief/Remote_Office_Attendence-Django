@@ -244,14 +244,15 @@ class AttendancePDFExportTests(TestCase):
         self.assertEqual(ws.cell(row=emp2_row, column=7).value, "9.33h")
         self.assertIn("2 Sessions", ws.cell(row=emp2_row, column=8).value)
 
-        # 4. Verify Emp 3: Explicit Open session
-        # In: 09:25:15, Out: Open
+        # 4. Verify Emp 3: Missing Checkout (final office checkout stays empty '—')
+        # In: 09:25:15, Out: —, Status: Late (Missing Checkout)
         self.assertIn("09:25:15", pdf_text)
-        self.assertIn("Open", pdf_text)
+        self.assertIn("Missing Checkout", pdf_text)
 
         emp3_row = next(r for r in range(5, ws.max_row + 1) if ws.cell(row=r, column=3).value == 'EMP-103')
         self.assertEqual(ws.cell(row=emp3_row, column=5).value, "09:25:15")
-        self.assertEqual(ws.cell(row=emp3_row, column=6).value, "Open")
+        self.assertEqual(ws.cell(row=emp3_row, column=6).value, "—")
+        self.assertIn("Missing Checkout", ws.cell(row=emp3_row, column=9).value)
 
     def test_long_geofence_note_and_appendix_preservation(self):
         """Verifies that long notes generate a reference in table and full text in appendix."""

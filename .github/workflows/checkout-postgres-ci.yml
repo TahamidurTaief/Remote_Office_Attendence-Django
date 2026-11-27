@@ -1,0 +1,59 @@
+name: Checkout PostgreSQL Verification
+
+on:
+  push:
+    branches:
+      - 'feat/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  postgres-checkout-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: fieldtrack_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:ci_test_password@127.0.0.1:5432/fieldtrack_ci
+      REQUIRE_POSTGRES_TESTS: "1"
+      DEBUG: "False"
+      ENABLE_DEBUG_TOOLBAR: "False"
+      SECRET_KEY: "ci-ephemeral-test-key-only"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify PostgreSQL connection and run checkout suites
+        run: |
+          python manage.py test \
+            apps.attendance.tests.test_pg_concurrency \
+            apps.attendance.tests.test_evidence_checkout \
+            apps.attendance.tests.test_pdf_export \
+            apps.attendance.tests.test_csrf_remediation \
+            --verbosity=2
