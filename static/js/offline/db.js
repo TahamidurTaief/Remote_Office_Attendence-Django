@@ -272,6 +272,31 @@
     },
 
     /**
+     * Suppress local missing-checkout reminders when a checkout is already queued locally.
+     * Local-only indicator ("Sync pending"); does not claim another device or server knows unuploaded state.
+     */
+    getReminderSuppressionState: async function (sessionId = null, checkInSyncUuid = null) {
+      const pending = await this.getPendingSyncItems();
+      const hasQueuedCheckout = pending.some((item) => {
+        if (item.action !== 'check_out' || item.status === 'synced') return false;
+        const p = item.payload || {};
+        if (sessionId !== null && sessionId !== undefined && String(p.session_id || p.attendance_id || '') === String(sessionId)) {
+          return true;
+        }
+        const dep = item.depends_on_sync_uuid || p.depends_on_sync_uuid || p.check_in_sync_uuid || p.parent_sync_uuid;
+        if (checkInSyncUuid && dep && String(dep) === String(checkInSyncUuid)) {
+          return true;
+        }
+        return !sessionId && !checkInSyncUuid;
+      });
+      return {
+        syncPending: hasQueuedCheckout,
+        suppressLocalReminder: hasQueuedCheckout,
+        label: hasQueuedCheckout ? 'Sync pending' : null
+      };
+    },
+
+    /**
      * Get the latest unresolved offline check_in item that has no dependent check_out queued yet
      */
     getActiveOfflineCheckIn: async function () {

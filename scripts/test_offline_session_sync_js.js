@@ -395,7 +395,31 @@ function loadOfflineEnv(idbMock, fetchHandler, fixedNowMs) {
     assert.strictEqual(child.payload.session_id, 123, "Explicit session_id must remain immutable");
   }
 
-  console.log("Offline session-targeting & dependency JS tests passed: 5/5 groups ok.");
+  // 6. Locally queued checkout shows Sync pending and suppresses local reminder
+  {
+    const idb = createPersistentIndexedDB();
+    const env = loadOfflineEnv(idb, async () => ({ ok: true, status: 200, json: async () => ({}) }), fixedNow);
+    const before = await env.window.FieldTrackDB.getReminderSuppressionState(501, null);
+    assert.strictEqual(before.syncPending, false);
+    assert.strictEqual(before.suppressLocalReminder, false);
+
+    await env.window.queueOfflineAction({
+      action: "check_out",
+      sync_uuid: "co-supp-1",
+      session_id: 501,
+      latitude: 23.81,
+      longitude: 90.41,
+      accuracy: 25,
+      client_event_time: "2026-11-28T12:00:00Z",
+    });
+
+    const after = await env.window.FieldTrackDB.getReminderSuppressionState(501, null);
+    assert.strictEqual(after.syncPending, true);
+    assert.strictEqual(after.suppressLocalReminder, true);
+    assert.strictEqual(after.label, "Sync pending");
+  }
+
+  console.log("Offline session-targeting & dependency JS tests passed: 6/6 groups ok.");
 })().catch((err) => {
   console.error(err);
   process.exit(1);

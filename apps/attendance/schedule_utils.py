@@ -347,7 +347,8 @@ def resolve_shift_schedule_times(employee, snapshot=None):
         s_time, e_time = parse_shift_times(str(raw_shift))
         if s_time is not None and e_time is not None:
             return s_time, e_time, 'employee_shift', None
-        return None, None, 'unresolved', f'Unparseable employee shift: {raw_shift}'
+        if str(raw_shift).strip().lower() != 'day shift':
+            return None, None, 'unresolved', f'Unparseable employee shift: {raw_shift}'
 
     branch = getattr(employee, 'branch', None)
     branch_schedule = None
