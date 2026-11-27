@@ -81,3 +81,4 @@ issues.md
 # SQLite temporary runtime files
 *.sqlite3-shm
 *.sqlite3-wal
+/db.sqlite3
