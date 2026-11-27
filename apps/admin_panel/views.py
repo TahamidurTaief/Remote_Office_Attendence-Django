@@ -2540,6 +2540,7 @@ class ExportReportPDFView(AdminRequiredMixin, View):
         response['Content-Disposition'] = (
             f'attachment; filename="attendance_report_{date_from_obj}.pdf"'
         )
+        response['Cache-Control'] = 'private, no-store'
         return response
 
 
@@ -2928,9 +2929,12 @@ def export_individual_pdf(request, emp_id, year, month):
     pdf_bytes = render_individual_attendance_pdf(employee, year, month, monthly_data, user=request.user)
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    month_slug = date(year, month, 1).strftime('%b_%Y')
-    emp_slug = (employee.employee_id or str(employee.id)).replace(' ', '_')
+    month_slug = _date(year, month, 1).strftime('%b_%Y')
+    import re
+    raw_emp_slug = str(employee.employee_id or employee.id)
+    emp_slug = re.sub(r'[^A-Za-z0-9._-]+', '_', raw_emp_slug).strip('_') or str(employee.id)
     response['Content-Disposition'] = f'attachment; filename="attendance_{emp_slug}_{month_slug}.pdf"'
+    response['Cache-Control'] = 'private, no-store'
     return response
 
 
@@ -3545,9 +3549,10 @@ def export_monthly_pdf(request):
     from apps.attendance.pdf_export import render_monthly_attendance_pdf
     pdf_bytes = render_monthly_attendance_pdf(data, filters=filters, user=request.user)
 
-    month_name = date(year, month, 1).strftime('%B-%y')
+    month_name = _date(year, month, 1).strftime('%B-%y')
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="attendance_{month_name}.pdf"'
+    response['Cache-Control'] = 'private, no-store'
     return response
 
 # ─────────────────────────────────────────────────────────────────

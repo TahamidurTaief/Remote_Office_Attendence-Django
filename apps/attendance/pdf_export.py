@@ -21,6 +21,7 @@ Design Principles:
 import os
 import io
 import html
+import math
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from collections import defaultdict
@@ -39,7 +40,6 @@ from reportlab.platypus import (
     Paragraph,
     Spacer,
     PageBreak,
-    KeepTogether,
     HRFlowable,
 )
 from reportlab.pdfgen import canvas
@@ -173,6 +173,81 @@ def get_employee_department_name(employee):
     return ''
 
 
+def _esc(val):
+    """Escapes user-controlled text before ReportLab Paragraph XML/markup parsing."""
+    if val is None:
+        return ''
+    return html.escape(str(val), quote=True)
+
+
+def _create_pdf_doc(buffer):
+    """Creates a standardized A4 Landscape SimpleDocTemplate with footer clearance."""
+    return SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=28,
+        rightMargin=28,
+        topMargin=26,
+        bottomMargin=36,
+    )
+
+
+def _build_appendix_flowables(appendix_notes, avail_w, styles, include_employee=True):
+    """
+    Builds a splittable Notes & Remarks Appendix without KeepTogether so
+    multi-page appendices and single notes taller than one page split cleanly
+    with repeated headers and zero LayoutError.
+    """
+    if not appendix_notes:
+        return []
+
+    flowables = [
+        Spacer(1, 14),
+        Paragraph("<b>Notes &amp; Remarks Appendix</b>", styles['meta_label']),
+        Spacer(1, 4),
+    ]
+
+    if include_employee:
+        app_col_w = [48, 170, round(avail_w - 218, 2)]
+        emp_col_header = "<b>Employee &amp; Date</b>"
+    else:
+        app_col_w = [48, 120, round(avail_w - 168, 2)]
+        emp_col_header = "<b>Date</b>"
+
+    app_data = [[
+        Paragraph("<b>Ref</b>", styles['th']),
+        Paragraph(emp_col_header, styles['th_left']),
+        Paragraph("<b>Complete Note / Policy Remarks</b>", styles['th_left']),
+    ]]
+    for note in appendix_notes:
+        if include_employee:
+            meta_html = (
+                f"<b>{_esc(note['emp'])}</b><br/>"
+                f"<font color='#64748B'>{_esc(note['date'])}</font>"
+            )
+        else:
+            meta_html = _esc(note['date'])
+        note_html = _esc(note['text']).replace('\r\n', '\n').replace('\r', '\n').replace('\n', '<br/>')
+        app_data.append([
+            Paragraph(f"<b>[Note {note['num']}]</b>", styles['td_center']),
+            Paragraph(meta_html, styles['td_left']),
+            Paragraph(note_html, styles['appendix']),
+        ])
+
+    app_table = Table(app_data, colWidths=app_col_w, repeatRows=1, splitInRow=1)
+    app_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    flowables.append(app_table)
+    return flowables
+
+
 # ── 4. STYLES FACTORY ────────────────────────────────────────────────────────
 
 def get_report_styles():
@@ -187,7 +262,8 @@ def get_report_styles():
         fontSize=13,
         leading=16,
         textColor=colors.HexColor('#0F172A'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     subtitle_style = ParagraphStyle(
         'RepSubtitle',
@@ -196,7 +272,8 @@ def get_report_styles():
         fontSize=8,
         leading=11,
         textColor=colors.HexColor('#475569'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     meta_label_style = ParagraphStyle(
         'RepMetaLabel',
@@ -205,7 +282,8 @@ def get_report_styles():
         fontSize=7.5,
         leading=10,
         textColor=colors.HexColor('#1E293B'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     meta_val_style = ParagraphStyle(
         'RepMetaVal',
@@ -214,7 +292,8 @@ def get_report_styles():
         fontSize=7.5,
         leading=10,
         textColor=colors.HexColor('#334155'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     th_style = ParagraphStyle(
         'RepTH',
@@ -224,13 +303,15 @@ def get_report_styles():
         leading=9.5,
         alignment=1,
         textColor=colors.HexColor('#1E293B'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     th_left_style = ParagraphStyle(
         'RepTHLeft',
         parent=th_style,
         alignment=0,
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     td_left = ParagraphStyle(
         'RepTDLeft',
@@ -240,7 +321,8 @@ def get_report_styles():
         leading=9,
         alignment=0,
         textColor=colors.HexColor('#0F172A'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     td_center = ParagraphStyle(
         'RepTDCenter',
@@ -250,7 +332,8 @@ def get_report_styles():
         leading=9,
         alignment=1,
         textColor=colors.HexColor('#0F172A'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     td_right = ParagraphStyle(
         'RepTDRight',
@@ -260,7 +343,8 @@ def get_report_styles():
         leading=9,
         alignment=2,
         textColor=colors.HexColor('#0F172A'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     badge_style = ParagraphStyle(
         'RepBadge',
@@ -269,7 +353,8 @@ def get_report_styles():
         fontSize=6.5,
         leading=8.5,
         alignment=1,
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
     appendix_style = ParagraphStyle(
         'RepAppendix',
@@ -279,7 +364,8 @@ def get_report_styles():
         leading=9.5,
         alignment=0,
         textColor=colors.HexColor('#334155'),
-        shaping=shaping
+        shaping=shaping,
+        splitLongWords=1,
     )
 
     return {
@@ -314,30 +400,14 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
 
     styles = get_report_styles()
     buffer = io.BytesIO()
-
-    # Landscape A4: 841.89 x 595.27 pt
-    # Available doc.width = 841.89 - (28 * 2) = 785.89 pt
-    left_margin = 28
-    right_margin = 28
-    top_margin = 26
-    bottom_margin = 32
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        leftMargin=left_margin,
-        rightMargin=right_margin,
-        topMargin=top_margin,
-        bottomMargin=bottom_margin,
-    )
-
+    doc = _create_pdf_doc(buffer)
     avail_w = doc.width
 
     # Assert and allocate strictly bounded column widths (10 columns):
-    # SN (26) | Emp+Dept (152) | ID (60) | Date (64) | In (54) | Out (54) | Hours (46) | Type (68) | Status (64) | Remarks (Remainder)
-    fixed_sum = 26 + 152 + 60 + 64 + 54 + 54 + 46 + 68 + 64  # 588 pt
-    remarks_w = round(avail_w - fixed_sum, 2)                 # ~197.89 pt
-    col_widths = [26, 152, 60, 64, 54, 54, 46, 68, 64, remarks_w]
+    # SN (28) | Emp+Dept (150) | ID (64) | Date (62) | In (54) | Out (54) | Hours (46) | Type (68) | Status (64) | Remarks (Remainder)
+    fixed_sum = 28 + 150 + 64 + 62 + 54 + 54 + 46 + 68 + 64  # 590 pt
+    remarks_w = math.floor((avail_w - fixed_sum) * 100) / 100.0  # ~195.88 pt
+    col_widths = [28, 150, 64, 62, 54, 54, 46, 68, 64, remarks_w]
 
     assert sum(col_widths) <= avail_w + 1e-3, f"Total column width {sum(col_widths)} exceeds available width {avail_w}"
 
@@ -541,35 +611,7 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
     story.append(register_table)
 
     # ── Numbered Appendix for Long Notes ─────────────────────────────────────
-    if appendix_notes:
-        story.append(Spacer(1, 14))
-        story.append(Paragraph("<b>Notes & Remarks Appendix</b>", styles['meta_label']))
-        story.append(Spacer(1, 4))
-
-        app_col_w = [48, 170, avail_w - 218]
-        app_data = [[
-            Paragraph("<b>Ref</b>", styles['th']),
-            Paragraph("<b>Employee & Date</b>", styles['th_left']),
-            Paragraph("<b>Complete Note / Policy Remarks</b>", styles['th_left']),
-        ]]
-        for note in appendix_notes:
-            app_data.append([
-                Paragraph(f"<b>[Note {note['num']}]</b>", styles['td_center']),
-                Paragraph(f"<b>{html.escape(note['emp'])}</b><br/><font color='#64748B'>{html.escape(note['date'])}</font>", styles['td_left']),
-                Paragraph(html.escape(note['text']), styles['appendix']),
-            ])
-
-        app_table = Table(app_data, colWidths=app_col_w, repeatRows=1)
-        app_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        story.append(KeepTogether(app_table))
+    story.extend(_build_appendix_flowables(appendix_notes, avail_w, styles, include_employee=True))
 
     doc.build(story, canvasmaker=NumberedCanvas)
     return buffer.getvalue()
@@ -577,12 +619,141 @@ def render_daily_attendance_pdf(report_data, filters=None, user=None):
 
 # ── 6. MONTHLY ATTENDANCE SUMMARY & SPLIT MATRIX PDF EXPORT ──────────────────
 
+def _monthly_day_cell_style(dc):
+    """Returns (code_str, hex_color, is_bold) for a monthly matrix day cell."""
+    st = (dc.get('status') or '').lower()
+    if dc.get('is_late'):
+        return 'L', '#B45309', True
+    if dc.get('is_present'):
+        return 'P', '#16A34A', True
+    if dc.get('is_absent'):
+        return 'A', '#DC2626', True
+    if 'leave' in st or dc.get('is_on_leave'):
+        return 'LV', '#2563EB', True
+    if 'holiday' in st or 'weekend' in st or dc.get('is_holiday'):
+        return 'H', '#64748B', False
+    return '—', '#94A3B8', False
+
+
+def _build_monthly_matrix_table(rows, days_slice, avail_w, styles, include_summary=False):
+    """
+    Builds a single Monthly Daily Matrix section with repeated Legend + header rows,
+    repeated employee identity (SN, Full Name, Emp ID), and minimum readable day columns.
+    """
+    sn_w = 28
+    emp_w = 144
+    summary_cols_w = [26, 26, 26, 40, 38] if include_summary else []
+    fixed_w = sn_w + emp_w + sum(summary_cols_w)
+    day_w = math.floor(((avail_w - fixed_w) / len(days_slice)) * 100) / 100.0
+    col_widths = [sn_w, emp_w] + [day_w] * len(days_slice) + summary_cols_w
+    assert sum(col_widths) <= avail_w + 1e-3, f"Matrix width {sum(col_widths)} exceeds {avail_w}"
+
+    total_cols = len(col_widths)
+    legend_text = (
+        "<b>Legend:</b> "
+        "<font color='#16A34A'><b>P</b></font> = Present &nbsp;|&nbsp; "
+        "<font color='#B45309'><b>L</b></font> = Late &nbsp;|&nbsp; "
+        "<font color='#DC2626'><b>A</b></font> = Absent &nbsp;|&nbsp; "
+        "<font color='#2563EB'><b>LV</b></font> = Leave &nbsp;|&nbsp; "
+        "<font color='#64748B'><b>H</b></font> = Holiday / Weekend &nbsp;|&nbsp; "
+        "<font color='#94A3B8'><b>—</b></font> = No Record"
+    )
+    legend_row = [Paragraph(legend_text, styles['appendix'])] + [''] * (total_cols - 1)
+
+    header_row = [
+        Paragraph("<b>SN</b>", styles['th']),
+        Paragraph("<b>Employee &amp; ID</b>", styles['th_left']),
+    ] + [Paragraph(f"<b>{d.day}</b>", styles['th']) for d in days_slice]
+    if include_summary:
+        header_row.extend([
+            Paragraph("<b>P</b>", styles['th']),
+            Paragraph("<b>A</b>", styles['th']),
+            Paragraph("<b>L</b>", styles['th']),
+            Paragraph("<b>Hours</b>", styles['th']),
+            Paragraph("<b>Att%</b>", styles['th']),
+        ])
+
+    m_data = [legend_row, header_row]
+    reg_font = styles['font_regular']
+    bold_font = styles['font_bold']
+
+    m_style = [
+        ('SPAN', (0, 0), (-1, 0)),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F8FAFC')),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#F1F5F9')),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
+        ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#94A3B8')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1.5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 1.5),
+        ('LEFTPADDING', (0, 0), (0, 0), 4),
+        ('FONTNAME', (0, 2), (-1, -1), reg_font),
+        ('FONTSIZE', (0, 2), (-1, -1), 6.5),
+        ('ALIGN', (0, 2), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 2), (-1, -1), 'CENTER'),
+    ]
+
+    if not rows:
+        empty_cell = Paragraph(
+            "<font color='#64748B'><i>No attendance records found for the selected criteria.</i></font>",
+            styles['td_center']
+        )
+        m_data.append([empty_cell] + [''] * (total_cols - 1))
+        m_style.append(('SPAN', (0, 2), (-1, 2)))
+        m_style.append(('TOPPADDING', (0, 2), (-1, 2), 12))
+        m_style.append(('BOTTOMPADDING', (0, 2), (-1, 2), 12))
+    else:
+        day_start_col = 2
+        for idx, r in enumerate(rows, 1):
+            row_idx = idx + 1  # account for legend (0) and header (1)
+            emp = r['employee']
+            emp_id_str = _esc(getattr(emp, 'employee_id', '') or '—')
+            emp_html = (
+                f"<b>{_esc(emp.full_name)}</b><br/>"
+                f"<font color='#64748B' size='6'>{emp_id_str}</font>"
+            )
+            row_c = [
+                str(idx),
+                Paragraph(emp_html, styles['td_left']),
+            ]
+            day_calcs = r.get('day_calcs', {})
+            for d_offset, d in enumerate(days_slice):
+                dc = day_calcs.get(d, {})
+                code, hex_c, is_bold = _monthly_day_cell_style(dc)
+                row_c.append(code)
+                col_i = day_start_col + d_offset
+                m_style.append(('TEXTCOLOR', (col_i, row_idx), (col_i, row_idx), colors.HexColor(hex_c)))
+                if is_bold:
+                    m_style.append(('FONTNAME', (col_i, row_idx), (col_i, row_idx), bold_font))
+
+            if include_summary:
+                sum_col = day_start_col + len(days_slice)
+                row_c.extend([
+                    str(r.get('present', 0)),
+                    str(r.get('absent', 0)),
+                    str(r.get('late', 0)),
+                    f"{r.get('total_hours', 0.0):.1f}h",
+                    f"{r.get('att_pct', 0)}%",
+                ])
+                m_style.append(('ALIGN', (sum_col + 3, row_idx), (sum_col + 4, row_idx), 'RIGHT'))
+
+            m_data.append(row_c)
+            row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
+            m_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), row_bg))
+
+    matrix_table = Table(m_data, colWidths=col_widths, repeatRows=2)
+    matrix_table.setStyle(TableStyle(m_style))
+    return matrix_table
+
+
 def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
     """
     Renders Monthly Attendance Report in A4 Landscape.
     Includes:
-    1. Executive Monthly Summary Table (SN | Employee+Dept | Present | Absent | Leave | Late | Field | Hours | OT | Att %)
-    2. Split Day Matrix (Days 1–15 on Section A, Days 16–31 on Section B) with repeated headers and guaranteed readability.
+    1. Executive Monthly Summary Table (SN | Employee+Dept | Emp ID | Present | Absent | Leave | Late | Field | Hours | OT | Att %)
+    2. Split Day Matrix (Days 1–15 on Section A, Days 16–28/29/30/31 on Section B) with repeated headers, employee identity, and legends.
     """
     filters = filters or {}
     year = monthly_data.get('year', timezone.localdate().year)
@@ -592,15 +763,7 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
 
     styles = get_report_styles()
     buffer = io.BytesIO()
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        leftMargin=28,
-        rightMargin=28,
-        topMargin=26,
-        bottomMargin=32,
-    )
+    doc = _create_pdf_doc(buffer)
     avail_w = doc.width
 
     month_name = date(year, month, 1).strftime('%B %Y')
@@ -611,13 +774,13 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
     # ── Header ───────────────────────────────────────────────────────────────
     header_table_data = [
         [
-            Paragraph(f"<b>FieldTrack</b> — Monthly Attendance Summary", styles['title']),
+            Paragraph("<b>FieldTrack</b> — Monthly Attendance Summary", styles['title']),
             Paragraph(f"<b>Timezone:</b> Asia/Dhaka (BST, UTC+6)<br/><b>Generated:</b> {gen_time_str}", styles['subtitle'])
         ],
         [
             Paragraph(
-                f"<b>Month:</b> {month_name} &nbsp;|&nbsp; "
-                f"<b>Branch:</b> {html.escape(str(filters.get('branch_name', 'All Branches')))} &nbsp;|&nbsp; "
+                f"<b>Month:</b> {_esc(month_name)} &nbsp;|&nbsp; "
+                f"<b>Branch:</b> {_esc(filters.get('branch_name', 'All Branches'))} &nbsp;|&nbsp; "
                 f"<b>Total Working Days:</b> {len(all_days)}",
                 styles['subtitle']
             ),
@@ -643,9 +806,11 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
     story.append(Spacer(1, 8))
 
     # ── 1. Executive Summary Table ───────────────────────────────────────────
-    # Columns: SN (26) | Emp+Dept (175) | ID (60) | Present (50) | Absent (50) | Leave (50) | Late (50) | Field (50) | Hours (58) | OT (58) | Att % (58)
-    sum_widths = [26, 175, 60, 50, 50, 50, 50, 50, 58, 58, 58]
-    assert sum(sum_widths) <= avail_w
+    # Fixed columns sum = 28 + 62 + 46*5 + 56 + 58 + 48 = 482 pt; remainder to Employee + Dept
+    fixed_sum = 28 + 62 + 46 + 46 + 46 + 46 + 46 + 56 + 58 + 48
+    emp_col_w = math.floor((avail_w - fixed_sum) * 100) / 100.0
+    sum_widths = [28, emp_col_w, 62, 46, 46, 46, 46, 46, 56, 58, 48]
+    assert sum(sum_widths) <= avail_w + 1e-3, f"Summary width {sum(sum_widths)} exceeds {avail_w}"
 
     sum_headers = [
         Paragraph("<b>SN</b>", styles['th']),
@@ -673,191 +838,100 @@ def render_monthly_attendance_pdf(monthly_data, filters=None, user=None):
         ('RIGHTPADDING', (0, 0), (-1, -1), 3),
     ]
 
-    for idx, r in enumerate(rows, 1):
-        emp = r['employee']
-        dept = get_employee_department_name(emp)
-        emp_display = f"<b>{html.escape(emp.full_name)}</b>"
-        if dept:
-            emp_display += f"<br/><font color='#64748B' size='6.5'>{html.escape(dept)}</font>"
+    if not rows:
+        empty_cell = Paragraph(
+            "<font color='#64748B'><i>No attendance records found for the selected criteria.</i></font>",
+            styles['td_center']
+        )
+        sum_table_data.append([empty_cell] + [Paragraph("", styles['td_center'])] * (len(sum_widths) - 1))
+        t_style.append(('SPAN', (0, 1), (-1, 1)))
+        t_style.append(('TOPPADDING', (0, 1), (-1, 1), 14))
+        t_style.append(('BOTTOMPADDING', (0, 1), (-1, 1), 14))
+    else:
+        for idx, r in enumerate(rows, 1):
+            emp = r['employee']
+            dept = get_employee_department_name(emp)
+            emp_display = f"<b>{_esc(emp.full_name)}</b>"
+            if dept:
+                emp_display += f"<br/><font color='#64748B' size='6.5'>{_esc(dept)}</font>"
 
-        p_cnt = str(r.get('present', 0))
-        a_cnt = str(r.get('absent', 0))
-        l_cnt = str(r.get('late', 0))
-        ol_cnt = str(r.get('on_leave', 0))
-        fv_cnt = str(r.get('field_visits', 0))
-        tot_hrs = f"{r.get('total_hours', 0.0):.2f}h"
-        ot_val = r.get('overtime', '—')
-        att_pct = f"{r.get('att_pct', 0)}%"
+            p_cnt = str(r.get('present', 0))
+            a_cnt = str(r.get('absent', 0))
+            l_cnt = str(r.get('late', 0))
+            ol_cnt = str(r.get('on_leave', 0))
+            fv_cnt = str(r.get('field_visits', 0))
+            tot_hrs = f"{r.get('total_hours', 0.0):.2f}h"
+            ot_val = _esc(r.get('overtime', '—'))
+            att_pct = f"{r.get('att_pct', 0)}%"
 
+            sum_table_data.append([
+                Paragraph(str(idx), styles['td_center']),
+                Paragraph(emp_display, styles['td_left']),
+                Paragraph(_esc(emp.employee_id or '—'), styles['td_center']),
+                Paragraph(p_cnt, styles['td_center']),
+                Paragraph(f"<font color='#DC2626'><b>{a_cnt}</b></font>" if int(a_cnt) > 0 else a_cnt, styles['td_center']),
+                Paragraph(ol_cnt, styles['td_center']),
+                Paragraph(f"<font color='#B45309'><b>{l_cnt}</b></font>" if int(l_cnt) > 0 else l_cnt, styles['td_center']),
+                Paragraph(fv_cnt, styles['td_center']),
+                Paragraph(tot_hrs, styles['td_right']),
+                Paragraph(ot_val, styles['td_right']),
+                Paragraph(att_pct, styles['td_right']),
+            ])
+            row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
+            t_style.append(('BACKGROUND', (0, idx), (-1, idx), row_bg))
+
+        # Summary Footer Row
+        tot_hrs_sum = f"{sum(r.get('total_hours', 0.0) for r in rows):.2f}h"
+        footer_idx = len(sum_table_data)
         sum_table_data.append([
-            Paragraph(str(idx), styles['td_center']),
-            Paragraph(emp_display, styles['td_left']),
-            Paragraph(html.escape(emp.employee_id or '—'), styles['td_center']),
-            Paragraph(p_cnt, styles['td_center']),
-            Paragraph(f"<font color='#DC2626'><b>{a_cnt}</b></font>" if int(a_cnt) > 0 else a_cnt, styles['td_center']),
-            Paragraph(ol_cnt, styles['td_center']),
-            Paragraph(f"<font color='#B45309'><b>{l_cnt}</b></font>" if int(l_cnt) > 0 else l_cnt, styles['td_center']),
-            Paragraph(fv_cnt, styles['td_center']),
-            Paragraph(tot_hrs, styles['td_right']),
-            Paragraph(ot_val, styles['td_right']),
-            Paragraph(att_pct, styles['td_right']),
+            Paragraph("", styles['td_center']),
+            Paragraph("<b>Monthly Totals</b>", styles['td_left']),
+            Paragraph("", styles['td_center']),
+            Paragraph(f"<b>{monthly_data.get('total_present', 0)}</b>", styles['td_center']),
+            Paragraph(f"<b>{monthly_data.get('total_absent', 0)}</b>", styles['td_center']),
+            Paragraph(f"<b>{monthly_data.get('total_on_leave', 0)}</b>", styles['td_center']),
+            Paragraph(f"<b>{monthly_data.get('total_late', 0)}</b>", styles['td_center']),
+            Paragraph(f"<b>{monthly_data.get('total_field', 0)}</b>", styles['td_center']),
+            Paragraph(f"<b>{tot_hrs_sum}</b>", styles['td_right']),
+            Paragraph(f"<b>{_esc(monthly_data.get('total_overtime', '0h'))}</b>", styles['td_right']),
+            Paragraph(f"<b>{monthly_data.get('avg_att_pct', 0)}%</b>", styles['td_right']),
         ])
-        row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
-        t_style.append(('BACKGROUND', (0, idx), (-1, idx), row_bg))
-
-    # Summary Footer Row
-    tot_hrs_sum = f"{sum(r.get('total_hours', 0.0) for r in rows):.2f}h"
-    footer_idx = len(sum_table_data)
-    sum_table_data.append([
-        Paragraph("", styles['td_center']),
-        Paragraph("<b>Monthly Totals</b>", styles['td_left']),
-        Paragraph("", styles['td_center']),
-        Paragraph(f"<b>{monthly_data.get('total_present', 0)}</b>", styles['td_center']),
-        Paragraph(f"<b>{monthly_data.get('total_absent', 0)}</b>", styles['td_center']),
-        Paragraph(f"<b>{monthly_data.get('total_on_leave', 0)}</b>", styles['td_center']),
-        Paragraph(f"<b>{monthly_data.get('total_late', 0)}</b>", styles['td_center']),
-        Paragraph(f"<b>{monthly_data.get('total_field', 0)}</b>", styles['td_center']),
-        Paragraph(f"<b>{tot_hrs_sum}</b>", styles['td_right']),
-        Paragraph(f"<b>{monthly_data.get('total_overtime', '0h')}</b>", styles['td_right']),
-        Paragraph(f"<b>{monthly_data.get('avg_att_pct', 0)}%</b>", styles['td_right']),
-    ])
-    t_style.append(('BACKGROUND', (0, footer_idx), (-1, footer_idx), colors.HexColor('#E2E8F0')))
-    t_style.append(('LINEABOVE', (0, footer_idx), (-1, footer_idx), 1, colors.HexColor('#94A3B8')))
+        t_style.append(('BACKGROUND', (0, footer_idx), (-1, footer_idx), colors.HexColor('#E2E8F0')))
+        t_style.append(('LINEABOVE', (0, footer_idx), (-1, footer_idx), 1, colors.HexColor('#94A3B8')))
 
     sum_table = Table(sum_table_data, colWidths=sum_widths, repeatRows=1)
     sum_table.setStyle(TableStyle(t_style))
     story.append(sum_table)
 
-    # ── 2. Split Daily Matrix (Handling 31-day Edge Case cleanly) ─────────────
-    if all_days and len(all_days) > 0:
-        story.append(PageBreak())
-        story.append(Paragraph(f"<b>Monthly Attendance Daily Matrix (Days 1 to 15) — {month_name}</b>", styles['meta_label']))
-        story.append(Spacer(1, 6))
+    # ── 2. Split Daily Matrix (Handling 28/29/30/31-day Months cleanly) ───────
+    if all_days:
+        min_day_w = 24.0
+        max_days_p1 = max(1, int((avail_w - 172) // min_day_w))
+        max_days_p2 = max(1, int((avail_w - 172 - 156) // min_day_w))
 
-        days_part1 = all_days[:15]
-        part1_col_w = [24, 130] + [round((avail_w - 154) / len(days_part1), 2)] * len(days_part1)
+        # Standard split: Days 1..15 and Days 16..end (with dynamic fallback if narrower)
+        split_at = min(15, max_days_p1)
+        chunks = [all_days[:split_at]]
+        rem_days = all_days[split_at:]
+        while rem_days:
+            if len(rem_days) <= max_days_p2:
+                chunks.append(rem_days)
+                break
+            chunks.append(rem_days[:max_days_p1])
+            rem_days = rem_days[max_days_p1:]
 
-        m_head1 = [
-            Paragraph("<b>SN</b>", styles['th']),
-            Paragraph("<b>Employee</b>", styles['th_left'])
-        ] + [Paragraph(f"<b>{d.day}</b>", styles['th']) for d in days_part1]
-
-        m_data1 = [m_head1]
-        m_style1 = [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-            ('LEFTPADDING', (0, 0), (-1, -1), 1),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 1),
-        ]
-
-        for idx, r in enumerate(rows, 1):
-            emp = r['employee']
-            row_c = [
-                Paragraph(str(idx), styles['td_center']),
-                Paragraph(html.escape(emp.full_name), styles['td_left'])
-            ]
-            day_calcs = r.get('day_calcs', {})
-            for d in days_part1:
-                dc = day_calcs.get(d, {})
-                st = dc.get('status', '').lower()
-                m_st = dc.get('monthly_status', '—')
-                if dc.get('is_late'):
-                    cell_html = f"<font color='#B45309' size='6'><b>L</b></font>"
-                elif dc.get('is_present'):
-                    cell_html = f"<font color='#16A34A' size='6'><b>P</b></font>"
-                elif dc.get('is_absent'):
-                    cell_html = f"<font color='#DC2626' size='6'><b>A</b></font>"
-                elif 'leave' in st:
-                    cell_html = f"<font color='#2563EB' size='6'><b>LV</b></font>"
-                elif 'holiday' in st or 'weekend' in st:
-                    cell_html = f"<font color='#94A3B8' size='6'>H</font>"
-                else:
-                    cell_html = f"<font color='#CBD5E1' size='6'>—</font>"
-                row_c.append(Paragraph(cell_html, styles['td_center']))
-
-            m_data1.append(row_c)
-            row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
-            m_style1.append(('BACKGROUND', (0, idx), (-1, idx), row_bg))
-
-        matrix_table1 = Table(m_data1, colWidths=part1_col_w, repeatRows=1)
-        matrix_table1.setStyle(TableStyle(m_style1))
-        story.append(matrix_table1)
-
-        # Part 2: Days 16 to End
-        if len(all_days) > 15:
+        for chunk_idx, days_slice in enumerate(chunks):
+            is_last = (chunk_idx == len(chunks) - 1)
             story.append(PageBreak())
-            days_part2 = all_days[15:]
-            story.append(Paragraph(f"<b>Monthly Attendance Daily Matrix (Days 16 to {len(all_days)}) & Summary — {month_name}</b>", styles['meta_label']))
-            story.append(Spacer(1, 6))
-
-            # Part 2 includes days 16..end plus P, A, L, Tot Hrs, Att %
-            summary_cols_w = [26, 26, 26, 38, 38]
-            days_part2_w = round((avail_w - 154 - sum(summary_cols_w)) / len(days_part2), 2)
-            part2_col_w = [24, 130] + [days_part2_w] * len(days_part2) + summary_cols_w
-
-            m_head2 = [
-                Paragraph("<b>SN</b>", styles['th']),
-                Paragraph("<b>Employee</b>", styles['th_left'])
-            ] + [Paragraph(f"<b>{d.day}</b>", styles['th']) for d in days_part2] + [
-                Paragraph("<b>P</b>", styles['th']),
-                Paragraph("<b>A</b>", styles['th']),
-                Paragraph("<b>L</b>", styles['th']),
-                Paragraph("<b>Hours</b>", styles['th']),
-                Paragraph("<b>Att%</b>", styles['th']),
-            ]
-
-            m_data2 = [m_head2]
-            m_style2 = [
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
-                ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 0), (-1, -1), 2),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ('LEFTPADDING', (0, 0), (-1, -1), 1),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 1),
-            ]
-
-            for idx, r in enumerate(rows, 1):
-                emp = r['employee']
-                row_c = [
-                    Paragraph(str(idx), styles['td_center']),
-                    Paragraph(html.escape(emp.full_name), styles['td_left'])
-                ]
-                day_calcs = r.get('day_calcs', {})
-                for d in days_part2:
-                    dc = day_calcs.get(d, {})
-                    st = dc.get('status', '').lower()
-                    if dc.get('is_late'):
-                        cell_html = f"<font color='#B45309' size='6'><b>L</b></font>"
-                    elif dc.get('is_present'):
-                        cell_html = f"<font color='#16A34A' size='6'><b>P</b></font>"
-                    elif dc.get('is_absent'):
-                        cell_html = f"<font color='#DC2626' size='6'><b>A</b></font>"
-                    elif 'leave' in st:
-                        cell_html = f"<font color='#2563EB' size='6'><b>LV</b></font>"
-                    elif 'holiday' in st or 'weekend' in st:
-                        cell_html = f"<font color='#94A3B8' size='6'>H</font>"
-                    else:
-                        cell_html = f"<font color='#CBD5E1' size='6'>—</font>"
-                    row_c.append(Paragraph(cell_html, styles['td_center']))
-
-                # Add summary numbers
-                row_c.append(Paragraph(str(r.get('present', 0)), styles['td_center']))
-                row_c.append(Paragraph(str(r.get('absent', 0)), styles['td_center']))
-                row_c.append(Paragraph(str(r.get('late', 0)), styles['td_center']))
-                row_c.append(Paragraph(f"{r.get('total_hours', 0.0):.1f}h", styles['td_right']))
-                row_c.append(Paragraph(f"{r.get('att_pct', 0)}%", styles['td_right']))
-
-                m_data2.append(row_c)
-                row_bg = colors.HexColor('#FFFFFF') if idx % 2 != 0 else colors.HexColor('#F8FAFC')
-                m_style2.append(('BACKGROUND', (0, idx), (-1, idx), row_bg))
-
-            matrix_table2 = Table(m_data2, colWidths=part2_col_w, repeatRows=1)
-            matrix_table2.setStyle(TableStyle(m_style2))
-            story.append(matrix_table2)
+            start_d = days_slice[0].day
+            end_d = days_slice[-1].day
+            title_suffix = " &amp; Summary" if is_last else ""
+            story.append(Paragraph(
+                f"<b>Monthly Attendance Daily Matrix (Days {start_d} to {end_d}){title_suffix} — {_esc(month_name)}</b>",
+                styles['meta_label']
+            ))
+            story.append(Spacer(1, 5))
+            story.append(_build_monthly_matrix_table(rows, days_slice, avail_w, styles, include_summary=is_last))
 
     doc.build(story, canvasmaker=NumberedCanvas)
     return buffer.getvalue()
@@ -873,15 +947,7 @@ def render_individual_attendance_pdf(employee, year, month, monthly_data, user=N
     """
     styles = get_report_styles()
     buffer = io.BytesIO()
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        leftMargin=28,
-        rightMargin=28,
-        topMargin=26,
-        bottomMargin=32,
-    )
+    doc = _create_pdf_doc(buffer)
     avail_w = doc.width
 
     month_name = date(year, month, 1).strftime('%B %Y')
@@ -1099,35 +1165,7 @@ def render_individual_attendance_pdf(employee, year, month, monthly_data, user=N
     story.append(day_table)
 
     # ── Remarks Appendix if long notes exist ─────────────────────────────────
-    if appendix_notes:
-        story.append(Spacer(1, 14))
-        story.append(Paragraph("<b>Notes & Remarks Appendix</b>", styles['meta_label']))
-        story.append(Spacer(1, 4))
-
-        app_col_w = [48, 120, avail_w - 168]
-        app_data = [[
-            Paragraph("<b>Ref</b>", styles['th']),
-            Paragraph("<b>Date</b>", styles['th_left']),
-            Paragraph("<b>Complete Note / Policy Remarks</b>", styles['th_left']),
-        ]]
-        for note in appendix_notes:
-            app_data.append([
-                Paragraph(f"<b>[Note {note['num']}]</b>", styles['td_center']),
-                Paragraph(html.escape(note['date']), styles['td_left']),
-                Paragraph(html.escape(note['text']), styles['appendix']),
-            ])
-
-        app_table = Table(app_data, colWidths=app_col_w, repeatRows=1)
-        app_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        story.append(KeepTogether(app_table))
+    story.extend(_build_appendix_flowables(appendix_notes, avail_w, styles, include_employee=False))
 
     doc.build(story, canvasmaker=NumberedCanvas)
     return buffer.getvalue()

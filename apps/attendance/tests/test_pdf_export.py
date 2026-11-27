@@ -34,7 +34,12 @@ from apps.attendance.pdf_export import (
     format_time_with_seconds,
     BD_TZ,
 )
-from apps.admin_panel.views import ExportReportPDFView, ExportReportExcelView
+from apps.admin_panel.views import (
+    ExportReportPDFView,
+    ExportReportExcelView,
+    export_monthly_pdf,
+    export_individual_pdf,
+)
 
 User = get_user_model()
 
@@ -370,3 +375,195 @@ class AttendancePDFExportTests(TestCase):
         self.assertIn("Software Engineering", full_text)
         # Check-in timestamp with seconds for Oct 26
         self.assertIn("09:14:22", full_text)
+
+    def test_oversized_note_splits_across_pages_without_layout_error(self):
+        """Notes taller than one printable page must split cleanly across pages without LayoutError."""
+        oversized_note = (
+            "Extended policy audit trail entry with detailed field verification steps. " * 140
+            + "END-OF-OVERSIZED-NOTE-MARKER"
+        )
+        # Daily renderer
+        daily_data = get_daily_report_data(start_date=self.test_date, end_date=self.test_date)
+        daily_data['rows'][0]['notes'] = oversized_note
+        daily_pdf = render_daily_attendance_pdf(daily_data)
+        daily_reader = PdfReader(io.BytesIO(daily_pdf))
+        self.assertGreaterEqual(len(daily_reader.pages), 2)
+        daily_text = "".join(p.extract_text() for p in daily_reader.pages)
+        self.assertIn("Complete Note / Policy Remarks", daily_text)
+        self.assertIn("END-OF-OVERSIZED-NOTE-MARKER", daily_text)
+
+        # Individual renderer
+        monthly_data = get_monthly_report_data(
+            year=2026,
+            month=10,
+            employee_id=self.emp1.id,
+            allowed_employee_ids={self.emp1.id},
+        )
+        monthly_data['rows'][0]['day_calcs'][self.test_date]['notes'] = oversized_note
+        indiv_pdf = render_individual_attendance_pdf(self.emp1, 2026, 10, monthly_data)
+        indiv_reader = PdfReader(io.BytesIO(indiv_pdf))
+        self.assertGreaterEqual(len(indiv_reader.pages), 2)
+        indiv_text = "".join(p.extract_text() for p in indiv_reader.pages)
+        self.assertIn("END-OF-OVERSIZED-NOTE-MARKER", indiv_text)
+
+    def test_monthly_pdf_28_29_30_31_day_month_boundaries_and_legends(self):
+        """Verifies 28/29/30/31-day monthly matrices repeat employee identity and legends cleanly."""
+        for year, month, last_day in [(2025, 2, 28), (2024, 2, 29), (2026, 4, 30), (2026, 10, 31)]:
+            monthly_data = get_monthly_report_data(
+                year=year,
+                month=month,
+                allowed_employee_ids={self.emp1.id, self.emp2.id, self.emp3.id},
+            )
+            pdf_bytes = render_monthly_attendance_pdf(monthly_data)
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+            self.assertGreaterEqual(len(reader.pages), 3)
+            full_text = "".join(p.extract_text() for p in reader.pages)
+            self.assertIn(f"Days 16 to {last_day}", full_text)
+            self.assertIn("Legend:", full_text)
+            self.assertIn("EMP-101", full_text)
+            self.assertIn("EMP-102", full_text)
+
+    def test_bengali_mixed_script_unbroken_identifiers_and_markup_escaping(self):
+        """Verifies Bengali conjuncts, mixed-script names, unbroken IDs, and markup-like user text."""
+        self.emp1.full_name = "তাহমিদুর তাইফ (ব্রাহ্মণবাড়িয়া) <script>alert(1)</script> & <b>Bold</b>"
+        self.emp1.employee_id = "EMP-" + ("9" * 48)
+        self.emp1.department = "DepartmentOfUnbrokenEngineeringNamesWithoutSpaces"
+        self.emp1.save()
+
+        daily_data = get_daily_report_data(start_date=self.test_date, end_date=self.test_date)
+        daily_data['rows'][0]['notes'] = "যুক্তাক্ষর: ক্ষ জ্ঞ ক্ত ন্ত ম্প শ্র হৃ <font color='red'>raw</font> & more"
+        daily_pdf = render_daily_attendance_pdf(daily_data)
+        daily_text = "".join(p.extract_text() for p in PdfReader(io.BytesIO(daily_pdf)).pages)
+        self.assertIn("<script>alert(1)</script>", daily_text)
+        self.assertIn("<font color='red'>raw</font>", daily_text)
+
+        monthly_data = get_monthly_report_data(
+            year=2026, month=10, allowed_employee_ids={self.emp1.id}
+        )
+        monthly_pdf = render_monthly_attendance_pdf(monthly_data)
+        self.assertGreater(len(monthly_pdf), 1000)
+
+        indiv_pdf = render_individual_attendance_pdf(self.emp1, 2026, 10, monthly_data)
+        self.assertGreater(len(indiv_pdf), 1000)
+
+    def test_pdf_export_views_headers_safe_filenames_and_zero_render_queries(self):
+        """Verifies PDF views preserve auth, application/pdf, private/no-store, safe filenames, and 0 render queries."""
+        # Daily view
+        req_daily = self.factory.get(f'/admin-panel/reports/export/pdf/?date={self.test_date}')
+        req_daily.user = self.admin
+        res_daily = ExportReportPDFView.as_view()(req_daily)
+        self.assertEqual(res_daily.status_code, 200)
+        self.assertEqual(res_daily['Content-Type'], 'application/pdf')
+        self.assertIn('private', res_daily['Cache-Control'])
+        self.assertIn('no-store', res_daily['Cache-Control'])
+        self.assertIn('attachment; filename="attendance_report_', res_daily['Content-Disposition'])
+
+        # Monthly view
+        req_monthly = self.factory.get('/admin-panel/reports/monthly/export/pdf/?year=2026&month=10')
+        req_monthly.user = self.admin
+        res_monthly = export_monthly_pdf(req_monthly)
+        self.assertEqual(res_monthly.status_code, 200)
+        self.assertEqual(res_monthly['Content-Type'], 'application/pdf')
+        self.assertIn('private', res_monthly['Cache-Control'])
+        self.assertIn('no-store', res_monthly['Cache-Control'])
+
+        # Individual view with unsafe employee_id characters
+        self.emp3.employee_id = 'EMP/103 "test"'
+        self.emp3.save()
+        req_indiv = self.factory.get(f'/admin-panel/reports/individual/{self.emp3.id}/2026/10/pdf/')
+        req_indiv.user = self.admin
+        res_indiv = export_individual_pdf(req_indiv, self.emp3.id, 2026, 10)
+        self.assertEqual(res_indiv.status_code, 200)
+        self.assertEqual(res_indiv['Content-Type'], 'application/pdf')
+        self.assertIn('private', res_indiv['Cache-Control'])
+        self.assertIn('no-store', res_indiv['Cache-Control'])
+        self.assertNotIn('"', res_indiv['Content-Disposition'].split('filename="')[1].rstrip('"'))
+
+        # Zero DB queries during rendering of preloaded data
+        daily_data = get_daily_report_data(start_date=self.test_date, end_date=self.test_date)
+        monthly_data = get_monthly_report_data(
+            year=2026, month=10, allowed_employee_ids={self.emp1.id, self.emp3.id}
+        )
+        indiv_data = get_monthly_report_data(
+            year=2026, month=10, employee_id=self.emp3.id, allowed_employee_ids={self.emp3.id}
+        )
+        with self.assertNumQueries(0):
+            render_daily_attendance_pdf(daily_data)
+            render_monthly_attendance_pdf(monthly_data)
+            render_individual_attendance_pdf(self.emp3, 2026, 10, indiv_data)
+
+    def test_500_employee_daily_and_monthly_pagination_repeated_headers(self):
+        """Verifies 500-employee Daily & Monthly PDFs paginate with repeated headers and footers."""
+        mock_daily_rows = []
+        mock_monthly_rows = []
+        all_days = [date(2026, 10, d) for d in range(1, 32)]
+        dt_in = timezone.make_aware(datetime(2026, 10, 26, 9, 0, 0), BD_TZ)
+
+        for i in range(1, 501):
+            emp = EmployeeProfile(
+                employee_id=f'EMP-{2000 + i}',
+                full_name=f'তাহমিদুর তাইফ কর্মচারী {i}',
+                branch=self.branch,
+                department='Operations',
+            )
+            att = Attendance(employee=emp, date=self.test_date, check_in_time=dt_in, total_hours=8.0)
+            mock_daily_rows.append({
+                'employee': emp,
+                'date': self.test_date,
+                'check_in': att,
+                'check_in_sessions': [att],
+                'field_visits': [],
+                'total_hours': 8.0,
+                'status': 'on_time',
+                'status_display': 'Present',
+                'notes': f'Record {i}',
+                'is_present': True,
+                'is_absent': False,
+            })
+            mock_monthly_rows.append({
+                'employee': emp,
+                'present': 27,
+                'absent': 0,
+                'late': 0,
+                'on_leave': 0,
+                'field_visits': 0,
+                'total_hours': 216.0,
+                'overtime': '0h',
+                'att_pct': 100,
+                'day_calcs': {d: {'status': 'present', 'is_present': True} for d in all_days},
+            })
+
+        daily_pdf = render_daily_attendance_pdf({
+            'start_date': self.test_date,
+            'end_date': self.test_date,
+            'rows': mock_daily_rows,
+            'present': 500,
+            'absent': 0,
+            'late': 0,
+            'total_hours': 4000.0,
+        })
+        daily_reader = PdfReader(io.BytesIO(daily_pdf))
+        self.assertGreater(len(daily_reader.pages), 15)
+        for idx in (0, len(daily_reader.pages) // 2, len(daily_reader.pages) - 1):
+            txt = daily_reader.pages[idx].extract_text()
+            self.assertIn("Employee + Department", txt)
+            self.assertIn(f"Page {idx + 1} of {len(daily_reader.pages)}", txt)
+
+        monthly_pdf = render_monthly_attendance_pdf({
+            'year': 2026,
+            'month': 10,
+            'all_days': all_days,
+            'rows': mock_monthly_rows,
+            'total_present': 13500,
+            'total_absent': 0,
+            'total_on_leave': 0,
+            'total_late': 0,
+            'total_field': 0,
+            'total_overtime': '0h',
+            'avg_att_pct': 100,
+        })
+        monthly_reader = PdfReader(io.BytesIO(monthly_pdf))
+        self.assertGreater(len(monthly_reader.pages), 20)
+        last_txt = monthly_reader.pages[-1].extract_text()
+        self.assertIn("Legend:", last_txt)
+        self.assertIn(f"Page {len(monthly_reader.pages)} of {len(monthly_reader.pages)}", last_txt)
