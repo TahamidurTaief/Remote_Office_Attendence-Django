@@ -642,6 +642,58 @@ def resolve_session_checkout(session, evidence=None):
     return _ambiguous_result()
 
 
+def _merge_verified_intervals(check_in_sessions, effective_checkouts=None):
+    """Return sorted, merged non-overlapping (start, end) intervals for verified completed office sessions."""
+    completed = []
+    for idx, s in enumerate(check_in_sessions):
+        eff_co = effective_checkouts[idx] if effective_checkouts is not None else s.check_out_time
+        if s.check_in_time and eff_co and eff_co > s.check_in_time:
+            completed.append((s, eff_co))
+    if not completed:
+        return [], False
+
+    completed.sort(key=lambda item: item[0].check_in_time)
+    has_overlap = any(
+        completed[i][0].check_in_time < completed[i - 1][1]
+        for i in range(1, len(completed))
+    )
+    merged = [(completed[0][0].check_in_time, completed[0][1])]
+    for s, eff_co in completed[1:]:
+        prev_start, prev_end = merged[-1]
+        if s.check_in_time <= prev_end:
+            if eff_co > prev_end:
+                merged[-1] = (prev_start, eff_co)
+        else:
+            merged.append((s.check_in_time, eff_co))
+    return merged, (has_overlap or any(eff_co != s.check_out_time for s, eff_co in completed))
+
+
+def _compute_observed_overtime_minutes(merged_intervals, schedule, employee, target_date):
+    """
+    Compute observed office overtime minutes once from merged verified session intervals
+    intersected with [overtime_starts, +inf). Pure in-memory calculation (0 DB queries).
+    """
+    if not merged_intervals or not schedule or not getattr(employee, 'overtime_enabled', False):
+        return 0
+
+    end_date = target_date
+    if schedule.office_end_time < schedule.office_start_time:
+        end_date = target_date + timedelta(days=1)
+
+    overtime_starts = datetime.combine(end_date, schedule.office_end_time)
+    if timezone.is_aware(merged_intervals[0][0]):
+        overtime_starts = timezone.make_aware(overtime_starts, BD_TZ)
+    overtime_starts += timedelta(minutes=int(getattr(schedule, 'overtime_after_minutes', 0) or 0))
+
+    total_ot_seconds = 0.0
+    for start, end in merged_intervals:
+        if end > overtime_starts:
+            ot_start = max(start, overtime_starts)
+            if end > ot_start:
+                total_ot_seconds += (end - ot_start).total_seconds()
+    return int(total_ot_seconds // 60)
+
+
 def _sum_non_overlapping_hours(check_in_sessions, effective_checkouts=None):
     """
     Sums completed office/check-in session durations in hours, merging overlapping
@@ -670,14 +722,7 @@ def _sum_non_overlapping_hours(check_in_sessions, effective_checkouts=None):
                 total += round((eff_co - s.check_in_time).total_seconds() / 3600.0, 2)
         return round(total, 2)
 
-    merged = [(completed[0][0].check_in_time, completed[0][1])]
-    for s, eff_co in completed[1:]:
-        prev_start, prev_end = merged[-1]
-        if s.check_in_time <= prev_end:
-            if eff_co > prev_end:
-                merged[-1] = (prev_start, eff_co)
-        else:
-            merged.append((s.check_in_time, eff_co))
+    merged, _ = _merge_verified_intervals(check_in_sessions, effective_checkouts=effective_checkouts)
     total_seconds = sum((end - start).total_seconds() for start, end in merged)
     return round(total_seconds / 3600.0, 2)
 
@@ -947,20 +992,10 @@ def calculate_employee_day(
             monthly_status = 'Field Visit'
             calendar_color = 'purple'
 
-        # Sum non-overlapping completed office session hours (exclude open/auto-closed/ambiguous & field visits)
+        # Sum non-overlapping completed office session hours and observed OT once from merged intervals
         total_hours = _sum_non_overlapping_hours(check_in_sessions, effective_checkouts=effective_checkouts)
-        ot_minutes = sum(
-            int(getattr(a, 'overtime_minutes', 0) or 0)
-            for idx, a in enumerate(check_in_sessions)
-            if effective_checkouts[idx] is not None
-        )
-        if ot_minutes == 0 and check_in_sessions and schedule:
-            from apps.attendance.schedule_utils import calculate_overtime
-            ot_minutes = sum(
-                calculate_overtime(effective_checkouts[idx], schedule, employee, session_date=target_date)
-                if effective_checkouts[idx] is not None else 0
-                for idx, a in enumerate(check_in_sessions)
-            )
+        merged_intervals, _ = _merge_verified_intervals(check_in_sessions, effective_checkouts=effective_checkouts)
+        ot_minutes = _compute_observed_overtime_minutes(merged_intervals, schedule, employee, target_date)
 
         all_sessions = check_in_sessions + field_visits
         ci_times = [s.check_in_time for s in all_sessions if s and s.check_in_time]
