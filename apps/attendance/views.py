@@ -606,6 +606,31 @@ def get_tracking_config(request):
         'is_enabled': is_enabled,
     })
 
+@login_required
+@require_POST
+def snooze_missing_checkout(request):
+    """Owner-scoped, CSRF-protected endpoint to durably snooze missing-checkout reminders for 60 minutes."""
+    if not check_role(request.user):
+        return JsonResponse({'success': False, 'error': 'Unauthorized role.'}, status=403)
+
+    employee = get_employee(request.user)
+    if not employee:
+        return JsonResponse({'success': False, 'error': 'Employee profile not found.'}, status=404)
+    if not employee.is_active:
+        return JsonResponse({'success': False, 'error': 'Employee profile is inactive.'}, status=403)
+
+    from apps.attendance.reminder_service import snooze_missing_checkout_reminder
+    log = snooze_missing_checkout_reminder(employee)
+    snoozed_until = (log.metadata or {}).get('snoozed_until')
+    resp = JsonResponse({
+        'success': True,
+        'snoozed_until': snoozed_until,
+        'message': 'Missing-checkout reminders snoozed for 60 minutes.',
+    })
+    resp['Cache-Control'] = 'no-store'
+    return resp
+
+
 @login_required  
 def save_location(request):
     """Auto-saves employee location during active shift"""

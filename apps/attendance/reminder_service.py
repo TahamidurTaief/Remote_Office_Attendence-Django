@@ -98,16 +98,30 @@ def evaluate_and_send_missing_checkout_reminder(employee, now=None, send_push=Tr
         for sess in open_sessions:
             if not sess.check_in_time:
                 continue
-            win = resolve_checkout_window(sess.check_in_time, employee=emp_locked)
+            if sess.checkout_deadline_at is not None and sess.shift_start_time is not None and sess.shift_end_time is not None:
+                win = resolve_checkout_window(sess.check_in_time, snapshot=sess)
+                deadline_at = sess.checkout_deadline_at
+                is_snapshotted = True
+            elif sess.checkout_deadline_at is not None:
+                win = resolve_checkout_window(sess.check_in_time, employee=emp_locked)
+                deadline_at = sess.checkout_deadline_at
+                is_snapshotted = True
+            else:
+                win = resolve_checkout_window(sess.check_in_time, employee=emp_locked)
+                deadline_at = win.get('checkout_deadline_at')
+                is_snapshotted = False
+
             if not win['resolved']:
                 continue
             resolved_count += 1
             first_alert_at = win['shift_end_at'] + timedelta(minutes=FIRST_REMINDER_DELAY_MINUTES)
             if ref_now >= first_alert_at:
                 eligible_sessions.append((sess, win, first_alert_at))
-                if ref_now >= win['checkout_deadline_at']:
+                # Never claim an unsnapshotted legacy window has expired
+                if is_snapshotted and deadline_at is not None and ref_now >= deadline_at:
                     any_past_deadline = True
-                latest_window = (sess, win, first_alert_at)
+                if latest_window is None:
+                    latest_window = (sess, win, first_alert_at)
 
         if not eligible_sessions:
             result['reason'] = 'unresolved_schedule' if resolved_count == 0 else 'before_first_reminder'
@@ -147,9 +161,24 @@ def evaluate_and_send_missing_checkout_reminder(employee, now=None, send_push=Tr
             result['reason'] = 'daily_cap_reached'
             return result
 
-        # Window index relative to the most recent eligible session's first_alert_at
-        _, _, anchor_first_alert = latest_window
-        window_index = int((ref_now - anchor_first_alert).total_seconds() // (REPEAT_INTERVAL_MINUTES * 60))
+        # Stable scheduling anchor for the employee-local-day so changing the open-session
+        # set never resets or shortens the 60-minute repeat interval.
+        anchor_first_alert = None
+        for log in day_logs:
+            raw_anchor = (log.metadata or {}).get('anchor_first_alert')
+            if raw_anchor:
+                try:
+                    parsed_anchor = datetime.fromisoformat(raw_anchor)
+                    if timezone.is_naive(parsed_anchor):
+                        parsed_anchor = timezone.make_aware(parsed_anchor, timezone.get_current_timezone())
+                    anchor_first_alert = parsed_anchor
+                    break
+                except ValueError:
+                    pass
+        if anchor_first_alert is None:
+            _, _, anchor_first_alert = latest_window
+
+        window_index = max(0, int((ref_now - anchor_first_alert).total_seconds() // (REPEAT_INTERVAL_MINUTES * 60)))
         dedupe_key = f"{emp_locked.pk}:{local_date_str}:w{window_index}"
 
         if any((log.metadata or {}).get('dedupe_key') == dedupe_key for log in day_logs):
@@ -188,6 +217,7 @@ def evaluate_and_send_missing_checkout_reminder(employee, now=None, send_push=Tr
                 'dedupe_key': dedupe_key,
                 'local_date': local_date_str,
                 'window_index': window_index,
+                'anchor_first_alert': anchor_first_alert.isoformat(),
                 'session_ids': session_ids,
                 'action': action,
                 'notification_id': notif.id,
@@ -212,8 +242,9 @@ def evaluate_and_send_missing_checkout_reminder(employee, now=None, send_push=Tr
             'dedupe_key': dedupe_key,
         })
 
-    # Outside atomic transaction: dispatch background Web Push (never inside punch transactions)
-    if send_push and notification_to_push is not None:
-        result['push_sent'] = _deliver_reminder_web_push(notification_to_push.recipient, push_payload)
+        if send_push and notification_to_push is not None:
+            _recipient = notification_to_push.recipient
+            _payload = dict(push_payload)
+            transaction.on_commit(lambda: _deliver_reminder_web_push(_recipient, _payload))
 
     return result

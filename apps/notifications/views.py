@@ -36,7 +36,7 @@ def notification_list(request):
 
     is_admin = request.user.is_superuser or PermissionEngine.evaluate(request.user, 'notifications.view').allowed
     if not is_admin:
-        allowed_types = ['task_assigned', 'task_completed', 'task_delayed', 'schedule_event']
+        allowed_types = ['task_assigned', 'task_completed', 'task_delayed', 'schedule_event', 'missing']
         notifs = notifs.filter(notif_type__in=allowed_types)
         unread_count = Notification.objects.filter(
             recipient=request.user, is_read=False, notif_type__in=allowed_types
@@ -44,6 +44,7 @@ def notification_list(request):
         filter_tabs = [
             ('all', 'All'),
             ('unread', 'Unread'),
+            ('missing', 'Missing Checkout'),
             ('schedule_event', 'Schedule Alerts'),
             ('task_assigned', 'Task Assigned'),
             ('task_completed', 'Task Completed'),
@@ -160,7 +161,7 @@ def _safe_internal_redirect(path):
 def notification_feed(request):
     from django.urls import reverse
 
-    allowed_types = ['schedule_event', 'task_assigned', 'task_completed', 'task_delayed']
+    allowed_types = ['schedule_event', 'task_assigned', 'task_completed', 'task_delayed', 'missing']
     notifs = Notification.objects.filter(
         recipient=request.user,
         notif_type__in=allowed_types
@@ -200,16 +201,22 @@ def notification_feed(request):
     for n in batch:
         if n.notif_type == 'schedule_event':
             redirect_url = reverse('schedule:month_view')
+        elif n.notif_type == 'missing':
+            msg_lower = (n.message or '').lower()
+            redirect_url = '/attendance/forgot-checkout/' if 'correction' in msg_lower else '/staff/check-in/'
         else:
             redirect_url = reverse('staff:my_tasks')
 
-        results.append({
+        item_payload = {
             'id': n.id,
             'type': n.notif_type,
             'title': n.title,
             'message': n.message or n.title,
             'redirect_url': _safe_internal_redirect(redirect_url),
-        })
+        }
+        if n.notif_type == 'missing':
+            item_payload['snooze_url'] = '/attendance/reminders/snooze/'
+        results.append(item_payload)
 
     response = JsonResponse({
         'notifications': results,

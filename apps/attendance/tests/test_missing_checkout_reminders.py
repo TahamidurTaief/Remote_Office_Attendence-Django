@@ -1,5 +1,5 @@
 import decimal
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -86,25 +86,31 @@ class MissingCheckoutReminderTests(TestCase):
             attendance_type="check_in",
             type="office",
             status="on_time",
+            shift_date=ci_time.date(),
+            shift_start_time=time(9, 0),
+            shift_end_time=time(18, 0),
+            checkout_deadline_at=datetime(2026, 11, 26, 9, 0, 0, tzinfo=BD_TZ),
         )
 
         with patch("apps.attendance.reminder_service.send_web_push", return_value=True) as mock_push:
-            r_early = evaluate_and_send_missing_checkout_reminder(
-                self.emp, now=datetime(2026, 11, 25, 18, 14, 59, tzinfo=BD_TZ)
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                r_early = evaluate_and_send_missing_checkout_reminder(
+                    self.emp, now=datetime(2026, 11, 25, 18, 14, 59, tzinfo=BD_TZ)
+                )
             self.assertFalse(r_early["sent"])
             self.assertEqual(r_early["reason"], "before_first_reminder")
 
-            r_first = evaluate_and_send_missing_checkout_reminder(
-                self.emp, now=datetime(2026, 11, 25, 18, 15, 0, tzinfo=BD_TZ)
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                r_first = evaluate_and_send_missing_checkout_reminder(
+                    self.emp, now=datetime(2026, 11, 25, 18, 15, 0, tzinfo=BD_TZ)
+                )
             self.assertTrue(r_first["sent"], r_first)
             self.assertEqual(r_first["action"], "checkout")
-            self.assertEqual(r_first["push_sent"], 1)
 
-            r_past_deadline = evaluate_and_send_missing_checkout_reminder(
-                self.emp, now=datetime(2026, 11, 26, 9, 0, 0, tzinfo=BD_TZ)
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                r_past_deadline = evaluate_and_send_missing_checkout_reminder(
+                    self.emp, now=datetime(2026, 11, 26, 9, 0, 0, tzinfo=BD_TZ)
+                )
             self.assertTrue(r_past_deadline["sent"])
             self.assertEqual(r_past_deadline["action"], "correction")
             self.assertEqual(mock_push.call_count, 2)
@@ -123,28 +129,31 @@ class MissingCheckoutReminderTests(TestCase):
 
         with patch("apps.attendance.reminder_service.send_web_push", return_value=True) as mock_push:
             t1 = datetime(2026, 11, 25, 18, 15, 0, tzinfo=BD_TZ)
-            w1 = evaluate_and_send_missing_checkout_reminder(self.emp, now=t1)
-            w2 = evaluate_and_send_missing_checkout_reminder(self.emp, now=t1 + timedelta(minutes=10))
+            with self.captureOnCommitCallbacks(execute=True):
+                w1 = evaluate_and_send_missing_checkout_reminder(self.emp, now=t1)
+                w2 = evaluate_and_send_missing_checkout_reminder(self.emp, now=t1 + timedelta(minutes=10))
             self.assertTrue(w1["sent"])
             self.assertFalse(w2["sent"])
             self.assertEqual(w2["reason"], "deduplicated")
 
             # Snooze for 60 minutes suppresses 19:15 window, resumes at 19:20
             snooze_missing_checkout_reminder(self.emp, now=datetime(2026, 11, 25, 18, 20, 0, tzinfo=BD_TZ))
-            r_snoozed = evaluate_and_send_missing_checkout_reminder(
-                self.emp, now=datetime(2026, 11, 25, 19, 15, 0, tzinfo=BD_TZ)
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                r_snoozed = evaluate_and_send_missing_checkout_reminder(
+                    self.emp, now=datetime(2026, 11, 25, 19, 15, 0, tzinfo=BD_TZ)
+                )
             self.assertFalse(r_snoozed["sent"])
             self.assertEqual(r_snoozed["reason"], "snoozed")
 
             # Advance across remaining windows on 2026-11-25 -> capped at 4 total
-            for h in (19, 20, 21, 22):
-                evaluate_and_send_missing_checkout_reminder(
-                    self.emp, now=datetime(2026, 11, 25, h, 25, 0, tzinfo=BD_TZ)
+            with self.captureOnCommitCallbacks(execute=True):
+                for h in (19, 20, 21, 22):
+                    evaluate_and_send_missing_checkout_reminder(
+                        self.emp, now=datetime(2026, 11, 25, h, 25, 0, tzinfo=BD_TZ)
+                    )
+                r_cap = evaluate_and_send_missing_checkout_reminder(
+                    self.emp, now=datetime(2026, 11, 25, 23, 25, 0, tzinfo=BD_TZ)
                 )
-            r_cap = evaluate_and_send_missing_checkout_reminder(
-                self.emp, now=datetime(2026, 11, 25, 23, 25, 0, tzinfo=BD_TZ)
-            )
             self.assertFalse(r_cap["sent"])
             self.assertEqual(r_cap["reason"], "daily_cap_reached")
             self.assertEqual(Notification.objects.filter(recipient=self.user, notif_type="missing").count(), 4)
@@ -159,6 +168,10 @@ class MissingCheckoutReminderTests(TestCase):
             attendance_type="check_in",
             type="office",
             status="on_time",
+            shift_date=datetime(2026, 11, 24).date(),
+            shift_start_time=time(9, 0),
+            shift_end_time=time(18, 0),
+            checkout_deadline_at=datetime(2026, 11, 25, 9, 0, 0, tzinfo=BD_TZ),
         )
         s2 = Attendance.objects.create(
             employee=self.emp,

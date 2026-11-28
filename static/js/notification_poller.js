@@ -231,6 +231,107 @@
       }).catch(() => {});
     }
 
+    function getCsrfToken() {
+      if (window.CSRFProvider && typeof window.CSRFProvider.getToken === 'function') {
+        return window.CSRFProvider.getToken();
+      }
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (meta && meta.content && !meta.content.includes('<input')) return meta.content.trim();
+      const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      return input ? input.value.trim() : '';
+    }
+
+    function showMissingCheckoutBanner(item) {
+      const existing = document.getElementById('ft-missing-checkout-banner');
+      if (existing) existing.remove();
+
+      const banner = document.createElement('div');
+      banner.id = 'ft-missing-checkout-banner';
+      banner.setAttribute('role', 'alert');
+      banner.className = 'fixed bottom-4 right-4 z-50 max-w-sm rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-lg text-amber-950 dark:bg-amber-950/90 dark:border-amber-700 dark:text-amber-100';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'font-bold text-sm mb-1';
+      titleEl.textContent = item.title || 'Missing Checkout Reminder';
+
+      const msgEl = document.createElement('p');
+      msgEl.className = 'text-xs mb-3';
+      msgEl.textContent = item.message || 'Please check out or review your session.';
+
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'flex items-center gap-2';
+
+      const safeRedirect = isSafeSameOriginPath(item.redirect_url) ? item.redirect_url : '/staff/check-in/';
+      const actionLink = document.createElement('a');
+      actionLink.href = safeRedirect;
+      actionLink.className = 'px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700';
+      actionLink.textContent = safeRedirect.includes('forgot-checkout') ? 'Submit Correction' : 'Check Out';
+
+      const snoozeBtn = document.createElement('button');
+      snoozeBtn.type = 'button';
+      snoozeBtn.id = 'ft-missing-checkout-snooze-btn';
+      snoozeBtn.className = 'px-3 py-1.5 rounded-lg border border-amber-400 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/50';
+      snoozeBtn.textContent = 'Snooze 1h';
+      snoozeBtn.addEventListener('click', async () => {
+        snoozeBtn.disabled = true;
+        const snoozeUrl = isSafeSameOriginPath(item.snooze_url) ? item.snooze_url : '/attendance/reminders/snooze/';
+        const fetchFn = (window.CSRFProvider && typeof window.CSRFProvider.fetchWithCsrf === 'function')
+          ? window.CSRFProvider.fetchWithCsrf.bind(window.CSRFProvider)
+          : fetch;
+        try {
+          const resp = await fetchFn(snoozeUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Accept': 'application/json',
+              'X-CSRFToken': getCsrfToken(),
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+          if (resp && resp.ok) {
+            banner.remove();
+            if (typeof window.showToast === 'function') {
+              window.showToast('Reminders snoozed for 60 minutes.', 'info');
+            }
+          } else {
+            snoozeBtn.disabled = false;
+          }
+        } catch (e) {
+          snoozeBtn.disabled = false;
+        }
+      });
+
+      const dismissBtn = document.createElement('button');
+      dismissBtn.type = 'button';
+      dismissBtn.className = 'ml-auto text-xs opacity-70 hover:opacity-100 px-1';
+      dismissBtn.textContent = '✕';
+      dismissBtn.addEventListener('click', () => banner.remove());
+
+      actionsEl.appendChild(actionLink);
+      actionsEl.appendChild(snoozeBtn);
+      actionsEl.appendChild(dismissBtn);
+      banner.appendChild(titleEl);
+      banner.appendChild(msgEl);
+      banner.appendChild(actionsEl);
+      document.body.appendChild(banner);
+    }
+
+    async function handleMissingCheckoutNotification(item) {
+      if (window.FieldTrackDB && typeof window.FieldTrackDB.getReminderSuppressionState === 'function') {
+        try {
+          const sup = await window.FieldTrackDB.getReminderSuppressionState();
+          if (sup && sup.syncPending) {
+            if (typeof window.showToast === 'function') {
+              window.showToast('Sync pending: local checkout queued on this device.', 'info', '/staff/check-in/');
+            }
+            return;
+          }
+        } catch (e) {}
+      }
+      showMissingCheckoutBanner(item);
+      showDeviceNotification(item);
+    }
+
     async function poll() {
       if (inFlight) return;
       if (document.hidden || !navigator.onLine) return;
@@ -278,6 +379,10 @@
 
           if (Array.isArray(data.notifications)) {
             data.notifications.forEach((item) => {
+              if (item.type === 'missing') {
+                handleMissingCheckoutNotification(item);
+                return;
+              }
               const text = item.message || item.title || 'New notification';
               const redirect = isSafeSameOriginPath(item.redirect_url) ? item.redirect_url : null;
               if (typeof window.showToast === 'function') {
