@@ -131,14 +131,14 @@ class LeaveRequestForm(_LeaveDurationFormMixin, forms.ModelForm):
                 except LeaveBalance.DoesNotExist:
                     from apps.employees.models import EmployeeLeaveRule
                     rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=leave_type).first()
-                    if rule and rule.custom_max_days is not None:
-                        remaining = rule.custom_max_days
+                    if rule and rule.days_per_year is not None:
+                        remaining = Decimal(str(rule.days_per_year))
                     else:
-                        remaining = leave_type.default_days_per_year
+                        remaining = Decimal(str(leave_type.default_days_per_year))
 
                 # Check if this is an edit of an existing approved request
                 if self.instance and self.instance.pk and self.instance.status == 'approved':
-                    remaining += self.instance.number_of_days
+                    remaining = Decimal(str(remaining)) + Decimal(str(self.instance.number_of_days))
 
                 temp_req = LeaveRequest(
                     employee=self.employee,
@@ -149,7 +149,7 @@ class LeaveRequestForm(_LeaveDurationFormMixin, forms.ModelForm):
                     pk=self.instance.pk if self.instance else None
                 )
                 deductible_days = temp_req.calculate_deductible_days()
-                self.projected_remaining = remaining - deductible_days
+                self.projected_remaining = Decimal(str(remaining)) - deductible_days
         return cleaned_data
 
 from apps.employees.models import EmployeeProfile

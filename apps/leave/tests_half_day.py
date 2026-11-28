@@ -175,16 +175,19 @@ class HalfDayLeaveFlowTests(TestCase):
             reason="Half",
             status="pending",
         )
-        with self.assertRaises(ValidationError):
-            lr.status = "approved"
-            lr.save()
+        lr.status = "approved"
+        lr.save()
 
         lr.refresh_from_db()
-        self.assertEqual(lr.status, "pending")
+        self.assertEqual(lr.status, "approved")
         self.assertEqual(lr.number_of_days, Decimal("0.5"))
-        self.assertFalse(
-            LeaveBalance.objects.filter(employee=self.prof, leave_type=self.lt_casual, year=d.year).exists()
-        )
+        bal = LeaveBalance.objects.get(employee=self.prof, leave_type=self.lt_casual, year=d.year)
+        self.assertEqual(bal.used_days, Decimal("0.50"))
+
+        lr.status = "cancelled"
+        lr.save()
+        bal.refresh_from_db()
+        self.assertEqual(bal.used_days, Decimal("0.00"))
 
     def test_4_whole_day_approval_and_repeated_cancellation_idempotency(self):
         d = date(2026, 11, 16)

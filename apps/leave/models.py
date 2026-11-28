@@ -40,8 +40,8 @@ class LeaveBalance(models.Model):
     )
     leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE)
     year = models.IntegerField()
-    total_days = models.IntegerField(default=0)
-    used_days = models.IntegerField(default=0)
+    total_days = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
+    used_days = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
 
     class Meta:
         unique_together = ('employee', 'leave_type', 'year')
@@ -50,7 +50,9 @@ class LeaveBalance(models.Model):
     def remaining_days(self):
         # NOTE: confirmed via codebase grep check that remaining_days has no max(0, ...) clamp 
         # anywhere in the codebase. Negative balances are naturally calculated and allowed.
-        return self.total_days - self.used_days
+        total = Decimal(str(self.total_days)) if self.total_days is not None else Decimal('0.00')
+        used = Decimal(str(self.used_days)) if self.used_days is not None else Decimal('0.00')
+        return total - used
 
     def __str__(self):
         return f"{self.employee.full_name} - {self.leave_type.name} ({self.year}): {self.remaining_days}/{self.total_days} left"
@@ -145,8 +147,6 @@ class LeaveRequest(models.Model):
                 return requested_weight.quantize(Decimal('0.01'))
         return deductible_days.quantize(Decimal('0.01'))
 
-        return deductible_days
-
     def calculate_deductible_days(self):
         base_days = self.overlapping_days_in(self.start_date, self.end_date)
         if self.start_date and self.end_date and self.start_date == self.end_date:
@@ -196,7 +196,7 @@ class LeaveRequest(models.Model):
                                     defaults={'total_days': limit}
                                 )
                                 LeaveBalance.objects.filter(pk=balance.pk).select_for_update().update(
-                                    used_days=F('used_days') + 1
+                                    used_days=F('used_days') + Decimal('1.00')
                                 )
                                 AttendanceAbsentLog.objects.create(
                                     employee=self.employee,
@@ -212,7 +212,8 @@ class LeaveRequest(models.Model):
 
         year = self.start_date.year if self.start_date else None
         old_status = old_instance.status if old_instance else None
-        old_days = old_instance.number_of_days if old_instance else Decimal('0.0')
+        old_days = Decimal(str(old_instance.number_of_days)) if (old_instance and old_instance.number_of_days is not None) else Decimal('0.00')
+        new_days = Decimal(str(self.number_of_days)) if self.number_of_days is not None else Decimal('0.00')
         old_type = old_instance.leave_type if old_instance else None
         old_year = old_instance.start_date.year if old_instance and old_instance.start_date else None
         old_start_date = old_instance.start_date if old_instance else None
@@ -220,9 +221,9 @@ class LeaveRequest(models.Model):
 
         # Case 1: Status transitioned to approved from a non-approved status
         if self.status == 'approved' and old_status != 'approved':
-            self._assert_fractional_balance_supported(self.number_of_days)
+            self._assert_fractional_balance_supported(new_days)
             rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
-            limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
+            limit = Decimal(str(rule.days_per_year if rule else self.leave_type.default_days_per_year))
             balance, _ = LeaveBalance.objects.get_or_create(
                 employee=self.employee,
                 leave_type=self.leave_type,
@@ -230,7 +231,7 @@ class LeaveRequest(models.Model):
                 defaults={'total_days': limit}
             )
             LeaveBalance.objects.filter(pk=balance.pk).select_for_update().update(
-                used_days=F('used_days') + self.number_of_days
+                used_days=F('used_days') + new_days
             )
 
             # Clean up overlapping absent logs to prevent double deduction
@@ -245,7 +246,7 @@ class LeaveRequest(models.Model):
                         employee=self.employee,
                         leave_type=lt,
                         year=log.date.year
-                    ).select_for_update().update(used_days=F('used_days') - 1)
+                    ).select_for_update().update(used_days=F('used_days') - Decimal('1.00'))
                 log.delete()
 
         # Case 2: Status transitioned from approved to something else (e.g. pending/rejected/cancelled/returned)
@@ -265,13 +266,13 @@ class LeaveRequest(models.Model):
             details_changed = (
                 old_type != self.leave_type or
                 old_year != year or
-                old_days != self.number_of_days or
+                old_days != new_days or
                 old_start_date != self.start_date or
                 old_end_date != self.end_date
             )
             if details_changed:
                 self._assert_fractional_balance_supported(old_days)
-                self._assert_fractional_balance_supported(self.number_of_days)
+                self._assert_fractional_balance_supported(new_days)
                 # Revert old balance
                 LeaveBalance.objects.filter(
                     employee=self.employee,
@@ -281,7 +282,7 @@ class LeaveRequest(models.Model):
 
                 # Apply new balance
                 rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=self.leave_type).first()
-                limit = rule.days_per_year if rule else self.leave_type.default_days_per_year
+                limit = Decimal(str(rule.days_per_year if rule else self.leave_type.default_days_per_year))
                 new_balance, _ = LeaveBalance.objects.get_or_create(
                     employee=self.employee,
                     leave_type=self.leave_type,
@@ -289,7 +290,7 @@ class LeaveRequest(models.Model):
                     defaults={'total_days': limit}
                 )
                 LeaveBalance.objects.filter(pk=new_balance.pk).select_for_update().update(
-                    used_days=F('used_days') + self.number_of_days
+                    used_days=F('used_days') + new_days
                 )
 
                 # Clean up overlapping absent logs for the new dates
@@ -304,7 +305,7 @@ class LeaveRequest(models.Model):
                             employee=self.employee,
                             leave_type=lt,
                             year=log.date.year
-                        ).select_for_update().update(used_days=F('used_days') - 1)
+                        ).select_for_update().update(used_days=F('used_days') - Decimal('1.00'))
                     log.delete()
 
         # Case 4: Status transitioned to rejected from a non-approved status
@@ -332,7 +333,16 @@ class LeaveRequest(models.Model):
             super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
+        from django.db import transaction
+        if self.pk is None:
+            return (0, {})
+        with transaction.atomic():
+            locked = LeaveRequest.objects.select_for_update().filter(pk=self.pk).first()
+            if not locked:
+                return (0, {})
+            self.status = locked.status
+            self.number_of_days = locked.number_of_days
+            return super(LeaveRequest, locked).delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.employee.full_name} - {self.leave_type.name} ({self.start_date} to {self.end_date})"
@@ -366,7 +376,7 @@ class YearLeaveHelper(dict):
             except (ValueError, TypeError):
                 return default
 
-            total_remaining = 0
+            total_remaining = Decimal('0.00')
             leave_types = get_cached_leave_types()
             
             is_balances_prefetched = hasattr(self.employee, '_prefetched_objects_cache') and 'leave_balances' in self.employee._prefetched_objects_cache
@@ -379,14 +389,14 @@ class YearLeaveHelper(dict):
                     balance = LeaveBalance.objects.filter(employee=self.employee, leave_type=lt, year=year).first()
 
                 if balance:
-                    total_remaining += balance.remaining_days
+                    total_remaining += Decimal(str(balance.remaining_days))
                 else:
                     if is_rules_prefetched:
                         rule = next((r for r in self.employee.leave_rules.all() if r.leave_type_id == lt.id), None)
                     else:
                         from apps.employees.models import EmployeeLeaveRule
                         rule = EmployeeLeaveRule.objects.filter(employee=self.employee, leave_type=lt).first()
-                    total_remaining += rule.days_per_year if rule else lt.default_days_per_year
+                    total_remaining += Decimal(str(rule.days_per_year if rule else lt.default_days_per_year))
             return total_remaining
 
     def __getitem__(self, year):

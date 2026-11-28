@@ -46,8 +46,8 @@ class AdminLeaveBalanceForm(forms.ModelForm):
         model = LeaveBalance
         fields = ['total_days', 'used_days']
         widgets = {
-            'total_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0}),
-            'used_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0}),
+            'total_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'step': '0.5'}),
+            'used_days': forms.NumberInput(attrs={'class': TEXT_INPUT, 'min': 0, 'step': '0.5'}),
         }
 
 
