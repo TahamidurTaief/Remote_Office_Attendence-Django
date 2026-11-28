@@ -433,12 +433,22 @@ def build_checkout_provenance_map(attendances):
         'corrections': [],
         'forgot_checkouts': [],
         'audit_logs': [],
+        'checkout_locations': [],
     })
 
+    from apps.attendance.models import AttendanceLocation
     # Chunk in batches of 500 for portable SQLite/Postgres IN-clause bounds
     unique_ids = list(dict.fromkeys(target_ids))
     for i in range(0, len(unique_ids), 500):
         chunk = unique_ids[i:i + 500]
+        for loc in (
+            AttendanceLocation.objects.filter(
+                attendance_id__in=chunk,
+                event='check_out',
+            )
+            .only('id', 'attendance_id', 'event', 'client_event_time', 'timestamp', 'synced_at')
+        ):
+            provenance_map[loc.attendance_id]['checkout_locations'].append(loc)
         for row in (
             AttendanceCorrectionRequest.objects.filter(
                 attendance_id__in=chunk,
@@ -610,12 +620,15 @@ def resolve_session_checkout(session, evidence=None):
             'provenance': 'genuine',
         }
 
-    co_locs = []
-    if getattr(session, 'pk', None) is not None and hasattr(session, 'locations'):
-        co_locs = [l for l in session.locations.all() if getattr(l, 'event', None) == 'check_out']
-
     if evidence is None and getattr(session, 'pk', None) is not None:
         evidence = build_checkout_provenance_map([session]).get(session.id, {})
+
+    if isinstance(evidence, dict) and 'checkout_locations' in evidence:
+        co_locs = evidence['checkout_locations']
+    elif getattr(session, 'pk', None) is not None and hasattr(session, 'locations'):
+        co_locs = [l for l in session.locations.all() if getattr(l, 'event', None) == 'check_out']
+    else:
+        co_locs = []
 
     auth_items, loc_items = _normalize_checkout_evidence(session, evidence, co_locs)
 
