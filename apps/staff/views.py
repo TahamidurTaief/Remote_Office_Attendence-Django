@@ -36,13 +36,9 @@ def home(request):
     ).order_by('-check_in_time')
 
     # Check if there is an active check-in
-    active_session_obj = Attendance.objects.filter(
-        employee=employee,
-        date=today,
-        attendance_type='check_in',
-        check_out_time__isnull=True,
-        is_expired=False
-    ).first()
+    from apps.attendance.schedule_utils import get_current_active_session_info
+    session_info = get_current_active_session_info(employee)
+    active_session_obj = session_info['active_session']
     active_session = bool(active_session_obj)
 
     total_leave_left = None
@@ -129,13 +125,11 @@ def attendance_card(request):
     today = timezone.localdate()
 
     # Active (unclosed) session
-    active_session = Attendance.objects.filter(
-        employee=employee,
-        date=today,
-        attendance_type='check_in',
-        check_out_time__isnull=True,
-        is_expired=False
-    ).first()
+    from apps.attendance.schedule_utils import get_current_active_session_info
+    from apps.attendance.views import get_attendance_policy
+    policy = get_attendance_policy(employee)
+    session_info = get_current_active_session_info(employee, policy=policy)
+    active_session = session_info['active_session']
 
     # All completed sessions today (for history strip)
     all_sessions_today = Attendance.objects.filter(
@@ -208,13 +202,11 @@ def check_in_page(request):
     employee = get_employee(request.user) or getattr(request.user, 'employee_profile', None)
     today = timezone.localdate()
 
-    active = Attendance.objects.filter(
-        employee=employee,
-        date=today,
-        attendance_type='check_in',
-        check_out_time__isnull=True,
-        is_expired=False
-    ).first()
+    from apps.attendance.views import get_attendance_policy
+    from apps.attendance.schedule_utils import get_current_active_session_info
+    policy = get_attendance_policy(employee)
+    session_info = get_current_active_session_info(employee, policy=policy)
+    active = session_info['active_session']
 
     today_attendance = Attendance.objects.filter(
         employee=employee,

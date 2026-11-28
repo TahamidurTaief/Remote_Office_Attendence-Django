@@ -464,3 +464,53 @@ def evaluate_checkout_eligibility(check_in_time, checkout_time, employee=None, s
         'requires_correction_workflow': not allowed,
         'reason': None if allowed else 'checkout_window_expired',
     }
+
+
+def get_current_active_session_info(employee, now=None, policy=None):
+    """
+    Resolve the employee's currently eligible active check-in session using a single
+    bounded query, without mutating or auto-closing historical unresolved sessions.
+    """
+    from apps.attendance.models import Attendance
+
+    if not employee:
+        return {'active_session': None, 'unresolved_past_count': 0}
+
+    ref_now = now or timezone.localtime()
+    local_today = timezone.localdate(ref_now)
+
+    if policy is None:
+        from apps.attendance.views import get_attendance_policy
+        policy = get_attendance_policy(employee)
+
+    open_sessions = list(
+        Attendance.objects.filter(
+            employee=employee,
+            attendance_type='check_in',
+            check_out_time__isnull=True,
+            is_expired=False,
+        ).order_by('-check_in_time')[:10]
+    )
+
+    if not open_sessions:
+        return {'active_session': None, 'unresolved_past_count': 0}
+
+    if not getattr(policy, 'shift_lifecycle_enforced', False):
+        active = next((s for s in open_sessions if s.date == local_today), None)
+        past_count = sum(1 for s in open_sessions if s.date != local_today)
+        return {'active_session': active, 'unresolved_past_count': past_count}
+
+    active = None
+    past_count = 0
+    for s in open_sessions:
+        if s.checkout_deadline_at is not None:
+            eligible = ref_now < s.checkout_deadline_at
+        else:
+            eligible = s.date == local_today
+
+        if eligible and active is None:
+            active = s
+        elif not eligible:
+            past_count += 1
+
+    return {'active_session': active, 'unresolved_past_count': past_count}

@@ -96,6 +96,12 @@ class Attendance(models.Model):
     sync_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     client_event_time = models.DateTimeField(null=True, blank=True)
     synced_at = models.DateTimeField(null=True, blank=True)
+    shift_date = models.DateField(null=True, blank=True, db_index=True)
+    shift_start_time = models.TimeField(null=True, blank=True)
+    shift_end_time = models.TimeField(null=True, blank=True)
+    shift_timezone = models.CharField(max_length=64, null=True, blank=True)
+    checkout_deadline_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    shift_policy_version = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -247,6 +253,9 @@ class AttendancePolicy(models.Model):
         ),
         default='warning'
     )
+    shift_lifecycle_enforced = models.BooleanField(default=False)
+    shift_policy_version = models.PositiveIntegerField(default=1)
+    shift_lifecycle_activated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "Attendance Policies"

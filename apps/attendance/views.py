@@ -221,13 +221,11 @@ def attendance_status(request):
 
         today = timezone.localdate()
 
-        # Active session (checked-in, not yet checked out)
-        active = Attendance.objects.filter(
-            employee=employee,
-            attendance_type='check_in',
-            check_out_time__isnull=True,
-            is_expired=False
-        ).first() if employee else None
+        from apps.attendance.schedule_utils import get_current_active_session_info
+        policy = get_attendance_policy(employee)
+        session_info = get_current_active_session_info(employee, policy=policy)
+        active = session_info['active_session']
+        unresolved_past_count = session_info['unresolved_past_count']
 
         # All sessions today
         all_sessions = Attendance.objects.filter(
@@ -276,6 +274,8 @@ def attendance_status(request):
             'has_active_session': active is not None,
             'active_session_id': active.id if active else None,
             'active_check_in_time': active.check_in_time.isoformat() if active else None,
+            'checkout_deadline_at': active.checkout_deadline_at.isoformat() if (active and active.checkout_deadline_at) else None,
+            'unresolved_past_sessions_count': unresolved_past_count,
             'sessions_today': sessions_data,
             'tracking_interval': tracking_interval,  # minutes, 0=disabled
         })

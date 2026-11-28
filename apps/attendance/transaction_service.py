@@ -295,13 +295,47 @@ class AttendanceTransactionService:
                 synced_at = None
                 today = timezone.localdate()
 
-            active_session = Attendance.objects.filter(
-                employee=emp_locked,
-                date=today,
-                attendance_type='check_in',
-                check_out_time__isnull=True,
-                is_expired=False
-            ).first()
+            policy = get_attendance_policy(emp_locked)
+
+            shift_snapshot_kwargs = {}
+            if getattr(policy, 'shift_lifecycle_enforced', False):
+                from django.db.models import Q
+                from .schedule_utils import resolve_checkout_window
+                win = resolve_checkout_window(event_time, employee=emp_locked)
+                if win['resolved']:
+                    active_session = Attendance.objects.filter(
+                        employee=emp_locked,
+                        attendance_type='check_in',
+                        check_out_time__isnull=True,
+                        is_expired=False,
+                    ).filter(
+                        Q(shift_date=win['shift_date']) | Q(shift_date__isnull=True, date=today)
+                    ).first()
+                    shift_snapshot_kwargs = {
+                        'shift_date': win['shift_date'],
+                        'shift_start_time': win['shift_start_at'].timetz().replace(tzinfo=None),
+                        'shift_end_time': win['shift_end_at'].timetz().replace(tzinfo=None),
+                        'shift_timezone': timezone.get_current_timezone_name(),
+                        'checkout_deadline_at': win['checkout_deadline_at'],
+                        'shift_policy_version': policy.shift_policy_version,
+                    }
+                else:
+                    active_session = Attendance.objects.filter(
+                        employee=emp_locked,
+                        date=today,
+                        attendance_type='check_in',
+                        check_out_time__isnull=True,
+                        is_expired=False,
+                    ).first()
+            else:
+                active_session = Attendance.objects.filter(
+                    employee=emp_locked,
+                    date=today,
+                    attendance_type='check_in',
+                    check_out_time__isnull=True,
+                    is_expired=False
+                ).first()
+
             if active_session:
                 if sync_uuid and str(active_session.sync_uuid) == str(sync_uuid):
                     ci_loc = active_session.locations.filter(event='check_in').first()
@@ -314,8 +348,6 @@ class AttendanceTransactionService:
                         'address': existing_address
                     }
                 raise AttendanceTransactionError('You are already checked in. Please check out first.', 400)
-
-            policy = get_attendance_policy(emp_locked)
 
             from django.conf import settings
             require_gps = getattr(settings, 'REQUIRE_GPS', True)
@@ -457,7 +489,8 @@ class AttendanceTransactionService:
                 gps_quality=gps_quality,
                 sync_uuid=sync_uuid or uuid.uuid4(),
                 client_event_time=client_time,
-                synced_at=synced_at
+                synced_at=synced_at,
+                **shift_snapshot_kwargs,
             )
 
             _safe_create_with_seq_retry(
@@ -698,6 +731,12 @@ class AttendanceTransactionService:
             if not attendance.check_in_time:
                 raise AttendanceTransactionError('Malformed session: missing check-in time. Please submit an attendance correction request.', 400)
 
+            if attendance.checkout_deadline_at is not None and event_time >= attendance.checkout_deadline_at:
+                raise AttendanceTransactionError(
+                    'Checkout window has expired (deadline passed at next shift start). Please submit a forgot-checkout or attendance correction request.',
+                    400,
+                )
+
             duration = event_time - attendance.check_in_time
             diff_seconds = duration.total_seconds()
             if diff_seconds < 0:
@@ -740,7 +779,7 @@ class AttendanceTransactionService:
                 event_photo=photo,
                 sync_uuid=sync_uuid or uuid.uuid4(),
                 client_event_time=client_time,
-                synced_at=synced_at
+                synced_at=synced_at,
             )
 
             transaction.on_commit(lambda: _safe_notify_admins(emp_locked, 'check_out', location=address))
@@ -882,7 +921,7 @@ class AttendanceTransactionService:
                 photo=photo,
                 sync_uuid=sync_uuid or uuid.uuid4(),
                 client_event_time=client_time,
-                synced_at=synced_at
+                synced_at=synced_at,
             )
 
             _safe_create_with_seq_retry(

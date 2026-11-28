@@ -68,13 +68,10 @@ def get_employee_dashboard_data(user):
         data['today_attendance'] = Attendance.objects.select_related('employee', 'employee__branch').filter(
             employee=emp_profile, date=today
         ).first()
-        data['active_session'] = Attendance.objects.filter(
-            employee=emp_profile,
-            date=today,
-            attendance_type='check_in',
-            check_out_time__isnull=True,
-            is_expired=False
-        ).first()
+        from apps.attendance.schedule_utils import get_current_active_session_info
+        session_info = get_current_active_session_info(emp_profile)
+        data['active_session'] = session_info['active_session']
+        data['unresolved_past_sessions_count'] = session_info['unresolved_past_count']
         data['today_sessions_count'] = Attendance.objects.filter(
             employee=emp_profile,
             date=today,
