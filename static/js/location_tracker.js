@@ -141,9 +141,18 @@
             this.isSending = true;
         navigator.geolocation.getCurrentPosition(
             async (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                const accuracy = position.coords.accuracy;
+                const lat = Number(position.coords.latitude);
+                const lng = Number(position.coords.longitude);
+                const accuracy = Number(position.coords.accuracy);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(accuracy) || accuracy <= 0) {
+                    this.isSending = false;
+                    return;
+                }
+                const sampleTs = (Number.isFinite(position.timestamp) && position.timestamp > 0)
+                    ? position.timestamp
+                    : Date.now();
+                const capturedAt = new Date(sampleTs).toISOString();
+                const eventTime = new Date(Math.max(sampleTs, Date.now())).toISOString();
 
                 console.log(`[LocationTracker] Sending location: (${lat}, ${lng}) with accuracy ${accuracy}m`);
 
@@ -151,6 +160,8 @@
                     latitude: lat,
                     longitude: lng,
                     accuracy: accuracy,
+                    location_captured_at: capturedAt,
+                    client_event_time: eventTime,
                     address: ''
                 };
 
@@ -203,7 +214,7 @@
             {
                 enableHighAccuracy: true,
                 timeout: 15000,
-                maximumAge: 10000
+                maximumAge: 0
             }
         );
         },

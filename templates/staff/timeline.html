@@ -58,7 +58,7 @@
                         <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t text-[11px]" style="border-color:var(--border); color:var(--text-secondary)">
                             <div class="font-mono">
                                 Lat: {{ loc.latitude|floatformat:4 }}, Lng: {{ loc.longitude|floatformat:4 }} 
-                                <span class="ml-1 text-[10px]" style="color:var(--text-muted)">(Acc: {{ loc.accuracy }}m)</span>
+                                <span class="ml-1 text-[10px]" style="color:var(--text-muted)">{% if loc.accuracy is not None %}(Acc: {{ loc.accuracy }}m){% else %}(Accuracy unavailable){% endif %}</span>
                             </div>
                             <a href="https://www.google.com/maps/search/?api=1&query={{ loc.latitude }},{{ loc.longitude }}" 
                                target="_blank" 

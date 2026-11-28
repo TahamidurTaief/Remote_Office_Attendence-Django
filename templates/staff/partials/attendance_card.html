@@ -252,12 +252,19 @@
 
             window.confirmAction('Are you sure you want to check out?', () => {
                 const btn = this;
+                if (btn.disabled) return;
                 btn.innerHTML = '<div class="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin mr-2 inline-block"></div> Getting GPS...';
                 btn.disabled = true;
 
-                async function doCheckout(lat, lng, acc, address) {
+                let cardPunchEventTime = null;
+
+                async function doCheckout(lat, lng, acc, address, locationCapturedAt) {
                     const sync_uuid = punchUuid;
-                    const clientEventTime = captureTimestamp;
+                    if (!cardPunchEventTime) {
+                        const locMs = Date.parse(locationCapturedAt) || 0;
+                        cardPunchEventTime = new Date(Math.max(Date.now(), locMs)).toISOString();
+                    }
+                    const clientEventTime = cardPunchEventTime;
                     const activeSessionId = {{ active_session.id }};
 
                     if (!navigator.onLine) {
@@ -265,12 +272,13 @@
                             queueOfflineAction({
                                 action: 'check_out',
                                 session_id: activeSessionId,
-                                latitude: lat || 0,
-                                longitude: lng || 0,
-                                accuracy: acc || 0,
+                                latitude: lat,
+                                longitude: lng,
+                                accuracy: acc,
                                 address: address || 'Offline Check-out location',
                                 sync_uuid: sync_uuid,
                                 client_event_time: clientEventTime,
+                                location_captured_at: locationCapturedAt,
                                 photo: photoBase64 || null
                             }).then(() => {
                                 if (window.LocationTracker) {
@@ -306,12 +314,13 @@
 
                     const fd = new FormData();
                     fd.append('session_id', activeSessionId);
-                    fd.append('latitude',  lat  || '0');
-                    fd.append('longitude', lng  || '0');
-                    fd.append('accuracy',  acc  || '0');
-                    fd.append('address',   address || (lat + ', ' + lng) || 'Unknown location');
+                    fd.append('latitude', lat);
+                    fd.append('longitude', lng);
+                    fd.append('accuracy', acc);
+                    fd.append('address', address || (lat + ', ' + lng));
                     fd.append('sync_uuid', sync_uuid);
                     fd.append('client_event_time', clientEventTime);
+                    fd.append('location_captured_at', locationCapturedAt);
                     if (preparedPhoto && (preparedPhoto.file || preparedPhoto.blob)) {
                         fd.append('photo', preparedPhoto.file || preparedPhoto.blob, 'checkout.jpg');
                     } else if (rawPhoto) {
@@ -352,58 +361,74 @@
                     });
                 }
 
-                function checkoutWithGPS() {
+                function resetCheckoutBtn() {
+                    const b = document.getElementById('checkout-btn');
+                    if (b) {
+                        b.innerHTML = 'Check Out';
+                        b.disabled = false;
+                    }
+                }
+
+                function resolveAddressAndCheckout(lat, lng, acc, capturedAt) {
+                    fetch(
+                        'https://nominatim.openstreetmap.org/reverse?lat=' + lat +
+                        '&lon=' + lng + '&format=json',
+                        { headers: { 'Accept-Language': 'en' }, signal: AbortSignal.timeout(4000) }
+                    )
+                    .then(r => r.json())
+                    .then(data => {
+                        doCheckout(lat, lng, acc, data.display_name || (lat + ', ' + lng), capturedAt);
+                    })
+                    .catch(function() {
+                        doCheckout(lat, lng, acc, lat + ', ' + lng, capturedAt);
+                    });
+                }
+
+                async function checkoutWithGPS() {
+                    if (window.LocationGuard && typeof window.LocationGuard.acquireFreshFix === 'function') {
+                        const fixRes = await window.LocationGuard.acquireFreshFix({
+                            maxAccuracyMeters: 100,
+                            targetAccuracyMeters: 50,
+                            maxDurationMs: 15000
+                        });
+                        if (fixRes && fixRes.ok && fixRes.coords) {
+                            const capturedAt = fixRes.coords.capturedAt || new Date(fixRes.coords.timestamp || Date.now()).toISOString();
+                            resolveAddressAndCheckout(fixRes.coords.latitude, fixRes.coords.longitude, fixRes.coords.accuracy, capturedAt);
+                            return;
+                        }
+                        window.showToast((fixRes && fixRes.message) ? fixRes.message : 'Fresh GPS location is required to check out.', 'error');
+                        window.LocationGuard.showModal((fixRes && fixRes.reason === 'denied') ? 'denied' : 'unavailable');
+                        resetCheckoutBtn();
+                        return;
+                    }
+
                     if (!navigator.geolocation) {
                         window.showToast('GPS location is required to check out.', 'error');
                         if (window.LocationGuard) window.LocationGuard.showModal('unavailable');
-                        const btn = document.getElementById('checkout-btn');
-                        if (btn) {
-                            btn.innerHTML = 'Check Out';
-                            btn.disabled = false;
-                        }
+                        resetCheckoutBtn();
                         return;
                     }
                     navigator.geolocation.getCurrentPosition(
                         function(pos) {
-                            const lat = pos.coords.latitude;
-                            const lng = pos.coords.longitude;
-                            const acc = pos.coords.accuracy;
-                            if (!lat || !lng || (lat === 0 && lng === 0)) {
-                                window.showToast('Invalid GPS coordinates. Please enable location.', 'error');
+                            const lat = Number(pos.coords.latitude);
+                            const lng = Number(pos.coords.longitude);
+                            const acc = Number(pos.coords.accuracy);
+                            if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(acc) || acc <= 0 || acc > 100) {
+                                window.showToast('GPS accuracy too low or unavailable. Please retry.', 'error');
                                 if (window.LocationGuard) window.LocationGuard.showModal('unavailable');
-                                const btn = document.getElementById('checkout-btn');
-                                if (btn) {
-                                    btn.innerHTML = 'Check Out';
-                                    btn.disabled = false;
-                                }
+                                resetCheckoutBtn();
                                 return;
                             }
-                            // Try reverse geocode
-                            fetch(
-                                'https://nominatim.openstreetmap.org/reverse?lat=' + lat +
-                                '&lon=' + lng + '&format=json',
-                                { headers: { 'Accept-Language': 'en' }, signal: AbortSignal.timeout(4000) }
-                            )
-                            .then(r => r.json())
-                            .then(data => {
-                                doCheckout(lat, lng, acc, data.display_name || (lat + ', ' + lng));
-                            })
-                            .catch(function() {
-                                doCheckout(lat, lng, acc, lat + ', ' + lng);
-                            });
+                            const sampleTs = (Number.isFinite(pos.timestamp) && pos.timestamp > 0) ? pos.timestamp : Date.now();
+                            resolveAddressAndCheckout(lat, lng, acc, new Date(sampleTs).toISOString());
                         },
                         function(err) {
-                            // Location denied or unavailable — strictly block checkout
                             window.showToast('GPS location must be enabled to check out.', 'error');
                             if (window.LocationGuard) {
                                 const reason = err.code === 1 ? 'denied' : (err.code === 3 ? 'timeout' : 'unavailable');
                                 window.LocationGuard.showModal(reason);
                             }
-                            const btn = document.getElementById('checkout-btn');
-                            if (btn) {
-                                btn.innerHTML = 'Check Out';
-                                btn.disabled = false;
-                            }
+                            resetCheckoutBtn();
                         },
                         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
                     );

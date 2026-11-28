@@ -63,11 +63,15 @@
 
                 const onSample = (position) => {
                     if (!position || !isValidSample(position.coords)) return;
+                    const sampleTs = (Number.isFinite(position.timestamp) && position.timestamp > 0)
+                        ? position.timestamp
+                        : Date.now();
                     const sample = {
                         latitude: Number(position.coords.latitude),
                         longitude: Number(position.coords.longitude),
                         accuracy: Number(position.coords.accuracy),
-                        capturedAt: new Date().toISOString()
+                        timestamp: sampleTs,
+                        capturedAt: new Date(sampleTs).toISOString()
                     };
                     if (!bestFix || sample.accuracy < bestFix.accuracy) {
                         bestFix = sample;
@@ -127,7 +131,9 @@
             if (cachedRaw) {
                 try {
                     const parsed = JSON.parse(cachedRaw);
-                    if (parsed && parsed.latitude && parsed.longitude) {
+                    if (parsed && parsed.latitude !== null && parsed.longitude !== null &&
+                        parsed.latitude !== '' && parsed.longitude !== '' &&
+                        Number.isFinite(Number(parsed.latitude)) && Number.isFinite(Number(parsed.longitude))) {
                         this.currentPosition = parsed;
                         this.isReady = true;
                         this.state = 'granted';
@@ -179,23 +185,17 @@
                 if (cachedRaw) {
                     try { this.currentPosition = JSON.parse(cachedRaw); } catch(e) {}
                 }
-                if (!this.currentPosition) {
-                    this.currentPosition = { ...this.DEFAULT_FALLBACK, timestamp: Date.now() };
-                    try {
-                        localStorage.setItem('ft_last_position', JSON.stringify(this.currentPosition));
-                    } catch(e) {}
-                }
             }
             this.isReady = true;
             this.state = 'granted';
             this.updateUI('granted');
 
-            window.dispatchEvent(new CustomEvent('location:ready', {
-                detail: this.currentPosition
-            }));
-
-            // Sync location to backend
-            this.syncMandatoryLocation(this.currentPosition);
+            if (this.currentPosition) {
+                window.dispatchEvent(new CustomEvent('location:ready', {
+                    detail: this.currentPosition
+                }));
+                this.syncMandatoryLocation(this.currentPosition);
+            }
 
             // Attempt background acquisition if browser allows
             this.passiveAcquire();
@@ -337,9 +337,13 @@
         },
 
         handleSuccess(position, notify = false) {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            const accuracy = position.coords.accuracy || 20;
+            const lat = Number(position.coords.latitude);
+            const lng = Number(position.coords.longitude);
+            const rawAcc = Number(position.coords.accuracy);
+            const accuracy = (Number.isFinite(rawAcc) && rawAcc > 0) ? rawAcc : null;
+            const sampleTs = (Number.isFinite(position.timestamp) && position.timestamp > 0)
+                ? position.timestamp
+                : Date.now();
 
             this.state = 'granted';
             this.isReady = true;
@@ -347,7 +351,8 @@
                 latitude: lat,
                 longitude: lng,
                 accuracy: accuracy,
-                timestamp: position.timestamp || Date.now()
+                timestamp: sampleTs,
+                capturedAt: new Date(sampleTs).toISOString()
             };
 
             // Save to localStorage & session
@@ -365,19 +370,26 @@
                 detail: this.currentPosition
             }));
 
-            // Sync mandatory location to backend
-            this.syncMandatoryLocation(this.currentPosition);
+            // Sync mandatory location to backend only when accuracy is valid
+            if (accuracy !== null) {
+                this.syncMandatoryLocation(this.currentPosition);
+            }
 
             // Continuously watch position
             if (!this.watchId) {
                 this.watchId = navigator.geolocation.watchPosition(
                     (newPos) => {
-                        const newAcc = newPos.coords.accuracy || 20;
+                        const newRawAcc = Number(newPos.coords.accuracy);
+                        const newAcc = (Number.isFinite(newRawAcc) && newRawAcc > 0) ? newRawAcc : null;
+                        const newTs = (Number.isFinite(newPos.timestamp) && newPos.timestamp > 0)
+                            ? newPos.timestamp
+                            : Date.now();
                         this.currentPosition = {
                             latitude: newPos.coords.latitude,
                             longitude: newPos.coords.longitude,
                             accuracy: newAcc,
-                            timestamp: newPos.timestamp || Date.now()
+                            timestamp: newTs,
+                            capturedAt: new Date(newTs).toISOString()
                         };
                         try {
                             localStorage.setItem('ft_last_position', JSON.stringify(this.currentPosition));
@@ -394,7 +406,8 @@
             }
 
             if (notify && window.showToast) {
-                window.showToast(`Location verified: ±${Math.round(accuracy)}m accuracy`, 'success');
+                const accMsg = accuracy !== null ? `±${Math.round(accuracy)}m accuracy` : 'accuracy unavailable';
+                window.showToast(`Location verified: ${accMsg}`, 'success');
             }
         },
 
@@ -544,13 +557,26 @@
 
         syncMandatoryLocation(coords) {
             const csrfToken = this.getCsrf();
-            if (!csrfToken) return;
+            if (!csrfToken || !coords) return;
+
+            const lat = Number(coords.latitude);
+            const lng = Number(coords.longitude);
+            const acc = Number(coords.accuracy);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(acc) || acc <= 0) {
+                return;
+            }
+
+            const capturedAt = coords.capturedAt || new Date(
+                (Number.isFinite(coords.timestamp) && coords.timestamp > 0) ? coords.timestamp : Date.now()
+            ).toISOString();
+            const eventTime = new Date(Math.max(Date.parse(capturedAt) || Date.now(), Date.now())).toISOString();
 
             const payload = {
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                accuracy: coords.accuracy || 20,
-                client_event_time: new Date(coords.timestamp || Date.now()).toISOString()
+                latitude: lat,
+                longitude: lng,
+                accuracy: acc,
+                location_captured_at: capturedAt,
+                client_event_time: eventTime
             };
 
             fetch('/attendance/save-location-mandatory/', {

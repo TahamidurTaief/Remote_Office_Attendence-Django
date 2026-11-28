@@ -143,7 +143,7 @@ class AttendanceLocation(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6)
     longitude = models.DecimalField(max_digits=9, decimal_places=6)
     address = models.CharField(max_length=255)
-    accuracy = models.FloatField()
+    accuracy = models.FloatField(null=True, blank=True)
     event_photo = models.ImageField(upload_to='attendance/photos/%Y/%m/%d/', null=True, blank=True)
     timestamp = models.DateTimeField()
     

@@ -360,11 +360,19 @@
   }
 
   // 2. GPS Acquisition & Reverse Geocoding
-  function applyGpsCoords(lat, lng, acc) {
-    acc = acc || 20;
+  let locationCapturedAt = null;
+
+  function applyGpsCoords(lat, lng, acc, capturedAt = null) {
+    lat = Number(lat);
+    lng = Number(lng);
+    acc = Number(acc);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(acc) || acc <= 0) {
+      return;
+    }
+    locationCapturedAt = capturedAt || new Date().toISOString();
     document.getElementById('id_latitude').value = lat;
     document.getElementById('id_longitude').value = lng;
-    document.getElementById('id_accuracy').value = parseFloat(acc).toFixed(1);
+    document.getElementById('id_accuracy').value = acc.toFixed(1);
 
     const distDisplay = document.getElementById('gps-distance-display');
     if (distDisplay) distDisplay.textContent = Math.round(acc);
@@ -419,29 +427,10 @@
     if (loadCard) loadCard.classList.remove('hidden');
     if (verCard) verCard.classList.add('hidden');
     if (retryBtn) retryBtn.classList.add('hidden');
+    isGpsReady = false;
+    locationCapturedAt = null;
+    checkFormReady();
 
-    if (window.LocationGuard && window.LocationGuard.currentPosition) {
-      applyGpsCoords(
-        window.LocationGuard.currentPosition.latitude,
-        window.LocationGuard.currentPosition.longitude,
-        window.LocationGuard.currentPosition.accuracy
-      );
-      return;
-    }
-
-    const cachedPos = localStorage.getItem('ft_last_position');
-    if (cachedPos) {
-      try {
-        const parsed = JSON.parse(cachedPos);
-        if (parsed && parsed.latitude && parsed.longitude) {
-          applyGpsCoords(parsed.latitude, parsed.longitude, parsed.accuracy || 25);
-          return;
-        }
-      } catch(e) {}
-    }
-
-    if (!navigator.geolocation) {
-      if (window.LocationGuard && window.LocationGuard.DEFAULT_FALLBACK) {
     if (window.LocationGuard && typeof window.LocationGuard.acquireFreshFix === 'function') {
       window.LocationGuard.acquireFreshFix({
         maxAccuracyMeters: 100,
@@ -449,7 +438,12 @@
         maxDurationMs: 15000
       }).then((fixRes) => {
         if (fixRes && fixRes.ok && fixRes.coords) {
-          applyGpsCoords(fixRes.coords.latitude, fixRes.coords.longitude, fixRes.coords.accuracy);
+          applyGpsCoords(
+            fixRes.coords.latitude,
+            fixRes.coords.longitude,
+            fixRes.coords.accuracy,
+            fixRes.coords.capturedAt || new Date(fixRes.coords.timestamp || Date.now()).toISOString()
+          );
         } else {
           const loadTitle = document.getElementById('gps-loading-title');
           if (loadTitle) loadTitle.textContent = (fixRes && fixRes.message) ? fixRes.message : 'Location failed';
@@ -468,9 +462,22 @@
 
     navigator.geolocation.getCurrentPosition(
       function(position) {
-        applyGpsCoords(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+        const acc = Number(position.coords.accuracy);
+        if (!Number.isFinite(acc) || acc <= 0 || acc > 100) {
+          const loadTitle = document.getElementById('gps-loading-title');
+          if (loadTitle) loadTitle.textContent = 'GPS accuracy too low. Please retry outdoors.';
+          if (retryBtn) retryBtn.classList.remove('hidden');
+          return;
+        }
+        const sampleTs = (Number.isFinite(position.timestamp) && position.timestamp > 0) ? position.timestamp : Date.now();
+        applyGpsCoords(
+          position.coords.latitude,
+          position.coords.longitude,
+          acc,
+          new Date(sampleTs).toISOString()
+        );
       },
-      function(error) {
+      function() {
         const loadTitle = document.getElementById('gps-loading-title');
         if (loadTitle) loadTitle.textContent = 'Location failed. Please retry.';
         if (retryBtn) retryBtn.classList.remove('hidden');
@@ -483,6 +490,7 @@
   let activePreparedPhoto = null;
   let activePunchUuid = null;
   let activeCaptureTimestamp = null;
+  let activePunchEventTime = null;
 
   async function handlePhotoSelect(input) {
     if (input.files && input.files[0]) {
@@ -565,6 +573,7 @@
     activePreparedPhoto = null;
     activePunchUuid = null;
     activeCaptureTimestamp = null;
+    activePunchEventTime = null;
 
     const preview = document.getElementById('photo-preview-img');
     const placeholder = document.getElementById('photo-placeholder');
@@ -628,12 +637,18 @@
   // 5. Submit Action
   async function submitFieldVisit() {
     const title = (document.getElementById('id_visit_title').value || '').trim();
-    if (!isGpsReady || !isPhotoReady || !title) {
-      if (window.showToast) showToast('GPS, photo and visit title are required.', 'error');
+    const lat = document.getElementById('id_latitude').value;
+    const lng = document.getElementById('id_longitude').value;
+    const acc = document.getElementById('id_accuracy').value;
+    const hasCoords = lat !== '' && lng !== '' && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+    const hasAcc = acc !== '' && Number.isFinite(Number(acc)) && Number(acc) > 0;
+    if (!isGpsReady || !hasCoords || !hasAcc || !locationCapturedAt || !isPhotoReady || !title) {
+      if (window.showToast) showToast('Fresh GPS, photo and visit title are required.', 'error');
       return;
     }
 
     const btn = document.getElementById('submit-action-btn');
+    if (btn.disabled) return;
     const btnText = document.getElementById('submit-btn-text');
     btn.disabled = true;
     if (btnText) btnText.textContent = 'Submitting visit...';
@@ -641,8 +656,12 @@
     if (!activePunchUuid) {
       activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
     }
+    if (!activePunchEventTime) {
+      const locMs = Date.parse(locationCapturedAt) || 0;
+      activePunchEventTime = new Date(Math.max(Date.now(), locMs)).toISOString();
+    }
     const sync_uuid = activePunchUuid;
-    const clientEventTime = activeCaptureTimestamp || new Date().toISOString();
+    const clientEventTime = activePunchEventTime;
 
     // Offline handling
     if (!navigator.onLine) {
@@ -650,9 +669,9 @@
         if (window.queueOfflineAction) {
           window.queueOfflineAction({
             action: 'field_visit',
-            latitude: document.getElementById('id_latitude').value || 0,
-            longitude: document.getElementById('id_longitude').value || 0,
-            accuracy: document.getElementById('id_accuracy').value || 0,
+            latitude: lat,
+            longitude: lng,
+            accuracy: acc,
             address: document.getElementById('id_address').value || 'Offline Field-visit location',
             visit_title: title,
             client_name: document.getElementById('id_client_name').value || '',
@@ -660,6 +679,7 @@
             note: document.getElementById('id_note').value || '',
             sync_uuid: sync_uuid,
             client_event_time: clientEventTime,
+            location_captured_at: locationCapturedAt,
             photo: photoBase64 || null
           }).then(() => {
             if (window.showToast) showToast('Offline visit stored. Will sync once connected.', 'info');
@@ -694,9 +714,9 @@
 
     // Online submission
     const formData = new FormData();
-    formData.append('latitude', document.getElementById('id_latitude').value);
-    formData.append('longitude', document.getElementById('id_longitude').value);
-    formData.append('accuracy', document.getElementById('id_accuracy').value);
+    formData.append('latitude', lat);
+    formData.append('longitude', lng);
+    formData.append('accuracy', acc);
     formData.append('address', document.getElementById('id_address').value);
     if (activePreparedPhoto && (activePreparedPhoto.file || activePreparedPhoto.blob)) {
       formData.append('photo', activePreparedPhoto.file || activePreparedPhoto.blob, 'field_visit.jpg');
@@ -710,6 +730,7 @@
     formData.append('note', document.getElementById('id_note').value || '');
     formData.append('sync_uuid', sync_uuid);
     formData.append('client_event_time', clientEventTime);
+    formData.append('location_captured_at', locationCapturedAt);
 
     const ctrl = new AbortController();
     const hardTimeout = setTimeout(() => ctrl.abort(), 25000);
@@ -768,12 +789,6 @@
     updateFieldClock();
     setInterval(updateFieldClock, 1000);
     startGPS();
-
-    window.addEventListener('location:ready', (e) => {
-      if (e.detail && e.detail.latitude && e.detail.longitude) {
-        applyGpsCoords(e.detail.latitude, e.detail.longitude, e.detail.accuracy);
-      }
-    });
 
     if (window.lucide) lucide.createIcons();
   });

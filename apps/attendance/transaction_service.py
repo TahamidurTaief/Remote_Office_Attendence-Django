@@ -30,19 +30,21 @@ def auto_close_past_sessions(employee=None, today=None):
     return 0
 
 
-def parse_and_validate_coordinates(lat_val, lng_val, accuracy_val=None):
+def parse_and_validate_coordinates(lat_val, lng_val, accuracy_val=None, allow_missing_accuracy=False):
     """
     Parses and validates coordinates and positive GPS accuracy.
-    - Both lat and lng absent/blank -> returns (None, None, None, True) (missing).
+    - Both lat and lng absent/blank -> returns (0.0, 0.0, None, True) (missing).
     - Zero coordinates (0.0, 0.0) are valid when explicitly supplied.
-    - Rejects booleans, non-finite (NaN, Inf), out-of-range coordinates,
-      and missing, zero, negative, or non-finite accuracy with 400 error.
-    Returns (lat: float | None, lng: float | None, accuracy: float | None, is_missing: bool).
+    - Rejects booleans, non-finite (NaN, Inf), and out-of-range coordinates.
+    - When allow_missing_accuracy=True (server-side legacy offline queue path only),
+      absent/blank accuracy returns None (honest unavailable) instead of 400 or 0.0.
+    - Otherwise rejects missing, zero, negative, or non-finite accuracy with 400 error.
+    Returns (lat: float, lng: float, accuracy: float | None, is_missing: bool).
     """
     lat_missing = lat_val is None or (isinstance(lat_val, str) and lat_val.strip() == '')
     lng_missing = lng_val is None or (isinstance(lng_val, str) and lng_val.strip() == '')
     if lat_missing and lng_missing:
-        return 0.0, 0.0, 0.0, True
+        return 0.0, 0.0, None, True
     if lat_missing or lng_missing:
         raise AttendanceTransactionError('Both latitude and longitude are required.', 400)
 
@@ -61,7 +63,13 @@ def parse_and_validate_coordinates(lat_val, lng_val, accuracy_val=None):
     if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
         raise AttendanceTransactionError('Coordinates out of valid geographic range.', 400)
 
-    if accuracy_val is None or (isinstance(accuracy_val, str) and accuracy_val.strip() == '') or isinstance(accuracy_val, bool):
+    acc_missing = accuracy_val is None or (isinstance(accuracy_val, str) and accuracy_val.strip() == '')
+    if acc_missing:
+        if allow_missing_accuracy:
+            return lat, lng, None, False
+        raise AttendanceTransactionError('Valid positive GPS accuracy is required.', 400)
+
+    if isinstance(accuracy_val, bool):
         raise AttendanceTransactionError('Valid positive GPS accuracy is required.', 400)
 
     try:
@@ -226,7 +234,7 @@ def _parse_positive_int_id(raw_value, error_message='Invalid attendance session 
 
 class AttendanceTransactionService:
     @staticmethod
-    def check_in(user, data, photo=None, validate_photo=True):
+    def check_in(user, data, photo=None, validate_photo=True, allow_missing_accuracy=False):
         from apps.attendance.views import check_role, get_employee, get_attendance_policy
 
         employee = get_employee(user)
@@ -315,7 +323,8 @@ class AttendanceTransactionService:
             lat, lng, acc_val, is_gps_missing = parse_and_validate_coordinates(
                 data.get('latitude'),
                 data.get('longitude'),
-                data.get('accuracy')
+                data.get('accuracy'),
+                allow_missing_accuracy=allow_missing_accuracy,
             )
             if not is_gps_missing:
                 validate_location_capture_time(data.get('location_captured_at'), event_time)
@@ -326,7 +335,7 @@ class AttendanceTransactionService:
             gps_quality = 'good'
             is_gps_poor = False
 
-            if not is_gps_missing and policy.max_gps_accuracy_meters and acc_val > policy.max_gps_accuracy_meters:
+            if not is_gps_missing and acc_val is not None and policy.max_gps_accuracy_meters and acc_val > policy.max_gps_accuracy_meters:
                 is_gps_poor = True
 
             from apps.accounts.engine import PermissionEngine
@@ -373,15 +382,17 @@ class AttendanceTransactionService:
                     within_geofence, distance = is_within_geofence(float(lat), float(lng), branch)
                     if not within_geofence:
                         is_outside_geofence = True
+                        dist_label = f'{int(distance)} meters' if distance is not None else 'an unknown distance'
+                        dist_short = f'{int(distance)}m' if distance is not None else 'unknown distance'
                         should_block = (policy.geofencing_policy == 'block') or (not policy.allow_outside_geofence and policy.geofencing_policy == 'block')
                         if should_block and not is_admin_or_hr:
                             raise AttendanceTransactionError(
-                                f'Geofence validation failed. You are outside the office radius by {int(distance)} meters.',
+                                f'Geofence validation failed. You are outside the office radius by {dist_label}.',
                                 400
                             )
                         else:
                             is_exception = True
-                            warning_msg = f" [POLICY EXCEPTION: Checked in {int(distance)}m outside geofence GEOFENCE WARNING]"
+                            warning_msg = f" [POLICY EXCEPTION: Checked in {dist_short} outside geofence GEOFENCE WARNING]"
                             note = f"{note}{warning_msg}".strip()
 
             from .schedule_utils import is_employee_holiday
@@ -456,7 +467,7 @@ class AttendanceTransactionService:
                 latitude=float(lat),
                 longitude=float(lng),
                 address=address,
-                accuracy=float(acc_val) if acc_val else 0.0,
+                accuracy=float(acc_val) if acc_val is not None else None,
                 timestamp=event_time,
                 sync_uuid=uuid.uuid4(),
                 client_event_time=client_time,
@@ -486,7 +497,7 @@ class AttendanceTransactionService:
             }
 
     @staticmethod
-    def check_out(user, data, photo=None, validate_photo=True):
+    def check_out(user, data, photo=None, validate_photo=True, allow_missing_accuracy=False):
         from apps.attendance.views import check_role, get_employee, get_attendance_policy
 
         employee = get_employee(user)
@@ -655,7 +666,8 @@ class AttendanceTransactionService:
             lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
                 data.get('latitude'),
                 data.get('longitude'),
-                data.get('accuracy')
+                data.get('accuracy'),
+                allow_missing_accuracy=allow_missing_accuracy,
             )
             if not is_gps_missing:
                 validate_location_capture_time(data.get('location_captured_at'), event_time)
@@ -667,7 +679,7 @@ class AttendanceTransactionService:
             from apps.accounts.engine import PermissionEngine
             is_admin_or_hr = user.is_superuser or PermissionEngine.evaluate(user, 'attendance.override').allowed or PermissionEngine.evaluate(user, 'attendance.edit').allowed
 
-            if not is_gps_missing and policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters:
+            if not is_gps_missing and accuracy is not None and policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters:
                 if policy.gps_required == 'required' and not is_admin_or_hr:
                     raise AttendanceTransactionError(
                         f'GPS accuracy ({int(accuracy)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).',
@@ -723,7 +735,7 @@ class AttendanceTransactionService:
                 latitude=float(lat),
                 longitude=float(lng),
                 address=address,
-                accuracy=float(accuracy) if accuracy else 0.0,
+                accuracy=float(accuracy) if accuracy is not None else None,
                 timestamp=event_time,
                 event_photo=photo,
                 sync_uuid=sync_uuid or uuid.uuid4(),
@@ -751,7 +763,7 @@ class AttendanceTransactionService:
             }
 
     @staticmethod
-    def field_visit(user, data, photo=None, validate_photo=True):
+    def field_visit(user, data, photo=None, validate_photo=True, allow_missing_accuracy=False):
         from apps.attendance.views import check_role, get_employee, get_attendance_policy
 
         employee = get_employee(user)
@@ -801,7 +813,8 @@ class AttendanceTransactionService:
             lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
                 data.get('latitude'),
                 data.get('longitude'),
-                data.get('accuracy')
+                data.get('accuracy'),
+                allow_missing_accuracy=allow_missing_accuracy,
             )
             if not is_gps_missing:
                 validate_location_capture_time(data.get('location_captured_at'), event_time)
@@ -818,7 +831,7 @@ class AttendanceTransactionService:
             if is_gps_missing and require_gps:
                 raise AttendanceTransactionError('Location is required.', 400)
 
-            if not is_gps_missing and policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters:
+            if not is_gps_missing and accuracy is not None and policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters:
                 if policy.gps_required == 'required':
                     raise AttendanceTransactionError(
                         f'GPS accuracy ({int(accuracy)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).',
@@ -879,7 +892,7 @@ class AttendanceTransactionService:
                 latitude=float(lat),
                 longitude=float(lng),
                 address=address,
-                accuracy=float(accuracy) if accuracy else 0.0,
+                accuracy=float(accuracy) if accuracy is not None else None,
                 timestamp=event_time,
                 sync_uuid=uuid.uuid4(),
                 client_event_time=client_time,

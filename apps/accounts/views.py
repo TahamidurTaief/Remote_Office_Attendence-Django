@@ -719,126 +719,35 @@ class SyncApiView(View):
                             'note': payload.get('note'),
                             'type': payload.get('type'),
                             'client_event_time': payload.get('client_event_time'),
+                            'location_captured_at': payload.get('location_captured_at'),
+                            'visit_title': payload.get('visit_title', ''),
+                            'client_name': payload.get('client_name', ''),
+                            'site_address': payload.get('site_address', ''),
+                            'project': payload.get('project'),
+                            'project_id': payload.get('project_id'),
+                            'session_id': payload.get('session_id'),
+                            'attendance_id': payload.get('attendance_id'),
+                            'depends_on_sync_uuid': payload.get('depends_on_sync_uuid'),
                         }
-                        
+                        is_legacy_queued = bool(data.get('client_event_time'))
+
                         if action == 'check_in':
-                            AttendanceTransactionService.check_in(request.user, data, photo=photo_file, validate_photo=True)
-                            
+                            AttendanceTransactionService.check_in(
+                                request.user, data, photo=photo_file, validate_photo=True,
+                                allow_missing_accuracy=is_legacy_queued,
+                            )
+
                         elif action == 'check_out':
-                            AttendanceTransactionService.check_out(request.user, data, photo=photo_file, validate_photo=True)
-                            
+                            AttendanceTransactionService.check_out(
+                                request.user, data, photo=photo_file, validate_photo=True,
+                                allow_missing_accuracy=is_legacy_queued,
+                            )
+
                         elif action == 'field_visit':
-                            if not check_role(request.user):
-                                raise AttendanceTransactionError('Unauthorized role.', 403)
-                                
-                            employee = get_employee(request.user)
-                            if not employee:
-                                raise AttendanceTransactionError('Employee profile not found.', 403)
-                                
-                            client_event_time_str = payload.get('client_event_time')
-                            client_time = parse_and_validate_client_time(client_event_time_str)
-
-                            if client_time:
-                                event_time = client_time
-                                synced_at = timezone.now()
-                                today = timezone.localdate(client_time)
-                            else:
-                                event_time = timezone.localtime()
-                                synced_at = None
-                                today = timezone.localdate()
-
-                            lat          = payload.get('latitude')
-                            lng          = payload.get('longitude')
-                            accuracy     = payload.get('accuracy', 0)
-                            address      = payload.get('address', '')
-                            visit_title  = payload.get('visit_title', '')
-                            client_name  = payload.get('client_name', '')
-                            site_address = payload.get('site_address', '')
-                            note         = payload.get('note', '')
-
-                            policy = get_attendance_policy(employee)
-                            
-                            from django.conf import settings
-                            require_gps = getattr(settings, 'REQUIRE_GPS', True)
-
-                            if (lat is None or lng is None or lat == '' or lng == '') and require_gps:
-                                raise AttendanceTransactionError('Location is required.', 400)
-
-                            if lat is None or lat == '':
-                                lat = 0.0
-                            if lng is None or lng == '':
-                                lng = 0.0
-
-                            try:
-                                lat = float(lat)
-                                lng = float(lng)
-                            except (TypeError, ValueError):
-                                raise AttendanceTransactionError('Invalid coordinates.', 400)
-
-                            if policy.photo_required and not photo_file:
-                                raise AttendanceTransactionError('Photo is required.', 400)
-
-                            if photo_file:
-                                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-                                if photo_file.content_type not in allowed_types:
-                                    raise AttendanceTransactionError('Invalid file type.', 400)
-                                if photo_file.size > 10 * 1024 * 1024:
-                                    raise AttendanceTransactionError('Photo too large. Max 10MB allowed.', 400)
-
-                            project = None
-                            project_id = payload.get('project') or payload.get('project_id')
-                            if project_id:
-                                try:
-                                    from apps.projects.models import Project
-                                    project = Project.objects.get(pk=project_id)
-                                except Exception:
-                                    pass
-                            if not project:
-                                try:
-                                    from apps.projects.models import Project, ProjectTask
-                                    from django.db.models import Q
-                                    project = Project.objects.filter(Q(project_managers=employee) | Q(site_engineers=employee)).first()
-                                    if not project:
-                                        task = ProjectTask.objects.filter(responsible_person=employee, planned_start__lte=today, planned_finish__gte=today).first()
-                                        if task:
-                                            project = task.project
-                                    if not project and employee.branch:
-                                        project = Project.objects.filter(branch=employee.branch).first()
-                                except Exception:
-                                    pass
-
-                            attendance = Attendance.objects.create(
-                                employee=employee,
-                                project=project,
-                                date=today,
-                                check_in_time=event_time,
-                                type='field',
-                                attendance_type='field_visit',
-                                status='on_time',
-                                visit_title=visit_title,
-                                client_name=client_name,
-                                site_address=site_address,
-                                note=note,
-                                photo=photo_file,
-                                sync_uuid=uuid_str or uuid.uuid4(),
-                                client_event_time=client_time,
-                                synced_at=synced_at
+                            AttendanceTransactionService.field_visit(
+                                request.user, data, photo=photo_file, validate_photo=True,
+                                allow_missing_accuracy=is_legacy_queued,
                             )
-
-                            AttendanceLocation.objects.create(
-                                attendance=attendance,
-                                event='check_in',
-                                latitude=float(lat),
-                                longitude=float(lng),
-                                address=address,
-                                accuracy=float(accuracy) if accuracy else 0.0,
-                                timestamp=event_time,
-                                sync_uuid=uuid.uuid4(),
-                                client_event_time=client_time,
-                                synced_at=synced_at
-                            )
-
-                            notify_admins(employee, 'field_visit', location=site_address or address)
                             
                         else:
                             raise AttendanceTransactionError(f"Unknown attendance action: {action}", 400)

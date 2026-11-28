@@ -652,25 +652,37 @@ def save_mandatory_location(request):
     else:
         synced_at = None
 
-    lat = data.get('latitude')
-    lng = data.get('longitude')
-    accuracy = data.get('accuracy', 0)
-    address = data.get('address', '')
-
-    if not lat or not lng:
-        return JsonResponse({'success': False, 'error': 'Coordinates required.'}, status=400)
-
+    from apps.attendance.transaction_service import (
+        AttendanceTransactionError,
+        parse_and_validate_coordinates,
+        validate_location_capture_time,
+    )
     try:
-        lat = float(lat)
-        lng = float(lng)
-    except (TypeError, ValueError):
-        return JsonResponse({'success': False, 'error': 'Invalid coordinates.'}, status=400)
+        lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
+            data.get('latitude'),
+            data.get('longitude'),
+            data.get('accuracy'),
+        )
+        if is_gps_missing:
+            return JsonResponse({'success': False, 'error': 'Coordinates required.'}, status=400)
+        event_ref = client_time or timezone.localtime()
+        validate_location_capture_time(data.get('location_captured_at'), event_ref)
+        policy = get_attendance_policy(employee)
+        if policy.max_gps_accuracy_meters and accuracy > policy.max_gps_accuracy_meters and policy.gps_required == 'required':
+            return JsonResponse({
+                'success': False,
+                'error': f'GPS accuracy ({int(accuracy)}m) exceeds maximum allowed limit ({policy.max_gps_accuracy_meters}m).'
+            }, status=400)
+    except AttendanceTransactionError as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=exc.status_code)
+
+    address = data.get('address', '')
 
     sync_record = EmployeeLocationSync.objects.create(
         employee=employee,
         latitude=lat,
         longitude=lng,
-        accuracy=float(accuracy) if accuracy else 0.0,
+        accuracy=accuracy,
         address=address,
         sync_uuid=sync_uuid or uuid.uuid4(),
         client_event_time=client_time,
@@ -1107,8 +1119,12 @@ def bulk_sync(request):
             try:
                 # Strictly preserve photo-required policy (validate_photo=True).
                 # Missing required photos will raise AttendanceTransactionError and remain pending.
+                is_legacy_queued = bool(payload.get('client_event_time'))
                 if action_type == 'check_in':
-                    res = AttendanceTransactionService.check_in(request.user, payload, photo=photo_file, validate_photo=True)
+                    res = AttendanceTransactionService.check_in(
+                        request.user, payload, photo=photo_file, validate_photo=True,
+                        allow_missing_accuracy=is_legacy_queued,
+                    )
                     synced_count += 1
                     if item_uuid:
                         batch_item_states[item_uuid] = {
@@ -1117,7 +1133,10 @@ def bulk_sync(request):
                         }
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 elif action_type == 'check_out':
-                    res = AttendanceTransactionService.check_out(request.user, payload, photo=photo_file, validate_photo=True)
+                    res = AttendanceTransactionService.check_out(
+                        request.user, payload, photo=photo_file, validate_photo=True,
+                        allow_missing_accuracy=is_legacy_queued,
+                    )
                     synced_count += 1
                     if item_uuid:
                         batch_item_states[item_uuid] = {
@@ -1126,7 +1145,10 @@ def bulk_sync(request):
                         }
                     results.append({'uuid': item_uuid, 'status': 'success', 'data': res})
                 elif action_type == 'field_visit':
-                    res = AttendanceTransactionService.field_visit(request.user, payload, photo=photo_file, validate_photo=True)
+                    res = AttendanceTransactionService.field_visit(
+                        request.user, payload, photo=photo_file, validate_photo=True,
+                        allow_missing_accuracy=is_legacy_queued,
+                    )
                     synced_count += 1
                     if item_uuid:
                         batch_item_states[item_uuid] = {

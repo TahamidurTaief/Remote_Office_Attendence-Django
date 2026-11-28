@@ -29,7 +29,7 @@
         {{ loc.address|truncatechars:60 }}
       </p>
       <p class="text-xs text-gray-400">
-        ±{{ loc.accuracy|floatformat:0 }}m accuracy
+        {% if loc.accuracy is not None %}±{{ loc.accuracy|floatformat:0 }}m accuracy{% else %}Accuracy unavailable{% endif %}
       </p>
     </div>
   </div>

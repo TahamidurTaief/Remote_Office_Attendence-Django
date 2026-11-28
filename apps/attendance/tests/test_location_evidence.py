@@ -229,3 +229,154 @@ class LocationEvidenceValidationTests(TestCase):
                 content_type="application/json",
             )
             self.assertEqual(loc_resp.status_code, 400)
+
+    def test_5_legacy_queued_punch_without_accuracy_and_retry_preservation(self):
+        """
+        Legacy queued punches missing accuracy are accepted via bulk_sync without Review Needed
+        or fabricated 0.0 accuracy; client version flags on live endpoints are not trusted;
+        retries preserve original UUID, session, and timestamps; UI surfaces have no fake defaults.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        import base64
+        import io
+
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 64), color="blue").save(buf, format="JPEG")
+        photo_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+        ci_uuid = str(uuid.uuid4())
+        co_uuid = str(uuid.uuid4())
+        fv_uuid = str(uuid.uuid4())
+        ci_time = (FROZEN_NOW - timedelta(hours=4)).isoformat()
+        co_time = (FROZEN_NOW - timedelta(hours=1)).isoformat()
+        fv_time = (FROZEN_NOW - timedelta(minutes=30)).isoformat()
+
+        with patch("django.utils.timezone.now", return_value=FROZEN_NOW), patch(
+            "apps.attendance.transaction_service.notify_admins"
+        ):
+            self.client.force_login(self.user)
+
+            # 1. Client-supplied legacy/version flag on live check_in MUST NOT bypass accuracy check
+            live_spoof = self.client.post(
+                reverse("attendance:check_in"),
+                data={
+                    "latitude": "23.8103",
+                    "longitude": "90.4125",
+                    "is_legacy": "true",
+                    "queue_version": "1",
+                },
+            )
+            self.assertEqual(live_spoof.status_code, 400)
+
+            # 2. Legacy queued check_in, check_out, field_visit without accuracy via bulk_sync
+            #    (with photo policy enabled)
+            policy = AttendancePolicy.objects.get(branch=self.branch)
+            policy.photo_required = True
+            policy.save(update_fields=["photo_required"])
+
+            bulk_payload = {
+                "items": [
+                    {
+                        "uuid": ci_uuid,
+                        "action": "check_in",
+                        "payload": {
+                            "latitude": 23.8103,
+                            "longitude": 90.4125,
+                            "address": "Legacy Offline",
+                            "client_event_time": ci_time,
+                            "sync_uuid": ci_uuid,
+                            "photo": photo_b64,
+                        },
+                    },
+                    {
+                        "uuid": co_uuid,
+                        "action": "check_out",
+                        "depends_on_sync_uuid": ci_uuid,
+                        "payload": {
+                            "latitude": 23.8103,
+                            "longitude": 90.4125,
+                            "address": "Legacy Offline Out",
+                            "client_event_time": co_time,
+                            "sync_uuid": co_uuid,
+                            "depends_on_sync_uuid": ci_uuid,
+                            "photo": photo_b64,
+                        },
+                    },
+                    {
+                        "uuid": fv_uuid,
+                        "action": "field_visit",
+                        "payload": {
+                            "latitude": 23.8103,
+                            "longitude": 90.4125,
+                            "visit_title": "Legacy Visit",
+                            "client_event_time": fv_time,
+                            "sync_uuid": fv_uuid,
+                            "photo": photo_b64,
+                        },
+                    },
+                ]
+            }
+            resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(bulk_payload),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 200)
+            res_json = resp.json()
+            self.assertEqual(res_json["synced"], 3, msg=res_json)
+
+            att = Attendance.objects.get(sync_uuid=ci_uuid)
+            self.assertEqual(att.gps_quality, "good")
+            self.assertFalse(att.is_policy_exception)
+            ci_loc = att.locations.get(event="check_in")
+            co_loc = att.locations.get(event="check_out")
+            self.assertIsNone(ci_loc.accuracy)
+            self.assertIsNone(co_loc.accuracy)
+
+            fv_att = Attendance.objects.get(sync_uuid=fv_uuid)
+            fv_loc = fv_att.locations.get(event="check_in")
+            self.assertIsNone(fv_loc.accuracy)
+
+            # 3. Retry after lost response preserves original evidence & is idempotent
+            retry_resp = self.client.post(
+                reverse("attendance:bulk_sync"),
+                data=json.dumps(bulk_payload),
+                content_type="application/json",
+            )
+            self.assertEqual(retry_resp.status_code, 200)
+            self.assertEqual(Attendance.objects.filter(employee=self.emp).count(), 2)
+
+            # 4. save_mandatory_location accepts (0.0, 0.0) with valid accuracy & capture time
+            mand_resp = self.client.post(
+                reverse("attendance:save_mandatory_location"),
+                data=json.dumps({
+                    "latitude": 0.0,
+                    "longitude": 0.0,
+                    "accuracy": 25.0,
+                    "location_captured_at": (FROZEN_NOW - timedelta(seconds=10)).isoformat(),
+                    "client_event_time": FROZEN_NOW.isoformat(),
+                }),
+                content_type="application/json",
+            )
+            self.assertEqual(mand_resp.status_code, 200)
+            self.assertTrue(mand_resp.json()["success"])
+
+            # 5. Template/JS surfaces carry location_captured_at and have no fake accuracy defaults
+            from django.conf import settings
+            from pathlib import Path
+            base = Path(settings.BASE_DIR)
+            for rel in (
+                "templates/staff/check_in.html",
+                "templates/staff/field_visit.html",
+                "templates/staff/partials/attendance_card.html",
+                "templates/dashboard/widgets/widget_employee_attendance.html",
+            ):
+                src = (base / rel).read_text(encoding="utf-8")
+                self.assertIn("location_captured_at", src, msg=rel)
+                self.assertNotIn("accuracy || 0", src, msg=rel)
+                self.assertNotIn("accuracy || 20", src, msg=rel)
+                self.assertNotIn("accuracy || 25", src, msg=rel)
+                self.assertNotIn("acc || 0", src, msg=rel)
+                self.assertNotIn("acc || '0'", src, msg=rel)
+                self.assertNotIn("doCheckout(0, 0, 0", src, msg=rel)

@@ -125,7 +125,7 @@ class EmployeeLocationSync(models.Model):
     )
     latitude = models.DecimalField(max_digits=9, decimal_places=6)
     longitude = models.DecimalField(max_digits=9, decimal_places=6)
-    accuracy = models.FloatField(default=0)
+    accuracy = models.FloatField(null=True, blank=True)
     address = models.CharField(max_length=500, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     

@@ -396,24 +396,24 @@ class AttendanceLifecycleService:
                 'stop_tracking': True
             }
 
-        lat = post_data.get('latitude')
-        lng = post_data.get('longitude')
-        accuracy = post_data.get('accuracy', 0)
+        from apps.attendance.transaction_service import (
+            AttendanceTransactionError,
+            parse_and_validate_coordinates,
+            validate_location_capture_time,
+        )
+        try:
+            lat, lng, accuracy, is_gps_missing = parse_and_validate_coordinates(
+                post_data.get('latitude'),
+                post_data.get('longitude'),
+                post_data.get('accuracy'),
+            )
+            if is_gps_missing:
+                raise AttendanceLifecycleError('Location required.', 400)
+            validate_location_capture_time(post_data.get('location_captured_at'), event_time)
+        except AttendanceTransactionError as exc:
+            raise AttendanceLifecycleError(str(exc), exc.status_code)
+
         address = post_data.get('address', '')
-
-        if not lat or not lng:
-            raise AttendanceLifecycleError('Location required.', 400)
-
-        try:
-            lat = float(lat)
-            lng = float(lng)
-        except (TypeError, ValueError):
-            raise AttendanceLifecycleError('Invalid coordinates.', 400)
-
-        try:
-            accuracy = float(accuracy) if accuracy else 0.0
-        except (TypeError, ValueError):
-            accuracy = 0.0
 
         if not client_time:
             from datetime import timedelta
@@ -435,7 +435,7 @@ class AttendanceLifecycleService:
             latitude=lat,
             longitude=lng,
             address=address,
-            accuracy=float(accuracy) if accuracy else 0.0,
+            accuracy=accuracy,
             timestamp=event_time,
             sync_uuid=sync_uuid or uuid.uuid4(),
             client_event_time=client_time,
@@ -446,7 +446,7 @@ class AttendanceLifecycleService:
             employee=employee,
             latitude=lat,
             longitude=lng,
-            accuracy=float(accuracy) if accuracy else 0.0,
+            accuracy=accuracy,
             address=address,
             sync_uuid=uuid.uuid4(),
             client_event_time=client_time,

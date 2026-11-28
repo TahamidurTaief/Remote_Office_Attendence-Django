@@ -523,8 +523,8 @@
         maxDurationMs: 15000
       });
       if (fixRes && fixRes.ok && fixRes.coords) {
-        locationCapturedAt = fixRes.coords.capturedAt || new Date().toISOString();
-        handleLocationSuccess({ coords: fixRes.coords });
+        locationCapturedAt = fixRes.coords.capturedAt || new Date(fixRes.coords.timestamp || Date.now()).toISOString();
+        handleLocationSuccess({ coords: fixRes.coords, timestamp: fixRes.coords.timestamp });
       } else {
         isGpsReady = false;
         locationCapturedAt = null;
@@ -558,7 +558,8 @@
       if (!pos || !pos.coords || !Number.isFinite(pos.coords.accuracy) || pos.coords.accuracy <= 0 || pos.coords.accuracy > 100) {
         throw new Error('GPS accuracy out of bounds');
       }
-      locationCapturedAt = new Date().toISOString();
+      const sampleTs = (Number.isFinite(pos.timestamp) && pos.timestamp > 0) ? pos.timestamp : Date.now();
+      locationCapturedAt = new Date(sampleTs).toISOString();
       handleLocationSuccess(pos);
     } catch (err) {
       isGpsReady = false;
@@ -574,9 +575,8 @@
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(acc) || acc <= 0) {
       return;
     }
-    if (!locationCapturedAt) {
-      locationCapturedAt = position.coords.capturedAt || new Date().toISOString();
-    }
+    const sampleTs = (Number.isFinite(position.timestamp) && position.timestamp > 0) ? position.timestamp : Date.now();
+    locationCapturedAt = position.coords.capturedAt || new Date(sampleTs).toISOString();
 
     document.getElementById('id_latitude').value = lat;
     document.getElementById('id_longitude').value = lng;
@@ -690,6 +690,7 @@
   let activePreparedPhoto = null;
   let activePunchUuid = null;
   let activeCaptureTimestamp = null;
+  let activePunchEventTime = null;
 
   async function handlePhotoSelect(input) {
     if (input.files && input.files[0]) {
@@ -768,6 +769,7 @@
     activePreparedPhoto = null;
     activePunchUuid = null;
     activeCaptureTimestamp = null;
+    activePunchEventTime = null;
 
     const previewImg = document.getElementById('photo-preview-img');
     const placeholder = document.getElementById('photo-placeholder');
@@ -822,8 +824,11 @@
   async function submitCheckIn() {
     const lat = document.getElementById('id_latitude').value;
     const lng = document.getElementById('id_longitude').value;
-    if (!isGpsReady || !lat || !lng || lat === '0' || lng === '0') {
-      if (window.showToast) showToast('GPS location is required to check in. Please enable location.', 'error');
+    const acc = document.getElementById('id_accuracy').value;
+    const hasCoords = lat !== '' && lng !== '' && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+    const hasAcc = acc !== '' && Number.isFinite(Number(acc)) && Number(acc) > 0;
+    if (!isGpsReady || !hasCoords || !hasAcc || !locationCapturedAt) {
+      if (window.showToast) showToast('Fresh GPS location is required to check in. Please acquire GPS fix.', 'error');
       if (window.LocationGuard) window.LocationGuard.showModal('unavailable');
       return;
     }
@@ -833,15 +838,20 @@
     }
 
     const btn = document.getElementById('submit-action-btn');
+    if (btn.disabled) return;
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Checking in...';
 
-    // Preserve punch UUID & event timestamp across retries / offline sync
+    // Preserve punch UUID & final punch event timestamp (captured after location sample) across retries
     if (!activePunchUuid) {
       activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
     }
+    if (!activePunchEventTime) {
+      const locMs = Date.parse(locationCapturedAt) || 0;
+      activePunchEventTime = new Date(Math.max(Date.now(), locMs)).toISOString();
+    }
     const sync_uuid = activePunchUuid;
-    const clientEventTime = activeCaptureTimestamp || new Date().toISOString();
+    const clientEventTime = activePunchEventTime;
 
     // ── Offline punch handling ──────────────────────────────────────
     if (!navigator.onLine) {
@@ -851,11 +861,12 @@
             action: 'check_in',
             latitude: lat,
             longitude: lng,
-            accuracy: document.getElementById('id_accuracy').value || 0,
+            accuracy: acc,
             address: document.getElementById('id_address').value || 'Verified Branch Location',
             type: document.getElementById('id_attendance_type').value || 'office',
             sync_uuid: sync_uuid,
             client_event_time: clientEventTime,
+            location_captured_at: locationCapturedAt,
             photo: photoBase64 || null
           }).then(() => {
             if (window.showToast) showToast('Offline check-in saved locally. Will sync when back online.', 'info');
@@ -892,11 +903,12 @@
     const formData = new FormData();
     formData.append('latitude', lat);
     formData.append('longitude', lng);
-    formData.append('accuracy', document.getElementById('id_accuracy').value || 0);
+    formData.append('accuracy', acc);
     formData.append('address', document.getElementById('id_address').value || 'Verified Branch Location');
     formData.append('type', document.getElementById('id_attendance_type').value || 'office');
     formData.append('sync_uuid', sync_uuid);
     formData.append('client_event_time', clientEventTime);
+    formData.append('location_captured_at', locationCapturedAt);
 
     if (activePreparedPhoto && (activePreparedPhoto.file || activePreparedPhoto.blob)) {
       formData.append('photo', activePreparedPhoto.file || activePreparedPhoto.blob, 'attendance.jpg');
@@ -957,21 +969,29 @@
   async function submitCheckOut() {
     const lat = document.getElementById('id_latitude').value;
     const lng = document.getElementById('id_longitude').value;
-    if (!isGpsReady || !lat || !lng || lat === '0' || lng === '0') {
-      if (window.showToast) showToast('GPS location is required to check out. Please enable location.', 'error');
+    const acc = document.getElementById('id_accuracy').value;
+    const hasCoords = lat !== '' && lng !== '' && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+    const hasAcc = acc !== '' && Number.isFinite(Number(acc)) && Number(acc) > 0;
+    if (!isGpsReady || !hasCoords || !hasAcc || !locationCapturedAt) {
+      if (window.showToast) showToast('Fresh GPS location is required to check out. Please acquire GPS fix.', 'error');
       if (window.LocationGuard) window.LocationGuard.showModal('unavailable');
       return;
     }
 
     const btn = document.getElementById('submit-action-btn');
+    if (btn.disabled) return;
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Checking out...';
 
     if (!activePunchUuid) {
       activePunchUuid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('ft-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
     }
+    if (!activePunchEventTime) {
+      const locMs = Date.parse(locationCapturedAt) || 0;
+      activePunchEventTime = new Date(Math.max(Date.now(), locMs)).toISOString();
+    }
     const sync_uuid = activePunchUuid;
-    const clientEventTime = activeCaptureTimestamp || new Date().toISOString();
+    const clientEventTime = activePunchEventTime;
     const targetSessionId = ACTIVE_SESSION_ID;
     const targetDependsOnSyncUuid = (!targetSessionId && pendingOfflineCheckInUuid) ? pendingOfflineCheckInUuid : null;
 
@@ -983,10 +1003,11 @@
             action: 'check_out',
             latitude: lat,
             longitude: lng,
-            accuracy: document.getElementById('id_accuracy').value || 0,
+            accuracy: acc,
             address: document.getElementById('id_address').value || 'Verified Branch Location',
             sync_uuid: sync_uuid,
             client_event_time: clientEventTime,
+            location_captured_at: locationCapturedAt,
             photo: photoBase64 || null
           };
           if (targetSessionId !== null) {
@@ -1030,9 +1051,10 @@
     const formData = new FormData();
     formData.append('latitude', lat);
     formData.append('longitude', lng);
-    formData.append('accuracy', document.getElementById('id_accuracy').value || 0);
+    formData.append('accuracy', acc);
     formData.append('sync_uuid', sync_uuid);
     formData.append('client_event_time', clientEventTime);
+    formData.append('location_captured_at', locationCapturedAt);
     if (targetSessionId !== null) {
       formData.append('session_id', targetSessionId);
     }
@@ -1116,19 +1138,6 @@
         console.warn('Failed to inspect offline check-in state:', e);
       }
     }
-
-    // Listen for LocationGuard success sync
-    window.addEventListener('location:ready', (e) => {
-      if (e.detail && e.detail.latitude && e.detail.longitude) {
-        handleLocationSuccess({
-          coords: {
-            latitude: e.detail.latitude,
-            longitude: e.detail.longitude,
-            accuracy: e.detail.accuracy || 20
-          }
-        });
-      }
-    });
 
     if (window.lucide) lucide.createIcons();
   });
