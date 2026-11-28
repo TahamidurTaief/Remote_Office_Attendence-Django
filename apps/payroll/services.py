@@ -535,6 +535,32 @@ class PayrollService:
                 "Resolve duplicate approved leave requests before running payroll."
             )
 
+        # Surface late-offline reconciliation discrepancies without auto-reversing financial/leave records
+        from apps.attendance.models import AttendanceAbsentLog, AttendanceCoverageRecord
+        payroll_emp_ids = [p.id for p in report['employees'] if p.master_employee]
+        late_reconciled = set(
+            AttendanceCoverageRecord.objects.filter(
+                employee_id__in=payroll_emp_ids,
+                date__gte=p_start,
+                date__lte=p_end,
+                coverage_state='reconciled_late_offline',
+            ).values_list('employee_id', 'date')
+        )
+        if late_reconciled:
+            absent_logs = set(
+                AttendanceAbsentLog.objects.filter(
+                    employee_id__in=payroll_emp_ids,
+                    date__gte=p_start,
+                    date__lte=p_end,
+                ).values_list('employee_id', 'date')
+            )
+            discrepancy_keys = late_reconciled & absent_logs
+            if discrepancy_keys:
+                raise ValidationError(
+                    "Cannot sync payroll: late offline attendance arrived after prior absence deduction "
+                    f"for {len(discrepancy_keys)} employee-day(s). Manual reconciliation is required before finalizing payroll."
+                )
+
         # Bulk-load approved OT minutes in [p_start, p_end]
         ot_by_emp = {
             row['employee_id']: (row['total'] or 0)

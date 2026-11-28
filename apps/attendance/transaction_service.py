@@ -510,7 +510,24 @@ class AttendanceTransactionService:
             notif_type = 'late' if status == 'late' else 'check_in'
             transaction.on_commit(lambda: _safe_notify_admins(emp_locked, notif_type, location=address))
 
-            from apps.attendance.models import AttendanceActivityLog
+            from apps.attendance.models import AttendanceActivityLog, AttendanceAbsentLog, AttendanceCoverageRecord
+            if client_time:
+                cov = AttendanceCoverageRecord.objects.filter(employee=emp_locked, date=today).first()
+                if cov and cov.coverage_state == 'complete':
+                    cov.coverage_state = 'reconciled_late_offline'
+                    cov.attestation_source = 'late_offline_sync'
+                    cov.save(update_fields=['coverage_state', 'attestation_source', 'updated_at'])
+                if AttendanceAbsentLog.objects.filter(employee=emp_locked, date=today).exists():
+                    try:
+                        _safe_create_with_seq_retry(
+                            AttendanceActivityLog,
+                            employee=emp_locked,
+                            action='late_offline_reconciliation',
+                            description=f"Late offline check-in synced for {today} after prior absence log; manual financial reconciliation required.",
+                        )
+                    except Exception:
+                        pass
+
             try:
                 _safe_create_with_seq_retry(
                     AttendanceActivityLog,

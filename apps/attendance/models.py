@@ -459,3 +459,67 @@ def sync_overtime_request_status(sender, instance, **kwargs):
                 ot_req.save()
         except OvertimeRequest.DoesNotExist:
             pass
+
+
+class RetentionRunLog(models.Model):
+    """Durable audit log for any future approved retention/archival run."""
+    run_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cutoff_expired_date = models.DateField()
+    cutoff_purged_before = models.DateTimeField()
+    expired_count = models.PositiveIntegerField(default=0)
+    purged_attendance_count = models.PositiveIntegerField(default=0)
+    purged_location_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"RetentionRun {self.run_uuid} ({self.started_at:%Y-%m-%d})"
+
+
+class AttendanceCoverageRecord(models.Model):
+    """
+    Independent employee-day completeness attestation ledger.
+    Attests whether attendance ingestion/sync windows closed cleanly for (employee, date),
+    or records incomplete activity / retention tombstone / late offline reconciliation.
+    """
+    COVERAGE_CHOICES = (
+        ('complete', 'Complete'),
+        ('incomplete_activity', 'Incomplete Activity'),
+        ('purged_retained', 'Purged Retained'),
+        ('reconciled_late_offline', 'Reconciled Late Offline'),
+        ('unknown', 'Unknown'),
+    )
+
+    employee = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name='coverage_records',
+        db_index=True,
+    )
+    date = models.DateField(db_index=True)
+    coverage_state = models.CharField(max_length=24, choices=COVERAGE_CHOICES, default='unknown')
+    attestation_source = models.CharField(max_length=40)
+    offline_grace_closed_at = models.DateTimeField(null=True, blank=True)
+    retention_run = models.ForeignKey(
+        RetentionRunLog,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='coverage_records',
+    )
+    expiry_reason = models.CharField(max_length=64, blank=True)
+    pre_purge_status = models.CharField(max_length=32, blank=True)
+    attested_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['employee', 'date'], name='uniq_att_coverage_emp_date'),
+        ]
+        ordering = ['-date', 'employee_id']
+
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.date}: {self.coverage_state}"

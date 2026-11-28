@@ -56,6 +56,29 @@ def classify_day_attendance_evidence(day_attendances):
     }
 
 
+def _build_coverage_map(employee_ids, start_date, end_date):
+    """
+    Bulk-loads employee/date-scoped AttendanceCoverageRecord in 1 bounded query.
+    Returns dict keyed by (employee_id, date) -> {'state', 'source', 'pre_purge_status'}.
+    """
+    if not employee_ids:
+        return {}
+    from apps.attendance.models import AttendanceCoverageRecord
+    recs = AttendanceCoverageRecord.objects.filter(
+        employee_id__in=employee_ids,
+        date__gte=start_date,
+        date__lte=end_date,
+    ).values('employee_id', 'date', 'coverage_state', 'attestation_source', 'pre_purge_status')
+    return {
+        (r['employee_id'], r['date']): {
+            'state': r['coverage_state'],
+            'source': r['attestation_source'],
+            'pre_purge_status': r['pre_purge_status'],
+        }
+        for r in recs
+    }
+
+
 def _build_missing_history_context(employee_ids, start_date, end_date, attendances=None):
     """
     Bulk-loads employee-scoped AttendanceActivityLog(action='check_in') metadata in 1 query,
@@ -800,10 +823,21 @@ def resolve_employee_day_evidence(
 
     cov_state = (coverage or {}).get('state') if isinstance(coverage, dict) else None
     cov_source = (coverage or {}).get('source') if isinstance(coverage, dict) else None
+    pre_purge_status = (coverage or {}).get('pre_purge_status') if isinstance(coverage, dict) else ''
     if history_unavailable:
         coverage_state = 'incomplete_activity'
         coverage_source = 'activity_log_missing_attendance'
-    elif cov_state == 'complete':
+    elif cov_state == 'purged_retained':
+        if pre_purge_status == 'absent':
+            coverage_state = 'complete'
+            coverage_source = cov_source or 'retention_tombstone'
+        else:
+            coverage_state = 'purged_retained'
+            coverage_source = cov_source or 'retention_tombstone'
+    elif cov_state == 'incomplete_activity':
+        coverage_state = 'incomplete_activity'
+        coverage_source = cov_source or 'ingestion_reconciler'
+    elif cov_state in ('complete', 'reconciled_late_offline'):
         coverage_state = 'complete'
         coverage_source = cov_source or 'explicit_complete'
     else:
@@ -1487,6 +1521,7 @@ def get_daily_report_data(
     eligibility_map = build_employment_eligibility_map(employees)
     checkout_provenance_map = build_checkout_provenance_map(attendances)
     missing_history_ctx = _build_missing_history_context(target_emp_ids, start_date, end_date, attendances=attendances)
+    coverage_map = _build_coverage_map(target_emp_ids, start_date, end_date)
 
     rows = []
     for d in date_list:
@@ -1506,6 +1541,7 @@ def get_daily_report_data(
                 eligibility=eligibility_map.get(emp.id),
                 checkout_provenance_map=checkout_provenance_map,
                 history_unavailable=is_history_missing,
+                coverage=coverage_map.get((emp.id, d)),
             )
 
             ci = day_calc['check_in']
@@ -1694,6 +1730,7 @@ def get_monthly_report_data(
 
     checkout_provenance_map = build_checkout_provenance_map(attendances)
     missing_history_ctx = _build_missing_history_context(employee_ids, month_start, month_end, attendances=attendances)
+    coverage_map = _build_coverage_map(employee_ids, month_start, month_end)
 
     # 4. Fetch approved leave requests
     leave_requests = LeaveRequest.objects.filter(
@@ -1774,6 +1811,7 @@ def get_monthly_report_data(
                 eligibility=emp_elig,
                 checkout_provenance_map=checkout_provenance_map,
                 history_unavailable=is_history_missing,
+                coverage=coverage_map.get((emp.id, d)),
             )
 
             if materialize_all:
@@ -1963,6 +2001,7 @@ def get_monthly_report_data(
                     eligibility=emp_elig,
                     checkout_provenance_map=checkout_provenance_map,
                     history_unavailable=is_history_missing,
+                    coverage=coverage_map.get((emp.id, d)),
                 )
                 emp_day_calcs[d] = day_calc
                 if day_calc['check_in']:
